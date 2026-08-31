@@ -162,7 +162,7 @@ export class NativeEditContext extends AbstractEditContext {
 		imeTextArea.tabIndex = -1;
 		imeTextArea.readOnly = true;
 		imeTextArea.setAttribute("aria-hidden", "true");
-		(element as NativeEditContextElement).editContext = nativeContext;
+		this.setEditContextOnDomNode();
 		this._register(NativeEditContextRegistry.register(options.ownerId, this));
 		container.append(element);
 		container.append(imeTextArea);
@@ -322,6 +322,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	focus(): void {
+		this.setEditContextOnDomNode();
 		if (!IME.enabled) {
 			this.focusImeFallback();
 			return;
@@ -340,6 +341,11 @@ export class NativeEditContext extends AbstractEditContext {
 			return;
 		}
 		this.focusTracker.refreshFocusState();
+	}
+
+	public setEditContextOnDomNode(): void {
+		const element = this.domNode as NativeEditContextElement;
+		if (element.editContext !== this.nativeContext) element.editContext = this.nativeContext;
 	}
 
 	setAriaOptions(options: IEditorAriaOptions): void {

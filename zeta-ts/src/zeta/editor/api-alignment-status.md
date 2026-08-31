@@ -60,7 +60,7 @@
 | `browser/controller/editContext/native/debugEditContext.ts` | `DebugEditContext` | 本地职责已改名或移出上游 owner |
 | `browser/controller/editContext/native/nativeEditContextUtils.ts` | `FocusTracker` | 已恢复公开名并由浏览器输入实现实际持有；构造契约和日志依赖仍待收敛 |
 | `browser/controller/editContext/editContext.ts` | `AbstractEditContext` | 已恢复公开名与剪贴板事件入口；当前仍继承 `Disposable` 且持有输入路由与组合输入状态，需随 `ViewPart` 生命周期迁移 |
-| `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 已恢复公开名、工厂 owner 和按编辑器 ID 注册；事件、渲染阶段及 `ViewContext` 构造契约仍待收敛 |
+| `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 已恢复公开名、工厂 owner、按编辑器 ID 注册和跨 document 的 EditContext DOM 重新挂接；事件、渲染阶段及 `ViewContext` 构造契约仍待收敛 |
 | `browser/controller/editContext/native/screenReaderContentRich.ts` | `RichScreenReaderContent` | 已恢复公开名并由 `ScreenReaderSupport` 实际选择；配置事件和视图渲染阶段仍待收敛 |
 | `browser/controller/editContext/native/screenReaderContentSimple.ts` | `SimpleScreenReaderContent` | 已恢复公开名并实际承担简单无障碍镜像；选择同步和 `ViewContext` 构造契约仍待收敛 |
 | `browser/controller/editContext/native/screenReaderSupport.ts` | `ScreenReaderSupport` | 已恢复公开名并由 `NativeEditContext` 持有；视图事件与 prepare/render 生命周期仍待收敛 |
@@ -164,7 +164,7 @@
 | 1 | Platform 配置与语言身份 | 配置 override 事件、全局 Registry、Modes Registry、语言实例 Registry 和语言配置 Registry 未形成上游链；现有语言配置服务有 28 个生产调用方 | 先统一配置键、override 与 Registry，再迁移语言身份和语言配置调用方，删除旧 owner |
 | 2 | TextModel parts | `ITextModel` 成员、模型部件事件和 ViewModel 注册链已闭合；实现类仍保留 Zeta 文档块、行身份与历史能力，并与上游私有阶段存在差异 | 明确这些 Zeta 能力在同一 TextModel 内的长期边界，继续统一基础模型私有 owner，不为私有常量或字段制造同名壳 |
 | 3 | ViewModel 与 Cursor | `CursorsController` 仍使用 `SelectionSet + EditorEditCommand`，并早于 `ViewModelLines` 创建；Cursor 目录 7 个仅本地文件仍承载上游职责 | 建立 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor` 唯一链，迁移调用方后删除 7 个旧文件 |
-| 4 | ViewContext、ViewPart 与 View | 23 个同路径 View Part 被本地 scheduler 类占用，事件、render 阶段和释放由手工 coordinator 调度 | 先恢复 ViewContext 事件与 ViewPart 生命周期，再迁移 View 和全部 Part；不能逐个复制叶子类 |
+| 4 | ViewContext、ViewPart 与 View | 23 个同路径 View Part 被本地 scheduler 类占用，事件、render 阶段和释放由手工 coordinator 调度；同路径 `ViewModel` 未进入生产入口，并仍依赖当前缺失的 `ViewLayout`、`IViewModelLines` 和另一套光标控制契约 | 先闭合 ViewModel 的布局、投影行和光标依赖，再恢复 ViewContext 事件与 ViewPart 生命周期，最后迁移 View 和全部 Part；不能增加适配层或逐个复制叶子类 |
 | 5 | CodeEditor Widget 与服务 | `CodeEditorWidget`、`ICodeEditor`、编辑器服务和 contribution 生命周期不完整；Workbench 仍导入缺失的 Diff/MultiDiff canonical export | Widget、服务、贡献初始化、model attach/detach、view state 和公开对象身份同批闭环 |
 | 6 | GPU 与 Editor contribution | Styled GPU 是一条独立生产链；19 个 contribution 通过改成 `Editor*` 隐藏同路径声明缺口 | GPU 按 atlas→rasterizer→strategy→context→ViewLinesGpu 整链迁移；contribution 随各自 Widget/服务 owner 迁移 |
 

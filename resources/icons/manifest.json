@@ -162,6 +162,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "circle-small",
+      "file": "circle-small.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "circle-small-filled",
+      "file": "circle-small-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "claude",
       "file": "claude.svg",
       "rendering": "multicolor"

@@ -93,7 +93,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	focus(): void {
-		this.textAreaInput.focus();
+		this.textAreaInput.focusTextArea();
 	}
 
 	isFocused(): boolean {
@@ -119,6 +119,10 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 
 	getLastRenderData(): Position | null {
 		return this.lastRenderPosition;
+	}
+
+	public getTextAreaDomNode(): HTMLTextAreaElement {
+		return this.domNode;
 	}
 
 	writeScreenReaderContent(reason: string): void {

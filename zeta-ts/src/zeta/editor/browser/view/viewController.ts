@@ -178,7 +178,7 @@ export class ViewController extends Disposable {
 				bracketColorizationSource: options.bracketColorizationSource,
 			}));
 			this.element = this.editContext.domNode;
-			this.textArea = this.editContext instanceof TextAreaEditContext ? this.editContext.domNode : undefined;
+			this.textArea = this.editContext instanceof TextAreaEditContext ? this.editContext.getTextAreaDomNode() : undefined;
 			this.compositionController = this.editContext.compositionController;
 			this.onWillBeforeInput = this.editContext.onWillBeforeInput;
 			this.onWillTextUpdate = this.editContext.onWillTextUpdate;

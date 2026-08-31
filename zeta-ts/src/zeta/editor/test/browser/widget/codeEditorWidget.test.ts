@@ -34,6 +34,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { NativeEditContext } = await import('../../../browser/controller/editContext/native/nativeEditContext.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
 const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
@@ -65,6 +66,46 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(editor.element.isConnected, false);
 	assert.equal(model.getText(), "alpha");
 	assert.throws(() => editor.selections.textModel, /already disposed/);
+	dom.window.close();
+});
+
+test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	class TestEditContext extends dom.window.EventTarget {
+		public text = '';
+		public selectionStart = 0;
+		public selectionEnd = 0;
+		public updateText(start: number, end: number, text: string): void {
+			this.text = `${this.text.slice(0, start)}${text}${this.text.slice(end)}`;
+		}
+		public updateSelection(start: number, end: number): void {
+			this.selectionStart = start;
+			this.selectionEnd = end;
+		}
+	}
+	Object.defineProperty(dom.window, 'EditContext', { configurable: true, value: TestEditContext });
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	assert.ok(editor.view.editContext instanceof NativeEditContext);
+	const editContext = editor.view.editContext as InstanceType<typeof NativeEditContext>;
+	const input = editContext.domNode as HTMLElement & { editContext?: unknown };
+	assert.strictEqual(input.editContext, editContext.nativeContext);
+
+	const adoptedDom = new JSDOM('<!doctype html><body></body>');
+	input.editContext = undefined;
+	adoptedDom.window.document.body.append(adoptedDom.window.document.adoptNode(input));
+	editContext.setEditContextOnDomNode();
+	assert.strictEqual(input.ownerDocument, adoptedDom.window.document);
+	assert.strictEqual(input.editContext, editContext.nativeContext);
+	editor.dispose();
+	adoptedDom.window.close();
 	dom.window.close();
 });
 

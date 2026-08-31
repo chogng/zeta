@@ -108,7 +108,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		));
 	}
 
-	focus(): void {
+	public focusTextArea(): void {
 		this.element.focus({ preventScroll: true });
 		this.refreshFocusState();
 	}

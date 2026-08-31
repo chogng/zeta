@@ -54,3 +54,14 @@ test('textarea input publishes normalized composition state', () => {
 	});
 	dom.window.close();
 });
+
+test('textarea input owns focus and reports the resulting focus state', () => {
+	const dom = new JSDOM('<body><textarea></textarea></body>');
+	const element = dom.window.document.querySelector('textarea')!;
+	using input = new TextAreaInput(element);
+	input.connect();
+	input.focusTextArea();
+	assert.equal(dom.window.document.activeElement, element);
+	assert.equal(input.isFocused(), true);
+	dom.window.close();
+});
