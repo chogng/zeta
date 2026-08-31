@@ -1,37 +1,24 @@
 import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import type { BrowserEditContext } from "./nativeEditContext.js";
-
-type NativeEditContextOwner = string | HTMLElement;
+import type { NativeEditContext } from "./nativeEditContext.js";
 
 /**
  * Finds an active native edit context without making clipboard or host code
  * depend on the concrete editor view instance.
  */
 class NativeEditContextRegistryImpl {
-	private readonly byId = new Map<string, BrowserEditContext>();
-	private readonly byElement = new WeakMap<HTMLElement, BrowserEditContext>();
+	private readonly byId = new Map<string, NativeEditContext>();
 
-	register(owner: NativeEditContextOwner, context: BrowserEditContext): IDisposable {
-		if (typeof owner === "string") {
-			const previous = this.byId.get(owner);
-			if (previous && previous !== context) throw new Error(`Native EditContext owner '${owner}' is already registered`);
-			this.byId.set(owner, context);
-		} else {
-			const previous = this.byElement.get(owner);
-			if (previous && previous !== context) throw new Error("Native EditContext element is already registered");
-			this.byElement.set(owner, context);
-		}
+	register(ownerID: string, context: NativeEditContext): IDisposable {
+		const previous = this.byId.get(ownerID);
+		if (previous && previous !== context) throw new Error(`EditContext owner '${ownerID}' is already registered`);
+		this.byId.set(ownerID, context);
 		return toDisposable(() => {
-			if (typeof owner === "string") {
-				if (this.byId.get(owner) === context) this.byId.delete(owner);
-			} else if (this.byElement.get(owner) === context) {
-				this.byElement.delete(owner);
-			}
+			if (this.byId.get(ownerID) === context) this.byId.delete(ownerID);
 		});
 	}
 
-	get(owner: NativeEditContextOwner): BrowserEditContext | undefined {
-		return typeof owner === "string" ? this.byId.get(owner) : this.byElement.get(owner);
+	get(ownerID: string): NativeEditContext | undefined {
+		return this.byId.get(ownerID);
 	}
 }
 

@@ -1,34 +1,21 @@
 import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import { type EditorTextAreaInputContext } from "./textAreaEditContext.js";
-
-type TextAreaEditContextOwner = string | HTMLElement;
+import { type TextAreaEditContext } from "./textAreaEditContext.js";
 
 /** Tracks textarea edit contexts for host integrations and diagnostics. */
 class TextAreaEditContextRegistryImpl {
-	private readonly byId = new Map<string, EditorTextAreaInputContext>();
-	private readonly byElement = new WeakMap<HTMLElement, EditorTextAreaInputContext>();
+	private readonly byId = new Map<string, TextAreaEditContext>();
 
-	register(owner: TextAreaEditContextOwner, context: EditorTextAreaInputContext): IDisposable {
-		if (typeof owner === "string") {
-			const previous = this.byId.get(owner);
-			if (previous && previous !== context) throw new Error(`Textarea edit-context owner '${owner}' is already registered`);
-			this.byId.set(owner, context);
-		} else {
-			const previous = this.byElement.get(owner);
-			if (previous && previous !== context) throw new Error("A textarea edit context is already registered for this element");
-			this.byElement.set(owner, context);
-		}
+	register(ownerID: string, context: TextAreaEditContext): IDisposable {
+		const previous = this.byId.get(ownerID);
+		if (previous && previous !== context) throw new Error(`Textarea edit-context owner '${ownerID}' is already registered`);
+		this.byId.set(ownerID, context);
 		return toDisposable(() => {
-			if (typeof owner === "string") {
-				if (this.byId.get(owner) === context) this.byId.delete(owner);
-			} else if (this.byElement.get(owner) === context) {
-				this.byElement.delete(owner);
-			}
+			if (this.byId.get(ownerID) === context) this.byId.delete(ownerID);
 		});
 	}
 
-	get(owner: TextAreaEditContextOwner): EditorTextAreaInputContext | undefined {
-		return typeof owner === "string" ? this.byId.get(owner) : this.byElement.get(owner);
+	get(ownerID: string): TextAreaEditContext | undefined {
+		return this.byId.get(ownerID);
 	}
 }
 

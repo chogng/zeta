@@ -14,7 +14,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type View } from "../../../browser/view.js";
-import { EditorInputContext } from "../../../browser/controller/editContext/editContext.js";
+import { AbstractEditContext } from "../../../browser/controller/editContext/editContext.js";
 import { createEditorClipboardCopyEvent, createClipboardPasteEvent, InMemoryClipboardMetadataManager, readEditorClipboardText, type ClipboardStoredMetadata, type IEditorClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewParts/viewLines/viewLine.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from '../../dropOrPasteInto/browser/textFileTransfer.js';
@@ -81,15 +81,15 @@ export class ClipboardController extends Disposable {
 	private asynchronousPasteRequest = 0;
 
 	constructor(
-		target: EditorInputContext | HTMLElement,
+		target: AbstractEditContext | HTMLElement,
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		private readonly clipboardService: IClipboardService,
 		options: ClipboardControllerOptions = {},
 	) {
 		super();
-		const editContext = target instanceof EditorInputContext ? target : undefined;
-		if (target instanceof EditorInputContext) this.element = target.domNode;
+		const editContext = target instanceof AbstractEditContext ? target : undefined;
+		if (target instanceof AbstractEditContext) this.element = target.domNode;
 		else this.element = target;
 		if (viewport.textModel !== selectionController.textModel) {
 			this.dispose();

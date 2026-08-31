@@ -117,7 +117,7 @@ export interface EditContextPosition {
  * browser. This is the same seam that lets VS Code provide native and
  * textarea edit contexts side by side.
  */
-export abstract class EditorInputContext extends Disposable {
+export abstract class AbstractEditContext extends Disposable {
 	abstract readonly domNode: HTMLElement;
 	abstract readonly textArea: HTMLTextAreaElement | undefined;
 	private readonly willCopyEmitter = this._register(new Emitter<IEditorClipboardCopyEvent>());
@@ -355,14 +355,14 @@ interface ActiveComposition {
  */
 export class CompositionController extends Disposable {
 	private readonly _onDidChange = this._register(new Emitter<boolean>());
-	private readonly input: EditorInputContext;
+	private readonly input: AbstractEditContext;
 	private readonly initialReadOnly: boolean;
 	private activeComposition: ActiveComposition | undefined;
 
 	readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
 	constructor(
-		input: EditorInputContext,
+		input: AbstractEditContext,
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 	) {

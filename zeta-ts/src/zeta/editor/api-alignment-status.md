@@ -55,17 +55,17 @@
 | --- | --- | --- |
 | `browser/controller/dragScrolling.ts` | `DragScrolling` | 当前只有仅本地 `bidirectionalDragScrolling.ts`，其双轴像素滚动职责不同于上游抽象 owner；需随 `ViewContext`、outside-editor target、`MouseTargetFactory`、render/hit-test、RTL 与 `dispatchMouse` 整链迁移后删除旧文件 |
 | `browser/controller/mouseHandler.ts` | `MouseHandler` | 已只保留浏览器指针捕获、拖动、自动滚动、目标解析和输入事件发布；选区策略已迁入 `ViewController.dispatchMouse`，构造参数仍待随 `ViewContext` 和 pointer helper 收敛 |
-| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 本地职责已改名或移出上游 owner |
-| `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 本地职责已改名或移出上游 owner |
+| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 本地仍使用 `IEditorClipboardCopyEvent`，且复制数据由 `ClipboardController` 事后生成；需先把选区数据生成迁回此 owner，再删除旧事件形状 |
+| `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 本地仍由无模型上下文的 `createEditorClipboardCopyEvent` 只包装 DOM 事件；需随 `ViewContext` 接入复制数据、元数据写入和内存记录后直接替换旧入口 |
 | `browser/controller/editContext/native/debugEditContext.ts` | `DebugEditContext` | 本地职责已改名或移出上游 owner |
-| `browser/controller/editContext/native/nativeEditContextUtils.ts` | `FocusTracker` | 本地 DOM 焦点助手改为明确的 `EditContextFocusTracker` |
-| `browser/controller/editContext/editContext.ts` | `AbstractEditContext` | 本地输入路由与 composition owner 改为 `EditorInputContext` |
-| `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 本地浏览器 EditContext 实现改为 `BrowserEditContext` |
-| `browser/controller/editContext/native/screenReaderContentRich.ts` | `RichScreenReaderContent` | 本地无障碍镜像实现改为 `EditorRichScreenReaderContent` |
-| `browser/controller/editContext/native/screenReaderContentSimple.ts` | `SimpleScreenReaderContent` | 本地无障碍镜像实现改为 `EditorSimpleScreenReaderContent` |
-| `browser/controller/editContext/native/screenReaderSupport.ts` | `ScreenReaderSupport` | 本地输入层无障碍协调器改为 `EditorScreenReaderSupport` |
-| `browser/controller/editContext/textArea/textAreaEditContext.ts` | `TextAreaEditContext` | 本地 textarea 输入上下文改为 `EditorTextAreaInputContext` |
-| `browser/controller/editContext/textArea/textAreaEditContextInput.ts` | `TextAreaInput` | 本地 DOM 事件适配器改为 `EditorTextAreaInput` |
+| `browser/controller/editContext/native/nativeEditContextUtils.ts` | `FocusTracker` | 已恢复公开名并由浏览器输入实现实际持有；构造契约和日志依赖仍待收敛 |
+| `browser/controller/editContext/editContext.ts` | `AbstractEditContext` | 已恢复公开名与剪贴板事件入口；当前仍继承 `Disposable` 且持有输入路由与组合输入状态，需随 `ViewPart` 生命周期迁移 |
+| `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 已恢复公开名、工厂 owner 和按编辑器 ID 注册；事件、渲染阶段及 `ViewContext` 构造契约仍待收敛 |
+| `browser/controller/editContext/native/screenReaderContentRich.ts` | `RichScreenReaderContent` | 已恢复公开名并由 `ScreenReaderSupport` 实际选择；配置事件和视图渲染阶段仍待收敛 |
+| `browser/controller/editContext/native/screenReaderContentSimple.ts` | `SimpleScreenReaderContent` | 已恢复公开名并实际承担简单无障碍镜像；选择同步和 `ViewContext` 构造契约仍待收敛 |
+| `browser/controller/editContext/native/screenReaderSupport.ts` | `ScreenReaderSupport` | 已恢复公开名并由 `NativeEditContext` 持有；视图事件与 prepare/render 生命周期仍待收敛 |
+| `browser/controller/editContext/textArea/textAreaEditContext.ts` | `TextAreaEditContext` | 已恢复公开名、按编辑器 ID 注册和真实输入调用链；仍缺 `ViewPart` 事件与渲染阶段 |
+| `browser/controller/editContext/textArea/textAreaEditContextInput.ts` | `TextAreaInput` | 已恢复公开名并真实负责 textarea DOM 事件、焦点、选区和释放；host 事件契约仍待收敛 |
 | `browser/gpu/atlas/textureAtlas.ts` | `TextureAtlas` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/atlas/textureAtlasPage.ts` | `TextureAtlasPage` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/atlas/textureAtlasShelfAllocator.ts` | `TextureAtlasShelfAllocator` | 本地职责已改名或移出上游 owner |

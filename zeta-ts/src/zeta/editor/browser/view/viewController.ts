@@ -27,9 +27,9 @@ import { type TextModel } from '../../common/model/textModel.js';
 import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
 import { type View } from '../view.js';
 import { NavigationCommandRevealType } from '../coreCommands.js';
-import { type CompositionController, type EditContextCharacterBounds, type EditContextOptions, type EditContextTextUpdate, type EditorInputContext } from '../controller/editContext/editContext.js';
-import { createNativeEditContext, supportsNativeEditContext } from '../controller/editContext/native/editContextFactory.js';
-import { EditorTextAreaInputContext } from '../controller/editContext/textArea/textAreaEditContext.js';
+import { type AbstractEditContext, type CompositionController, type EditContextCharacterBounds, type EditContextOptions, type EditContextTextUpdate } from '../controller/editContext/editContext.js';
+import { NativeEditContext, type NativeEditContextWindow } from '../controller/editContext/native/nativeEditContext.js';
+import { TextAreaEditContext } from '../controller/editContext/textArea/textAreaEditContext.js';
 import { ViewUserInputEvents } from './viewUserInputEvents.js';
 import { type IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { type IEditorAriaOptions, type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editorBrowser.js';
@@ -128,7 +128,7 @@ export class ViewController extends Disposable {
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	readonly userInputEvents: ViewUserInputEvents;
 	readonly ownerId: string;
-	readonly editContext: EditorInputContext;
+	readonly editContext: AbstractEditContext;
 	readonly element: HTMLElement;
 	readonly textArea: HTMLTextAreaElement | undefined;
 	readonly compositionController: CompositionController;
@@ -178,7 +178,7 @@ export class ViewController extends Disposable {
 				bracketColorizationSource: options.bracketColorizationSource,
 			}));
 			this.element = this.editContext.domNode;
-			this.textArea = this.editContext instanceof EditorTextAreaInputContext ? this.editContext.domNode : undefined;
+			this.textArea = this.editContext instanceof TextAreaEditContext ? this.editContext.domNode : undefined;
 			this.compositionController = this.editContext.compositionController;
 			this.onWillBeforeInput = this.editContext.onWillBeforeInput;
 			this.onWillTextUpdate = this.editContext.onWillTextUpdate;
@@ -607,10 +607,11 @@ function lineEndExclusive(model: TextModel, lineNumber: number): Position {
 		: new Position(lineNumber, model.getLineContent(lineNumber).length + 1);
 }
 
-function createEditContext(container: HTMLElement, options: EditContextOptions): EditorInputContext {
-	return supportsNativeEditContext(container)
-		? createNativeEditContext(container, options)
-		: new EditorTextAreaInputContext(container, options);
+function createEditContext(container: HTMLElement, options: EditContextOptions): AbstractEditContext {
+	const ownerWindow = container.ownerDocument.defaultView as NativeEditContextWindow | null;
+	return typeof ownerWindow?.EditContext === 'function'
+		? new NativeEditContext(container, options)
+		: new TextAreaEditContext(container, options);
 }
 
 let viewId = 1;

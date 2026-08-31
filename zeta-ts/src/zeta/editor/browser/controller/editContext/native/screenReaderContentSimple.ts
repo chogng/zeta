@@ -1,9 +1,9 @@
 import { addDisposableListener, h, text as createText } from "../../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { clampScreenReaderOffset, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, type NativeScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
+import { clampScreenReaderOffset, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
 
 /** Plain-text screen-reader projection used by the native EditContext. */
-export class EditorSimpleScreenReaderContent extends Disposable implements NativeScreenReaderContent {
+export class SimpleScreenReaderContent extends Disposable implements IScreenReaderContent {
 	readonly element: HTMLDivElement;
 	protected state: ScreenReaderContentState | undefined;
 

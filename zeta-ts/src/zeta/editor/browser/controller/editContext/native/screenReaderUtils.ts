@@ -48,7 +48,7 @@ export interface ScreenReaderContentLayout {
 	readonly scrollTop: number;
 }
 
-export interface NativeScreenReaderContent {
+export interface IScreenReaderContent {
 	readonly element: HTMLElement;
 	getState(): ScreenReaderContentState | undefined;
 	sync(state: ScreenReaderContentState): void;
