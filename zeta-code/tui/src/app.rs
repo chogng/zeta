@@ -22,8 +22,6 @@ pub(crate) use bootstrap::slash_command_registry;
 pub(crate) use command::AppCommand;
 #[cfg(test)]
 pub(crate) use composer_mode::ComposerMode;
-#[cfg(test)]
-pub(crate) use composer_mode::ComposerMode;
 pub(crate) use event::AppEvent;
 pub(crate) use event_loop::run;
 #[cfg(test)]
