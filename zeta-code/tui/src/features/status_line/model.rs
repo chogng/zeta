@@ -128,63 +128,35 @@ impl StatusLineModel {
         });
     }
 
-    pub(crate) fn text_for_width(
+    pub(crate) fn top_text_for_width(&self, width: usize, runtime: StatusLineRuntime) -> String {
+        let runtime = runtime.text();
+        let mut values = Vec::new();
+        if !runtime.is_empty() {
+            values.push(DisplayValue {
+                full: runtime.clone(),
+                compact: runtime,
+            });
+        }
+        values.extend(self.configured_values());
+        fit_values(&values, width)
+    }
+
+    pub(crate) fn policy_text_for_width(
         &self,
         width: usize,
         approval: impl Into<ApprovalModeStatus>,
     ) -> String {
-        if width == 0 {
+        if !self.settings.enabled(StatusLineItem::Permissions) {
             return String::new();
         }
-
-        let values = self.configured_values(approval.into());
-        if values.is_empty() {
-            return String::new();
-        }
-
-        let full = values
-            .iter()
-            .map(|value| value.full.as_str())
-            .collect::<Vec<_>>()
-            .join(SEPARATOR);
-        if full.width() <= width {
-            return full;
-        }
-
-        let compact = values
-            .iter()
-            .map(|value| value.compact.as_str())
-            .collect::<Vec<_>>()
-            .join(SEPARATOR);
-        if compact.width() <= width {
-            return compact;
-        }
-
-        for visible in (1..values.len()).rev() {
-            let candidate = values[..visible]
-                .iter()
-                .map(|value| value.compact.as_str())
-                .collect::<Vec<_>>()
-                .join(SEPARATOR);
-            if candidate.width() <= width {
-                return candidate;
-            }
-        }
-
-        truncate_with_ellipsis(&values[0].compact, width)
+        truncate_with_ellipsis(&approval_mode_text(approval.into()), width)
     }
 
-    fn configured_values(&self, approval: ApprovalModeStatus) -> Vec<DisplayValue> {
+    fn configured_values(&self) -> Vec<DisplayValue> {
         let mut values = Vec::new();
         for item in self.settings.items() {
             match item {
-                StatusLineItem::Permissions => {
-                    let permission = approval_mode_text(approval);
-                    values.push(DisplayValue {
-                        full: permission.clone(),
-                        compact: permission,
-                    });
-                }
+                StatusLineItem::Permissions => {}
                 StatusLineItem::Model => values.extend(self.preferred_model.iter().cloned()),
                 StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),
                 StatusLineItem::GitChanges => values.extend(self.git_changes.iter().cloned()),
@@ -192,6 +164,47 @@ impl StatusLineModel {
         }
         values
     }
+}
+
+fn fit_values(values: &[DisplayValue], width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+
+    if values.is_empty() {
+        return String::new();
+    }
+
+    let full = values
+        .iter()
+        .map(|value| value.full.as_str())
+        .collect::<Vec<_>>()
+        .join(SEPARATOR);
+    if full.width() <= width {
+        return full;
+    }
+
+    let compact = values
+        .iter()
+        .map(|value| value.compact.as_str())
+        .collect::<Vec<_>>()
+        .join(SEPARATOR);
+    if compact.width() <= width {
+        return compact;
+    }
+
+    for visible in (1..values.len()).rev() {
+        let candidate = values[..visible]
+            .iter()
+            .map(|value| value.compact.as_str())
+            .collect::<Vec<_>>()
+            .join(SEPARATOR);
+        if candidate.width() <= width {
+            return candidate;
+        }
+    }
+
+    truncate_with_ellipsis(&values[0].compact, width)
 }
 
 pub(super) fn approval_mode_text(approval: ApprovalModeStatus) -> String {

@@ -12,7 +12,6 @@ use crate::features::rewind;
 use crate::features::sessions;
 use crate::features::sessions::ActiveConversation;
 use crate::features::sessions::ConversationChange;
-use crate::features::sessions::NewConversationKind;
 use crate::features::sessions::ResumeOutcome;
 use crate::features::skills::load_selection;
 use crate::features::status;
@@ -36,9 +35,9 @@ use zeta_protocol::Thread;
 
 pub(crate) struct ProductCommandOutput {
     pub(crate) conversation: ActiveConversation,
+    pub(crate) command: String,
     pub(crate) events: Vec<AppEvent>,
     pub(crate) conversation_change: Option<ConversationChange>,
-    pub(crate) exit_requested: bool,
 }
 
 pub(crate) fn execute_product_command<T>(
@@ -50,13 +49,14 @@ pub(crate) fn execute_product_command<T>(
 where
     T: JsonRpcTransport,
 {
+    let command = invocation.display_text();
     conversation
         .try_execute(client, invocation, &dir_permissions)
         .map(|output| ProductCommandOutput {
             conversation,
+            command,
             events: output.events,
             conversation_change: output.conversation_change,
-            exit_requested: output.exit_requested,
         })
         .map_err(|error| error.to_string())
 }
@@ -175,11 +175,8 @@ impl ActiveConversation {
                 }
             }
             TuiSlashCommandAction::Archive => {
-                let archived_id = self.archive_session(client).map_err(session_error)?;
-                output.events.push(AppEvent::ProductNotice(format!(
-                    "Archived session {archived_id}."
-                )));
-                output.exit_requested = true;
+                output.conversation_change =
+                    Some(self.archive_and_replace(client).map_err(session_error)?);
             }
             TuiSlashCommandAction::Rewind => {
                 if arguments.is_empty() {
@@ -202,14 +199,9 @@ impl ActiveConversation {
                     );
                 }
             }
-            TuiSlashCommandAction::Clear | TuiSlashCommandAction::New => {
-                let kind = match command {
-                    TuiSlashCommandAction::Clear => NewConversationKind::Clear,
-                    TuiSlashCommandAction::New => NewConversationKind::New,
-                    _ => unreachable!("only new-chat commands reach this branch"),
-                };
+            TuiSlashCommandAction::New => {
                 output.conversation_change = Some(
-                    self.replace_with_new(client, kind, &arguments)
+                    self.replace_with_new(client, &arguments)
                         .map_err(session_error)?,
                 );
             }
@@ -258,8 +250,7 @@ impl ActiveConversation {
                         .map_err(session_error)?,
                 );
             }
-            TuiSlashCommandAction::Copy
-            | TuiSlashCommandAction::Config
+            TuiSlashCommandAction::Config
             | TuiSlashCommandAction::Export
             | TuiSlashCommandAction::Help
             | TuiSlashCommandAction::Shortcuts
@@ -297,7 +288,6 @@ impl ActiveConversation {
 struct CommandOutput {
     events: Vec<AppEvent>,
     conversation_change: Option<ConversationChange>,
-    exit_requested: bool,
 }
 
 #[cfg(test)]

@@ -357,7 +357,7 @@ AppServerEvents::Notification(ServerNotification)
                     └─► 无界面运行的完成状态
 ```
 
-产品消费端不得穷尽列出未拥有的 notification。TUI 当前拥有 Connector Pane，因此由
+产品消费端不得穷尽列出未拥有的 notification。TUI 当前拥有 Connector picker，因此由
 Connector capability 消费 `ConnectorsChanged` 并触发 canonical list refresh；其他产品若不拥有
 Connector UI，则无需增加对应分支。Connector 状态不能塞进通用 connection lifecycle event。
 

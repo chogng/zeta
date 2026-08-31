@@ -1298,7 +1298,7 @@ impl App {
             Status::WaitingForUserInput => Some("waiting input"),
             Status::WaitingForCapability => Some("waiting capability"),
             Status::Cancelling => Some("cancelling"),
-            Status::Error => Some("error"),
+            Status::Error => None,
         };
         StatusLineRuntime {
             state,
@@ -1959,6 +1959,15 @@ impl App {
             .name
             .parse::<TuiSlashCommandAction>()
             .ok();
+        if invocation.origin == SlashCommandOrigin::Local
+            && local.is_some()
+            && !matches!(local, Some(TuiSlashCommandAction::Quit))
+        {
+            self.thread
+                .update(ThreadPresentationEvent::CommandSubmitted(
+                    invocation.display_text(),
+                ));
+        }
         if invocation.origin == SlashCommandOrigin::Local && invocation.arguments.is_empty() {
             match local {
                 Some(TuiSlashCommandAction::Sessions | TuiSlashCommandAction::Agents) => {
@@ -1992,10 +2001,7 @@ impl App {
         }
         if matches!(self.status, Status::Working)
             && invocation.origin == SlashCommandOrigin::Local
-            && !matches!(
-                local,
-                Some(TuiSlashCommandAction::Copy | TuiSlashCommandAction::Export)
-            )
+            && !matches!(local, Some(TuiSlashCommandAction::Export))
         {
             self.thread
                 .update(ThreadPresentationEvent::FailureReported(format!(
@@ -2009,11 +2015,6 @@ impl App {
                 if invocation.arguments.is_empty() =>
             {
                 Some(AppCommand::Quit)
-            }
-            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Copy))
-                if invocation.arguments.is_empty() =>
-            {
-                Some(AppCommand::CopyLastResponse)
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Export)) => {
                 let requested_path = (!invocation.display_arguments.trim().is_empty())

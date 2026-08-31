@@ -25,13 +25,11 @@ pub(crate) enum TuiSlashCommandAction {
     Archive,
     Connectors,
     Rewind,
-    Clear,
     Config,
     AddDir,
     Fork,
     Help,
     Shortcuts,
-    Copy,
     Export,
     Model,
     Theme,
@@ -59,15 +57,13 @@ impl TuiSlashCommandAction {
             Self::Mcp => "list configured MCP tools",
             Self::Connectors => "show external service connections",
             Self::Resume => "list or resume a saved session",
-            Self::Archive => "archive the current session and exit",
+            Self::Archive => "archive the current session and start a new chat",
             Self::Rewind => "return to an earlier message checkpoint",
-            Self::Clear => "clear the terminal and start a new chat",
             Self::Config => "show the current configuration",
             Self::AddDir => "add or manage a session directory",
             Self::Fork => "fork the current chat",
             Self::Help => "show executable slash commands",
             Self::Shortcuts => "browse and customize terminal shortcuts",
-            Self::Copy => "copy the latest Zeta response",
             Self::Export => "export this conversation as Markdown",
             Self::Model => "show or set the preferred provider/model",
             Self::Theme => "show or set the terminal color theme",
@@ -80,7 +76,6 @@ impl TuiSlashCommandAction {
         match self {
             Self::Resume
             | Self::Rewind
-            | Self::Clear
             | Self::AddDir
             | Self::Fork
             | Self::Export
@@ -115,13 +110,18 @@ pub(crate) struct SlashCommandInvocation {
 }
 
 impl SlashCommandInvocation {
-    pub(crate) fn into_forwarded_submission(mut self) -> ChatSubmission {
-        let command_text = format!("/{}", self.command.name);
-        let display_text = if self.display_arguments.is_empty() {
-            command_text.clone()
+    pub(crate) fn display_text(&self) -> String {
+        let command = format!("/{}", self.command.name);
+        if self.display_arguments.is_empty() {
+            command
         } else {
-            format!("{command_text} {}", self.display_arguments)
-        };
+            format!("{command} {}", self.display_arguments)
+        }
+    }
+
+    pub(crate) fn into_forwarded_submission(mut self) -> ChatSubmission {
+        let display_text = self.display_text();
+        let command_text = format!("/{}", self.command.name);
 
         match self.arguments.first_mut() {
             Some(ChatInputItem::Text(text)) => {

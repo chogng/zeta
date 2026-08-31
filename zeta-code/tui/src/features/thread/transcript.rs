@@ -274,9 +274,44 @@ impl TranscriptProjection {
         });
     }
 
-    pub(super) fn command_started(&mut self, command: String) {
+    pub(super) fn command_submitted(&mut self, command: String) {
         let cell_id = self.local_id("command");
         let render_revision = self.render_revision();
+        self.cells.push(TranscriptCell {
+            cell_id,
+            source_entry_id: None,
+            lifecycle: CellLifecycle::Final,
+            render_revision,
+            body: TranscriptCellBody::Command {
+                command,
+                result: None,
+                status: CommandStatus::Submitted,
+            },
+        });
+    }
+
+    pub(super) fn command_started(&mut self, command: String) {
+        let render_revision = self.render_revision();
+        if let Some(cell) = self.cells.iter_mut().rev().find(|cell| {
+            matches!(
+                &cell.body,
+                TranscriptCellBody::Command {
+                    command: submitted,
+                    result: None,
+                    status: CommandStatus::Submitted,
+                } if submitted == &command
+            )
+        }) {
+            cell.lifecycle = CellLifecycle::Live;
+            cell.render_revision = render_revision;
+            cell.body = TranscriptCellBody::Command {
+                command,
+                result: None,
+                status: CommandStatus::Running,
+            };
+            return;
+        }
+        let cell_id = self.local_id("command");
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
@@ -297,7 +332,8 @@ impl TranscriptProjection {
                 &cell.body,
                 TranscriptCellBody::Command {
                     command: active,
-                    status: CommandStatus::Running,
+                    result: None,
+                    status: CommandStatus::Submitted | CommandStatus::Running,
                     ..
                 } if active == &command
             )

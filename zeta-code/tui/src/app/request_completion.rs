@@ -3,7 +3,6 @@ use super::App;
 use super::AppEvent;
 use super::chat_input_catalog_snapshot;
 use super::dispatch::ProductCommandOutput;
-use crate::TuiExit;
 use crate::components::chat_input::ChatInputCatalog;
 use crate::components::chat_input::ChatSubmission;
 use crate::components::steer::SteerId;
@@ -12,7 +11,6 @@ use crate::features::keymap;
 use crate::features::queue::QueueId;
 use crate::features::sessions::ConversationChange;
 use crate::features::sessions::ConversationTranscript;
-use crate::features::sessions::NewConversationKind;
 use crate::features::skills;
 use crate::features::skills::SkillChoices;
 use crate::features::status_line::StatusLineSettings;
@@ -235,7 +233,7 @@ pub(super) fn create_manager_session_and_start(
 ) -> Result<ManagerSessionCompletion, String> {
     let title = submission.display_text.clone();
     let change = conversation
-        .replace_with_new(&mut client, NewConversationKind::New, &title)
+        .replace_with_new(&mut client, &title)
         .map_err(|error| error.to_string())?;
     let conversation =
         finish_conversation_request(&mut client, conversation, subscription, change)?;
@@ -285,7 +283,7 @@ pub(super) fn apply_request_completion(
     active_turn: &mut Option<TurnId>,
     thread_subscription: &mut ThreadSubscription,
     app: &mut App,
-) -> Option<TuiExit> {
+) {
     match completion {
         RequestCompletion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, app),
         RequestCompletion::ConfigRefreshed(Err(error)) => {
@@ -309,7 +307,7 @@ pub(super) fn apply_request_completion(
                 app,
                 change,
                 switch,
-                ConversationCompletionPresentation::Notice,
+                ConversationCompletionPresentation::Silent,
             );
             apply_turn_start_completion(
                 turn,
@@ -378,25 +376,23 @@ pub(super) fn apply_request_completion(
             for event in output.events.drain(..) {
                 app.update(event);
             }
-            if output.exit_requested {
-                return Some(TuiExit::UserRequested);
-            }
             if let Some(change) = output.conversation_change.take() {
                 let Some((subscription, switch)) = switched else {
                     app.update(AppEvent::FailureReported(
                         "conversation command completed without a subscription result".into(),
                     ));
-                    return None;
+                    return;
                 };
                 *conversation = output.conversation;
                 *thread_subscription = subscription;
+                let command = output.command;
                 finish_conversation_change(
                     conversation,
                     active_turn,
                     app,
                     change,
                     switch,
-                    ConversationCompletionPresentation::Notice,
+                    ConversationCompletionPresentation::Command(command),
                 );
             }
         }
@@ -527,7 +523,7 @@ pub(super) fn apply_request_completion(
                     conversation.session_id(),
                     conversation.thread_id()
                 )));
-                return None;
+                return;
             }
             conversation.set_thread_sequence(snapshot.thread.sequence);
             let install_transcript = thread_subscription.apply_latest_snapshot(
@@ -553,7 +549,7 @@ pub(super) fn apply_request_completion(
                     conversation.session_id(),
                     conversation.thread_id()
                 )));
-                return None;
+                return;
             }
             thread_subscription.apply_history_page(&page.thread, page.boundary);
             app.update(AppEvent::ThreadTranscriptHistoryPageReceived(
@@ -584,7 +580,6 @@ pub(super) fn apply_request_completion(
             app.update(AppEvent::InterruptFailed(error.to_string()));
         }
     }
-    None
 }
 
 pub(super) fn apply_tui_config(config: ConfigReadResult, app: &mut App) {
@@ -778,6 +773,7 @@ fn turn_plan(
 enum ConversationCompletionPresentation {
     Command(String),
     Notice,
+    Silent,
 }
 
 fn finish_conversation_change(
@@ -825,5 +821,6 @@ fn finish_conversation_change(
         ConversationCompletionPresentation::Notice => {
             app.update(AppEvent::ProductNotice(change.notice));
         }
+        ConversationCompletionPresentation::Silent => {}
     }
 }

@@ -11,6 +11,7 @@ pub(crate) enum MessageRole {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum CommandStatus {
+    Submitted,
     Running,
     Succeeded,
     Failed,

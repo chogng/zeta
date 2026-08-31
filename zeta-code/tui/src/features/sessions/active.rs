@@ -25,11 +25,6 @@ pub(crate) struct ActiveConversation {
     thread_sequence: u64,
 }
 
-pub(crate) enum NewConversationKind {
-    Clear,
-    New,
-}
-
 pub(crate) struct ConversationChange {
     pub(crate) notice: String,
     pub(crate) transcript: ConversationTranscript,
@@ -162,10 +157,10 @@ impl ActiveConversation {
         })
     }
 
-    pub(crate) fn archive_session<T>(
+    pub(crate) fn archive_and_replace<T>(
         &mut self,
         client: &mut AppServerClient<T>,
-    ) -> Result<SessionId, SessionsError>
+    ) -> Result<ConversationChange, SessionsError>
     where
         T: JsonRpcTransport,
     {
@@ -174,43 +169,37 @@ impl ActiveConversation {
                 session_id: self.session.session_id.clone(),
             })?
             .session;
-        let archived_id = self.session.session_id.clone();
+        let session_id = self.session.session_id.clone();
         self.session = client
             .request_session(SessionRequestParams {
                 command_id: new_command_id("archive"),
-                session_id: archived_id.clone(),
+                session_id,
                 request: SessionRequest::Archive,
             })
             .and_then(expect_session_result)?
             .session;
-        Ok(archived_id)
+        let mut change = self.replace_with_new(client, "")?;
+        change.notice = "Archived the previous session and started a new session.".into();
+        Ok(change)
     }
 
     pub(crate) fn replace_with_new<T>(
         &mut self,
         client: &mut AppServerClient<T>,
-        kind: NewConversationKind,
         arguments: &str,
     ) -> Result<ConversationChange, SessionsError>
     where
         T: JsonRpcTransport,
     {
         let title = if arguments.is_empty() {
-            match kind {
-                NewConversationKind::Clear => "Cleared conversation",
-                NewConversationKind::New => "TUI conversation",
-            }
-            .to_owned()
+            "TUI conversation".to_owned()
         } else {
             arguments.to_owned()
         };
         let (conversation, _) = create_conversation(client, title)?;
         *self = conversation;
         Ok(ConversationChange {
-            notice: format!(
-                "Started session {} on thread {}.",
-                self.session.session_id, self.thread_id
-            ),
+            notice: "Started a new session.".into(),
             transcript: ConversationTranscript::Clear,
         })
     }

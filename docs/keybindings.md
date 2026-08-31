@@ -166,7 +166,7 @@ Zeta Code 当前可配置 command ID：
 | Command ID | 行为 |
 | --- | --- |
 | `zetaCode.action.cycleApprovalMode` | 切换下一次提交的权限模式 |
-| `zetaCode.action.openRewind` | 直接打开 Rewind Pane；不模拟 `Esc Esc` |
+| `zetaCode.action.openRewind` | 直接打开 Rewind picker；不模拟 `Esc Esc` |
 | `zetaCode.action.attachClipboardImage` | 从本机剪贴板附加图片 |
 | `zetaCode.action.interruptOrQuit` | 工作时中断，空闲时退出 |
 | `zetaCode.action.copyLastResponse` | 复制最近一条 Agent response |
@@ -180,15 +180,15 @@ App 和 TUI 连接 App Server 后分别读取 `[gui].keybindings` 与 `[tui].key
 
 共享 `zeta-keybinding` 只编译规则，不读配置、不知道 profile 路径；App 与 TUI 分别拥有字段解释、诊断呈现和编辑，App Server 只校验配置 revision 并持久化前端传入的完整表。
 
-`/shortcuts` 只新增、替换或清除目标 command 的 User 字符串规则；固定操作项只读。“替换 User 项”不会删除 default 键位，也不会改写 `block = true` 规则。需要禁用 default 键位、添加 `when` 或设置平台覆盖时直接编辑 TOML。录制结果写入 portable `key`，因此适用于所有平台；单键和两段 Chord 可在 Pane 中录制，三至四段 Chord 继续直接配置。App 设置浮层同样只编辑 `[gui].keybindings` 中目标 command 的规则。
+`/shortcuts` 只新增、替换或清除目标 command 的 User 字符串规则；固定操作项只读。“替换 User 项”不会删除 default 键位，也不会改写 `block = true` 规则。需要禁用 default 键位、添加 `when` 或设置平台覆盖时直接编辑 TOML。录制结果写入 portable `key`，因此适用于所有平台；单键和两段 Chord 可在 Keymap editor 中录制，三至四段 Chord 继续直接配置。App 设置浮层同样只编辑 `[gui].keybindings` 中目标 command 的规则。
 
 ### 6.4 设置界面与后续边界
 
 | 阶段 | 状态 | 退出条件 |
 | --- | --- | --- |
 | 严格规则 schema、User 覆盖/blocker、平台覆盖、`when`、Chord 与配置刷新 | Current | Zeta Code、App 和共享 core 测试持续覆盖完整替换 |
-| Zeta Code 可搜索的 Keymap Pane | Current | `/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列汇总 default 与 User 键位，不展示内部 command ID；诊断和配置位置可见，可配置项只消费 `AppKeymap` snapshot |
-| Zeta Code 录制与保存 | Current | 单键/两段 Chord 录制只在临时 Pane 中截获输入；配置 revision 过期时拒绝保存，完整编译成功后才更新配置和运行时规则 |
+| Zeta Code 可搜索的 Keymap editor | Current | `/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列汇总 default 与 User 键位，不展示内部 command ID；诊断和配置位置可见，可配置项只消费 `AppKeymap` snapshot |
+| Zeta Code 录制与保存 | Current | 单键/两段 Chord 录制只在 Keymap editor 的 `KeyCapture` 中截获输入；配置 revision 过期时拒绝保存，完整编译成功后才更新配置和运行时规则 |
 | 目录提供的键位 | Not accepted | `DirConfigDocument` 不接受键位声明；如需支持必须先定义独立来源 capability 与显式启用 |
 | OS `systemWide` 热键 | Not accepted | 只可能由拥有窗口快捷键能力的 Zeta/App 实现；TUI 不支持 |
 
@@ -211,7 +211,7 @@ App 和 TUI 连接 App Server 后分别读取 `[gui].keybindings` 与 `[tui].key
 | TS/Rust parser conformance fixtures | Current | 两个实现读取同一 fixture 并通过 |
 | TS/Rust Resolver precedence fixtures | Current | Builtin/Workbench/User 来源、极值优先级、后注册覆盖、condition、blocker 和 prefix 读取同一 fixture |
 | Zeta Code 用户可配置 Keymap | Current | `[tui].keybindings`、User precedence/blocker、`when`、平台覆盖、Chord、配置刷新和坏更新恢复持续通过测试 |
-| Zeta Code Keymap Pane 与录制保存 | Current | 可搜索、来源/诊断可见；保存后直接安装同一份已校验规则，不建立第二套 Resolver |
+| Zeta Code Keymap editor 与录制保存 | Current | 可搜索、来源/诊断可见；保存后直接安装同一份已校验规则，不建立第二套 Resolver |
 
 当前 Rust 路径只有一套纯 core：App 的快捷键设置页面由 `zeta-settings` 管，工作界面的组合键提示由 `zeta-workbench` 管，Zeta Code 根级 Keymap 直接接入共享 Resolver。adapter 只做单向转换，不保留第二套 Resolver。
 

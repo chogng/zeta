@@ -54,7 +54,7 @@ fn session_layout_does_not_reserve_a_subagent_gap_without_both_surfaces() {
 }
 
 #[test]
-fn session_layout_places_query_immediately_above_the_input_region() {
+fn session_layout_places_query_immediately_above_the_input_area() {
     let areas = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 1, 3, 1, 0);
 
     assert_eq!(areas.request.height, 1);

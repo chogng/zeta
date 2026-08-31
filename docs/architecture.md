@@ -95,7 +95,7 @@ flowchart TD
 | --- | --- | --- | --- | --- |
 | 扩展系统 | 外部能力如何被发现、激活和撤销？ | Marketplace Manager 管 package lifecycle，各领域消费 capability；Plugin 只是 bundle，Connector 管账号，MCP 管协议，Skill 管指令 | 安装、领域授权、运行时和 Agent 消费是否分层 | [`marketplace-integration.md`](marketplace-integration.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
 | App Server 与协议 | 产品入口如何调用同一套权威能力？ | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约 | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`zeta-app-server-api.md`](zeta-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md) |
-| 产品界面 | 用户如何观察和控制这些系统？ | Desktop、CLI、TUI 的交互、呈现和平台适配 | 界面是否复制 Core 状态或在本地发明业务规则 | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、[`zeta-cli-architecture.md`](zeta-cli-architecture.md)、[`tui.md`](tui.md) |
+| 产品界面 | 用户如何观察和控制这些系统？ | Desktop、CLI、TUI 的交互、呈现和平台适配 | 界面是否复制 Core 状态或在本地发明业务规则 | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、[`zeta-code/docs`](../zeta-code/docs/README.md) |
 
 系统名称不是按照 crate 数量划分的。一个系统可以由多个 crate 实现，一个 crate 也可能只是某个
 系统的适配器。真正的边界由权威状态、最终决定、执行责任和失败语义决定。
@@ -187,8 +187,4 @@ flowchart TD
 4. 用真实调用关系检查实现是否仍符合系统边界；
 5. 如果实现无法映射回唯一系统，先记录并解决架构问题，不为现状补一个模糊名称。
 
-完整的文档分层、语言和图表规则见
-[`documentation-guidelines.md`](documentation-guidelines.md)。长期目标与 staged evolution 见
-[`zeta-code-architecture-codex-style-v2.md`](zeta-code-architecture-codex-style-v2.md)，
-Rust 产品内核和对外层的总体边界见
-[`zeta-rs-architecture.md`](zeta-rs-architecture.md)。
+完整的文档分层、语言和图表规则见 [`documentation-guidelines.md`](documentation-guidelines.md)。领域身份、Core、协议和 Rust 对外层分别由 [`domain-model.md`](domain-model.md)、[`core.md`](core.md)、[`protocol.md`](protocol.md) 与 [`zeta-rs-architecture.md`](zeta-rs-architecture.md) 拥有。

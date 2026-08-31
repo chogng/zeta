@@ -2,8 +2,8 @@
 
 > 状态：Current product model。本文是三条公开产品线的 canonical 说明。
 > Electron Desktop 的内置 Workbench 模式与窗口重载入口见 [`workbench-modes.md`](workbench-modes.md)；
-> 具体实现分别见 [`zeta-cli-architecture.md`](zeta-cli-architecture.md)、
-> [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、[`tui.md`](tui.md) 和
+> 具体实现分别见 [`zeta-code/docs`](../zeta-code/docs/README.md)、
+> [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) 和
 > [`app/TERMINAL.md`](../app/TERMINAL.md)。
 
 ## 快速理解

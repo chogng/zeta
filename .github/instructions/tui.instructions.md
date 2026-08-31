@@ -5,7 +5,7 @@ applyTo: "zeta-code/**"
 
 # Zeta Code CLI/TUI Guidelines
 
-Follow [`docs/tui.md`](../../docs/tui.md) for the product architecture, state ownership, event flow, current implementation, migration sequence, and validation requirements.
+Follow [`zeta-code/docs/tui.md`](../../zeta-code/docs/tui.md) for the product architecture, state ownership, event flow, current implementation, and validation requirements.
 
 `zeta-code` owns `zeta-cli`, `zeta-tui`, raw-mode lifecycle, Ratatui interaction, and CLI product composition. Do not move this product presentation or lifecycle into `zeta-rs`; shared backend semantics must first form a backend-neutral contract with a real non-TUI consumer.
 

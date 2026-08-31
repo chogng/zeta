@@ -1,13 +1,14 @@
-# Zeta CLI 架构与协作边界
+# Zeta Code 产品与 CLI 架构
 
-> 负责人：CLI 开发者  
-> App Server 与 Rust 对接负责人：zeta-rs 开发者  
+> 负责人：CLI 开发者
+> App Server 与 Rust 对接负责人：zeta-rs 开发者
 > CLI 与 Desktop 共用唯一的 Zeta App Server 产品契约。
-> 当前开发基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)
-> 本地启动与连接基线：[`app-server-client.md`](app-server-client.md)
-> 无交互执行基线：[`exec.md`](exec.md)
-> MCP Agent server：[`mcp-server.md`](mcp-server.md)
-> 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
+> TUI 状态、事件与布局边界：[`tui.md`](tui.md)
+> 当前开发基线：[`zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)
+> 本地启动与连接基线：[`app-server-client.md`](../../docs/app-server-client.md)
+> 无交互执行基线：[`exec.md`](../../docs/exec.md)
+> MCP Agent server：[`mcp-server.md`](../../docs/mcp-server.md)
+> 三条公开产品线与宿主边界：[`product-lines.md`](../../docs/product-lines.md)
 
 ## 快速理解
 
@@ -100,7 +101,7 @@ CLI 可以依赖产品层 `zeta-exec` 运行无交互 Agent，但不依赖目标
 dispatcher 直接调用 Core 用例。
 
 跨客户端的唯一外部门禁和进程内嵌规则以
-[`zeta-app-server-api.md#唯一外部门禁`](zeta-app-server-api.md#唯一外部门禁) 为准；本文件只描述
+[`zeta-app-server-api.md#唯一外部门禁`](../../docs/zeta-app-server-api.md#唯一外部门禁) 为准；本文件只描述
 CLI、TUI 和 exec 如何接入同一 App Server 契约。
 
 `zeta mcp-server` 是 `zeta-mcp-server` binary 的 CLI 入口。该 crate 依赖
@@ -141,7 +142,7 @@ Remote App Server
 `zeta-exec` 和 TUI 启动本地 App Server、完成 initialize、连接 request/event channel 并正确
 关闭。后续 `zeta-exec` 作为远程调度的 headless execution entry；scheduler adapter 仍通过
 这一 owned session 工作，不能建立第二套 Core 或 App Server 私有调用路径。完整 Job/Attempt、
-lease、event cursor 与 remote execution plane 边界见 [`exec.md`](exec.md)。
+lease、event cursor 与 remote execution plane 边界见 [`exec.md`](../../docs/exec.md)。
 
 ## 5. 请求与事件
 
@@ -165,7 +166,7 @@ CLI 不解析日志、stderr 或人类文本来判断状态。
 
 Human 输出可以演进；JSON/JSONL 是稳定 CLI 契约，但其事件必须由 App Server typed
 notification 显式映射。具体 mapping、stdout/stderr 和 scheduler event 规则由
-[`exec.md`](exec.md#7-输出契约) 维护。
+[`exec.md`](../../docs/exec.md#7-输出契约) 维护。
 
 ```json
 {
@@ -242,7 +243,7 @@ CLI 开发者交付：
 CLI 新需求不得通过直接依赖内部 crate 临时解决；先补产品 API 契约。
 
 当前可以实现的 method、notification 和限制以
-[`zeta-app-server-api.md`](zeta-app-server-api.md) 为准。
+[`zeta-app-server-api.md`](../../docs/zeta-app-server-api.md) 为准。
 
 ## 9. 验收
 

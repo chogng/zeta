@@ -1,8 +1,14 @@
+use super::InputPointerTarget;
 use super::draw;
 use super::input_overlay_index_at;
 use super::layout;
 use crate::app::App;
 use crate::app::AppEvent;
+use crate::components::chat_composer::ChatComposerPointerTarget;
+use crate::components::chat_input::ChatInputCatalog;
+use crate::components::chat_input::SkillCompletionItem;
+use crate::components::chat_input::SlashCommandCatalog;
+use crate::components::chat_input::built_in_slash_command_definitions;
 use crate::components::detail_list::DetailList;
 use crate::components::detail_list::DetailListRow;
 use crate::components::list_selection::ListSelectionGroup;
@@ -31,6 +37,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
+use zeta_protocol::ContentDigest;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerActivity;
@@ -38,8 +45,14 @@ use zeta_protocol::SessionManagerInfo;
 use zeta_protocol::SessionManagerStatus;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::SessionThread;
+use zeta_protocol::SkillId;
+use zeta_protocol::SkillName;
+use zeta_protocol::SkillRef;
+use zeta_protocol::SkillSourceId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
+use zeta_slash_commands::SlashCommandArgumentMode;
+use zeta_slash_commands::SlashCommandDefinition;
 
 fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
     let mut settings = TerminalSettings::default();
@@ -59,7 +72,10 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
     let status_line = rendered.lines().last().unwrap();
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(
+        status_line.trim_end(),
+        "  ⏸ ask permissions on (shift+tab to cycle)"
+    );
 }
 
 #[test]
@@ -155,16 +171,22 @@ fn empty_session_input_offers_manager_navigation() {
     );
 
     let rendered = render(&app, 80, 20);
-    let status_line = rendered.lines().last().unwrap();
+    let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(status_line.starts_with("  ⏸ ask permissions on"));
-    assert!(status_line.trim_end().ends_with("← agents"));
+    assert!(rows[18].trim_end().ends_with("← agents"));
+    assert_eq!(
+        rows[19].trim_end(),
+        "  ⏸ ask permissions on (shift+tab to cycle)"
+    );
 
     app.insert_text("draft");
     let rendered = render(&app, 80, 20);
     let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(
+        status_line.trim_end(),
+        "  ⏸ ask permissions on (shift+tab to cycle)"
+    );
     assert!(!status_line.contains("← agents"));
 }
 
@@ -180,8 +202,8 @@ fn narrow_session_footer_keeps_status_and_manager_hint_on_separate_rows() {
     let rendered = render(&app, 24, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
-    assert!(rows[19].trim_end().ends_with("← agents"));
+    assert!(rows[18].trim_end().ends_with("← agents"));
+    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
@@ -302,9 +324,9 @@ fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
     assert_eq!(
         [ask_permissions, auto_review, bypass_permissions],
         [
-            "  ⏸ ask permissions on",
-            "  ⏩  auto review on",
-            "  ▶ bypass permissions on",
+            "  ⏸ ask permissions on (shift+tab to cycle)",
+            "  ⏩  auto review on (shift+tab to cycle)",
+            "  ▶ bypass permissions on (shift+tab to cycle)",
         ]
     );
 }
@@ -423,12 +445,18 @@ fn status_line_renders_the_configured_model() {
     })));
 
     let buffer = render_buffer(&app, 80, 20);
-    let status_line = (0..80)
+    let context_line = (0..80)
+        .map(|x| buffer[(x, 18)].symbol())
+        .collect::<String>();
+    let policy_line = (0..80)
         .map(|x| buffer[(x, 19)].symbol())
         .collect::<String>();
 
-    assert!(status_line.starts_with("  ⏸ ask permissions on"));
-    assert!(status_line.trim_end().ends_with("anthropic/claude-sonnet"));
+    assert_eq!(context_line.trim_end(), "  anthropic/claude-sonnet");
+    assert_eq!(
+        policy_line.trim_end(),
+        "  ⏸ ask permissions on (shift+tab to cycle)"
+    );
     assert_eq!(buffer[(2, 19)].fg, test_context().warning());
 }
 
@@ -441,10 +469,10 @@ fn narrow_status_line_keeps_the_first_configured_item() {
     })));
 
     let rendered = render(&app, 24, 20);
-    let status_line = rendered.lines().last().unwrap();
+    let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
-    assert!(!status_line.contains("claude"));
+    assert_eq!(rows[18].trim_end(), "  claude-sonnet");
+    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
@@ -519,7 +547,10 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[15].contains("first"));
     assert!(rows[16].contains("second"));
     assert!(rows[17].contains("third"));
-    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(
+        rows[19].trim_end(),
+        "  ⏸ ask permissions on (shift+tab to cycle)"
+    );
 }
 
 #[test]
@@ -530,7 +561,10 @@ fn working_status_line_keeps_configured_context_separate_from_runtime_text() {
     let rendered = render(&app, 80, 20);
     let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(
+        status_line.trim_end(),
+        "  ⏸ ask permissions on (shift+tab to cycle)"
+    );
     assert!(!status_line.contains("enter queue"));
     assert!(!status_line.contains("ctrl-c interrupt"));
 }
@@ -652,6 +686,7 @@ fn error_detail_is_rendered_once_and_status_line_only_offers_recovery() {
     ));
 
     let rendered = render(&app, 80, 20);
+    let rows = rendered.lines().collect::<Vec<_>>();
 
     assert_eq!(
         rendered
@@ -660,9 +695,25 @@ fn error_detail_is_rendered_once_and_status_line_only_offers_recovery() {
         1
     );
     assert!(rendered.contains("ask permissions on"));
+    assert!(!rows.iter().any(|line| line.trim() == "error"));
+    assert_eq!(
+        rows[19].trim_end(),
+        "  ⏸ ask permissions on (shift+tab to cycle)"
+    );
     assert!(!rendered.contains("ready to retry"));
     assert!(!rendered.contains("esc esc rewind"));
     assert!(!rendered.contains("StableTurnError"));
+}
+
+#[test]
+fn submitted_slash_command_is_immediately_visible_in_the_transcript() {
+    let mut app = App::new();
+    app.insert_text("/status");
+
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let rendered = render(&app, 80, 20);
+    assert!(rendered.lines().next().unwrap().contains("›  /status"));
 }
 
 #[test]
@@ -702,7 +753,7 @@ fn bare_slash_renders_the_first_command_window() {
 }
 
 #[test]
-fn slash_popup_inherits_the_theme_surface_and_bolds_the_selected_command() {
+fn slash_popup_uses_focus_colored_text_without_a_selection_surface() {
     let mut app = App::new();
     app.insert_text("/");
 
@@ -711,14 +762,23 @@ fn slash_popup_inherits_the_theme_surface_and_bolds_the_selected_command() {
     let unselected = &buffer[(2, 11)];
     let surface_background = buffer[(0, 0)].bg;
 
-    assert_eq!(selected.fg, test_context().selection_foreground());
-    assert_eq!(selected.bg, test_context().selection_background());
+    assert_eq!(selected.fg, test_context().focus());
+    assert_eq!(selected.bg, surface_background);
     assert_eq!(selected.symbol(), "/");
-    assert!(selected.modifier.contains(Modifier::BOLD));
+    assert!(!selected.modifier.contains(Modifier::BOLD));
     assert_eq!(unselected.fg, test_context().muted());
     assert_eq!(unselected.bg, surface_background);
     assert_eq!(unselected.symbol(), "/");
     assert!(!unselected.modifier.contains(Modifier::BOLD));
+
+    app.update_pointer_hover(Some(InputPointerTarget::Composer(
+        ChatComposerPointerTarget::CompletionItem(2),
+    )));
+    let hovered_buffer = render_buffer(&app, 80, 20);
+    let hovered = &hovered_buffer[(2, 12)];
+    assert_eq!(hovered.fg, test_context().focus());
+    assert_eq!(hovered.bg, surface_background);
+    assert!(!hovered.modifier.contains(Modifier::BOLD));
 }
 
 #[test]
@@ -737,6 +797,70 @@ fn slash_popup_hit_testing_maps_visible_rows_and_rejects_outside_clicks() {
     }
     assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 10), Some(2));
     assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(7));
+}
+
+#[test]
+fn slash_popup_wraps_descriptions_to_two_clickable_lines_and_truncates_the_rest() {
+    let slash_commands = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        [SlashCommandDefinition {
+            name: "diagnose".into(),
+            description: "one two three four five six seven eight nine ten".into(),
+            argument_mode: SlashCommandArgumentMode::Optional,
+        }],
+    )
+    .unwrap();
+    let mut app = App::for_dir_with_slash_commands(Path::new("."), slash_commands);
+    app.insert_text("/diagnose");
+    let terminal_area = Rect::new(0, 0, 50, 20);
+
+    let rendered = render(&app, 50, 20);
+    let rows = rendered.lines().collect::<Vec<_>>();
+
+    assert!(rows[14].contains("one two three four"));
+    assert!(rows[15].contains("five six seven"));
+    assert!(!rendered.contains("eight"));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 29, 14), Some(0));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 29, 15), Some(0));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 29, 13), None);
+}
+
+#[test]
+fn skill_popup_wraps_descriptions_to_two_clickable_lines_and_truncates_the_rest() {
+    let slash_commands = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        std::iter::empty(),
+    )
+    .unwrap();
+    let skill = SkillRef::pinned(
+        SkillId::new(
+            SkillSourceId::new("user:skill-source:test").unwrap(),
+            SkillName::new("diagnose").unwrap(),
+        ),
+        ContentDigest::sha256(b"diagnose skill"),
+    );
+    let mut app = App::for_dir_with_slash_commands(Path::new("."), slash_commands.clone());
+    app.replace_chat_input_catalog(ChatInputCatalog::new(
+        slash_commands,
+        vec![SkillCompletionItem::new(
+            "diagnose".into(),
+            "one two three four five six seven eight nine ten".into(),
+            skill,
+        )],
+        Vec::new(),
+    ));
+    app.insert_text("$diagnose");
+    let terminal_area = Rect::new(0, 0, 36, 20);
+
+    let rendered = render(&app, 36, 20);
+    let rows = rendered.lines().collect::<Vec<_>>();
+
+    assert!(rows[14].contains("one two three four"));
+    assert!(rows[15].contains("five six seven eight"));
+    assert!(!rendered.contains("nine"));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 14), Some(0));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(0));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 13), None);
 }
 
 #[test]
@@ -785,7 +909,7 @@ fn escape_dismisses_the_slash_popup_without_clearing_input() {
 }
 
 #[test]
-fn mention_popup_renders_paths_and_exposes_the_same_click_rows() {
+fn mention_popup_aligns_markers_with_the_query_and_highlights_fuzzy_matches() {
     let dir = std::env::temp_dir().join(format!(
         "zeta-tui-render-mention-{}-{}",
         std::process::id(),
@@ -809,27 +933,37 @@ fn mention_popup_renders_paths_and_exposes_the_same_click_rows() {
         panic!("expected mention suggestions");
     };
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
+        assert_eq!(buffer[(2, row as u16 + 14)].symbol(), "+");
         for (column, character) in matched.label.chars().enumerate() {
             assert_eq!(
-                buffer[(column as u16 + 2, row as u16 + 14)].symbol(),
+                buffer[(column as u16 + 4, row as u16 + 14)].symbol(),
                 character.to_string()
             );
         }
     }
+    assert_eq!(buffer[(2, 17)].symbol(), "@");
     let second = &popup.matches[1];
     let matched_index = second.indices[0];
     let unmatched_index = (0..second.label.chars().count())
         .find(|index| !second.indices.contains(index))
         .unwrap();
     assert!(
-        buffer[(matched_index as u16 + 2, 15)]
+        buffer[(matched_index as u16 + 4, 15)]
             .modifier
             .contains(Modifier::BOLD)
     );
+    assert_eq!(
+        buffer[(matched_index as u16 + 4, 15)].fg,
+        test_context().foreground()
+    );
     assert!(
-        !buffer[(unmatched_index as u16 + 2, 15)]
+        !buffer[(unmatched_index as u16 + 4, 15)]
             .modifier
             .contains(Modifier::BOLD)
+    );
+    assert_eq!(
+        buffer[(unmatched_index as u16 + 4, 15)].fg,
+        test_context().muted()
     );
     assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 14), Some(0));
     assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(1));

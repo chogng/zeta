@@ -102,7 +102,7 @@ python3 -B build/cargo_with_v8.py run -p app
 - [Zeta user documentation](https://github.com/chogng/zeta-docs)
 - [Product lines and host boundaries](docs/product-lines.md)
 - [System architecture](docs/architecture.md)
-- [CLI/TUI architecture](docs/zeta-cli-architecture.md)
+- [Zeta Code documentation](zeta-code/docs/README.md)
 - [Electron Desktop architecture](docs/zeta-desktop-architecture.md)
 - [Shared Rust architecture](docs/zeta-rs-architecture.md)
 - [Remote development](docs/remote-development.md)

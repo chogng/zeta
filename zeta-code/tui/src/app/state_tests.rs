@@ -2,6 +2,7 @@ use super::App;
 use super::AppCommand;
 use super::Status;
 use crate::app::AppEvent;
+use crate::components::chat_history::CommandStatus;
 use crate::components::chat_history::MessageRole;
 use crate::components::chat_input::ChatInputItem;
 use crate::components::chat_input::ChatInputMode;
@@ -502,14 +503,8 @@ fn control_o_requests_copy_and_control_z_requests_suspend() {
 }
 
 #[test]
-fn copy_and_export_slash_commands_stay_in_the_terminal_host() {
+fn export_slash_command_stays_in_the_terminal_host() {
     let mut app = App::new();
-    app.insert_text("/copy");
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::CopyLastResponse)
-    );
-
     app.insert_text("/export notes/conversation.md");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -636,7 +631,13 @@ fn product_command_is_delegated_to_the_typed_dispatcher() {
     assert_eq!(invocation.origin, SlashCommandOrigin::Local);
     assert!(invocation.arguments.is_empty());
     assert_eq!(app.status(), &Status::Ready);
-    assert!(app.messages().is_empty());
+    assert_eq!(app.messages().len(), 1);
+    assert_eq!(app.messages()[0].role, MessageRole::Command);
+    assert_eq!(app.messages()[0].text, "/status");
+    assert_eq!(
+        app.messages()[0].command_status,
+        Some(CommandStatus::Submitted)
+    );
 }
 
 #[test]
@@ -647,7 +648,7 @@ fn shortcut_slash_command_is_owned_by_the_local_host() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(action, Some(AppCommand::OpenKeymapEditor));
-    assert!(app.messages().is_empty());
+    assert_eq!(app.messages()[0].text, "/shortcuts");
 }
 
 #[test]
@@ -658,7 +659,7 @@ fn config_slash_command_is_owned_by_the_local_host() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(action, Some(AppCommand::OpenConfigEditor));
-    assert!(app.messages().is_empty());
+    assert_eq!(app.messages()[0].text, "/config");
 }
 
 #[test]
@@ -878,7 +879,7 @@ fn statusline_slash_command_is_owned_by_the_local_host() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(action, Some(AppCommand::OpenStatusLineEditor));
-    assert!(app.messages().is_empty());
+    assert_eq!(app.messages()[0].text, "/statusline");
 }
 
 #[test]
@@ -962,7 +963,7 @@ fn inline_product_arguments_reach_the_typed_dispatcher() {
         vec![ChatInputItem::Text("provider/model".into())]
     );
     assert_eq!(app.status(), &Status::Ready);
-    assert!(app.messages().is_empty());
+    assert_eq!(app.messages()[0].text, "/model provider/model");
 }
 
 #[test]

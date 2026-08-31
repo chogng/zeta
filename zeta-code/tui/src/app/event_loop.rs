@@ -359,15 +359,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     Ok(Some(completion)) => {
                         pending_request = None;
                         redraw.request(Instant::now(), RedrawPriority::Batched);
-                        if let Some(exit) = apply_request_completion(
+                        apply_request_completion(
                             completion,
                             &mut conversation,
                             &mut active_turn,
                             &mut thread_subscription,
                             &mut app,
-                        ) {
-                            return Ok(exit);
-                        }
+                        );
                     }
                     Ok(None) => {}
                     Err(error) => {

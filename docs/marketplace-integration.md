@@ -207,7 +207,7 @@ Workspace connection 广播 `marketplace/changed { instanceId, generation }`。�
 `marketplace/listInstalled`
 同时返回当前 instance/generation；新连接或重连先 list 补读，在线连接把通知只当失效提示，再按需 list，不能把
 通知本身当成安装状态。Desktop 已按此规则失效 Browse snapshot；Zeta Code 把 Marketplace/Plugin
-source 变化投影为 Skill catalog 与已打开 Connector Pane 的刷新。app 当前不缓存 Marketplace
+source 变化投影为 Skill catalog 与已打开 Connector picker 的刷新。app 当前不缓存 Marketplace
 展示状态，可直接使用同一 typed client 方法；它尚无独立 Marketplace 浏览界面。
 
 广播不依赖某个 RPC 调用者“记得通知”。共享 profile runtime 为唯一 Manager 持有一个

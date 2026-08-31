@@ -76,6 +76,38 @@ fn multiline_content_uses_the_same_continuation_prefix_for_measurement_and_drawi
 }
 
 #[test]
+fn user_message_starts_in_the_symbol_column_and_fills_the_content_row() {
+    let messages = vec![
+        Message::plain(MessageRole::User, "hello".into())
+            .with_cell_id("user-message")
+            .with_render_revision(1),
+    ];
+    let scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
+    let welcome = WelcomeModel::for_workspace(Path::new("."));
+    let view = ChatHistoryView {
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &render_cache,
+        welcome: &welcome,
+        pointer: ChatHistoryPointerState::default(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(12, 2)).unwrap();
+
+    terminal
+        .draw(|frame| view.render(frame, frame.area(), test_context()))
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(0, 0)].symbol(), "›");
+    assert_eq!(buffer[(3, 0)].symbol(), "h");
+    assert_eq!(buffer[(0, 0)].bg, test_context().user_message_background());
+    assert_eq!(buffer[(11, 0)].bg, test_context().user_message_background());
+    assert_eq!(buffer[(0, 1)].bg, test_context().background());
+    assert_eq!(buffer[(11, 1)].bg, test_context().background());
+}
+
+#[test]
 fn selected_transcript_cell_uses_the_shared_selection_style() {
     let messages = vec![
         Message::plain(MessageRole::Agent, "selected".into())
@@ -116,7 +148,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
         .draw(|frame| hovered.render(frame, frame.area(), test_context()))
         .unwrap();
     assert_eq!(
-        terminal.backend().buffer()[(2, 0)].bg,
+        terminal.backend().buffer()[(0, 0)].bg,
         test_context().hover_background()
     );
 
@@ -131,7 +163,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
         .draw(|frame| pressed.render(frame, frame.area(), test_context()))
         .unwrap();
     assert_eq!(
-        terminal.backend().buffer()[(2, 0)].bg,
+        terminal.backend().buffer()[(0, 0)].bg,
         test_context().pressed_background()
     );
 }
@@ -165,7 +197,7 @@ fn pointer_rows_follow_the_same_multiline_height_as_rendering() {
             &ChatHistoryScroll::default(),
             &ChatHistoryRenderCache::default(),
             test_context(),
-            2,
+            0,
             3,
         ),
         Some(ChatHistoryPointerTarget::Toggle("reasoning".into()))

@@ -1,5 +1,7 @@
 # `zeta-code`
 
+> 产品与 TUI 系统文档从 [`docs/README.md`](docs/README.md) 进入；CLI 和 TUI 的实现细节分别由各自 crate README 拥有。
+
 `zeta-code` is the product-owned source boundary for the `zeta code` terminal product.
 It contains the `zeta-cli` command host and the `zeta-tui` presentation shell.
 

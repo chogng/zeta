@@ -54,22 +54,20 @@ mod mention {
                     let base_style =
                         super::item_style(index, popup.selected, hovered, pressed, context);
                     let mut matched_indices = mention_match.indices.iter().peekable();
-                    let mut spans = mention_match
-                        .label
-                        .chars()
-                        .enumerate()
-                        .map(|(char_index, character)| {
+                    let mut spans = vec![Span::styled("+ ", base_style)];
+                    spans.extend(mention_match.label.chars().enumerate().map(
+                        |(char_index, character)| {
                             let mut style = base_style;
                             if matched_indices
                                 .peek()
                                 .is_some_and(|matched| **matched == char_index)
                             {
                                 matched_indices.next();
-                                style = style.add_modifier(Modifier::BOLD);
+                                style = style.fg(context.foreground()).add_modifier(Modifier::BOLD);
                             }
                             Span::styled(character.to_string(), style)
-                        })
-                        .collect::<Vec<_>>();
+                        },
+                    ));
                     if mention_match.kind == MentionMatchKind::Plugin {
                         spans.push(Span::styled("  plugin", base_style));
                     }
@@ -123,8 +121,9 @@ mod mention {
 
 mod skill {
     use super::super::SkillCompletionView;
+    use super::description_height;
+    use super::description_popup_layout;
     use crate::render::RenderContext;
-    use crate::render::bottom_anchored_area;
     use crate::render::horizontal_margin;
     use ratatui::Frame;
     use ratatui::layout::Rect;
@@ -133,8 +132,8 @@ mod skill {
     use ratatui::text::Span;
     use ratatui::widgets::Clear;
     use ratatui::widgets::Paragraph;
-
-    const MAX_VISIBLE_ROWS: usize = 6;
+    use ratatui::widgets::Wrap;
+    use unicode_width::UnicodeWidthStr;
 
     pub(crate) fn draw(
         frame: &mut Frame<'_>,
@@ -147,32 +146,60 @@ mod skill {
         let Some(popup) = popup else {
             return;
         };
-        let Some((popup_area, first_item, visible_rows)) = popup_layout(area, popup) else {
-            return;
-        };
-        let lines = if popup.items.is_empty() {
-            vec![Line::from(Span::styled(
-                "No matching Skills",
-                Style::default().fg(context.muted()),
-            ))]
+        let popup_width = horizontal_margin(area, 2).width;
+        let item_heights = if popup.items.is_empty() {
+            vec![1]
         } else {
             popup
                 .items
                 .iter()
-                .enumerate()
-                .skip(first_item)
-                .take(visible_rows)
-                .map(|(index, item)| {
-                    let style = super::item_style(index, popup.selected, hovered, pressed, context);
-                    Line::from(vec![
-                        Span::styled(format!("${}", item.name()), style),
-                        Span::styled(format!("  {}", item.description()), style),
-                    ])
+                .map(|item| {
+                    let label_width = format!("${}  ", item.name()).width().min(u16::MAX as usize);
+                    description_height(
+                        item.description(),
+                        popup_width.saturating_sub(label_width as u16),
+                    )
                 })
                 .collect()
         };
-        frame.render_widget(Clear, popup_area);
-        frame.render_widget(Paragraph::new(lines), popup_area);
+        let Some(layout) = description_popup_layout(area, popup.selected, &item_heights) else {
+            return;
+        };
+        frame.render_widget(Clear, layout.area);
+        if popup.items.is_empty() {
+            frame.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "No matching Skills",
+                    Style::default().fg(context.muted()),
+                ))),
+                layout.area,
+            );
+            return;
+        }
+
+        let mut y = layout.area.y;
+        for (offset, height) in layout.item_heights.iter().copied().enumerate() {
+            let index = layout.first_item + offset;
+            let item = &popup.items[index];
+            let style = super::item_style(index, popup.selected, hovered, pressed, context);
+            let label = format!("${}  ", item.name());
+            let label_width = label.width().min(usize::from(layout.area.width)) as u16;
+            frame.render_widget(
+                Paragraph::new(Span::styled(label, style)),
+                Rect::new(layout.area.x, y, label_width, 1),
+            );
+            let description_area = Rect::new(
+                layout.area.x.saturating_add(label_width),
+                y,
+                layout.area.width.saturating_sub(label_width),
+                height,
+            );
+            frame.render_widget(
+                Paragraph::new(Span::styled(item.description(), style)).wrap(Wrap { trim: true }),
+                description_area,
+            );
+            y = y.saturating_add(height);
+        }
     }
 
     pub(crate) fn skill_index_at(
@@ -185,41 +212,35 @@ mod skill {
         if popup.items.is_empty() {
             return None;
         }
-        let (popup_area, first_item, _) = popup_layout(area, popup)?;
-        if column < popup_area.x
-            || column >= popup_area.right()
-            || row < popup_area.y
-            || row >= popup_area.bottom()
+        let popup_width = horizontal_margin(area, 2).width;
+        let item_heights = popup
+            .items
+            .iter()
+            .map(|item| {
+                let label_width = format!("${}  ", item.name()).width().min(u16::MAX as usize);
+                description_height(
+                    item.description(),
+                    popup_width.saturating_sub(label_width as u16),
+                )
+            })
+            .collect::<Vec<_>>();
+        let layout = description_popup_layout(area, popup.selected, &item_heights)?;
+        if column < layout.area.x
+            || column >= layout.area.right()
+            || row < layout.area.y
+            || row >= layout.area.bottom()
         {
             return None;
         }
-        let index = first_item + usize::from(row - popup_area.y);
-        (index < popup.items.len()).then_some(index)
-    }
-
-    fn popup_layout(area: Rect, popup: SkillCompletionView<'_>) -> Option<(Rect, usize, usize)> {
-        let max_rows = area.height.saturating_sub(2).min(MAX_VISIBLE_ROWS as u16) as usize;
-        if max_rows == 0 {
-            return None;
-        }
-        let visible_rows = popup.items.len().clamp(1, max_rows);
-        let first_item = popup
-            .selected
-            .saturating_add(1)
-            .saturating_sub(max_rows)
-            .min(popup.items.len().saturating_sub(visible_rows));
-        Some((
-            horizontal_margin(bottom_anchored_area(area, visible_rows as u16), 2),
-            first_item,
-            visible_rows,
-        ))
+        layout.item_at(row)
     }
 }
 
 mod slash {
     use super::super::SlashCommandsView;
+    use super::description_height;
+    use super::description_popup_layout;
     use crate::render::RenderContext;
-    use crate::render::bottom_anchored_area;
     use crate::render::horizontal_margin;
     use ratatui::Frame;
     use ratatui::layout::Rect;
@@ -227,15 +248,10 @@ mod slash {
     use ratatui::text::Line;
     use ratatui::text::Span;
     use ratatui::widgets::Paragraph;
+    use ratatui::widgets::Wrap;
 
     const COMMAND_COLUMN_WIDTH: usize = 26;
-
-    #[derive(Clone, Copy)]
-    struct PopupLayout {
-        area: Rect,
-        first_command: usize,
-        visible_rows: usize,
-    }
+    const COMMAND_COLUMN_DISPLAY_WIDTH: u16 = COMMAND_COLUMN_WIDTH as u16 + 1;
 
     pub(crate) fn draw(
         frame: &mut Frame<'_>,
@@ -248,35 +264,57 @@ mod slash {
         let Some(popup) = popup else {
             return;
         };
-        let Some(layout) = popup_layout(area, popup.commands.len(), popup.selected) else {
-            return;
-        };
-        let lines = if popup.commands.is_empty() {
-            vec![Line::from(Span::styled(
-                "No matching commands",
-                Style::default().fg(context.muted()),
-            ))]
+        let description_width = horizontal_margin(area, 2)
+            .width
+            .saturating_sub(COMMAND_COLUMN_DISPLAY_WIDTH);
+        let item_heights = if popup.commands.is_empty() {
+            vec![1]
         } else {
             popup
                 .commands
                 .iter()
-                .enumerate()
-                .skip(layout.first_command)
-                .take(layout.visible_rows)
-                .map(|(index, command)| {
-                    let command_style =
-                        super::item_style(index, popup.selected, hovered, pressed, context);
-                    Line::from(vec![
-                        Span::styled(
-                            format!("/{:<width$}", command.name, width = COMMAND_COLUMN_WIDTH),
-                            command_style,
-                        ),
-                        Span::styled(&command.description, command_style),
-                    ])
-                })
+                .map(|command| description_height(&command.description, description_width))
                 .collect()
         };
-        frame.render_widget(Paragraph::new(lines), layout.area);
+        let Some(layout) = description_popup_layout(area, popup.selected, &item_heights) else {
+            return;
+        };
+        if popup.commands.is_empty() {
+            frame.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "No matching commands",
+                    Style::default().fg(context.muted()),
+                ))),
+                layout.area,
+            );
+            return;
+        }
+
+        let mut y = layout.area.y;
+        for (offset, height) in layout.item_heights.iter().copied().enumerate() {
+            let index = layout.first_item + offset;
+            let command = &popup.commands[index];
+            let command_style = super::item_style(index, popup.selected, hovered, pressed, context);
+            let command_width = COMMAND_COLUMN_DISPLAY_WIDTH.min(layout.area.width);
+            frame.render_widget(
+                Paragraph::new(Span::styled(
+                    format!("/{:<width$}", command.name, width = COMMAND_COLUMN_WIDTH),
+                    command_style,
+                )),
+                Rect::new(layout.area.x, y, command_width, 1),
+            );
+            frame.render_widget(
+                Paragraph::new(Span::styled(&command.description, command_style))
+                    .wrap(Wrap { trim: true }),
+                Rect::new(
+                    layout.area.x.saturating_add(command_width),
+                    y,
+                    layout.area.width.saturating_sub(command_width),
+                    height,
+                ),
+            );
+            y = y.saturating_add(height);
+        }
     }
 
     pub(crate) fn command_index_at(
@@ -289,7 +327,15 @@ mod slash {
         if popup.commands.is_empty() {
             return None;
         }
-        let layout = popup_layout(area, popup.commands.len(), popup.selected)?;
+        let description_width = horizontal_margin(area, 2)
+            .width
+            .saturating_sub(COMMAND_COLUMN_DISPLAY_WIDTH);
+        let item_heights = popup
+            .commands
+            .iter()
+            .map(|command| description_height(&command.description, description_width))
+            .collect::<Vec<_>>();
+        let layout = description_popup_layout(area, popup.selected, &item_heights)?;
         if column < layout.area.x
             || column >= layout.area.right()
             || row < layout.area.y
@@ -297,35 +343,93 @@ mod slash {
         {
             return None;
         }
-        let index = layout.first_command + usize::from(row - layout.area.y);
-        (index < popup.commands.len()).then_some(index)
-    }
-
-    fn popup_layout(area: Rect, command_count: usize, selected: usize) -> Option<PopupLayout> {
-        let max_rows = area.height.saturating_sub(2).min(6) as usize;
-        if max_rows == 0 {
-            return None;
-        }
-        let visible_rows = command_count.clamp(1, max_rows);
-        let first_command = selected
-            .saturating_add(1)
-            .saturating_sub(max_rows)
-            .min(command_count.saturating_sub(visible_rows));
-        Some(PopupLayout {
-            area: horizontal_margin(bottom_anchored_area(area, visible_rows as u16), 2),
-            first_command,
-            visible_rows,
-        })
+        layout.item_at(row)
     }
 }
 
 use super::CompletionView;
-use crate::render::InteractionState;
-use crate::render::InteractionTarget;
 use crate::render::RenderContext;
-use crate::render::interaction_style;
+use crate::render::bottom_anchored_area;
+use crate::render::horizontal_margin;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::widgets::Paragraph;
+use ratatui::widgets::Wrap;
+
+const MAX_VISIBLE_DESCRIPTION_ITEMS: usize = 6;
+const MAX_DESCRIPTION_LINES: usize = 2;
+
+struct DescriptionPopupLayout {
+    area: Rect,
+    first_item: usize,
+    item_heights: Vec<u16>,
+}
+
+impl DescriptionPopupLayout {
+    fn item_at(&self, row: u16) -> Option<usize> {
+        let relative_row = row.saturating_sub(self.area.y);
+        let mut item_start = 0;
+        for (offset, height) in self.item_heights.iter().copied().enumerate() {
+            if relative_row < item_start + height {
+                return Some(self.first_item + offset);
+            }
+            item_start += height;
+        }
+        None
+    }
+}
+
+fn description_height(description: &str, width: u16) -> u16 {
+    if description.is_empty() || width == 0 {
+        return 1;
+    }
+    Paragraph::new(description)
+        .wrap(Wrap { trim: true })
+        .line_count(width)
+        .clamp(1, MAX_DESCRIPTION_LINES) as u16
+}
+
+fn description_popup_layout(
+    area: Rect,
+    selected: usize,
+    item_heights: &[u16],
+) -> Option<DescriptionPopupLayout> {
+    let max_height = area.height.saturating_sub(2);
+    if max_height == 0 || item_heights.is_empty() {
+        return None;
+    }
+
+    let selected = selected.min(item_heights.len() - 1);
+    let height = |index: usize| item_heights[index].clamp(1, max_height);
+    let mut first_item = selected;
+    let mut last_item = selected + 1;
+    let mut visible_height = height(selected);
+    let mut visible_items = 1;
+    while first_item > 0 && visible_items < MAX_VISIBLE_DESCRIPTION_ITEMS {
+        let previous_height = height(first_item - 1);
+        if visible_height + previous_height > max_height {
+            break;
+        }
+        first_item -= 1;
+        visible_height += previous_height;
+        visible_items += 1;
+    }
+    while last_item < item_heights.len() && visible_items < MAX_VISIBLE_DESCRIPTION_ITEMS {
+        let next_height = height(last_item);
+        if visible_height + next_height > max_height {
+            break;
+        }
+        visible_height += next_height;
+        last_item += 1;
+        visible_items += 1;
+    }
+
+    Some(DescriptionPopupLayout {
+        area: horizontal_margin(bottom_anchored_area(area, visible_height), 2),
+        first_item,
+        item_heights: (first_item..last_item).map(height).collect(),
+    })
+}
 
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
@@ -356,17 +460,10 @@ fn item_style(
     pressed: Option<usize>,
     context: RenderContext<'_>,
 ) -> ratatui::style::Style {
-    let state = InteractionState {
-        target: InteractionTarget::Rest,
-        selected: index == selected,
-        hovered: hovered == Some(index),
-        pressed: pressed == Some(index),
-    };
-    let style = interaction_style(context, state);
-    if !state.selected && !state.hovered && !state.pressed {
-        style.fg(context.muted())
+    if index == selected || hovered == Some(index) || pressed == Some(index) {
+        ratatui::style::Style::default().fg(context.focus())
     } else {
-        style
+        ratatui::style::Style::default().fg(context.muted())
     }
 }
 

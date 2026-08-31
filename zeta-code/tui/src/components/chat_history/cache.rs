@@ -8,6 +8,7 @@ use crate::render::push_owned_lines;
 use crate::render::wrapped_height;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -171,13 +172,28 @@ impl ChatHistoryRenderCache {
             self.insert_height(key.clone(), height);
         }
         let Some(cost) = usize::from(width).checked_mul(height) else {
-            return PreparedCell::Lines { lines };
+            return PreparedCell::Lines {
+                lines,
+                background: message_background(message, context),
+                separator_background: context.background(),
+                height,
+            };
         };
         let Some(buffer_height) = u16::try_from(height).ok() else {
-            return PreparedCell::Lines { lines };
+            return PreparedCell::Lines {
+                lines,
+                background: message_background(message, context),
+                separator_background: context.background(),
+                height,
+            };
         };
         if key.is_none() || cost > MAX_CELL_CELLS {
-            return PreparedCell::Lines { lines };
+            return PreparedCell::Lines {
+                lines,
+                background: message_background(message, context),
+                separator_background: context.background(),
+                height,
+            };
         }
 
         let area = Rect::new(0, 0, width, buffer_height);
@@ -186,7 +202,11 @@ impl ChatHistoryRenderCache {
             area,
             Style::default()
                 .fg(context.foreground())
-                .bg(context.background()),
+                .bg(message_background(message, context)),
+        );
+        buffer.set_style(
+            Rect::new(0, buffer_height.saturating_sub(1), width, 1),
+            Style::default().bg(context.background()),
         );
         Paragraph::new(lines)
             .wrap(Wrap { trim: false })
@@ -422,14 +442,40 @@ fn complete_source(source: &str) -> (&str, &str) {
 
 pub(crate) enum PreparedCell {
     Buffered(Arc<RenderedCell>),
-    Lines { lines: Vec<Line<'static>> },
+    Lines {
+        lines: Vec<Line<'static>>,
+        background: Color,
+        separator_background: Color,
+        height: usize,
+    },
 }
 
 impl PreparedCell {
     pub(crate) fn render(&self, target: &mut Buffer, area: Rect, source_row: usize) {
         match self {
             Self::Buffered(cell) => cell.render(target, area, source_row),
-            Self::Lines { lines, .. } => {
+            Self::Lines {
+                lines,
+                background,
+                separator_background,
+                height,
+            } => {
+                target.set_style(area, Style::default().bg(*background));
+                if let Some(separator_row) = height.checked_sub(1).and_then(|separator_row| {
+                    separator_row
+                        .checked_sub(source_row)
+                        .filter(|row| *row < usize::from(area.height))
+                }) {
+                    target.set_style(
+                        Rect::new(
+                            area.x,
+                            area.y.saturating_add(separator_row as u16),
+                            area.width,
+                            1,
+                        ),
+                        Style::default().bg(*separator_background),
+                    );
+                }
                 let (lines, source_row) = visible_lines(lines, area.width, source_row);
                 let lines = lines.iter().map(line_to_borrowed).collect::<Vec<_>>();
                 Paragraph::new(lines)
@@ -438,6 +484,14 @@ impl PreparedCell {
                     .render(area, target);
             }
         }
+    }
+}
+
+fn message_background(message: &Message, context: RenderContext<'_>) -> Color {
+    if message.role == super::MessageRole::User {
+        context.user_message_background()
+    } else {
+        context.background()
     }
 }
 

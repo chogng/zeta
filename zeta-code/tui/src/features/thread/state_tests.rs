@@ -138,6 +138,9 @@ fn structured_turn_plan_is_rendered_by_the_tui() {
 #[test]
 fn command_completion_groups_the_command_with_its_result() {
     let mut state = ThreadFeatureState::default();
+    state.update(ThreadPresentationEvent::CommandSubmitted(
+        "/theme light".into(),
+    ));
     state.update(ThreadPresentationEvent::CommandStarted(
         "/theme light".into(),
     ));
@@ -146,6 +149,7 @@ fn command_completion_groups_the_command_with_its_result() {
         result: "Theme set".into(),
     });
     let message = state.messages().first().unwrap();
+    assert_eq!(state.messages().len(), 1);
     assert_eq!(message.command_status, Some(CommandStatus::Succeeded));
     assert_eq!(message.detail.as_deref(), Some("Theme set"));
 }

@@ -10,7 +10,6 @@ use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::Renderable;
 use crate::render::action_style;
-use crate::render::horizontal_margin;
 use crate::render::interaction_style;
 use crate::render::prefix_lines;
 use crate::render::push_owned_lines;
@@ -44,29 +43,22 @@ impl Renderable for ChatHistoryView<'_> {
         if self.messages.is_empty() {
             return welcome::desired_height(width);
         }
-        let content_width = horizontal_margin(Rect::new(0, 0, width, u16::MAX), 2).width;
-        measured_heights(self.messages, self.render_cache, content_width, context)
+        measured_heights(self.messages, self.render_cache, width, context)
             .into_iter()
             .sum::<usize>()
             .min(u16::MAX as usize) as u16
     }
 
     fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-        let content_area = horizontal_margin(area, 2);
         if self.messages.is_empty() {
             welcome::draw(frame, area, self.welcome, context);
             return;
         }
 
-        let heights = measured_heights(
-            self.messages,
-            self.render_cache,
-            content_area.width,
-            context,
-        );
+        let heights = measured_heights(self.messages, self.render_cache, area.width, context);
         render_cells(
             frame,
-            content_area,
+            area,
             self.scroll,
             self.messages,
             &heights,
@@ -92,26 +84,21 @@ pub(crate) fn pointer_target_at(
     column: u16,
     row: u16,
 ) -> Option<ChatHistoryPointerTarget> {
-    let content_area = horizontal_margin(area, 2);
-    if column < content_area.x
-        || column >= content_area.right()
-        || row < content_area.y
-        || row >= content_area.bottom()
-    {
+    if column < area.x || column >= area.right() || row < area.y || row >= area.bottom() {
         return None;
     }
-    let heights = measured_heights(messages, render_cache, content_area.width, context);
+    let heights = measured_heights(messages, render_cache, area.width, context);
     let total_rows = heights.iter().sum::<usize>();
-    let bottom_offset = total_rows.saturating_sub(content_area.height as usize);
+    let bottom_offset = total_rows.saturating_sub(area.height as usize);
     let visible_offset = scroll.paragraph_offset(bottom_offset);
-    let target_row = visible_offset.saturating_add(usize::from(row - content_area.y));
+    let target_row = visible_offset.saturating_add(usize::from(row - area.y));
     let mut start = 0usize;
     for (message, rows) in messages.iter().zip(heights) {
         let Some(cell_id) = message.cell_id.as_ref() else {
             start = start.saturating_add(rows);
             continue;
         };
-        if message.can_expand && target_row == start && column < content_area.x.saturating_add(2) {
+        if message.can_expand && target_row == start && column < area.x.saturating_add(2) {
             return Some(ChatHistoryPointerTarget::Toggle(cell_id.clone()));
         }
         if message.expanded
@@ -140,6 +127,7 @@ fn message_lines_with_code<'a>(
     for message in messages {
         if message.role == MessageRole::Command {
             let (color, status_marker) = match message.command_status {
+                Some(CommandStatus::Submitted) => (context.accent(), "›"),
                 Some(CommandStatus::Running) => (context.accent(), "◉"),
                 Some(CommandStatus::Succeeded) => (context.success(), "●"),
                 Some(CommandStatus::Failed) => (context.danger(), "×"),

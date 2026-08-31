@@ -42,7 +42,7 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
 }
 
 #[test]
-fn built_in_palettes_keep_the_documented_interaction_colors() {
+fn built_in_palettes_keep_the_documented_semantic_colors() {
     let cases = [
         (
             ThemePalette::dark(),
@@ -51,6 +51,7 @@ fn built_in_palettes_keep_the_documented_interaction_colors() {
             Color::Rgb(47, 43, 82),
             Color::Rgb(37, 35, 58),
             Color::Rgb(59, 53, 104),
+            Color::Rgb(22, 27, 34),
         ),
         (
             ThemePalette::light(),
@@ -59,6 +60,7 @@ fn built_in_palettes_keep_the_documented_interaction_colors() {
             Color::Rgb(233, 229, 255),
             Color::Rgb(242, 240, 255),
             Color::Rgb(216, 209, 255),
+            Color::Rgb(246, 248, 250),
         ),
         (
             ThemePalette::colorblind_dark(),
@@ -67,6 +69,7 @@ fn built_in_palettes_keep_the_documented_interaction_colors() {
             Color::Rgb(18, 41, 75),
             Color::Rgb(23, 42, 70),
             Color::Rgb(31, 79, 133),
+            Color::Rgb(22, 27, 34),
         ),
         (
             ThemePalette::colorblind_light(),
@@ -75,15 +78,17 @@ fn built_in_palettes_keep_the_documented_interaction_colors() {
             Color::Rgb(221, 244, 255),
             Color::Rgb(238, 248, 255),
             Color::Rgb(182, 227, 255),
+            Color::Rgb(246, 248, 250),
         ),
     ];
 
-    for (palette, action, focus, selection, hover, pressed) in cases {
+    for (palette, action, focus, selection, hover, pressed, user_message) in cases {
         let theme = RenderTheme::from_palette(palette, ColorLevel::TrueColor);
         assert_eq!(theme.action_foreground(), action);
         assert_eq!(theme.focus(), focus);
         assert_eq!(theme.selection_background(), selection);
         assert_eq!(theme.hover_background(), hover);
         assert_eq!(theme.pressed_background(), pressed);
+        assert_eq!(theme.user_message_background(), user_message);
     }
 }

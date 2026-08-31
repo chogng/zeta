@@ -154,43 +154,47 @@ impl ComposerMode {
             return ComposerOutcome::QueueInput { input, action };
         }
         match self {
-            Self::Help(region) => map_read_only(region.handle_key(key)),
-            Self::Dirs(region) => map_selection(region.handle_key(key), ComposerOutcome::Dirs),
-            Self::Config(region) => ComposerOutcome::Config(region.handle_key(key)),
-            Self::Connectors(region) => {
-                map_selection(region.handle_key(key), ComposerOutcome::Connectors)
+            Self::Help(content) => map_read_only(content.handle_key(key)),
+            Self::Dirs(content) => map_selection(content.handle_key(key), ComposerOutcome::Dirs),
+            Self::Config(content) => ComposerOutcome::Config(content.handle_key(key)),
+            Self::Connectors(content) => {
+                map_selection(content.handle_key(key), ComposerOutcome::Connectors)
             }
-            Self::Keymap(region) => ComposerOutcome::Keymap(region.handle_key(key)),
-            Self::Mcp(region) => map_selection(region.handle_key(key), ComposerOutcome::Mcp),
-            Self::Model(region) => map_selection(region.handle_key(key), ComposerOutcome::Model),
-            Self::Queue(region) => map_selection(region.handle_key(key), ComposerOutcome::Queue),
-            Self::Rewind(region) => map_selection(region.handle_key(key), ComposerOutcome::Rewind),
-            Self::Sessions(region) => {
-                map_selection(region.handle_key(key), ComposerOutcome::Sessions)
+            Self::Keymap(content) => ComposerOutcome::Keymap(content.handle_key(key)),
+            Self::Mcp(content) => map_selection(content.handle_key(key), ComposerOutcome::Mcp),
+            Self::Model(content) => map_selection(content.handle_key(key), ComposerOutcome::Model),
+            Self::Queue(content) => map_selection(content.handle_key(key), ComposerOutcome::Queue),
+            Self::Rewind(content) => {
+                map_selection(content.handle_key(key), ComposerOutcome::Rewind)
             }
-            Self::Skills(region) => map_selection(region.handle_key(key), ComposerOutcome::Skills),
-            Self::StatusLine(region) => {
-                map_selection(region.handle_key(key), ComposerOutcome::StatusLine)
+            Self::Sessions(content) => {
+                map_selection(content.handle_key(key), ComposerOutcome::Sessions)
             }
-            Self::Theme(region) => ComposerOutcome::Theme(region.handle_key(key)),
+            Self::Skills(content) => {
+                map_selection(content.handle_key(key), ComposerOutcome::Skills)
+            }
+            Self::StatusLine(content) => {
+                map_selection(content.handle_key(key), ComposerOutcome::StatusLine)
+            }
+            Self::Theme(content) => ComposerOutcome::Theme(content.handle_key(key)),
         }
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         match self {
-            Self::Help(region) => region.handle_paste(pasted),
-            Self::Dirs(region) => region.handle_paste(pasted),
-            Self::Config(region) => region.handle_paste(pasted),
-            Self::Connectors(region) => region.handle_paste(pasted),
-            Self::Keymap(region) => region.handle_paste(pasted),
-            Self::Mcp(region) => region.handle_paste(pasted),
-            Self::Model(region) => region.handle_paste(pasted),
-            Self::Queue(region) => region.handle_paste(pasted),
-            Self::Rewind(region) => region.handle_paste(pasted),
-            Self::Sessions(region) => region.handle_paste(pasted),
-            Self::Skills(region) => region.handle_paste(pasted),
-            Self::StatusLine(region) => region.handle_paste(pasted),
-            Self::Theme(region) => region.handle_paste(pasted),
+            Self::Help(content) => content.handle_paste(pasted),
+            Self::Dirs(content) => content.handle_paste(pasted),
+            Self::Config(content) => content.handle_paste(pasted),
+            Self::Connectors(content) => content.handle_paste(pasted),
+            Self::Keymap(content) => content.handle_paste(pasted),
+            Self::Mcp(content) => content.handle_paste(pasted),
+            Self::Model(content) => content.handle_paste(pasted),
+            Self::Queue(content) => content.handle_paste(pasted),
+            Self::Rewind(content) => content.handle_paste(pasted),
+            Self::Sessions(content) => content.handle_paste(pasted),
+            Self::Skills(content) => content.handle_paste(pasted),
+            Self::StatusLine(content) => content.handle_paste(pasted),
+            Self::Theme(content) => content.handle_paste(pasted),
         }
     }
 
@@ -350,177 +354,177 @@ impl ComposerMode {
 
     pub(crate) fn key_hints(&self) -> &str {
         match self {
-            Self::Help(region) => region.key_hints(),
-            Self::Dirs(region) => region.key_hints(),
-            Self::Config(region) => region.key_hints(),
-            Self::Connectors(region) => region.key_hints(),
-            Self::Keymap(region) => region.key_hints(),
-            Self::Mcp(region) => region.key_hints(),
-            Self::Model(region) => region.key_hints(),
-            Self::Queue(region) => region.key_hints(),
-            Self::Rewind(region) => region.key_hints(),
-            Self::Sessions(region) => region.key_hints(),
-            Self::Skills(region) => region.key_hints(),
-            Self::StatusLine(region) => region.key_hints(),
-            Self::Theme(region) => region.key_hints(),
+            Self::Help(content) => content.key_hints(),
+            Self::Dirs(content) => content.key_hints(),
+            Self::Config(content) => content.key_hints(),
+            Self::Connectors(content) => content.key_hints(),
+            Self::Keymap(content) => content.key_hints(),
+            Self::Mcp(content) => content.key_hints(),
+            Self::Model(content) => content.key_hints(),
+            Self::Queue(content) => content.key_hints(),
+            Self::Rewind(content) => content.key_hints(),
+            Self::Sessions(content) => content.key_hints(),
+            Self::Skills(content) => content.key_hints(),
+            Self::StatusLine(content) => content.key_hints(),
+            Self::Theme(content) => content.key_hints(),
         }
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
         match self {
-            Self::Help(region) => region.select_tab(index),
-            Self::Dirs(region) => region.select_tab(index),
-            Self::Config(region) => region.select_tab(index),
-            Self::Connectors(region) => region.select_tab(index),
-            Self::Keymap(region) => region.select_tab(index),
-            Self::Mcp(region) => region.select_tab(index),
-            Self::Model(region) => region.select_tab(index),
-            Self::Queue(region) => region.select_tab(index),
-            Self::Rewind(region) => region.select_tab(index),
-            Self::Sessions(region) => region.select_tab(index),
-            Self::Skills(region) => region.select_tab(index),
-            Self::StatusLine(region) => region.select_tab(index),
-            Self::Theme(region) => region.select_tab(index),
+            Self::Help(content) => content.select_tab(index),
+            Self::Dirs(content) => content.select_tab(index),
+            Self::Config(content) => content.select_tab(index),
+            Self::Connectors(content) => content.select_tab(index),
+            Self::Keymap(content) => content.select_tab(index),
+            Self::Mcp(content) => content.select_tab(index),
+            Self::Model(content) => content.select_tab(index),
+            Self::Queue(content) => content.select_tab(index),
+            Self::Rewind(content) => content.select_tab(index),
+            Self::Sessions(content) => content.select_tab(index),
+            Self::Skills(content) => content.select_tab(index),
+            Self::StatusLine(content) => content.select_tab(index),
+            Self::Theme(content) => content.select_tab(index),
         }
     }
 
     pub(crate) fn focus_search(&mut self) -> bool {
         match self {
-            Self::Help(region) => region.focus_search(),
-            Self::Dirs(region) => region.focus_search(),
-            Self::Config(region) => region.focus_search(),
-            Self::Connectors(region) => region.focus_search(),
-            Self::Keymap(region) => region.focus_search(),
-            Self::Mcp(region) => region.focus_search(),
-            Self::Model(region) => region.focus_search(),
-            Self::Queue(region) => region.focus_search(),
-            Self::Rewind(region) => region.focus_search(),
-            Self::Sessions(region) => region.focus_search(),
-            Self::Skills(region) => region.focus_search(),
-            Self::StatusLine(region) => region.focus_search(),
-            Self::Theme(region) => region.focus_search(),
+            Self::Help(content) => content.focus_search(),
+            Self::Dirs(content) => content.focus_search(),
+            Self::Config(content) => content.focus_search(),
+            Self::Connectors(content) => content.focus_search(),
+            Self::Keymap(content) => content.focus_search(),
+            Self::Mcp(content) => content.focus_search(),
+            Self::Model(content) => content.focus_search(),
+            Self::Queue(content) => content.focus_search(),
+            Self::Rewind(content) => content.focus_search(),
+            Self::Sessions(content) => content.focus_search(),
+            Self::Skills(content) => content.focus_search(),
+            Self::StatusLine(content) => content.focus_search(),
+            Self::Theme(content) => content.focus_search(),
         }
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ComposerOutcome> {
         match self {
-            Self::Help(region) => region.activate_visible_item(index).map(map_read_only),
-            Self::Dirs(region) => region
+            Self::Help(content) => content.activate_visible_item(index).map(map_read_only),
+            Self::Dirs(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::Dirs)),
-            Self::Config(region) => region
+            Self::Config(content) => content
                 .activate_visible_item(index)
                 .map(ComposerOutcome::Config),
-            Self::Connectors(region) => region
+            Self::Connectors(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::Connectors)),
-            Self::Keymap(region) => region
+            Self::Keymap(content) => content
                 .activate_visible_item(index)
                 .map(ComposerOutcome::Keymap),
-            Self::Mcp(region) => region
+            Self::Mcp(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::Mcp)),
-            Self::Model(region) => region
+            Self::Model(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::Model)),
-            Self::Queue(region) => region
+            Self::Queue(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::Queue)),
-            Self::Rewind(region) => region
+            Self::Rewind(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::Rewind)),
-            Self::Sessions(region) => region
+            Self::Sessions(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::Sessions)),
-            Self::Skills(region) => region
+            Self::Skills(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::Skills)),
-            Self::StatusLine(region) => region
+            Self::StatusLine(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, ComposerOutcome::StatusLine)),
-            Self::Theme(region) => region
+            Self::Theme(content) => content
                 .activate_visible_item(index)
                 .map(ComposerOutcome::Theme),
         }
     }
 
     pub(crate) fn replace_dirs(&mut self, spec: DirChoices) -> bool {
-        let Self::Dirs(region) = self else {
+        let Self::Dirs(content) = self else {
             return false;
         };
-        region.replace(spec.model, spec.actions);
+        content.replace(spec.model, spec.actions);
         true
     }
 
     pub(crate) fn replace_config(&mut self, spec: ConfigChoices) -> bool {
-        let Self::Config(region) = self else {
+        let Self::Config(content) = self else {
             return false;
         };
-        region.replace(spec);
+        content.replace(spec);
         true
     }
 
     pub(crate) fn finish_config_prompt(&mut self, spec: ConfigChoices) -> bool {
-        let Self::Config(region) = self else {
+        let Self::Config(content) = self else {
             return false;
         };
-        region.close_prompt_and_replace(spec);
+        content.close_prompt_and_replace(spec);
         true
     }
 
     pub(crate) fn replace_connectors(&mut self, spec: ConnectorChoices) -> bool {
-        let Self::Connectors(region) = self else {
+        let Self::Connectors(content) = self else {
             return false;
         };
-        region.replace(spec.model, spec.actions);
+        content.replace(spec.model, spec.actions);
         true
     }
 
     pub(crate) fn replace_keymap_catalog(&mut self, spec: KeymapChoices) -> bool {
-        let Self::Keymap(region) = self else {
+        let Self::Keymap(content) = self else {
             return false;
         };
-        region.replace_catalog(spec);
+        content.replace_catalog(spec);
         true
     }
 
     pub(crate) fn replace_mcp(&mut self, spec: McpChoices) -> bool {
-        let Self::Mcp(region) = self else {
+        let Self::Mcp(content) = self else {
             return false;
         };
-        region.replace(spec.model, spec.actions);
+        content.replace(spec.model, spec.actions);
         true
     }
 
     pub(crate) fn replace_queue(&mut self, spec: QueueChoices) -> bool {
-        let Self::Queue(region) = self else {
+        let Self::Queue(content) = self else {
             return false;
         };
-        region.replace(spec.model, spec.actions);
+        content.replace(spec.model, spec.actions);
         true
     }
 
     pub(crate) fn replace_skills(&mut self, spec: SkillChoices) -> bool {
-        let Self::Skills(region) = self else {
+        let Self::Skills(content) = self else {
             return false;
         };
-        region.replace(spec.model, spec.actions);
+        content.replace(spec.model, spec.actions);
         true
     }
 
     pub(crate) fn replace_status_line(&mut self, spec: StatusLineChoices) -> bool {
-        let Self::StatusLine(region) = self else {
+        let Self::StatusLine(content) = self else {
             return false;
         };
-        region.replace(spec.model, spec.actions);
+        content.replace(spec.model, spec.actions);
         true
     }
 
     pub(crate) fn push_custom_theme(&mut self, spec: ThemeChoices) -> bool {
-        let Self::Theme(region) = self else {
+        let Self::Theme(content) = self else {
             return false;
         };
-        region.push_custom(spec);
+        content.push_custom(spec);
         true
     }
 

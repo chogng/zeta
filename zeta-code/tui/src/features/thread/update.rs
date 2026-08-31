@@ -7,6 +7,7 @@ pub(crate) enum ThreadPresentationEvent {
     TranscriptHistoryPageReceived(ThreadTranscriptSnapshot),
     TranscriptUpdateReceived(Box<ThreadTranscriptUpdateEnvelope>),
     UserSubmitted(String),
+    CommandSubmitted(String),
     CommandStarted(String),
     CommandCompleted { command: String, result: String },
     NoticeReceived(String),

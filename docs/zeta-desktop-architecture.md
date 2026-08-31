@@ -10,7 +10,7 @@
 > Chat 内 Session Inspector 的信息架构与 Plan 演进：[`chat-session-inspector.md`](chat-session-inspector.md)
 > 外部 Agent Skill 来源与加载边界：[`skills.md`](skills.md)
 > Agent 自定义对象、`.zeta` 与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
-> TUI 明确不提供外部 Agent 导入入口：[`tui.md`](tui.md)
+> TUI 明确不提供外部 Agent 导入入口：[`zeta-code/docs/tui.md`](../zeta-code/docs/tui.md)
 > 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
 > 共享 Rust 进程入口实现：[`zeta-server-host`](../zeta-rs/server-host/README.md)
 

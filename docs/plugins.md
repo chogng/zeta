@@ -125,9 +125,7 @@ Skill source、Connector catalog、durable authority 和 package-rooted MCP prov
 分别持久化 installed/enabled/granted/effective refs 和 command receipts，并驱动 live activation 切换；
 App Server 只为该 legacy authority 暴露 list/enable/disable/grant/revokeGrant/uninstall；浏览和安装统一走
 通用 `marketplace/*` API。
-`docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical
-App Server contract 后，TUI 才能增加管理 feature。TUI 已有可复用的 interaction view stack 与
-tabs/search/selection presentation primitive，但当前没有 Plugin view model 或 `/plugins` command；
+`zeta-code/docs/tui.md` 也明确要求 Plugin domain projection 进入 canonical App Server contract 后，TUI 才能增加管理 feature。TUI 已有可复用的 tabs/search/selection 组件，但当前没有 Plugin view model 或 `/plugins` command；
 这些 UI 基础设施不改变本节的 backend gate。
 
 已有可复用边界：

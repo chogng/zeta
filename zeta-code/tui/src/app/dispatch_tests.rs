@@ -86,6 +86,10 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
         &mut app,
     );
     assert_ne!(conversation.session_id(), &original_session);
+    assert_eq!(
+        app.messages().last().unwrap().text,
+        "Started a new session."
+    );
 
     conversation.execute(
         &mut client,
@@ -108,24 +112,17 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
 }
 
 #[test]
-fn archive_persists_status_requests_exit_and_does_not_call_the_model() {
+fn archive_persists_status_starts_a_new_session_and_does_not_call_the_model() {
     let (mut client, state_root, model) = client_with_model_probe();
-    let conversation = ActiveConversation::start(&mut client, "archive me".into()).unwrap();
+    let mut conversation = ActiveConversation::start(&mut client, "archive me".into()).unwrap();
     let archived_session_id = conversation.session_id().clone();
     let mut app = App::new();
 
-    let output = super::execute_product_command(
-        conversation,
+    conversation.execute(
         &mut client,
         invocation(TuiSlashCommandAction::Archive, ""),
-        Vec::new(),
-    )
-    .unwrap();
-    assert!(output.exit_requested);
-    let conversation = output.conversation;
-    for event in output.events {
-        app.update(event);
-    }
+        &mut app,
+    );
 
     let archived = client
         .read_session(SessionReadParams {
@@ -134,10 +131,18 @@ fn archive_persists_status_requests_exit_and_does_not_call_the_model() {
         .unwrap()
         .session;
     assert_eq!(archived.status, SessionStatus::Archived);
-    assert_eq!(conversation.session_id(), &archived_session_id);
+    assert_ne!(conversation.session_id(), &archived_session_id);
+    let next_session_id = conversation.session_id().clone();
+    let next = client
+        .read_session(SessionReadParams {
+            session_id: next_session_id.clone(),
+        })
+        .unwrap()
+        .session;
+    assert_eq!(next.status, SessionStatus::Active);
     assert_eq!(
         app.messages().last().unwrap().text,
-        format!("Archived session {archived_session_id}.")
+        "Archived the previous session and started a new session."
     );
     assert_eq!(model.calls(), 0);
 
@@ -289,8 +294,14 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
     assert_eq!(selected.provider, "test");
     assert_eq!(selected.model, "model-one");
     assert_eq!(
-        app.status_line().text_for_width(80, app.approval_mode()),
-        "⏸ ask permissions on · test/model-one"
+        app.status_line()
+            .top_text_for_width(80, app.status_line_runtime()),
+        "test/model-one"
+    );
+    assert_eq!(
+        app.status_line()
+            .policy_text_for_width(80, app.approval_mode()),
+        "⏸ ask permissions on"
     );
 
     conversation.execute(
@@ -300,7 +311,8 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
     );
     assert_eq!(client.read_config().unwrap().preferred_model, None);
     assert_eq!(
-        app.status_line().text_for_width(80, app.approval_mode()),
+        app.status_line()
+            .policy_text_for_width(80, app.approval_mode()),
         "⏸ ask permissions on"
     );
     assert_eq!(app.status(), &Status::Ready);
@@ -369,7 +381,7 @@ fn keybindings_and_status_line_are_persisted_in_the_tui_toml_section() {
 }
 
 #[test]
-fn resume_and_model_without_arguments_open_actionable_regions() {
+fn resume_and_model_without_arguments_open_actionable_pickers() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();
     let current_session = conversation.session_id().to_string();
@@ -410,7 +422,7 @@ fn resume_and_model_without_arguments_open_actionable_regions() {
 }
 
 #[test]
-fn rewind_without_arguments_opens_the_checkpoint_region() {
+fn rewind_without_arguments_opens_the_checkpoint_picker() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "rewind".into()).unwrap();
     let mut app = App::new();

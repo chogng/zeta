@@ -4,6 +4,7 @@
 > 面向使用者的文档和文档站由独立的 [`zeta-docs`](https://github.com/chogng/zeta-docs) 仓库维护。
 > `app` 专属系统文档由 [`app/docs/README.md`](../app/docs/README.md) 索引，避免产品宿主
 > 文档和共享系统文档混在同一目录。
+> `zeta code` 专属系统文档由 [`zeta-code/docs/README.md`](../zeta-code/docs/README.md) 索引。
 > 系统性的阅读方法（先系统后 crate、两层文档职责）见
 > [`documentation-guidelines.md`](documentation-guidelines.md)。
 
@@ -16,6 +17,7 @@
 | --- | --- |
 | 理解共享 backend、协议、执行和存储 | 本目录对应的系统文档与 `zeta-rs/*/README.md` |
 | 理解 `app` 产品行为 | [`app/docs/README.md`](../app/docs/README.md) |
+| 理解 `zeta code` CLI/TUI | [`zeta-code/docs/README.md`](../zeta-code/docs/README.md) |
 | 理解某个 crate 的实现契约 | 对应 crate 的 `README.md` |
 | 学习如何使用 Zeta | [`zeta-docs`](https://github.com/chogng/zeta-docs) |
 
@@ -112,13 +114,10 @@
 [`design-tokens.md`](design-tokens.md)、[`theme-authoring-template.md`](theme-authoring-template.md)（模板）、
 [`menu-system.md`](menu-system.md)、[`icons.md`](icons.md)、[`search.md`](search.md)、
 [`keybindings.md`](keybindings.md)、
-[`tui-chat-architecture-discussion-v15.md`](tui-chat-architecture-discussion-v15.md)（Session/Thread/正文单元与布局决定）、
-[`tui-chat-composer.md`](tui-chat-composer.md)（当前架构）、
 [`code-intelligence.md`](code-intelligence.md)、
 [`codebase.md`](codebase.md)、
 [`syntax-analysis.md`](syntax-analysis.md)、[`lsp.md`](lsp.md)、
 [`editor-extensions.md`](editor-extensions.md)、
-[`tui.md`](tui.md)、
 [`chat-session-inspector.md`](chat-session-inspector.md)、[`pdf.md`](pdf.md)、[`typst.md`](typst.md)
 
 ### app 产品
@@ -129,7 +128,7 @@ Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁�
 ### 平台与产品
 
 [`architecture.md`](architecture.md)（总入口）、[`zeta-rs-architecture.md`](zeta-rs-architecture.md)、
-[`zeta-cli-architecture.md`](zeta-cli-architecture.md)、[`workbench-modes.md`](workbench-modes.md)、
+[`zeta-code/docs/README.md`](../zeta-code/docs/README.md)、[`workbench-modes.md`](workbench-modes.md)、
 [`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)、
 [`documentation-guidelines.md`](documentation-guidelines.md)
 
@@ -137,14 +136,13 @@ Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁�
 
 | 文档 | 状态 |
 | --- | --- |
-| [`zeta-code-architecture-codex-style-v2.md`](zeta-code-architecture-codex-style-v2.md) | Done；结论已并入领域、Core 与协议文档 |
 | [`app/docs/native-deprecation-plan.md`](../app/docs/native-deprecation-plan.md) | Native 弃用迁移 |
 | [`app/docs/app-migration-plan.md`](../app/docs/app-migration-plan.md) | App 迁移 |
 | [`app/docs/app-release-graph.md`](../app/docs/app-release-graph.md) | App 发布依赖 |
 
 ## 4. 维护规则
 
-1. 新工程文档：加入本索引并声明类型（设计/规格/计划/参考）；面向使用者的内容加入 `zeta-docs/docs/toc.json`；
+1. 新跨产品工程文档加入本索引并声明类型（设计/规格/计划/参考）；产品专属文档加入对应产品的 `docs/README.md`；面向使用者的内容加入 `zeta-docs/docs/toc.json`；
 2. 计划类文档完成后：结论并入对应设计文档的状态标记，计划本体标 Done 或删除——
    不允许长期留着已完成的计划冒充现状；
 3. 设计文档描述未实现组件必须挂状态标记（已实现/部分/仅设计/推迟），词表定义见

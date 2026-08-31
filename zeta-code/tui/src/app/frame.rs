@@ -545,7 +545,12 @@ fn draw_status_line(
     supplemental_hint: Option<&str>,
     context: crate::render::RenderContext<'_>,
 ) {
-    let status_rows = status_line::desired_rows(app.status_line_runtime(), 2);
+    let status_rows = status_line::desired_rows(
+        app.status_line(),
+        app.approval_mode_status(),
+        app.status_line_runtime(),
+        2,
+    );
     let Some(hint) = supplemental_hint else {
         status_line::draw(
             frame,
@@ -561,6 +566,7 @@ fn draw_status_line(
         !status_and_hint_fit(app, area.width, hint) && area.height > status_rows;
     let status_area = chat_input::content_area(if separate_hint_row {
         Rect {
+            y: area.y.saturating_add(1),
             height: area.height.saturating_sub(1),
             ..area
         }
@@ -583,35 +589,21 @@ fn draw_status_line(
         app.status_line_runtime(),
         context,
     );
-    let hint_area = if separate_hint_row {
-        Rect {
-            y: area.bottom().saturating_sub(1),
-            height: 1,
-            ..area
-        }
-    } else {
-        Rect {
-            y: area
-                .y
-                .saturating_add(status_rows.min(area.height).saturating_sub(1)),
-            height: 1,
-            ..area
-        }
-    };
+    let hint_area = Rect { height: 1, ..area };
     key_hint::draw_right(frame, hint_area, hint, context);
 }
 
 fn status_and_hint_fit(app: &App, width: u16, hint: &str) -> bool {
     let status_width = usize::from(width.saturating_sub(2));
-    let configured = app
+    let top = app
         .status_line()
-        .text_for_width(status_width, app.approval_mode_status());
-    let runtime = app.status_line_runtime().text();
-    let longest_status = configured.width().max(runtime.width());
-    longest_status
-        .saturating_add(usize::from(STATUS_HINT_GAP))
-        .saturating_add(hint.width())
-        <= usize::from(width.saturating_sub(4))
+        .top_text_for_width(status_width, app.status_line_runtime());
+    !top.is_empty()
+        && top
+            .width()
+            .saturating_add(usize::from(STATUS_HINT_GAP))
+            .saturating_add(hint.width())
+            <= usize::from(width.saturating_sub(4))
 }
 
 impl StatusAreaView<'_> {
@@ -619,7 +611,12 @@ impl StatusAreaView<'_> {
         match self {
             Self::Hint { .. } => 1,
             Self::StatusLine { supplemental_hint } => {
-                let status_rows = status_line::desired_rows(app.status_line_runtime(), 2);
+                let status_rows = status_line::desired_rows(
+                    app.status_line(),
+                    app.approval_mode_status(),
+                    app.status_line_runtime(),
+                    2,
+                );
                 status_rows
                     + u16::from(
                         supplemental_hint

@@ -48,6 +48,9 @@ impl ThreadFeatureState {
             ThreadPresentationEvent::UserSubmitted(text) => {
                 self.transcript.push_message(MessageRole::User, text);
             }
+            ThreadPresentationEvent::CommandSubmitted(command) => {
+                self.transcript.command_submitted(command);
+            }
             ThreadPresentationEvent::CommandStarted(command) => {
                 self.transcript.command_started(command);
             }

@@ -6,14 +6,24 @@ use zeta_protocol::ApprovalMode;
 use zeta_protocol::StreamInstanceId;
 
 #[test]
-fn status_line_orders_permissions_model_branch_and_changes() {
+fn status_line_separates_policy_from_runtime_model_branch_and_changes() {
     let mut status_line = StatusLineModel::new();
     status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
     status_line.apply_git_status(&git_status(1));
 
     assert_eq!(
-        status_line.text_for_width(100, ApprovalMode::AskPermissions),
-        "⏸ ask permissions on · anthropic/claude-sonnet · main · 1 change"
+        status_line.top_text_for_width(
+            100,
+            StatusLineRuntime {
+                state: Some("working"),
+                ..Default::default()
+            }
+        ),
+        "working · anthropic/claude-sonnet · main · 1 change"
+    );
+    assert_eq!(
+        status_line.policy_text_for_width(100, ApprovalMode::AskPermissions),
+        "⏸ ask permissions on"
     );
 }
 
@@ -22,15 +32,15 @@ fn approval_modes_use_pause_fast_forward_and_play_symbols() {
     let status_line = StatusLineModel::new();
 
     assert_eq!(
-        status_line.text_for_width(80, ApprovalMode::AskPermissions),
+        status_line.policy_text_for_width(80, ApprovalMode::AskPermissions),
         "⏸ ask permissions on"
     );
     assert_eq!(
-        status_line.text_for_width(80, ApprovalMode::AutoReview),
+        status_line.policy_text_for_width(80, ApprovalMode::AutoReview),
         "⏩ auto review on"
     );
     assert_eq!(
-        status_line.text_for_width(80, ApprovalMode::BypassPermissions),
+        status_line.policy_text_for_width(80, ApprovalMode::BypassPermissions),
         "▶ bypass permissions on"
     );
 }
@@ -40,7 +50,7 @@ fn running_turn_and_next_turn_are_both_explicit_when_the_modes_differ() {
     let status_line = StatusLineModel::new();
 
     assert_eq!(
-        status_line.text_for_width(
+        status_line.policy_text_for_width(
             100,
             ApprovalModeStatus {
                 current: Some(ApprovalMode::AskPermissions),
@@ -62,8 +72,12 @@ fn configured_items_can_be_hidden_independently() {
     status_line.apply_settings(settings);
 
     assert_eq!(
-        status_line.text_for_width(80, ApprovalMode::AutoReview),
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
         "anthropic/claude-sonnet · 1 change"
+    );
+    assert_eq!(
+        status_line.policy_text_for_width(80, ApprovalMode::AutoReview),
+        ""
     );
 }
 
@@ -77,7 +91,7 @@ fn narrow_status_line_keeps_configured_order_and_uses_compact_values() {
     status_line.apply_settings(settings);
 
     assert_eq!(
-        status_line.text_for_width(24, ApprovalMode::AskPermissions),
+        status_line.top_text_for_width(24, StatusLineRuntime::default()),
         "claude-sonnet · main · *"
     );
 }
@@ -92,7 +106,11 @@ fn status_line_with_every_item_disabled_is_empty() {
     status_line.apply_settings(settings);
 
     assert_eq!(
-        status_line.text_for_width(80, ApprovalMode::AskPermissions),
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        ""
+    );
+    assert_eq!(
+        status_line.policy_text_for_width(80, ApprovalMode::AskPermissions),
         ""
     );
 }
@@ -108,15 +126,15 @@ fn very_narrow_status_line_truncates_on_character_boundaries() {
     status_line.apply_settings(settings);
 
     assert_eq!(
-        status_line.text_for_width(5, ApprovalMode::AskPermissions),
+        status_line.top_text_for_width(5, StatusLineRuntime::default()),
         "模型…"
     );
     assert_eq!(
-        status_line.text_for_width(1, ApprovalMode::AskPermissions),
+        status_line.top_text_for_width(1, StatusLineRuntime::default()),
         "…"
     );
     assert_eq!(
-        status_line.text_for_width(0, ApprovalMode::AskPermissions),
+        status_line.top_text_for_width(0, StatusLineRuntime::default()),
         ""
     );
 }

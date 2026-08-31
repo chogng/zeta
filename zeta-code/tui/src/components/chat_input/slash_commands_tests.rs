@@ -18,13 +18,11 @@ fn builtins_follow_enum_presentation_order() {
             "archive",
             "connectors",
             "rewind",
-            "clear",
             "config",
             "add-dir",
             "fork",
             "help",
             "shortcuts",
-            "copy",
             "export",
             "model",
             "theme",
@@ -36,7 +34,7 @@ fn builtins_follow_enum_presentation_order() {
             "queue",
         ]
     );
-    assert_eq!(definitions.len(), 24);
+    assert_eq!(definitions.len(), 22);
 }
 
 #[test]

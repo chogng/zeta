@@ -103,6 +103,7 @@ fn apply_color(palette: &mut ThemePalette, name: &str, color: ThemeRgb) -> Resul
         "screenSelectionBackground" => &mut palette.screen_selection_background,
         "screenSelectionForeground" => &mut palette.screen_selection_foreground,
         "type" => &mut palette.r#type,
+        "userMessageBackground" => &mut palette.user_message_background,
         "variable" => &mut palette.variable,
         "warning" => &mut palette.warning,
         _ => return Err(format!("unknown TUI theme color '{name}'")),
