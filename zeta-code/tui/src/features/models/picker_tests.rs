@@ -12,7 +12,7 @@ use zeta_protocol::ModelRef;
 use zeta_protocol::ProviderId;
 
 #[test]
-fn model_region_marks_the_preference_and_maps_selection_to_slash_arguments() {
+fn model_picker_marks_the_preference_and_maps_selection_to_slash_arguments() {
     let catalog = ModelListResult {
         models: vec![ModelCatalogEntry {
             model: ModelRef::new(
@@ -37,7 +37,7 @@ fn model_region_marks_the_preference_and_maps_selection_to_slash_arguments() {
     };
 
     let view = model_choices(&catalog, Some(&preferred_model));
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Model");
     assert_eq!(state.visible_items()[1].label(), "GPT Zeta ✓");

@@ -24,10 +24,7 @@ pub(crate) struct SessionChoices {
     pub(crate) actions: BTreeMap<ListSelectionItemId, SessionSelectionAction>,
 }
 
-pub(crate) fn session_choices(
-    sessions: &[Session],
-    active_session_id: &str,
-) -> SessionChoices {
+pub(crate) fn session_choices(sessions: &[Session], active_session_id: &str) -> SessionChoices {
     session_choices_at(sessions, active_session_id, current_unix_millis())
 }
 

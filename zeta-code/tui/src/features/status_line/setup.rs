@@ -47,10 +47,7 @@ pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> St
     .without_tab_bar()
     .with_activation_mode(ListSelectionActivationMode::EnterOrSpace)
     .with_activation_label("toggle");
-    StatusLineChoices {
-        model,
-        actions,
-    }
+    StatusLineChoices { model, actions }
 }
 
 const fn checkbox(checked: bool) -> &'static str {

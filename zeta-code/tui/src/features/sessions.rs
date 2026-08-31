@@ -1,6 +1,6 @@
 mod active;
 mod manager;
-mod region;
+mod picker;
 mod state;
 
 pub(crate) use active::ActiveConversation;
@@ -12,9 +12,9 @@ pub(crate) use manager::SessionManagerPointerTarget;
 pub(crate) use manager::SessionManagerView;
 pub(crate) use manager::draw_manager;
 pub(crate) use manager::pointer_target_at;
-pub(crate) use region::SessionChoices;
-pub(crate) use region::SessionSelectionAction;
-pub(crate) use region::session_choices;
+pub(crate) use picker::SessionChoices;
+pub(crate) use picker::SessionSelectionAction;
+pub(crate) use picker::session_choices;
 pub(crate) use state::SessionsState;
 pub(crate) use state::TerminalScreen;
 

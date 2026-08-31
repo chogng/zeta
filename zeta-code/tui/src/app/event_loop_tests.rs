@@ -4,6 +4,7 @@ use super::update_pointer_hover;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
+use crate::app::composer_mode::ComposerModePointerTarget;
 use crate::app::frame;
 use crate::app::frame::InputPointerTarget;
 use crate::components::chat_composer::ChatComposerPointerTarget;
@@ -12,8 +13,6 @@ use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::region::ComposerModePointerTarget;
-use crate::components::region::RegionSpec;
 use crate::components::search_box::SearchBoxModel;
 use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
@@ -33,7 +32,7 @@ use zeta_protocol::ThreadStatus;
 fn request_actions_wait_for_the_active_request_without_losing_order() {
     let mut queued = VecDeque::new();
     let first = AppCommand::OpenConfigEditor;
-    let second = AppCommand::OpenRewindRegion;
+    let second = AppCommand::OpenRewindPicker;
     let third = AppCommand::OpenThemePicker;
 
     assert!(schedule_action(Some(first), true, &mut queued).is_none());
@@ -46,7 +45,7 @@ fn request_actions_wait_for_the_active_request_without_losing_order() {
     ));
     assert!(matches!(
         schedule_action(None, false, &mut queued),
-        Some(AppCommand::OpenRewindRegion)
+        Some(AppCommand::OpenRewindPicker)
     ));
     assert!(matches!(
         schedule_action(None, false, &mut queued),
@@ -88,7 +87,7 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
 #[test]
 fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
     let mut app = App::new();
-    app.update(AppEvent::HelpOpened(RegionSpec::new(
+    app.update(AppEvent::HelpOpened(
         ListSelectionModel::new(
             "Feature",
             vec![ListSelectionGroup::new(
@@ -100,13 +99,15 @@ fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
             )],
         )
         .without_tab_bar(),
-    )));
+    ));
     let area = Rect::new(0, 0, 80, 24);
     let mut target = None;
     'rows: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::Region(ComposerModePointerTarget::Item(1)))
+                == Some(InputPointerTarget::ComposerMode(
+                    ComposerModePointerTarget::Item(1),
+                ))
             {
                 target = Some((column, row));
                 break 'rows;
@@ -123,21 +124,21 @@ fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
     );
     assert_eq!(
         app.hovered_pointer_target(),
-        Some(&InputPointerTarget::Region(ComposerModePointerTarget::Item(1)))
+        Some(&InputPointerTarget::ComposerMode(
+            ComposerModePointerTarget::Item(1)
+        ))
     );
 }
 
 #[test]
 fn pointer_click_switches_a_selection_tab() {
     let mut app = App::new();
-    app.update(AppEvent::HelpOpened(RegionSpec::new(
-        ListSelectionModel::new(
-            "Feature",
-            vec![
-                ListSelectionGroup::new("First", vec![ListSelectionItem::new("Read only")]),
-                ListSelectionGroup::new("Second", vec![ListSelectionItem::new("Another item")]),
-            ],
-        ),
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Feature",
+        vec![
+            ListSelectionGroup::new("First", vec![ListSelectionItem::new("Read only")]),
+            ListSelectionGroup::new("Second", vec![ListSelectionItem::new("Another item")]),
+        ],
     )));
     let area = Rect::new(0, 0, 80, 24);
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
@@ -146,7 +147,9 @@ fn pointer_click_switches_a_selection_tab() {
     'cells: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::Region(ComposerModePointerTarget::Tab(1)))
+                == Some(InputPointerTarget::ComposerMode(
+                    ComposerModePointerTarget::Tab(1),
+                ))
             {
                 target = Some((column, row));
                 break 'cells;
@@ -160,9 +163,9 @@ fn pointer_click_switches_a_selection_tab() {
 }
 
 #[test]
-fn pointer_click_explicitly_focuses_the_region_search_box() {
+fn pointer_click_explicitly_focuses_the_composer_search_box() {
     let mut app = App::new();
-    app.update(AppEvent::HelpOpened(RegionSpec::new(
+    app.update(AppEvent::HelpOpened(
         ListSelectionModel::new(
             "Feature",
             vec![ListSelectionGroup::new(
@@ -171,20 +174,22 @@ fn pointer_click_explicitly_focuses_the_region_search_box() {
             )],
         )
         .with_search(SearchBoxModel::new("Search features")),
-    )));
+    ));
     let area = Rect::new(0, 0, 80, 24);
     let mut target = None;
     'cells: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::Region(ComposerModePointerTarget::Search))
+                == Some(InputPointerTarget::ComposerMode(
+                    ComposerModePointerTarget::Search,
+                ))
             {
                 target = Some((column, row));
                 break 'cells;
             }
         }
     }
-    let (column, row) = target.expect("region search box should be clickable");
+    let (column, row) = target.expect("composer search box should be clickable");
 
     update_pointer_hover(&mut app, area, column, row);
     assert_eq!(app.list_selection().unwrap().query(), "");
@@ -248,6 +253,6 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
     app.insert_text("/sessions");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
-    assert_eq!(app.active_overlay().unwrap().title(), "Session preview");
+    assert_eq!(app.overlay().unwrap().title(), "Session preview");
     assert!(app.session_manager_view().is_some());
 }

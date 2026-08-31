@@ -1,4 +1,4 @@
-use super::SubagentRegionState;
+use super::SubagentPickerState;
 use super::draw_subagent_picker;
 use crate::render::test_context;
 use ratatui::Terminal;
@@ -13,7 +13,7 @@ use zeta_protocol::ThreadStatus;
 #[test]
 fn completed_subagents_disappear_without_changing_stable_selection() {
     let mut session = session();
-    let mut region = SubagentRegionState::default();
+    let mut region = SubagentPickerState::default();
     let selected = thread_id("child-b");
     region.reconcile(Some(&session), Some(&selected));
     region.focus();
@@ -31,7 +31,7 @@ fn selection_drives_a_bounded_viewport() {
     for index in 0..6 {
         session.threads.push(child(&format!("extra-{index}")));
     }
-    let mut region = SubagentRegionState::default();
+    let mut region = SubagentPickerState::default();
     region.reconcile(Some(&session), Some(&thread_id("root")));
     region.focus();
     for _ in 0..6 {
@@ -55,7 +55,7 @@ fn rows_use_selection_dots_lowercase_names_and_right_aligned_elapsed_time() {
     session.threads[0].completed_turn_duration_ms = 61_000;
     session.threads[1].completed_turn_duration_ms = 21_000;
     session.threads[1].active_turn_started_at_unix_ms = Some(52_000);
-    let mut region = SubagentRegionState::default();
+    let mut region = SubagentPickerState::default();
     region.reconcile(Some(&session), Some(&thread_id("child-a")));
     region.now_unix_ms = 62_000;
     let backend = TestBackend::new(30, 2);
@@ -83,7 +83,7 @@ fn rows_use_selection_dots_lowercase_names_and_right_aligned_elapsed_time() {
 #[test]
 fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
     let session = session();
-    let mut region = SubagentRegionState::default();
+    let mut region = SubagentPickerState::default();
     region.reconcile(Some(&session), Some(&thread_id("child-a")));
     region.focus();
     region.select_next();
@@ -114,10 +114,10 @@ fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
 }
 
 #[test]
-fn region_is_absent_without_an_active_subagent() {
+fn picker_is_absent_without_an_active_subagent() {
     let mut session = session();
     session.threads.truncate(1);
-    let mut region = SubagentRegionState::default();
+    let mut region = SubagentPickerState::default();
 
     region.reconcile(Some(&session), Some(&thread_id("root")));
 

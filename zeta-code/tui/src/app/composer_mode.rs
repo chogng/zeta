@@ -1,25 +1,28 @@
+use crate::components::key_capture;
+use crate::components::key_capture::KeyCapture;
+use crate::components::list_selection;
+use crate::components::list_selection::ListSelection;
 use crate::components::list_selection::ListSelectionAdjustment;
+use crate::components::list_selection::ListSelectionOutcome;
 use crate::components::list_selection::ListSelectionState;
-use crate::components::region::RegionSpec;
-use crate::components::region::RegionView;
-use crate::components::region::SelectionRegion;
-use crate::components::region::SelectionRegionOutcome;
+use crate::components::text_prompt;
+use crate::components::text_prompt::TextPrompt;
+use crate::features::config::ConfigChoices;
 use crate::features::config::ConfigEditor;
 use crate::features::config::ConfigEditorOutcome;
-use crate::features::config::ConfigChoices;
 use crate::features::connectors::ConnectorChoices;
 use crate::features::connectors::ConnectorSelectionAction;
 use crate::features::dirs::DirChoices;
 use crate::features::dirs::DirSelectionAction;
+use crate::features::keymap::KeymapChoices;
 use crate::features::keymap::KeymapEditor;
 use crate::features::keymap::KeymapEditorOutcome;
-use crate::features::keymap::KeymapChoices;
 use crate::features::mcp::McpChoices;
 use crate::features::mcp::McpSelectionAction;
 use crate::features::models::ModelChoices;
 use crate::features::models::ModelSelectionAction;
-use crate::features::queue::QueueInput;
 use crate::features::queue::QueueChoices;
+use crate::features::queue::QueueInput;
 use crate::features::queue::QueueSelectionAction;
 use crate::features::rewind::RewindChoices;
 use crate::features::rewind::RewindSelectionAction;
@@ -29,26 +32,42 @@ use crate::features::skills::SkillChoices;
 use crate::features::skills::SkillSelectionAction;
 use crate::features::status_line::StatusLineChoices;
 use crate::features::status_line::StatusLineSelectionAction;
+use crate::features::theme::ThemeChoices;
 use crate::features::theme::ThemePicker;
 use crate::features::theme::ThemePickerOutcome;
-use crate::features::theme::ThemeChoices;
 use crossterm::event::KeyEvent;
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 use std::collections::BTreeMap;
+
+const TITLE_BAR_HEIGHT: u16 = 1;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ComposerModePointerTarget {
+    Tab(usize),
+    Search,
+    Item(usize),
+}
 
 #[derive(Debug)]
 pub(crate) enum ComposerMode {
-    Help(SelectionRegion<()>),
-    Dirs(SelectionRegion<DirSelectionAction>),
+    Help(ListSelection<()>),
+    Dirs(ListSelection<DirSelectionAction>),
     Config(ConfigEditor),
-    Connectors(SelectionRegion<ConnectorSelectionAction>),
+    Connectors(ListSelection<ConnectorSelectionAction>),
     Keymap(KeymapEditor),
-    Mcp(SelectionRegion<McpSelectionAction>),
-    Model(SelectionRegion<ModelSelectionAction>),
-    Queue(SelectionRegion<QueueSelectionAction>),
-    Rewind(SelectionRegion<RewindSelectionAction>),
-    Sessions(SelectionRegion<SessionSelectionAction>),
-    Skills(SelectionRegion<SkillSelectionAction>),
-    StatusLine(SelectionRegion<StatusLineSelectionAction>),
+    Mcp(ListSelection<McpSelectionAction>),
+    Model(ListSelection<ModelSelectionAction>),
+    Queue(ListSelection<QueueSelectionAction>),
+    Rewind(ListSelection<RewindSelectionAction>),
+    Sessions(ListSelection<SessionSelectionAction>),
+    Skills(ListSelection<SkillSelectionAction>),
+    StatusLine(ListSelection<StatusLineSelectionAction>),
     Theme(ThemePicker),
 }
 
@@ -75,14 +94,12 @@ pub(crate) enum ComposerOutcome {
 }
 
 impl ComposerMode {
-    pub(crate) fn help(
-        spec: RegionSpec<crate::components::list_selection::ListSelectionModel>,
-    ) -> Self {
-        Self::Help(SelectionRegion::new(spec, BTreeMap::new()))
+    pub(crate) fn help(model: crate::components::list_selection::ListSelectionModel) -> Self {
+        Self::Help(ListSelection::new(model, BTreeMap::new()))
     }
 
     pub(crate) fn dirs(spec: DirChoices) -> Self {
-        Self::Dirs(SelectionRegion::new(spec.model, spec.actions))
+        Self::Dirs(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn config(spec: ConfigChoices) -> Self {
@@ -90,7 +107,7 @@ impl ComposerMode {
     }
 
     pub(crate) fn connectors(spec: ConnectorChoices) -> Self {
-        Self::Connectors(SelectionRegion::new(spec.model, spec.actions))
+        Self::Connectors(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn keymap(spec: KeymapChoices) -> Self {
@@ -98,31 +115,31 @@ impl ComposerMode {
     }
 
     pub(crate) fn mcp(spec: McpChoices) -> Self {
-        Self::Mcp(SelectionRegion::new(spec.model, spec.actions))
+        Self::Mcp(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn model(spec: ModelChoices) -> Self {
-        Self::Model(SelectionRegion::new(spec.model, spec.actions))
+        Self::Model(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn queue(spec: QueueChoices) -> Self {
-        Self::Queue(SelectionRegion::new(spec.model, spec.actions))
+        Self::Queue(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn rewind(spec: RewindChoices) -> Self {
-        Self::Rewind(SelectionRegion::new(spec.model, spec.actions))
+        Self::Rewind(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn sessions(spec: SessionChoices) -> Self {
-        Self::Sessions(SelectionRegion::new(spec.model, spec.actions))
+        Self::Sessions(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn skills(spec: SkillChoices) -> Self {
-        Self::Skills(SelectionRegion::new(spec.model, spec.actions))
+        Self::Skills(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn status_line(spec: StatusLineChoices) -> Self {
-        Self::StatusLine(SelectionRegion::new(spec.model, spec.actions))
+        Self::StatusLine(ListSelection::new(spec.model, spec.actions))
     }
 
     pub(crate) fn theme(spec: ThemeChoices) -> Self {
@@ -130,9 +147,9 @@ impl ComposerMode {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ComposerOutcome {
-        if let Self::Queue(region) = self
-            && let Some(input) = crate::features::queue::region_input(key)
-            && let Some(action) = region.selected_action().copied()
+        if let Self::Queue(selection) = self
+            && let Some(input) = crate::features::queue::queue_input(key)
+            && let Some(action) = selection.selected_action().copied()
         {
             return ComposerOutcome::QueueInput { input, action };
         }
@@ -145,21 +162,13 @@ impl ComposerMode {
             }
             Self::Keymap(region) => ComposerOutcome::Keymap(region.handle_key(key)),
             Self::Mcp(region) => map_selection(region.handle_key(key), ComposerOutcome::Mcp),
-            Self::Model(region) => {
-                map_selection(region.handle_key(key), ComposerOutcome::Model)
-            }
-            Self::Queue(region) => {
-                map_selection(region.handle_key(key), ComposerOutcome::Queue)
-            }
-            Self::Rewind(region) => {
-                map_selection(region.handle_key(key), ComposerOutcome::Rewind)
-            }
+            Self::Model(region) => map_selection(region.handle_key(key), ComposerOutcome::Model),
+            Self::Queue(region) => map_selection(region.handle_key(key), ComposerOutcome::Queue),
+            Self::Rewind(region) => map_selection(region.handle_key(key), ComposerOutcome::Rewind),
             Self::Sessions(region) => {
                 map_selection(region.handle_key(key), ComposerOutcome::Sessions)
             }
-            Self::Skills(region) => {
-                map_selection(region.handle_key(key), ComposerOutcome::Skills)
-            }
+            Self::Skills(region) => map_selection(region.handle_key(key), ComposerOutcome::Skills),
             Self::StatusLine(region) => {
                 map_selection(region.handle_key(key), ComposerOutcome::StatusLine)
             }
@@ -185,21 +194,157 @@ impl ComposerMode {
         }
     }
 
-    pub(crate) fn view(&self) -> RegionView<'_> {
+    pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
         match self {
-            Self::Help(region) => region.view(),
-            Self::Dirs(region) => region.view(),
-            Self::Config(region) => region.view(),
-            Self::Connectors(region) => region.view(),
-            Self::Keymap(region) => region.view(),
-            Self::Mcp(region) => region.view(),
-            Self::Model(region) => region.view(),
-            Self::Queue(region) => region.view(),
-            Self::Rewind(region) => region.view(),
-            Self::Sessions(region) => region.view(),
-            Self::Skills(region) => region.view(),
-            Self::StatusLine(region) => region.view(),
-            Self::Theme(region) => region.view(),
+            Self::Help(selection) => Some(selection.state()),
+            Self::Dirs(selection) => Some(selection.state()),
+            Self::Config(editor) => editor.selection(),
+            Self::Connectors(selection) => Some(selection.state()),
+            Self::Keymap(editor) => editor.selection(),
+            Self::Mcp(selection) => Some(selection.state()),
+            Self::Model(selection) => Some(selection.state()),
+            Self::Queue(selection) => Some(selection.state()),
+            Self::Rewind(selection) => Some(selection.state()),
+            Self::Sessions(selection) => Some(selection.state()),
+            Self::Skills(selection) => Some(selection.state()),
+            Self::StatusLine(selection) => Some(selection.state()),
+            Self::Theme(picker) => Some(picker.selection()),
+        }
+    }
+
+    pub(crate) fn text_prompt(&self) -> Option<&TextPrompt> {
+        match self {
+            Self::Config(editor) => editor.prompt(),
+            Self::Help(_)
+            | Self::Dirs(_)
+            | Self::Connectors(_)
+            | Self::Keymap(_)
+            | Self::Mcp(_)
+            | Self::Model(_)
+            | Self::Queue(_)
+            | Self::Rewind(_)
+            | Self::Sessions(_)
+            | Self::Skills(_)
+            | Self::StatusLine(_)
+            | Self::Theme(_) => None,
+        }
+    }
+
+    pub(crate) fn key_capture(&self) -> Option<&KeyCapture> {
+        match self {
+            Self::Keymap(editor) => editor.capture(),
+            Self::Help(_)
+            | Self::Dirs(_)
+            | Self::Config(_)
+            | Self::Connectors(_)
+            | Self::Mcp(_)
+            | Self::Model(_)
+            | Self::Queue(_)
+            | Self::Rewind(_)
+            | Self::Sessions(_)
+            | Self::Skills(_)
+            | Self::StatusLine(_)
+            | Self::Theme(_) => None,
+        }
+    }
+
+    pub(crate) fn desired_height(&self, width: u16) -> u16 {
+        let body_height = if let Some(selection) = self.list_selection() {
+            selection.desired_height(width)
+        } else if let Some(prompt) = self.text_prompt() {
+            prompt.desired_height()
+        } else if let Some(capture) = self.key_capture() {
+            capture.desired_height()
+        } else {
+            0
+        };
+        body_height.saturating_add(TITLE_BAR_HEIGHT)
+    }
+
+    pub(crate) fn draw(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        hovered: Option<ComposerModePointerTarget>,
+        pressed: Option<ComposerModePointerTarget>,
+        context: crate::render::RenderContext<'_>,
+    ) {
+        let body = composer_body_area(area);
+        let presentation_focus = self
+            .list_selection()
+            .and_then(ListSelectionState::presentation_focus)
+            .unwrap_or_else(|| context.focus());
+        let title_style = crate::render::interaction_style(
+            context,
+            crate::render::InteractionState {
+                target: crate::render::InteractionTarget::Active,
+                selected: false,
+                hovered: false,
+                pressed: false,
+            },
+        );
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::TOP)
+                .border_style(Style::default().fg(presentation_focus))
+                .title(Line::from(vec![
+                    Span::styled("─", Style::default().fg(presentation_focus)),
+                    Span::styled(format!(" {} ", self.title()), title_style),
+                ])),
+            area,
+        );
+        if let Some(selection) = self.list_selection() {
+            list_selection::draw_with_pointer(
+                frame,
+                body,
+                selection,
+                tab_index(hovered),
+                tab_index(pressed),
+                hovered == Some(ComposerModePointerTarget::Search),
+                pressed == Some(ComposerModePointerTarget::Search),
+                item_index(hovered),
+                item_index(pressed),
+                context,
+            );
+        } else if let Some(prompt) = self.text_prompt() {
+            text_prompt::draw(frame, body, prompt, context);
+        } else if let Some(capture) = self.key_capture() {
+            key_capture::draw(frame, body, capture, context);
+        }
+    }
+
+    pub(crate) fn pointer_target_at(
+        &self,
+        area: Rect,
+        column: u16,
+        row: u16,
+    ) -> Option<ComposerModePointerTarget> {
+        let selection = self.list_selection()?;
+        let body = composer_body_area(area);
+        selection
+            .tab_index_at(body, column, row)
+            .map(ComposerModePointerTarget::Tab)
+            .or_else(|| {
+                selection
+                    .search_contains(body, column, row)
+                    .then_some(ComposerModePointerTarget::Search)
+            })
+            .or_else(|| {
+                selection
+                    .item_index_at(body, column, row)
+                    .map(ComposerModePointerTarget::Item)
+            })
+    }
+
+    fn title(&self) -> &str {
+        if let Some(selection) = self.list_selection() {
+            selection.title()
+        } else if let Some(prompt) = self.text_prompt() {
+            prompt.title()
+        } else if let Some(capture) = self.key_capture() {
+            capture.title()
+        } else {
+            ""
         }
     }
 
@@ -218,24 +363,6 @@ impl ComposerMode {
             Self::Skills(region) => region.key_hints(),
             Self::StatusLine(region) => region.key_hints(),
             Self::Theme(region) => region.key_hints(),
-        }
-    }
-
-    pub(crate) fn selection(&self) -> Option<&ListSelectionState> {
-        match self {
-            Self::Help(region) => Some(region.state()),
-            Self::Dirs(region) => Some(region.state()),
-            Self::Config(region) => region.selection(),
-            Self::Connectors(region) => Some(region.state()),
-            Self::Keymap(region) => region.selection(),
-            Self::Mcp(region) => Some(region.state()),
-            Self::Model(region) => Some(region.state()),
-            Self::Queue(region) => Some(region.state()),
-            Self::Rewind(region) => Some(region.state()),
-            Self::Sessions(region) => Some(region.state()),
-            Self::Skills(region) => Some(region.state()),
-            Self::StatusLine(region) => Some(region.state()),
-            Self::Theme(region) => Some(region.selection()),
         }
     }
 
@@ -406,25 +533,48 @@ impl ComposerMode {
     }
 }
 
-fn map_read_only(outcome: SelectionRegionOutcome<()>) -> ComposerOutcome {
+fn map_read_only(outcome: ListSelectionOutcome<()>) -> ComposerOutcome {
     match outcome {
-        SelectionRegionOutcome::Activate(())
-        | SelectionRegionOutcome::Adjust((), ListSelectionAdjustment::Previous)
-        | SelectionRegionOutcome::Adjust((), ListSelectionAdjustment::Next)
-        | SelectionRegionOutcome::Consumed => ComposerOutcome::Consumed,
-        SelectionRegionOutcome::Dismiss => ComposerOutcome::Dismiss,
+        ListSelectionOutcome::Activate(())
+        | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Previous)
+        | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Next)
+        | ListSelectionOutcome::Consumed => ComposerOutcome::Consumed,
+        ListSelectionOutcome::Dismiss => ComposerOutcome::Dismiss,
     }
 }
 
 fn map_selection<A>(
-    outcome: SelectionRegionOutcome<A>,
+    outcome: ListSelectionOutcome<A>,
     activate: impl FnOnce(A) -> ComposerOutcome,
 ) -> ComposerOutcome {
     match outcome {
-        SelectionRegionOutcome::Activate(action) => activate(action),
-        SelectionRegionOutcome::Adjust(_, _) | SelectionRegionOutcome::Consumed => {
+        ListSelectionOutcome::Activate(action) => activate(action),
+        ListSelectionOutcome::Adjust(_, _) | ListSelectionOutcome::Consumed => {
             ComposerOutcome::Consumed
         }
-        SelectionRegionOutcome::Dismiss => ComposerOutcome::Dismiss,
+        ListSelectionOutcome::Dismiss => ComposerOutcome::Dismiss,
+    }
+}
+
+fn composer_body_area(area: Rect) -> Rect {
+    let title_height = TITLE_BAR_HEIGHT.min(area.height);
+    Rect {
+        y: area.y.saturating_add(title_height),
+        height: area.height.saturating_sub(title_height),
+        ..area
+    }
+}
+
+fn tab_index(target: Option<ComposerModePointerTarget>) -> Option<usize> {
+    match target {
+        Some(ComposerModePointerTarget::Tab(index)) => Some(index),
+        Some(ComposerModePointerTarget::Search | ComposerModePointerTarget::Item(_)) | None => None,
+    }
+}
+
+fn item_index(target: Option<ComposerModePointerTarget>) -> Option<usize> {
+    match target {
+        Some(ComposerModePointerTarget::Item(index)) => Some(index),
+        Some(ComposerModePointerTarget::Tab(_) | ComposerModePointerTarget::Search) | None => None,
     }
 }

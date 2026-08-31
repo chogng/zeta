@@ -50,7 +50,7 @@ fn no_directories() -> SessionDirListResult {
 }
 
 #[test]
-fn config_region_organizes_the_snapshot_into_searchable_tabs() {
+fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     let mut config = empty_config_snapshot();
     config.revision = 4;
     config.generation = 5;
@@ -62,7 +62,7 @@ fn config_region_organizes_the_snapshot_into_searchable_tabs() {
         &session_id(),
         &no_directories(),
     );
-    let mut state = ListSelectionState::new(view.model.into_body());
+    let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Config");
     assert!(state.search().is_some());
@@ -147,7 +147,7 @@ fn config_region_organizes_the_snapshot_into_searchable_tabs() {
 }
 
 #[test]
-fn config_region_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabled() {
+fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabled() {
     let mut terminal = TerminalSettings::default();
     terminal.set_mouse_interactions(false);
 
@@ -158,7 +158,7 @@ fn config_region_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
         &session_id(),
         &no_directories(),
     );
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
 
     assert_eq!(
         state.visible_items()[0].description(),
@@ -183,7 +183,7 @@ fn add_dir_items_emit_revision_bound_complete_permission_sets() {
         &session_id(),
         &directories,
     );
-    let mut state = ListSelectionState::new(view.model.into_body());
+    let mut state = ListSelectionState::new(view.model);
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert_eq!(state.visible_items().len(), 30);
@@ -231,15 +231,13 @@ fn add_dir_items_emit_revision_bound_complete_permission_sets() {
 #[test]
 fn provider_api_key_input_is_masked_keeps_its_explanation_and_submits_with_enter() {
     let prompt = provider_api_key_prompt("openai".into(), "OpenAI".into());
-    let (spec, key_hints) = prompt.spec.into_parts();
-    let mut state = TextPrompt::new(spec);
+    let mut state = TextPrompt::new(prompt.spec);
 
     state.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
     let outcome = state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(state.input().masked());
-    assert_eq!(key_hints.text(), "Enter save  ·  Esc cancel");
     assert_eq!(
         state.explanation(),
         "The key is hidden and stored in the profile secret store"

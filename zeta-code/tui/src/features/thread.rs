@@ -32,7 +32,7 @@ pub(crate) use request::resolve_interaction;
 pub(crate) use request::steer_prompt;
 pub(crate) use request::submit_prompt;
 pub(crate) use state::ThreadFeatureState;
-pub(crate) use subagent_picker::SubagentRegionState;
+pub(crate) use subagent_picker::SubagentPickerState;
 pub(crate) use subagent_picker::SubagentPickerView;
 pub(crate) use subagent_picker::draw_subagent_picker;
 pub(crate) use subscription::ThreadSubscription;

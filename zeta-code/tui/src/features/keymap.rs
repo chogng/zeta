@@ -11,12 +11,12 @@ use crate::client::new_command_id;
 use crate::keymap::AppKeymap;
 use crate::keymap::compile_app_user_bindings;
 
-mod region;
+mod editor;
 
-pub(crate) use region::KeymapEditor;
-pub(crate) use region::KeymapEditorOutcome;
-pub(crate) use region::KeymapChoices;
-pub(crate) use region::keymap_choices;
+pub(crate) use editor::KeymapChoices;
+pub(crate) use editor::KeymapEditor;
+pub(crate) use editor::KeymapEditorOutcome;
+pub(crate) use editor::keymap_choices;
 
 const CONFIG_KEY: &str = "keybindings";
 
@@ -55,7 +55,7 @@ pub(crate) struct KeymapSettings {
 
 pub(crate) struct KeymapEditorUpdate {
     pub(crate) settings: KeymapSettings,
-    pub(crate) region_spec: KeymapChoices,
+    pub(crate) choices: KeymapChoices,
     pub(crate) notice: Option<String>,
 }
 
@@ -77,14 +77,14 @@ where
 {
     let config = client.read_config().map_err(|error| error.to_string())?;
     let settings = settings_from_tui(&config.tui)?;
-    let region_spec = keymap_choices(
+    let choices = keymap_choices(
         settings.keymap.setup_actions(),
         &settings.diagnostics,
         config.revision,
     );
     Ok(KeymapEditorUpdate {
         settings,
-        region_spec,
+        choices,
         notice: None,
     })
 }
@@ -131,14 +131,14 @@ where
 
     let config = client.read_config().map_err(|error| error.to_string())?;
     let settings = settings_from_tui(&config.tui)?;
-    let region_spec = keymap_choices(
+    let choices = keymap_choices(
         settings.keymap.setup_actions(),
         &settings.diagnostics,
         config.revision,
     );
     Ok(KeymapEditorUpdate {
         settings,
-        region_spec,
+        choices,
         notice: Some(notice),
     })
 }

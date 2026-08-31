@@ -1,12 +1,10 @@
 use crate::components::detail_list::DetailList;
 #[cfg(test)]
 use crate::components::list_selection::ListSelectionModel;
-#[cfg(test)]
-use crate::components::region::RegionSpec;
 use crate::components::steer::SteerId;
 use crate::features::approval::Approval;
-use crate::features::config::ConfigEditResult;
 use crate::features::config::ConfigChoices;
+use crate::features::config::ConfigEditResult;
 use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorChoices;
 use crate::features::dirs::DirChoices;
@@ -19,7 +17,7 @@ use crate::features::queue::QueueId;
 use crate::features::rewind::RewindChoices;
 use crate::features::sessions::SessionChoices;
 use crate::features::skills::SkillChoices;
-use crate::features::status_line::StatusLineRegionUpdate;
+use crate::features::status_line::StatusLineEditorUpdate;
 use crate::features::status_line::StatusLineSettings;
 use crate::features::theme::ThemeChoices;
 use crate::features::thread::ThreadRequestIdentity;
@@ -44,7 +42,7 @@ pub(crate) enum AppEvent {
     DirPickerOpened(DirChoices),
     DirRemoved {
         path: std::path::PathBuf,
-        region_spec: DirChoices,
+        choices: DirChoices,
     },
     ClipboardImageRead(Result<Vec<u8>, String>),
     CommandStarted(String),
@@ -58,7 +56,7 @@ pub(crate) enum AppEvent {
     ConfigEditorUpdated(ConfigChoices),
     ConfigApiKeySaved {
         provider: String,
-        region_spec: ConfigChoices,
+        choices: ConfigChoices,
     },
     ConnectorPickerOpened(ConnectorChoices),
     ConnectorPickerUpdated(ConnectorChoices),
@@ -80,8 +78,8 @@ pub(crate) enum AppEvent {
     KeymapSettingsReceived(KeymapSettings),
     KeymapEditorOpened(KeymapEditorUpdate),
     StatusLineSettingsReceived(StatusLineSettings),
-    StatusLineRegionOpened(StatusLineRegionUpdate),
-    StatusLineRegionReplaced(StatusLineRegionUpdate),
+    StatusLineEditorOpened(StatusLineEditorUpdate),
+    StatusLineEditorUpdated(StatusLineEditorUpdate),
     McpSettingsOpened(McpChoices),
     McpSettingsUpdated(McpChoices),
     ModelPickerOpened(ModelChoices),
@@ -96,7 +94,7 @@ pub(crate) enum AppEvent {
     StatusOverlayOpened(DetailList),
     ComposerModeClosed,
     #[cfg(test)]
-    HelpOpened(RegionSpec<ListSelectionModel>),
+    HelpOpened(ListSelectionModel),
     SkillSettingsOpened(SkillChoices),
     SkillSettingsUpdated(SkillChoices),
     SkillDiagnosticsReceived(Vec<SkillDiagnosticDto>),

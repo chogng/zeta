@@ -1,10 +1,10 @@
 use super::Queue;
 use super::QueueInput;
-use super::region_input;
-use super::region_spec;
+use super::choices;
+use super::queue_input;
 use crate::components::chat_input::ChatInput;
 use crate::components::chat_input::ChatInputQueueOutcome;
-use crate::components::region::SelectionRegion;
+use crate::components::list_selection::ListSelection;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -83,17 +83,17 @@ fn restore_preserves_a_nonempty_draft_and_restores_by_stable_identity() {
 }
 
 #[test]
-fn queue_region_bindings_own_input_mapping_and_hints() {
+fn queue_picker_owns_input_mapping_and_hints() {
     assert_eq!(
-        region_input(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)),
+        queue_input(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)),
         Some(QueueInput::Restore)
     );
     assert_eq!(
-        region_input(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT)),
+        queue_input(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT)),
         Some(QueueInput::MoveDown)
     );
     assert_eq!(
-        region_input(KeyEvent {
+        queue_input(KeyEvent {
             kind: KeyEventKind::Release,
             ..KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)
         }),
@@ -101,11 +101,11 @@ fn queue_region_bindings_own_input_mapping_and_hints() {
     );
 
     let queue = Queue::default();
-    let spec = region_spec(&queue.view());
-    let region = SelectionRegion::new(spec.model, spec.actions);
+    let spec = choices(&queue.view());
+    let selection = ListSelection::new(spec.model, spec.actions);
 
     assert_eq!(
-        region.key_hints(),
+        selection.key_hints(),
         "↑/↓ select  ·  Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send  ·  Esc to close"
     );
 }

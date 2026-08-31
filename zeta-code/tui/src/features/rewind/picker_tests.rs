@@ -12,11 +12,11 @@ use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
 
 #[test]
-fn rewind_region_lists_user_message_checkpoints_and_selects_the_latest() {
+fn rewind_picker_lists_user_message_checkpoints_and_selects_the_latest() {
     let thread = thread(&["first checkpoint", "second checkpoint"]);
 
     let view = rewind_choices(&thread);
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Rewind");
     assert!(state.search().is_some());

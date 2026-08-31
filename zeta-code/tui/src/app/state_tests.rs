@@ -13,8 +13,6 @@ use crate::components::detail_list::DetailListRow;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::region::RegionSpec;
-use crate::components::region::RegionView;
 use crate::features::approval::Approval;
 use crate::features::approval::ApprovalSpec;
 use crate::features::config::FollowUpMode;
@@ -31,8 +29,8 @@ use crate::features::query::QueryChoice;
 use crate::features::query::QueryCustomAnswer;
 use crate::features::query::QueryQuestion;
 use crate::features::rewind::rewind_choices;
+use crate::features::status_line::StatusLineEditorUpdate;
 use crate::features::status_line::StatusLineItem;
-use crate::features::status_line::StatusLineRegionUpdate;
 use crate::features::status_line::StatusLineSettings;
 use crate::features::status_line::status_line_choices;
 use crate::features::theme::ThemePickerCatalog;
@@ -225,11 +223,9 @@ fn query_paste_uses_its_own_editor_without_changing_the_chat_draft() {
 }
 
 #[test]
-fn selected_theme_closes_the_theme_region_after_success() {
+fn selected_theme_closes_the_theme_picker_after_success() {
     let mut app = App::new();
-    app.update(AppEvent::ThemePickerOpened(theme_choices(
-        &theme_catalog(),
-    )));
+    app.update(AppEvent::ThemePickerOpened(theme_choices(&theme_catalog())));
 
     assert_eq!(app.list_selection().unwrap().title(), "Theme");
     let command = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -255,11 +251,9 @@ fn selected_render_theme_is_read_through_the_frame_context() {
 }
 
 #[test]
-fn pointer_activation_uses_the_feature_region_action_mapping() {
+fn pointer_activation_uses_the_feature_action_mapping() {
     let mut app = App::new();
-    app.update(AppEvent::ThemePickerOpened(theme_choices(
-        &theme_catalog(),
-    )));
+    app.update(AppEvent::ThemePickerOpened(theme_choices(&theme_catalog())));
 
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     assert_eq!(
@@ -282,9 +276,7 @@ fn selected_custom_theme_closes_the_entire_theme_flow_after_success() {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::OpenCustomThemePicker)
     );
-    app.update(AppEvent::ThemePickerOpened(custom_theme_choices(
-        &catalog,
-    )));
+    app.update(AppEvent::ThemePickerOpened(custom_theme_choices(&catalog)));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::SetCustomTheme {
@@ -832,7 +824,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
 
     app.update(AppEvent::ConfigApiKeySaved {
         provider: "openai".into(),
-        region_spec: config_choices(
+        choices: config_choices(
             &config,
             &providers,
             TerminalSettings::default(),
@@ -885,18 +877,18 @@ fn statusline_slash_command_is_owned_by_the_local_host() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, Some(AppCommand::OpenStatusLineRegion));
+    assert_eq!(action, Some(AppCommand::OpenStatusLineEditor));
     assert!(app.messages().is_empty());
 }
 
 #[test]
 fn statusline_selection_emits_a_revision_bound_edit() {
     let settings = StatusLineSettings::default();
-    let region_spec = status_line_choices(&settings, 7);
+    let choices = status_line_choices(&settings, 7);
     let mut app = App::new();
-    app.update(AppEvent::StatusLineRegionOpened(StatusLineRegionUpdate {
+    app.update(AppEvent::StatusLineEditorOpened(StatusLineEditorUpdate {
         settings,
-        region_spec,
+        choices,
     }));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -914,10 +906,10 @@ fn statusline_selection_emits_a_revision_bound_edit() {
 fn shortcut_capture_emits_a_revision_bound_edit() {
     let mut app = App::new();
     let settings = keymap_settings_from_tui(&Default::default()).unwrap();
-    let region_spec = keymap_choices(settings.keymap.setup_actions(), &[], 7);
+    let choices = keymap_choices(settings.keymap.setup_actions(), &[], 7);
     app.update(AppEvent::KeymapEditorOpened(KeymapEditorUpdate {
         settings,
-        region_spec,
+        choices,
         notice: None,
     }));
 
@@ -932,8 +924,8 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
         None
     );
     assert!(matches!(
-        app.composer_mode(),
-        Some(RegionView::KeyCapture(body)) if body.title() == "Record shortcut"
+        app.composer_mode().and_then(|mode| mode.key_capture()),
+        Some(body) if body.title() == "Record shortcut"
     ));
 
     let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
@@ -1252,14 +1244,12 @@ fn escape_does_not_exit_the_idle_session_screen() {
 #[test]
 fn terminal_screen_change_closes_the_composer_mode_and_application_overlay() {
     let mut app = App::new();
-    app.update(AppEvent::HelpOpened(RegionSpec::new(
-        ListSelectionModel::new(
-            "Help",
-            vec![ListSelectionGroup::new(
-                "Commands",
-                vec![ListSelectionItem::new("/status")],
-            )],
-        ),
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Help",
+        vec![ListSelectionGroup::new(
+            "Commands",
+            vec![ListSelectionItem::new("/status")],
+        )],
     )));
     assert!(app.composer_mode().is_some());
 
@@ -1270,12 +1260,12 @@ fn terminal_screen_change_closes_the_composer_mode_and_application_overlay() {
         "Status",
         vec![DetailListRow::new("Model", "openai/gpt")],
     )));
-    assert!(app.active_overlay().is_some());
+    assert!(app.overlay().is_some());
     app.update(AppEvent::ThreadContextChanged {
         session_id: SessionId::new("other-session").unwrap(),
         thread_id: ThreadId::new("other-thread").unwrap(),
     });
-    assert!(app.active_overlay().is_none());
+    assert!(app.overlay().is_none());
 }
 
 #[test]
@@ -1292,26 +1282,24 @@ fn two_screen_escape_presses_within_the_gesture_window_open_rewind() {
             KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
             started + Duration::from_millis(200),
         ),
-        Some(AppCommand::OpenRewindRegion)
+        Some(AppCommand::OpenRewindPicker)
     );
 }
 
 #[test]
-fn escape_from_a_region_does_not_count_toward_the_screen_rewind_sequence() {
+fn escape_from_composer_content_does_not_count_toward_the_screen_rewind_sequence() {
     let mut app = App::new();
     let started = Instant::now();
     assert_eq!(
         app.handle_key_at(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), started),
         None
     );
-    app.update(AppEvent::HelpOpened(RegionSpec::new(
-        ListSelectionModel::new(
-            "Feature",
-            vec![ListSelectionGroup::new(
-                "Items",
-                vec![ListSelectionItem::new("Item")],
-            )],
-        ),
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Feature",
+        vec![ListSelectionGroup::new(
+            "Items",
+            vec![ListSelectionItem::new("Item")],
+        )],
     )));
 
     assert_eq!(
@@ -1509,10 +1497,10 @@ fn manager_group_and_session_keys_use_the_selected_node_semantics() {
         app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
         None
     );
-    assert_eq!(app.active_overlay().unwrap().title(), "Session preview");
+    assert_eq!(app.overlay().unwrap().title(), "Session preview");
     assert!(app.session_manager_view().is_some());
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.active_overlay().is_none());
+    assert!(app.overlay().is_none());
     assert!(app.session_manager_view().is_some());
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),

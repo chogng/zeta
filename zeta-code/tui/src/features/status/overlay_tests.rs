@@ -8,7 +8,7 @@ use ratatui::backend::TestBackend;
 use ratatui::style::Modifier;
 
 #[test]
-fn status_region_exposes_model_context_and_conversation_identity_without_search() {
+fn status_overlay_exposes_model_context_and_conversation_identity_without_search() {
     let state = status_overlay(StatusViewData {
         model: "openai/gpt",
         full_context_window: Some(1_000_000),
@@ -42,7 +42,7 @@ fn status_region_exposes_model_context_and_conversation_identity_without_search(
 }
 
 #[test]
-fn status_region_renders_bold_labels_with_colons_and_plain_values() {
+fn status_overlay_renders_bold_labels_with_colons_and_plain_values() {
     let state = status_overlay(StatusViewData {
         model: "openai/gpt",
         full_context_window: Some(1_000_000),

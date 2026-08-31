@@ -32,7 +32,7 @@ fn connected_connector_is_actionable_while_disconnected_connector_is_read_only()
     };
 
     let view = connector_choices(&catalog);
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Connectors");
     assert_eq!(view.actions.len(), 1);

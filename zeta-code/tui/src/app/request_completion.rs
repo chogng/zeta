@@ -114,7 +114,7 @@ pub(super) struct ProductCommandCompletion {
 
 pub(super) struct SkillRequestCompletion {
     input_catalog: ChatInputCatalog,
-    region_spec: SkillChoices,
+    choices: SkillChoices,
 }
 
 pub(super) fn refresh_skills_and_registry(
@@ -141,7 +141,7 @@ pub(super) fn refresh_skills_and_registry(
         .map_err(|error| error.to_string())?;
     Ok(SkillRequestCompletion {
         input_catalog,
-        region_spec: skills::skill_choices(&catalog),
+        choices: skills::skill_choices(&catalog),
     })
 }
 
@@ -434,10 +434,10 @@ pub(super) fn apply_request_completion(
         RequestCompletion::SkillsRefreshed(Ok(refresh)) => {
             app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {
-                app.update(AppEvent::SkillSettingsUpdated(refresh.region_spec));
+                app.update(AppEvent::SkillSettingsUpdated(refresh.choices));
             } else {
                 app.update(AppEvent::SkillDiagnosticsReceived(
-                    refresh.region_spec.diagnostics,
+                    refresh.choices.diagnostics,
                 ));
             }
         }

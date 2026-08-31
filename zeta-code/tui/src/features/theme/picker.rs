@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
+use crate::components::list_selection::ListSelection;
 use crate::components::list_selection::ListSelectionActivationMode;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::list_selection::ListSelection;
 use crate::components::list_selection::ListSelectionOutcome;
 use crate::components::list_selection::ListSelectionPreview;
 use crate::features::theme::ThemePickerCatalog;

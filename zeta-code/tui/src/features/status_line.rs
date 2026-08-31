@@ -8,7 +8,7 @@ pub(crate) use model::ApprovalModeStatus;
 pub(crate) use model::StatusLineModel;
 pub(crate) use model::StatusLineRuntime;
 pub(crate) use request::StatusLineEdit;
-pub(crate) use request::StatusLineRegionUpdate;
+pub(crate) use request::StatusLineEditorUpdate;
 pub(crate) use request::read_status_line;
 pub(crate) use request::set_status_line;
 pub(crate) use settings::StatusLineItem;

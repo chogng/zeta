@@ -5,14 +5,12 @@ use crossterm::event::KeyModifiers;
 use std::collections::BTreeMap;
 
 use crate::components::key_capture::KeyCapture;
+use crate::components::list_selection::ListSelection;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::region::RegionSpec;
-use crate::components::region::RegionView;
-use crate::components::region::SelectionRegion;
-use crate::components::region::SelectionRegionOutcome;
+use crate::components::list_selection::ListSelectionOutcome;
 use crate::components::search_box::SearchBoxModel;
 use crate::keymap::KeymapActionSnapshot;
 use crate::keymap::compose_config_chord;
@@ -42,13 +40,13 @@ pub(crate) enum KeymapAction {
 }
 
 pub(crate) struct KeymapChoices {
-    pub(crate) model: RegionSpec<ListSelectionModel>,
+    pub(crate) model: ListSelectionModel,
     pub(crate) actions: BTreeMap<ListSelectionItemId, KeymapAction>,
 }
 
 #[derive(Debug)]
 pub(crate) struct KeymapEditor {
-    pages: Vec<SelectionRegion<KeymapAction>>,
+    pages: Vec<ListSelection<KeymapAction>>,
     capture: Option<KeymapCapturePage>,
 }
 
@@ -69,21 +67,21 @@ pub(crate) enum KeymapEditorOutcome {
 impl KeymapEditor {
     pub(crate) fn new(spec: KeymapChoices) -> Self {
         Self {
-            pages: vec![SelectionRegion::new(spec.model, spec.actions)],
+            pages: vec![ListSelection::new(spec.model, spec.actions)],
             capture: None,
         }
     }
 
     pub(crate) fn replace_catalog(&mut self, spec: KeymapChoices) {
-        self.pages = vec![SelectionRegion::new(spec.model, spec.actions)];
+        self.pages = vec![ListSelection::new(spec.model, spec.actions)];
         self.capture = None;
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> KeymapEditorOutcome {
         if let Some(capture) = self.capture.as_mut() {
             return match capture.state.handle_key(key) {
-                KeymapCaptureOutcome::Pending(model) => {
-                    let (view, key_hints) = model.into_parts();
+                KeymapCaptureOutcome::Pending => {
+                    let (view, key_hints) = capture.state.presentation();
                     capture.view = view;
                     capture.key_hints = key_hints;
                     KeymapEditorOutcome::Consumed
@@ -98,21 +96,13 @@ impl KeymapEditor {
         let outcome = self
             .pages
             .last_mut()
-            .expect("a keymap region always has a selection page")
+            .expect("a keymap editor always has a selection page")
             .handle_key(key);
         self.apply_selection_outcome(outcome)
     }
 
-    pub(crate) fn view(&self) -> RegionView<'_> {
-        self.capture
-            .as_ref()
-            .map(|capture| RegionView::KeyCapture(&capture.view))
-            .unwrap_or_else(|| {
-                self.pages
-                    .last()
-                    .expect("a keymap region always has a selection page")
-                    .view()
-            })
+    pub(crate) fn capture(&self) -> Option<&KeyCapture> {
+        self.capture.as_ref().map(|capture| &capture.view)
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
@@ -130,7 +120,7 @@ impl KeymapEditor {
             .unwrap_or_else(|| {
                 self.pages
                     .last()
-                    .expect("a keymap region always has a selection page")
+                    .expect("a keymap editor always has a selection page")
                     .key_hints()
             })
     }
@@ -141,7 +131,7 @@ impl KeymapEditor {
         self.capture.is_none().then(|| {
             self.pages
                 .last()
-                .expect("a keymap region always has a selection page")
+                .expect("a keymap editor always has a selection page")
                 .state()
         })
     }
@@ -159,7 +149,7 @@ impl KeymapEditor {
             && self
                 .pages
                 .last_mut()
-                .is_some_and(SelectionRegion::focus_search)
+                .is_some_and(ListSelection::focus_search)
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<KeymapEditorOutcome> {
@@ -172,23 +162,23 @@ impl KeymapEditor {
 
     fn apply_selection_outcome(
         &mut self,
-        outcome: SelectionRegionOutcome<KeymapAction>,
+        outcome: ListSelectionOutcome<KeymapAction>,
     ) -> KeymapEditorOutcome {
         match outcome {
-            SelectionRegionOutcome::Activate(KeymapAction::OpenAction { action, revision }) => {
+            ListSelectionOutcome::Activate(KeymapAction::OpenAction { action, revision }) => {
                 let spec = keymap_action_menu(action, revision);
                 self.pages
-                    .push(SelectionRegion::new(spec.model, spec.actions));
+                    .push(ListSelection::new(spec.model, spec.actions));
                 KeymapEditorOutcome::Consumed
             }
-            SelectionRegionOutcome::Activate(KeymapAction::BeginCapture {
+            ListSelectionOutcome::Activate(KeymapAction::BeginCapture {
                 action,
                 revision,
                 intent,
                 mode,
             }) => {
-                let (model, state) = keymap_capture(action, revision, intent, mode);
-                let (view, key_hints) = model.into_parts();
+                let state = keymap_capture(action, revision, intent, mode);
+                let (view, key_hints) = state.presentation();
                 self.capture = Some(KeymapCapturePage {
                     view,
                     key_hints,
@@ -196,7 +186,7 @@ impl KeymapEditor {
                 });
                 KeymapEditorOutcome::Consumed
             }
-            SelectionRegionOutcome::Activate(KeymapAction::ClearUser {
+            ListSelectionOutcome::Activate(KeymapAction::ClearUser {
                 command_id,
                 revision,
             }) => KeymapEditorOutcome::Edit(KeymapEdit {
@@ -204,14 +194,14 @@ impl KeymapEditor {
                 command_id,
                 kind: KeymapEditKind::ClearUser,
             }),
-            SelectionRegionOutcome::Adjust(_, _) | SelectionRegionOutcome::Consumed => {
+            ListSelectionOutcome::Adjust(_, _) | ListSelectionOutcome::Consumed => {
                 KeymapEditorOutcome::Consumed
             }
-            SelectionRegionOutcome::Dismiss if self.pages.len() > 1 => {
+            ListSelectionOutcome::Dismiss if self.pages.len() > 1 => {
                 self.pages.pop();
                 KeymapEditorOutcome::Consumed
             }
-            SelectionRegionOutcome::Dismiss => KeymapEditorOutcome::Dismiss,
+            ListSelectionOutcome::Dismiss => KeymapEditorOutcome::Dismiss,
         }
     }
 }
@@ -252,19 +242,17 @@ pub(crate) fn keymap_choices(
         "No keymap diagnostics",
     );
     KeymapChoices {
-        model: RegionSpec::new(
-            ListSelectionModel::new(
-                "Keymap",
-                vec![
-                    ListSelectionGroup::new("All", all_items),
-                    ListSelectionGroup::new("User", user_items),
-                    ListSelectionGroup::new("Diagnostics", diagnostic_items),
-                ],
-            )
-            .with_activation_label("edit")
-            .with_search(SearchBoxModel::new("Search shortcuts"))
-            .with_empty_message("No matching shortcuts"),
-        ),
+        model: ListSelectionModel::new(
+            "Keymap",
+            vec![
+                ListSelectionGroup::new("All", all_items),
+                ListSelectionGroup::new("User", user_items),
+                ListSelectionGroup::new("Diagnostics", diagnostic_items),
+            ],
+        )
+        .with_activation_label("edit")
+        .with_search(SearchBoxModel::new("Search shortcuts"))
+        .with_empty_message("No matching shortcuts"),
         actions: item_actions,
     }
 }
@@ -329,15 +317,13 @@ pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) ->
     }
     let summary = binding_summary(&action);
     KeymapChoices {
-        model: RegionSpec::new(
-            ListSelectionModel::new(
-                action.label,
-                vec![ListSelectionGroup::new("Actions", items)],
-            )
-            .with_activation_label("choose")
-            .with_key_hint_note(summary)
-            .without_tab_bar(),
-        ),
+        model: ListSelectionModel::new(
+            action.label,
+            vec![ListSelectionGroup::new("Actions", items)],
+        )
+        .with_activation_label("choose")
+        .with_key_hint_note(summary)
+        .without_tab_bar(),
         actions,
     }
 }
@@ -354,7 +340,7 @@ pub(crate) struct KeymapCaptureState {
 
 #[derive(Debug)]
 pub(crate) enum KeymapCaptureOutcome {
-    Pending(RegionSpec<KeyCapture>),
+    Pending,
     Cancelled,
     Edit(KeymapEdit),
 }
@@ -364,22 +350,21 @@ pub(crate) fn keymap_capture(
     revision: u64,
     intent: KeymapEditIntent,
     mode: KeymapCaptureMode,
-) -> (RegionSpec<KeyCapture>, KeymapCaptureState) {
-    let state = KeymapCaptureState {
+) -> KeymapCaptureState {
+    KeymapCaptureState {
         action,
         revision,
         intent,
         mode,
         first_stroke: None,
         error: None,
-    };
-    (state.model(), state)
+    }
 }
 
 impl KeymapCaptureState {
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> KeymapCaptureOutcome {
         if key.kind != KeyEventKind::Press {
-            return KeymapCaptureOutcome::Pending(self.model());
+            return KeymapCaptureOutcome::Pending;
         }
         if is_cancel(key) {
             return KeymapCaptureOutcome::Cancelled;
@@ -388,7 +373,7 @@ impl KeymapCaptureState {
             Ok(stroke) => stroke,
             Err(error) => {
                 self.error = Some(error);
-                return KeymapCaptureOutcome::Pending(self.model());
+                return KeymapCaptureOutcome::Pending;
             }
         };
         self.error = None;
@@ -397,13 +382,13 @@ impl KeymapCaptureState {
             KeymapCaptureMode::Chord => match self.first_stroke.take() {
                 None => {
                     self.first_stroke = Some(stroke);
-                    return KeymapCaptureOutcome::Pending(self.model());
+                    return KeymapCaptureOutcome::Pending;
                 }
                 Some(first) => match compose_config_chord(&first, &stroke) {
                     Ok(chord) => chord,
                     Err(error) => {
                         self.error = Some(error);
-                        return KeymapCaptureOutcome::Pending(self.model());
+                        return KeymapCaptureOutcome::Pending;
                     }
                 },
             },
@@ -418,7 +403,7 @@ impl KeymapCaptureState {
         })
     }
 
-    fn model(&self) -> RegionSpec<KeyCapture> {
+    fn presentation(&self) -> (KeyCapture, crate::components::key_hint::KeyHints) {
         let instruction = match (self.mode, self.first_stroke.as_deref()) {
             (KeymapCaptureMode::SingleKey, _) => {
                 "Press the new key now. Esc or Ctrl-C cancels.".to_owned()
@@ -434,11 +419,14 @@ impl KeymapCaptureState {
         if let Some(error) = &self.error {
             lines.push(format!("Error: {error}"));
         }
-        RegionSpec::new(KeyCapture::new("Record shortcut", lines)).with_key_hint_note(format!(
-            "{}  ·  {}",
-            self.action.label,
-            binding_summary(&self.action)
-        ))
+        (
+            KeyCapture::new("Record shortcut", lines),
+            crate::components::key_hint::KeyHints::new().with_note(format!(
+                "{}  ·  {}",
+                self.action.label,
+                binding_summary(&self.action)
+            )),
+        )
     }
 }
 
@@ -579,5 +567,5 @@ fn is_cancel(key: KeyEvent) -> bool {
 }
 
 #[cfg(test)]
-#[path = "region_tests.rs"]
+#[path = "editor_tests.rs"]
 mod tests;

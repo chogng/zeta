@@ -156,7 +156,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
         invocation(TuiSlashCommandAction::Status, ""),
         &mut app,
     );
-    assert_eq!(app.active_overlay().unwrap().title(), "Status");
+    assert_eq!(app.overlay().unwrap().title(), "Status");
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     conversation.execute(

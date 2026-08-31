@@ -5,7 +5,7 @@ use zeta_app_server_protocol::protocol::skills::{
 };
 
 #[test]
-fn region_keeps_backend_diagnostics_out_of_the_tab_model() {
+fn settings_keep_backend_diagnostics_out_of_the_tab_model() {
     let diagnostic = SkillDiagnosticDto {
         source: "user:skill-source:personal".into(),
         subject: Some("broken/SKILL.md".into()),
@@ -21,7 +21,7 @@ fn region_keeps_backend_diagnostics_out_of_the_tab_model() {
     let spec = skill_choices(&catalog);
     assert_eq!(spec.diagnostics, vec![diagnostic]);
 
-    let state = ListSelectionState::new(spec.model.into_body());
+    let state = ListSelectionState::new(spec.model);
     assert_eq!(
         state
             .tabs()

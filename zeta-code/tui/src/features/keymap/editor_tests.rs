@@ -24,7 +24,7 @@ fn copy_action() -> crate::keymap::KeymapActionSnapshot {
 
 #[test]
 fn chord_capture_waits_for_two_strokes_and_emits_canonical_edit() {
-    let (_, mut capture) = keymap_capture(
+    let mut capture = keymap_capture(
         copy_action(),
         4,
         KeymapEditIntent::AddAlternate,
@@ -33,7 +33,7 @@ fn chord_capture_waits_for_two_strokes_and_emits_canonical_edit() {
 
     assert!(matches!(
         capture.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL,)),
-        KeymapCaptureOutcome::Pending(_)
+        KeymapCaptureOutcome::Pending
     ));
     let KeymapCaptureOutcome::Edit(edit) =
         capture.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL))
@@ -54,7 +54,7 @@ fn chord_capture_waits_for_two_strokes_and_emits_canonical_edit() {
 
 #[test]
 fn escape_cancels_capture_without_emitting_an_edit() {
-    let (_, mut capture) = keymap_capture(
+    let mut capture = keymap_capture(
         copy_action(),
         1,
         KeymapEditIntent::ReplaceUser,
@@ -70,7 +70,7 @@ fn escape_cancels_capture_without_emitting_an_edit() {
 #[test]
 fn keymap_choices_lists_keys_before_responsibilities() {
     let view = super::keymap_choices(AppKeymap::default().setup_actions(), &[], 1);
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
     let labels = state
         .visible_items()
         .into_iter()
@@ -106,7 +106,7 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
     let mut keymap = AppKeymap::default();
     keymap.replace_user_bindings(rules).unwrap();
     let view = super::keymap_choices(keymap.setup_actions(), &[], 1);
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
     let backend = TestBackend::new(100, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 

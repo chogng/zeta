@@ -15,7 +15,7 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
-fn resume_region_marks_the_current_session_and_maps_enter_to_its_id() {
+fn resume_picker_marks_the_current_session_and_maps_enter_to_its_id() {
     let sessions = vec![Session {
         session_id: SessionId::new("session-1").unwrap(),
         title: "Current work".into(),
@@ -25,7 +25,7 @@ fn resume_region_marks_the_current_session_and_maps_enter_to_its_id() {
     }];
 
     let view = session_choices(&sessions, "session-1");
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Resume session");
     assert_eq!(state.tabs()[0].label(), "All (1)");
@@ -62,7 +62,7 @@ fn resume_action_ids_do_not_change_when_sessions_are_reordered() {
 }
 
 #[test]
-fn resume_region_groups_statuses_and_activates_the_selected_session() {
+fn resume_picker_groups_statuses_and_activates_the_selected_session() {
     let sessions = vec![
         Session {
             session_id: SessionId::new("session-1").unwrap(),
@@ -81,7 +81,7 @@ fn resume_region_groups_statuses_and_activates_the_selected_session() {
     ];
 
     let view = session_choices(&sessions, "session-2");
-    let mut state = ListSelectionState::new(view.model.into_body());
+    let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(
         state
@@ -137,7 +137,7 @@ fn resume_items_show_time_branch_count_and_total_token_size() {
     session.threads[0].usage.output_tokens.reported = 300;
 
     let view = session_choices_at(&[session], "different", 70_000);
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
 
     assert_eq!(
         state.visible_items()[0].description(),

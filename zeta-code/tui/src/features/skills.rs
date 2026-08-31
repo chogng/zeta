@@ -1,10 +1,10 @@
-mod region;
 mod request;
+mod settings;
 mod warnings;
 
-pub(crate) use region::SkillChoices;
-pub(crate) use region::SkillSelectionAction;
-pub(crate) use region::skill_choices;
 pub(crate) use request::load_selection;
 pub(crate) use request::set_enablement;
+pub(crate) use settings::SkillChoices;
+pub(crate) use settings::SkillSelectionAction;
+pub(crate) use settings::skill_choices;
 pub(crate) use warnings::SkillDiagnosticWarnings;

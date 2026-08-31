@@ -8,7 +8,7 @@ use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::config::McpTransportDto;
 
 #[test]
-fn mcp_region_filters_servers_and_maps_enter_to_the_opposite_enablement() {
+fn mcp_settings_filter_servers_and_maps_enter_to_the_opposite_enablement() {
     let mut servers = BTreeMap::new();
     servers.insert(
         "docs".into(),
@@ -25,7 +25,7 @@ fn mcp_region_filters_servers_and_maps_enter_to_the_opposite_enablement() {
     );
 
     let view = mcp_choices(&servers);
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "MCP servers");
     assert_eq!(state.tabs()[0].label(), "All (1)");

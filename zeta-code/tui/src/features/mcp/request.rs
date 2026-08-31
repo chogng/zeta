@@ -7,9 +7,7 @@ use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::config::McpServerSetEnablementParams;
 
-pub(crate) fn load_selection<T>(
-    client: &mut AppServerClient<T>,
-) -> Result<McpChoices, ClientError>
+pub(crate) fn load_selection<T>(client: &mut AppServerClient<T>) -> Result<McpChoices, ClientError>
 where
     T: JsonRpcTransport,
 {

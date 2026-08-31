@@ -264,10 +264,7 @@ pub(crate) fn choices(view: &QueueView<'_>) -> QueueChoices {
             model.with_key_hint(keys, label)
         },
     );
-    QueueChoices {
-        model,
-        actions,
-    }
+    QueueChoices { model, actions }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

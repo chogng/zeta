@@ -1,12 +1,11 @@
-use super::active_overlay::ActiveOverlay;
+use super::command::AppCommand;
 use super::composer_mode::ComposerMode;
 use super::composer_mode::ComposerOutcome;
-use super::command::AppCommand;
 use super::escape::ScreenEscapeOutcome;
 use super::escape::ScreenEscapeSequence;
 use super::event::AppEvent;
 use super::frame::InputPointerTarget;
-use super::help::help_region_spec;
+use super::help::help_choices;
 use super::status_notice::StatusNotice;
 use crate::components::chat_composer::ChatComposer;
 use crate::components::chat_composer::ChatComposerOutcome;
@@ -20,10 +19,8 @@ use crate::components::detail_list::DetailList;
 use crate::components::detail_list::DetailListRow;
 use crate::components::list_selection::ListSelectionAdjustment;
 use crate::components::list_selection::ListSelectionState;
+use crate::components::overlay::DetailOverlay;
 use crate::components::overlay::OverlayInputOutcome;
-#[cfg(test)]
-use crate::components::region::RegionSpec;
-use crate::components::region::RegionView;
 use crate::components::welcome::WelcomeModel;
 use crate::features::approval::Approval;
 use crate::features::approval::ApprovalOutcome;
@@ -34,35 +31,35 @@ use crate::features::connectors::ConnectorChoices;
 use crate::features::connectors::ConnectorSelectionAction;
 use crate::features::dirs::DirChoices;
 use crate::features::dirs::DirSelectionAction;
-use crate::features::keymap::KeymapEditorOutcome;
 use crate::features::keymap::KeymapChoices;
+use crate::features::keymap::KeymapEditorOutcome;
 use crate::features::mcp::McpChoices;
 use crate::features::mcp::McpSelectionAction;
 use crate::features::models::ModelChoices;
 use crate::features::models::ModelSelectionAction;
 use crate::features::query::Query;
 use crate::features::query::QueryOutcome;
-use crate::features::queue::QueueInput;
 use crate::features::queue::QueueChoices;
+use crate::features::queue::QueueInput;
 use crate::features::queue::QueueSelectionAction;
 use crate::features::queue::QueueView;
 use crate::features::rewind::RewindChoices;
 use crate::features::rewind::RewindSelectionAction;
+use crate::features::sessions::SessionChoices;
 use crate::features::sessions::SessionManagerPointerTarget;
 use crate::features::sessions::SessionManagerView;
-use crate::features::sessions::SessionChoices;
 use crate::features::sessions::SessionSelectionAction;
 use crate::features::sessions::SessionsState;
 use crate::features::sessions::TerminalScreen;
-use crate::features::skills::{SkillDiagnosticWarnings, SkillChoices, SkillSelectionAction};
+use crate::features::skills::{SkillChoices, SkillDiagnosticWarnings, SkillSelectionAction};
 use crate::features::status_line::ApprovalModeStatus;
-use crate::features::status_line::StatusLineModel;
 use crate::features::status_line::StatusLineChoices;
+use crate::features::status_line::StatusLineModel;
 use crate::features::status_line::StatusLineRuntime;
 use crate::features::status_line::StatusLineSelectionAction;
-use crate::features::theme::ThemePickerOutcome;
 use crate::features::theme::ThemeChoices;
-use crate::features::thread::SubagentRegionState;
+use crate::features::theme::ThemePickerOutcome;
+use crate::features::thread::SubagentPickerState;
 use crate::features::thread::SubagentPickerView;
 use crate::features::thread::ThreadFeatureState;
 use crate::features::thread::ThreadPresentationEvent;
@@ -143,9 +140,9 @@ pub(crate) struct App {
     thread: ThreadFeatureState,
     thread_presentations: ThreadPresentationStore,
     sessions: SessionsState,
-    subagent_picker: SubagentRegionState,
+    subagent_picker: SubagentPickerState,
     composer_mode: Option<ComposerMode>,
-    active_overlay: Option<ActiveOverlay>,
+    overlay: Option<DetailOverlay>,
     welcome: WelcomeModel,
     approval: Option<Approval>,
     query: Option<Query>,
@@ -174,9 +171,9 @@ impl App {
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
             ),
             sessions: SessionsState::default(),
-            subagent_picker: SubagentRegionState::default(),
+            subagent_picker: SubagentPickerState::default(),
             composer_mode: None,
-            active_overlay: None,
+            overlay: None,
             welcome: WelcomeModel::for_workspace(Path::new(".")),
             approval: None,
             query: None,
@@ -224,9 +221,9 @@ impl App {
                 input_catalog,
             ),
             sessions: SessionsState::default(),
-            subagent_picker: SubagentRegionState::default(),
+            subagent_picker: SubagentPickerState::default(),
             composer_mode: None,
-            active_overlay: None,
+            overlay: None,
             welcome: WelcomeModel::for_workspace(dir_root),
             approval: None,
             query: None,
@@ -257,9 +254,9 @@ impl App {
         if key.kind == KeyEventKind::Press {
             self.pointer.clear();
         }
-        if let Some(overlay) = self.active_overlay.as_mut() {
+        if let Some(overlay) = self.overlay.as_mut() {
             if overlay.handle_key(key) == OverlayInputOutcome::Dismiss {
-                self.close_active_overlay();
+                self.close_overlay();
             }
             return None;
         }
@@ -271,8 +268,8 @@ impl App {
                 return None;
             }
         }
-        if let Some(region) = self.composer_mode.as_mut() {
-            let outcome = region.handle_key(key);
+        if let Some(mode) = self.composer_mode.as_mut() {
+            let outcome = mode.handle_key(key);
             return self.handle_composer_mode_outcome(outcome);
         }
         let temporary_interaction_active = self.completion().is_some();
@@ -441,7 +438,7 @@ impl App {
             ComposerOutcome::Dirs(DirSelectionAction::Remove { path }) => {
                 Some(AppCommand::RemoveDir { path })
             }
-            ComposerOutcome::Config(outcome) => self.handle_config_region_outcome(outcome),
+            ComposerOutcome::Config(outcome) => self.handle_config_editor_outcome(outcome),
             ComposerOutcome::Connectors(ConnectorSelectionAction::ConnectDeviceOAuth {
                 connector_id,
                 connection_generation,
@@ -449,9 +446,9 @@ impl App {
                 connector_id,
                 connection_generation,
             }),
-            ComposerOutcome::Connectors(ConnectorSelectionAction::Disconnect {
-                connector_id,
-            }) => Some(AppCommand::DisconnectConnector { connector_id }),
+            ComposerOutcome::Connectors(ConnectorSelectionAction::Disconnect { connector_id }) => {
+                Some(AppCommand::DisconnectConnector { connector_id })
+            }
             ComposerOutcome::Keymap(KeymapEditorOutcome::Edit(edit)) => {
                 Some(AppCommand::EditKeymap(edit))
             }
@@ -477,7 +474,7 @@ impl App {
             ComposerOutcome::QueueInput {
                 input,
                 action: QueueSelectionAction::Select(queue_id),
-            } => self.handle_queue_region_input(input, queue_id),
+            } => self.handle_queue_input(input, queue_id),
             ComposerOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
                 checkpoint_label,
@@ -501,7 +498,7 @@ impl App {
             ComposerOutcome::StatusLine(StatusLineSelectionAction::SetEnabled(edit)) => {
                 Some(AppCommand::EditStatusLine(edit))
             }
-            ComposerOutcome::Theme(outcome) => self.handle_theme_region_outcome(outcome),
+            ComposerOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
             ComposerOutcome::Consumed => None,
             ComposerOutcome::Dismiss => {
                 self.close_composer_mode();
@@ -510,7 +507,7 @@ impl App {
         }
     }
 
-    fn handle_config_region_outcome(
+    fn handle_config_editor_outcome(
         &mut self,
         outcome: crate::features::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
@@ -566,7 +563,7 @@ impl App {
         }
     }
 
-    fn handle_theme_region_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
+    fn handle_theme_picker_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
         match outcome {
             ThemePickerOutcome::Select { preference } => Some(AppCommand::SetTheme { preference }),
             ThemePickerOutcome::SelectCustom { preference } => {
@@ -635,7 +632,7 @@ impl App {
             return false;
         };
         self.thread_presentations.active_mut().selected_cell = Some(cell_id);
-        self.open_active_overlay(DetailList::new(
+        self.show_overlay(DetailList::new(
             "Transcript cell",
             vec![DetailListRow::new("Content", details)],
         ));
@@ -656,7 +653,7 @@ impl App {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         self.pointer.clear();
-        if self.active_overlay.is_some() {
+        if self.overlay.is_some() {
             return;
         }
         if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
@@ -668,8 +665,8 @@ impl App {
                 return;
             }
         }
-        if let Some(region) = self.composer_mode.as_mut() {
-            region.handle_paste(pasted);
+        if let Some(mode) = self.composer_mode.as_mut() {
+            mode.handle_paste(pasted);
             return;
         }
         if self.accepts_input()
@@ -715,23 +712,23 @@ impl App {
         self.composer_mode.as_ref().map(ComposerMode::key_hints)
     }
 
-    pub(crate) fn composer_mode(&self) -> Option<RegionView<'_>> {
-        self.composer_mode.as_ref().map(ComposerMode::view)
+    pub(crate) fn composer_mode(&self) -> Option<&ComposerMode> {
+        self.composer_mode.as_ref()
     }
 
-    pub(crate) fn active_overlay(&self) -> Option<&ActiveOverlay> {
-        self.active_overlay.as_ref()
+    pub(crate) fn overlay(&self) -> Option<&DetailOverlay> {
+        self.overlay.as_ref()
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
-        if self.composer_mode.is_some() || self.active_overlay.is_some() {
+        if self.composer_mode.is_some() || self.overlay.is_some() {
             return None;
         }
         self.thread_presentations.active().input.completion()
     }
 
     pub(crate) fn chat_input_focused(&self) -> bool {
-        self.active_overlay.is_none()
+        self.overlay.is_none()
             && self.approval_view().is_none()
             && self.query_view().is_none()
             && !self.sessions.manager().focused()
@@ -805,10 +802,7 @@ impl App {
     }
 
     #[cfg(test)]
-    fn show_list_selection_region(
-        &mut self,
-        model: RegionSpec<crate::components::list_selection::ListSelectionModel>,
-    ) {
+    fn show_help(&mut self, model: crate::components::list_selection::ListSelectionModel) {
         self.open_composer_mode(ComposerMode::help(model));
     }
 
@@ -829,10 +823,10 @@ impl App {
             && self.thread_presentations.active().selected_cell.is_some()
     }
 
-    fn open_composer_mode(&mut self, region: ComposerMode) {
+    fn open_composer_mode(&mut self, mode: ComposerMode) {
         self.screen_escape_sequence.reset();
-        self.active_overlay = None;
-        self.composer_mode = Some(region);
+        self.overlay = None;
+        self.composer_mode = Some(mode);
         self.pointer.clear();
     }
 
@@ -842,37 +836,37 @@ impl App {
         self.pointer.clear();
     }
 
-    fn open_active_overlay(&mut self, detail: DetailList) {
+    fn show_overlay(&mut self, detail: DetailList) {
         self.screen_escape_sequence.reset();
-        self.active_overlay = Some(ActiveOverlay::detail(detail));
+        self.overlay = Some(DetailOverlay::new(detail));
         self.pointer.clear();
     }
 
-    fn close_active_overlay(&mut self) {
+    fn close_overlay(&mut self) {
         self.screen_escape_sequence.reset();
-        self.active_overlay = None;
+        self.overlay = None;
         self.pointer.clear();
     }
 
     fn close_transient_surfaces(&mut self) {
         self.screen_escape_sequence.reset();
         self.composer_mode = None;
-        self.active_overlay = None;
+        self.overlay = None;
         self.pointer.clear();
     }
 
-    fn show_dirs_region(&mut self, spec: DirChoices) {
+    fn show_dirs_picker(&mut self, spec: DirChoices) {
         self.open_composer_mode(ComposerMode::dirs(spec));
     }
 
-    fn show_queue_region(&mut self, spec: QueueChoices) {
+    fn show_queue_picker(&mut self, spec: QueueChoices) {
         self.open_composer_mode(ComposerMode::queue(spec));
     }
 
-    fn replace_queue_region(&mut self) {
-        let spec = crate::features::queue::region_spec(&self.queue_view());
-        if let Some(region) = self.composer_mode.as_mut() {
-            region.replace_queue(spec);
+    fn update_queue_picker(&mut self) {
+        let spec = crate::features::queue::choices(&self.queue_view());
+        if let Some(mode) = self.composer_mode.as_mut() {
+            mode.replace_queue(spec);
         }
     }
 
@@ -886,13 +880,13 @@ impl App {
         else {
             return;
         };
-        self.open_active_overlay(DetailList::new(
+        self.show_overlay(DetailList::new(
             "Queued message",
             vec![DetailListRow::new("Message", text)],
         ));
     }
 
-    fn handle_queue_region_input(
+    fn handle_queue_input(
         &mut self,
         input: QueueInput,
         queue_id: crate::features::queue::QueueId,
@@ -913,7 +907,7 @@ impl App {
                     .active_mut()
                     .queue
                     .delete(queue_id);
-                self.replace_queue_region();
+                self.update_queue_picker();
                 None
             }
             QueueInput::MoveUp => {
@@ -921,7 +915,7 @@ impl App {
                     .active_mut()
                     .queue
                     .move_up(queue_id);
-                self.replace_queue_region();
+                self.update_queue_picker();
                 None
             }
             QueueInput::MoveDown => {
@@ -929,7 +923,7 @@ impl App {
                     .active_mut()
                     .queue
                     .move_down(queue_id);
-                self.replace_queue_region();
+                self.update_queue_picker();
                 None
             }
             QueueInput::Send => {
@@ -959,18 +953,18 @@ impl App {
         }
     }
 
-    fn replace_dirs_region(&mut self, spec: DirChoices) {
-        if let Some(region) = self.composer_mode.as_mut() {
-            region.replace_dirs(spec);
+    fn update_dirs_picker(&mut self, spec: DirChoices) {
+        if let Some(mode) = self.composer_mode.as_mut() {
+            mode.replace_dirs(spec);
         }
     }
 
-    fn show_skills_region(&mut self, region_spec: SkillChoices) {
+    fn show_skill_settings(&mut self, choices: SkillChoices) {
         let SkillChoices {
             model,
             actions,
             diagnostics,
-        } = region_spec;
+        } = choices;
         self.report_skill_diagnostics(&diagnostics);
         self.open_composer_mode(ComposerMode::skills(SkillChoices {
             model,
@@ -979,53 +973,53 @@ impl App {
         }));
     }
 
-    fn show_mcp_region(&mut self, spec: McpChoices) {
+    fn show_mcp_settings(&mut self, spec: McpChoices) {
         self.open_composer_mode(ComposerMode::mcp(spec));
     }
 
-    fn show_connector_region(&mut self, spec: ConnectorChoices) {
+    fn show_connector_picker(&mut self, spec: ConnectorChoices) {
         self.open_composer_mode(ComposerMode::connectors(spec));
     }
 
-    fn replace_connector_region(&mut self, spec: ConnectorChoices) {
-        if let Some(region) = self.composer_mode.as_mut() {
-            region.replace_connectors(spec);
+    fn update_connector_picker(&mut self, spec: ConnectorChoices) {
+        if let Some(mode) = self.composer_mode.as_mut() {
+            mode.replace_connectors(spec);
         }
     }
 
-    pub(crate) fn connector_region_open(&self) -> bool {
+    pub(crate) fn connector_picker_open(&self) -> bool {
         self.composer_mode
             .as_ref()
             .is_some_and(ComposerMode::is_connectors)
     }
 
-    fn replace_mcp_region(&mut self, spec: McpChoices) {
-        if let Some(region) = self.composer_mode.as_mut() {
-            region.replace_mcp(spec);
+    fn update_mcp_settings(&mut self, spec: McpChoices) {
+        if let Some(mode) = self.composer_mode.as_mut() {
+            mode.replace_mcp(spec);
         }
     }
 
-    fn show_model_region(&mut self, spec: ModelChoices) {
+    fn show_model_picker(&mut self, spec: ModelChoices) {
         self.open_composer_mode(ComposerMode::model(spec));
     }
 
-    fn show_rewind_region(&mut self, spec: RewindChoices) {
+    fn show_rewind_picker(&mut self, spec: RewindChoices) {
         self.open_composer_mode(ComposerMode::rewind(spec));
     }
 
-    fn show_session_region(&mut self, spec: SessionChoices) {
+    fn show_session_picker(&mut self, spec: SessionChoices) {
         self.open_composer_mode(ComposerMode::sessions(spec));
     }
 
-    fn replace_skills_region(&mut self, region_spec: SkillChoices) {
+    fn update_skill_settings(&mut self, choices: SkillChoices) {
         let SkillChoices {
             model,
             actions,
             diagnostics,
-        } = region_spec;
+        } = choices;
         self.report_skill_diagnostics(&diagnostics);
-        if let Some(region) = self.composer_mode.as_mut() {
-            region.replace_skills(SkillChoices {
+        if let Some(mode) = self.composer_mode.as_mut() {
+            mode.replace_skills(SkillChoices {
                 model,
                 actions,
                 diagnostics: Vec::new(),
@@ -1043,21 +1037,21 @@ impl App {
         }
     }
 
-    fn show_theme_region(&mut self, spec: ThemeChoices) {
+    fn show_theme_picker(&mut self, spec: ThemeChoices) {
         self.open_composer_mode(ComposerMode::theme(spec));
     }
 
-    fn show_keymap_region(&mut self, spec: KeymapChoices) {
+    fn show_keymap_editor(&mut self, spec: KeymapChoices) {
         self.open_composer_mode(ComposerMode::keymap(spec));
     }
 
-    fn show_status_line_region(&mut self, spec: StatusLineChoices) {
+    fn show_status_line_editor(&mut self, spec: StatusLineChoices) {
         self.open_composer_mode(ComposerMode::status_line(spec));
     }
 
-    fn replace_status_line_region(&mut self, spec: StatusLineChoices) {
-        if let Some(region) = self.composer_mode.as_mut() {
-            region.replace_status_line(spec);
+    fn update_status_line_editor(&mut self, spec: StatusLineChoices) {
+        if let Some(mode) = self.composer_mode.as_mut() {
+            mode.replace_status_line(spec);
         }
     }
 
@@ -1070,16 +1064,16 @@ impl App {
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
         self.composer_mode
             .as_ref()
-            .and_then(ComposerMode::selection)
+            .and_then(ComposerMode::list_selection)
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
         self.composer_mode
             .as_mut()
-            .is_some_and(|region| region.select_tab(index))
+            .is_some_and(|mode| mode.select_tab(index))
     }
 
-    pub(crate) fn focus_region_search(&mut self) -> bool {
+    pub(crate) fn focus_composer_search(&mut self) -> bool {
         self.composer_mode
             .as_mut()
             .is_some_and(ComposerMode::focus_search)
@@ -1172,7 +1166,7 @@ impl App {
             .manager_mut()
             .activate_pointer_target(target, &catalog)
         {
-            self.open_active_overlay(preview);
+            self.show_overlay(preview);
         }
     }
 
@@ -1358,9 +1352,9 @@ impl App {
     pub(crate) fn update(&mut self, event: AppEvent) {
         self.pointer.clear();
         match event {
-            AppEvent::DirPickerOpened(view) => self.show_dirs_region(view),
-            AppEvent::DirRemoved { path, region_spec } => {
-                self.replace_dirs_region(region_spec);
+            AppEvent::DirPickerOpened(view) => self.show_dirs_picker(view),
+            AppEvent::DirRemoved { path, choices } => {
+                self.update_dirs_picker(choices);
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
                         "Removed directory {}",
@@ -1387,24 +1381,21 @@ impl App {
                 }
                 self.thread_presentations
                     .set_input_mode(result.settings.input_mode());
-                if let Some(region) = self.composer_mode.as_mut() {
-                    region.replace_config(result.region_spec);
+                if let Some(mode) = self.composer_mode.as_mut() {
+                    mode.replace_config(result.choices);
                 }
             }
             AppEvent::ConfigEditorOpened(view) => {
                 self.open_composer_mode(ComposerMode::config(view))
             }
             AppEvent::ConfigEditorUpdated(view) => {
-                if let Some(region) = self.composer_mode.as_mut() {
-                    region.replace_config(view);
+                if let Some(mode) = self.composer_mode.as_mut() {
+                    mode.replace_config(view);
                 }
             }
-            AppEvent::ConfigApiKeySaved {
-                provider,
-                region_spec,
-            } => {
-                if let Some(region) = self.composer_mode.as_mut() {
-                    region.finish_config_prompt(region_spec);
+            AppEvent::ConfigApiKeySaved { provider, choices } => {
+                if let Some(mode) = self.composer_mode.as_mut() {
+                    mode.finish_config_prompt(choices);
                 }
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
@@ -1494,30 +1485,30 @@ impl App {
                 if matches!(self.composer_mode, Some(ComposerMode::Keymap(_))) {
                     self.composer_mode
                         .as_mut()
-                        .expect("the keymap region is active")
-                        .replace_keymap_catalog(update.region_spec);
+                        .expect("the keymap editor is active")
+                        .replace_keymap_catalog(update.choices);
                 } else {
-                    self.show_keymap_region(update.region_spec);
+                    self.show_keymap_editor(update.choices);
                 }
             }
             AppEvent::StatusLineSettingsReceived(settings) => {
                 self.status_line.apply_settings(settings)
             }
-            AppEvent::StatusLineRegionOpened(update) => {
+            AppEvent::StatusLineEditorOpened(update) => {
                 self.status_line.apply_settings(update.settings);
-                self.show_status_line_region(update.region_spec);
+                self.show_status_line_editor(update.choices);
             }
-            AppEvent::StatusLineRegionReplaced(update) => {
+            AppEvent::StatusLineEditorUpdated(update) => {
                 self.status_line.apply_settings(update.settings);
-                self.replace_status_line_region(update.region_spec);
+                self.update_status_line_editor(update.choices);
             }
-            AppEvent::ConnectorPickerOpened(view) => self.show_connector_region(view),
-            AppEvent::ConnectorPickerUpdated(view) => self.replace_connector_region(view),
-            AppEvent::McpSettingsOpened(view) => self.show_mcp_region(view),
-            AppEvent::McpSettingsUpdated(view) => self.replace_mcp_region(view),
-            AppEvent::ModelPickerOpened(view) => self.show_model_region(view),
-            AppEvent::RewindPickerOpened(view) => self.show_rewind_region(view),
-            AppEvent::SessionPickerOpened(view) => self.show_session_region(view),
+            AppEvent::ConnectorPickerOpened(view) => self.show_connector_picker(view),
+            AppEvent::ConnectorPickerUpdated(view) => self.update_connector_picker(view),
+            AppEvent::McpSettingsOpened(view) => self.show_mcp_settings(view),
+            AppEvent::McpSettingsUpdated(view) => self.update_mcp_settings(view),
+            AppEvent::ModelPickerOpened(view) => self.show_model_picker(view),
+            AppEvent::RewindPickerOpened(view) => self.show_rewind_picker(view),
+            AppEvent::SessionPickerOpened(view) => self.show_session_picker(view),
             AppEvent::SessionCatalogReceived(catalog) => {
                 self.sessions.refresh_catalog(catalog);
                 self.reconcile_subagent_picker();
@@ -1535,13 +1526,13 @@ impl App {
                 self.thread_presentations.active_mut().goal = goal;
             }
             AppEvent::StatusOverlayOpened(detail) => {
-                self.open_active_overlay(detail);
+                self.show_overlay(detail);
             }
             AppEvent::ComposerModeClosed => self.close_composer_mode(),
             #[cfg(test)]
-            AppEvent::HelpOpened(model) => self.show_list_selection_region(model),
-            AppEvent::SkillSettingsOpened(view) => self.show_skills_region(view),
-            AppEvent::SkillSettingsUpdated(view) => self.replace_skills_region(view),
+            AppEvent::HelpOpened(model) => self.show_help(model),
+            AppEvent::SkillSettingsOpened(view) => self.show_skill_settings(view),
+            AppEvent::SkillSettingsUpdated(view) => self.update_skill_settings(view),
             AppEvent::SkillDiagnosticsReceived(diagnostics) => {
                 self.report_skill_diagnostics(&diagnostics)
             }
@@ -1582,10 +1573,10 @@ impl App {
                 if matches!(self.composer_mode, Some(ComposerMode::Theme(_))) {
                     self.composer_mode
                         .as_mut()
-                        .expect("the theme region is active")
+                        .expect("the theme picker is active")
                         .push_custom_theme(view);
                 } else {
-                    self.show_theme_region(view);
+                    self.show_theme_picker(view);
                 }
             }
             AppEvent::RenderThemeChanged(theme) => {
@@ -1721,7 +1712,7 @@ impl App {
                 KeyCode::Char(' ') => {
                     let preview = self.sessions.manager_mut().toggle_or_preview(&catalog);
                     if let Some(preview) = preview {
-                        self.open_active_overlay(preview);
+                        self.show_overlay(preview);
                     }
                     Some(None)
                 }
@@ -1930,9 +1921,9 @@ impl App {
             AppKeymapAction::CycleApprovalMode => Some(AppCommand::CycleNextApprovalMode),
             AppKeymapAction::ScreenEscape => match self.screen_escape_sequence.press(now) {
                 ScreenEscapeOutcome::WaitingForSecondPress => None,
-                ScreenEscapeOutcome::OpenRewind => Some(AppCommand::OpenRewindRegion),
+                ScreenEscapeOutcome::OpenRewind => Some(AppCommand::OpenRewindPicker),
             },
-            AppKeymapAction::OpenRewind => Some(AppCommand::OpenRewindRegion),
+            AppKeymapAction::OpenRewind => Some(AppCommand::OpenRewindPicker),
             AppKeymapAction::ReadClipboardImage => Some(AppCommand::ReadClipboardImage),
             AppKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
             AppKeymapAction::CopyLastResponse => Some(AppCommand::CopyLastResponse),
@@ -1981,8 +1972,8 @@ impl App {
                     return None;
                 }
                 Some(TuiSlashCommandAction::Queue) => {
-                    let spec = crate::features::queue::region_spec(&self.queue_view());
-                    self.show_queue_region(spec);
+                    let spec = crate::features::queue::choices(&self.queue_view());
+                    self.show_queue_picker(spec);
                     return None;
                 }
                 _ => {}
@@ -2042,7 +2033,7 @@ impl App {
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::StatusLine))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenStatusLineRegion)
+                Some(AppCommand::OpenStatusLineEditor)
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Theme))
                 if invocation.arguments.is_empty() =>
@@ -2055,7 +2046,7 @@ impl App {
                 })
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Help)) => {
-                let spec = help_region_spec(self.thread_presentations.slash_commands());
+                let spec = help_choices(self.thread_presentations.slash_commands());
                 self.open_composer_mode(ComposerMode::help(spec));
                 None
             }

@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::app::composer_mode::ComposerModePointerTarget;
 use crate::components::chat_composer;
 use crate::components::chat_composer::ChatComposerPointerTarget;
 use crate::components::chat_composer::ChatComposerSurface;
@@ -7,8 +8,6 @@ use crate::components::chat_history::ChatHistoryPointerState;
 use crate::components::chat_history::ChatHistoryView;
 use crate::components::chat_input;
 use crate::components::key_hint;
-use crate::components::region;
-use crate::components::region::ComposerModePointerTarget;
 use crate::components::welcome;
 use crate::features::approval;
 use crate::features::query;
@@ -114,21 +113,20 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             pressed_choice,
             context,
         );
-    } else if let Some(region_view) = app.composer_mode() {
-        let hovered_region = match hovered {
-            Some(InputPointerTarget::Region(target)) => Some(*target),
+    } else if let Some(mode) = app.composer_mode() {
+        let hovered_mode = match hovered {
+            Some(InputPointerTarget::ComposerMode(target)) => Some(*target),
             _ => None,
         };
-        let pressed_region = match pressed {
-            Some(InputPointerTarget::Region(target)) => Some(*target),
+        let pressed_mode = match pressed {
+            Some(InputPointerTarget::ComposerMode(target)) => Some(*target),
             _ => None,
         };
-        region::draw(
+        mode.draw(
             frame,
             areas.session.composer,
-            region_view,
-            hovered_region,
-            pressed_region,
+            hovered_mode,
+            pressed_mode,
             context,
         );
     } else {
@@ -184,13 +182,8 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         app.status_notice(),
         context,
     );
-    if let Some(active_overlay) = app.active_overlay() {
-        crate::components::overlay::draw(
-            frame,
-            transient_area(&areas),
-            active_overlay.detail_view(),
-            context,
-        );
+    if let Some(overlay) = app.overlay() {
+        crate::components::overlay::draw(frame, transient_area(&areas), overlay, context);
     } else if completion_visible(app) {
         let hovered_composer = match hovered {
             Some(InputPointerTarget::Composer(target)) => Some(*target),
@@ -257,7 +250,7 @@ pub(crate) fn input_overlay_index_at(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InputPointerTarget {
     Composer(ChatComposerPointerTarget),
-    Region(ComposerModePointerTarget),
+    ComposerMode(ComposerModePointerTarget),
     Approval(usize),
     Query(usize),
     SessionManager(crate::features::sessions::SessionManagerPointerTarget),
@@ -296,7 +289,7 @@ pub(crate) fn input_pointer_target_at(
     row: u16,
 ) -> Option<InputPointerTarget> {
     let areas = layout(app, terminal_area);
-    if app.active_overlay().is_some() {
+    if app.overlay().is_some() {
         return None;
     }
     let input_view = app.chat_composer_view();
@@ -320,10 +313,10 @@ pub(crate) fn input_pointer_target_at(
     {
         return Some(InputPointerTarget::Query(index));
     }
-    if let Some(view) = app.composer_mode()
-        && let Some(target) = region::pointer_target_at(areas.session.composer, view, column, row)
+    if let Some(mode) = app.composer_mode()
+        && let Some(target) = mode.pointer_target_at(areas.session.composer, column, row)
     {
-        return Some(InputPointerTarget::Region(target));
+        return Some(InputPointerTarget::ComposerMode(target));
     }
     if let Some(manager) = app.session_manager_view() {
         let manager_areas = super::screen_layout::manager_areas(
@@ -371,9 +364,9 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         cursor: chat_input::ChatInputCursor::Hidden,
     }
     .desired_height(terminal_area.width, app.render_context());
-    let region_rows = app
+    let mode_rows = app
         .composer_mode()
-        .map(|view| region::view_desired_height(view, terminal_area.width))
+        .map(|mode| mode.desired_height(terminal_area.width))
         .unwrap_or_default();
     let approval_rows = app
         .approval_view()
@@ -385,8 +378,8 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         .unwrap_or_default();
     let composer_rows = if approval_rows > 0 {
         approval_rows
-    } else if region_rows > 0 {
-        region_rows
+    } else if mode_rows > 0 {
+        mode_rows
     } else {
         input_rows
     };
@@ -415,7 +408,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         status_area.desired_rows(app, terminal_area.width),
         app.subagent_picker_rows(),
     );
-    let input = if approval_rows > 0 || region_rows > 0 {
+    let input = if approval_rows > 0 || mode_rows > 0 {
         Rect {
             y: session.composer.bottom(),
             height: 0,
@@ -455,7 +448,7 @@ fn transient_area(areas: &FrameLayout) -> Rect {
 }
 
 fn completion_visible(app: &App) -> bool {
-    app.active_overlay().is_none()
+    app.overlay().is_none()
         && app.composer_mode().is_none()
         && app.approval_view().is_none()
         && app.query_view().is_none()

@@ -1,6 +1,6 @@
+use super::ConfigChoices;
 use super::ConfigEdit;
 use super::ConfigEditResult;
-use super::ConfigChoices;
 use super::PermissionEdit;
 use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
@@ -23,10 +23,10 @@ use zeta_protocol::SessionId;
 
 pub(crate) struct ProviderApiKeyUpdate {
     pub(crate) provider: String,
-    pub(crate) region_spec: ConfigChoices,
+    pub(crate) choices: ConfigChoices,
 }
 
-pub(crate) fn read_config_region(
+pub(crate) fn read_config_choices(
     client: &mut AppServerRequestHandle,
     session_id: &SessionId,
 ) -> Result<ConfigChoices, ConfigCommandError> {
@@ -52,11 +52,8 @@ pub(crate) fn set_provider_api_key(
 ) -> Result<ProviderApiKeyUpdate, ConfigCommandError> {
     let (provider, api_key) = edit.into_parts();
     client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
-    let region_spec = read_config_region(client, session_id)?;
-    Ok(ProviderApiKeyUpdate {
-        provider,
-        region_spec,
-    })
+    let choices = read_config_choices(client, session_id)?;
+    Ok(ProviderApiKeyUpdate { provider, choices })
 }
 
 pub(crate) fn set_permissions(
@@ -100,7 +97,7 @@ pub(crate) fn set_terminal_settings(
     let settings = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
     Ok(ConfigEditResult {
         settings,
-        region_spec: config_choices(
+        choices: config_choices(
             &config,
             &edit.providers,
             settings,

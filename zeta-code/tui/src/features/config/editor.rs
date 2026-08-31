@@ -1,9 +1,9 @@
 use crate::components::chat_input::ChatInputMode;
+use crate::components::list_selection::ListSelection;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::list_selection::ListSelection;
 use crate::components::list_selection::ListSelectionOutcome;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::text_prompt::TextPrompt;

@@ -8,7 +8,6 @@ use crate::components::detail_list::DetailListRow;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::region::RegionSpec;
 use crate::components::search_box::SearchBoxModel;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
@@ -106,7 +105,7 @@ fn application_overlay_keeps_layout_fixed_and_blocks_covered_pointer_targets() {
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.input(), "/");
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.active_overlay().is_none());
+    assert!(app.overlay().is_none());
     assert_eq!(app.input(), "/");
 }
 
@@ -549,7 +548,7 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn list_selection_region_replaces_chat_input_and_status_line_with_its_hint_bar() {
+fn composer_selection_replaces_chat_input_and_status_line_with_its_hint_bar() {
     let mut app = App::new();
     app.update(AppEvent::ProductNotice(
         "Conversation remains visible.".into(),
@@ -579,7 +578,7 @@ fn list_selection_region_replaces_chat_input_and_status_line_with_its_hint_bar()
 }
 
 #[test]
-fn list_selection_region_supports_keyboard_tab_switching_and_search() {
+fn composer_selection_supports_keyboard_tab_switching_and_search() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(help_view()));
 
@@ -598,23 +597,21 @@ fn list_selection_region_supports_keyboard_tab_switching_and_search() {
 }
 
 #[test]
-fn theme_candidate_focus_repaints_only_the_region_focus_border() {
+fn theme_candidate_focus_repaints_only_the_composer_focus_border() {
     let mut app = App::new();
-    app.update(AppEvent::HelpOpened(RegionSpec::new(
-        ListSelectionModel::new(
-            "Theme",
-            vec![ListSelectionGroup::new(
-                "Themes",
-                vec![
-                    ListSelectionItem::new("First")
-                        .with_selection_foreground(Color::LightRed)
-                        .with_presentation_focus(Color::Red),
-                    ListSelectionItem::new("Second")
-                        .with_selection_foreground(Color::LightGreen)
-                        .with_presentation_focus(Color::Green),
-                ],
-            )],
-        ),
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Theme",
+        vec![ListSelectionGroup::new(
+            "Themes",
+            vec![
+                ListSelectionItem::new("First")
+                    .with_selection_foreground(Color::LightRed)
+                    .with_presentation_focus(Color::Red),
+                ListSelectionItem::new("Second")
+                    .with_selection_foreground(Color::LightGreen)
+                    .with_presentation_focus(Color::Green),
+            ],
+        )],
     )));
 
     let first = render_buffer(&app, 80, 24);
@@ -908,29 +905,27 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .join("\n")
 }
 
-fn help_view() -> RegionSpec<ListSelectionModel> {
-    RegionSpec::new(
-        ListSelectionModel::new(
-            "Help",
-            vec![
-                ListSelectionGroup::new(
-                    "Commands",
-                    vec![
-                        ListSelectionItem::new("/status").with_description("show status"),
-                        ListSelectionItem::new("/model").with_description("show model"),
-                    ],
-                ),
-                ListSelectionGroup::new(
-                    "Keys",
-                    vec![
-                        ListSelectionItem::new("↑ / ↓").with_description("move selection"),
-                        ListSelectionItem::new("Esc").with_description("return to chat_input"),
-                    ],
-                ),
-            ],
-        )
-        .with_search(SearchBoxModel::new("Search commands and shortcuts")),
+fn help_view() -> ListSelectionModel {
+    ListSelectionModel::new(
+        "Help",
+        vec![
+            ListSelectionGroup::new(
+                "Commands",
+                vec![
+                    ListSelectionItem::new("/status").with_description("show status"),
+                    ListSelectionItem::new("/model").with_description("show model"),
+                ],
+            ),
+            ListSelectionGroup::new(
+                "Keys",
+                vec![
+                    ListSelectionItem::new("↑ / ↓").with_description("move selection"),
+                    ListSelectionItem::new("Esc").with_description("return to chat_input"),
+                ],
+            ),
+        ],
     )
+    .with_search(SearchBoxModel::new("Search commands and shortcuts"))
 }
 
 fn wait_for_mention_results(app: &mut App, dir: &Path) {

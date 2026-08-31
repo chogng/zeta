@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use super::ThemePicker;
 use super::ThemeSelectionAction;
 use super::custom_theme_choices;
 use super::theme_choices;
@@ -80,9 +79,9 @@ fn catalog() -> ThemePickerCatalog {
 }
 
 #[test]
-fn theme_region_is_numbered_fixed_and_not_searchable() {
+fn theme_picker_is_numbered_fixed_and_not_searchable() {
     let view = theme_choices(&catalog());
-    let model = view.model.clone().into_body();
+    let model = view.model.clone();
     let mut state = ListSelectionState::new(model);
 
     assert_eq!(state.title(), "Theme");
@@ -121,22 +120,20 @@ fn theme_region_is_numbered_fixed_and_not_searchable() {
         .map(|span| span.content.as_ref() as &str)
         .collect::<String>();
     assert_eq!(caption, "Syntax palette: Palette 1");
-    let region = ThemePicker::new(view);
-    let key_hints = region.key_hints().to_owned();
-    let region_view = region.view();
-    let region_height = crate::components::region::view_desired_height(region_view, 80);
-    let height = region_height.saturating_add(1);
+    let mode = crate::app::ComposerMode::theme(view);
+    let key_hints = mode.key_hints().to_owned();
+    let mode_height = mode.desired_height(80);
+    let height = mode_height.saturating_add(1);
     let backend = TestBackend::new(80, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
-            crate::components::region::draw(
+            mode.draw(
                 frame,
                 ratatui::layout::Rect {
-                    height: region_height,
+                    height: mode_height,
                     ..frame.area()
                 },
-                region_view,
                 None,
                 None,
                 test_context(),
@@ -144,7 +141,7 @@ fn theme_region_is_numbered_fixed_and_not_searchable() {
             crate::components::key_hint::draw(
                 frame,
                 ratatui::layout::Rect {
-                    y: region_height,
+                    y: mode_height,
                     height: 1,
                     ..frame.area()
                 },
@@ -217,7 +214,7 @@ fn custom_row_opens_the_custom_theme_model() {
     );
 
     let custom = custom_theme_choices(&catalog);
-    let state = ListSelectionState::new(custom.model.into_body());
+    let state = ListSelectionState::new(custom.model);
     assert_eq!(state.title(), "Custom color themes");
     assert_eq!(state.visible_items()[0].label(), "1. Aurora");
     assert_eq!(

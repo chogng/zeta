@@ -13,7 +13,7 @@ fn setup_lists_each_item_with_a_description_checkbox_and_toggle_action() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
     let view = list_selection(&settings, 7);
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Status line");
     assert!(!state.show_tabs());
@@ -46,7 +46,7 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
     let view = list_selection(&settings, 1);
-    let state = ListSelectionState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model);
     let backend = TestBackend::new(80, 10);
     let mut terminal = Terminal::new(backend).unwrap();
 

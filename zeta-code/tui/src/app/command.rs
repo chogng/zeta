@@ -26,7 +26,7 @@ pub(crate) enum AppCommand {
     CopyLastResponse,
     OpenConfigEditor,
     OpenKeymapEditor,
-    OpenStatusLineRegion,
+    OpenStatusLineEditor,
     OpenThemePicker,
     EditKeymap(KeymapEdit),
     EditConfig(ConfigEdit),
@@ -46,7 +46,7 @@ pub(crate) enum AppCommand {
     LoadOlderHistory,
     ReadClipboardImage,
     OpenCustomThemePicker,
-    OpenRewindRegion,
+    OpenRewindPicker,
     RemoveDir {
         path: PathBuf,
     },

@@ -21,7 +21,7 @@ pub(crate) const DEFAULT_MAX_ROWS: usize = 4;
 const MARKER_WIDTH: usize = 2;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SubagentRegionRow {
+pub(crate) struct SubagentPickerRow {
     pub(crate) thread_id: ThreadId,
     pub(crate) label: String,
     pub(crate) completed_turn_duration_ms: u64,
@@ -29,8 +29,8 @@ pub(crate) struct SubagentRegionRow {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct SubagentRegionState {
-    rows: Vec<SubagentRegionRow>,
+pub(crate) struct SubagentPickerState {
+    rows: Vec<SubagentPickerRow>,
     selected: Option<ThreadId>,
     viewed: Option<ThreadId>,
     viewport_start: usize,
@@ -38,7 +38,7 @@ pub(crate) struct SubagentRegionState {
     now_unix_ms: u64,
 }
 
-impl SubagentRegionState {
+impl SubagentPickerState {
     pub(crate) fn reconcile(
         &mut self,
         session: Option<&Session>,
@@ -154,7 +154,7 @@ impl SubagentRegionState {
 }
 
 pub(crate) struct SubagentPickerView<'a> {
-    pub(crate) rows: &'a [SubagentRegionRow],
+    pub(crate) rows: &'a [SubagentPickerRow],
     pub(crate) selected: Option<&'a ThreadId>,
     pub(crate) viewed: Option<&'a ThreadId>,
     pub(crate) focused: bool,
@@ -243,7 +243,7 @@ fn current_unix_millis() -> u64 {
     u64::try_from(millis).expect("Unix millisecond timestamp must fit u64")
 }
 
-fn active_rows(session: &Session) -> Vec<SubagentRegionRow> {
+fn active_rows(session: &Session) -> Vec<SubagentPickerRow> {
     let child_rows = session
         .threads
         .iter()
@@ -252,7 +252,7 @@ fn active_rows(session: &Session) -> Vec<SubagentRegionRow> {
                 && thread.parent_thread_id.is_some()
                 && thread.forked_from_id.is_none()
         })
-        .map(|thread| SubagentRegionRow {
+        .map(|thread| SubagentPickerRow {
             thread_id: thread.thread_id.clone(),
             label: thread.title.to_lowercase(),
             completed_turn_duration_ms: thread.completed_turn_duration_ms,
@@ -268,7 +268,7 @@ fn active_rows(session: &Session) -> Vec<SubagentRegionRow> {
         thread.thread_id.as_str() == session.session_id.as_str()
             && thread.status == ThreadStatus::Active
     }) {
-        rows.push(SubagentRegionRow {
+        rows.push(SubagentPickerRow {
             thread_id: root.thread_id.clone(),
             label: "main".into(),
             completed_turn_duration_ms: root.completed_turn_duration_ms,
