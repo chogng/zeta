@@ -495,16 +495,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             .ok_or_else(|| "there is no Zeta response to copy".to_owned())
                             .and_then(|response| {
                                 let char_count = response.chars().count();
-                                host::clipboard::write_text(response)
-                                    .map(|()| char_count)
+                                host::clipboard::write_text(response).map(|()| char_count)
                             });
                         match result {
                             Ok(char_count) => app.update(AppEvent::StatusNoticeShown(format!(
                                 "Copied {char_count} chars to clipboard"
                             ))),
-                            Err(error) => {
-                                app.update(AppEvent::HostOperationCompleted(Err(error)))
-                            }
+                            Err(error) => app.update(AppEvent::HostOperationCompleted(Err(error))),
                         }
                     }
                     AppCommand::OpenConfigPane => {
@@ -515,12 +512,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 "zeta-tui-read-config",
                                 move || {
                                     RequestCompletion::Presentation(
-                                        config::read_config_pane(
-                                            &mut request_client,
-                                            &session_id,
-                                        )
-                                        .map(AppEvent::ConfigPaneOpened)
-                                        .map_err(|error| error.to_string()),
+                                        config::read_config_pane(&mut request_client, &session_id)
+                                            .map(AppEvent::ConfigPaneOpened)
+                                            .map_err(|error| error.to_string()),
                                     )
                                 },
                                 &mut app,
@@ -550,12 +544,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 "zeta-tui-set-directory-permissions",
                                 move || {
                                     RequestCompletion::Presentation(
-                                        config::set_permissions(
-                                            &mut request_client,
-                                            edit,
-                                        )
-                                        .map(AppEvent::ConfigPaneReplaced)
-                                        .map_err(|error| error.to_string()),
+                                        config::set_permissions(&mut request_client, edit)
+                                            .map(AppEvent::ConfigPaneReplaced)
+                                            .map_err(|error| error.to_string()),
                                     )
                                 },
                                 &mut app,
@@ -691,7 +682,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                                     .catalog(config::tui_theme(&config))
                                                     .map(|catalog| {
                                                         AppEvent::ThemePaneOpened(
-                                                            theme_feature::theme_pane_spec(&catalog),
+                                                            theme_feature::theme_pane_spec(
+                                                                &catalog,
+                                                            ),
                                                         )
                                                     })
                                             }),
@@ -760,16 +753,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 "zeta-tui-remove-directory",
                                 move || {
                                     RequestCompletion::Presentation(
-                                        dirs::remove(
-                                            &mut request_client,
-                                            &session_id,
-                                            path,
-                                        )
-                                        .map(|pane_spec| AppEvent::DirRemoved {
-                                            path: event_path,
-                                            pane_spec,
-                                        })
-                                        .map_err(|error| error.to_string()),
+                                        dirs::remove(&mut request_client, &session_id, path)
+                                            .map(|pane_spec| AppEvent::DirRemoved {
+                                                path: event_path,
+                                                pane_spec,
+                                            })
+                                            .map_err(|error| error.to_string()),
                                     )
                                 },
                                 &mut app,
@@ -822,13 +811,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             let next_subscription = thread_subscription.clone();
                             pending_request = spawn_request(
                                 "zeta-tui-resume-session",
-                                move || match next_conversation
-                                    .resume_session(
-                                        &mut request_client,
-                                        &session_id,
-                                        preferred_thread_id.as_ref(),
-                                    )
-                                {
+                                move || match next_conversation.resume_session(
+                                    &mut request_client,
+                                    &session_id,
+                                    preferred_thread_id.as_ref(),
+                                ) {
                                     Ok(ResumeOutcome::Changed(change)) => {
                                         RequestCompletion::ConversationChanged {
                                             command,
@@ -882,16 +869,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             let history = thread_subscription.history();
                             pending_request = spawn_request(
                                 "zeta-tui-resolve-thread-request",
-                                move || {
-                                    RequestCompletion::ThreadRequestResolved {
-                                        request,
-                                        result: resolve_thread_request_and_read(
-                                            request_client,
-                                            scope,
-                                            response,
-                                            history,
-                                        ),
-                                    }
+                                move || RequestCompletion::ThreadRequestResolved {
+                                    request,
+                                    result: resolve_thread_request_and_read(
+                                        request_client,
+                                        scope,
+                                        response,
+                                        history,
+                                    ),
                                 },
                                 &mut app,
                             );
@@ -1112,8 +1097,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         submission,
                     } => {
                         if pending_request.is_none() {
-                            if matches!(app.status(), Status::Working)
-                                && !app.steers_active_turn()
+                            if matches!(app.status(), Status::Working) && !app.steers_active_turn()
                             {
                                 queued_actions.push_front(AppCommand::SteerTurn {
                                     steer_id,
