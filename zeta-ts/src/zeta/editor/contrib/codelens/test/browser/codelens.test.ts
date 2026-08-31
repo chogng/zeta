@@ -31,7 +31,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import('../../../../browser/view.js');
+const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { CodeLensContribution } = await import('../../browser/codelensController.js');
 
 test('CodeLens model preserves provider ownership, provider rank, and independent failures', async () => {

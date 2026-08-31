@@ -1,4 +1,4 @@
-import { AbstractDisposable, combinedDisposable } from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, combinedDisposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import type { LanguageToken } from '../tokens/languageTokens.js';
 import { LanguageTokenStylingResolver } from './languageTokenStylingResolver.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type IResolvedSemanticTokensService, type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type SemanticTokenStylingResolver } from './resolvedSemanticTokens.js';
@@ -6,12 +6,23 @@ import { SemanticTokenModifier, SemanticTokenPresentation, type IResolvedSemanti
 /** Adapts common token indexes into immutable styled line sources for one editor lifetime. */
 export class ResolvedSemanticTokensService extends AbstractDisposable implements IResolvedSemanticTokensService {
 	private readonly defaultStyling = new LanguageTokenStylingResolver();
+	private readonly sourceListeners = new DisposableStore();
 
 	public createSource(source: SemanticTokenModelSource, styling: SemanticTokenStylingResolver = this.defaultStyling): SemanticTokenSource {
 		this.assertNotDisposed();
 		if (!source || typeof source.getLineTokens !== 'function' || typeof source.onDidChange !== 'function') throw new TypeError('Semantic token styling requires a token model source');
 		if (!styling || typeof styling.resolve !== 'function') throw new TypeError('Semantic token styling requires a resolver');
 		const service = this;
+		const lines = new Map<number, readonly ResolvedSemanticToken[]>();
+		const getLineTokens = (lineIndex: number): readonly ResolvedSemanticToken[] => {
+			service.assertNotDisposed();
+			const cached = lines.get(lineIndex);
+			if (cached) return cached;
+			const resolved = resolveLineTokens(source.getLineTokens(lineIndex), styling);
+			lines.set(lineIndex, resolved);
+			return resolved;
+		};
+		this.sourceListeners.add(source.onDidChange(() => lines.clear()));
 		const onDidChange: SemanticTokenSource['onDidChange'] = listener => {
 			service.assertNotDisposed();
 			return source.onDidChange(() => listener());
@@ -21,12 +32,9 @@ export class ResolvedSemanticTokensService extends AbstractDisposable implements
 			onDidChange,
 			get lines(): readonly SemanticTokenLine[] {
 				service.assertNotDisposed();
-				return Object.freeze(source.lines.map(line => Object.freeze({ lineIndex: line.lineIndex, tokens: resolveLineTokens(line.tokens, styling) })));
+				return Object.freeze(source.lines.map(line => Object.freeze({ lineIndex: line.lineIndex, tokens: getLineTokens(line.lineIndex) })));
 			},
-			getLineTokens: (lineIndex: number) => {
-				service.assertNotDisposed();
-				return resolveLineTokens(source.getLineTokens(lineIndex), styling);
-			},
+			getLineTokens,
 		});
 	}
 
@@ -54,7 +62,9 @@ export class ResolvedSemanticTokensService extends AbstractDisposable implements
 		});
 	}
 
-	protected disposeCore(): void {}
+	protected disposeCore(): void {
+		this.sourceListeners.dispose();
+	}
 }
 
 function resolveLineTokens(tokens: readonly LanguageToken[], styling: SemanticTokenStylingResolver): readonly ResolvedSemanticToken[] {

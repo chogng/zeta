@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../../base/common/event.js';
 import { OverlayWidgetPositionPreference, type IOverlayWidget, type IOverlayWidgetPosition } from '../../../browser/editorBrowser.js';
 import { ViewOverlayWidgets } from '../../../browser/viewParts/overlayWidgets/overlayWidgets.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 test('ViewOverlayWidgets reports only position changes and owns widget DOM lifetime', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -21,7 +22,7 @@ test('ViewOverlayWidgets reports only position changes and owns widget DOM lifet
 		getPosition: () => initial,
 		getMinContentWidthInPx: () => minimumWidth,
 	};
-	const overlays = new ViewOverlayWidgets({
+	const overlays = new ViewOverlayWidgets(testViewContext(), {
 		viewDomNode: host,
 		allowOverflow: true,
 		fixedOverflowWidgets: false,
@@ -52,3 +53,7 @@ test('ViewOverlayWidgets reports only position changes and owns widget DOM lifet
 	layout.dispose();
 	dom.window.close();
 });
+
+function testViewContext(): ViewContext {
+	return { addEventHandler() {}, removeEventHandler() {} } as unknown as ViewContext;
+}

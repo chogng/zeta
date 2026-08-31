@@ -2,58 +2,53 @@ import "./indentGuides.css";
 import { h } from "../../../../base/browser/dom.js";
 import { type InternalGuidesOptions } from '../../../common/config/editorOptions.js';
 import { Position } from '../../../common/core/position.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { type IViewModel } from '../../../common/viewModel.js';
 import { type EditorVisualLine } from '../../../common/viewModel/modelLineProjection.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { ViewPartRows } from '../../view/viewLayer.js';
+import { type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type BracketColorizationSource, type BracketGuide } from '../viewLines/viewLine.js';
 
 interface IndentGuidesOptions {
-	readonly host: HTMLElement;
 	readonly guides: InternalGuidesOptions;
 	readonly tabSize: number;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	readonly selectionController: CursorsController | undefined;
+	readonly viewModel: IViewModel;
 }
 
 /** Owns and projects the visible indentation-guide rows. */
 export class IndentGuidesOverlay extends DynamicViewOverlay {
-	public readonly domNode: HTMLElement;
 	private readonly guides: InternalGuidesOptions;
 	private readonly tabSize: number;
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	private readonly selectionController: CursorsController | undefined;
-	private readonly rows: ViewPartRows;
-
-	constructor(_context: EditorViewContext, options: IndentGuidesOptions) {
+	private readonly viewModel: IViewModel;
+	constructor(private readonly context: ViewContext, options: IndentGuidesOptions) {
 		super();
-		this.rows = this._register(new ViewPartRows(options.host, 'stanza-editor-indent-guides-layer', 'stanza-editor-line-indent-guides'));
-		this.domNode = this.rows.domNode;
+		this.context.addEventHandler(this);
 		this.guides = options.guides;
 		this.tabSize = options.tabSize;
 		this.bracketColorizationSource = options.bracketColorizationSource;
-		this.selectionController = options.selectionController;
+		this.viewModel = options.viewModel;
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		const rows = this.rows.render(context);
+	public override dispose(): void {
+		this.context.removeEventHandler(this);
+		super.dispose();
+	}
+
+	public prepareRender(context: EditorRenderingContext): void {
 		const bracketGuides = this.resolveBracketGuides(context);
 		const activeBracketGuide = this.resolveActiveBracketGuide(bracketGuides);
 		const activeIndentation = this.resolveActiveIndentation(activeBracketGuide);
+		this.prepareRows(context, (overlay, rows) => {
 		for (const [visualLineIndex, row] of rows) {
-			row.replaceChildren();
 			const visualLine = overlay.visualLineProjection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
 			const text = overlay.model.getLineContent((visualLine.logicalLineIndex) + 1);
 			if (this.guides.indentation && visualLine.firstForLogicalLine) {
 				for (const guide of createStanzaIndentationGuides(text, this.tabSize)) {
 					const element = h(overlay.ownerDocument, "span");
-					element.className = "stanza-editor-indent-guide";
+					element.className = "core-guide stanza-editor-indent-guide";
 					element.dataset.indentLevel = String(guide.level);
 					element.style.left = `${overlay.textLeft + overlay.textMeasurer.measureLineWidth(text.slice(0, guide.columnIndex)) - 1}px`;
 					if (activeIndentation?.level === guide.level && activeIndentation.startLineIndex <= visualLine.logicalLineIndex && visualLine.logicalLineIndex <= activeIndentation.endLineIndex) element.classList.add('active');
@@ -62,6 +57,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 			}
 			for (const guide of bracketGuides) this.appendBracketGuide(row, visualLine, context.layout.lineHeight, guide, activeBracketGuide, overlay.textLeft, overlay.textMeasurer.measureLineWidth.bind(overlay.textMeasurer));
 		}
+		});
 	}
 
 	private resolveBracketGuides(context: EditorRenderingContext): readonly BracketGuide[] {
@@ -74,7 +70,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	}
 
 	private resolveActiveBracketGuide(guides: readonly BracketGuide[]): BracketGuide | undefined {
-		const position = this.selectionController?.selections[0]!.getPosition();
+		const position = this.viewModel.getPrimaryCursorState().modelState.position;
 		if (!position) return undefined;
 		return guides.filter(guide => containsPosition(guide, position)).sort(compareInnermostFirst)[0];
 	}
@@ -82,15 +78,14 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	private resolveActiveIndentation(activeBracketGuide: BracketGuide | undefined): ActiveIndentationGuide | undefined {
 		const highlight = this.guides.highlightActiveIndentation;
 		if (highlight === false || (highlight !== 'always' && activeBracketGuide)) return undefined;
-		const lineIndex = this.selectionController ? this.selectionController.selections[0]!.getPosition().lineNumber - 1 : undefined;
-		if (lineIndex === undefined) return undefined;
-		const model = this.bracketColorizationSource?.textModel ?? this.selectionController!.textModel;
+		const lineIndex = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber - 1;
+		const model = this.bracketColorizationSource?.textModel ?? this.viewModel.model;
 		const level = createStanzaIndentationGuides(model.getLineContent((lineIndex) + 1), this.tabSize).at(-1)?.level;
 		if (!level) return undefined;
 		let startLineIndex = lineIndex;
 		let endLineIndex = lineIndex;
 		while (startLineIndex > 0 && indentationLevel(model.getLineContent((startLineIndex - 1) + 1), this.tabSize) >= level) startLineIndex -= 1;
-		while (endLineIndex + 1 < model.lineCount && indentationLevel(model.getLineContent((endLineIndex + 1) + 1), this.tabSize) >= level) endLineIndex += 1;
+		while (endLineIndex + 1 < model.getLineCount() && indentationLevel(model.getLineContent((endLineIndex + 1) + 1), this.tabSize) >= level) endLineIndex += 1;
 		return { level, startLineIndex, endLineIndex };
 	}
 
@@ -116,7 +111,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		const openingLine = this.bracketColorizationSource!.textModel.getLineContent(guide.opening.getStartPosition().lineNumber);
 		const left = textLeft + measureLineWidth(openingLine.slice(0, openingColumnIndex));
 		const vertical = h(row.ownerDocument, 'span');
-		vertical.className = 'stanza-editor-bracket-guide';
+		vertical.className = 'core-guide stanza-editor-bracket-guide';
 		vertical.dataset.bracketLevel = String(guide.level);
 		vertical.style.left = `${left}px`;
 		const openingVisualLine = lineIndex === openingLineIndex && visualLine.startColumn <= openingColumnIndex && openingColumnIndex < visualLine.endColumn;

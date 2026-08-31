@@ -29,9 +29,10 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorTextDirection, View } = await import(
+const { EditorTextDirection } = await import(
 	"../../browser/view.js"
 );
+const { TestView: View } = await import("./viewModel/testViewModel.js");
 const { EditorLineWrapping } = await import(
 	"../../common/config/editorOptions.js"
 );
@@ -106,7 +107,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	}]);
 	const errorMarker = requiredElement<HTMLElement>(
 		viewport.element,
-		'.stanza-editor-diagnostic-marker[data-line-index="2"]',
+		'.margin-view-overlays .view-overlay-line[data-line-index="2"] .stanza-editor-diagnostic-marker',
 	);
 	assert.equal(errorMarker.hidden, false);
 	assert.equal(errorMarker.classList.contains("error"), true);
@@ -133,7 +134,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(warning.style.width, "20px");
 	const warningMarker = requiredElement<HTMLElement>(
 		viewport.element,
-		'.stanza-editor-diagnostic-marker[data-line-index="1"]',
+		'.margin-view-overlays .view-overlay-line[data-line-index="1"] .stanza-editor-diagnostic-marker',
 	);
 	assert.equal(warningMarker.hidden, false);
 	assert.equal(warningMarker.classList.contains("warning"), true);
@@ -211,9 +212,9 @@ test("Line and block decoration parts project source presentation details", () =
 	});
 	viewport.layout({ width: 200, height: 60 });
 
-	const firstLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line-lines-decorations[data-line-index="0"]');
-	const secondLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line-lines-decorations[data-line-index="1"]');
-	const thirdLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line-lines-decorations[data-line-index="2"]');
+	const firstLine = requiredElement<HTMLElement>(viewport.element, '.margin-view-overlays .view-overlay-line[data-line-index="0"]');
+	const secondLine = requiredElement<HTMLElement>(viewport.element, '.margin-view-overlays .view-overlay-line[data-line-index="1"]');
+	const thirdLine = requiredElement<HTMLElement>(viewport.element, '.margin-view-overlays .view-overlay-line[data-line-index="2"]');
 	const firstMarker = requiredElement<HTMLElement>(firstLine, ".stanza-editor-line-decoration");
 	const secondMarker = requiredElement<HTMLElement>(secondLine, ".stanza-editor-line-decoration");
 	assert.equal(firstMarker.classList.contains("stanza-test-line-marker"), true);

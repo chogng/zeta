@@ -33,7 +33,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { View } = await import("../../../../browser/view.js");
+const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 test("Ctrl+Space requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];

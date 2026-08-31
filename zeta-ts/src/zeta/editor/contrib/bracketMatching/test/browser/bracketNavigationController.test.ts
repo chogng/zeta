@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import("../../../../browser/view.js");
+const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { BracketNavigationController } = await import("../../browser/bracketNavigationController.js");
 
 test("Go-to-bracket shortcut uses the shared structural bracket index", () => {

@@ -15,8 +15,8 @@ import { type DiagnosticOverviewMarker, type DiffOverviewMarker } from "../overv
 import { type EditorOverlayContext } from "../../view/renderingContext.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { ViewPartRows } from '../../view/viewLayer.js';
+import { type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export type DecorationsOverlayMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
@@ -528,64 +528,56 @@ function lastCoveredLineIndex(decoration: ResolvedDecoration): number {
 }
 
 export class DecorationsOverlay extends DynamicViewOverlay {
-	public readonly domNode: HTMLElement;
 	private readonly model: TextModel;
 	private readonly decorationSources: readonly DecorationSource[];
 	private readonly decorationSnapshots = new Map<DecorationSource, readonly ResolvedDecoration[]>();
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private decorationLineIndex = new DecorationLineIndex([]);
-	private decorationModelVersion: number;
 	private markerRevision = 0;
-	private readonly rows: ViewPartRows;
 
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-	constructor(_context: EditorViewContext, host: HTMLElement, model: TextModel, decorationSources: readonly DecorationSource[]) {
+	constructor(private readonly context: ViewContext, model: TextModel, decorationSources: readonly DecorationSource[]) {
 		super();
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-decorations-layer', 'stanza-editor-line-decorations'));
-		this.domNode = this.rows.domNode;
+		this.context.addEventHandler(this);
 		this.model = model;
 		this.decorationSources = Object.freeze([...decorationSources]);
 		for (const source of this.decorationSources) {
 			this.decorationSnapshots.set(source, source.decorations);
 			this._register(source.onDidChange(() => {
 				this.decorationSnapshots.set(source, source.decorations);
-				this.decorationModelVersion = this.model.version;
 				this.rebuildDecorationLineIndex();
 				this.changeEmitter.fire();
 			}));
 		}
-		this.decorationModelVersion = this.model.version;
 		this.rebuildDecorationLineIndex();
 	}
 
+	public override dispose(): void {
+		this.context.removeEventHandler(this);
+		super.dispose();
+	}
+
 	public get markersRevision(): number {
-		this.synchronizeDecorationSnapshots();
 		return this.markerRevision;
 	}
 
-	public render(context: EditorRenderingContext): void {
-		this.synchronizeDecorationSnapshots();
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		projectStanzaDecorationOverlays(overlay, this.resolveVisibleDecorations(overlay), this.rows.render(context));
+	public prepareRender(context: EditorRenderingContext): void {
+		this.prepareRows(context, (overlay, rows) => {
+			projectStanzaDecorationOverlays(overlay, this.resolveVisibleDecorations(overlay), rows);
+		});
 	}
 
 	public visibleDecorations(context: EditorOverlayContext): readonly ResolvedDecoration[] {
-		this.synchronizeDecorationSnapshots();
 		return this.resolveVisibleDecorations(context);
 	}
 
 	public overviewMarkers(): readonly DecorationsOverlayMarker[] {
-		this.synchronizeDecorationSnapshots();
 		const decorations = this.allDecorations().filter(decoration => decoration.overviewRuler !== false);
 		return markersForDecorations(decorations, this.model.lineCount);
 	}
 
 	public minimapMarkers(): readonly DecorationsOverlayMarker[] {
-		this.synchronizeDecorationSnapshots();
 		const decorations = this.allDecorations().filter(decoration => decoration.minimap !== false);
 		return markersForDecorations(decorations, this.model.lineCount);
 	}
@@ -597,15 +589,6 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 	private rebuildDecorationLineIndex(): void {
 		this.decorationLineIndex = new DecorationLineIndex(this.allDecorations());
 		this.markerRevision += 1;
-	}
-
-	private synchronizeDecorationSnapshots(): void {
-		if (this.decorationModelVersion === this.model.version) return;
-		for (const source of this.decorationSources) {
-			this.decorationSnapshots.set(source, source.decorations);
-		}
-		this.decorationModelVersion = this.model.version;
-		this.rebuildDecorationLineIndex();
 	}
 
 	private resolveVisibleDecorations(context: EditorOverlayContext): readonly ResolvedDecoration[] {
@@ -724,8 +707,9 @@ function projectStanzaDecorationOverlays(context: EditorOverlayContext, decorati
 
 function createDecorationElement(ownerDocument: Document, decoration: ResolvedDecoration, left: number, width: number): HTMLElement {
 	const element = h(ownerDocument, 'div');
-	element.className = 'stanza-editor-decoration';
+	element.className = 'cdr';
 	element.classList.add(decoration.presentation);
+	element.classList.add('stanza-editor-decoration');
 	element.dataset.decorationId = String(decoration.id);
 	if (decoration.hoverText !== undefined) element.title = decoration.hoverText;
 	if (decoration.presentation === DecorationPresentation.ColorSwatch) {

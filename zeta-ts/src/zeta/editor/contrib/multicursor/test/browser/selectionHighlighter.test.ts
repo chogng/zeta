@@ -31,7 +31,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { ViewController } = await import('../../../../browser/view/viewController.js');
-const { View } = await import('../../../../browser/view.js');
+const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { resolveSelectionHighlightPresentation } = await import('../../../wordHighlighter/browser/highlightDecorations.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
 const { SelectionHighlighter } = await import('../../browser/multicursor.js');

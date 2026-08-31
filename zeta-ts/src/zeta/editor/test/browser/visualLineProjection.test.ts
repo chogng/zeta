@@ -3,7 +3,7 @@ import test from "node:test";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOptions.js";
 import { FontInfo } from "../../common/config/fontInfo.js";
-import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
+import { ViewModelLinesFromModelAsIs, ViewModelLinesFromProjectedModel } from "../../common/viewModel/viewModelLines.js";
 import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -87,6 +87,21 @@ test("view-model lines expose wrapped cursor rows and convert positions through 
 	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3)), new Position(2, 1));
 	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3), PositionAffinity.Left), new Position(1, 3));
 	assert.equal(coordinates.getModelLineViewLineCount(1), 3);
+	assert.deepEqual(lines.getViewLinesData(1, 4, [true, false, true, true]).map(line => line?.content ?? null), ["ab", null, "ef", "xy"]);
+});
+
+test("model-as-is view-model lines preserve one view row per model row", () => {
+	using model = new TextModel("first\nsecond");
+	using lines = new ViewModelLinesFromModelAsIs(model);
+	const computer = lines.createLineBreaksComputer();
+	computer.addRequest(1, null);
+	computer.addRequest(2, null);
+
+	assert.equal(lines.getViewLineCount(), 2);
+	assert.equal(lines.getViewLineContent(2), "second");
+	assert.equal(lines.getViewLineData(1).content, "first");
+	assert.deepEqual(computer.finalize(), [null, null]);
+	assert.deepEqual(lines.createCoordinatesConverter().convertViewPositionToModelPosition(new Position(2, 3)), new Position(2, 3));
 });
 
 test("browser visual-line projection validates its public wrapping inputs", () => {
@@ -209,8 +224,8 @@ class CountingTextMeasurer extends FixedTextMeasurer {
 	}
 }
 
-function createViewModelLines(model: TextModel, measurer: TextMeasurer, options: ConstructorParameters<typeof ViewModelLines>[4] = {}): ViewModelLines {
-	return new ViewModelLines(model, createFactory(measurer), TEST_FONT_INFO, 4, options);
+function createViewModelLines(model: TextModel, measurer: TextMeasurer, options: ConstructorParameters<typeof ViewModelLinesFromProjectedModel>[4] = {}): ViewModelLinesFromProjectedModel {
+	return new ViewModelLinesFromProjectedModel(model, createFactory(measurer), TEST_FONT_INFO, 4, options);
 }
 
 function computeWrappedIndent(model: TextModel, measurer: TextMeasurer, wrapWidth: number, wrappingIndent: WrappingIndent): number {

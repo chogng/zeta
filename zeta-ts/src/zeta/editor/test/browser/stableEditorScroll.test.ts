@@ -28,7 +28,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { View } = await import('../../browser/view.js');
+const { TestView: View } = await import('./viewModel/testViewModel.js');
 const { StableEditorBottomScrollState, StableEditorScrollState } = await import('../../browser/stableEditorScroll.js');
 
 test('StableEditorScrollState preserves the first visible row offset', () => {

@@ -109,14 +109,13 @@ flowchart LR
     Parts --> DOM[DOM / GPU mutation]
 ```
 
-- 当前 `EditorViewportLayoutManager`、`EditorViewportLinesLayout`、`EditorViewContext`、`EditorViewPartCollection` 和 `ViewOverlays` 组成一套本地手动调度链。
-- 这套链可以渲染现有界面，但不等同于 VS Code 的 `ViewContext → ViewPart → View` 事件、失效和释放生命周期，不能据此把同路径 View Part 记为已对齐。
-- 目标实现由 `ViewContext` 注册和移除事件处理器，`ViewPart` 统一接收配置、滚动、行映射和装饰事件，`View` 只负责组装、帧调度与 DOM 层级。
-- 迁移完成后删除手动 coordinator 及同职责的 `Editor*` owner；不会让两套调度链长期并存。
+- `ViewContext` 统一注册和移除事件处理器，`ViewPart` 接收配置、滚动、行映射和装饰事件，`View` 只负责组装、同步渲染阶段与 DOM 层级。
+- `ContentViewOverlays` 和 `MarginViewOverlays` 分别持有一份可见行 DOM；`DynamicViewOverlay` 只准备数据并按行返回内容。
+- 光标与块装饰持有跨行稳定 DOM，因此作为独立 `ViewPart`；旧的 `EditorViewPartCollection` 和各覆盖层独立行容器已经移除。
 
-### 待对齐：ViewPart 生命周期
+### 待对齐：渲染上下文与输入 Part
 
-下一步不是优化当前 coordinator，而是先恢复 `ViewContext → ViewPart → View` 主干。事件注册、失效、`prepareRender`、`render` 和释放都必须由这条主干统一拥有；具体 Part 只有在生产调用已经切入该生命周期后才算完成。
+下一步收敛 `RenderingContext` 的精确成员、GPU 的 `IViewLines` 几何查询，以及两个输入实现的 `ViewPart` 渲染阶段；不再建立第二套调度链。
 
 ### DOM 与 Part 边界
 
@@ -204,11 +203,11 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | --- | --- | --- |
 | TextModel、ITextBuffer、history、snapshot、tracked range | 部分具备 | 行为可用；`ITextModel`、PieceTree 与 ModelService 契约仍在待处理账目 |
 | Multi-selection、IME、clipboard、pointer/keyboard input | 部分具备 | 本地链可用；cursor 与 edit-context owner 尚未对齐 |
-| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | 本地手动调度可用；ViewPart 生命周期尚未对齐 |
+| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | ViewPart 生命周期和统一覆盖层已接通；渲染上下文与 GPU 几何查询仍待收敛 |
 | Token、diagnostic、completion、TextMate 和 App Server parser provider | 部分具备 | 异步版本边界存在；language service 与 tokenization owner 尚未对齐 |
 | Diff editor 与 App Server diff | 部分具备 | 本地 review widget 可用；canonical DiffEditorWidget/MultiDiffEditorWidget 契约尚未完成 |
-| `ViewContext → ViewPart → View` | 尚未完成 | 当前仍由 `EditorViewContext` 与手动 coordinator 调度 |
-| `ViewModelImpl → CursorsController` | 尚未完成 | 当前 controller 仍由 `CodeEditorWidget` 直接创建 |
+| `ViewContext → ViewPart → View` | 部分具备 | 事件、渲染阶段和释放已统一；两个输入实现仍待进入同一 Part 生命周期 |
+| `ViewModelImpl → CursorsController` | 部分具备 | ViewModel 已持有 controller；输入与 contribution 仍需移除内部执行器入口 |
 | Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |
 
 ## 关键实现入口

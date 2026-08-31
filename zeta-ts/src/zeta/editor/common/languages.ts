@@ -1,5 +1,7 @@
 import { type CancellationToken } from '../../base/common/cancellation.js';
+import { type Color } from '../../base/common/color.js';
 import { type Event } from '../../base/common/event.js';
+import { Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { type URI } from '../../base/common/uri.js';
 import { EditOperation, type ISingleEditOperation } from './core/editOperation.js';
 import { type Position } from './core/position.js';
@@ -10,6 +12,7 @@ import { type LanguageSelector } from './languageSelector.js';
 import * as model from './model.js';
 import { type TextModel } from './model/textModel.js';
 import { type LanguageTokenResult } from './tokens/languageTokens.js';
+import { TokenizationRegistry as TokenizationRegistryImpl } from './tokenizationRegistry.js';
 
 type Thenable<T> = PromiseLike<T>;
 
@@ -219,3 +222,45 @@ export class VersionedExtensionId {
 		return `${this.extensionId}@${this.version}`;
 	}
 }
+
+export interface ITokenizationSupportChangedEvent {
+	readonly changedLanguages: string[];
+	readonly changedColorMap: boolean;
+}
+
+export interface ILazyTokenizationSupport<TSupport> {
+	readonly tokenizationSupport: Promise<TSupport | null>;
+}
+
+export class LazyTokenizationSupport<TSupport> extends Disposable implements ILazyTokenizationSupport<TSupport> {
+	private support: Promise<TSupport & IDisposable | null> | undefined;
+
+	constructor(private readonly createSupport: () => Promise<TSupport & IDisposable | null>) {
+		super();
+	}
+
+	get tokenizationSupport(): Promise<TSupport | null> {
+		this.support ??= this.createSupport();
+		return this.support;
+	}
+
+	public override dispose(): void {
+		void this.support?.then(support => support?.dispose());
+		super.dispose();
+	}
+}
+
+export interface ITokenizationRegistry<TSupport> {
+	readonly onDidChange: Event<ITokenizationSupportChangedEvent>;
+	handleChange(languageIds: string[]): void;
+	register(languageId: string, support: TSupport): IDisposable;
+	registerFactory(languageId: string, factory: ILazyTokenizationSupport<TSupport>): IDisposable;
+	getOrCreate(languageId: string): Promise<TSupport | null>;
+	get(languageId: string): TSupport | null;
+	isResolved(languageId: string): boolean;
+	setColorMap(colorMap: Color[]): void;
+	getColorMap(): Color[] | null;
+	getDefaultBackground(): Color | null;
+}
+
+export const TokenizationRegistry: ITokenizationRegistry<unknown> = new TokenizationRegistryImpl();

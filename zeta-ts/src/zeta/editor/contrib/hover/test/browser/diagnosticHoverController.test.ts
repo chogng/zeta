@@ -36,7 +36,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import("../../../../browser/view.js");
+const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 
 test("Diagnostic hover presents current gutter-marker messages and hides on pointer exit", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import("../../../../browser/view.js");
+const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { MultiCursorController, resolveStanzaAdjacentCursorDirection } = await import("../../browser/multiCursorController.js");
 
 test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common state", () => {

@@ -1,24 +1,77 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Emitter, type Event } from "../../../base/common/event.js";
+import { Emitter, Event } from "../../../base/common/event.js";
+import { Disposable as DisposableBase } from '../../../base/common/lifecycle.js';
+import { type IEditorConfiguration } from '../../common/config/editorConfiguration.js';
+import { EditorOption, type IComputedEditorOptions } from '../../common/config/editorOptions.js';
 import { Range } from "../../common/core/range.js";
+import { ScrollType } from '../../common/editorCommon.js';
 import { TextModel } from "../../common/model/textModel.js";
 import { type EditorViewportLineSource } from "../../common/viewModel/editorViewportContracts.js";
-import { EditorViewportChangeReason, EditorViewportLayoutManager } from "../../common/viewLayout/viewLayout.js";
+import { type CustomLineHeightData } from '../../common/viewLayout/lineHeights.js';
+import { EditorViewportChangeReason, type EditorViewportVerticalPadding, ViewLayout as EditorViewLayout } from "../../common/viewLayout/viewLayout.js";
 
-test("EditorViewportLayoutManager calculates visible and overscan line ranges", () => {
+interface TestViewLayoutOptions {
+	readonly lineHeight: number;
+	readonly lineSource?: EditorViewportLineSource;
+	readonly padding?: EditorViewportVerticalPadding;
+	readonly customLineHeightData?: readonly CustomLineHeightData[];
+}
+
+class ViewLayout extends EditorViewLayout {
+	constructor(model: TextModel, options: TestViewLayoutOptions) {
+		const lineSource = options.lineSource;
+		super(
+			testConfiguration(options.lineHeight, options.padding),
+			lineSource?.lineCount ?? model.lineCount,
+			[...(options.customLineHeightData ?? [])],
+			callback => {
+				queueMicrotask(callback);
+				return DisposableBase.None;
+			},
+		);
+		this._register(model.onDidChangeContent(() => this.onFlushed(lineSource?.lineCount ?? model.lineCount, [])));
+		if (lineSource) this._register(lineSource.onDidChange(() => this.onFlushed(lineSource.lineCount, [])));
+	}
+}
+
+function testConfiguration(lineHeight: number, padding: EditorViewportVerticalPadding | undefined): IEditorConfiguration {
+	const values = new Map<EditorOption, unknown>([
+		[EditorOption.lineHeight, lineHeight],
+		[EditorOption.padding, padding ?? { top: 0, bottom: 0 }],
+		[EditorOption.layoutInfo, { width: 0, height: 0 }],
+		[EditorOption.smoothScrolling, false],
+	]);
+	return {
+		isSimpleWidget: false,
+		contextMenuId: undefined,
+		options: { get: id => values.get(id) } as IComputedEditorOptions,
+		onDidChangeFast: Event.None,
+		onDidChange: Event.None,
+		getRawOptions: () => ({}),
+		updateOptions: () => {},
+		observeContainer: () => {},
+		setIsDominatedByLongLines: () => {},
+		setModelLineCount: () => {},
+		setViewLineCount: () => {},
+		setReservedHeight: () => {},
+		setGlyphMarginDecorationLaneCount: () => {},
+		dispose: () => {},
+		[Symbol.dispose]: () => {},
+	};
+}
+
+test("ViewLayout calculates visible line ranges", () => {
 	using model = new TextModel(lines(100));
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
-		overscanLineCount: 2,
 	});
 
 	viewport.setViewportSize({ width: 300, height: 100 });
-	viewport.setContentWidth(500);
-	viewport.setScrollPosition({ left: 250, top: 45 });
+	viewport.setMaxLineWidth(500);
+	viewport.setScrollPosition({ scrollLeft: 250, scrollTop: 45 }, ScrollType.Immediate);
 
 	assert.deepEqual(viewport.layout, {
-		modelVersion: 1,
 		lineHeight: 20,
 		viewportSize: { width: 300, height: 100 },
 		contentSize: { width: 500, height: 2_000 },
@@ -29,13 +82,36 @@ test("EditorViewportLayoutManager calculates visible and overscan line ranges", 
 			endLineIndexExclusive: 8,
 		},
 		renderLines: {
-			startLineIndex: 0,
-			endLineIndexExclusive: 10,
+			startLineIndex: 2,
+			endLineIndexExclusive: 8,
 		},
-		renderTop: 0,
+		renderTop: 40,
+	});
+	assert.deepEqual({
+		contentWidth: viewport.getContentWidth(),
+		contentHeight: viewport.getContentHeight(),
+		scrollWidth: viewport.getScrollWidth(),
+		scrollHeight: viewport.getScrollHeight(),
+		viewport: { ...viewport.getCurrentViewport() },
+		lineNumber: viewport.getLineNumberAtVerticalOffset(45),
+		lineTop: viewport.getVerticalOffsetForLineNumber(3),
+		lineBottom: viewport.getVerticalOffsetAfterLineNumber(3),
+		lineHeight: viewport.getLineHeightForLineNumber(3),
+		whitespaces: viewport.getWhitespaces(),
+	}, {
+		contentWidth: 500,
+		contentHeight: 2_000,
+		scrollWidth: 500,
+		scrollHeight: 2_000,
+		viewport: { _viewportBrand: undefined, top: 45, left: 200, width: 300, height: 100 },
+		lineNumber: 3,
+		lineTop: 40,
+		lineBottom: 60,
+		lineHeight: 20,
+		whitespaces: [],
 	});
 
-	viewport.setScrollPosition({ left: 0, top: 100_000 });
+	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: 100_000 }, ScrollType.Immediate);
 
 	assert.deepEqual({
 		scrollPosition: viewport.layout.scrollPosition,
@@ -49,18 +125,17 @@ test("EditorViewportLayoutManager calculates visible and overscan line ranges", 
 			endLineIndexExclusive: 100,
 		},
 		renderLines: {
-			startLineIndex: 93,
+			startLineIndex: 95,
 			endLineIndexExclusive: 100,
 		},
-		renderTop: 1_860,
+		renderTop: 1_900,
 	});
 });
 
-test("EditorViewportLayoutManager includes vertical padding in content and row projection", () => {
+test("ViewLayout includes vertical padding in content and row projection", () => {
 	using model = new TextModel(lines(10));
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
-		overscanLineCount: 2,
 		padding: { top: 20, bottom: 10 },
 	});
 
@@ -73,11 +148,11 @@ test("EditorViewportLayoutManager includes vertical padding in content and row p
 	}, {
 		contentHeight: 230,
 		visibleLines: { startLineIndex: 0, endLineIndexExclusive: 1 },
-		renderLines: { startLineIndex: 0, endLineIndexExclusive: 3 },
+		renderLines: { startLineIndex: 0, endLineIndexExclusive: 1 },
 		renderTop: 20,
 	});
 
-	viewport.setScrollPosition({ left: 0, top: 1_000 });
+	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: 1_000 }, ScrollType.Immediate);
 	assert.deepEqual({
 		scrollTop: viewport.layout.scrollPosition.top,
 		visibleLines: viewport.layout.visibleLines,
@@ -86,14 +161,14 @@ test("EditorViewportLayoutManager includes vertical padding in content and row p
 	}, {
 		scrollTop: 190,
 		visibleLines: { startLineIndex: 8, endLineIndexExclusive: 10 },
-		renderLines: { startLineIndex: 6, endLineIndexExclusive: 10 },
-		renderTop: 140,
+		renderLines: { startLineIndex: 8, endLineIndexExclusive: 10 },
+		renderTop: 180,
 	});
 });
 
-test('EditorViewportLayoutManager reserves independently addressable view zones between lines', () => {
+test('ViewLayout reserves independently addressable view zones between lines', () => {
 	using model = new TextModel(lines(4));
-	using viewport = new EditorViewportLayoutManager(model, { lineHeight: 20 });
+	using viewport = new ViewLayout(model, { lineHeight: 20 });
 	viewport.setViewportSize({ width: 200, height: 30 });
 	const reasons: EditorViewportChangeReason[] = [];
 	using listener = viewport.onDidChange(change => reasons.push(change.reason));
@@ -116,10 +191,10 @@ test('EditorViewportLayoutManager reserves independently addressable view zones 
 		visibleLines: { startLineIndex: 0, endLineIndexExclusive: 1 },
 	});
 	viewport.setViewportSize({ width: 200, height: 10 });
-	viewport.setScrollPosition({ left: 0, top: 50 });
+	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: 50 }, ScrollType.Immediate);
 	assert.deepEqual(viewport.layout.visibleLines, { startLineIndex: 2, endLineIndexExclusive: 2 });
 	viewport.setViewportSize({ width: 200, height: 30 });
-	viewport.setScrollPosition({ left: 0, top: 0 });
+	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: 0 }, ScrollType.Immediate);
 	reasons.length = 0;
 
 	viewport.changeViewZone(beforeFirst, 0, 5);
@@ -141,9 +216,9 @@ test('EditorViewportLayoutManager reserves independently addressable view zones 
 	});
 });
 
-test('EditorViewportLayoutManager orders same-line view zones by explicit ordinal and creation order', () => {
+test('ViewLayout orders same-line view zones by explicit ordinal and creation order', () => {
 	using model = new TextModel(lines(2));
-	using viewport = new EditorViewportLayoutManager(model, { lineHeight: 20 });
+	using viewport = new ViewLayout(model, { lineHeight: 20 });
 	const defaultOrdinal = viewport.addViewZone(0, 5);
 	const later = viewport.addViewZone(0, 7, 20);
 	const earlier = viewport.addViewZone(0, 3, 10);
@@ -164,12 +239,11 @@ test('EditorViewportLayoutManager orders same-line view zones by explicit ordina
 
 test("Viewport resize and line-height changes preserve a stable top line", () => {
 	using model = new TextModel(lines(100));
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
-		overscanLineCount: 2,
 	});
 	viewport.setViewportSize({ width: 300, height: 100 });
-	viewport.setScrollPosition({ left: 0, top: 1_800 });
+	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: 1_800 }, ScrollType.Immediate);
 
 	viewport.setViewportSize({ width: 300, height: 200 });
 	assert.deepEqual({
@@ -200,30 +274,21 @@ test("Viewport resize and line-height changes preserve a stable top line", () =>
 			endLineIndexExclusive: 95,
 		},
 		renderLines: {
-			startLineIndex: 88,
-			endLineIndexExclusive: 97,
+			startLineIndex: 90,
+			endLineIndexExclusive: 95,
 		},
 	});
 });
 
 test("Model line changes update layout and clamp scrolling", () => {
 	using model = new TextModel(lines(100));
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
-		overscanLineCount: 3,
 	});
 	viewport.setViewportSize({ width: 200, height: 100 });
-	viewport.setScrollPosition({ left: 0, top: 1_900 });
-	const events: Array<{
-		readonly reason: EditorViewportChangeReason;
-		readonly modelVersion: number;
-		readonly changedVersion: number | undefined;
-	}> = [];
-	using listener = viewport.onDidChange(change => events.push({
-		reason: change.reason,
-		modelVersion: change.layout.modelVersion,
-		changedVersion: change.modelChange?.version,
-	}));
+	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: 1_900 }, ScrollType.Immediate);
+	const events: EditorViewportChangeReason[] = [];
+	using listener = viewport.onDidChange(change => events.push(change.reason));
 	const end = model.positionAt(model.createVersionedSnapshot().length);
 
 	model.applyEdits([{
@@ -236,7 +301,6 @@ test("Model line changes update layout and clamp scrolling", () => {
 		events,
 	}, {
 		layout: {
-			modelVersion: 2,
 			lineHeight: 20,
 			viewportSize: { width: 200, height: 100 },
 			contentSize: { width: 200, height: 100 },
@@ -252,17 +316,13 @@ test("Model line changes update layout and clamp scrolling", () => {
 			},
 			renderTop: 0,
 		},
-		events: [{
-			reason: EditorViewportChangeReason.Model,
-			modelVersion: 2,
-			changedVersion: 2,
-		}],
+		events: [EditorViewportChangeReason.Model],
 	});
 });
 
-test("Same-line model changes still advance the viewport model version", () => {
+test("Same-line model changes do not publish unchanged layout", () => {
 	using model = new TextModel("abc");
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
 	viewport.setViewportSize({ width: 100, height: 20 });
@@ -279,24 +339,18 @@ test("Same-line model changes still advance the viewport model version", () => {
 		text: "X",
 	}]);
 
-	assert.deepEqual({
-		modelVersion: viewport.layout.modelVersion,
-		reasons,
-	}, {
-		modelVersion: 2,
-		reasons: [EditorViewportChangeReason.Model],
-	});
+	assert.deepEqual(reasons, []);
 });
 
 test("Viewport virtualizes a caller-owned visual-line source", () => {
 	using model = new TextModel("one\ntwo");
 	using visualLines = new MutableLineSource(5);
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 10,
 		lineSource: visualLines,
 	});
 	viewport.setViewportSize({ width: 100, height: 20 });
-	viewport.setScrollPosition({ left: 0, top: 30 });
+	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: 30 }, ScrollType.Immediate);
 	const reasons: EditorViewportChangeReason[] = [];
 	using listener = viewport.onDidChange(change => reasons.push(change.reason));
 
@@ -311,15 +365,14 @@ test("Viewport virtualizes a caller-owned visual-line source", () => {
 		contentHeight: 80,
 		scrollTop: 30,
 		visibleLines: { startLineIndex: 3, endLineIndexExclusive: 5 },
-		reasons: [EditorViewportChangeReason.LineProjection],
+		reasons: [EditorViewportChangeReason.Model],
 	});
 });
 
 test("Zero-sized viewports render no lines and setters suppress no-ops", () => {
 	using model = new TextModel("");
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
-		overscanLineCount: 5,
 	});
 	const reasons: EditorViewportChangeReason[] = [];
 	using listener = viewport.onDidChange(change => {
@@ -327,8 +380,8 @@ test("Zero-sized viewports render no lines and setters suppress no-ops", () => {
 	});
 
 	viewport.setViewportSize({ width: 0, height: 0 });
-	viewport.setContentWidth(0);
-	viewport.setScrollPosition({ left: -10, top: -20 });
+	viewport.setMaxLineWidth(0);
+	viewport.setScrollPosition({ scrollLeft: -10, scrollTop: -20 }, ScrollType.Immediate);
 
 	assert.deepEqual({
 		visibleLines: viewport.layout.visibleLines,
@@ -349,29 +402,75 @@ test("Zero-sized viewports render no lines and setters suppress no-ops", () => {
 	});
 });
 
-test("EditorViewportLayoutManager validates geometry before changing layout", () => {
+test('ViewLayout publishes scroll, content-size, and whitespace changes from one owner', () => {
+	using model = new TextModel(lines(10));
+	using viewport = new ViewLayout(model, { lineHeight: 20 });
+	viewport.setViewportSize({ width: 100, height: 40 });
+	viewport.setMaxLineWidth(200);
+	const scrolls: Array<{ left: number; top: number; widthChanged: boolean }> = [];
+	const sizes: Array<{ width: number; height: number }> = [];
+	using scrollListener = viewport.onDidScroll(event => scrolls.push({
+		left: event.scrollLeft,
+		top: event.scrollTop,
+		widthChanged: event.scrollWidthChanged,
+	}));
+	using sizeListener = viewport.onDidContentSizeChange(event => sizes.push({
+		width: event.contentWidth,
+		height: event.contentHeight,
+	}));
+
+	viewport.setOverlayWidgetsMinWidth(250);
+	viewport.setScrollPosition({ scrollLeft: 20, scrollTop: 30 }, ScrollType.Immediate);
+	viewport.deltaScrollNow(5, 10);
+	const changedWhitespace = viewport.changeWhitespace(accessor => {
+		accessor.insertWhitespace(2, 0, 15, 0);
+	});
+
+	assert.equal(changedWhitespace, true);
+	const validated = viewport.validateScrollPosition({ scrollLeft: 1_000, scrollTop: -1 });
+	assert.deepEqual({ scrollLeft: validated.scrollLeft, scrollTop: validated.scrollTop }, {
+		scrollLeft: 150,
+		scrollTop: 0,
+	});
+	assert.deepEqual(viewport.saveState(), {
+		scrollLeft: 25,
+		scrollTop: 40,
+		scrollTopWithoutViewZones: 40,
+	});
+	assert.equal(viewport.hasPendingScrollAnimation(), false);
+	assert.equal(viewport.getWhitespaces().length, 1);
+	assert.deepEqual(sizes, [
+		{ width: 250, height: 200 },
+		{ width: 250, height: 215 },
+	]);
+	assert.deepEqual(scrolls.map(event => ({ left: event.left, top: event.top })), [
+		{ left: 0, top: 0 },
+		{ left: 20, top: 30 },
+		{ left: 25, top: 40 },
+		{ left: 25, top: 40 },
+	]);
+	const scrollable = viewport.getScrollable();
+	assert.strictEqual(viewport.getScrollable(), scrollable);
+	scrollable.setScrollPositionNow({ scrollLeft: 30, scrollTop: 50 });
+	assert.deepEqual(viewport.layout.scrollPosition, { left: 30, top: 50 });
+});
+
+test("ViewLayout validates geometry before changing layout", () => {
 	using model = new TextModel("a");
 
 	assert.throws(
-		() => new EditorViewportLayoutManager(model, { lineHeight: 0 }),
+		() => new ViewLayout(model, { lineHeight: 0 }),
 		/lineHeight must be positive/,
 	);
 	assert.throws(
-		() => new EditorViewportLayoutManager(model, {
-			lineHeight: 20,
-			overscanLineCount: 1.5,
-		}),
-		/overscanLineCount/,
-	);
-	assert.throws(
-		() => new EditorViewportLayoutManager(model, {
+		() => new ViewLayout(model, {
 			lineHeight: 20,
 			padding: { top: -1, bottom: 0 },
 		}),
 		/padding.top must be non-negative/,
 	);
 
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
 	assert.throws(
@@ -382,16 +481,11 @@ test("EditorViewportLayoutManager validates geometry before changing layout", ()
 		/viewportSize.width must be finite/,
 	);
 	assert.throws(
-		() => viewport.setContentWidth(-1),
+		() => viewport.setMaxLineWidth(-1),
 		/contentWidth must be non-negative/,
 	);
-	assert.throws(
-		() => viewport.setScrollPosition({
-			left: 0,
-			top: Number.POSITIVE_INFINITY,
-		}),
-		/scrollPosition.top must be finite/,
-	);
+	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: Number.POSITIVE_INFINITY }, ScrollType.Immediate);
+	assert.deepEqual(viewport.layout.scrollPosition, { left: 0, top: 20 });
 	assert.deepEqual(viewport.layout.viewportSize, {
 		width: 0,
 		height: 0,
@@ -400,7 +494,7 @@ test("EditorViewportLayoutManager validates geometry before changing layout", ()
 
 test("Viewport disposal releases its listener without owning the model", () => {
 	using model = new TextModel("a");
-	using viewport = new EditorViewportLayoutManager(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
 	let viewportChangeCount = 0;
@@ -419,11 +513,9 @@ test("Viewport disposal releases its listener without owning the model", () => {
 
 	assert.deepEqual({
 		modelVersion: model.version,
-		viewportModelVersion: viewport.layout.modelVersion,
 		viewportChangeCount,
 	}, {
 		modelVersion: 2,
-		viewportModelVersion: 1,
 		viewportChangeCount: 0,
 	});
 });

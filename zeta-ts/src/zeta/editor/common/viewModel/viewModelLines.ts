@@ -3,13 +3,17 @@ import { Disposable, MutableDisposable, type IDisposable } from '../../../base/c
 import { isFiniteNumber, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../config/editorOptions.js';
 import { type FontInfo } from '../config/fontInfo.js';
-import { type ICoordinatesConverter } from '../coordinatesConverter.js';
+import { IdentityCoordinatesConverter, type ICoordinatesConverter } from '../coordinatesConverter.js';
 import { type ICursorSimpleModel } from '../cursorCommon.js';
+import { type IPosition } from '../core/position.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
-import { PositionAffinity } from '../model.js';
+import { type IModelDecoration, type ITextModel, PositionAffinity } from '../model.js';
 import { type TextModel } from '../model/textModel.js';
-import { type ILineBreaksComputerContext, type ILineBreaksComputerFactory, type ModelLineProjectionData } from '../modelLineProjectionData.js';
+import { type ILineBreaksComputer, type ILineBreaksComputerContext, type ILineBreaksComputerFactory, type InjectedText, type ModelLineProjectionData } from '../modelLineProjectionData.js';
+import { type BracketGuideOptions, type IActiveIndentGuideInfo, type IndentGuide } from '../textModelGuides.js';
+import * as viewEvents from '../viewEvents.js';
+import { ViewLineData } from '../viewModel.js';
 import { type EditorViewportLineSource } from './editorViewportContracts.js';
 import { EditorVisualLineProjection, type EditorVisualLine } from './modelLineProjection.js';
 
@@ -19,7 +23,35 @@ export interface EditorLineVisibilitySource {
 	isLineVisible(lineIndex: number): boolean;
 }
 
-export interface ViewModelLinesOptions {
+export interface IViewModelLines extends IDisposable {
+	createCoordinatesConverter(): ICoordinatesConverter;
+	setWrappingSettings(fontInfo: FontInfo, wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean;
+	setTabSize(tabSize: number): boolean;
+	getHiddenAreas(): Range[];
+	setHiddenAreas(ranges: readonly Range[]): boolean;
+	createLineBreaksComputer(context?: ILineBreaksComputerContext): ILineBreaksComputer;
+	onModelFlushed(): void;
+	onModelLinesDeleted(versionId: number | null, fromLineNumber: number, toLineNumber: number): viewEvents.ViewLinesDeletedEvent | null;
+	onModelLinesInserted(versionId: number | null, fromLineNumber: number, toLineNumber: number, lineBreaks: (ModelLineProjectionData | null)[]): viewEvents.ViewLinesInsertedEvent | null;
+	onModelLineChanged(versionId: number | null, lineNumber: number, lineBreakData: ModelLineProjectionData | null): [boolean, viewEvents.ViewLinesChangedEvent | null, viewEvents.ViewLinesInsertedEvent | null, viewEvents.ViewLinesDeletedEvent | null];
+	acceptVersionId(versionId: number): void;
+	getViewLineCount(): number;
+	getActiveIndentGuide(viewLineNumber: number, minLineNumber: number, maxLineNumber: number): IActiveIndentGuideInfo;
+	getViewLinesIndentGuides(viewStartLineNumber: number, viewEndLineNumber: number): number[];
+	getViewLinesBracketGuides(startLineNumber: number, endLineNumber: number, activePosition: IPosition | null, options: BracketGuideOptions): IndentGuide[][];
+	getViewLineContent(viewLineNumber: number): string;
+	getViewLineLength(viewLineNumber: number): number;
+	getViewLineMinColumn(viewLineNumber: number): number;
+	getViewLineMaxColumn(viewLineNumber: number): number;
+	getViewLineData(viewLineNumber: number): ViewLineData;
+	getViewLinesData(viewStartLineNumber: number, viewEndLineNumber: number, needed: boolean[]): Array<ViewLineData | null>;
+	getDecorationsInRange(range: Range, ownerId: number, filterOutValidation: boolean, filterFontDecorations: boolean, onlyMinimapDecorations: boolean, onlyMarginDecorations: boolean): IModelDecoration[];
+	getInjectedTextAt(viewPosition: Position): InjectedText | null;
+	normalizePosition(position: Position, affinity: PositionAffinity): Position;
+	getLineIndentColumn(lineNumber: number): number;
+}
+
+interface ProjectedLinesOptions {
 	readonly wrapping?: EditorLineWrapping;
 	readonly wrapWidth?: number;
 	readonly wrappingIndent?: WrappingIndent;
@@ -27,25 +59,25 @@ export interface ViewModelLinesOptions {
 	 * Defers expensive initial soft-wrap measurement while preserving a usable
 	 * one-row-per-logical-line projection until the complete result is ready.
 	 */
-	readonly initialWrappingMeasurement?: ViewModelLinesInitialMeasurementOptions;
+	readonly initialWrappingMeasurement?: InitialMeasurementOptions;
 	/** Optional logical-line visibility supplied by folding or another feature. */
 	readonly visibilitySource?: EditorLineVisibilitySource;
 }
 
 /** Schedules a later, cancellable slice of initial visual-line measurement. */
-export type ViewModelLinesMeasurementScheduler = (callback: () => void) => IDisposable;
+type MeasurementScheduler = (callback: () => void) => IDisposable;
 
 /** Controls non-blocking initial measurement for a large wrapped document. */
-export interface ViewModelLinesInitialMeasurementOptions {
+interface InitialMeasurementOptions {
 	readonly initialLineCount?: number;
 	readonly linesPerSlice?: number;
-	readonly schedule: ViewModelLinesMeasurementScheduler;
+	readonly schedule: MeasurementScheduler;
 }
 
 interface ResolvedInitialMeasurement {
 	readonly initialLineCount: number;
 	readonly linesPerSlice: number;
-	readonly schedule: ViewModelLinesMeasurementScheduler;
+	readonly schedule: MeasurementScheduler;
 }
 
 /**
@@ -55,15 +87,17 @@ interface ResolvedInitialMeasurement {
  * model-versioned logical-to-visual mapping and combines visibility with the
  * wrapped rows. The browser supplies only the line-break computation policy.
  */
-export class ViewModelLines extends Disposable implements ICursorSimpleModel {
+export class ViewModelLinesFromProjectedModel extends Disposable implements ICursorSimpleModel, IViewModelLines {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly lineCountChangeEmitter = this._register(new Emitter<void>());
 	private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
 	private readonly pendingMeasurement = this._register(new MutableDisposable<IDisposable>());
 	private readonly visibilitySource: EditorLineVisibilitySource | undefined;
+	private hiddenAreas: Range[] = [];
 	private wrapping: EditorLineWrapping;
 	private wrapWidth: number;
 	private currentWrappingIndent: WrappingIndent;
+	private currentWordBreak: 'normal' | 'keepAll' = 'normal';
 	private wrappingProjection: EditorVisualLineProjection;
 	private currentProjection: EditorVisualLineProjection;
 	private projectionRevision = 0;
@@ -78,9 +112,9 @@ export class ViewModelLines extends Disposable implements ICursorSimpleModel {
 	constructor(
 		private readonly model: TextModel,
 		private readonly lineBreaksComputerFactory: ILineBreaksComputerFactory,
-		private readonly fontInfo: FontInfo,
-		private readonly tabSize: number,
-		options: ViewModelLinesOptions = {},
+		private fontInfo: FontInfo,
+		private tabSize: number,
+		options: ProjectedLinesOptions = {},
 	) {
 		super();
 		if (!lineBreaksComputerFactory || typeof lineBreaksComputerFactory.createLineBreaksComputer !== 'function') {
@@ -126,8 +160,46 @@ export class ViewModelLines extends Disposable implements ICursorSimpleModel {
 		return new ViewModelCoordinatesConverter(this.model, this);
 	}
 
+	setWrappingSettings(fontInfo: FontInfo, _wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean {
+		const nextWrapping = wrappingColumn > 0 ? EditorLineWrapping.On : EditorLineWrapping.Off;
+		const nextWidth = Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth;
+		const changed = this.fontInfo !== fontInfo || this.wrapping !== nextWrapping || this.wrapWidth !== nextWidth || this.currentWrappingIndent !== wrappingIndent || this.currentWordBreak !== wordBreak;
+		if (!changed) return false;
+		this.fontInfo = fontInfo;
+		this.wrapping = nextWrapping;
+		this.wrapWidth = nextWidth;
+		this.currentWrappingIndent = wrappingIndent;
+		this.currentWordBreak = wordBreak;
+		this.refresh();
+		return true;
+	}
+
+	setTabSize(tabSize: number): boolean {
+		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Editor view-model tab size must be a positive safe integer');
+		if (this.tabSize === tabSize) return false;
+		this.tabSize = tabSize;
+		this.refresh();
+		return true;
+	}
+
+	getHiddenAreas(): Range[] {
+		return this.hiddenAreas.map(range => Range.lift(range));
+	}
+
+	setHiddenAreas(ranges: readonly Range[]): boolean {
+		const next = ranges.map(range => this.model.validateRange(range));
+		if (rangesEqual(this.hiddenAreas, next)) return false;
+		this.hiddenAreas = next;
+		this.rebuildVisibleProjection();
+		return true;
+	}
+
 	getLineCount(): number {
 		return this.ensureCurrent().visualLineCount;
+	}
+
+	getViewLineCount(): number {
+		return this.getLineCount();
 	}
 
 	getLineContent(lineNumber: number): string {
@@ -135,12 +207,28 @@ export class ViewModelLines extends Disposable implements ICursorSimpleModel {
 		return this.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
 	}
 
+	getViewLineContent(viewLineNumber: number): string {
+		return this.getLineContent(viewLineNumber);
+	}
+
+	getViewLineLength(viewLineNumber: number): number {
+		return this.getViewLineContent(viewLineNumber).length;
+	}
+
 	getLineMinColumn(_lineNumber: number): number {
 		return 1;
 	}
 
+	getViewLineMinColumn(viewLineNumber: number): number {
+		return this.getLineMinColumn(viewLineNumber);
+	}
+
 	getLineMaxColumn(lineNumber: number): number {
 		return this.getLineContent(lineNumber).length + 1;
+	}
+
+	getViewLineMaxColumn(viewLineNumber: number): number {
+		return this.getLineMaxColumn(viewLineNumber);
 	}
 
 	getLineFirstNonWhitespaceColumn(lineNumber: number): number {
@@ -204,6 +292,102 @@ export class ViewModelLines extends Disposable implements ICursorSimpleModel {
 		this.currentWrappingIndent = next;
 		this.refresh();
 	}
+
+	getActiveIndentGuide(viewLineNumber: number, minLineNumber: number, maxLineNumber: number): IActiveIndentGuideInfo {
+		const active = this.getVisualLine(viewLineNumber).logicalLineIndex + 1;
+		const min = this.getVisualLine(minLineNumber).logicalLineIndex + 1;
+		const max = this.getVisualLine(maxLineNumber).logicalLineIndex + 1;
+		const guide = this.model.guides.getActiveIndentGuide(active, min, max);
+		return {
+			startLineNumber: this.projection.visualLineIndexAt(new Position(guide.startLineNumber, 1)) + 1,
+			endLineNumber: this.projection.visualLineIndexAt(new Position(guide.endLineNumber, this.model.getLineMaxColumn(guide.endLineNumber))) + 1,
+			indent: guide.indent,
+		};
+	}
+
+	getViewLinesIndentGuides(viewStartLineNumber: number, viewEndLineNumber: number): number[] {
+		return this.mapViewLines(viewStartLineNumber, viewEndLineNumber, lineNumber => (
+			this.model.guides.getLinesIndentGuides(lineNumber, lineNumber)[0] ?? 0
+		));
+	}
+
+	getViewLinesBracketGuides(viewStartLineNumber: number, viewEndLineNumber: number, activePosition: IPosition | null, options: BracketGuideOptions): IndentGuide[][] {
+		return this.mapViewLines(viewStartLineNumber, viewEndLineNumber, lineNumber => (
+			this.model.guides.getLinesBracketGuides(lineNumber, lineNumber, activePosition, options)[0] ?? []
+		));
+	}
+
+	getViewLineData(viewLineNumber: number): ViewLineData {
+		const line = this.getVisualLine(viewLineNumber);
+		const content = this.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
+		const tokens = this.model.tokenization.getLineTokens(line.logicalLineIndex + 1).sliceAndInflate(line.startColumn, line.endColumn, -line.startColumn);
+		return new ViewLineData(content, !line.lastForLogicalLine, 1, content.length + 1, 0, tokens, null);
+	}
+
+	getViewLinesData(viewStartLineNumber: number, viewEndLineNumber: number, needed: boolean[]): Array<ViewLineData | null> {
+		const start = Math.max(1, Math.min(viewStartLineNumber, this.getViewLineCount()));
+		const end = Math.max(start, Math.min(viewEndLineNumber, this.getViewLineCount()));
+		return Array.from({ length: end - start + 1 }, (_, index) => needed[index] === false ? null : this.getViewLineData(start + index));
+	}
+
+	getDecorationsInRange(range: Range, ownerId: number, filterOutValidation: boolean, filterFontDecorations: boolean, onlyMinimapDecorations: boolean, onlyMarginDecorations: boolean): IModelDecoration[] {
+		return this.model.getDecorationsInRange(
+			this.createCoordinatesConverter().convertViewRangeToModelRange(range),
+			ownerId,
+			filterOutValidation,
+			filterFontDecorations,
+			onlyMinimapDecorations,
+			onlyMarginDecorations,
+		);
+	}
+
+	getInjectedTextAt(_viewPosition: Position): InjectedText | null {
+		return null;
+	}
+
+	public createLineBreaksComputer(context?: ILineBreaksComputerContext): ILineBreaksComputer {
+		const source = context ?? {
+			getLineContent: lineNumber => this.model.getLineContent(lineNumber),
+			getLineInjectedText: _lineNumber => null,
+		};
+		return this.lineBreaksComputerFactory.createLineBreaksComputer(
+			source,
+			this.fontInfo,
+			this.tabSize,
+			Math.max(0, Math.floor(this.wrapWidth / this.fontInfo.typicalHalfwidthCharacterWidth)),
+			this.currentWrappingIndent,
+			this.currentWordBreak,
+			false,
+		);
+	}
+
+	onModelFlushed(): void {
+		this.refresh();
+	}
+
+	onModelLinesDeleted(_versionId: number | null, fromLineNumber: number, toLineNumber: number): viewEvents.ViewLinesDeletedEvent | null {
+		this.refresh();
+		return new viewEvents.ViewLinesDeletedEvent(fromLineNumber, toLineNumber);
+	}
+
+	onModelLinesInserted(_versionId: number | null, fromLineNumber: number, toLineNumber: number, _lineBreaks: (ModelLineProjectionData | null)[]): viewEvents.ViewLinesInsertedEvent | null {
+		this.refresh();
+		return new viewEvents.ViewLinesInsertedEvent(fromLineNumber, toLineNumber);
+	}
+
+	onModelLineChanged(_versionId: number | null, lineNumber: number, _lineBreakData: ModelLineProjectionData | null): [boolean, viewEvents.ViewLinesChangedEvent | null, viewEvents.ViewLinesInsertedEvent | null, viewEvents.ViewLinesDeletedEvent | null] {
+		const previousCount = this.getViewLineCount();
+		this.refresh();
+		const nextCount = this.getViewLineCount();
+		return [
+			previousCount !== nextCount,
+			new viewEvents.ViewLinesChangedEvent(lineNumber, 1),
+			nextCount > previousCount ? new viewEvents.ViewLinesInsertedEvent(lineNumber + 1, lineNumber + nextCount - previousCount) : null,
+			nextCount < previousCount ? new viewEvents.ViewLinesDeletedEvent(lineNumber + 1, lineNumber + previousCount - nextCount) : null,
+		];
+	}
+
+	acceptVersionId(_versionId: number): void {}
 
 	private refresh(): void {
 		if (this.usesInitialMeasurement()) this.startInitialMeasurement();
@@ -299,31 +483,27 @@ export class ViewModelLines extends Disposable implements ICursorSimpleModel {
 		)), breaks.map(result => (result?.wrappedTextIndentLength ?? 0) * this.fontInfo.spaceWidth));
 	}
 
-	private createLineBreaksComputer() {
-		const context: ILineBreaksComputerContext = {
-			getLineContent: lineNumber => this.model.getLineContent(lineNumber),
-			getLineInjectedText: _lineNumber => null,
-		};
-		return this.lineBreaksComputerFactory.createLineBreaksComputer(
-			context,
-			this.fontInfo,
-			this.tabSize,
-			Math.max(0, Math.floor(this.wrapWidth / this.fontInfo.typicalHalfwidthCharacterWidth)),
-			this.currentWrappingIndent,
-			'normal',
-			false,
-		);
-	}
-
 	private createVisibleProjection(source: EditorVisualLineProjection): EditorVisualLineProjection {
-		if (!this.visibilitySource) return source;
+		if (!this.visibilitySource && this.hiddenAreas.length === 0) return source;
 		const visibleLogicalLines = Object.freeze(Array.from(
 			{ length: source.logicalLineCount },
-			(_, lineIndex) => this.visibilitySource!.isLineVisible(lineIndex),
+			(_, lineIndex) => this.isLogicalLineVisible(lineIndex),
 		));
 		const lines = source.lines.filter(line => visibleLogicalLines[line.logicalLineIndex]);
 		const anchors = createVisualLineAnchors(source, visibleLogicalLines, lines);
 		return EditorVisualLineProjection.fromVisibleLines(source.modelVersion, source.logicalLineCount, lines, anchors);
+	}
+
+	private isLogicalLineVisible(lineIndex: number): boolean {
+		if (this.visibilitySource && !this.visibilitySource.isLineVisible(lineIndex)) return false;
+		const lineNumber = lineIndex + 1;
+		return !this.hiddenAreas.some(range => range.startLineNumber <= lineNumber && lineNumber <= range.endLineNumber);
+	}
+
+	private mapViewLines<T>(startLineNumber: number, endLineNumber: number, read: (modelLineNumber: number) => T): T[] {
+		const start = Math.max(1, Math.min(startLineNumber, this.getViewLineCount()));
+		const end = Math.max(start, Math.min(endLineNumber, this.getViewLineCount()));
+		return Array.from({ length: end - start + 1 }, (_, index) => read(this.getVisualLine(start + index).logicalLineIndex + 1));
 	}
 
 	private usesInitialMeasurement(): boolean {
@@ -339,10 +519,129 @@ export class ViewModelLines extends Disposable implements ICursorSimpleModel {
 	}
 }
 
+export class ViewModelLinesFromModelAsIs extends Disposable implements IViewModelLines {
+	constructor(private readonly model: ITextModel) {
+		super();
+	}
+
+	createCoordinatesConverter(): ICoordinatesConverter {
+		return new IdentityCoordinatesConverter(this.model);
+	}
+
+	setWrappingSettings(_fontInfo: FontInfo, _wrappingStrategy: 'simple' | 'advanced', _wrappingColumn: number, _wrappingIndent: WrappingIndent, _wordBreak: 'normal' | 'keepAll'): boolean {
+		return false;
+	}
+
+	setTabSize(_tabSize: number): boolean {
+		return false;
+	}
+
+	getHiddenAreas(): Range[] {
+		return [];
+	}
+
+	setHiddenAreas(_ranges: readonly Range[]): boolean {
+		return false;
+	}
+
+	createLineBreaksComputer(): ILineBreaksComputer {
+		return new IdentityLineBreaksComputer();
+	}
+
+	onModelFlushed(): void {}
+
+	onModelLinesDeleted(_versionId: number | null, fromLineNumber: number, toLineNumber: number): viewEvents.ViewLinesDeletedEvent {
+		return new viewEvents.ViewLinesDeletedEvent(fromLineNumber, toLineNumber);
+	}
+
+	onModelLinesInserted(_versionId: number | null, fromLineNumber: number, toLineNumber: number, _lineBreaks: (ModelLineProjectionData | null)[]): viewEvents.ViewLinesInsertedEvent {
+		return new viewEvents.ViewLinesInsertedEvent(fromLineNumber, toLineNumber);
+	}
+
+	onModelLineChanged(_versionId: number | null, lineNumber: number, _lineBreakData: ModelLineProjectionData | null): [false, viewEvents.ViewLinesChangedEvent, null, null] {
+		return [false, new viewEvents.ViewLinesChangedEvent(lineNumber, 1), null, null];
+	}
+
+	acceptVersionId(_versionId: number): void {}
+
+	getViewLineCount(): number {
+		return this.model.getLineCount();
+	}
+
+	getActiveIndentGuide(viewLineNumber: number, minLineNumber: number, maxLineNumber: number): IActiveIndentGuideInfo {
+		return this.model.guides.getActiveIndentGuide(viewLineNumber, minLineNumber, maxLineNumber);
+	}
+
+	getViewLinesIndentGuides(viewStartLineNumber: number, viewEndLineNumber: number): number[] {
+		return this.model.guides.getLinesIndentGuides(viewStartLineNumber, viewEndLineNumber);
+	}
+
+	getViewLinesBracketGuides(startLineNumber: number, endLineNumber: number, activePosition: IPosition | null, options: BracketGuideOptions): IndentGuide[][] {
+		return this.model.guides.getLinesBracketGuides(startLineNumber, endLineNumber, activePosition, options);
+	}
+
+	getViewLineContent(viewLineNumber: number): string {
+		return this.model.getLineContent(viewLineNumber);
+	}
+
+	getViewLineLength(viewLineNumber: number): number {
+		return this.model.getLineLength(viewLineNumber);
+	}
+
+	getViewLineMinColumn(viewLineNumber: number): number {
+		return this.model.getLineMinColumn(viewLineNumber);
+	}
+
+	getViewLineMaxColumn(viewLineNumber: number): number {
+		return this.model.getLineMaxColumn(viewLineNumber);
+	}
+
+	getViewLineData(viewLineNumber: number): ViewLineData {
+		const tokens = this.model.tokenization.getLineTokens(viewLineNumber);
+		const content = tokens.getLineContent();
+		return new ViewLineData(content, false, 1, content.length + 1, 0, tokens.inflate(), null);
+	}
+
+	getViewLinesData(viewStartLineNumber: number, viewEndLineNumber: number, needed: boolean[]): Array<ViewLineData | null> {
+		const start = Math.max(1, Math.min(viewStartLineNumber, this.model.getLineCount()));
+		const end = Math.max(start, Math.min(viewEndLineNumber, this.model.getLineCount()));
+		return Array.from({ length: end - start + 1 }, (_, index) => needed[index] === false ? null : this.getViewLineData(start + index));
+	}
+
+	getDecorationsInRange(range: Range, ownerId: number, filterOutValidation: boolean, filterFontDecorations: boolean, onlyMinimapDecorations: boolean, onlyMarginDecorations: boolean): IModelDecoration[] {
+		return this.model.getDecorationsInRange(range, ownerId, filterOutValidation, filterFontDecorations, onlyMinimapDecorations, onlyMarginDecorations);
+	}
+
+	getInjectedTextAt(_viewPosition: Position): InjectedText | null {
+		return null;
+	}
+
+	normalizePosition(position: Position, _affinity: PositionAffinity): Position {
+		return this.model.validatePosition(position);
+	}
+
+	getLineIndentColumn(lineNumber: number): number {
+		const first = this.model.getLineFirstNonWhitespaceColumn(lineNumber);
+		return first === 0 ? this.model.getLineMaxColumn(lineNumber) : first;
+	}
+}
+
+class IdentityLineBreaksComputer implements ILineBreaksComputer {
+	private requestCount = 0;
+
+	addRequest(_lineNumber: number, _previousLineBreakData: ModelLineProjectionData | null): void {
+		this.requestCount += 1;
+	}
+
+	finalize(): null[] {
+		return Array.from({ length: this.requestCount }, () => null);
+	}
+}
+
 class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 	constructor(
 		private readonly model: TextModel,
-		private readonly lines: ViewModelLines,
+		private readonly lines: ViewModelLinesFromProjectedModel,
 	) {}
 
 	public convertViewPositionToModelPosition(viewPosition: Position): Position {
@@ -462,7 +761,7 @@ function readWrapWidth(value: number | undefined): number {
 	return width;
 }
 
-function readInitialMeasurement(value: ViewModelLinesInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
+function readInitialMeasurement(value: InitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
 	if (value === undefined) return undefined;
 	if (!value || typeof value.schedule !== 'function') {
 		throw new TypeError('Stanza initial visual-line measurement requires a scheduler');
@@ -476,4 +775,8 @@ function readInitialMeasurement(value: ViewModelLinesInitialMeasurementOptions |
 		throw new RangeError('Stanza visual-line measurement slice size must be a positive safe integer');
 	}
 	return Object.freeze({ initialLineCount, linesPerSlice, schedule: value.schedule });
+}
+
+function rangesEqual(left: readonly Range[], right: readonly Range[]): boolean {
+	return left.length === right.length && left.every((range, index) => range.equalsRange(right[index]));
 }

@@ -1,4 +1,4 @@
-import { IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { Range } from '../core/range.js';
 import { IEditorConfiguration } from '../config/editorConfiguration.js';
 import { ITextModel } from '../model.js';
@@ -8,7 +8,7 @@ import { IViewDecorationsCollection, IInlineModelDecorationsComputerContext, Inl
 import { ICoordinatesConverter } from '../coordinatesConverter.js';
 import { filterFontDecorations, filterValidationDecorations } from '../config/editorOptions.js';
 
-export class ViewModelDecorations implements IDisposable {
+export class ViewModelDecorations extends Disposable {
 
 	private readonly editorId: number;
 	private readonly configuration: IEditorConfiguration;
@@ -20,6 +20,7 @@ export class ViewModelDecorations implements IDisposable {
 	private _cachedModelDecorationsResolverViewRange: Range | null;
 
 	constructor(editorId: number, model: ITextModel, configuration: IEditorConfiguration, linesCollection: IViewModelLines, coordinatesConverter: ICoordinatesConverter) {
+		super();
 		this.editorId = editorId;
 		this.configuration = configuration;
 		this._linesCollection = linesCollection;
@@ -76,5 +77,4 @@ export class ViewModelDecorations implements IDisposable {
 		return this._inlineDecorationsComputer.getDecorations(range, onlyMinimapDecorations, onlyMarginDecorations);
 	}
 }
-
 

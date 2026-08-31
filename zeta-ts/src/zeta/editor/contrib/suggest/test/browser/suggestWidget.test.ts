@@ -31,7 +31,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { View } = await import("../../../../browser/view.js");
+const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 
 test("Completion widget projects named options, focus, ARIA, and content coordinates", () => {

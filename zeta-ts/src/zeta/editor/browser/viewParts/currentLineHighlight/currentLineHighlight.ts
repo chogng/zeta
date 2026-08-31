@@ -1,38 +1,39 @@
 import './currentLineHighlight.css';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { type IViewModel } from '../../../common/viewModel.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
-import { ViewPartRows } from '../../view/viewLayer.js';
+import { type EditorRenderingContext } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 /** Projects the active logical line independently from selection ranges. */
 export class CurrentLineHighlightOverlay extends DynamicViewOverlay {
-	public readonly domNode: HTMLElement;
-	private readonly selectionController: CursorsController | undefined;
-	private readonly rows: ViewPartRows;
-
-	constructor(_context: EditorViewContext, host: HTMLElement, selectionController: CursorsController | undefined) {
+	constructor(private readonly context: ViewContext, private readonly viewModel: IViewModel) {
 		super();
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-current-line-highlight-layer', 'stanza-editor-current-line-highlight'));
-		this.domNode = this.rows.domNode;
-		this.selectionController = selectionController;
+		this.context.addEventHandler(this);
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		const selections = this.selectionController?.selections ?? [];
+	public override dispose(): void {
+		this.context.removeEventHandler(this);
+		super.dispose();
+	}
+
+	public prepareRender(context: EditorRenderingContext): void {
+		const selections = this.viewModel.getCursorStates().map(state => state.modelState.selection);
 		const activeLineIndexes = new Set(selections.map(selection => selection.getPosition().lineNumber - 1));
 		const selectionIsEmpty = selections.every(selection => selection.isEmpty());
-		for (const [visualLineIndex, row] of this.rows.render(context)) {
+		this.prepareRows(context, (overlay, rows) => {
+		for (const [visualLineIndex, row] of rows) {
 			const isActive = activeLineIndexes.has(overlay.visualLineProjection.lineAt(visualLineIndex)?.logicalLineIndex ?? -1);
 			const highlightsLine = selectionIsEmpty && (overlay.renderLineHighlight === 'line' || overlay.renderLineHighlight === 'all');
 			const highlightsGutter = overlay.renderLineHighlight === 'gutter' || overlay.renderLineHighlight === 'all';
-			row.classList.toggle('active', isActive);
-			row.classList.toggle('highlight-line', highlightsLine);
-			row.classList.toggle('highlight-gutter', highlightsGutter);
-			row.classList.toggle('focus-only', overlay.renderLineHighlightOnlyWhenFocus);
+			const highlight = h(row.ownerDocument, 'div');
+			highlight.className = 'current-line stanza-editor-current-line-highlight';
+			highlight.classList.toggle('active', isActive);
+			highlight.classList.toggle('highlight-line', highlightsLine);
+			highlight.classList.toggle('highlight-gutter', highlightsGutter);
+			highlight.classList.toggle('focus-only', overlay.renderLineHighlightOnlyWhenFocus);
+			row.append(highlight);
 		}
+		});
 	}
 }
+import { h } from '../../../../base/browser/dom.js';

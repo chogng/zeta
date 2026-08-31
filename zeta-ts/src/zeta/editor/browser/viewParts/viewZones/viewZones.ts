@@ -1,9 +1,10 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { AbstractDisposable, DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { isFiniteNumber } from '../../../../base/common/numbers.js';
-import { type EditorViewportLayout, EditorViewportLayoutManager } from '../../../common/viewLayout/viewLayout.js';
+import { type EditorViewportLayout, ViewLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type IViewZone, type IViewZoneChangeAccessor } from '../../editorBrowser.js';
-import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
+import { ViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export type EditorViewZone = IViewZone;
 
@@ -15,7 +16,7 @@ export interface EditorViewZoneHandle extends IDisposable {
 
 interface ViewZonesOptions {
 	readonly host: HTMLElement;
-	readonly viewLayout: EditorViewportLayoutManager;
+	readonly viewLayout: ViewLayout;
 	readonly readVisualLineCount: () => number;
 	readonly readVisualLineIndexAfterPosition: (lineNumber: number, column: number | undefined) => number;
 	readonly readContentLeft: () => number;
@@ -24,18 +25,18 @@ interface ViewZonesOptions {
 }
 
 /** Owns caller-provided DOM roots placed in reserved vertical editor space. */
-export class ViewZones extends EditorViewPart {
+export class ViewZones extends ViewPart {
 	public readonly domNode: HTMLDivElement;
 	public readonly marginDomNode: HTMLDivElement;
-	private readonly viewLayout: EditorViewportLayoutManager;
+	private readonly viewLayout: ViewLayout;
 	private readonly readVisualLineCount: () => number;
 	private readonly zones = new Map<string, EditorViewZone>();
 	private readonly mouseDownListeners = this._register(new DisposableMap<string>());
 	private readonly zoneLayouts = new Map<string, { readonly top: number; readonly heightInPixels: number }>();
 	private lineHeight: number;
 
-	constructor(private readonly options: ViewZonesOptions) {
-		super();
+	constructor(context: ViewContext, private readonly options: ViewZonesOptions) {
+		super(context);
 		this.viewLayout = options.viewLayout;
 		this.readVisualLineCount = options.readVisualLineCount;
 		this.lineHeight = options.viewLayout.layout.lineHeight;

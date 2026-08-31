@@ -3,7 +3,8 @@ import { h, reset, fragment as createFragment } from "../../../../base/browser/d
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
-import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { ViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 /** One 1-based editor column at which a vertical guide is rendered. */
 export interface EditorRuler {
@@ -19,7 +20,7 @@ export interface RulersOptions {
 }
 
 /** Projects configured column guides into the scrollable editor content. */
-export class Rulers extends EditorViewPart {
+export class Rulers extends ViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly textMeasurer: TextMeasurer;
@@ -27,8 +28,8 @@ export class Rulers extends EditorViewPart {
 	private readonly rulers: readonly EditorRuler[];
 	private readonly renderedRulers: FastDomNode<HTMLDivElement>[] = [];
 
-	constructor(options: RulersOptions) {
-		super();
+	constructor(context: ViewContext, options: RulersOptions) {
+		super(context);
 		this.textMeasurer = options.textMeasurer;
 		this.readTextLeft = options.readTextLeft;
 		this.rulers = Object.freeze([...(options.rulers ?? [])].map(validateRuler));

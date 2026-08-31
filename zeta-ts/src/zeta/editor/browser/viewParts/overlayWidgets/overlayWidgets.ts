@@ -3,7 +3,8 @@ import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fa
 import { getDomNodePagePosition, type IDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type IOverlayWidget, type IOverlayWidgetPosition, type IOverlayWidgetPositionCoordinates, OverlayWidgetPositionPreference } from '../../editorBrowser.js';
-import { PartFingerprint, PartFingerprints, type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
+import { PartFingerprint, PartFingerprints, type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 interface ViewOverlayWidgetsOptions {
 	readonly viewDomNode: HTMLElement;
@@ -25,20 +26,20 @@ interface OverlayWidgetLayout {
 }
 
 /** Owns widgets positioned against the editor viewport rather than document content. */
-export class ViewOverlayWidgets extends EditorViewPart {
+export class ViewOverlayWidgets extends ViewPart {
 	private readonly _viewDomNode: HTMLElement;
 	private readonly _domNode: FastDomNode<HTMLDivElement>;
 	public readonly overflowingOverlayWidgetsDomNode: FastDomNode<HTMLDivElement>;
 	private readonly _widgets = this._register(new DisposableMap<string, OverlayWidget>());
 	private _viewDomNodeRect: IDomNodePagePosition | null = null;
-	private _verticalScrollbarWidth: number;
+	private readonly _verticalScrollbarWidth: number;
 	private _minimapWidth = 0;
-	private _horizontalScrollbarHeight: number;
+	private readonly _horizontalScrollbarHeight: number;
 	private _editorHeight = 0;
 	private _editorWidth = 0;
 
-	constructor(private readonly options: ViewOverlayWidgetsOptions) {
-		super();
+	constructor(context: ViewContext, private readonly options: ViewOverlayWidgetsOptions) {
+		super(context);
 		this._viewDomNode = options.viewDomNode;
 		this._verticalScrollbarWidth = options.verticalScrollbarWidth;
 		this._horizontalScrollbarHeight = options.horizontalScrollbarHeight;
@@ -64,12 +65,6 @@ export class ViewOverlayWidgets extends EditorViewPart {
 
 	public getDomNode(): FastDomNode<HTMLElement> {
 		return this._domNode;
-	}
-
-	public onConfigurationChanged(configuration: Pick<ViewOverlayWidgetsOptions, 'verticalScrollbarWidth' | 'horizontalScrollbarHeight'>): boolean {
-		this._verticalScrollbarWidth = configuration.verticalScrollbarWidth;
-		this._horizontalScrollbarHeight = configuration.horizontalScrollbarHeight;
-		return true;
 	}
 
 	private _widgetCanOverflow(widget: IOverlayWidget): boolean {

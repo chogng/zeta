@@ -26,7 +26,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import('../../../../browser/view.js');
+const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { RenameCommandId, RenameController } = await import('../../browser/renameController.js');
 
 test.after(() => browserEnvironment.window.close());

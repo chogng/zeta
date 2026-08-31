@@ -1,4 +1,4 @@
-import { Disposable, MutableDisposable, type IReference } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { GPULifecycle } from '../../gpu/gpuDisposable.js';
 import { GlyphRasterizer } from '../../gpu/raster/glyphRasterizer.js';
@@ -12,6 +12,8 @@ import { BindingId, type GpuFrame, type IGpuRenderStrategy } from '../../gpu/gpu
 import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
 import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
 import { type EditorRenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export interface ViewLinesGpuOptions {
 	readonly host: HTMLElement;
@@ -32,7 +34,7 @@ interface PreparedGpuFrame {
 const VERTEX_FLOAT_COUNT = 5;
 
 /** Draws eligible visible text rows through the VS Code-aligned WebGPU glyph-atlas path. */
-export class ViewLinesGpu extends Disposable {
+export class ViewLinesGpu extends ViewPart {
 	private readonly context: ViewGpuContext;
 	private readonly vertexBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly uniformBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
@@ -50,8 +52,8 @@ export class ViewLinesGpu extends Disposable {
 	private rendering = false;
 	private renderedGpuLineIndexes = new Set<number>();
 
-	constructor(private readonly options: ViewLinesGpuOptions) {
-		super();
+	constructor(context: ViewContext, private readonly options: ViewLinesGpuOptions) {
+		super(context);
 		this.context = this._register(new ViewGpuContext({ host: options.host }));
 		this._register(this.context.onDidChange(() => {
 			if (this.lastRenderingContext) options.requestRender();
@@ -65,6 +67,21 @@ export class ViewLinesGpu extends Disposable {
 	public get gpuLineIndexes(): ReadonlySet<number> {
 		return this.renderedGpuLineIndexes;
 	}
+
+	public prepareRender(_context: EditorRenderingContext): void {
+	}
+
+	public override onConfigurationChanged(): boolean { return true; }
+	public override onCursorStateChanged(): boolean { return true; }
+	public override onDecorationsChanged(): boolean { return true; }
+	public override onFlushed(): boolean { return true; }
+	public override onLinesChanged(): boolean { return true; }
+	public override onLinesDeleted(): boolean { return true; }
+	public override onLinesInserted(): boolean { return true; }
+	public override onLineMappingChanged(): boolean { return true; }
+	public override onScrollChanged(): boolean { return true; }
+	public override onThemeChanged(): boolean { return true; }
+	public override onZonesChanged(): boolean { return true; }
 
 	public render(context: EditorRenderingContext): void {
 		this.lastRenderingContext = context;
@@ -293,7 +310,7 @@ export class ViewLinesGpu extends Disposable {
 	}
 
 	private isRenderingContextCurrent(context: EditorRenderingContext, visualLines: EditorVisualLineProjection): boolean {
-		return context.layout.modelVersion === this.options.model.version && visualLines.modelVersion === this.options.model.version;
+		return context.viewportData.modelVersion === this.options.model.version && visualLines.modelVersion === this.options.model.version;
 	}
 
 	private validateRenderedLines(visualLines: EditorVisualLineProjection, renderedLines: ReadonlyMap<number, ViewLine>): void {

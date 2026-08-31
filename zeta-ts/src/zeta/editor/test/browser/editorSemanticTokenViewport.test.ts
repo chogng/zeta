@@ -32,7 +32,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { View } = await import("../../browser/view.js");
+const { TestView: View } = await import("./viewModel/testViewModel.js");
 const { EditorLineWrapping } = await import("../../common/config/editorOptions.js");
 
 test("Viewport projects tokens only for virtualized lines and preserves overlapping rows", () => {
@@ -52,7 +52,6 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
 		container,
 		model,
 		lineHeight: 20,
-		overscanLineCount: 0,
 		textMeasurer: new FixedTextMeasurer(),
 		semanticTokenSource: source,
 	});
@@ -210,7 +209,6 @@ test("Viewport resolves semantic tokens only for virtualized lines", () => {
 		container,
 		model,
 		lineHeight: 20,
-		overscanLineCount: 0,
 		textMeasurer: new FixedTextMeasurer(),
 		semanticTokenSource: source,
 	});

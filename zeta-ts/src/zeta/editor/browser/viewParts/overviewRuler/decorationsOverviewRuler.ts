@@ -1,4 +1,5 @@
 import { type DiagnosticOverviewMarker, type DiffOverviewMarker, OverviewRuler } from './overviewRuler.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 const OVERVIEW_RULER_WIDTH = 6;
 
@@ -14,8 +15,8 @@ export interface DecorationsOverviewRulerOptions {
 
 /** Projects diagnostic and diff markers into the editor's overview ruler. */
 export class DecorationsOverviewRuler extends OverviewRuler {
-	constructor(options: DecorationsOverviewRulerOptions) {
-		super({
+	constructor(context: ViewContext, options: DecorationsOverviewRulerOptions) {
+		super(context, {
 			host: options.host,
 			className: 'stanza-editor-overview-ruler',
 			width: OVERVIEW_RULER_WIDTH,

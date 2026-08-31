@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import("../../../../browser/view.js");
+const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { GotoLineController, isStanzaGotoLineChord } = await import("../../browser/quickAccessController.js");
 
 test("Go to Line previews locally, accepts a line and column, and cancels without changing selections", () => {

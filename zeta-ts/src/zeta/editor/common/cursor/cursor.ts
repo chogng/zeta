@@ -334,16 +334,13 @@ export class CursorsController extends Disposable {
 		return this.context.readOnly;
 	}
 
-	setSelections(selections: readonly Selection[]): void {
+	setSelections(selections: readonly Selection[], reason = CursorChangeReason.NotSet): void {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("set selections");
 		this.breakHistoryGroup();
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
-		this.installSelections(
-			selections,
-			CursorChangeReason.NotSet,
-		);
+		this.installSelections(selections, reason);
 	}
 
 	/** Records one cursor-only selection transition that `undoCursorOperation` may restore. */

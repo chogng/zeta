@@ -4,7 +4,7 @@
 
 ## 当前结论
 
-- 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 589 个，VS Code Editor 729 个；380 个同路径，209 个仅本地，349 个仅上游。
+- 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 729 个；381 个同路径，209 个仅本地，348 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
 - 账目摘要：初始确认 118 组同名声明结构差异，已处理 28 组，剩余 90 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
 - 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题，也不新增 Editor 生产文件。
@@ -64,8 +64,8 @@
 | `browser/controller/editContext/native/screenReaderContentRich.ts` | `RichScreenReaderContent` | 已恢复公开名并由 `ScreenReaderSupport` 实际选择；配置事件和视图渲染阶段仍待收敛 |
 | `browser/controller/editContext/native/screenReaderContentSimple.ts` | `SimpleScreenReaderContent` | 已恢复公开名并实际承担简单无障碍镜像；选择同步和 `ViewContext` 构造契约仍待收敛 |
 | `browser/controller/editContext/native/screenReaderSupport.ts` | `ScreenReaderSupport` | 已恢复公开名并由 `NativeEditContext` 持有；视图事件与 prepare/render 生命周期仍待收敛 |
-| `browser/controller/editContext/textArea/textAreaEditContext.ts` | `TextAreaEditContext` | 已恢复公开名、按编辑器 ID 注册和真实输入调用链；仍缺 `ViewPart` 事件与渲染阶段 |
-| `browser/controller/editContext/textArea/textAreaEditContextInput.ts` | `TextAreaInput` | 已恢复公开名并真实负责 textarea DOM 事件、焦点、选区和释放；host 事件契约仍待收敛 |
+| `browser/controller/editContext/textArea/textAreaEditContext.ts` | `TextAreaEditContext` | 已恢复公开名、按编辑器 ID 注册、`getTextAreaDomNode` 和真实输入调用链；仍缺 `ViewPart` 事件与渲染阶段 |
+| `browser/controller/editContext/textArea/textAreaEditContextInput.ts` | `TextAreaInput` | 已恢复公开名并由 `focusTextArea`、DOM 事件、选区和释放形成真实调用链；host 事件契约仍待收敛 |
 | `browser/gpu/atlas/textureAtlas.ts` | `TextureAtlas` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/atlas/textureAtlasPage.ts` | `TextureAtlasPage` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/atlas/textureAtlasShelfAllocator.ts` | `TextureAtlasShelfAllocator` | 本地职责已改名或移出上游 owner |
@@ -76,44 +76,44 @@
 | `browser/gpu/renderStrategy/fullFileRenderStrategy.ts` | `FullFileRenderStrategy` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/renderStrategy/viewportRenderStrategy.ts` | `ViewportRenderStrategy` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/viewGpuContext.ts` | `ViewGpuContext` | 本地职责已改名或移出上游 owner |
-| `browser/viewParts/overlayWidgets/overlayWidgets.ts` | `ViewOverlayWidgets` | 已恢复上游公开名、成员边界、DOM owner、配置更新、布局缓存和 widget 生命周期 |
-| `browser/view/viewOverlays.ts` | `ViewOverlays` | 本地职责已改名或移出上游 owner |
-| `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 旧账误标为已处理；本地仍继承 `EditorViewPart` 并按整帧 `EditorRenderingContext` 直接写 DOM，上游契约继承 `ViewEventHandler`、按可见行返回渲染片段；必须随 `ViewContext`、`ViewPart`、`ViewOverlays` 和各 overlay 的事件生命周期整链迁移 |
+| `browser/viewParts/overlayWidgets/overlayWidgets.ts` | `ViewOverlayWidgets` | 已恢复公开名、`ViewPart` 生命周期、DOM owner、布局缓存和 widget 生命周期；剩余成员差异继续按真实调用方收敛 |
+| `browser/view/viewOverlays.ts` | `ViewOverlays` | 已恢复 `ViewPart` owner、`addDynamicOverlay`、统一可见行 DOM 和 `ContentViewOverlays` / `MarginViewOverlays`；逐行覆盖层不再各建一套行容器 |
+| `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 已继承 `ViewEventHandler`，渲染契约改为 `prepareRender(context)` 后按行号返回片段；不再继承 Part 或直接持有编辑器 DOM |
 | `browser/view/viewController.ts` | `ViewController` | 已接管 edit context、组合输入、焦点、命令路由和 `dispatchMouse` 选区策略，真实覆盖拖选、单词、整行、列选及多光标；构造契约、剪贴板委托和剩余公开成员仍待随 `ViewContext` 收敛 |
 | `browser/viewParts/gpuMark/gpuMark.ts` | `GpuMarkOverlay` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 本地职责已改名或移出上游 owner |
-| `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 本地 scheduler 实现改为 `EditorBlockDecorations` |
-| `browser/viewParts/contentWidgets/contentWidgets.ts` | `ViewContentWidgets` | 本地 scheduler 实现改为 `EditorContentWidgets` |
-| `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 本地 scheduler 实现改为 `EditorCurrentLineHighlightOverlay` |
-| `browser/viewParts/decorations/decorations.ts` | `DecorationsOverlay` | 本地 scheduler 实现改为 `EditorDecorationsOverlay` |
-| `browser/viewParts/editorScrollbar/editorScrollbar.ts` | `EditorScrollbar` | 本地 scheduler 实现改为 `EditorViewportScrollbar` |
-| `browser/viewParts/glyphMargin/glyphMargin.ts` | `GlyphMarginWidgets` | 本地 scheduler 实现改为 `EditorGlyphMarginWidgets` |
-| `browser/viewParts/indentGuides/indentGuides.ts` | `IndentGuidesOverlay` | 本地 scheduler 实现改为 `EditorIndentGuidesOverlay` |
-| `browser/viewParts/lineNumbers/lineNumbers.ts` | `LineNumbersOverlay` | 本地 scheduler 实现改为 `EditorLineNumbersOverlay` |
-| `browser/viewParts/linesDecorations/linesDecorations.ts` | `LinesDecorationsOverlay` | 本地 scheduler 实现改为 `EditorLinesDecorationsOverlay` |
-| `browser/viewParts/margin/margin.ts` | `Margin` | 本地 scheduler 实现改为 `EditorMargin` |
-| `browser/viewParts/marginDecorations/marginDecorations.ts` | `MarginViewLineDecorationsOverlay` | 本地 scheduler 实现改为 `EditorMarginLineDecorationsOverlay` |
-| `browser/viewParts/minimap/minimap.ts` | `Minimap` | 本地 scheduler 实现改为 `EditorMinimap` |
-| `browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` | `DecorationsOverviewRuler` | 本地 scheduler 实现改为 `EditorDecorationsOverviewRuler` |
-| `browser/viewParts/overviewRuler/overviewRuler.ts` | `OverviewRuler` | 本地 scheduler 实现改为 `EditorOverviewRuler` |
-| `browser/viewParts/rulers/rulers.ts` | `Rulers` | 本地 scheduler 实现改为 `EditorRulers` |
-| `browser/viewParts/scrollDecoration/scrollDecoration.ts` | `ScrollDecorationViewPart` | 本地 scheduler 实现改为 `EditorScrollDecorationViewPart` |
-| `browser/viewParts/selections/selections.ts` | `SelectionsOverlay` | 本地 scheduler 实现改为 `EditorSelectionsOverlay` |
-| `browser/viewParts/viewCursors/viewCursor.ts` | `ViewCursor` | 本地 scheduler 实现改为 `EditorViewCursor` |
-| `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 本地 scheduler 实现改为 `EditorViewCursors` |
+| `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 已作为独立 `ViewPart` 持有块级 DOM，不再混入逐行覆盖层 |
+| `browser/viewParts/contentWidgets/contentWidgets.ts` | `ViewContentWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
+| `browser/viewParts/decorations/decorations.ts` | `DecorationsOverlay` | 已恢复逐行片段职责、装饰快照和失效事件 owner，并由 `ContentViewOverlays` 持有 |
+| `browser/viewParts/editorScrollbar/editorScrollbar.ts` | `EditorScrollbar` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/glyphMargin/glyphMargin.ts` | `GlyphMarginWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/indentGuides/indentGuides.ts` | `IndentGuidesOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
+| `browser/viewParts/lineNumbers/lineNumbers.ts` | `LineNumbersOverlay` | 已从独立 Part 改为 margin 逐行覆盖层，并由 `MarginViewOverlays` 持有 |
+| `browser/viewParts/linesDecorations/linesDecorations.ts` | `LinesDecorationsOverlay` | 已恢复逐行片段职责并由 `MarginViewOverlays` 持有 |
+| `browser/viewParts/margin/margin.ts` | `Margin` | 已恢复公开名和 `ViewPart` 生命周期，并持有 margin 覆盖层、视图区与 glyph margin DOM |
+| `browser/viewParts/marginDecorations/marginDecorations.ts` | `MarginViewLineDecorationsOverlay` | 已恢复逐行片段职责并由 `MarginViewOverlays` 持有 |
+| `browser/viewParts/minimap/minimap.ts` | `Minimap` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` | `DecorationsOverviewRuler` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/overviewRuler/overviewRuler.ts` | `OverviewRuler` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/rulers/rulers.ts` | `Rulers` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/scrollDecoration/scrollDecoration.ts` | `ScrollDecorationViewPart` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/selections/selections.ts` | `SelectionsOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
+| `browser/viewParts/viewCursors/viewCursor.ts` | `ViewCursor` | 已恢复公开名并由 `ViewCursors` 独立持有 |
+| `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 已从逐行覆盖层移回独立 `ViewPart`，持有光标 DOM、组合输入显示和移动动画 |
 | `browser/viewParts/viewLines/viewLine.ts` | `ViewLine` | 本地 scheduler 实现改为 `ViewLine` |
 | `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 本地 scheduler 实现改为 `ViewLineOptions` |
 | `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 本地 scheduler 实现改为 `ViewLines` |
-| `browser/viewParts/viewZones/viewZones.ts` | `ViewZones` | 本地 scheduler 实现改为 `EditorViewZones` |
-| `browser/viewParts/whitespace/whitespace.ts` | `WhitespaceOverlay` | 本地 scheduler 实现改为 `EditorWhitespaceOverlay` |
+| `browser/viewParts/viewZones/viewZones.ts` | `ViewZones` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/whitespace/whitespace.ts` | `WhitespaceOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
 | `browser/widget/codeEditor/codeEditorContributions.ts` | `CodeEditorContributions` | 本地多 context contribution owner 改为 `WidgetContributionCollection` |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | `DiffEditorWidget` | 本地只读虚拟化审阅面板改为 `EditorDiffWidget` |
 | `browser/widget/multiDiffEditor/multiDiffEditorWidget.ts` | `MultiDiffEditorWidget` | 本地多文件审阅面板改为 `EditorMultiDiffWidget` |
-| `browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | `ViewLinesGpu` | 本地职责已改名或移出上游 owner |
+| `browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | `ViewLinesGpu` | 已接入 `ViewPart` 事件、渲染和释放链；`IViewLines` 几何查询契约及 GPU 私有成员仍待继续收敛 |
 | `common/services/languageService.ts` | `LanguageService` | 已按上游契约对齐 |
 | `common/services/languageFeatures.ts` | `ILanguageFeaturesService` | 本地 provider 集合契约改为 `IEditorLanguageFeaturesService` |
 | `common/services/languageFeaturesService.ts` | `LanguageFeaturesService` | 本地 provider registry 改为 `EditorLanguageFeaturesService` |
-| `common/viewLayout/viewLayout.ts` | `ViewLayout` | 本地 viewport layout owner 改为 `EditorViewportLayoutManager` |
+| `common/viewLayout/viewLayout.ts` | `ViewLayout` | 已恢复标准构造入口、配置更新和 `Scrollable` 所有权；生产由唯一 `ViewModel` 持有，内容/滚动尺寸、当前视口、行坐标、可见行、空白区、特殊行高以及滚动/内容尺寸事件均由它发布；`View` 只读取布局结果，不再创建或更新第二份布局 |
 | `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 已恢复上游公开名与成员边界；selection offset 归并留在文件私有 helper，不再伪装成 class API |
 | `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 已恢复上游公开名与 `_runAutoClosingOvertype` 内部阶段，现有多光标 overtype 行为保持不变 |
 | `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 文件正文与上游一致，但生产键盘导航仍走仅本地的 `cursorNavigation.ts`，尚未形成 `CursorMoveCommands → MoveOperations` 调用链 |
@@ -163,15 +163,15 @@
 | --- | --- | --- | --- |
 | 1 | Platform 配置与语言身份 | 配置 override 事件、全局 Registry、Modes Registry、语言实例 Registry 和语言配置 Registry 未形成上游链；现有语言配置服务有 28 个生产调用方 | 先统一配置键、override 与 Registry，再迁移语言身份和语言配置调用方，删除旧 owner |
 | 2 | TextModel parts | `ITextModel` 成员、模型部件事件和 ViewModel 注册链已闭合；实现类仍保留 Zeta 文档块、行身份与历史能力，并与上游私有阶段存在差异 | 明确这些 Zeta 能力在同一 TextModel 内的长期边界，继续统一基础模型私有 owner，不为私有常量或字段制造同名壳 |
-| 3 | ViewModel 与 Cursor | `CursorsController` 仍使用 `SelectionSet + EditorEditCommand`，并早于 `ViewModelLines` 创建；Cursor 目录 7 个仅本地文件仍承载上游职责 | 建立 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor` 唯一链，迁移调用方后删除 7 个旧文件 |
-| 4 | ViewContext、ViewPart 与 View | 23 个同路径 View Part 被本地 scheduler 类占用，事件、render 阶段和释放由手工 coordinator 调度；同路径 `ViewModel` 未进入生产入口，并仍依赖当前缺失的 `ViewLayout`、`IViewModelLines` 和另一套光标控制契约 | 先闭合 ViewModel 的布局、投影行和光标依赖，再恢复 ViewContext 事件与 ViewPart 生命周期，最后迁移 View 和全部 Part；不能增加适配层或逐个复制叶子类 |
+| 3 | ViewModel 与 Cursor | 生产构造链已收敛为 `CodeEditorWidget → ViewModel → View`；行映射、坐标转换、光标、布局、装饰和事件只有一份，`ViewModelLinesFromProjectedModel` 只由 `ViewModel` 创建。当前缺口是输入与 contribution 仍通过内部光标执行器工作，Widget 还保留获取该执行器的内部入口 | 将选择、输入、组合输入、命令执行和只读事件逐项改为 `ViewModel` 契约，删除内部执行器入口；相关调用方完成迁移后再把本切片计为完成 |
+| 4 | ViewContext、ViewPart 与 View | `ViewContext → ViewPart → View` 生命周期已经接通，`EditorViewPart` 与手工集合已移除；内容/margin 覆盖层统一逐行 DOM，块装饰和光标回到独立 Part。当前缺口集中在输入 Part、`RenderingContext` 精确成员和 GPU 的 `IViewLines` 几何查询 | 继续迁移输入 Part 与渲染上下文成员，再完成 GPU 几何查询；不保留第二套调度框架 |
 | 5 | CodeEditor Widget 与服务 | `CodeEditorWidget`、`ICodeEditor`、编辑器服务和 contribution 生命周期不完整；Workbench 仍导入缺失的 Diff/MultiDiff canonical export | Widget、服务、贡献初始化、model attach/detach、view state 和公开对象身份同批闭环 |
 | 6 | GPU 与 Editor contribution | Styled GPU 是一条独立生产链；19 个 contribution 通过改成 `Editor*` 隐藏同路径声明缺口 | GPU 按 atlas→rasterizer→strategy→context→ViewLinesGpu 整链迁移；contribution 随各自 Widget/服务 owner 迁移 |
 
 ## 验证状态
 
-- 文件集合审计：380 个同路径、0 个大小写错误、209 个仅本地、347 个仅上游；Zeta 589 个生产文件，VS Code 727 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
+- 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、348 个仅上游；Zeta 590 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
 - 118 项账本校验通过：28 项已处理、90 项待处理、总计 118 个唯一声明。
-- `tsconfig.stanza.json --noEmit` 通过；LineHeights 5 项、LinesLayout 3 项、布局链 11 项、Piece Tree 8 项、ModelService 5 项、Standalone 13 项与编辑器服务 4 项定向测试通过。TextModel 27 项、稳定滚动/CodeLens/Widget 18 项、Folding decoration 生产链 2 项和主题 token 3 项测试通过；`DynamicViewOverlay` 的旧测试只覆盖本地调度方式，不能证明对应契约已对齐；`TextModel` 实现类仍未计入 118 项完成数。
+- `tsconfig.stanza.json --noEmit` 与 `tsconfig.extensions-test.json --noEmit` 通过；整个 `editor` 测试集合通过。完整测试类型检查仍只有 Sessions 与 Workbench Chat 的 9 个既有错误；生产 Widget 已接入唯一 ViewModel，但输入与 contribution 尚未移除内部光标入口，因此当前不从 118 项账目中扣减。
 - `tsconfig.test.json` 仍报告 9 个已有错误，集中在 Sessions 与 Workbench Chat；本轮 Editor 文件没有新增类型错误。
 - 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 96 项中扣减。

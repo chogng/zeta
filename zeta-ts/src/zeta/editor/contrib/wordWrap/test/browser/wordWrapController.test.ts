@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import("../../../../browser/view.js");
+const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { EditorLineWrapping } = await import("../../../../common/config/editorOptions.js");
 const { WordWrapController } = await import("../../browser/wordWrapController.js");
 

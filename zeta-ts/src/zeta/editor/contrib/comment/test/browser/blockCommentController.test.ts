@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import("../../../../browser/view.js");
+const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { BlockCommentController } = await import("../../browser/blockCommentController.js");
 
 test("Block comment shortcut toggles the active language pair locally", () => {

@@ -3,10 +3,10 @@ import { h, reset } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
 import { DecorationsOverlay } from "../decorations/decorations.js";
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
+import { type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorations.js";
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { ViewPartRows } from '../../view/viewLayer.js';
 
 export interface LinesDecorationLaneLayout {
 	readonly owner: string;
@@ -16,31 +16,29 @@ export interface LinesDecorationLaneLayout {
 
 /** Owns line-side decoration classes and tooltips for rendered logical lines. */
 export class LinesDecorationsOverlay extends DynamicViewOverlay {
-	public readonly domNode: HTMLElement;
 	private readonly decorations: DecorationsOverlay;
 	private readonly lanes: ReadonlyMap<string, LinesDecorationLaneLayout>;
-	private readonly rows: ViewPartRows;
 
-	constructor(_context: EditorViewContext, host: HTMLElement, decorations: DecorationsOverlay, sources: readonly DecorationSource[]) {
+	constructor(private readonly context: ViewContext, decorations: DecorationsOverlay, sources: readonly DecorationSource[]) {
 		super();
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-lines-decorations-layer', 'stanza-editor-line-lines-decorations'));
-		this.domNode = this.rows.domNode;
+		this.context.addEventHandler(this);
 		this.decorations = decorations;
 		this.lanes = new Map(collectLinesDecorationLanes(sources).map(lane => [lane.owner, lane]));
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		projectStanzaLinesDecorations(
+	public override dispose(): void {
+		this.context.removeEventHandler(this);
+		super.dispose();
+	}
+
+	public prepareRender(context: EditorRenderingContext): void {
+		this.prepareRows(context, (overlay, rows) => projectStanzaLinesDecorations(
 			overlay,
 			this.decorations.visibleDecorations(overlay),
 			this.lanes,
 			context.layout.scrollPosition.left,
-			this.rows.render(context),
-		);
+			rows,
+		));
 	}
 }
 
@@ -88,7 +86,7 @@ function projectStanzaLinesDecorations(
 			} else {
 				element.setAttribute('aria-hidden', 'true');
 			}
-			element.className = 'stanza-editor-line-decoration';
+			element.className = 'cldr stanza-editor-line-decoration';
 			for (const className of classes.flatMap(value => value.trim().split(/\s+/u))) element.classList.add(className);
 			element.dataset.decorationId = String(decoration.id);
 			element.dataset.decorationOwner = presentation.owner;

@@ -64,18 +64,18 @@ export class FloatHorizontalRange {
 }
 
 /** Creates the version-bound context used by one render pass. */
-export function createEditorRenderingContext(layout: EditorViewportLayout, overlay: EditorOverlayContext, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
+export function createEditorRenderingContext(layout: EditorViewportLayout, overlay: EditorOverlayContext, viewportData = createEditorViewportData(layout, overlay.model.version)): EditorRenderingContext {
 	return Object.freeze({
 		layout,
 		viewportData,
-		overlay: overlay.model.version === layout.modelVersion && overlay.visualLineProjection.modelVersion === layout.modelVersion ? overlay : undefined,
+		overlay: overlay.model.version === viewportData.modelVersion && overlay.visualLineProjection.modelVersion === viewportData.modelVersion ? overlay : undefined,
 	});
 }
 
 /** Adapts the common layout snapshot to the line-rendering viewport contract. */
-export function createEditorViewportData(layout: EditorViewportLayout): EditorViewportData {
+export function createEditorViewportData(layout: EditorViewportLayout, modelVersion: number): EditorViewportData {
 	return new EditorViewportData({
-		modelVersion: layout.modelVersion,
+		modelVersion,
 		lineHeight: layout.lineHeight,
 		visibleLines: layout.visibleLines,
 		renderLines: layout.renderLines,

@@ -33,7 +33,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { ViewController } = await import('../../../../browser/view/viewController.js');
-const { View } = await import('../../../../browser/view.js');
+const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { resolveDocumentHighlightPresentation } = await import('../../browser/highlightDecorations.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
 const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.contribution.js');

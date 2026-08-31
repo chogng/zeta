@@ -141,8 +141,8 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { View } = await import(
-	"../../browser/view.js"
+const { TestView: View } = await import(
+	"./viewModel/testViewModel.js"
 );
 
 test("Viewport maps client coordinates through its bounds and scroll state", () => {

@@ -27,7 +27,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import('../../../../browser/view.js');
+const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { LanguageEditingAdapter, ViewController } = await import('../../../../browser/view/viewController.js');
 const { LinkedEditingContribution } = await import('../../browser/linkedEditing.js');
 

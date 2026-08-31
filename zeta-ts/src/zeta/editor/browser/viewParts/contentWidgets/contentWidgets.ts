@@ -6,7 +6,8 @@ import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidg
 import { type IPosition, Position } from '../../../common/core/position.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { PositionAffinity } from '../../../common/model.js';
-import { PartFingerprint, PartFingerprints, type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
+import { PartFingerprint, PartFingerprints, type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 interface ViewContentWidgetsOptions {
 	readonly viewDomNode: HTMLElement;
@@ -37,13 +38,13 @@ interface InViewportRenderData {
 
 type RenderData = InViewportRenderData | OffViewportRenderData;
 
-export class ViewContentWidgets extends EditorViewPart {
+export class ViewContentWidgets extends ViewPart {
 	public readonly domNode: FastDomNode<HTMLDivElement>;
 	public readonly overflowingContentWidgetsDomNode: FastDomNode<HTMLDivElement>;
 	private readonly widgets = this._register(new DisposableMap<string, ContentWidget>());
 
-	constructor(private readonly options: ViewContentWidgetsOptions) {
-		super();
+	constructor(context: ViewContext, private readonly options: ViewContentWidgetsOptions) {
+		super(context);
 		this.domNode = createFastDomNode(options.viewDomNode.ownerDocument.createElement('div'));
 		PartFingerprints.write(this.domNode, PartFingerprint.ContentWidgets);
 		this.domNode.setClassName('stanza-editor-content-widgets');

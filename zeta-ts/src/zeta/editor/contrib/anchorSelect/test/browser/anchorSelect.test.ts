@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
-const { View } = await import('../../../../browser/view.js');
+const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { SelectionAnchorController } = await import('../../browser/anchorSelect.js');
 
 test.after(() => browserEnvironment.window.close());

@@ -1,26 +1,27 @@
 import { type FastDomNode } from '../../../base/browser/fastDomNode.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
+import { ViewEventHandler } from '../../common/viewEventHandler.js';
+import { type ViewContext } from '../../common/viewModel/viewContext.js';
 import { type EditorRenderingContext } from './renderingContext.js';
 
 export type { EditorRenderingContext } from './renderingContext.js';
 
-export class EditorViewContext {
-	constructor(
-		private readonly readLayout: () => EditorViewportLayout,
-		private readonly createRenderingContext: (layout: EditorViewportLayout) => EditorRenderingContext,
-	) { }
+export abstract class ViewPart extends ViewEventHandler {
+	protected readonly _context: ViewContext;
 
-	public get layout(): EditorViewportLayout {
-		return this.readLayout();
+	constructor(context: ViewContext) {
+		super();
+		this._context = context;
+		this._context.addEventHandler(this);
 	}
 
-	public get renderingContext(): EditorRenderingContext {
-		return this.createRenderingContext(this.layout);
+	public override dispose(): void {
+		this._context.removeEventHandler(this);
+		super.dispose();
 	}
-}
 
-export abstract class EditorViewPart extends Disposable {
+	public onBeforeRender(_viewportData: EditorRenderingContext['viewportData']): void {
+	}
+
 	public prepareRender(_context: EditorRenderingContext): void {
 	}
 
@@ -64,27 +65,5 @@ export class PartFingerprints {
 			child = child.parentElement;
 		}
 		return Uint8Array.from(fingerprints.reverse());
-	}
-}
-
-export class EditorViewPartCollection extends Disposable {
-	private readonly parts: EditorViewPart[] = [];
-
-	public register<TPart extends EditorViewPart>(part: TPart): TPart {
-		this.parts.push(part);
-		this._register(part);
-		return part;
-	}
-
-	public prepareRender(context: EditorRenderingContext): void {
-		for (const part of this.parts) {
-			part.prepareRender(context);
-		}
-	}
-
-	public render(context: EditorRenderingContext): void {
-		for (const part of this.parts) {
-			part.render(context);
-		}
 	}
 }

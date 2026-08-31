@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EditorLineWrapping } from "../../common/config/editorOptions.js";
 import { FontInfo } from "../../common/config/fontInfo.js";
-import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
+import { ViewModelLinesFromProjectedModel } from "../../common/viewModel/viewModelLines.js";
 import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
@@ -82,8 +82,8 @@ class FixedTextMeasurer implements TextMeasurer {
 	}
 }
 
-function createViewModelLines(model: TextModel, options: ConstructorParameters<typeof ViewModelLines>[4] = {}): ViewModelLines {
-	return new ViewModelLines(
+function createViewModelLines(model: TextModel, options: ConstructorParameters<typeof ViewModelLinesFromProjectedModel>[4] = {}): ViewModelLinesFromProjectedModel {
+	return new ViewModelLinesFromProjectedModel(
 		model,
 		new DOMLineBreaksComputerFactory(new WeakRef({} as Window), new FixedTextMeasurer()),
 		TEST_FONT_INFO,

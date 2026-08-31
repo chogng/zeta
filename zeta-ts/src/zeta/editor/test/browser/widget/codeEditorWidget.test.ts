@@ -35,6 +35,8 @@ for (const [name, value] of Object.entries({
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { NativeEditContext } = await import('../../../browser/controller/editContext/native/nativeEditContext.js');
+const { NativeEditContextRegistry } = await import('../../../browser/controller/editContext/native/nativeEditContextRegistry.js');
+const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
 const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
@@ -50,6 +52,7 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
 	const editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20, ariaLabel: "Code" });
+	const ownerId = editor.ownerId;
 
 	editor.layout({ width: 320, height: 80 });
 	const fontTarget = dom.window.document.createElement('span');
@@ -58,11 +61,13 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(editor.element.parentElement, container);
 	assert.equal(editor.element.getAttribute("aria-label"), "Code");
 	assert.equal(editor.view.element.getAttribute("aria-label"), "Code");
+	assert.strictEqual(TextAreaEditContextRegistry.get(editor.ownerId), editor.view.editContext);
 	assert.deepEqual(editor.viewport.viewportLayout.viewportSize, { width: 320, height: 80 });
 	assert.equal(fontTarget.style.fontFamily, editor.element.style.fontFamily);
 	assert.equal(fontTarget.style.fontFeatureSettings, editor.element.style.fontFeatureSettings);
 
 	editor.dispose();
+	assert.equal(TextAreaEditContextRegistry.get(ownerId), undefined);
 	assert.equal(editor.element.isConnected, false);
 	assert.equal(model.getText(), "alpha");
 	assert.throws(() => editor.selections.textModel, /already disposed/);
@@ -93,8 +98,10 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
+	const ownerId = editor.ownerId;
 	assert.ok(editor.view.editContext instanceof NativeEditContext);
 	const editContext = editor.view.editContext as InstanceType<typeof NativeEditContext>;
+	assert.strictEqual(NativeEditContextRegistry.get(ownerId), editContext);
 	const input = editContext.domNode as HTMLElement & { editContext?: unknown };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
 
@@ -105,6 +112,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.strictEqual(input.ownerDocument, adoptedDom.window.document);
 	assert.strictEqual(input.editContext, editContext.nativeContext);
 	editor.dispose();
+	assert.equal(NativeEditContextRegistry.get(ownerId), undefined);
 	adoptedDom.window.close();
 	dom.window.close();
 });

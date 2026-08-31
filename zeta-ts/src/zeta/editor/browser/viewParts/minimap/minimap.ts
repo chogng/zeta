@@ -9,7 +9,8 @@ import { type SemanticTokenSource } from '../../../common/services/resolvedSeman
 import { type EditorScrollPosition } from '../../../common/viewModel/editorViewportContracts.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
-import { type EditorRenderingContext, EditorViewPart, PartFingerprint, PartFingerprints } from '../../view/viewPart.js';
+import { type EditorRenderingContext, ViewPart, PartFingerprint, PartFingerprints } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationsOverlayMarker } from '../decorations/decorations.js';
 
 export interface MinimapOptions {
@@ -30,13 +31,13 @@ export interface MinimapOptions {
 }
 
 /** Owns the document overview canvas, viewport indicator, markers, and pointer navigation. */
-export class Minimap extends EditorViewPart {
+export class Minimap extends ViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly canvas: HTMLCanvasElement;
 	private dragging = false;
 
-	constructor(private readonly source: MinimapOptions) {
-		super();
+	constructor(context: ViewContext, private readonly source: MinimapOptions) {
+		super(context);
 		this.domNode = h(source.host.ownerDocument, 'div');
 		this.domNode.className = 'minimap';
 		this.domNode.setAttribute('role', 'presentation');

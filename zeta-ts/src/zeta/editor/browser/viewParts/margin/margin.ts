@@ -4,7 +4,8 @@ import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
-import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { ViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 const GUTTER_HORIZONTAL_PADDING = 16;
 
@@ -23,7 +24,7 @@ export interface MarginOptions {
 }
 
 /** Owns editor margin geometry and its background. */
-export class Margin extends EditorViewPart {
+export class Margin extends ViewPart {
 	public static readonly CLASS_NAME = 'glyph-margin';
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
@@ -37,8 +38,8 @@ export class Margin extends EditorViewPart {
 	private readonly lineDecorationsWidth: number;
 	private lineHeight: number;
 
-	constructor(options: MarginOptions) {
-		super();
+	constructor(context: ViewContext, options: MarginOptions) {
+		super(context);
 		this.host = options.host;
 		this.contentElement = options.contentElement;
 		this.model = options.model;

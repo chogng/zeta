@@ -1,7 +1,7 @@
 import { IEditorConfiguration } from '../config/editorConfiguration.js';
 import { ViewEventHandler } from '../viewEventHandler.js';
 import { IViewLayout, IViewModel } from '../viewModel.js';
-import { IColorTheme } from '../../../platform/theme/common/themeService.js';
+import { IColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { EditorTheme } from '../editorTheme.js';
 
 export class ViewContext {
@@ -30,5 +30,4 @@ export class ViewContext {
 		this.viewModel.removeViewEventHandler(eventHandler);
 	}
 }
-
 

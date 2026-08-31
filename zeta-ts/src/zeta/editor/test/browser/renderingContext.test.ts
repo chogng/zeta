@@ -3,67 +3,10 @@ import test from 'node:test';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 import { createEditorRenderingContext, type EditorOverlayContext, type EditorRenderingContext } from '../../browser/view/renderingContext.js';
-import { EditorViewContext, EditorViewPart, EditorViewPartCollection } from '../../browser/view/viewPart.js';
-
-test('EditorViewPartCollection prepares every part before rendering with one context', () => {
-	const layout = {} as EditorViewportLayout;
-	const renderingContext = { layout, overlay: undefined } as EditorRenderingContext;
-	const phases: string[] = [];
-	const received: EditorRenderingContext[] = [];
-	using parts = new EditorViewPartCollection();
-
-	parts.register(new RecordingPart('first', phases, received));
-	parts.register(new RecordingPart('second', phases, received));
-
-	parts.prepareRender(renderingContext);
-	parts.render(renderingContext);
-
-	assert.deepEqual(phases, ['prepare:first', 'prepare:second', 'render:first', 'render:second']);
-	assert.equal(received.length, 4);
-	for (const context of received) {
-		assert.equal(context, renderingContext);
-	}
-});
-
-class RecordingPart extends EditorViewPart {
-	constructor(
-		private readonly name: string,
-		private readonly phases: string[],
-		private readonly received: EditorRenderingContext[],
-	) {
-		super();
-	}
-
-	public override prepareRender(context: EditorRenderingContext): void {
-		this.phases.push(`prepare:${this.name}`);
-		this.received.push(context);
-	}
-
-	public render(context: EditorRenderingContext): void {
-		this.phases.push(`render:${this.name}`);
-		this.received.push(context);
-	}
-}
-
-test('EditorViewContext creates a rendering context from the current layout', () => {
-	const layout = {} as EditorViewportLayout;
-	const renderingContext = { layout, overlay: undefined } as EditorRenderingContext;
-	let providedLayout: EditorViewportLayout | undefined;
-	const context = new EditorViewContext(
-		() => layout,
-		provided => {
-			providedLayout = provided;
-			return renderingContext;
-		},
-	);
-
-	assert.equal(context.renderingContext, renderingContext);
-	assert.equal(providedLayout, layout);
-});
 
 test('createEditorRenderingContext omits stale overlay geometry', () => {
-	const layout = { modelVersion: 4 } as EditorViewportLayout;
-	const viewportData = {} as EditorViewportData;
+	const layout = {} as EditorViewportLayout;
+	const viewportData = { modelVersion: 4 } as EditorViewportData;
 	const matchingOverlay = {
 		model: { version: 4 },
 		visualLineProjection: { modelVersion: 4 },
@@ -72,15 +15,15 @@ test('createEditorRenderingContext omits stale overlay geometry', () => {
 		model: { version: 5 },
 		visualLineProjection: { modelVersion: 4 },
 	} as unknown as EditorOverlayContext;
-	const staleLayout = { modelVersion: 3 } as EditorViewportLayout;
+	const staleViewportData = { modelVersion: 3 } as EditorViewportData;
 
 	const current = createEditorRenderingContext(layout, matchingOverlay, viewportData);
 	const stale = createEditorRenderingContext(layout, staleOverlay, viewportData);
-	const staleLayoutContext = createEditorRenderingContext(staleLayout, matchingOverlay, viewportData);
+	const staleViewportContext = createEditorRenderingContext(layout, matchingOverlay, staleViewportData);
 
 	assert.equal(current.overlay, matchingOverlay);
 	assert.equal(stale.overlay, undefined);
-	assert.equal(staleLayoutContext.overlay, undefined);
+	assert.equal(staleViewportContext.overlay, undefined);
 	assert.equal(current.viewportData, viewportData);
 	assert.equal(Object.isFrozen(current), true);
 });

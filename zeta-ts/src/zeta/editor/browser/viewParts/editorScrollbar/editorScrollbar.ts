@@ -5,7 +5,8 @@ import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/vertica
 import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
 import { EditorOptions } from "../../../common/config/editorOptions.js";
 import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
-import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { ViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export type EditorScrollbarVisibility = "auto" | "visible" | "hidden";
 
@@ -25,7 +26,7 @@ export interface EditorScrollbarOptions {
  * scrollbar axes. Native scrolling remains the editor's input and
  * accessibility fallback; this part owns only the visible custom tracks.
  */
-export class EditorScrollbar extends EditorViewPart {
+export class EditorScrollbar extends ViewPart {
 	private static nextViewportId = 1;
 	private readonly container: HTMLElement;
 	private readonly horizontal: HorizontalScrollbar;
@@ -40,8 +41,8 @@ export class EditorScrollbar extends EditorViewPart {
 	private lastScrollPosition: EditorScrollPosition | undefined;
 	private readonly scrollActivityScheduler: RunOnceScheduler;
 
-	constructor(options: EditorScrollbarOptions) {
-		super();
+	constructor(context: ViewContext, options: EditorScrollbarOptions) {
+		super(context);
 		if (!options.container || !options.viewport) {
 			throw new TypeError("Editor scrollbar part requires a container and viewport");
 		}

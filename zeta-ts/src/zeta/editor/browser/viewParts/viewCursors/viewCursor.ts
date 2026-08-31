@@ -3,7 +3,7 @@ import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDom
 import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
 import * as strings from '../../../../base/common/strings.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
-import { TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
+import { EditorOption, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
 import { type BareFontInfo } from '../../../common/config/fontInfo.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
@@ -12,7 +12,7 @@ import { type TextModel } from '../../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { type EditorLineVisibleRange, type EditorOverlayContext, type EditorRenderingContext, type EditorVisiblePosition } from '../../view/renderingContext.js';
-import { type EditorViewContext } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export interface ViewCursorOptions {
 	readonly style: TextEditorCursorStyle;
@@ -77,7 +77,7 @@ export class ViewCursor extends AbstractDisposable {
 	private lastRenderedContent = '';
 
 	constructor(
-		private readonly context: EditorViewContext,
+		private readonly context: ViewContext,
 		host: HTMLElement,
 		selectionIndex: number,
 		options: ViewCursorOptions,
@@ -90,10 +90,10 @@ export class ViewCursor extends AbstractDisposable {
 		this.lineWidth = options.lineWidth;
 		this.lineHeight = options.lineHeight;
 		this.fastDomNode = createFastDomNode(dom.h(host.ownerDocument, 'div'));
-		this.fastDomNode.setClassName('stanza-editor-caret');
+		this.fastDomNode.setClassName('cursor stanza-editor-caret');
 		this.fastDomNode.setAttribute('data-selection-index', String(selectionIndex));
 		this.fastDomNode.setAttribute('aria-hidden', 'true');
-		this.fastDomNode.setHeight(this.context.layout.lineHeight);
+		this.fastDomNode.setHeight(this.context.configuration.options.get(EditorOption.lineHeight));
 		this.fastDomNode.setTop(0);
 		this.fastDomNode.setLeft(0);
 		applyFontInfo(this.fastDomNode, options.fontInfo);
@@ -182,6 +182,7 @@ export class ViewCursor extends AbstractDisposable {
 			return null;
 		}
 		this.fastDomNode.setClassName([
+			'cursor',
 			'stanza-editor-caret',
 			cursorStyleClass(this.style),
 			this.plurality === CursorPlurality.MultiSecondary ? '' : 'primary',

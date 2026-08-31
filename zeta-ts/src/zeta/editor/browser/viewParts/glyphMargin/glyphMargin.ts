@@ -5,7 +5,8 @@ import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
+import { ViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationGlyphMarginPresentation, type DecorationSource, type ResolvedDecoration } from '../decorations/decorations.js';
 import { GlyphMarginLane } from '../../../common/model.js';
 import { type DecorationsOverlay } from '../decorations/decorations.js';
@@ -20,7 +21,7 @@ export interface GlyphMarginWidgetsOptions {
 }
 
 /** Renders decoration-backed glyphs in shared, stable margin lanes. */
-export class GlyphMarginWidgets extends EditorViewPart {
+export class GlyphMarginWidgets extends ViewPart {
 	public readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly decorations: DecorationsOverlay;
@@ -30,8 +31,8 @@ export class GlyphMarginWidgets extends EditorViewPart {
 	private readonly laneDomNodes: ReadonlyMap<GlyphMarginLane, HTMLSpanElement>;
 	private readonly buttons = new Map<TextDecorationId, HTMLButtonElement>();
 
-	constructor(options: GlyphMarginWidgetsOptions) {
-		super();
+	constructor(context: ViewContext, options: GlyphMarginWidgetsOptions) {
+		super(context);
 		this.decorations = options.decorations;
 		this.readVisualLines = options.readVisualLines;
 		this.readLeft = options.readLeft;

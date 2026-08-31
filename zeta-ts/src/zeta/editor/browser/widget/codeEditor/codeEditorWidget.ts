@@ -1,4 +1,4 @@
-import { getClientArea, isHTMLElement } from "../../../../base/browser/dom.js";
+import { getClientArea, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -19,7 +19,7 @@ import { MouseHandler } from "../../controller/mouseHandler.js";
 import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions, type CodeEditorContribution, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
 import { observableCodeEditor } from '../../observableCodeEditor.js';
-import { type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
+import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
 import { getTextEditorCapabilityContributions, type EditorCapability, type EditorCommandEvent, type TextEditorContributionContext } from '../../editorExtensions.js';
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
@@ -31,7 +31,7 @@ import { LanguageFeaturesService } from '../../../common/services/languageFeatur
 import { ResolvedSemanticTokensService } from '../../../common/services/resolvedSemanticTokensService.js';
 import { LanguageEditingAdapter } from '../../view/viewController.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
-import { EditorOption, EditorOptions, type EditorLayoutInfo, type EditorLineWrapping, type FindComputedEditorOptionValueById, WrappingIndent } from '../../../common/config/editorOptions.js';
+import { EditorLineWrapping, EditorOption, EditorOptions, type EditorLayoutInfo, type FindComputedEditorOptionValueById, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type LanguageCompletionWorkerFactory } from '../../../common/languages/completion/languageCompletionService.js';
 import { type ILanguageDiagnosticsService } from '../../../common/services/languageDiagnosticsService.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/ownedCompletionsEnablement.js';
@@ -48,8 +48,14 @@ import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type IClipboardPasteEvent } from '../../controller/editContext/clipboardUtils.js';
+import { DOMLineBreaksComputerFactory } from '../../view/domLineBreaksComputer.js';
+import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
+import { getViewModelCursorController, ViewModel } from '../../../common/viewModel/viewModelImpl.js';
+import { OutgoingViewModelEventKind } from '../../../common/viewModelEventDispatcher.js';
+import { IThemeService, ThemeService } from '../../../../platform/theme/common/themeService.js';
+import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 
-export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, 'container' | 'model' | 'lineHeight' | 'ariaLabel' | 'selectionController'>;
+export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, 'container' | 'viewModel' | 'configuration' | 'lineHeight' | 'ariaLabel'>;
 
 export interface EditorContextMenuRequest {
 	readonly position: Position;
@@ -167,6 +173,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	readonly userInputEvents: ViewController['userInputEvents'];
 	readonly contributions: CodeEditorContributions;
 	private readonly instantiationService: IInstantiationService;
+	private readonly viewModel: ViewModel;
+	private readonly configuration: EditorConfiguration;
 	private readonly decorationOwnerId = ++decorationOwnerPool;
 
 	constructor(options: CodeEditorWidgetOptions) {
@@ -175,6 +183,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		try {
 			validateOptions(options);
 			migrateOptions(options);
+			const services = this._register(options.instantiationService?.createChild() ?? new ServiceContainer());
+			this.instantiationService = services;
+			const inheritedThemeService = services.getOptional(IThemeService);
+			const themeService = inheritedThemeService ?? this._register(new ThemeService(darkColorTheme));
+			if (!inheritedThemeService) services.registerInstance(IThemeService, themeService);
 			const onLanguageError = options.onLanguageError ?? options.onContributionError ?? reportLanguageError;
 			const editorWorker = this._register(options.editorWorkerFactory
 				? options.editorWorkerFactory(options.model)
@@ -186,13 +199,39 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const languageConfigurationService = options.languageConfigurationService ?? this._register(createBuiltinLanguageConfigurationService());
 			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService(languageConfigurationService));
 			const resolvedSemanticTokensService = this._register(new ResolvedSemanticTokensService());
-			this.selections = this._register(new CursorsController(
+			this.configuration = this._register(new EditorConfiguration({
+				...options,
+				readOnly: options.input.readOnly,
+				wordWrap: options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off',
+				padding: options.padding === undefined ? undefined : {
+					top: options.padding.top ?? 0,
+					bottom: options.padding.bottom ?? 0,
+				},
+			}, options.container));
+			this.configuration.setModelLineCount(options.model.lineCount);
+			const attachedView = options.model.onBeforeAttached();
+			this._register(toDisposable(() => options.model.onBeforeDetached(attachedView)));
+			const ownerWindow = options.container.ownerDocument.defaultView;
+			if (!ownerWindow) throw new ReferenceError('Code editor requires a browser window');
+			this.viewModel = this._register(new ViewModel(
+				this.decorationOwnerId,
+				this.configuration,
 				options.model,
-				[Selection.fromPositions(new Position(1, 1))],
-				{ readOnly: options.input.readOnly },
+				DOMLineBreaksComputerFactory.create(ownerWindow),
+				MonospaceLineBreaksComputerFactory.create(this.configuration.options),
+				callback => scheduleAtNextAnimationFrame(ownerWindow, callback),
+				languageConfigurationService,
+				themeService,
+				attachedView,
+				{ batchChanges: callback => callback() },
 			));
-			this.onDidAttemptReadOnlyEdit = this.selections.onDidAttemptReadOnlyEdit;
-			this.onDidChangeCursorSelection = listener => this.selections.onDidChange(() => listener());
+			this.selections = getViewModelCursorController(this.viewModel);
+			this.onDidAttemptReadOnlyEdit = listener => this.viewModel.onEvent(event => {
+				if (event.kind === OutgoingViewModelEventKind.ReadOnlyEditAttempt) listener();
+			});
+			this.onDidChangeCursorSelection = listener => this.viewModel.onEvent(event => {
+				if (event.kind === OutgoingViewModelEventKind.CursorStateChanged) listener();
+			});
 			const capabilities = new Map<string, unknown>();
 			const commandEmitter = this._register(new Emitter<EditorCommandEvent>());
 			const executeCommand = <T>(commandId: string, operation: () => T): T => executeEditorCommand(commandEmitter, commandId, operation);
@@ -247,6 +286,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					register: value => this._register(value),
 				});
 			}
+			if (lineProjection) {
+				const syncHiddenAreas = (): void => this.viewModel.setHiddenAreas(readHiddenAreas(options.model, lineProjection!.visibilitySource));
+				syncHiddenAreas();
+				this._register(lineProjection.visibilitySource.onDidChange(syncHiddenAreas));
+			}
 			const languageEditing = this._register(new LanguageEditingAdapter(
 				options.model,
 				this.selections,
@@ -257,16 +301,15 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			));
 			this.viewport = this._register(new View({
 				container: options.container,
-				model: options.model,
+				viewModel: this.viewModel,
+				configuration: this.configuration,
+				theme: themeService.getColorTheme(),
 				lineHeight: options.lineHeight,
 				ariaLabel: options.ariaLabel ?? editorLabel(options.input),
-				selectionController: this.selections,
 				dimension: options.dimension,
 					automaticLayout: options.automaticLayout,
 					cursorOptions: { readOnly: options.input.readOnly, stickyTabStops: options.stickyTabStops },
 					languageId: options.languageId,
-					languageConfigurationService,
-					lineVisibilitySource: lineProjection?.visibilitySource,
 					decorationSources,
 					semanticTokenSource,
 					bracketColorizationSource,
@@ -365,7 +408,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			}));
 			this._register(observableCodeEditor(this));
 			this.contributions = this._register(new CodeEditorContributions());
-			this.instantiationService = this._register(options.instantiationService?.createChild() ?? new ServiceContainer());
 			this.contributions.initialize({
 				editor: this,
 				model: options.model,
@@ -374,7 +416,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				view: this.view,
 				placeholder: options.placeholder,
 			}, this.instantiationService, options.contributions, options.onContributionError);
-			this._register(new KeyboardNavigationController(this.viewport, this.selections, this.userInputEvents, {
+			this._register(new KeyboardNavigationController(this.viewport, this.viewModel, this.userInputEvents, {
 				wordPattern: () => languageConfigurationService.getLanguageConfiguration(options.languageId).getWordDefinition(),
 				stickyTabStops: EditorOptions.stickyTabStops.validate(options.stickyTabStops) as boolean,
 				tabSize: resolveEditorIndentationOptions(options.indentation).tabSize,
@@ -505,36 +547,17 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	saveViewState(): CodeEditorViewState {
-		const selections = this.selections.selections;
-		const ordered = [selections[0]!, ...selections.filter((_, index) => index !== 0)];
-		const scroll = this.viewport.currentLayout.scrollPosition;
 		return Object.freeze({
-			cursorState: ordered.map(selection => ({
-				inSelectionMode: !selection.isEmpty(),
-				selectionStart: selection.getSelectionStart(),
-				position: selection.getPosition(),
-			})),
-			viewState: {
-				scrollTop: scroll.top,
-				scrollTopWithoutViewZones: scroll.top,
-				scrollLeft: scroll.left,
-				firstPosition: new Position(this.viewport.currentLayout.visibleLines.startLineIndex + 1, 1),
-				firstPositionDeltaTop: 0,
-			},
+			cursorState: this.viewModel.saveCursorState(),
+			viewState: this.viewModel.saveState(),
 			contributionsState: {},
 		});
 	}
 
 	restoreViewState(state: CodeEditorViewState): void {
-		const selections = state.cursorState.map(cursor => {
-			const start = Position.lift(cursor.selectionStart);
-			const end = Position.lift(cursor.position);
-			this.viewport.textModel.offsetAt(start);
-			this.viewport.textModel.offsetAt(end);
-			return Selection.fromPositions(start, end);
-		});
-		this.selections.setSelections(selections);
-		this.viewport.scrollTo({ left: state.viewState.scrollLeft, top: state.viewState.scrollTop ?? 0 });
+		this.viewModel.restoreCursorState(state.cursorState);
+		const scroll = this.viewModel.reduceRestoreState(state.viewState);
+		this.viewport.scrollTo({ left: scroll.scrollLeft, top: scroll.scrollTop });
 	}
 
 	getId(): string {
@@ -559,7 +582,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	getPosition(): Position | null {
-		return this.selections.selections[0]?.getPosition() ?? null;
+		return this.viewModel.getPosition();
 	}
 
 	getScrollTop(): number {
@@ -583,23 +606,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	getVisibleRanges(): Range[] {
-		const layout = this.viewport.currentLayout;
-		const projection = this.viewport.getVisualLineProjection();
-		const ranges: Range[] = [];
-		for (let index = layout.visibleLines.startLineIndex; index < layout.visibleLines.endLineIndexExclusive; index += 1) {
-			const line = projection.lineAt(index);
-			if (!line) continue;
-			const next = new Range(line.logicalLineIndex + 1, line.startColumn + 1, line.logicalLineIndex + 1, line.endColumn + 1);
-			const previous = ranges.at(-1);
-			if (previous && previous.endLineNumber === next.startLineNumber && previous.endColumn >= next.startColumn) {
-				ranges[ranges.length - 1] = previous.plusRange(next);
-			} else if (previous && previous.endLineNumber + 1 === next.startLineNumber) {
-				ranges[ranges.length - 1] = previous.plusRange(next);
-			} else {
-				ranges.push(next);
-			}
-		}
-		return ranges;
+		return this.viewModel.getVisibleRanges();
 	}
 
 	getTopForPosition(lineNumber: number, column: number): number {
@@ -624,31 +631,32 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	getSelection(): Selection | null {
-		return this.selections.selections[0] ?? null;
+		return this.viewModel.getSelection();
 	}
 
 	getSelections(): Selection[] {
-		return [...this.selections.selections];
+		return this.viewModel.getSelections();
 	}
 
-	setSelection(selection: ISelection, _source?: string): void {
-		this.selections.setSelections([Selection.liftSelection(selection)]);
+	setSelection(selection: ISelection, source?: string): void {
+		this.viewModel.setSelections(source, [selection]);
 	}
 
-	setSelections(selections: readonly ISelection[], _source?: string): void {
-		this.selections.setSelections(selections.map(selection => Selection.liftSelection(selection)));
+	setSelections(selections: readonly ISelection[], source?: string): void {
+		this.viewModel.setSelections(source, selections);
 	}
 
 	executeCommand(source: string | null | undefined, command: ICommand): void {
-		this.selections.executeCommand(command, source);
+		this.viewModel.executeCommand(command, source);
 	}
 
 	executeCommands(source: string | null | undefined, commands: ICommand[]): void {
-		this.selections.executeCommands(commands, source);
+		this.viewModel.executeCommands(commands, source);
 	}
 
 	pushUndoStop(): boolean {
-		this.selections.pushUndoStop();
+		if (this.configuration.options.get(EditorOption.readOnly)) return false;
+		this.viewport.textModel.pushStackElement();
 		return true;
 	}
 
@@ -691,6 +699,23 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	public getContribution<T extends import('../../../common/editorCommon.js').IEditorContribution>(id: string): T | null {
 		return this.contributions.get(id) as T | undefined ?? null;
 	}
+}
+
+function readHiddenAreas(model: TextModel, source: EditorLineVisibilitySource): Range[] {
+	const ranges: Range[] = [];
+	let startLineNumber: number | undefined;
+	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
+		if (!source.isLineVisible(lineIndex)) {
+			startLineNumber ??= lineIndex + 1;
+			continue;
+		}
+		if (startLineNumber === undefined) continue;
+		const endLineNumber = lineIndex;
+		ranges.push(new Range(startLineNumber, 1, endLineNumber, model.getLineMaxColumn(endLineNumber)));
+		startLineNumber = undefined;
+	}
+	if (startLineNumber !== undefined) ranges.push(new Range(startLineNumber, 1, model.lineCount, model.getLineMaxColumn(model.lineCount)));
+	return ranges;
 }
 
 class EditorDecorationsCollection extends Disposable implements IEditorDecorationsCollection {

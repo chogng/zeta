@@ -1,39 +1,35 @@
 import './whitespace.css';
-import { h, reset } from '../../../../base/browser/dom.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { h } from '../../../../base/browser/dom.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
+import { type IViewModel } from '../../../common/viewModel.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
-import { ViewPartRows } from '../../view/viewLayer.js';
+import { type EditorRenderingContext } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export type WhitespaceRenderingMode = 'none' | 'boundary' | 'selection' | 'trailing' | 'all';
 
 /** Projects whitespace glyphs without changing the text rows used for selection geometry. */
 export class WhitespaceOverlay extends DynamicViewOverlay {
-	public readonly domNode: HTMLElement;
-	private readonly rows: ViewPartRows;
-
 	constructor(
-		_context: EditorViewContext,
-		host: HTMLElement,
+		private readonly context: ViewContext,
 		private readonly model: TextModel,
-		private readonly selectionController: CursorsController | undefined,
+		private readonly viewModel: IViewModel,
 		private readonly mode: WhitespaceRenderingMode,
 	) {
 		super();
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-whitespace-layer', 'stanza-editor-whitespace-row'));
-		this.domNode = this.rows.domNode;
+		this.context.addEventHandler(this);
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		for (const [visualLineIndex, row] of this.rows.render(context)) {
-			reset(row);
+	public override dispose(): void {
+		this.context.removeEventHandler(this);
+		super.dispose();
+	}
+
+	public prepareRender(context: EditorRenderingContext): void {
+		this.prepareRows(context, (overlay, rows) => {
+		for (const [visualLineIndex, row] of rows) {
 			if (this.mode === 'none') {
 				continue;
 			}
@@ -58,17 +54,17 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 					continue;
 				}
 				const marker = h(row.ownerDocument, 'span');
-				marker.className = 'stanza-editor-whitespace';
+				marker.className = 'mwh stanza-editor-whitespace';
 				marker.textContent = character === '\t' ? '→' : '·';
 				marker.style.left = `${overlay.textLeft + overlay.textMeasurer.measureLineWidth(text.slice(0, index))}px`;
 				row.append(marker);
 			}
 		}
+		});
 	}
 
 	private isSelected(lineIndex: number, columnIndex: number): boolean {
-		if (!this.selectionController) return false;
 		const characterRange = Range.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1), new Position((lineIndex) + 1, (columnIndex + 1) + 1));
-		return this.selectionController.selections.some(selection => Range.areIntersecting(selection, characterRange));
+		return this.viewModel.getCursorStates().some(state => Range.areIntersecting(state.modelState.selection, characterRange));
 	}
 }

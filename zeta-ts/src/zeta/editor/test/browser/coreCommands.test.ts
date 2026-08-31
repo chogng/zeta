@@ -21,7 +21,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import("../../browser/view.js");
+const { TestView: View } = await import("./viewModel/testViewModel.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
 await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');

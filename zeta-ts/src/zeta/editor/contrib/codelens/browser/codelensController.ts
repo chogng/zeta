@@ -28,8 +28,6 @@ export class CodeLensContribution extends Disposable {
 	private refreshPromise: Promise<void> | undefined;
 	private resolvePromise: Promise<void> | undefined;
 	private refreshScheduled = false;
-	private modelVersion: number;
-
 	public constructor(
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
@@ -39,22 +37,17 @@ export class CodeLensContribution extends Disposable {
 		private readonly onError: (error: unknown) => void = error => console.error('Stanza CodeLens failed', error),
 	) {
 		super();
-		this.modelVersion = viewport.textModel.version;
 		this.bindProviderListeners();
 		this._register(providers.onDidChange(() => {
 			this.bindProviderListeners();
 			this.scheduleRefresh();
 		}));
-		this._register(viewport.onDidChangeLayout(change => {
-			if (change.layout.modelVersion !== this.modelVersion) {
-				this.modelVersion = change.layout.modelVersion;
-				this.setModel(CodeLensModel.Empty);
-				this.clearWidgets();
-				this.scheduleRefresh();
-				return;
-			}
-			this.layoutAndResolve();
+		this._register(viewport.textModel.onDidChangeContent(() => {
+			this.setModel(CodeLensModel.Empty);
+			this.clearWidgets();
+			this.scheduleRefresh();
 		}));
+		this._register(viewport.onDidChangeLayout(() => this.layoutAndResolve()));
 		this._register(toDisposable(() => {
 			this.request?.dispose(true);
 			if (this.currentModel !== CodeLensModel.Empty) this.currentModel.dispose();

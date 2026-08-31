@@ -7,18 +7,18 @@ import { type ResolvedDecoration } from '../decorations/decorations.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
+import { type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
-export class BlockDecorations extends DynamicViewOverlay {
+export class BlockDecorations extends ViewPart {
 	public readonly domNode: HTMLDivElement;
 
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly decorations: DecorationsOverlay;
 	private readonly blocks: FastDomNode<HTMLDivElement>[] = [];
 
-	constructor(_context: EditorViewContext, decorations: DecorationsOverlay, host: HTMLElement) {
-		super();
+	constructor(context: ViewContext, decorations: DecorationsOverlay, host: HTMLElement) {
+		super(context);
 
 		this.decorations = decorations;
 		const domNode = h(host.ownerDocument, 'div');

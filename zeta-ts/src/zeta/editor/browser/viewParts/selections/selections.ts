@@ -1,46 +1,42 @@
 import "./selections.css";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
+import { type Selection } from '../../../common/core/selection.js';
+import { type IViewModel } from '../../../common/viewModel.js';
 import { type EditorLineVisibleRange, type EditorOverlayContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { ViewPartRows } from '../../view/viewLayer.js';
+import { type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 /** Projects selection ranges and current-line state without owning selection state. */
 export class SelectionsOverlay extends DynamicViewOverlay {
-	public readonly domNode: HTMLElement;
-	private readonly selectionController: CursorsController | undefined;
-	private readonly rows: ViewPartRows;
-
-	constructor(_context: EditorViewContext, host: HTMLElement, selectionController: CursorsController | undefined) {
+	constructor(private readonly context: ViewContext, private readonly viewModel: IViewModel) {
 		super();
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-selections-layer', 'stanza-editor-line-selections'));
-		this.domNode = this.rows.domNode;
-		this.selectionController = selectionController;
+		this.context.addEventHandler(this);
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		const rows = this.rows.render(context);
-		projectStanzaSelectionOverlays(overlay, this.selectionController, rows);
+	public override dispose(): void {
+		this.context.removeEventHandler(this);
+		super.dispose();
+	}
+
+	public prepareRender(context: EditorRenderingContext): void {
+		this.prepareRows(context, (overlay, rows) => {
+			projectStanzaSelectionOverlays(overlay, this.viewModel.getCursorStates().map(state => state.modelState.selection), rows);
+		});
 	}
 }
 
-function projectStanzaSelectionOverlays(context: EditorOverlayContext, controller: CursorsController | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
+function projectStanzaSelectionOverlays(context: EditorOverlayContext, selections: readonly Selection[], rows: ReadonlyMap<number, HTMLElement>): void {
 	for (const row of rows.values()) reset(row);
-	if (!controller) return;
 	const domSelections = new Map<number, readonly EditorLineVisibleRange[]>();
-	for (let selectionIndex = 0; selectionIndex < controller.selections.length; selectionIndex += 1) {
-		const selection = controller.selections[selectionIndex]!;
+	for (let selectionIndex = 0; selectionIndex < selections.length; selectionIndex += 1) {
+		const selection = selections[selectionIndex]!;
 		if (selection.isEmpty()) continue;
 		const ranges = context.linesVisibleRangesForRange(selection, true);
 		if (ranges) domSelections.set(selectionIndex, ranges);
 	}
-	const geometry = createStanzaVisualSelectionGeometry(context.model, controller.selections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+	const geometry = createStanzaVisualSelectionGeometry(context.model, selections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
 	for (const rectangle of geometry.selections) {
 		if (domSelections.has(rectangle.selectionIndex)) continue;
 		appendSelection(context, rows, rectangle.selectionIndex, rectangle.visualLineIndex, rectangle.left, rectangle.width);
@@ -54,7 +50,7 @@ function appendSelection(context: EditorOverlayContext, rows: ReadonlyMap<number
 	const row = rows.get(visualLineIndex);
 	if (!row) return;
 	const element = h(context.ownerDocument, 'div');
-	element.className = 'stanza-editor-selection';
+	element.className = 'cslr selected-text stanza-editor-selection';
 	element.dataset.selectionIndex = String(selectionIndex);
 	element.style.left = `${left}px`;
 	element.style.width = `${width}px`;

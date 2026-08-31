@@ -2,7 +2,8 @@ import { h, reset, fragment as createFragment } from '../../../../base/browser/d
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { OverviewRulerZone, OverviewZoneManager } from '../../../common/viewModel/overviewZoneManager.js';
-import { type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
+import { type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationPresentation } from '../decorations/decorations.js';
 
 export interface DiagnosticOverviewMarker {
@@ -38,15 +39,15 @@ export interface OverviewRulerOptions {
 }
 
 /** Owns overview-ruler layout and line-to-pixel zone projection. */
-export class OverviewRuler extends EditorViewPart {
+export class OverviewRuler extends ViewPart {
 	public readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly zoneManager: OverviewZoneManager;
 	private entries: readonly { readonly entry: OverviewRulerEntry; readonly zone: OverviewRulerZone }[] = [];
 	private renderedRevision = -1;
 
-	constructor(private readonly options: OverviewRulerOptions) {
-		super();
+	constructor(context: ViewContext, private readonly options: OverviewRulerOptions) {
+		super(context);
 		if (!Number.isFinite(options.width) || options.width <= 0) throw new RangeError('Overview ruler width must be finite and positive');
 		this.zoneManager = new OverviewZoneManager(lineNumber => options.getVerticalOffsetForLineIndex(lineNumber - 1));
 		this.domNode = h(options.host.ownerDocument, 'div');

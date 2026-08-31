@@ -42,7 +42,6 @@ interface DecorationEntry<TMetadata> {
 }
 
 let nextTextDecorationId = 1;
-let nextTextDecorationOwnerId = 1;
 
 /**
  * One owner's decorations over a shared text model.
@@ -56,7 +55,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 		this._register(new Emitter<TextDecorationChange<TMetadata>>());
 	private readonly entries =
 		new Map<TextDecorationId, DecorationEntry<TMetadata>>();
-	private readonly ownerId = nextTextDecorationOwnerId++;
+	private readonly ownerId = 0;
 
 	readonly onDidChange: Event<TextDecorationChange<TMetadata>> =
 		this.changeEmitter.event;

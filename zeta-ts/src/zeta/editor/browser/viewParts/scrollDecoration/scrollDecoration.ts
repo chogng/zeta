@@ -2,17 +2,18 @@ import "./scrollDecoration.css";
 import { h } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { ViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 /** Projects scroll shadows without owning the editor's scroll state. */
-export class ScrollDecorationViewPart extends EditorViewPart {
+export class ScrollDecorationViewPart extends ViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly topShadow: FastDomNode<HTMLDivElement>;
 	private readonly bottomShadow: FastDomNode<HTMLDivElement>;
 
-	constructor(host: HTMLElement) {
-		super();
+	constructor(context: ViewContext, host: HTMLElement) {
+		super(context);
 		const ownerDocument = host.ownerDocument;
 		const domNode = h(ownerDocument, "div");
 		this._register(toDisposable(() => domNode.remove()));

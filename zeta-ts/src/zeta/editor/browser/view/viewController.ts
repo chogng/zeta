@@ -12,6 +12,8 @@ import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperatio
 import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
 import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
 import { type CursorsController } from '../../common/cursor/cursor.js';
+import { CursorChangeReason } from '../../common/cursorEvents.js';
+import { CursorState } from '../../common/cursorCommon.js';
 import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../common/core/selection.js';
@@ -25,6 +27,8 @@ import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '
 import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
+import { type IViewModel } from '../../common/viewModel.js';
+import { ViewEventHandler } from '../../common/viewEventHandler.js';
 import { type View } from '../view.js';
 import { NavigationCommandRevealType } from '../coreCommands.js';
 import { type AbstractEditContext, type CompositionController, type EditContextCharacterBounds, type EditContextOptions, type EditContextTextUpdate } from '../controller/editContext/editContext.js';
@@ -710,7 +714,7 @@ export class KeyboardNavigationController extends Disposable {
 
 	constructor(
 		private readonly viewport: View,
-		private readonly selectionController: CursorsController,
+		private readonly viewModel: IViewModel,
 		userInputEvents: ViewUserInputEvents,
 		options: KeyboardNavigationControllerOptions = {},
 	) {
@@ -734,7 +738,7 @@ export class KeyboardNavigationController extends Disposable {
 			this.dispose();
 			throw error;
 		}
-		if (viewport.textModel !== selectionController.textModel) {
+		if (viewport.textModel !== viewModel.model) {
 			this.dispose();
 			throw new TypeError(
 				"Stanza keyboard and selection controllers must share one text model",
@@ -753,12 +757,19 @@ export class KeyboardNavigationController extends Disposable {
 				userInputEvents.onKeyDown = previousKeyDownHandler;
 			}
 		}));
-		this._register(selectionController.onDidChange(() => {
-			if (!this.applyingNavigation) {
-				this.preferredColumns = undefined;
-				this.preferredVisualHorizontalOffsets = undefined;
+		const cursorListener = this._register(new class extends ViewEventHandler {
+			constructor(private readonly reset: () => void) { super(); }
+			override onCursorStateChanged(): boolean {
+				this.reset();
+				return false;
 			}
+		}(() => {
+			if (this.applyingNavigation) return;
+			this.preferredColumns = undefined;
+			this.preferredVisualHorizontalOffsets = undefined;
 		}));
+		viewModel.addViewEventHandler(cursorListener);
+		this._register(toDisposable(() => viewModel.removeViewEventHandler(cursorListener)));
 	}
 
 	private handleKeyDown(event: IKeyboardEvent): void {
@@ -781,7 +792,7 @@ export class KeyboardNavigationController extends Disposable {
 			? navigateStanzaVisualCursors(
 				this.viewport.textModel,
 				this.viewport.getVisualLineProjection(),
-				this.selectionController.selections,
+				this.viewModel.getCursorStates().map(state => state.modelState.selection),
 				{
 					command: visualCommand,
 					mode: navigation.mode,
@@ -796,7 +807,7 @@ export class KeyboardNavigationController extends Disposable {
 			)
 			: MoveOperations.navigate(
 				this.viewport.textModel,
-				this.selectionController.selections,
+				this.viewModel.getCursorStates().map(state => state.modelState.selection),
 				{
 					...navigation,
 					pageLineCount,
@@ -807,7 +818,7 @@ export class KeyboardNavigationController extends Disposable {
 			);
 		this.applyingNavigation = true;
 		try {
-			this.selectionController.setSelections(result.selections);
+			this.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, result.selections.map(CursorState.fromModelSelection));
 		} finally {
 			this.applyingNavigation = false;
 		}

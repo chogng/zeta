@@ -3,28 +3,25 @@ import { DecorationsOverlay } from "../decorations/decorations.js";
 import { type ResolvedDecoration, DecorationPresentation } from '../decorations/decorations.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { ViewPartRows } from '../../view/viewLayer.js';
+import { type EditorRenderingContext } from "../../view/viewPart.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 /** Projects line-level diagnostics into the editor margin. */
 export class MarginViewLineDecorationsOverlay extends DynamicViewOverlay {
-	public readonly domNode: HTMLElement;
-	private readonly decorations: DecorationsOverlay;
-	private readonly rows: ViewPartRows;
-
-	constructor(_context: EditorViewContext, host: HTMLElement, decorations: DecorationsOverlay) {
+	constructor(private readonly context: ViewContext, private readonly decorations: DecorationsOverlay) {
 		super();
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-margin-decorations-layer', 'stanza-editor-diagnostic-marker'));
-		this.domNode = this.rows.domNode;
-		this.decorations = decorations;
+		this.context.addEventHandler(this);
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		projectStanzaDiagnosticMarginDecorations(overlay, this.decorations.visibleDecorations(overlay), this.rows.render(context));
+	public override dispose(): void {
+		this.context.removeEventHandler(this);
+		super.dispose();
+	}
+
+	public prepareRender(context: EditorRenderingContext): void {
+		this.prepareRows(context, (overlay, rows) => {
+			projectStanzaDiagnosticMarginDecorations(overlay, this.decorations.visibleDecorations(overlay), rows);
+		});
 	}
 }
 
@@ -53,20 +50,22 @@ function projectStanzaDiagnosticMarginDecorations(
 			diagnosticsByLine.set(lineIndex, lineDiagnostics);
 		}
 	}
-	for (const [visualLineIndex, marker] of rows) {
+	for (const [visualLineIndex, row] of rows) {
+		const marker = h(row.ownerDocument, 'div');
+		row.append(marker);
 		const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
 		const diagnostics = visualLine?.firstForLogicalLine ? diagnosticsByLine.get(visualLine.logicalLineIndex) ?? [] : [];
 		marker.hidden = diagnostics.length === 0;
 		delete marker.dataset.diagnosticHoverText;
 		marker.removeAttribute('title');
 		if (diagnostics.length === 0) {
-			marker.className = 'stanza-editor-diagnostic-marker';
+			marker.className = 'cmdr stanza-editor-diagnostic-marker';
 			marker.textContent = '';
 			continue;
 		}
 		const highest = diagnostics.reduce((current, candidate) =>
 			(DIAGNOSTIC_PRESENTATION_PRIORITY.get(candidate.presentation) ?? 0) > (DIAGNOSTIC_PRESENTATION_PRIORITY.get(current.presentation) ?? 0) ? candidate : current);
-		marker.className = `stanza-editor-diagnostic-marker ${diagnosticMarkerClass(highest.presentation)}`;
+		marker.className = `cmdr stanza-editor-diagnostic-marker ${diagnosticMarkerClass(highest.presentation)}`;
 		marker.textContent = '●';
 		const hoverTexts = [...new Set(diagnostics.flatMap(diagnostic => diagnostic.hoverText === undefined ? [] : [diagnostic.hoverText]))];
 		if (hoverTexts.length > 0) {
@@ -86,3 +85,4 @@ function diagnosticMarkerClass(presentation: ResolvedDecoration['presentation'])
 		default: throw new TypeError(`Unknown diagnostic presentation '${presentation}'`);
 	}
 }
+import { h } from '../../../../base/browser/dom.js';

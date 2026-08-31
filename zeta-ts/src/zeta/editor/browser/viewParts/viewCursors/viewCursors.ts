@@ -3,16 +3,16 @@ import { h, reset } from '../../../../base/browser/dom.js';
 import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { type Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
+import { type IViewModel } from '../../../common/viewModel.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type TrackedRange } from '../../../common/model/trackedRange.js';
 import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
+import { type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
 import { ViewPartRows } from '../../view/viewLayer.js';
 import { CursorPlurality, ViewCursor, type IViewCursorRenderData, type ViewCursorOptions } from './viewCursor.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
@@ -25,11 +25,11 @@ export interface ViewCursorsOptions extends ViewCursorOptions {
 }
 
 /** Coordinates active cursors, movement animation, and input composition presentation. */
-export class ViewCursors extends DynamicViewOverlay {
+export class ViewCursors extends ViewPart {
 	public readonly domNode: HTMLElement;
 	private readonly fastDomNode: FastDomNode<HTMLElement>;
 	private readonly model: TextModel;
-	private readonly selectionController: CursorsController | undefined;
+	private readonly viewModel: IViewModel;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
 	private readonly compositionRows: ViewPartRows;
 	private readonly smoothCaretAnimation: 'off' | 'explicit' | 'on';
@@ -41,11 +41,11 @@ export class ViewCursors extends DynamicViewOverlay {
 	private movementRenderGeneration = 0;
 	private renderData: IViewCursorRenderData[] = [];
 
-	constructor(private readonly context: EditorViewContext, options: ViewCursorsOptions, model: TextModel, selectionController: CursorsController | undefined) {
-		super();
+	constructor(context: ViewContext, options: ViewCursorsOptions, model: TextModel, viewModel: IViewModel) {
+		super(context);
 		this.domNode = h(options.host.ownerDocument, 'div');
 		this.fastDomNode = createFastDomNode(this.domNode);
-		this.fastDomNode.setClassName('stanza-editor-cursors-layer');
+		this.fastDomNode.setClassName('cursors-layer stanza-editor-cursors-layer');
 		this.domNode.classList.add(cursorBlinkingClass(options.blinking));
 		this.domNode.classList.toggle('cursor-smooth-caret-animation', options.smoothCaretAnimation !== 'off');
 		this.domNode.setAttribute('role', 'presentation');
@@ -54,11 +54,11 @@ export class ViewCursors extends DynamicViewOverlay {
 		this.compositionRows = this._register(new ViewPartRows(this.domNode, 'stanza-editor-composition-layer', 'stanza-editor-composition-row'));
 		this.domNode.append(this.compositionRows.domNode);
 		this.model = model;
-		this.selectionController = selectionController;
+		this.viewModel = viewModel;
 		this.semanticTokenSource = options.semanticTokenSource;
 		this.smoothCaretAnimation = options.smoothCaretAnimation;
 		this.cursorOptions = options;
-		this.previousSelectionCount = selectionController?.selections.length ?? 0;
+		this.previousSelectionCount = viewModel.getCursorStates().length;
 		this.reconcileCursors(true);
 		this._register(toDisposable(() => {
 			for (const cursor of this.cursors.splice(0)) cursor.dispose();
@@ -70,7 +70,6 @@ export class ViewCursors extends DynamicViewOverlay {
 		const next = range ? this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges) : undefined;
 		this.compositionRange?.dispose();
 		this.compositionRange = next;
-		this.renderNow(this.context.renderingContext);
 	}
 
 	public getDomNode(): FastDomNode<HTMLElement> {
@@ -81,18 +80,17 @@ export class ViewCursors extends DynamicViewOverlay {
 		if (style === this.cursorOptions.style) return;
 		this.cursorOptions = Object.freeze({ ...this.cursorOptions, style });
 		for (const cursor of this.cursors) cursor.onConfigurationChanged(this.cursorOptions);
-		this.renderNow(this.context.renderingContext);
 	}
 
 	public setLineWidth(lineWidth: number): void {
 		if (lineWidth === this.cursorOptions.lineWidth) return;
 		this.cursorOptions = Object.freeze({ ...this.cursorOptions, lineWidth });
 		for (const cursor of this.cursors) cursor.onConfigurationChanged(this.cursorOptions);
-		this.renderNow(this.context.renderingContext);
 	}
 
 	public override prepareRender(context: EditorRenderingContext): void {
-		this.updateCursorPositions(this.pauseMovementAnimation);
+		if (this.cursors.length !== this.viewModel.getCursorStates().length) this.reconcileCursors(this.pauseMovementAnimation);
+		else this.updateCursorPositions(this.pauseMovementAnimation);
 		for (const cursor of this.cursors) cursor.prepareRender(context);
 	}
 
@@ -112,11 +110,12 @@ export class ViewCursors extends DynamicViewOverlay {
 	}
 
 	public renderSelection(context: EditorRenderingContext, reason: CursorChangeReason): void {
-		const selectionCount = this.selectionController?.selections.length ?? 0;
+		const selectionCount = this.viewModel.getCursorStates().length;
 		this.pauseMovementAnimation = !this.shouldAnimateMovement(reason, selectionCount);
 		this.previousSelectionCount = selectionCount;
 		this.reconcileCursors(this.pauseMovementAnimation);
-		this.renderNow(context);
+		this.prepareRender(context);
+		this.render(context);
 		for (const animation of this.domNode.getAnimations?.() ?? []) animation.currentTime = 0;
 		const generation = ++this.movementRenderGeneration;
 		queueMicrotask(() => {
@@ -127,16 +126,17 @@ export class ViewCursors extends DynamicViewOverlay {
 	public renderTokens(context: EditorRenderingContext): void {
 		this.movementRenderGeneration += 1;
 		this.pauseMovementAnimation = true;
-		this.renderNow(context);
+		this.prepareRender(context);
+		this.render(context);
 	}
 
 	private reconcileCursors(pauseMovementAnimation: boolean): void {
-		const selections = this.selectionController?.selections;
-		const selectionCount = selections?.length ?? 0;
+		const selections = this.viewModel.getCursorStates().map(state => state.modelState.selection);
+		const selectionCount = selections.length;
 		while (this.cursors.length < selectionCount) {
 			const selectionIndex = this.cursors.length;
 			this.cursors.push(new ViewCursor(
-				this.context,
+				this._context,
 				this.domNode,
 				selectionIndex,
 				this.cursorOptions,
@@ -150,8 +150,7 @@ export class ViewCursors extends DynamicViewOverlay {
 	}
 
 	private updateCursorPositions(pauseMovementAnimation: boolean): void {
-		const selections = this.selectionController?.selections;
-		if (!selections) return;
+		const selections = this.viewModel.getCursorStates().map(state => state.modelState.selection);
 		for (let selectionIndex = 0; selectionIndex < this.cursors.length; selectionIndex += 1) {
 			const plurality = cursorPlurality(selectionIndex, this.cursors.length, 0);
 			const cursor = this.cursors[selectionIndex]!;

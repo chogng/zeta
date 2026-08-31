@@ -54,7 +54,6 @@ test('Full-file GPU rendering starts at canonical coordinates and leaves subpixe
 	using strategy = new FullFileRenderStrategy({ devicePixelRatio: 1 } as unknown as GlyphRasterizer);
 	const frame = strategy.update({
 		layout: {
-			modelVersion: model.version,
 			lineHeight: 20,
 			viewportSize: { width: 200, height: 40 },
 			contentSize: { width: 200, height: 40 },
