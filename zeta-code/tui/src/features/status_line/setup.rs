@@ -5,7 +5,6 @@ use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::pane::PaneSpec;
 
 use super::StatusLineEdit;
 use super::StatusLineItem;
@@ -16,12 +15,12 @@ pub(crate) enum StatusLineSelectionAction {
     SetEnabled(StatusLineEdit),
 }
 
-pub(crate) struct StatusLinePaneSpec {
-    pub(crate) model: PaneSpec<ListSelectionModel>,
+pub(crate) struct StatusLineChoices {
+    pub(crate) model: ListSelectionModel,
     pub(crate) actions: BTreeMap<ListSelectionItemId, StatusLineSelectionAction>,
 }
 
-pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> StatusLinePaneSpec {
+pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> StatusLineChoices {
     let mut actions = BTreeMap::new();
     let items = StatusLineItem::ALL
         .into_iter()
@@ -48,8 +47,8 @@ pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> St
     .without_tab_bar()
     .with_activation_mode(ListSelectionActivationMode::EnterOrSpace)
     .with_activation_label("toggle");
-    StatusLinePaneSpec {
-        model: PaneSpec::new(model),
+    StatusLineChoices {
+        model,
         actions,
     }
 }

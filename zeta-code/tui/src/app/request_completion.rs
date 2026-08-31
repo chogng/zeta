@@ -14,7 +14,7 @@ use crate::features::sessions::ConversationChange;
 use crate::features::sessions::ConversationTranscript;
 use crate::features::sessions::NewConversationKind;
 use crate::features::skills;
-use crate::features::skills::SkillPaneSpec;
+use crate::features::skills::SkillChoices;
 use crate::features::status_line::StatusLineSettings;
 use crate::features::thread::ActiveTurnUpdate;
 use crate::features::thread::LatestThreadSnapshot;
@@ -114,7 +114,7 @@ pub(super) struct ProductCommandCompletion {
 
 pub(super) struct SkillRequestCompletion {
     input_catalog: ChatInputCatalog,
-    pane_spec: SkillPaneSpec,
+    region_spec: SkillChoices,
 }
 
 pub(super) fn refresh_skills_and_registry(
@@ -141,7 +141,7 @@ pub(super) fn refresh_skills_and_registry(
         .map_err(|error| error.to_string())?;
     Ok(SkillRequestCompletion {
         input_catalog,
-        pane_spec: skills::skills_pane_spec(&catalog),
+        region_spec: skills::skill_choices(&catalog),
     })
 }
 
@@ -410,7 +410,7 @@ pub(super) fn apply_request_completion(
                 command,
                 result: update.notice,
             });
-            app.update(AppEvent::ListSelectionPaneClosed);
+            app.update(AppEvent::ComposerModeClosed);
         }
         RequestCompletion::PreferredModelUpdated {
             result: Err(error), ..
@@ -426,7 +426,7 @@ pub(super) fn apply_request_completion(
                 command,
                 result: format!("Theme set to {label}"),
             });
-            app.update(AppEvent::ThemePanesClosed);
+            app.update(AppEvent::ThemePickerClosed);
         }
         RequestCompletion::ThemeUpdated {
             result: Err(error), ..
@@ -434,10 +434,10 @@ pub(super) fn apply_request_completion(
         RequestCompletion::SkillsRefreshed(Ok(refresh)) => {
             app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {
-                app.update(AppEvent::SkillsPaneReplaced(refresh.pane_spec));
+                app.update(AppEvent::SkillSettingsUpdated(refresh.region_spec));
             } else {
                 app.update(AppEvent::SkillDiagnosticsReceived(
-                    refresh.pane_spec.diagnostics,
+                    refresh.region_spec.diagnostics,
                 ));
             }
         }
@@ -789,7 +789,7 @@ fn finish_conversation_change(
     presentation: ConversationCompletionPresentation,
 ) {
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
-        app.update(AppEvent::ListSelectionPaneClosed);
+        app.update(AppEvent::ComposerModeClosed);
     }
     if matches!(change.transcript, ConversationTranscript::Clear) {
         app.update(AppEvent::TranscriptCleared);

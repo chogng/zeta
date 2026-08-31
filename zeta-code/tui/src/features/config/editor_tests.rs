@@ -1,0 +1,252 @@
+use super::config_choices;
+use super::provider_api_key_prompt;
+use crate::components::chat_input::ChatInputMode;
+use crate::components::list_selection::ListSelectionState;
+use crate::components::text_prompt::TextPrompt;
+use crate::components::text_prompt::TextPromptOutcome;
+use crate::features::config::ConfigSelectionAction;
+use crate::features::config::FollowUpMode;
+use crate::features::config::TerminalSettings;
+use crate::test_support::empty_config_snapshot;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use zeta_app_server_protocol::protocol::environment::PermissionDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
+use zeta_app_server_protocol::protocol::provider::{
+    ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
+};
+use zeta_protocol::SessionId;
+
+fn providers() -> ProviderListResult {
+    ProviderListResult {
+        providers: vec![
+            ProviderCatalogEntryDto {
+                provider: "openai".into(),
+                display_name: "OpenAI".into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Required,
+                api_key_configured: false,
+            },
+            ProviderCatalogEntryDto {
+                provider: "ollama".into(),
+                display_name: "Ollama".into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                api_key_configured: false,
+            },
+        ],
+    }
+}
+
+fn session_id() -> SessionId {
+    SessionId::new("config-session").unwrap()
+}
+
+fn no_directories() -> SessionDirListResult {
+    SessionDirListResult {
+        revision: 0,
+        dirs: Vec::new(),
+    }
+}
+
+#[test]
+fn config_region_organizes_the_snapshot_into_searchable_tabs() {
+    let mut config = empty_config_snapshot();
+    config.revision = 4;
+    config.generation = 5;
+    let providers = providers();
+    let view = config_choices(
+        &config,
+        &providers,
+        TerminalSettings::default(),
+        &session_id(),
+        &no_directories(),
+    );
+    let mut state = ListSelectionState::new(view.model.into_body());
+
+    assert_eq!(state.title(), "Config");
+    assert!(state.search().is_some());
+    assert_eq!(
+        state
+            .tabs()
+            .iter()
+            .map(|tab| tab.label())
+            .collect::<Vec<_>>(),
+        vec!["Config", "Add-dir", "Providers", "Language servers"]
+    );
+    let mouse = &state.visible_items()[0];
+    assert_eq!(mouse.label(), "Mouse interactions");
+    assert_eq!(
+        mouse.description(),
+        Some("Select and auto-copy text, click, and hover [ ✔ ]")
+    );
+    assert!(matches!(
+        view.actions.get(mouse.id().unwrap()).unwrap(),
+        ConfigSelectionAction::SetTerminalSettings(edit)
+            if edit.server_config.revision == 4
+                && !edit.terminal.mouse_interactions()
+    ));
+    let input_mode = &state.visible_items()[2];
+    assert_eq!(input_mode.label(), "Input mode");
+    assert_eq!(
+        input_mode.description(),
+        Some("Standard or Vim editing inside ChatInput Standard")
+    );
+    assert!(matches!(
+        view.actions.get(input_mode.id().unwrap()).unwrap(),
+        ConfigSelectionAction::ChooseInputMode { standard, vim }
+            if standard.terminal.input_mode() == ChatInputMode::Standard
+                && vim.terminal.input_mode() == ChatInputMode::Vim
+    ));
+    let follow_up = &state.visible_items()[1];
+    assert_eq!(follow_up.label(), "Follow-up messages");
+    assert_eq!(
+        follow_up.description(),
+        Some("How Enter sends a message while a Turn is running Queue")
+    );
+    assert!(matches!(
+        view.actions.get(follow_up.id().unwrap()).unwrap(),
+        ConfigSelectionAction::ChooseFollowUpMode { queue, steer }
+            if queue.server_config.revision == 4
+                && queue.terminal.follow_up_mode() == FollowUpMode::Queue
+                && steer.terminal.follow_up_mode() == FollowUpMode::Steer
+    ));
+
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(state.visible_items().len(), 15);
+    assert_eq!(state.visible_items()[0].label(), "Read files");
+    assert_eq!(state.visible_items()[1].label(), "Modify files");
+    assert!(matches!(
+        view.actions
+            .get(state.visible_items()[5].id().unwrap())
+            .unwrap(),
+        ConfigSelectionAction::SetTerminalSettings(edit)
+            if edit.terminal.dir_permissions() == vec![
+                PermissionDto::ReadFiles,
+                PermissionDto::WriteFiles,
+                PermissionDto::SearchFiles,
+            ]
+    ));
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(state.visible_items().len(), 2);
+    assert_eq!(state.visible_items()[0].label(), "OpenAI");
+    assert_eq!(state.visible_items()[1].label(), "Ollama");
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .all(|item| item.description().is_none())
+    );
+    assert!(matches!(
+        view.actions
+            .get(state.visible_items()[0].id().unwrap())
+            .unwrap(),
+        ConfigSelectionAction::OpenProviderApiKey { provider, .. } if provider == "openai"
+    ));
+    assert!(state.visible_items()[1].id().is_none());
+}
+
+#[test]
+fn config_region_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabled() {
+    let mut terminal = TerminalSettings::default();
+    terminal.set_mouse_interactions(false);
+
+    let view = config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        terminal,
+        &session_id(),
+        &no_directories(),
+    );
+    let state = ListSelectionState::new(view.model.into_body());
+
+    assert_eq!(
+        state.visible_items()[0].description(),
+        Some("Select and auto-copy text, click, and hover [   ]")
+    );
+}
+
+#[test]
+fn add_dir_items_emit_revision_bound_complete_permission_sets() {
+    let directories = SessionDirListResult {
+        revision: 4,
+        dirs: vec![SessionDirDto {
+            contributions: Default::default(),
+            path: "/dir/shared".into(),
+            permissions: vec![PermissionDto::ReadFiles, PermissionDto::WriteFiles],
+        }],
+    };
+    let view = config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        &session_id(),
+        &directories,
+    );
+    let mut state = ListSelectionState::new(view.model.into_body());
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert_eq!(state.visible_items().len(), 30);
+    assert_eq!(
+        state.visible_items()[15].label(),
+        "Read files · /dir/shared"
+    );
+    assert_eq!(
+        state.visible_items()[15].description(),
+        Some("Allow read_file, grep and glob [ ✔ ]")
+    );
+    let execute = &state.visible_items()[17];
+    assert_eq!(
+        execute.description(),
+        Some("Allow shell-command and Session terminals [   ]")
+    );
+    assert_eq!(
+        state.visible_items()[18].description(),
+        Some("Watch this directory for file changes [   ]")
+    );
+    assert_eq!(
+        state.visible_items()[19].description(),
+        Some("Show this directory in file browsing surfaces [   ]")
+    );
+    assert_eq!(
+        state.visible_items()[21].description(),
+        Some("Load .zeta/instructions and .zeta/agents [   ]")
+    );
+    assert_eq!(
+        state.visible_items()[24].description(),
+        Some("Authorize MCP declarations (0 found); connect them separately [   ]")
+    );
+    assert!(matches!(
+        view.actions.get(execute.id().unwrap()).unwrap(),
+        ConfigSelectionAction::SetPermissions(edit)
+            if edit.params.expected_revision == 4
+                && edit.params.permissions == vec![
+                    PermissionDto::ReadFiles,
+                    PermissionDto::WriteFiles,
+                    PermissionDto::ExecuteCommands,
+                ]
+    ));
+}
+
+#[test]
+fn provider_api_key_input_is_masked_keeps_its_explanation_and_submits_with_enter() {
+    let prompt = provider_api_key_prompt("openai".into(), "OpenAI".into());
+    let (spec, key_hints) = prompt.spec.into_parts();
+    let mut state = TextPrompt::new(spec);
+
+    state.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    state.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+    let outcome = state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(state.input().masked());
+    assert_eq!(key_hints.text(), "Enter save  ·  Esc cancel");
+    assert_eq!(
+        state.explanation(),
+        "The key is hidden and stored in the profile secret store"
+    );
+    assert!(matches!(
+        outcome,
+        TextPromptOutcome::Submit(value) if value == "sk"
+    ));
+    assert_eq!(prompt.provider, "openai");
+}

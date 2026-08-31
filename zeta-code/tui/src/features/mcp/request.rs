@@ -1,5 +1,5 @@
-use super::McpPaneSpec;
-use super::mcp_pane_spec;
+use super::McpChoices;
+use super::mcp_choices;
 use crate::client::new_command_id;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
@@ -7,20 +7,22 @@ use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::config::McpServerSetEnablementParams;
 
-pub(crate) fn load_selection<T>(client: &mut AppServerClient<T>) -> Result<McpPaneSpec, ClientError>
+pub(crate) fn load_selection<T>(
+    client: &mut AppServerClient<T>,
+) -> Result<McpChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
     client
         .read_config()
-        .map(|config| mcp_pane_spec(&config.mcp_servers))
+        .map(|config| mcp_choices(&config.mcp_servers))
 }
 
 pub(crate) fn set_enablement<T>(
     client: &mut AppServerClient<T>,
     server_id: String,
     enablement: McpServerEnablementDto,
-) -> Result<McpPaneSpec, ClientError>
+) -> Result<McpChoices, ClientError>
 where
     T: JsonRpcTransport,
 {

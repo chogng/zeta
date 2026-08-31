@@ -27,7 +27,7 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
         true_color.screen_selection_background(),
         Color::Rgb(135, 206, 235)
     );
-    assert_eq!(true_color.quick_view_background(), Color::Rgb(37, 37, 38));
+    assert_eq!(true_color.overlay_background(), Color::Rgb(37, 37, 38));
     assert!(matches!(ansi256.accent(), Color::Indexed(..)));
     assert!(!matches!(
         ansi16.accent(),
@@ -38,7 +38,7 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
     let light = RenderTheme::from_palette(ThemePalette::light(), ColorLevel::TrueColor);
     assert_eq!(light.background(), Color::Rgb(255, 255, 255));
     assert_eq!(light.foreground(), Color::Rgb(31, 35, 40));
-    assert_eq!(light.quick_view_background(), Color::Rgb(248, 248, 248));
+    assert_eq!(light.overlay_background(), Color::Rgb(248, 248, 248));
 }
 
 #[test]

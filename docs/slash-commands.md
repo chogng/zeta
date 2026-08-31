@@ -40,7 +40,7 @@ App Server 当前在 `initialize.slashCommands` 发布服务端命令；每个�
 | 现有 Surface | Catalog 来源 | Core/adapter | Renderer owner |
 | --- | --- | --- | --- |
 | TUI | built-ins + initialize snapshot | 直接使用 `zeta-slash-commands` | Ratatui popup |
-| Native zeta-ui-components | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；Native 另拥有 model picker | WGPU composer interaction rows |
+| Codex Rust UI | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；该端另拥有 model picker | WGPU composer interaction rows |
 | Desktop Chat | Workbench actions + initialize snapshot | canonical generated `SlashCommandDefinition` + action binding | Stanza completion widget；textarea/legacy editor runtime 可复用同一 catalog |
 
 TUI 与 Desktop 的 Skill adapter 独立消费 `skills/list` metadata，并为 `$name` 候选绑定 exact pinned `SkillRef`；Skill 不再生成 command definition，也不参与 Slash Command 冲突检查。
@@ -67,9 +67,9 @@ Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origi
 当前对话；它不会把 `/compact` 文本发给模型。其他 server prompt command 继续把 unchanged invocation
 作为普通 `StartTurn.input`。Local command 必须存在真实 client execution path，否则不能进入 catalog。
 Desktop 的 `/new`、`/history` 属于
-Workbench command mapping；Native 的 `/model` 属于 Session model selector；TUI 的 `/theme` 属于
+Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Zeta TUI 的 `/theme` 属于
 device-local presentation preference：无参数时打开由 `features/theme` 拥有的固定 Zeta Code
-Theme Pane，带 ID 时静默直接切换；Theme Pane 不启用搜索，通用 Selection Pane 则以显式
+Theme Region，带 ID 时静默直接切换；Theme Region 不启用搜索，通用 Selection Region 则以显式
 的上下焦点移动进入 SearchBox。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
 整份合并结果，不按客户端优先级静默覆盖。Skill 与命令使用不同前缀；同名 Skill 仍因来源歧义不进入无来源限定的 `$name` 候选，但不会覆盖或屏蔽 `/name` 命令。
 
@@ -88,5 +88,5 @@ Rust surfaces 直接共享 `zeta-slash-commands` 的 headless state。Desktop �
 ## 修改影响
 
 新增 wire 字段先修改 `zeta-app-server-protocol` 并重新生成 TypeScript/schema。修改名称、参数、匹配或
-输入规则必须同时更新 crate tests、跨运行时 fixture、TUI/native adapter tests 和 Desktop tests。
+输入规则必须同时更新 crate tests、跨运行时 fixture、TUI/Rust UI adapter tests 和 Desktop tests。
 纯视觉变化只修改对应 renderer，不得把 host-specific state 反推到 catalog 或 protocol。

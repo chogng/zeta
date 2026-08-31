@@ -18,11 +18,11 @@ use zeta_keybinding::compile_user_bindings;
 use zeta_keybinding::parse_key_sequence;
 use zeta_keybinding::serialize_key_sequence;
 
-/// Cross-component actions owned by the Zeta Code TUI root.
+/// Cross-component actions owned by the Zeta Code TUI application.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AppKeymapAction {
     CycleApprovalMode,
-    RootEscape,
+    ScreenEscape,
     OpenRewind,
     ReadClipboardImage,
     InterruptOrQuit,
@@ -34,7 +34,7 @@ impl AppKeymapAction {
     pub(crate) const fn command_id(self) -> Option<&'static str> {
         match self {
             Self::CycleApprovalMode => Some("zetaCode.action.cycleApprovalMode"),
-            Self::RootEscape => None,
+            Self::ScreenEscape => None,
             Self::OpenRewind => Some("zetaCode.action.openRewind"),
             Self::ReadClipboardImage => Some("zetaCode.action.attachClipboardImage"),
             Self::InterruptOrQuit => Some("zetaCode.action.interruptOrQuit"),
@@ -61,7 +61,7 @@ impl AppKeymapAction {
     const fn label(self) -> &'static str {
         match self {
             Self::CycleApprovalMode => "Cycle approval mode",
-            Self::RootEscape => "Root escape",
+            Self::ScreenEscape => "Rewind escape gesture",
             Self::OpenRewind => "Open rewind checkpoints",
             Self::ReadClipboardImage => "Attach clipboard image",
             Self::InterruptOrQuit => "Interrupt or quit",
@@ -95,7 +95,7 @@ pub(crate) enum AppKeymapCondition {
     Expression(ContextExpression),
 }
 
-/// State needed to decide a root binding without exposing component internals to the resolver.
+/// State needed to decide an application binding without exposing component internals.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct AppKeymapContext {
     pub(crate) accepts_input: bool,
@@ -138,7 +138,7 @@ const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
     },
     AppKeybindingSpec {
         keybinding: "escape",
-        action: AppKeymapAction::RootEscape,
+        action: AppKeymapAction::ScreenEscape,
         condition: AppKeymapCondition::PressWithInput,
     },
     AppKeybindingSpec {

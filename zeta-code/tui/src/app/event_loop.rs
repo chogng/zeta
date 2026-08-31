@@ -419,7 +419,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             connector_id,
                                             connection_generation,
                                         )
-                                        .map(AppEvent::ConnectorPaneReplaced)
+                                        .map(AppEvent::ConnectorPickerUpdated)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -504,7 +504,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             Err(error) => app.update(AppEvent::HostOperationCompleted(Err(error))),
                         }
                     }
-                    AppCommand::OpenConfigPane => {
+                    AppCommand::OpenConfigEditor => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
@@ -512,9 +512,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 "zeta-tui-read-config",
                                 move || {
                                     RequestCompletion::Presentation(
-                                        config::read_config_pane(&mut request_client, &session_id)
-                                            .map(AppEvent::ConfigPaneOpened)
-                                            .map_err(|error| error.to_string()),
+                                        config::read_config_region(
+                                            &mut request_client,
+                                            &session_id,
+                                        )
+                                        .map(AppEvent::ConfigEditorOpened)
+                                        .map_err(|error| error.to_string()),
                                     )
                                 },
                                 &mut app,
@@ -545,7 +548,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || {
                                     RequestCompletion::Presentation(
                                         config::set_permissions(&mut request_client, edit)
-                                            .map(AppEvent::ConfigPaneReplaced)
+                                            .map(AppEvent::ConfigEditorUpdated)
                                             .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -568,7 +571,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         )
                                         .map(|update| AppEvent::ConfigApiKeySaved {
                                             provider: update.provider,
-                                            pane_spec: update.pane_spec,
+                                            region_spec: update.region_spec,
                                         })
                                         .map_err(|error| error.to_string()),
                                     )
@@ -577,27 +580,27 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenKeymapPane => {
+                    AppCommand::OpenKeymapEditor => {
                         let mut request_client = client.clone();
                         pending_request = spawn_request(
                             "zeta-tui-read-keymap",
                             move || {
                                 RequestCompletion::Presentation(
                                     keymap::read_keymap(&mut request_client)
-                                        .map(AppEvent::KeymapPaneOpened),
+                                        .map(AppEvent::KeymapEditorOpened),
                                 )
                             },
                             &mut app,
                         );
                     }
-                    AppCommand::OpenStatusLinePane => {
+                    AppCommand::OpenStatusLineRegion => {
                         let mut request_client = client.clone();
                         pending_request = spawn_request(
                             "zeta-tui-read-status-line",
                             move || {
                                 RequestCompletion::Presentation(
                                     status_line::read_status_line(&mut request_client)
-                                        .map(AppEvent::StatusLinePaneOpened),
+                                        .map(AppEvent::StatusLineRegionOpened),
                                 )
                             },
                             &mut app,
@@ -610,7 +613,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             move || {
                                 RequestCompletion::Presentation(
                                     status_line::set_status_line(&mut request_client, edit)
-                                        .map(AppEvent::StatusLinePaneReplaced),
+                                        .map(AppEvent::StatusLineRegionReplaced),
                                 )
                             },
                             &mut app,
@@ -623,7 +626,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             move || {
                                 RequestCompletion::Presentation(
                                     keymap::set_keymap(&mut request_client, edit)
-                                        .map(AppEvent::KeymapPaneOpened),
+                                        .map(AppEvent::KeymapEditorOpened),
                                 )
                             },
                             &mut app,
@@ -666,7 +669,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenThemePane => {
+                    AppCommand::OpenThemePicker => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
                             let request_theme_resource = theme_resource.clone();
@@ -681,8 +684,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                                 request_theme_resource
                                                     .catalog(config::tui_theme(&config))
                                                     .map(|catalog| {
-                                                        AppEvent::ThemePaneOpened(
-                                                            theme_feature::theme_pane_spec(
+                                                        AppEvent::ThemePickerOpened(
+                                                            theme_feature::theme_choices(
                                                                 &catalog,
                                                             ),
                                                         )
@@ -694,7 +697,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenCustomThemePane => {
+                    AppCommand::OpenCustomThemePicker => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
                             let request_theme_resource = theme_resource.clone();
@@ -709,8 +712,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                                 request_theme_resource
                                                     .catalog(config::tui_theme(&config))
                                                     .map(|catalog| {
-                                                        AppEvent::ThemePaneOpened(
-                                                            theme_feature::custom_theme_pane_spec(
+                                                        AppEvent::ThemePickerOpened(
+                                                            theme_feature::custom_theme_choices(
                                                                 &catalog,
                                                             ),
                                                         )
@@ -722,7 +725,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenRewindPane => {
+                    AppCommand::OpenRewindRegion => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
@@ -736,7 +739,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &session_id,
                                             &thread_id,
                                         )
-                                        .map(AppEvent::RewindPaneOpened)
+                                        .map(AppEvent::RewindPickerOpened)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -754,9 +757,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || {
                                     RequestCompletion::Presentation(
                                         dirs::remove(&mut request_client, &session_id, path)
-                                            .map(|pane_spec| AppEvent::DirRemoved {
+                                            .map(|region_spec| AppEvent::DirRemoved {
                                                 path: event_path,
-                                                pane_spec,
+                                                region_spec,
                                             })
                                             .map_err(|error| error.to_string()),
                                     )
@@ -941,7 +944,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &mut request_client,
                                             connector_id,
                                         )
-                                        .map(AppEvent::ConnectorPaneReplaced)
+                                        .map(AppEvent::ConnectorPickerUpdated)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -964,7 +967,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             server_id,
                                             enablement,
                                         )
-                                        .map(AppEvent::McpPaneReplaced)
+                                        .map(AppEvent::McpSettingsUpdated)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -1035,7 +1038,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             skill_id,
                                             enablement,
                                         )
-                                        .map(AppEvent::SkillsPaneReplaced)
+                                        .map(AppEvent::SkillSettingsUpdated)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -1213,7 +1216,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     move || {
                         RequestCompletion::Presentation(
                             crate::features::connectors::load_selection(&mut request_client)
-                                .map(AppEvent::ConnectorPaneReplaced)
+                                .map(AppEvent::ConnectorPickerUpdated)
                                 .map_err(|error| error.to_string()),
                         )
                     },
@@ -1244,15 +1247,15 @@ fn activate_pointer_item(
 ) -> Option<AppCommand> {
     let target = frame::input_pointer_target_at(app, area, column, row)?;
     match target {
-        InputPointerTarget::Composer(ChatComposerPointerTarget::PaneTab(index)) => {
+        InputPointerTarget::Region(crate::components::region::ComposerModePointerTarget::Tab(index)) => {
             app.select_tab(index);
             None
         }
-        InputPointerTarget::Composer(ChatComposerPointerTarget::PaneSearch) => {
-            app.focus_pane_search();
+        InputPointerTarget::Region(crate::components::region::ComposerModePointerTarget::Search) => {
+            app.focus_region_search();
             None
         }
-        InputPointerTarget::Composer(ChatComposerPointerTarget::PaneItem(index)) => {
+        InputPointerTarget::Region(crate::components::region::ComposerModePointerTarget::Item(index)) => {
             app.activate_visible_item(index)
         }
         InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
@@ -1438,11 +1441,11 @@ fn refresh_server_event(
             ..ServerRefresh::default()
         },
         client::ClientEvent::ConnectorsChanged => ServerRefresh {
-            connectors: app.connector_pane_open(),
+            connectors: app.connector_region_open(),
             ..ServerRefresh::default()
         },
         client::ClientEvent::PackageSourcesChanged => ServerRefresh {
-            connectors: app.connector_pane_open(),
+            connectors: app.connector_region_open(),
             skills: true,
             ..ServerRefresh::default()
         },

@@ -4,7 +4,7 @@ use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
 use zeta_protocol::Patch;
 
 use super::StatusLineItem;
-use super::StatusLinePaneSpec;
+use super::StatusLineChoices;
 use super::StatusLineSettings;
 use super::setup::list_selection;
 use crate::client::new_command_id;
@@ -16,30 +16,30 @@ pub(crate) struct StatusLineEdit {
     pub(crate) enabled: bool,
 }
 
-pub(crate) struct StatusLinePaneUpdate {
+pub(crate) struct StatusLineRegionUpdate {
     pub(crate) settings: StatusLineSettings,
-    pub(crate) pane_spec: StatusLinePaneSpec,
+    pub(crate) region_spec: StatusLineChoices,
 }
 
 pub(crate) fn read_status_line<T>(
     client: &mut AppServerClient<T>,
-) -> Result<StatusLinePaneUpdate, String>
+) -> Result<StatusLineRegionUpdate, String>
 where
     T: JsonRpcTransport,
 {
     let config = client.read_config().map_err(|error| error.to_string())?;
     let settings = StatusLineSettings::from_tui(&config.tui)?;
-    let pane_spec = list_selection(&settings, config.revision);
-    Ok(StatusLinePaneUpdate {
+    let region_spec = list_selection(&settings, config.revision);
+    Ok(StatusLineRegionUpdate {
         settings,
-        pane_spec,
+        region_spec,
     })
 }
 
 pub(crate) fn set_status_line<T>(
     client: &mut AppServerClient<T>,
     edit: StatusLineEdit,
-) -> Result<StatusLinePaneUpdate, String>
+) -> Result<StatusLineRegionUpdate, String>
 where
     T: JsonRpcTransport,
 {
@@ -69,9 +69,9 @@ where
 
     let config = client.read_config().map_err(|error| error.to_string())?;
     let settings = StatusLineSettings::from_tui(&config.tui)?;
-    let pane_spec = list_selection(&settings, config.revision);
-    Ok(StatusLinePaneUpdate {
+    let region_spec = list_selection(&settings, config.revision);
+    Ok(StatusLineRegionUpdate {
         settings,
-        pane_spec,
+        region_spec,
     })
 }

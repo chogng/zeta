@@ -1,10 +1,10 @@
 use super::Queue;
-use super::QueuePaneInput;
-use super::pane_input;
-use super::pane_spec;
+use super::QueueInput;
+use super::region_input;
+use super::region_spec;
 use crate::components::chat_input::ChatInput;
 use crate::components::chat_input::ChatInputQueueOutcome;
-use crate::components::pane::PaneStack;
+use crate::components::region::SelectionRegion;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -83,17 +83,17 @@ fn restore_preserves_a_nonempty_draft_and_restores_by_stable_identity() {
 }
 
 #[test]
-fn queue_pane_bindings_own_input_mapping_and_hints() {
+fn queue_region_bindings_own_input_mapping_and_hints() {
     assert_eq!(
-        pane_input(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)),
-        Some(QueuePaneInput::Restore)
+        region_input(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)),
+        Some(QueueInput::Restore)
     );
     assert_eq!(
-        pane_input(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT)),
-        Some(QueuePaneInput::MoveDown)
+        region_input(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT)),
+        Some(QueueInput::MoveDown)
     );
     assert_eq!(
-        pane_input(KeyEvent {
+        region_input(KeyEvent {
             kind: KeyEventKind::Release,
             ..KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)
         }),
@@ -101,13 +101,11 @@ fn queue_pane_bindings_own_input_mapping_and_hints() {
     );
 
     let queue = Queue::default();
-    let mut panes = PaneStack::default();
-    panes.push_list_selection(pane_spec(&queue.view()).model);
+    let spec = region_spec(&queue.view());
+    let region = SelectionRegion::new(spec.model, spec.actions);
 
     assert_eq!(
-        panes.top_key_hints(),
-        Some(
-            "↑/↓ select  ·  Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send  ·  Esc to close"
-        )
+        region.key_hints(),
+        "↑/↓ select  ·  Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send  ·  Esc to close"
     );
 }

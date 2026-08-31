@@ -123,20 +123,20 @@ impl ActiveConversation {
                 )));
             }
             TuiSlashCommandAction::Status => {
-                output.events.push(AppEvent::StatusQuickViewOpened(
-                    status::load_status_pane_spec(
+                output
+                    .events
+                    .push(AppEvent::StatusOverlayOpened(status::load_status_overlay(
                         client,
                         status::StatusRequestScope {
                             session_id: self.session_id(),
                             thread_id: self.thread_id(),
                         },
-                    )?,
-                ));
+                    )?));
             }
             TuiSlashCommandAction::Skills => {
                 output
                     .events
-                    .push(AppEvent::SkillsPaneOpened(load_selection(
+                    .push(AppEvent::SkillSettingsOpened(load_selection(
                         client,
                         self.session_id(),
                         SkillCatalogReloadDto::Refresh,
@@ -145,10 +145,10 @@ impl ActiveConversation {
             TuiSlashCommandAction::Mcp => {
                 output
                     .events
-                    .push(AppEvent::McpPaneOpened(mcp::load_selection(client)?));
+                    .push(AppEvent::McpSettingsOpened(mcp::load_selection(client)?));
             }
             TuiSlashCommandAction::Connectors => {
-                output.events.push(AppEvent::ConnectorPaneOpened(
+                output.events.push(AppEvent::ConnectorPickerOpened(
                     crate::features::connectors::load_selection(client)?,
                 ));
             }
@@ -156,7 +156,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::SessionPaneOpened(sessions::load_selection(
+                        .push(AppEvent::SessionPickerOpened(sessions::load_selection(
                             client,
                             self.session_id().as_str(),
                         )?));
@@ -185,7 +185,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::RewindPaneOpened(rewind::load_selection(
+                        .push(AppEvent::RewindPickerOpened(rewind::load_selection(
                             client,
                             self.session_id(),
                             self.thread_id(),
@@ -217,7 +217,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::DirsPaneOpened(dirs::load_selection(
+                        .push(AppEvent::DirPickerOpened(dirs::load_selection(
                             client,
                             self.session_id(),
                         )?));
@@ -272,7 +272,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::ModelPaneOpened(models::load_selection(client)?));
+                        .push(AppEvent::ModelPickerOpened(models::load_selection(client)?));
                 } else {
                     let update = config::set_preferred_model(client, &arguments)
                         .map_err(|error| CommandExecutionError(error.to_string()))?;

@@ -1,26 +1,27 @@
 use crate::components::detail_list::DetailList;
 #[cfg(test)]
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::pane::PaneSpec;
+#[cfg(test)]
+use crate::components::region::RegionSpec;
 use crate::components::steer::SteerId;
 use crate::features::approval::Approval;
 use crate::features::config::ConfigEditResult;
-use crate::features::config::ConfigPaneSpec;
+use crate::features::config::ConfigChoices;
 use crate::features::config::TerminalSettings;
-use crate::features::connectors::ConnectorPaneSpec;
-use crate::features::dirs::DirPaneSpec;
-use crate::features::keymap::KeymapPaneUpdate;
+use crate::features::connectors::ConnectorChoices;
+use crate::features::dirs::DirChoices;
+use crate::features::keymap::KeymapEditorUpdate;
 use crate::features::keymap::KeymapSettings;
-use crate::features::mcp::McpPaneSpec;
-use crate::features::models::ModelPaneSpec;
+use crate::features::mcp::McpChoices;
+use crate::features::models::ModelChoices;
 use crate::features::query::Query;
 use crate::features::queue::QueueId;
-use crate::features::rewind::RewindPaneSpec;
-use crate::features::sessions::SessionPaneSpec;
-use crate::features::skills::SkillPaneSpec;
-use crate::features::status_line::StatusLinePaneUpdate;
+use crate::features::rewind::RewindChoices;
+use crate::features::sessions::SessionChoices;
+use crate::features::skills::SkillChoices;
+use crate::features::status_line::StatusLineRegionUpdate;
 use crate::features::status_line::StatusLineSettings;
-use crate::features::theme::ThemePaneSpec;
+use crate::features::theme::ThemeChoices;
 use crate::features::thread::ThreadRequestIdentity;
 use crate::features::thread::TurnActivity;
 use crate::render::RenderTheme;
@@ -40,10 +41,10 @@ use zeta_protocol::TurnId;
 
 /// A fact delivered to the single writer of TUI presentation state.
 pub(crate) enum AppEvent {
-    DirsPaneOpened(DirPaneSpec),
+    DirPickerOpened(DirChoices),
     DirRemoved {
         path: std::path::PathBuf,
-        pane_spec: DirPaneSpec,
+        region_spec: DirChoices,
     },
     ClipboardImageRead(Result<Vec<u8>, String>),
     CommandStarted(String),
@@ -53,14 +54,14 @@ pub(crate) enum AppEvent {
     },
     ConfigSettingsReceived(TerminalSettings),
     ConfigUpdated(ConfigEditResult),
-    ConfigPaneOpened(ConfigPaneSpec),
-    ConfigPaneReplaced(ConfigPaneSpec),
+    ConfigEditorOpened(ConfigChoices),
+    ConfigEditorUpdated(ConfigChoices),
     ConfigApiKeySaved {
         provider: String,
-        pane_spec: ConfigPaneSpec,
+        region_spec: ConfigChoices,
     },
-    ConnectorPaneOpened(ConnectorPaneSpec),
-    ConnectorPaneReplaced(ConnectorPaneSpec),
+    ConnectorPickerOpened(ConnectorChoices),
+    ConnectorPickerUpdated(ConnectorChoices),
     PreferredModelReceived(Option<ModelRefDto>),
     FailureReported(String),
     FileSearchSnapshotReceived(PathSearchSnapshot),
@@ -77,27 +78,27 @@ pub(crate) enum AppEvent {
         error: String,
     },
     KeymapSettingsReceived(KeymapSettings),
-    KeymapPaneOpened(KeymapPaneUpdate),
+    KeymapEditorOpened(KeymapEditorUpdate),
     StatusLineSettingsReceived(StatusLineSettings),
-    StatusLinePaneOpened(StatusLinePaneUpdate),
-    StatusLinePaneReplaced(StatusLinePaneUpdate),
-    McpPaneOpened(McpPaneSpec),
-    McpPaneReplaced(McpPaneSpec),
-    ModelPaneOpened(ModelPaneSpec),
-    RewindPaneOpened(RewindPaneSpec),
-    SessionPaneOpened(SessionPaneSpec),
+    StatusLineRegionOpened(StatusLineRegionUpdate),
+    StatusLineRegionReplaced(StatusLineRegionUpdate),
+    McpSettingsOpened(McpChoices),
+    McpSettingsUpdated(McpChoices),
+    ModelPickerOpened(ModelChoices),
+    RewindPickerOpened(RewindChoices),
+    SessionPickerOpened(SessionChoices),
     SessionCatalogReceived(Vec<Session>),
     ThreadContextChanged {
         session_id: SessionId,
         thread_id: ThreadId,
     },
     ThreadGoalChanged(Option<ThreadGoal>),
-    StatusQuickViewOpened(PaneSpec<DetailList>),
-    ListSelectionPaneClosed,
+    StatusOverlayOpened(DetailList),
+    ComposerModeClosed,
     #[cfg(test)]
-    ListSelectionPaneOpened(PaneSpec<ListSelectionModel>),
-    SkillsPaneOpened(SkillPaneSpec),
-    SkillsPaneReplaced(SkillPaneSpec),
+    HelpOpened(RegionSpec<ListSelectionModel>),
+    SkillSettingsOpened(SkillChoices),
+    SkillSettingsUpdated(SkillChoices),
     SkillDiagnosticsReceived(Vec<SkillDiagnosticDto>),
     SteerCompleted(SteerId),
     SteerSubmissionFailed {
@@ -109,8 +110,8 @@ pub(crate) enum AppEvent {
         queue_id: QueueId,
         error: String,
     },
-    ThemePanesClosed,
-    ThemePaneOpened(ThemePaneSpec),
+    ThemePickerClosed,
+    ThemePickerOpened(ThemeChoices),
     RenderThemeChanged(RenderTheme),
     ThreadTranscriptSnapshotReceived(ThreadTranscriptSnapshot),
     ThreadTranscriptHistoryPageReceived(ThreadTranscriptSnapshot),

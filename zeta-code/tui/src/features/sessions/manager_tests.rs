@@ -147,7 +147,7 @@ fn pointer_activation_does_not_take_keyboard_focus_or_selection() {
 
     assert!(!state.focused());
     assert!(state.selected_session().is_none());
-    assert_eq!(detail.into_body().title(), "Session preview");
+    assert_eq!(detail.title(), "Session preview");
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn session_preview_is_read_only_manager_detail() {
     state.reconcile(&sessions);
     state.select_next(&sessions);
 
-    let detail = state.toggle_or_preview(&sessions).unwrap().into_body();
+    let detail = state.toggle_or_preview(&sessions).unwrap();
 
     assert_eq!(detail.title(), "Session preview");
     assert!(

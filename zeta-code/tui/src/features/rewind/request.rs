@@ -1,5 +1,5 @@
-use super::RewindPaneSpec;
-use super::rewind_pane_spec;
+use super::RewindChoices;
+use super::rewind_choices;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
@@ -11,7 +11,7 @@ pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
     thread_id: &ThreadId,
-) -> Result<RewindPaneSpec, ClientError>
+) -> Result<RewindChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -21,5 +21,5 @@ where
             thread_id: thread_id.clone(),
             history: None,
         })
-        .map(|result| rewind_pane_spec(&result.thread))
+        .map(|result| rewind_choices(&result.thread))
 }

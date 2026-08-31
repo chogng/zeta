@@ -2,7 +2,6 @@ use super::branch_count_label;
 use super::session_size_label;
 use crate::components::detail_list::DetailList;
 use crate::components::detail_list::DetailListRow;
-use crate::components::pane::PaneSpec;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -101,10 +100,7 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn toggle_or_preview(
-        &mut self,
-        sessions: &[Session],
-    ) -> Option<PaneSpec<DetailList>> {
+    pub(crate) fn toggle_or_preview(&mut self, sessions: &[Session]) -> Option<DetailList> {
         match self.selected.as_ref()? {
             ManagerSelection::Group(group) => {
                 if !self.collapsed.remove(group) {
@@ -123,7 +119,7 @@ impl SessionManagerState {
         &mut self,
         target: SessionManagerPointerTarget,
         sessions: &[Session],
-    ) -> Option<PaneSpec<DetailList>> {
+    ) -> Option<DetailList> {
         match target.0 {
             ManagerSelection::Group(group) => {
                 if !self.collapsed.remove(&group) {
@@ -244,7 +240,7 @@ impl SessionManagerState {
     }
 }
 
-fn session_preview(session: &Session, now_unix_ms: u64) -> PaneSpec<DetailList> {
+fn session_preview(session: &Session, now_unix_ms: u64) -> DetailList {
     let mut rows = vec![
         DetailListRow::new("Session", session.title.clone()),
         DetailListRow::new("ID", session.session_id.to_string()),
@@ -267,7 +263,7 @@ fn session_preview(session: &Session, now_unix_ms: u64) -> PaneSpec<DetailList> 
             format!("{} · {}", thread.title, thread_status_label(thread.status)),
         ));
     }
-    PaneSpec::new(DetailList::new("Session preview", rows)).with_key_hint("Esc", "to close")
+    DetailList::new("Session preview", rows)
 }
 
 fn manager_status_label(status: SessionManagerStatus) -> &'static str {

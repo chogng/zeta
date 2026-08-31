@@ -6,7 +6,6 @@ use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::pane::PaneSpec;
 use crate::render::RenderContext;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -184,7 +183,7 @@ pub(crate) enum QueueSelectionAction {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum QueuePaneInput {
+pub(crate) enum QueueInput {
     Restore,
     Delete,
     MoveUp,
@@ -192,7 +191,7 @@ pub(crate) enum QueuePaneInput {
     Send,
 }
 
-impl QueuePaneInput {
+impl QueueInput {
     const ALL: [Self; 5] = [
         Self::Restore,
         Self::Delete,
@@ -222,21 +221,21 @@ impl QueuePaneInput {
     }
 }
 
-pub(crate) fn pane_input(key: KeyEvent) -> Option<QueuePaneInput> {
+pub(crate) fn queue_input(key: KeyEvent) -> Option<QueueInput> {
     if key.kind != KeyEventKind::Press {
         return None;
     }
-    QueuePaneInput::ALL
+    QueueInput::ALL
         .into_iter()
         .find(|input| input.key() == (key.code, key.modifiers))
 }
 
-pub(crate) struct QueuePaneSpec {
-    pub(crate) model: PaneSpec<ListSelectionModel>,
+pub(crate) struct QueueChoices {
+    pub(crate) model: ListSelectionModel,
     pub(crate) actions: BTreeMap<ListSelectionItemId, QueueSelectionAction>,
 }
 
-pub(crate) fn pane_spec(view: &QueueView<'_>) -> QueuePaneSpec {
+pub(crate) fn choices(view: &QueueView<'_>) -> QueueChoices {
     let mut actions = BTreeMap::new();
     let items = view
         .items
@@ -249,7 +248,7 @@ pub(crate) fn pane_spec(view: &QueueView<'_>) -> QueuePaneSpec {
                 .with_description(if item.sending { "sending" } else { "queued" })
         })
         .collect();
-    let model = QueuePaneInput::ALL.into_iter().fold(
+    let model = QueueInput::ALL.into_iter().fold(
         ListSelectionModel::new(
             "Queue",
             vec![ListSelectionGroup::new("Current Thread", items)],
@@ -265,8 +264,8 @@ pub(crate) fn pane_spec(view: &QueueView<'_>) -> QueuePaneSpec {
             model.with_key_hint(keys, label)
         },
     );
-    QueuePaneSpec {
-        model: PaneSpec::new(model),
+    QueueChoices {
+        model,
         actions,
     }
 }

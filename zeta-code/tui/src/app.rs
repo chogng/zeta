@@ -1,3 +1,5 @@
+mod active_overlay;
+mod composer_mode;
 mod bootstrap;
 mod command;
 mod dispatch;

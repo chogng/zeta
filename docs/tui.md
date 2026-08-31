@@ -6,6 +6,7 @@
 > 宿主：`zeta-code/cli/`
 > 文档所有权：本文是 TUI 跨 crate ownership、长期不变量、产品支持边界与已接受架构迁移顺序的 canonical 文档。
 > 当前实现接口与事件循环：[`zeta-code/tui/README.md`](../zeta-code/tui/README.md)
+> 终端界面、占高 Region 与 Overlay 的 owner/lifecycle：[`tui-surface-migration-plan.md`](tui-surface-migration-plan.md)
 > 聊天输入区当前架构：[`tui-chat-composer.md`](tui-chat-composer.md)
 > Session/Thread/正文单元/布局决定：[`tui-chat-architecture-discussion-v15.md`](tui-chat-architecture-discussion-v15.md)
 > 产品接口基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
@@ -55,8 +56,7 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 | 尚无 `zeta code` 产品要求或 canonical contract 的 feature | 非目标或 Potential；不构成实现承诺 | 对应产品线、领域与 App Server API 文档 |
 
 本文只为已经接受的 `zeta code` 能力规定架构与迁移顺序。“某能力在 TUI 中不存在”不自动产生
-产品 backlog。Native Agent Timeline 的 Markdown、table、selection、折叠与虚拟化由
-[`app/docs/native-agent-console.md`](../app/docs/native-agent-console.md) 规划，具体 Native
+产品 backlog。桌面 Agent Timeline 的 Markdown、table、selection、折叠与虚拟化由 app 产品文档规划，具体
 Markdown 组件由 [`app/markdown`](../app/markdown/README.md) 拥有；TUI 不追求与其 feature
 parity。remote selector/reconnect、通用 structured Mention 和 durable blob 只有在产品文档
 接受需求并确定 canonical owner 后，才可能成为某条产品线的实施项。
@@ -70,14 +70,14 @@ Zeta 已经在 TUI 外部拥有：
 - `zeta-ansi-escape` 中独立的 ANSI SGR → Ratatui presentation adapter；它不拥有 PTY/terminal state。
 
 主题是 Zeta Code 自有能力，不是图形界面主题的子集。`render/theme.rs` 定义完整 `ThemePalette`、内置 dark/light/colorblind 调色板和 TrueColor、ANSI-256、ANSI-16、Monochrome 转换；`features/theme` 严格读取 TUI 自己的用户主题，不引用 TypeScript token registry、`resources/design-tokens` 或 `zeta-theme`。主题选择、Mouse interactions、Follow-up messages、Input mode 和新增目录默认授权都通过 App Server Config API 保存到 `<profile>/config.toml` 的根级 `[tui]`，用户主题内容位于 `<profile>/zeta-code/themes/*.json`。无参数 `/theme` 打开由 `features/theme` 拥有、不可搜索的固定
-Zeta Code Theme Pane 以挂在顶部分隔线上的反色 `Theme` 块为标题，标题与第一个候选项之间保留一行；固定选项为 Auto、Dark/Light、对应 colorblind-friendly 与 ANSI-only 模式，以及 Custom
+Zeta Code Theme Region 以挂在顶部分隔线上的反色 `Theme` 块为标题，标题与第一个候选项之间保留一行；固定选项为 Auto、Dark/Light、对应 colorblind-friendly 与 ANSI-only 模式，以及 Custom
 color theme。候选行编号展示，cursor 选择色和 syntax/diff preview 随候选主题变化；Enter 原子保存、
-即时切换并关闭整个 Theme flow 返回主界面；保存成功后 transcript 以独立的状态圆点显示实际执行的 `/theme <id>`，下一行通过 `└─` 结构连接符归属结果说明，两行正文保持同列对齐；保存失败时则保留当前 Pane 以显示错误。移动 cursor 时，Theme Pane 分隔线、上方 welcome banner
+即时切换并关闭整个 Theme flow 返回主界面；保存成功后 transcript 以独立的状态圆点显示实际执行的 `/theme <id>`，下一行通过 `└─` 结构连接符归属结果说明，两行正文保持同列对齐；保存失败时则保留当前 Region 以显示错误。移动 cursor 时，Theme Region 分隔线、上方 welcome banner
 框线使用候选 highlight；独立 `Diff preview` 区域不画左右边框，只用候选 muted token 绘制上下
 较高对比度的长节虚线。主题列表与 preview 间保留两行，palette 来源说明与操作提示间保留一行。preview 下方标明
-GitHub、GitHub Colorblind、ANSI 16 colors 或 User-defined 配色来源。`/theme <id>` 保留直接切换。通用 `ListSelection` Pane 的搜索是独立、
+GitHub、GitHub Colorblind、ANSI 16 colors 或 User-defined 配色来源。`/theme <id>` 保留直接切换。通用 `ListSelection` Region 的搜索是独立、
 可配置的底座；启用搜索的页面用上下键在列表、SearchBox 和 Tab 栏之间移动焦点，焦点到 Tab 栏后用左右键切换，Tab/Shift-Tab 也可直接切换。Tab、SearchBox 和 item 共用同一个两格状态列并保持正文对齐。
-所有本地 command 都可使用同一个“命令 + 结果”正文单元：命令本身不带箭头符号，独立的状态圆点为 Running 显示 `◉`，为 Succeeded 显示 `●`；结果行使用与状态位结构相连的 `└─` 表达归属，正文与命令文字同列对齐并使用弱化色，之后才空行。正文单元按稳定 `TranscriptCellId` 展开，并可在 QuickView 中查看 TUI 拿到的完整保留表示；若上游已省略内容，详情必须保留该事实。
+所有本地 command 都可使用同一个“命令 + 结果”正文单元：命令本身不带箭头符号，独立的状态圆点为 Running 显示 `◉`，为 Succeeded 显示 `●`；结果行使用与状态位结构相连的 `└─` 表达归属，正文与命令文字同列对齐并使用弱化色，之后才空行。正文单元按稳定 `TranscriptCellId` 展开，并可在 Overlay 中查看 TUI 拿到的完整保留表示；若上游已省略内容，详情必须保留该事实。
 Auto 在终端 raw mode 建立后、输入事件线程启动前发出一次 OSC 11 背景色查询，并按实际 RGB
 亮度选择 Light/Dark；120 ms 内没有有效响应时读取 `COLORFGBG`，仍无法识别才安全回退 Dark。
 检测结果在当前 TUI 会话内缓存，主题面板与再次选择 Auto 不会重复查询；显式模式不受该判断影响。
@@ -234,7 +234,7 @@ component 被至少两个真实消费者使用、API 变化频率下降且抽取
 zeta-code/tui/
 ├── src/
 │   ├── app.rs
-│   ├── app/                    # state, event, command, frame, event merge and loop
+│   ├── app/                    # state, active region/overlay, frame, event merge and loop
 │   ├── client.rs / client/     # typed completion and App Server event adaptation
 │   ├── features.rs / features/ # product-facing vertical features
 │   ├── components.rs
@@ -242,11 +242,9 @@ zeta-code/tui/
 │   │   ├── chat_history.rs / chat_history/ # transcript renderer and bounded per-Thread buffer cache
 │   │   ├── chat_input.rs / chat_input/
 │   │   ├── chat_composer.rs / chat_composer/
-│   │   ├── pane.rs / pane/
+│   │   ├── region.rs / region/
 │   │   ├── list_selection.rs / list_selection/
-│   │   ├── approval.rs / approval/
-│   │   ├── query.rs / query/
-│   │   ├── quick_view.rs
+│   │   ├── overlay.rs
 │   │   ├── detail_list.rs / detail_list/
 │   │   ├── text_prompt.rs / text_prompt/
 │   │   ├── key_capture.rs / key_capture/
@@ -429,13 +427,13 @@ value；但不能调用领域接口或保存 canonical aggregate。
 
 | Component | 拥有 | 不拥有 |
 | --- | --- | --- |
-| `chat_composer/` | caller-owned `ChatInput` 与 stacked Pane 的局部输入优先级和提交目标 | 补全状态、Approval、Query、Queue、Goal、Plan、Session/Thread lifecycle |
+| `chat_composer/` | caller-owned `ChatInput` 的 Start/Queue/Steer 提交目标 | Region、Overlay、补全状态、Approval、Query、Queue、Goal、Plan、Session/Thread lifecycle |
 | `chat_input/` | draft、Unicode cursor、attachments、paste bindings，以及 `/`、`@`、`$` 补全的 token、popup、selection、应用和鼠标命中 | 候选数据发现、Turn start、config mutation、App Server client |
 | `chat_history/` | plain-text visible row、wrapping、scroll 与每个 Thread 独立的有界派生 buffer cache | canonical Thread snapshot、sequence、transient cursor |
-| `pane/` | `PaneSpec`、`PaneStack`、`PaneId`、封闭 `PaneBody`、统一 `PaneOutcome`、存活 `Pane` 和当前帧只读 `PaneView`；集中输入、高度、顶边反色标题、提示和命中分派 | 具体产品动作、RPC、QuickView、`ListSelection` 专属的 Tab/Search/Adjust 状态 |
-| `quick_view.rs` | 不改变正常布局高度的通用只读覆盖层 | `/status` 等功能事实和产品动作 |
+| `region/` | `RegionSpec`、`SelectionRegion<A>`、`RegionView`、占高测量、顶边标题、机械输入和命中；typed action 与列表状态同生命周期 | 跨 feature 页面栈、RPC、应用级打开/替换/关闭 |
+| `overlay.rs` | 不改变正常布局高度的只读详情层、滚动、Esc 和绘制 | `/status` 等功能事实、ChatInput completion 和应用级生命周期 |
 | `key_hint.rs` | 结构化按键提示、统一分隔与底栏绘制 | 产品动作语义和按键处理 |
-| `tab_list.rs` | tab 集合、当前项、键盘与鼠标横向切换、窄宽度换行和绘制 | pane 内容、搜索、产品 action |
+| `tab_list.rs` | tab 集合、当前项、键盘与鼠标横向切换、窄宽度换行和绘制 | region 内容、搜索、产品 action |
 | `list_selection/` | query、filtered indices、selection 和通用列表渲染，并组合 `tab_list` 切换每组候选项 | Session/Skill identity 的业务 action，非列表页面 |
 
 `features/thread/update.rs` 完成 committed/transient item 合并并暴露有稳定 identity 的可见
@@ -483,7 +481,7 @@ render primitives → ratatui
 terminal/session → ratatui backend draw
 ```
 
-`ChatHistoryView` 与 `ChatComposerSurface` 已是 `Renderable` 的首批真实消费者，同一实现同时提供宽度测量与绘制。`ChatHistoryView` 的多行正文、ANSI detail、首行/续行前缀、总高度、scroll 和 pointer row 现在都从同一份派生结果得出，不再保留另一套 Unicode 行数估算。每个 `ThreadPresentationState` 持有自己的 `ChatHistoryRenderCache`：轻量高度记录覆盖当前正文，Ratatui `Buffer` 只为视口内 cell 生成，并按稳定 cell identity、单调 content revision、width、theme revision 与 render mode 复用；buffer 的单项、总 cell 数和条目数都有硬上限，切走 Thread 时释放重型缓存。Theme Pane 的 Rust diff preview 与 transcript fenced code block 都使用代码高亮入口，活动代码块按完整新增行延续 parser state。其他 component 只有在需要同一测量 contract 时再迁入，不能为了统一外形一次性包装全部 `draw` function；不得建立全局 cache service。
+`ChatHistoryView` 与 `ChatComposerSurface` 已是 `Renderable` 的首批真实消费者，同一实现同时提供宽度测量与绘制。`ChatHistoryView` 的多行正文、ANSI detail、首行/续行前缀、总高度、scroll 和 pointer row 现在都从同一份派生结果得出，不再保留另一套 Unicode 行数估算。每个 `ThreadPresentationState` 持有自己的 `ChatHistoryRenderCache`：轻量高度记录覆盖当前正文，Ratatui `Buffer` 只为视口内 cell 生成，并按稳定 cell identity、单调 content revision、width、theme revision 与 render mode 复用；buffer 的单项、总 cell 数和条目数都有硬上限，切走 Thread 时释放重型缓存。Theme Region 的 Rust diff preview 与 transcript fenced code block 都使用代码高亮入口，活动代码块按完整新增行延续 parser state。其他 component 只有在需要同一测量 contract 时再迁入，不能为了统一外形一次性包装全部 `draw` function；不得建立全局 cache service。
 
 ## 10. `terminal/`：真实终端基础设施
 
@@ -517,12 +515,12 @@ features/<name>/
 ├── state.rs
 ├── command.rs
 ├── request.rs
-├── pane.rs
+├── region.rs
 └── <name>_tests.rs
 ```
 
 不是每个 feature 都需要全部文件。`command.rs` 表达用户意图，`request.rs` 直接调用数据
-owner 的公开 typed interface，`pane.rs` 组装打开 Pane 需要的 `PaneSpec` 和产品动作映射。没有请求的 feature 不创建空
+owner 的公开 typed interface，`region.rs` 组装打开 Region 需要的 `RegionSpec` 和产品动作映射。没有请求的 feature 不创建空
 `request.rs`，也不建立 `mod.rs`、`service.rs`、provider registry 或 feature-local facade。
 
 目标树中已经确定的首批 feature：
@@ -605,7 +603,7 @@ owning crate interface / typed App Server result
 
 `status_line/` 定义稳定的 item identity、用户排序、开关、separator 和 overflow policy；项目列表保存在 `config.toml` 的 `[tui].statusLine`。TUI 负责解释与校验字段，App Server 只按完整 `[tui]` 表持久化并校验 config revision。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
 
-当前实现由 `features/status_line/model.rs` 组合 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序展示的权限、模型、Git 分支和 Git 变更。`features/status_line/view.rs` 最多绘制两行。总 Session Manager、Pane、SubagentPane 或 Chord 等表面需要明确按键时，固定一行 KeyHints 直接替换 StatusLine；Pane 打开时同时保留 ChatInput 状态但接管其可见高度。StatusLine/KeyHints 与存在内容的 SubagentPane 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
+当前实现由 `features/status_line/model.rs` 组合 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序展示的权限、模型、Git 分支和 Git 变更。`features/status_line/view.rs` 最多绘制两行。总 Session Manager、Region、SubagentRegion 或 Chord 等表面需要明确按键时，固定一行 KeyHints 直接替换 StatusLine；Region 打开时同时保留 ChatInput 状态但接管其可见高度。StatusLine/KeyHints 与存在内容的 SubagentRegion 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
 
 ## 12. `host/`：窄宿主能力
 
@@ -657,7 +655,7 @@ TerminalEvent / ClientResult / ServerNotification / TerminationRequest
 - `ServerNotification`：App Server typed notification。
 
 不要把所有类型压成一个包含任意闭包、JSON 或字符串 method 的总线。原始 key event 应先由
-当前焦点和 keymap 转换为用户意图，再进入业务 command。三端共享语法和 Zeta Code 的根级
+当前焦点和 keymap 转换为用户意图，再进入业务 command。三端共享语法和 Zeta Code 的应用级
 Keymap 边界见 [`keybindings.md`](keybindings.md)。
 
 单个 event-loop iteration 应有界，长请求、resource 读取和大型 transcript projection 不得阻塞
@@ -904,20 +902,20 @@ components/
 ├── chat_history.rs + chat_history/
 ├── chat_input.rs + chat_input/
 ├── chat_composer.rs + chat_composer/
-├── pane.rs + pane/
+├── region.rs + region/
 ├── list_selection.rs + list_selection/
 ├── approval.rs + approval/
 ├── query.rs + query/
-├── quick_view.rs
+├── overlay.rs
 ├── detail_list.rs + detail_list/
 ├── text_prompt.rs + text_prompt/
 ├── key_capture.rs + key_capture/
 ├── search_box.rs + search_box/
 └── tab_list.rs
 features.rs + features/
-├── sessions/                    # Manager, root navigation and last viewed Thread
+├── sessions/                    # TerminalScreen, Manager and last viewed Thread
 ├── thread/                      # snapshot plus Thread-keyed draft/Queue/scroll
-├── queue.rs + queue/            # stable Queue identity, inline rows and Pane
+├── queue.rs + queue/            # stable Queue identity, inline rows and Region
 ├── goal.rs / plan.rs            # one-row Thread-derived content
 └── interactions.rs              # Agent interaction bindings and batch entry
 host.rs + host/
@@ -959,28 +957,28 @@ lib.rs + lib_tests.rs
 - `features/approval.rs` 与 `features/query.rs` 分别拥有请求绑定、选择、提交和错误状态，只返回准确的
   typed response；Query 的自定义文本由 Query 自己编辑，Approval 替换普通输入区域，owner selection、deadline 与 cancellation 留在 App Server；
 - `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 只调度请求并把 feature result 转成 `AppEvent`；Config 页面读取服务端配置、Provider 和当前 Session 的目录权限，主题选择、TUI 设置、API key 保存后的重读链及带版本的权限修改也由 `features/config/request.rs` 完成。`TerminalSettings` 解释 `[tui]` 中由 TUI 拥有的字段，写入时保留主题和未知键；配置后端只校验 revision 并替换完整表。Mouse interactions 决定整个 TUI 会话由 `TuiCapture` 处理拖动选择、自动复制和点击，还是由 `TerminalSelection` 把鼠标交还终端；Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，Input mode 决定 `ChatInput` 使用 Standard 或 Vim；
-- `components/tab_list.rs` 已拥有横向 tab 集合、当前项、Tab/Shift-Tab 与左右键循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并只拥有 query/filter/selection state、列表/SearchBox/Tab 焦点、输入 outcome 与列表 Ratatui view；上下键在三个区域间移动焦点，焦点位于 item 时左右调整当前配置项，位于 Tab 栏时左右切换标签；只读详情、文本输入和按键录制已分别交给 `DetailList`、`TextPrompt` 和 `KeyCapture`；
+- `components/tab_list.rs` 已拥有横向 tab 集合、当前项、Tab/Shift-Tab 与左右键循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并只拥有 query/filter/selection state、列表/SearchBox/Tab 焦点、输入 outcome 与列表 Ratatui view；`components/region` 把列表状态和 typed action 合并为 `SelectionRegion<A>`，只读详情、文本输入和按键录制分别由 `DetailList`、`TextPrompt` 和 `KeyCapture` 提供机械能力；
 - `render/layout.rs` 已拥有跨 presentation surface 复用的纯 geometry；`render/theme.rs` 拥有 TUI 完整调色板和终端色彩能力转换，`features/theme/resource.rs` 负责 TUI 产品目录的读取、预览、选择和保存；`App` 持有活动主题并通过 `RenderContext` 向下传递，component 不反向依赖 frame coordinator；
-- 根级 `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/shortcuts` 可配置项；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和一行 KeyHints；当前内建表仍只声明单段组合。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；`ChatInput` 编辑、`ListSelection` 导航与 `ChatHistory` 滚动继续由局部 component 拥有；
+- `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、Session 界面 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/shortcuts` 可配置项；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和一行 KeyHints；当前内建表仍只声明单段组合。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；`ChatInput` 编辑、`ListSelection` 导航与 `ChatHistory` 滚动继续由局部 component 拥有；
 - `features/keymap` 解释 `config.toml` 的 `[tui].keybindings`，完整校验 User command/blocker、平台覆盖与 `when`；`/shortcuts` 打开 Keymap 设置界面，汇总固定操作键和可配置应用级绑定，并提供可搜索的 All/Customized/Diagnostics 列表、action 菜单和单键/两段 Chord 录制。保存要求打开界面时的 config revision 仍有效，完整编译成功后才通过 `config/update` 替换 `[tui]` 并安装新 `AppKeymap`；坏更新或保存失败保留上一份有效映射，`config/changed` 触发重读；
-- `App` 处理 presentation coordination 与 Keymap action，并把普通输入委托给 `ChatComposer`；`app/screen_layout.rs` 为 Session 页面统一分配 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPane`，为 Manager 页面分配 `Welcome → 分组 Session rows → ChatInput → KeyHints`；
-- `ChatInput`、editor、attachment、paste 和 `/`、`@`、`$` completion 位于 `components/chat_input/`；补全目录由 provider/domain 提供快照，每个 Thread 的 `ChatInput` 独立保存活动 token、popup 和 selection；`components/pane/` 以 `PaneStack + PaneBody + PaneOutcome` 统一页面身份、生命周期和正文分派；Queue、Goal、Plan、Approval、Query 和 SubagentPane 的状态留在对应 feature，区域留在 `app/screen_layout.rs`；
+- `App` 处理 presentation coordination 与 Keymap action，并明确保存当前 `TerminalScreen`、一个活动 Region 和一个应用级 Overlay；`app/screen_layout.rs` 只接收占高行数，为 Session 页面统一分配 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval/Region → StatusLine/KeyHints → 空行 → SubagentRegion`，为 Manager 页面分配 `Welcome → 分组 Session rows → ChatInput/Region → KeyHints`；
+- `ChatInput`、editor、attachment、paste 和 `/`、`@`、`$` completion 位于 `components/chat_input/`；补全目录由 provider/domain 提供快照，每个 Thread 的 `ChatInput` 独立保存活动 token、popup 和 selection。Config、Keymap、Theme 的多页面返回关系由对应 feature region 保存；`app::active_region` 只协调当前一个活动 Region，`app::active_overlay` 只协调当前一个只读详情 Overlay；
 - update-driven snapshot resync 先应用完整 canonical Thread，再把
   completed/waiting/failed/interrupted 映射为 presentation lifecycle；active Turn 的定时
   snapshot polling 已移除，Turn completion 不再单独追加 agent 文本；
-- `ChatComposer` 在 caller-owned `ChatInput` 与 stacked Pane 之间路由输入，并按 Running/Queue/Steer 状态选择提交目标；Pane 打开时保留草稿但接管 ChatInput 的可见高度，Pane KeyHints 在底栏替换 StatusLine。Approval、Query、Queue 与 Plan 均不由它保存。Turn 为 Running 时 Enter 按 Follow-up messages 设置把完整草稿放入 Queue 或通过 typed `SteerTurn` 发送。普通 Up 只访问输入历史；`/queue` Pane 负责恢复、删除、调序、立即发送和完整内容 QuickView。当前 Turn 结束后队首才调用 `StartTurn`，请求被拒绝时保留条目，服务端接受后才移除。`ListSelection` Pane 用上下键在 item、SearchBox 与 Tab 栏间移动焦点，支持 Tab/Shift-Tab 切页、搜索、过滤和逐层出栈。`$` Skill、`/` command 和 `@` Mention 由 `ChatInput` 的 `CompletionView` 保证同时最多显示一种；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
+- `ChatComposer` 只按 Running/Queue/Steer 状态选择 caller-owned `ChatInput` 的提交目标。Region 打开时由 frame 隐藏 ChatInput、使用 Region 自己的 desired rows，并把 Region KeyHints 放到底栏；ChatComposer 不保存或路由 Region。Turn 为 Running 时 Enter 按 Follow-up messages 设置把完整草稿放入 Queue 或通过 typed `SteerTurn` 发送。普通 Up 只访问输入历史；`/queue` Region 负责恢复、删除、调序、立即发送和完整内容 Overlay。当前 Turn 结束后队首才调用 `StartTurn`，请求被拒绝时保留条目，服务端接受后才移除。`ListSelection` Region 用上下键在 item、SearchBox 与 Tab 栏间移动焦点，支持 Tab/Shift-Tab 切页、搜索和过滤；feature 内多页面由 feature 自己处理返回。`$` Skill、`/` command 和 `@` Mention 由 `ChatInput` 的 `CompletionView` 保证同时最多显示一种；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
   All/Enabled/Disabled/Manage catalog tabs；Skill 目录诊断由 App Server 判断并脱敏，TUI 只把新出现的
   诊断写入 Notice。同一条持续存在的诊断不重复提示，消失后再出现或内容变化时重新提示；
 - `$name` 候选和 `/skills` 都只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；候选选中后保留原子 `$name` 文本并绑定 exact pinned `SkillRef`；
   Manage tab 的 `Enter` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
   `skills/changed` 也会刷新前台页面。enablement 不等于正文 activation，TUI 当前没有
   Skill context injection；
-- `app/frame.rs` 只装配 frame 并选择普通 status line 或临时操作提示；Pane 打开时由它把 Pane KeyHints 放进同一个底栏。`components/chat_composer/view.rs` 组合普通输入区和接管输入高度的 Pane，ChatInput completion view 拥有补全绘制与命中语义，各 component/feature view 拥有自己的 surface。补全弹层从输入框上沿覆盖；Query 使用输入框上方的独立区域，Approval 使用输入区域本身；
+- `app/frame.rs` 按 `TerminalScreen → 占高 Region → 应用级 Overlay 或 ChatInput completion → 字符框选` 绘制，并以相反顺序命中。Region 打开时由它替换输入区域并把 Region KeyHints 放进同一个底栏；应用级 Overlay 不进入 `screen_layout`，存在时阻止底层 pointer。补全弹层从输入框上沿覆盖；Query 使用输入框上方的独立区域，Approval 使用输入区域本身；
 - `TerminalModeGuard` 在任一 mode 获取失败时按逆序恢复已经获取的 terminal mode，显式
   restore 和 Drop 共享幂等清理路径；
 - `StatusLineModel` 映射运行事实与 typed config/Git result，`StatusLineSettings` 解释 `[tui].statusLine` 的项目与顺序，`features/status_line/view.rs` 在最多两行内按可用宽度降级；`WelcomeModel` 在 App 构造阶段把 workspace 路径缩写为 home-relative 文案，供空会话和 Manager 顶部复用；
 - `/status` 使用 Session snapshot 的实际模型、`model/list` 的完整/可用 context capacity 与最新 Turn typed `contextUsage` 展示模型、上下文窗口和 Session/Thread identity；剩余窗口不从 transcript 或累计 Thread usage 推导；
-- `ChatInput` 拥有 popup keys、活动 token、候选 selection、range completion 应用和提交解析；`zeta-slash-commands` 拥有 slash grammar、catalog、matches 与 dismiss，Ratatui popup renderer 根据自身 viewport 投影可见范围。`TextArea` 只拥有 UTF-8 buffer、光标和原子元素；`components/chat_input/vim.rs` 在 `ChatInput` 内拥有 Insert/Normal/Visual、operator、count、selection 与 yank 状态。补全弹层优先处理按键，之后才进入 Vim 或普通编辑；Vim 状态不进入 `App`，也不改变 Pane/正文的应用级导航；
+- `ChatInput` 拥有 popup keys、活动 token、候选 selection、range completion 应用和提交解析；`zeta-slash-commands` 拥有 slash grammar、catalog、matches 与 dismiss，Ratatui popup renderer 根据自身 viewport 投影可见范围。`TextArea` 只拥有 UTF-8 buffer、光标和原子元素；`components/chat_input/vim.rs` 在 `ChatInput` 内拥有 Insert/Normal/Visual、operator、count、selection 与 yank 状态。补全弹层优先处理按键，之后才进入 Vim 或普通编辑；Vim 状态不进入 `App`，也不改变 Region/正文的应用级导航；
 - bracketed paste 使用独立事件路径；超过 1000 个 Unicode scalar value 的内容由 `PendingPastes`
   绑定到 `TextArea` 原子占位符，并在提交前展开；
 - 粘贴 PNG/JPEG/GIF/WEBP 本地文件路径会由 `Attachments` 立即读取并绑定为 `[Image #N]`
@@ -998,7 +996,7 @@ lib.rs + lib_tests.rs
 当前产品支持边界与非目标：
 
 - transcript 采用 bounded plain-text wrapping、分页键盘滚动、最后回复 copy 与当前已加载 history window 的 Markdown export。最外层 TUI 表面额外支持任意页面的可见字符选择：拖动更新 Ratatui 字符网格范围，双击选择连续的 Unicode 单词、词间空白或符号，三击选择当前可视行，完成选择后从最后完成的 frame 提取文字并自动复制；单击继续执行页面原有动作。该能力只复制屏幕上当前可见的字符，不提供 Markdown 结构、折行前逻辑行或滚出屏幕内容的语义选择；
-  Native Agent Timeline 的 Markdown/table、结构化内容选择、折叠与虚拟化属于 `app`，
+  桌面 Agent Timeline 的 Markdown/table、结构化内容选择、折叠与虚拟化属于 `app`，
   不是 TUI 的“尚未完成”；
 - 鼠标捕获由 `App` 按 Mouse interactions 设置统一决定，不再由局部页面声明。开启时所有页面共享拖动选择、松手复制与点击/拖动分流，ChatInput 的 Slash/File/Plugin completion、`ListSelection`、Approval、Query 和正文标记继续只拥有各自的点击命中语义；关闭时全部鼠标输入和框选交还宿主终端；
 - 当前入口通过 `AppServerSession` 消费 profile 和 Environment 目录授权，不提供 remote
@@ -1009,12 +1007,12 @@ lib.rs + lib_tests.rs
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
 - status line 已按 `[tui].statusLine` 顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；当前目录路径只在空会话和 Manager 顶部 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
-- Config surface 包含 Config、Add-dir、Providers 与 Language servers 四个标签页。主题仍通过 `/theme` Pane 选择；主题、Mouse interactions、Follow-up messages、Input mode 和 Add-dir 的新增目录默认 Permission 都由 App Server 保存到 `<profile>/config.toml` 的根级 `[tui]`。Input mode 在 item 焦点下用左右或 Enter 选择 Standard/Vim，只影响 `ChatInput`。Follow-up messages 默认 Queue，在 item 焦点下用左右明确选择 Queue/Steer，Enter 在两者间切换；上下键在列表、SearchBox 和 Tab 栏间移动焦点，Tab/Shift-Tab 直接切标签。默认 Permission 只保存权限集合，不保存目录或 Session。Add-dir 同时管理当前 Session 每个目录的独立 Permission，目录授权不写入 profile 配置；发现类开关会显示当前找到的条目数，但不会绕过 MCP 连接或 Plugin 安装确认。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。`/mcp` 与 `/skills` 页面继续管理各自的运行状态和可用条目。
+- Config surface 包含 Config、Add-dir、Providers 与 Language servers 四个标签页。主题仍通过 `/theme` Region 选择；主题、Mouse interactions、Follow-up messages、Input mode 和 Add-dir 的新增目录默认 Permission 都由 App Server 保存到 `<profile>/config.toml` 的根级 `[tui]`。Input mode 在 item 焦点下用左右或 Enter 选择 Standard/Vim，只影响 `ChatInput`。Follow-up messages 默认 Queue，在 item 焦点下用左右明确选择 Queue/Steer，Enter 在两者间切换；上下键在列表、SearchBox 和 Tab 栏间移动焦点，Tab/Shift-Tab 直接切标签。默认 Permission 只保存权限集合，不保存目录或 Session。Add-dir 同时管理当前 Session 每个目录的独立 Permission，目录授权不写入 profile 配置；发现类开关会显示当前找到的条目数，但不会绕过 MCP 连接或 Plugin 安装确认。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。`/mcp` 与 `/skills` 页面继续管理各自的运行状态和可用条目。
 
-`inline_visualization` 已接受为普通 `TranscriptCell` 种类，但当前 protocol 尚未提供 canonical visualization artifact、结构化 fallback 或安全引用。TUI 在该契约出现前不解析任意 HTML，也不凭显示文本伪造图表；契约到位后由 Thread transcript 投影生成稳定 `TranscriptCellId`，小型 fallback 可展开，大型 fallback 进入现有 QuickView。
+`inline_visualization` 已接受为普通 `TranscriptCell` 种类，但当前 protocol 尚未提供 canonical visualization artifact、结构化 fallback 或安全引用。TUI 在该契约出现前不解析任意 HTML，也不凭显示文本伪造图表；契约到位后由 Thread transcript 投影生成稳定 `TranscriptCellId`，小型 fallback 可展开，大型 fallback 进入现有 Overlay。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
-因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。
+因为桌面端已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。
 
 ## 17. 已接受的架构迁移顺序
 
@@ -1033,7 +1031,7 @@ lib.rs + lib_tests.rs
 | 通用 `render/`、`Renderable` 与 `ui/` 退场 | Current |
 | `components/tab_list` 横向切换、换行与绘制边界 | Current |
 | `components/list_selection` state/view 边界 | Current |
-| `chat_input` / `chat_composer` / `pane` component 物理边界 | Current |
+| `chat_input` / `chat_composer` / `region` component 物理边界 | Current |
 | 后端 Thread transient merge、cursor recovery 与 bounded notification data plane | Current |
 | transcript cell revision 与每个 Thread 独立的有界 render cache | Current |
 | TUI frame scheduler 与输入优先重绘 | Current |
@@ -1070,7 +1068,7 @@ README 中记录。
 4. 建立 `features/thread/`，用 canonical Thread snapshot 替换扁平 message authority；
    （snapshot/展示映射 owner、typed request、durable sequence/gap snapshot resync 为 Current；
    transient merge 和完整 ThreadItem projection 也为 Current）
-5. 把 bootstrap `toppane/` 与各 presentation surface 按职责迁入
+5. 把 bootstrap `topregion/` 与各 presentation surface 按职责迁入
    `components/chat_history/`、`components/chat_composer/`、`components/tab_list.rs`、`components/list_selection/` 和
    `components/chat_input/`；（Current）保留 `ChatComposer → ChatInput → TextArea` 的局部 ownership；新的通用 `render/` 只接收机械渲染能力，不重新接管这些 presentation surface；
 6. 将 public `run` 收敛为接收 owned `AppServerSession`，并在所有正常/错误退出路径显式

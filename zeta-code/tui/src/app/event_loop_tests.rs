@@ -12,7 +12,8 @@ use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::pane::PaneSpec;
+use crate::components::region::ComposerModePointerTarget;
+use crate::components::region::RegionSpec;
 use crate::components::search_box::SearchBoxModel;
 use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
@@ -31,9 +32,9 @@ use zeta_protocol::ThreadStatus;
 #[test]
 fn request_actions_wait_for_the_active_request_without_losing_order() {
     let mut queued = VecDeque::new();
-    let first = AppCommand::OpenConfigPane;
-    let second = AppCommand::OpenRewindPane;
-    let third = AppCommand::OpenThemePane;
+    let first = AppCommand::OpenConfigEditor;
+    let second = AppCommand::OpenRewindRegion;
+    let third = AppCommand::OpenThemePicker;
 
     assert!(schedule_action(Some(first), true, &mut queued).is_none());
     assert!(schedule_action(Some(second), true, &mut queued).is_none());
@@ -41,15 +42,15 @@ fn request_actions_wait_for_the_active_request_without_losing_order() {
     assert_eq!(queued.len(), 3);
     assert!(matches!(
         schedule_action(None, false, &mut queued),
-        Some(AppCommand::OpenConfigPane)
+        Some(AppCommand::OpenConfigEditor)
     ));
     assert!(matches!(
         schedule_action(None, false, &mut queued),
-        Some(AppCommand::OpenRewindPane)
+        Some(AppCommand::OpenRewindRegion)
     ));
     assert!(matches!(
         schedule_action(None, false, &mut queued),
-        Some(AppCommand::OpenThemePane)
+        Some(AppCommand::OpenThemePicker)
     ));
 }
 
@@ -87,7 +88,7 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
 #[test]
 fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
     let mut app = App::new();
-    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+    app.update(AppEvent::HelpOpened(RegionSpec::new(
         ListSelectionModel::new(
             "Feature",
             vec![ListSelectionGroup::new(
@@ -105,9 +106,7 @@ fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
     'rows: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::Composer(
-                    ChatComposerPointerTarget::PaneItem(1),
-                ))
+                == Some(InputPointerTarget::Region(ComposerModePointerTarget::Item(1)))
             {
                 target = Some((column, row));
                 break 'rows;
@@ -124,16 +123,14 @@ fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
     );
     assert_eq!(
         app.hovered_pointer_target(),
-        Some(&InputPointerTarget::Composer(
-            ChatComposerPointerTarget::PaneItem(1)
-        ))
+        Some(&InputPointerTarget::Region(ComposerModePointerTarget::Item(1)))
     );
 }
 
 #[test]
 fn pointer_click_switches_a_selection_tab() {
     let mut app = App::new();
-    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+    app.update(AppEvent::HelpOpened(RegionSpec::new(
         ListSelectionModel::new(
             "Feature",
             vec![
@@ -149,9 +146,7 @@ fn pointer_click_switches_a_selection_tab() {
     'cells: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::Composer(
-                    ChatComposerPointerTarget::PaneTab(1),
-                ))
+                == Some(InputPointerTarget::Region(ComposerModePointerTarget::Tab(1)))
             {
                 target = Some((column, row));
                 break 'cells;
@@ -165,9 +160,9 @@ fn pointer_click_switches_a_selection_tab() {
 }
 
 #[test]
-fn pointer_click_explicitly_focuses_the_pane_search_box() {
+fn pointer_click_explicitly_focuses_the_region_search_box() {
     let mut app = App::new();
-    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+    app.update(AppEvent::HelpOpened(RegionSpec::new(
         ListSelectionModel::new(
             "Feature",
             vec![ListSelectionGroup::new(
@@ -182,16 +177,14 @@ fn pointer_click_explicitly_focuses_the_pane_search_box() {
     'cells: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::Composer(
-                    ChatComposerPointerTarget::PaneSearch,
-                ))
+                == Some(InputPointerTarget::Region(ComposerModePointerTarget::Search))
             {
                 target = Some((column, row));
                 break 'cells;
             }
         }
     }
-    let (column, row) = target.expect("pane search box should be clickable");
+    let (column, row) = target.expect("region search box should be clickable");
 
     update_pointer_hover(&mut app, area, column, row);
     assert_eq!(app.list_selection().unwrap().query(), "");
@@ -255,6 +248,6 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
     app.insert_text("/sessions");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
-    assert_eq!(app.quick_view().unwrap().title(), "Session preview");
+    assert_eq!(app.active_overlay().unwrap().title(), "Session preview");
     assert!(app.session_manager_view().is_some());
 }

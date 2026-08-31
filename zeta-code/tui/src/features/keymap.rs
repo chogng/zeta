@@ -11,15 +11,12 @@ use crate::client::new_command_id;
 use crate::keymap::AppKeymap;
 use crate::keymap::compile_app_user_bindings;
 
-mod pane;
+mod region;
 
-pub(crate) use pane::KeymapAction;
-pub(crate) use pane::KeymapCaptureOutcome;
-pub(crate) use pane::KeymapCaptureState;
-pub(crate) use pane::KeymapPaneSpec;
-pub(crate) use pane::keymap_action_menu;
-pub(crate) use pane::keymap_capture_pane_spec;
-pub(crate) use pane::keymap_pane_spec;
+pub(crate) use region::KeymapEditor;
+pub(crate) use region::KeymapEditorOutcome;
+pub(crate) use region::KeymapChoices;
+pub(crate) use region::keymap_choices;
 
 const CONFIG_KEY: &str = "keybindings";
 
@@ -56,9 +53,9 @@ pub(crate) struct KeymapSettings {
     pub(crate) diagnostics: Vec<String>,
 }
 
-pub(crate) struct KeymapPaneUpdate {
+pub(crate) struct KeymapEditorUpdate {
     pub(crate) settings: KeymapSettings,
-    pub(crate) pane_spec: KeymapPaneSpec,
+    pub(crate) region_spec: KeymapChoices,
     pub(crate) notice: Option<String>,
 }
 
@@ -74,20 +71,20 @@ pub(crate) fn settings_from_tui(section: &FrontendConfigDto) -> Result<KeymapSet
     compile_settings(&document)
 }
 
-pub(crate) fn read_keymap<T>(client: &mut AppServerClient<T>) -> Result<KeymapPaneUpdate, String>
+pub(crate) fn read_keymap<T>(client: &mut AppServerClient<T>) -> Result<KeymapEditorUpdate, String>
 where
     T: JsonRpcTransport,
 {
     let config = client.read_config().map_err(|error| error.to_string())?;
     let settings = settings_from_tui(&config.tui)?;
-    let pane_spec = keymap_pane_spec(
+    let region_spec = keymap_choices(
         settings.keymap.setup_actions(),
         &settings.diagnostics,
         config.revision,
     );
-    Ok(KeymapPaneUpdate {
+    Ok(KeymapEditorUpdate {
         settings,
-        pane_spec,
+        region_spec,
         notice: None,
     })
 }
@@ -95,7 +92,7 @@ where
 pub(crate) fn set_keymap<T>(
     client: &mut AppServerClient<T>,
     edit: KeymapEdit,
-) -> Result<KeymapPaneUpdate, String>
+) -> Result<KeymapEditorUpdate, String>
 where
     T: JsonRpcTransport,
 {
@@ -134,14 +131,14 @@ where
 
     let config = client.read_config().map_err(|error| error.to_string())?;
     let settings = settings_from_tui(&config.tui)?;
-    let pane_spec = keymap_pane_spec(
+    let region_spec = keymap_choices(
         settings.keymap.setup_actions(),
         &settings.diagnostics,
         config.revision,
     );
-    Ok(KeymapPaneUpdate {
+    Ok(KeymapEditorUpdate {
         settings,
-        pane_spec,
+        region_spec,
         notice: Some(notice),
     })
 }

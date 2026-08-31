@@ -7,14 +7,14 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum RootTarget {
+pub(crate) enum TerminalScreen {
     Manager,
     Session(SessionId),
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct SessionsState {
-    root: Option<RootTarget>,
+    screen: Option<TerminalScreen>,
     active_session_id: Option<SessionId>,
     catalog: Vec<Session>,
     last_viewed_thread: BTreeMap<SessionId, ThreadId>,
@@ -32,7 +32,7 @@ impl SessionsState {
         self.last_viewed_thread
             .insert(active_session_id.clone(), viewed_thread_id);
         self.active_session_id = Some(active_session_id.clone());
-        self.root = Some(RootTarget::Session(active_session_id));
+        self.screen = Some(TerminalScreen::Session(active_session_id));
         self.catalog = catalog;
         self.manager.reconcile(&self.catalog);
     }
@@ -48,22 +48,22 @@ impl SessionsState {
         }) {
             self.active_session_id = None;
         }
-        if let Some(RootTarget::Session(session_id)) = self.root.as_ref()
+        if let Some(TerminalScreen::Session(session_id)) = self.screen.as_ref()
             && !self
                 .catalog
                 .iter()
                 .any(|session| &session.session_id == session_id)
         {
-            self.root = Some(RootTarget::Manager);
+            self.screen = Some(TerminalScreen::Manager);
         }
     }
 
-    pub(crate) fn root(&self) -> Option<&RootTarget> {
-        self.root.as_ref()
+    pub(crate) fn screen(&self) -> Option<&TerminalScreen> {
+        self.screen.as_ref()
     }
 
     pub(crate) fn show_manager(&mut self) {
-        self.root = Some(RootTarget::Manager);
+        self.screen = Some(TerminalScreen::Manager);
         self.manager.reconcile(&self.catalog);
     }
 
@@ -71,7 +71,7 @@ impl SessionsState {
         self.last_viewed_thread
             .insert(session_id.clone(), viewed_thread_id);
         self.active_session_id = Some(session_id.clone());
-        self.root = Some(RootTarget::Session(session_id));
+        self.screen = Some(TerminalScreen::Session(session_id));
     }
 
     pub(crate) fn activate_context(&mut self, session_id: SessionId, thread_id: ThreadId) {
@@ -138,17 +138,17 @@ impl SessionsState {
         self.manager.refresh_time(now, &self.catalog)
     }
 
-    pub(crate) fn previous_root(&self) -> Option<RootTarget> {
-        match self.root()? {
-            RootTarget::Manager => None,
-            RootTarget::Session(_) => Some(RootTarget::Manager),
+    pub(crate) fn previous_screen(&self) -> Option<TerminalScreen> {
+        match self.screen()? {
+            TerminalScreen::Manager => None,
+            TerminalScreen::Session(_) => Some(TerminalScreen::Manager),
         }
     }
 
-    pub(crate) fn next_root(&self) -> Option<RootTarget> {
-        match self.root()? {
-            RootTarget::Manager => self.active_session_id.clone().map(RootTarget::Session),
-            RootTarget::Session(_) => None,
+    pub(crate) fn next_screen(&self) -> Option<TerminalScreen> {
+        match self.screen()? {
+            TerminalScreen::Manager => self.active_session_id.clone().map(TerminalScreen::Session),
+            TerminalScreen::Session(_) => None,
         }
     }
 }

@@ -7,26 +7,26 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthStartPar
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
 
-use super::ConnectorPaneSpec;
-use super::connector_pane_spec;
+use super::ConnectorChoices;
+use super::connector_choices;
 use crate::client::new_command_id;
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
-) -> Result<ConnectorPaneSpec, ClientError>
+) -> Result<ConnectorChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
     client
         .list_connectors()
-        .map(|catalog| connector_pane_spec(&catalog))
+        .map(|catalog| connector_choices(&catalog))
 }
 
 pub(crate) fn connect_device_oauth<T>(
     client: &mut AppServerClient<T>,
     connector_id: String,
     connection_generation: u64,
-) -> Result<ConnectorPaneSpec, ClientError>
+) -> Result<ConnectorChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -73,7 +73,7 @@ where
 pub(crate) fn disconnect<T>(
     client: &mut AppServerClient<T>,
     connector_id: String,
-) -> Result<ConnectorPaneSpec, ClientError>
+) -> Result<ConnectorChoices, ClientError>
 where
     T: JsonRpcTransport,
 {

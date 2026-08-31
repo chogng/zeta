@@ -1,14 +1,15 @@
+use super::active_overlay::ActiveOverlay;
+use super::composer_mode::ComposerMode;
+use super::composer_mode::ComposerOutcome;
 use super::command::AppCommand;
-use super::escape::RootEscapeOutcome;
-use super::escape::RootEscapeSequence;
+use super::escape::ScreenEscapeOutcome;
+use super::escape::ScreenEscapeSequence;
 use super::event::AppEvent;
 use super::frame::InputPointerTarget;
-use super::help::help_pane_spec;
+use super::help::help_region_spec;
 use super::status_notice::StatusNotice;
 use crate::components::chat_composer::ChatComposer;
 use crate::components::chat_composer::ChatComposerOutcome;
-#[cfg(test)]
-use crate::components::chat_composer::ChatComposerPaneView;
 use crate::components::chat_composer::ChatComposerView;
 use crate::components::chat_history::ChatHistoryRenderCache;
 use crate::components::chat_history::ChatHistoryScroll;
@@ -18,59 +19,51 @@ use crate::components::chat_input::ChatInputItem;
 use crate::components::detail_list::DetailList;
 use crate::components::detail_list::DetailListRow;
 use crate::components::list_selection::ListSelectionAdjustment;
-use crate::components::list_selection::ListSelectionItemId;
-use crate::components::list_selection::ListSelectionModel;
 use crate::components::list_selection::ListSelectionState;
-use crate::components::pane::PaneId;
-use crate::components::pane::PaneSpec;
-use crate::components::quick_view::QuickViewState;
+use crate::components::overlay::OverlayInputOutcome;
+#[cfg(test)]
+use crate::components::region::RegionSpec;
+use crate::components::region::RegionView;
 use crate::components::welcome::WelcomeModel;
 use crate::features::approval::Approval;
 use crate::features::approval::ApprovalOutcome;
 use crate::features::config::ConfigSelectionAction;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
-use crate::features::connectors::ConnectorPaneSpec;
+use crate::features::connectors::ConnectorChoices;
 use crate::features::connectors::ConnectorSelectionAction;
-use crate::features::dirs::DirPaneSpec;
+use crate::features::dirs::DirChoices;
 use crate::features::dirs::DirSelectionAction;
-use crate::features::keymap::KeymapAction;
-use crate::features::keymap::KeymapCaptureOutcome;
-use crate::features::keymap::KeymapCaptureState;
-use crate::features::keymap::KeymapEdit;
-use crate::features::keymap::KeymapEditKind;
-use crate::features::keymap::KeymapPaneSpec;
-use crate::features::keymap::keymap_action_menu;
-use crate::features::keymap::keymap_capture_pane_spec;
-use crate::features::mcp::McpPaneSpec;
+use crate::features::keymap::KeymapEditorOutcome;
+use crate::features::keymap::KeymapChoices;
+use crate::features::mcp::McpChoices;
 use crate::features::mcp::McpSelectionAction;
-use crate::features::models::ModelPaneSpec;
+use crate::features::models::ModelChoices;
 use crate::features::models::ModelSelectionAction;
 use crate::features::query::Query;
 use crate::features::query::QueryOutcome;
-use crate::features::queue;
-use crate::features::queue::QueuePaneInput;
-use crate::features::queue::QueuePaneSpec;
+use crate::features::queue::QueueInput;
+use crate::features::queue::QueueChoices;
 use crate::features::queue::QueueSelectionAction;
 use crate::features::queue::QueueView;
-use crate::features::rewind::RewindPaneSpec;
+use crate::features::rewind::RewindChoices;
 use crate::features::rewind::RewindSelectionAction;
-use crate::features::sessions::RootTarget;
 use crate::features::sessions::SessionManagerPointerTarget;
 use crate::features::sessions::SessionManagerView;
-use crate::features::sessions::SessionPaneSpec;
+use crate::features::sessions::SessionChoices;
 use crate::features::sessions::SessionSelectionAction;
 use crate::features::sessions::SessionsState;
-use crate::features::skills::{SkillDiagnosticWarnings, SkillPaneSpec, SkillSelectionAction};
+use crate::features::sessions::TerminalScreen;
+use crate::features::skills::{SkillDiagnosticWarnings, SkillChoices, SkillSelectionAction};
 use crate::features::status_line::ApprovalModeStatus;
 use crate::features::status_line::StatusLineModel;
-use crate::features::status_line::StatusLinePaneSpec;
+use crate::features::status_line::StatusLineChoices;
 use crate::features::status_line::StatusLineRuntime;
 use crate::features::status_line::StatusLineSelectionAction;
-use crate::features::theme::ThemePaneSpec;
-use crate::features::theme::ThemeSelectionAction;
-use crate::features::thread::SubagentPaneState;
-use crate::features::thread::SubagentPaneView;
+use crate::features::theme::ThemePickerOutcome;
+use crate::features::theme::ThemeChoices;
+use crate::features::thread::SubagentRegionState;
+use crate::features::thread::SubagentPickerView;
 use crate::features::thread::ThreadFeatureState;
 use crate::features::thread::ThreadPresentationEvent;
 use crate::features::thread::ThreadPresentationStore;
@@ -92,7 +85,6 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::layout::Position;
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -118,23 +110,26 @@ enum TurnInputMode {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EmptyInputNavigation {
-    PreviousRoot,
-    NextRoot,
+    PreviousScreen,
+    NextScreen,
     FocusManager,
     FocusSubagents,
 }
 
-fn empty_input_navigation(root: Option<&RootTarget>, key: KeyCode) -> Option<EmptyInputNavigation> {
+fn empty_input_navigation(
+    screen: Option<&TerminalScreen>,
+    key: KeyCode,
+) -> Option<EmptyInputNavigation> {
     match key {
-        KeyCode::Left => Some(EmptyInputNavigation::PreviousRoot),
-        KeyCode::Right => Some(EmptyInputNavigation::NextRoot),
-        KeyCode::Esc if matches!(root, Some(RootTarget::Manager)) => {
-            Some(EmptyInputNavigation::NextRoot)
+        KeyCode::Left => Some(EmptyInputNavigation::PreviousScreen),
+        KeyCode::Right => Some(EmptyInputNavigation::NextScreen),
+        KeyCode::Esc if matches!(screen, Some(TerminalScreen::Manager)) => {
+            Some(EmptyInputNavigation::NextScreen)
         }
-        KeyCode::Up if matches!(root, Some(RootTarget::Manager)) => {
+        KeyCode::Up if matches!(screen, Some(TerminalScreen::Manager)) => {
             Some(EmptyInputNavigation::FocusManager)
         }
-        KeyCode::Down if matches!(root, Some(RootTarget::Session(_))) => {
+        KeyCode::Down if matches!(screen, Some(TerminalScreen::Session(_))) => {
             Some(EmptyInputNavigation::FocusSubagents)
         }
         _ => None,
@@ -148,13 +143,13 @@ pub(crate) struct App {
     thread: ThreadFeatureState,
     thread_presentations: ThreadPresentationStore,
     sessions: SessionsState,
-    subagent_pane: SubagentPaneState,
-    quick_view: Option<QuickViewState>,
+    subagent_picker: SubagentRegionState,
+    composer_mode: Option<ComposerMode>,
+    active_overlay: Option<ActiveOverlay>,
     welcome: WelcomeModel,
-    pane_actions: BTreeMap<PaneId, PaneActions>,
     approval: Option<Approval>,
     query: Option<Query>,
-    root_escape_sequence: RootEscapeSequence,
+    screen_escape_sequence: ScreenEscapeSequence,
     status: Status,
     turn_input_mode: TurnInputMode,
     status_line: StatusLineModel,
@@ -168,25 +163,6 @@ pub(crate) struct App {
     skill_diagnostic_warnings: SkillDiagnosticWarnings,
 }
 
-#[derive(Debug)]
-enum PaneActions {
-    ReadOnly,
-    Dirs(BTreeMap<ListSelectionItemId, DirSelectionAction>),
-    Config(BTreeMap<ListSelectionItemId, ConfigSelectionAction>),
-    ConfigTextPrompt { provider: String },
-    Connectors(BTreeMap<ListSelectionItemId, ConnectorSelectionAction>),
-    Mcp(BTreeMap<ListSelectionItemId, McpSelectionAction>),
-    Model(BTreeMap<ListSelectionItemId, ModelSelectionAction>),
-    Queue(BTreeMap<ListSelectionItemId, QueueSelectionAction>),
-    Rewind(BTreeMap<ListSelectionItemId, RewindSelectionAction>),
-    Sessions(BTreeMap<ListSelectionItemId, SessionSelectionAction>),
-    Skills(BTreeMap<ListSelectionItemId, SkillSelectionAction>),
-    StatusLine(BTreeMap<ListSelectionItemId, StatusLineSelectionAction>),
-    Theme(BTreeMap<ListSelectionItemId, ThemeSelectionAction>),
-    Keymap(BTreeMap<ListSelectionItemId, KeymapAction>),
-    KeymapCapture(KeymapCaptureState),
-}
-
 impl App {
     #[cfg(test)]
     pub(crate) fn new() -> Self {
@@ -198,13 +174,13 @@ impl App {
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
             ),
             sessions: SessionsState::default(),
-            subagent_pane: SubagentPaneState::default(),
-            quick_view: None,
+            subagent_picker: SubagentRegionState::default(),
+            composer_mode: None,
+            active_overlay: None,
             welcome: WelcomeModel::for_workspace(Path::new(".")),
-            pane_actions: BTreeMap::new(),
             approval: None,
             query: None,
-            root_escape_sequence: RootEscapeSequence::default(),
+            screen_escape_sequence: ScreenEscapeSequence::default(),
             status: Status::Ready,
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
@@ -248,13 +224,13 @@ impl App {
                 input_catalog,
             ),
             sessions: SessionsState::default(),
-            subagent_pane: SubagentPaneState::default(),
-            quick_view: None,
+            subagent_picker: SubagentRegionState::default(),
+            composer_mode: None,
+            active_overlay: None,
             welcome: WelcomeModel::for_workspace(dir_root),
-            pane_actions: BTreeMap::new(),
             approval: None,
             query: None,
-            root_escape_sequence: RootEscapeSequence::default(),
+            screen_escape_sequence: ScreenEscapeSequence::default(),
             status: Status::Ready,
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
@@ -277,21 +253,17 @@ impl App {
         self.handle_key_at(key, Instant::now())
     }
 
-    fn top_pane_actions(&self) -> Option<&PaneActions> {
-        let pane_id = self.chat_composer.top_pane_id()?;
-        self.pane_actions.get(&pane_id)
-    }
-
     fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
         if key.kind == KeyEventKind::Press {
             self.pointer.clear();
         }
-        if matches!(self.top_pane_actions(), Some(PaneActions::KeymapCapture(_))) {
-            let input = &mut self.thread_presentations.active_mut().input;
-            let outcome = self.chat_composer.handle_key(input, key);
-            return self.handle_chat_composer_outcome(outcome);
+        if let Some(overlay) = self.active_overlay.as_mut() {
+            if overlay.handle_key(key) == OverlayInputOutcome::Dismiss {
+                self.close_active_overlay();
+            }
+            return None;
         }
-        if matches!(self.sessions.root(), Some(RootTarget::Session(_))) {
+        if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
             if let Some(command) = self.handle_thread_request_key(key) {
                 return command;
             }
@@ -299,28 +271,17 @@ impl App {
                 return None;
             }
         }
-        if self.quick_view.is_some() {
-            if key.kind == KeyEventKind::Press
-                && key.code == KeyCode::Esc
-                && key.modifiers.is_empty()
-            {
-                self.quick_view = None;
-            } else if let Some(quick_view) = self.quick_view.as_mut() {
-                quick_view.handle_key(key);
-            }
-            return None;
+        if let Some(region) = self.composer_mode.as_mut() {
+            let outcome = region.handle_key(key);
+            return self.handle_composer_mode_outcome(outcome);
         }
-        if let Some(command) = self.handle_queue_pane_key(key) {
-            return command;
-        }
-        let temporary_interaction_active =
-            self.chat_composer.pane_active() || self.completion().is_some();
-        let is_root_escape_press = key.kind == KeyEventKind::Press
+        let temporary_interaction_active = self.completion().is_some();
+        let is_screen_escape_press = key.kind == KeyEventKind::Press
             && key.code == KeyCode::Esc
             && key.modifiers.is_empty()
             && !temporary_interaction_active;
-        if key.kind == KeyEventKind::Press && !is_root_escape_press {
-            self.root_escape_sequence.reset();
+        if key.kind == KeyEventKind::Press && !is_screen_escape_press {
+            self.screen_escape_sequence.reset();
         }
         let keymap_context = self.app_keymap_context(key.kind == KeyEventKind::Press);
         match self.app_keymap.route_chord(&key, keymap_context, now) {
@@ -330,14 +291,14 @@ impl App {
                 return self.apply_app_keymap_action(action, now);
             }
         }
-        if let Some(command) = self.handle_root_navigation_key(key) {
+        if let Some(command) = self.handle_screen_navigation_key(key) {
             return command;
         }
         if self.handle_transcript_selection_key(key) {
             return None;
         }
         if !self.accepts_input() {
-            self.root_escape_sequence.reset();
+            self.screen_escape_sequence.reset();
             return self.handle_app_key(key, now);
         }
 
@@ -365,17 +326,6 @@ impl App {
 
     fn handle_chat_composer_outcome(&mut self, outcome: ChatComposerOutcome) -> Option<AppCommand> {
         match outcome {
-            ChatComposerOutcome::ActivateSelectionItem { pane_id, item_id } => {
-                self.activate_selection_item(pane_id, &item_id)
-            }
-            ChatComposerOutcome::AdjustSelectionItem {
-                pane_id,
-                item_id,
-                adjustment,
-            } => self.adjust_selection_item(pane_id, &item_id, adjustment),
-            ChatComposerOutcome::PaneKeyCaptured { pane_id, key } => {
-                self.handle_keymap_capture(pane_id, key)
-            }
             ChatComposerOutcome::Command(command) => self.handle_slash_command(command),
             ChatComposerOutcome::SubmissionRejected(error) => {
                 self.thread
@@ -387,7 +337,7 @@ impl App {
                 None
             }
             ChatComposerOutcome::Submit(submission) => {
-                if matches!(self.sessions.root(), Some(RootTarget::Manager)) {
+                if matches!(self.sessions.screen(), Some(TerminalScreen::Manager)) {
                     self.status = Status::Working;
                     return Some(AppCommand::CreateSessionAndEnter { submission });
                 }
@@ -407,23 +357,8 @@ impl App {
                 self.turn_input_mode = TurnInputMode::Queue;
                 Some(AppCommand::SubmitTurn { submission })
             }
-            ChatComposerOutcome::TextPromptSubmitted { pane_id, value } => {
-                let Some(PaneActions::ConfigTextPrompt { provider }) =
-                    self.pane_actions.get(&pane_id)
-                else {
-                    return None;
-                };
-                Some(AppCommand::SetProviderApiKey(
-                    crate::features::config::ProviderApiKeyEdit::new(provider.clone(), value),
-                ))
-            }
             ChatComposerOutcome::Consumed => None,
             ChatComposerOutcome::Unhandled => None,
-            ChatComposerOutcome::PaneDismissed(pane_id) => {
-                self.pane_actions.remove(&pane_id);
-                self.root_escape_sequence.reset();
-                None
-            }
         }
     }
 
@@ -501,223 +436,148 @@ impl App {
         }
     }
 
-    fn handle_keymap_capture(&mut self, pane_id: PaneId, key: KeyEvent) -> Option<AppCommand> {
-        let outcome = match self.pane_actions.get_mut(&pane_id) {
-            Some(PaneActions::KeymapCapture(capture)) => capture.handle_key(key),
-            _ => return None,
-        };
+    fn handle_composer_mode_outcome(&mut self, outcome: ComposerOutcome) -> Option<AppCommand> {
         match outcome {
-            KeymapCaptureOutcome::Pending(model) => {
-                self.chat_composer.update_top_key_capture(model);
+            ComposerOutcome::Dirs(DirSelectionAction::Remove { path }) => {
+                Some(AppCommand::RemoveDir { path })
+            }
+            ComposerOutcome::Config(outcome) => self.handle_config_region_outcome(outcome),
+            ComposerOutcome::Connectors(ConnectorSelectionAction::ConnectDeviceOAuth {
+                connector_id,
+                connection_generation,
+            }) => Some(AppCommand::ConnectConnectorDeviceOAuth {
+                connector_id,
+                connection_generation,
+            }),
+            ComposerOutcome::Connectors(ConnectorSelectionAction::Disconnect {
+                connector_id,
+            }) => Some(AppCommand::DisconnectConnector { connector_id }),
+            ComposerOutcome::Keymap(KeymapEditorOutcome::Edit(edit)) => {
+                Some(AppCommand::EditKeymap(edit))
+            }
+            ComposerOutcome::Keymap(KeymapEditorOutcome::Consumed) => None,
+            ComposerOutcome::Keymap(KeymapEditorOutcome::Dismiss) => {
+                self.close_composer_mode();
                 None
             }
-            KeymapCaptureOutcome::Cancelled => {
-                self.close_top_pane();
+            ComposerOutcome::Mcp(McpSelectionAction::SetEnablement {
+                server_id,
+                enablement,
+            }) => Some(AppCommand::SetMcpEnablement {
+                server_id,
+                enablement,
+            }),
+            ComposerOutcome::Model(ModelSelectionAction::Select { preference }) => {
+                Some(AppCommand::SetPreferredModel { preference })
+            }
+            ComposerOutcome::Queue(QueueSelectionAction::Select(queue_id)) => {
+                self.open_queue_detail(queue_id);
                 None
             }
-            KeymapCaptureOutcome::Edit(edit) => Some(AppCommand::EditKeymap(edit)),
-        }
-    }
-
-    fn activate_selection_item(
-        &mut self,
-        pane_id: PaneId,
-        item_id: &ListSelectionItemId,
-    ) -> Option<AppCommand> {
-        if let Some(PaneActions::Keymap(actions)) = self.pane_actions.get(&pane_id) {
-            let action = actions.get(item_id)?.clone();
-            return self.apply_keymap_action(action);
-        }
-        if let Some(PaneActions::Queue(actions)) = self.pane_actions.get(&pane_id) {
-            let action = *actions.get(item_id)?;
-            return match action {
-                QueueSelectionAction::Select(queue_id) => {
-                    let text = self
-                        .queue_view()
-                        .items
-                        .into_iter()
-                        .find(|item| item.id == queue_id)?
-                        .text
-                        .to_owned();
-                    self.quick_view = Some(QuickViewState::new(
-                        PaneSpec::new(DetailList::new(
-                            "Queued message",
-                            vec![DetailListRow::new("Message", text)],
-                        ))
-                        .with_key_hint("Esc", "to close"),
-                    ));
-                    None
-                }
-            };
-        }
-        match self.pane_actions.get(&pane_id)? {
-            PaneActions::ReadOnly => None,
-            PaneActions::Dirs(actions) => match actions.get(item_id)? {
-                DirSelectionAction::Remove { path } => {
-                    Some(AppCommand::RemoveDir { path: path.clone() })
-                }
-            },
-            PaneActions::Config(actions) => match actions.get(item_id)?.clone() {
-                ConfigSelectionAction::SetTerminalSettings(edit) => {
-                    Some(AppCommand::EditConfig(edit))
-                }
-                ConfigSelectionAction::ChooseFollowUpMode { queue, steer } => Some(
-                    AppCommand::EditConfig(match self.terminal_settings.follow_up_mode() {
-                        FollowUpMode::Queue => *steer,
-                        FollowUpMode::Steer => *queue,
-                    }),
-                ),
-                ConfigSelectionAction::ChooseInputMode { standard, vim } => Some(
-                    AppCommand::EditConfig(match self.terminal_settings.input_mode() {
-                        crate::components::chat_input::ChatInputMode::Standard => *vim,
-                        crate::components::chat_input::ChatInputMode::Vim => *standard,
-                    }),
-                ),
-                ConfigSelectionAction::SetPermissions(edit) => {
-                    Some(AppCommand::EditPermissions(edit))
-                }
-                ConfigSelectionAction::OpenProviderApiKey {
-                    provider,
-                    display_name,
-                } => {
-                    let prompt =
-                        crate::features::config::provider_api_key_prompt(provider, display_name);
-                    let pane_id = self.chat_composer.push_text_prompt(prompt.spec);
-                    self.pane_actions.insert(
-                        pane_id,
-                        PaneActions::ConfigTextPrompt {
-                            provider: prompt.provider,
-                        },
-                    );
-                    None
-                }
-            },
-            PaneActions::Connectors(actions) => match actions.get(item_id)? {
-                ConnectorSelectionAction::ConnectDeviceOAuth {
-                    connector_id,
-                    connection_generation,
-                } => Some(AppCommand::ConnectConnectorDeviceOAuth {
-                    connector_id: connector_id.clone(),
-                    connection_generation: *connection_generation,
-                }),
-                ConnectorSelectionAction::Disconnect { connector_id } => {
-                    Some(AppCommand::DisconnectConnector {
-                        connector_id: connector_id.clone(),
-                    })
-                }
-            },
-            PaneActions::Mcp(actions) => match actions.get(item_id)? {
-                McpSelectionAction::SetEnablement {
-                    server_id,
-                    enablement,
-                } => Some(AppCommand::SetMcpEnablement {
-                    server_id: server_id.clone(),
-                    enablement: *enablement,
-                }),
-            },
-            PaneActions::Model(actions) => match actions.get(item_id)? {
-                ModelSelectionAction::Select { preference } => {
-                    Some(AppCommand::SetPreferredModel {
-                        preference: preference.clone(),
-                    })
-                }
-            },
-            PaneActions::Queue(_) => unreachable!("Queue actions are handled before dispatch"),
-            PaneActions::Rewind(actions) => match actions.get(item_id)? {
-                RewindSelectionAction::Rewind {
-                    before_turn_id,
-                    checkpoint_label,
-                } => Some(AppCommand::RewindToCheckpoint {
-                    before_turn_id: before_turn_id.clone(),
-                    checkpoint_label: checkpoint_label.clone(),
-                }),
-            },
-            PaneActions::Sessions(actions) => match actions.get(item_id)? {
-                SessionSelectionAction::Resume { session_id } => Some(AppCommand::ResumeSession {
-                    session_id: session_id.clone(),
+            ComposerOutcome::QueueInput {
+                input,
+                action: QueueSelectionAction::Select(queue_id),
+            } => self.handle_queue_region_input(input, queue_id),
+            ComposerOutcome::Rewind(RewindSelectionAction::Rewind {
+                before_turn_id,
+                checkpoint_label,
+            }) => Some(AppCommand::RewindToCheckpoint {
+                before_turn_id,
+                checkpoint_label,
+            }),
+            ComposerOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => {
+                Some(AppCommand::ResumeSession {
+                    session_id,
                     preferred_thread_id: None,
-                }),
-            },
-            PaneActions::Skills(actions) => match actions.get(item_id)?.clone() {
-                SkillSelectionAction::SetEnablement {
-                    skill_id,
-                    enablement,
-                } => Some(AppCommand::SetSkillEnablement {
-                    skill_id,
-                    enablement,
-                }),
-            },
-            PaneActions::StatusLine(actions) => match actions.get(item_id)? {
-                StatusLineSelectionAction::SetEnabled(edit) => {
-                    Some(AppCommand::EditStatusLine(edit.clone()))
-                }
-            },
-            PaneActions::Theme(actions) => match actions.get(item_id)? {
-                ThemeSelectionAction::Select { preference } => Some(AppCommand::SetTheme {
-                    preference: preference.clone(),
-                }),
-                ThemeSelectionAction::SelectCustom { preference } => {
-                    Some(AppCommand::SetCustomTheme {
-                        preference: preference.clone(),
-                    })
-                }
-                ThemeSelectionAction::OpenCustomThemes => Some(AppCommand::OpenCustomThemePane),
-            },
-            PaneActions::ConfigTextPrompt { .. }
-            | PaneActions::Keymap(_)
-            | PaneActions::KeymapCapture(_) => None,
+                })
+            }
+            ComposerOutcome::Skills(SkillSelectionAction::SetEnablement {
+                skill_id,
+                enablement,
+            }) => Some(AppCommand::SetSkillEnablement {
+                skill_id,
+                enablement,
+            }),
+            ComposerOutcome::StatusLine(StatusLineSelectionAction::SetEnabled(edit)) => {
+                Some(AppCommand::EditStatusLine(edit))
+            }
+            ComposerOutcome::Theme(outcome) => self.handle_theme_region_outcome(outcome),
+            ComposerOutcome::Consumed => None,
+            ComposerOutcome::Dismiss => {
+                self.close_composer_mode();
+                None
+            }
         }
     }
 
-    fn adjust_selection_item(
-        &self,
-        pane_id: PaneId,
-        item_id: &ListSelectionItemId,
-        adjustment: ListSelectionAdjustment,
+    fn handle_config_region_outcome(
+        &mut self,
+        outcome: crate::features::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
-        let PaneActions::Config(actions) = self.pane_actions.get(&pane_id)? else {
-            return None;
-        };
-        Some(AppCommand::EditConfig(match actions.get(item_id)? {
-            ConfigSelectionAction::ChooseFollowUpMode { queue, steer } => match adjustment {
-                ListSelectionAdjustment::Previous => queue.as_ref().clone(),
-                ListSelectionAdjustment::Next => steer.as_ref().clone(),
-            },
-            ConfigSelectionAction::ChooseInputMode { standard, vim } => match adjustment {
-                ListSelectionAdjustment::Previous => standard.as_ref().clone(),
-                ListSelectionAdjustment::Next => vim.as_ref().clone(),
-            },
-            _ => return None,
-        }))
+        match outcome {
+            crate::features::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::SetTerminalSettings(edit),
+            ) => Some(AppCommand::EditConfig(edit)),
+            crate::features::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::ChooseFollowUpMode { queue, steer },
+            ) => Some(AppCommand::EditConfig(
+                match self.terminal_settings.follow_up_mode() {
+                    FollowUpMode::Queue => *steer,
+                    FollowUpMode::Steer => *queue,
+                },
+            )),
+            crate::features::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::ChooseInputMode { standard, vim },
+            ) => Some(AppCommand::EditConfig(
+                match self.terminal_settings.input_mode() {
+                    crate::components::chat_input::ChatInputMode::Standard => *vim,
+                    crate::components::chat_input::ChatInputMode::Vim => *standard,
+                },
+            )),
+            crate::features::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::SetPermissions(edit),
+            ) => Some(AppCommand::EditPermissions(edit)),
+            crate::features::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::OpenProviderApiKey { .. },
+            ) => None,
+            crate::features::config::ConfigEditorOutcome::Adjust(action, adjustment) => {
+                Some(AppCommand::EditConfig(match action {
+                    ConfigSelectionAction::ChooseFollowUpMode { queue, steer } => {
+                        match adjustment {
+                            ListSelectionAdjustment::Previous => *queue,
+                            ListSelectionAdjustment::Next => *steer,
+                        }
+                    }
+                    ConfigSelectionAction::ChooseInputMode { standard, vim } => match adjustment {
+                        ListSelectionAdjustment::Previous => *standard,
+                        ListSelectionAdjustment::Next => *vim,
+                    },
+                    _ => return None,
+                }))
+            }
+            crate::features::config::ConfigEditorOutcome::SaveApiKey(edit) => {
+                Some(AppCommand::SetProviderApiKey(edit))
+            }
+            crate::features::config::ConfigEditorOutcome::Consumed => None,
+            crate::features::config::ConfigEditorOutcome::Dismiss => {
+                self.close_composer_mode();
+                None
+            }
+        }
     }
 
-    fn apply_keymap_action(&mut self, action: KeymapAction) -> Option<AppCommand> {
-        match action {
-            KeymapAction::OpenAction { action, revision } => {
-                self.show_keymap_pane(keymap_action_menu(action, revision));
+    fn handle_theme_region_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
+        match outcome {
+            ThemePickerOutcome::Select { preference } => Some(AppCommand::SetTheme { preference }),
+            ThemePickerOutcome::SelectCustom { preference } => {
+                Some(AppCommand::SetCustomTheme { preference })
+            }
+            ThemePickerOutcome::OpenCustomThemes => Some(AppCommand::OpenCustomThemePicker),
+            ThemePickerOutcome::Consumed => None,
+            ThemePickerOutcome::Dismiss => {
+                self.close_composer_mode();
                 None
             }
-            KeymapAction::BeginCapture {
-                action,
-                revision,
-                intent,
-                mode,
-            } => {
-                let (model, capture) = keymap_capture_pane_spec(action, revision, intent, mode);
-                self.root_escape_sequence.reset();
-                let pane_id = self.chat_composer.push_key_capture(model);
-                self.pane_actions
-                    .insert(pane_id, PaneActions::KeymapCapture(capture));
-                None
-            }
-            KeymapAction::ClearUser {
-                command_id,
-                revision,
-            } => Some(AppCommand::EditKeymap(KeymapEdit {
-                expected_revision: revision,
-                command_id,
-                kind: KeymapEditKind::ClearUser,
-            })),
         }
     }
 
@@ -775,12 +635,9 @@ impl App {
             return false;
         };
         self.thread_presentations.active_mut().selected_cell = Some(cell_id);
-        self.quick_view = Some(QuickViewState::new(
-            PaneSpec::new(DetailList::new(
-                "Transcript cell",
-                vec![DetailListRow::new("Content", details)],
-            ))
-            .with_key_hint("Esc", "to close"),
+        self.open_active_overlay(DetailList::new(
+            "Transcript cell",
+            vec![DetailListRow::new("Content", details)],
         ));
         true
     }
@@ -799,7 +656,10 @@ impl App {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         self.pointer.clear();
-        if matches!(self.sessions.root(), Some(RootTarget::Session(_))) {
+        if self.active_overlay.is_some() {
+            return;
+        }
+        if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
             if self.approval.is_some() {
                 return;
             }
@@ -808,8 +668,11 @@ impl App {
                 return;
             }
         }
-        if self.quick_view.is_none()
-            && self.accepts_input()
+        if let Some(region) = self.composer_mode.as_mut() {
+            region.handle_paste(pasted);
+            return;
+        }
+        if self.accepts_input()
             && let Err(error) = self
                 .chat_composer
                 .handle_paste(&mut self.thread_presentations.active_mut().input, pasted)
@@ -848,30 +711,33 @@ impl App {
             .view(&self.thread_presentations.active().input)
     }
 
-    pub(crate) fn pane_key_hints(&self) -> Option<&str> {
-        self.chat_composer.pane_key_hints()
+    pub(crate) fn composer_key_hints(&self) -> Option<&str> {
+        self.composer_mode.as_ref().map(ComposerMode::key_hints)
+    }
+
+    pub(crate) fn composer_mode(&self) -> Option<RegionView<'_>> {
+        self.composer_mode.as_ref().map(ComposerMode::view)
+    }
+
+    pub(crate) fn active_overlay(&self) -> Option<&ActiveOverlay> {
+        self.active_overlay.as_ref()
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
-        if self.chat_composer.pane_active() {
+        if self.composer_mode.is_some() || self.active_overlay.is_some() {
             return None;
         }
         self.thread_presentations.active().input.completion()
     }
 
-    #[cfg(test)]
-    pub(crate) fn input_pane_views(&self) -> Vec<ChatComposerPaneView<'_>> {
-        self.chat_composer.pane_views()
-    }
-
     pub(crate) fn chat_input_focused(&self) -> bool {
-        self.quick_view.is_none()
+        self.active_overlay.is_none()
             && self.approval_view().is_none()
             && self.query_view().is_none()
             && !self.sessions.manager().focused()
-            && !self.subagent_pane.focused()
+            && !self.subagent_picker.focused()
             && self.thread_presentations.active().selected_cell.is_none()
-            && !self.chat_composer.pane_active()
+            && self.composer_mode.is_none()
             && self.completion().is_none()
     }
 
@@ -938,198 +804,233 @@ impl App {
         self.screen_selection.select(range);
     }
 
-    fn show_list_selection_pane(&mut self, model: PaneSpec<ListSelectionModel>) {
-        self.push_list_selection_pane(model, PaneActions::ReadOnly);
-    }
-
-    pub(crate) fn quick_view(&self) -> Option<&QuickViewState> {
-        self.quick_view.as_ref()
+    #[cfg(test)]
+    fn show_list_selection_region(
+        &mut self,
+        model: RegionSpec<crate::components::list_selection::ListSelectionModel>,
+    ) {
+        self.open_composer_mode(ComposerMode::help(model));
     }
 
     pub(crate) fn approval_view(&self) -> Option<crate::features::approval::ApprovalView<'_>> {
-        matches!(self.sessions.root(), Some(RootTarget::Session(_)))
+        matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
             .then(|| self.approval.as_ref().map(Approval::view))
             .flatten()
     }
 
     pub(crate) fn query_view(&self) -> Option<crate::features::query::QueryView<'_>> {
-        matches!(self.sessions.root(), Some(RootTarget::Session(_)))
+        matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
             .then(|| self.query.as_ref().map(Query::view))
             .flatten()
     }
 
     pub(crate) fn transcript_selection_active(&self) -> bool {
-        matches!(self.sessions.root(), Some(RootTarget::Session(_)))
+        matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
             && self.thread_presentations.active().selected_cell.is_some()
     }
 
-    fn show_dirs_pane(&mut self, pane_spec: DirPaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Dirs(pane_spec.actions));
+    fn open_composer_mode(&mut self, region: ComposerMode) {
+        self.screen_escape_sequence.reset();
+        self.active_overlay = None;
+        self.composer_mode = Some(region);
+        self.pointer.clear();
     }
 
-    fn show_queue_pane(&mut self, pane_spec: QueuePaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Queue(pane_spec.actions));
+    fn close_composer_mode(&mut self) {
+        self.screen_escape_sequence.reset();
+        self.composer_mode = None;
+        self.pointer.clear();
     }
 
-    fn replace_queue_pane(&mut self) {
-        let pane_spec = crate::features::queue::pane_spec(&self.queue_view());
-        self.replace_list_selection_pane(pane_spec.model, PaneActions::Queue(pane_spec.actions));
+    fn open_active_overlay(&mut self, detail: DetailList) {
+        self.screen_escape_sequence.reset();
+        self.active_overlay = Some(ActiveOverlay::detail(detail));
+        self.pointer.clear();
     }
 
-    fn handle_queue_pane_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
-        let input = queue::pane_input(key)?;
-        let PaneActions::Queue(actions) = self.top_pane_actions()? else {
-            return None;
+    fn close_active_overlay(&mut self) {
+        self.screen_escape_sequence.reset();
+        self.active_overlay = None;
+        self.pointer.clear();
+    }
+
+    fn close_transient_surfaces(&mut self) {
+        self.screen_escape_sequence.reset();
+        self.composer_mode = None;
+        self.active_overlay = None;
+        self.pointer.clear();
+    }
+
+    fn show_dirs_region(&mut self, spec: DirChoices) {
+        self.open_composer_mode(ComposerMode::dirs(spec));
+    }
+
+    fn show_queue_region(&mut self, spec: QueueChoices) {
+        self.open_composer_mode(ComposerMode::queue(spec));
+    }
+
+    fn replace_queue_region(&mut self) {
+        let spec = crate::features::queue::region_spec(&self.queue_view());
+        if let Some(region) = self.composer_mode.as_mut() {
+            region.replace_queue(spec);
+        }
+    }
+
+    fn open_queue_detail(&mut self, queue_id: crate::features::queue::QueueId) {
+        let Some(text) = self
+            .queue_view()
+            .items
+            .into_iter()
+            .find(|item| item.id == queue_id)
+            .map(|item| item.text.to_owned())
+        else {
+            return;
         };
-        let item_id = self.list_selection()?.selected_item()?.id()?.clone();
-        let QueueSelectionAction::Select(queue_id) = *actions.get(&item_id)?;
+        self.open_active_overlay(DetailList::new(
+            "Queued message",
+            vec![DetailListRow::new("Message", text)],
+        ));
+    }
+
+    fn handle_queue_region_input(
+        &mut self,
+        input: QueueInput,
+        queue_id: crate::features::queue::QueueId,
+    ) -> Option<AppCommand> {
         match input {
-            QueuePaneInput::Restore => {
+            QueueInput::Restore => {
                 let state = self.thread_presentations.active_mut();
                 match state.queue.restore(queue_id, &mut state.input) {
-                    Ok(()) => self.close_top_pane(),
+                    Ok(()) => self.close_composer_mode(),
                     Err(error) => self
                         .thread
                         .update(ThreadPresentationEvent::FailureReported(error)),
                 }
-                Some(None)
+                None
             }
-            QueuePaneInput::Delete => {
+            QueueInput::Delete => {
                 self.thread_presentations
                     .active_mut()
                     .queue
                     .delete(queue_id);
-                self.replace_queue_pane();
-                Some(None)
+                self.replace_queue_region();
+                None
             }
-            QueuePaneInput::MoveUp => {
+            QueueInput::MoveUp => {
                 self.thread_presentations
                     .active_mut()
                     .queue
                     .move_up(queue_id);
-                self.replace_queue_pane();
-                Some(None)
+                self.replace_queue_region();
+                None
             }
-            QueuePaneInput::MoveDown => {
+            QueueInput::MoveDown => {
                 self.thread_presentations
                     .active_mut()
                     .queue
                     .move_down(queue_id);
-                self.replace_queue_pane();
-                Some(None)
+                self.replace_queue_region();
+                None
             }
-            QueuePaneInput::Send => {
+            QueueInput::Send => {
                 if matches!(self.status, Status::Working) {
                     self.thread.update(ThreadPresentationEvent::FailureReported(
                         "finish or interrupt the active Turn before sending this queued message"
                             .into(),
                     ));
-                    return Some(None);
+                    return None;
                 }
                 let submission = self
                     .thread_presentations
                     .active_mut()
                     .queue
                     .begin_send(queue_id)?;
-                self.close_top_pane();
+                self.close_composer_mode();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
                 ));
                 self.status = Status::Working;
                 self.turn_input_mode = TurnInputMode::Queue;
-                Some(Some(AppCommand::SubmitQueuedTurn {
+                Some(AppCommand::SubmitQueuedTurn {
                     queue_id,
                     submission,
-                }))
+                })
             }
         }
     }
 
-    fn replace_dirs_pane(&mut self, pane_spec: DirPaneSpec) {
-        self.replace_list_selection_pane(pane_spec.model, PaneActions::Dirs(pane_spec.actions));
-    }
-
-    fn show_skills_pane(&mut self, pane_spec: SkillPaneSpec) {
-        let SkillPaneSpec {
-            model,
-            actions,
-            diagnostics,
-        } = pane_spec;
-        self.report_skill_diagnostics(&diagnostics);
-        self.push_list_selection_pane(model, PaneActions::Skills(actions));
-    }
-
-    fn show_mcp_pane(&mut self, pane_spec: McpPaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Mcp(pane_spec.actions));
-    }
-
-    fn show_connector_pane(&mut self, pane_spec: ConnectorPaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Connectors(pane_spec.actions));
-    }
-
-    fn replace_connector_pane(&mut self, pane_spec: ConnectorPaneSpec) {
-        self.replace_list_selection_pane(
-            pane_spec.model,
-            PaneActions::Connectors(pane_spec.actions),
-        );
-    }
-
-    pub(crate) fn connector_pane_open(&self) -> bool {
-        matches!(self.top_pane_actions(), Some(PaneActions::Connectors(_)))
-    }
-
-    fn replace_mcp_pane(&mut self, pane_spec: McpPaneSpec) {
-        self.replace_list_selection_pane(pane_spec.model, PaneActions::Mcp(pane_spec.actions));
-    }
-
-    fn show_model_pane(&mut self, pane_spec: ModelPaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Model(pane_spec.actions));
-    }
-
-    fn show_rewind_pane(&mut self, pane_spec: RewindPaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Rewind(pane_spec.actions));
-    }
-
-    fn show_session_pane(&mut self, pane_spec: SessionPaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Sessions(pane_spec.actions));
-    }
-
-    fn push_list_selection_pane(
-        &mut self,
-        model: PaneSpec<ListSelectionModel>,
-        actions: PaneActions,
-    ) {
-        self.root_escape_sequence.reset();
-        let pane_id = self.chat_composer.push_list_selection(model);
-        self.pane_actions.insert(pane_id, actions);
-    }
-
-    fn replace_list_selection_pane(
-        &mut self,
-        model: PaneSpec<ListSelectionModel>,
-        actions: PaneActions,
-    ) {
-        self.root_escape_sequence.reset();
-        if let Some(pane_id) = self.chat_composer.update_top_list_selection(model) {
-            self.pane_actions.insert(pane_id, actions);
+    fn replace_dirs_region(&mut self, spec: DirChoices) {
+        if let Some(region) = self.composer_mode.as_mut() {
+            region.replace_dirs(spec);
         }
     }
 
-    fn close_top_pane(&mut self) {
-        self.root_escape_sequence.reset();
-        if let Some(pane_id) = self.chat_composer.pop_pane() {
-            self.pane_actions.remove(&pane_id);
-        }
-    }
-
-    fn replace_skills_pane(&mut self, pane_spec: SkillPaneSpec) {
-        let SkillPaneSpec {
+    fn show_skills_region(&mut self, region_spec: SkillChoices) {
+        let SkillChoices {
             model,
             actions,
             diagnostics,
-        } = pane_spec;
+        } = region_spec;
         self.report_skill_diagnostics(&diagnostics);
-        self.replace_list_selection_pane(model, PaneActions::Skills(actions));
+        self.open_composer_mode(ComposerMode::skills(SkillChoices {
+            model,
+            actions,
+            diagnostics: Vec::new(),
+        }));
+    }
+
+    fn show_mcp_region(&mut self, spec: McpChoices) {
+        self.open_composer_mode(ComposerMode::mcp(spec));
+    }
+
+    fn show_connector_region(&mut self, spec: ConnectorChoices) {
+        self.open_composer_mode(ComposerMode::connectors(spec));
+    }
+
+    fn replace_connector_region(&mut self, spec: ConnectorChoices) {
+        if let Some(region) = self.composer_mode.as_mut() {
+            region.replace_connectors(spec);
+        }
+    }
+
+    pub(crate) fn connector_region_open(&self) -> bool {
+        self.composer_mode
+            .as_ref()
+            .is_some_and(ComposerMode::is_connectors)
+    }
+
+    fn replace_mcp_region(&mut self, spec: McpChoices) {
+        if let Some(region) = self.composer_mode.as_mut() {
+            region.replace_mcp(spec);
+        }
+    }
+
+    fn show_model_region(&mut self, spec: ModelChoices) {
+        self.open_composer_mode(ComposerMode::model(spec));
+    }
+
+    fn show_rewind_region(&mut self, spec: RewindChoices) {
+        self.open_composer_mode(ComposerMode::rewind(spec));
+    }
+
+    fn show_session_region(&mut self, spec: SessionChoices) {
+        self.open_composer_mode(ComposerMode::sessions(spec));
+    }
+
+    fn replace_skills_region(&mut self, region_spec: SkillChoices) {
+        let SkillChoices {
+            model,
+            actions,
+            diagnostics,
+        } = region_spec;
+        self.report_skill_diagnostics(&diagnostics);
+        if let Some(region) = self.composer_mode.as_mut() {
+            region.replace_skills(SkillChoices {
+                model,
+                actions,
+                diagnostics: Vec::new(),
+            });
+        }
     }
 
     fn report_skill_diagnostics(
@@ -1142,65 +1043,55 @@ impl App {
         }
     }
 
-    fn show_theme_pane(&mut self, pane_spec: ThemePaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Theme(pane_spec.actions));
+    fn show_theme_region(&mut self, spec: ThemeChoices) {
+        self.open_composer_mode(ComposerMode::theme(spec));
     }
 
-    fn show_keymap_pane(&mut self, pane_spec: KeymapPaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Keymap(pane_spec.actions));
+    fn show_keymap_region(&mut self, spec: KeymapChoices) {
+        self.open_composer_mode(ComposerMode::keymap(spec));
     }
 
-    fn show_status_line_pane(&mut self, pane_spec: StatusLinePaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::StatusLine(pane_spec.actions));
+    fn show_status_line_region(&mut self, spec: StatusLineChoices) {
+        self.open_composer_mode(ComposerMode::status_line(spec));
     }
 
-    fn replace_status_line_pane(&mut self, pane_spec: StatusLinePaneSpec) {
-        self.replace_list_selection_pane(
-            pane_spec.model,
-            PaneActions::StatusLine(pane_spec.actions),
-        );
-    }
-
-    fn close_keymap_panes(&mut self) {
-        self.root_escape_sequence.reset();
-        while matches!(
-            self.top_pane_actions(),
-            Some(PaneActions::Keymap(_) | PaneActions::KeymapCapture(_))
-        ) {
-            self.close_top_pane();
-        }
-    }
-
-    fn close_theme_panes(&mut self) {
-        self.root_escape_sequence.reset();
-        while matches!(self.top_pane_actions(), Some(PaneActions::Theme(_))) {
-            self.close_top_pane();
+    fn replace_status_line_region(&mut self, spec: StatusLineChoices) {
+        if let Some(region) = self.composer_mode.as_mut() {
+            region.replace_status_line(spec);
         }
     }
 
     pub(crate) fn skills_view_is_active(&self) -> bool {
-        matches!(self.top_pane_actions(), Some(PaneActions::Skills(_)))
+        self.composer_mode
+            .as_ref()
+            .is_some_and(ComposerMode::is_skills)
     }
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
-        self.chat_composer.list_selection()
+        self.composer_mode
+            .as_ref()
+            .and_then(ComposerMode::selection)
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.chat_composer.select_tab(index)
+        self.composer_mode
+            .as_mut()
+            .is_some_and(|region| region.select_tab(index))
     }
 
-    pub(crate) fn focus_pane_search(&mut self) -> bool {
-        self.chat_composer.focus_search()
+    pub(crate) fn focus_region_search(&mut self) -> bool {
+        self.composer_mode
+            .as_mut()
+            .is_some_and(ComposerMode::focus_search)
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<AppCommand> {
-        let outcome = self.chat_composer.activate_visible_item(index)?;
-        self.handle_chat_composer_outcome(outcome)
+        let outcome = self.composer_mode.as_mut()?.activate_visible_item(index)?;
+        self.handle_composer_mode_outcome(outcome)
     }
 
     pub(crate) fn mention_query(&self) -> Option<&str> {
-        if self.chat_composer.pane_active() {
+        if self.composer_mode.is_some() {
             return None;
         }
         self.thread_presentations.active().input.mention_query()
@@ -1258,12 +1149,12 @@ impl App {
     }
 
     pub(crate) fn session_manager_view(&self) -> Option<SessionManagerView<'_>> {
-        matches!(self.sessions.root(), Some(RootTarget::Manager))
+        matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             .then(|| self.sessions.manager().view(self.sessions.catalog()))
     }
 
     pub(crate) fn session_manager_focused(&self) -> bool {
-        matches!(self.sessions.root(), Some(RootTarget::Manager))
+        matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.manager().focused()
     }
 
@@ -1281,12 +1172,12 @@ impl App {
             .manager_mut()
             .activate_pointer_target(target, &catalog)
         {
-            self.quick_view = Some(QuickViewState::new(preview));
+            self.open_active_overlay(preview);
         }
     }
 
     pub(crate) fn scroll_session_manager(&mut self, up: bool) -> bool {
-        if !matches!(self.sessions.root(), Some(RootTarget::Manager)) {
+        if !matches!(self.sessions.screen(), Some(TerminalScreen::Manager)) {
             return false;
         }
         let catalog = self.sessions.catalog().to_vec();
@@ -1300,31 +1191,31 @@ impl App {
         true
     }
 
-    pub(crate) fn root_navigation_hint(&self) -> Option<&'static str> {
+    pub(crate) fn screen_navigation_hint(&self) -> Option<&'static str> {
         if !self.chat_input_focused() || !self.input().is_empty() {
             return None;
         }
-        match self.sessions.previous_root()? {
-            RootTarget::Manager => Some("← agents"),
-            RootTarget::Session(_) => None,
+        match self.sessions.previous_screen()? {
+            TerminalScreen::Manager => Some("← agents"),
+            TerminalScreen::Session(_) => None,
         }
     }
 
-    pub(crate) fn subagent_pane_view(&self) -> Option<SubagentPaneView<'_>> {
-        matches!(self.sessions.root(), Some(RootTarget::Session(_)))
-            .then(|| self.subagent_pane.view())
+    pub(crate) fn subagent_picker_view(&self) -> Option<SubagentPickerView<'_>> {
+        matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
+            .then(|| self.subagent_picker.view())
     }
 
-    pub(crate) fn subagent_pane_rows(&self) -> u16 {
-        if matches!(self.sessions.root(), Some(RootTarget::Session(_))) {
-            self.subagent_pane.desired_rows()
+    pub(crate) fn subagent_picker_rows(&self) -> u16 {
+        if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
+            self.subagent_picker.desired_rows()
         } else {
             0
         }
     }
 
-    pub(crate) fn subagent_pane_focused(&self) -> bool {
-        self.subagent_pane.focused()
+    pub(crate) fn subagent_picker_focused(&self) -> bool {
+        self.subagent_picker.focused()
     }
 
     pub(crate) fn dispatch_next_queued_turn(&mut self) -> Option<AppCommand> {
@@ -1380,9 +1271,9 @@ impl App {
     pub(crate) fn status_line_runtime(&self) -> StatusLineRuntime {
         let plan = self.plan_view().map(|view| (view.completed, view.total));
         let queue = self.queue_view().items.len();
-        let visible_session = match self.sessions.root() {
-            Some(RootTarget::Session(session_id)) => Some(session_id),
-            Some(RootTarget::Manager) | None => None,
+        let visible_session = match self.sessions.screen() {
+            Some(TerminalScreen::Session(session_id)) => Some(session_id),
+            Some(TerminalScreen::Manager) | None => None,
         };
         let viewed_thread =
             visible_session.and_then(|session_id| self.sessions.remembered_thread(session_id));
@@ -1441,11 +1332,11 @@ impl App {
 
     pub(crate) fn viewed_thread_completed(&self) -> bool {
         !self.viewed_thread_accepts_input()
-            && matches!(self.sessions.root(), Some(RootTarget::Session(_)))
+            && matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
     }
 
     fn viewed_thread_accepts_input(&self) -> bool {
-        let Some(RootTarget::Session(session_id)) = self.sessions.root() else {
+        let Some(TerminalScreen::Session(session_id)) = self.sessions.screen() else {
             return true;
         };
         let Some(thread_id) = self.sessions.remembered_thread(session_id) else {
@@ -1467,9 +1358,9 @@ impl App {
     pub(crate) fn update(&mut self, event: AppEvent) {
         self.pointer.clear();
         match event {
-            AppEvent::DirsPaneOpened(view) => self.show_dirs_pane(view),
-            AppEvent::DirRemoved { path, pane_spec } => {
-                self.replace_dirs_pane(pane_spec);
+            AppEvent::DirPickerOpened(view) => self.show_dirs_region(view),
+            AppEvent::DirRemoved { path, region_spec } => {
+                self.replace_dirs_region(region_spec);
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
                         "Removed directory {}",
@@ -1496,26 +1387,25 @@ impl App {
                 }
                 self.thread_presentations
                     .set_input_mode(result.settings.input_mode());
-                self.replace_list_selection_pane(
-                    result.pane_spec.model,
-                    PaneActions::Config(result.pane_spec.actions),
-                );
+                if let Some(region) = self.composer_mode.as_mut() {
+                    region.replace_config(result.region_spec);
+                }
             }
-            AppEvent::ConfigPaneOpened(view) => {
-                self.push_list_selection_pane(view.model, PaneActions::Config(view.actions))
+            AppEvent::ConfigEditorOpened(view) => {
+                self.open_composer_mode(ComposerMode::config(view))
             }
-            AppEvent::ConfigPaneReplaced(view) => {
-                self.replace_list_selection_pane(view.model, PaneActions::Config(view.actions))
+            AppEvent::ConfigEditorUpdated(view) => {
+                if let Some(region) = self.composer_mode.as_mut() {
+                    region.replace_config(view);
+                }
             }
             AppEvent::ConfigApiKeySaved {
                 provider,
-                pane_spec,
+                region_spec,
             } => {
-                self.close_top_pane();
-                self.replace_list_selection_pane(
-                    pane_spec.model,
-                    PaneActions::Config(pane_spec.actions),
-                );
+                if let Some(region) = self.composer_mode.as_mut() {
+                    region.finish_config_prompt(region_spec);
+                }
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
                         "Saved API key for {provider}"
@@ -1592,59 +1482,66 @@ impl App {
                     self.report_keybinding_diagnostic(diagnostic);
                 }
             }
-            AppEvent::KeymapPaneOpened(update) => {
+            AppEvent::KeymapEditorOpened(update) => {
                 self.app_keymap = update.settings.keymap;
                 for diagnostic in update.settings.diagnostics {
                     self.report_keybinding_diagnostic(diagnostic);
                 }
                 if let Some(notice) = update.notice {
-                    self.close_keymap_panes();
                     self.thread
                         .update(ThreadPresentationEvent::NoticeReceived(notice));
                 }
-                self.show_keymap_pane(update.pane_spec);
+                if matches!(self.composer_mode, Some(ComposerMode::Keymap(_))) {
+                    self.composer_mode
+                        .as_mut()
+                        .expect("the keymap region is active")
+                        .replace_keymap_catalog(update.region_spec);
+                } else {
+                    self.show_keymap_region(update.region_spec);
+                }
             }
             AppEvent::StatusLineSettingsReceived(settings) => {
                 self.status_line.apply_settings(settings)
             }
-            AppEvent::StatusLinePaneOpened(update) => {
+            AppEvent::StatusLineRegionOpened(update) => {
                 self.status_line.apply_settings(update.settings);
-                self.show_status_line_pane(update.pane_spec);
+                self.show_status_line_region(update.region_spec);
             }
-            AppEvent::StatusLinePaneReplaced(update) => {
+            AppEvent::StatusLineRegionReplaced(update) => {
                 self.status_line.apply_settings(update.settings);
-                self.replace_status_line_pane(update.pane_spec);
+                self.replace_status_line_region(update.region_spec);
             }
-            AppEvent::ConnectorPaneOpened(view) => self.show_connector_pane(view),
-            AppEvent::ConnectorPaneReplaced(view) => self.replace_connector_pane(view),
-            AppEvent::McpPaneOpened(view) => self.show_mcp_pane(view),
-            AppEvent::McpPaneReplaced(view) => self.replace_mcp_pane(view),
-            AppEvent::ModelPaneOpened(view) => self.show_model_pane(view),
-            AppEvent::RewindPaneOpened(view) => self.show_rewind_pane(view),
-            AppEvent::SessionPaneOpened(view) => self.show_session_pane(view),
+            AppEvent::ConnectorPickerOpened(view) => self.show_connector_region(view),
+            AppEvent::ConnectorPickerUpdated(view) => self.replace_connector_region(view),
+            AppEvent::McpSettingsOpened(view) => self.show_mcp_region(view),
+            AppEvent::McpSettingsUpdated(view) => self.replace_mcp_region(view),
+            AppEvent::ModelPickerOpened(view) => self.show_model_region(view),
+            AppEvent::RewindPickerOpened(view) => self.show_rewind_region(view),
+            AppEvent::SessionPickerOpened(view) => self.show_session_region(view),
             AppEvent::SessionCatalogReceived(catalog) => {
                 self.sessions.refresh_catalog(catalog);
-                self.reconcile_subagent_pane();
+                self.reconcile_subagent_picker();
             }
             AppEvent::ThreadContextChanged {
                 session_id,
                 thread_id,
             } => {
+                self.close_transient_surfaces();
                 self.thread_presentations.switch(thread_id.clone());
                 self.sessions.activate_context(session_id, thread_id);
-                self.reconcile_subagent_pane();
+                self.reconcile_subagent_picker();
             }
             AppEvent::ThreadGoalChanged(goal) => {
                 self.thread_presentations.active_mut().goal = goal;
             }
-            AppEvent::StatusQuickViewOpened(spec) => {
-                self.quick_view = Some(QuickViewState::new(spec));
+            AppEvent::StatusOverlayOpened(detail) => {
+                self.open_active_overlay(detail);
             }
-            AppEvent::ListSelectionPaneClosed => self.close_top_pane(),
+            AppEvent::ComposerModeClosed => self.close_composer_mode(),
             #[cfg(test)]
-            AppEvent::ListSelectionPaneOpened(model) => self.show_list_selection_pane(model),
-            AppEvent::SkillsPaneOpened(view) => self.show_skills_pane(view),
-            AppEvent::SkillsPaneReplaced(view) => self.replace_skills_pane(view),
+            AppEvent::HelpOpened(model) => self.show_list_selection_region(model),
+            AppEvent::SkillSettingsOpened(view) => self.show_skills_region(view),
+            AppEvent::SkillSettingsUpdated(view) => self.replace_skills_region(view),
             AppEvent::SkillDiagnosticsReceived(diagnostics) => {
                 self.report_skill_diagnostics(&diagnostics)
             }
@@ -1676,8 +1573,21 @@ impl App {
                 self.status = Status::Error;
                 self.turn_input_mode = TurnInputMode::Start;
             }
-            AppEvent::ThemePanesClosed => self.close_theme_panes(),
-            AppEvent::ThemePaneOpened(view) => self.show_theme_pane(view),
+            AppEvent::ThemePickerClosed => {
+                if matches!(self.composer_mode, Some(ComposerMode::Theme(_))) {
+                    self.close_composer_mode();
+                }
+            }
+            AppEvent::ThemePickerOpened(view) => {
+                if matches!(self.composer_mode, Some(ComposerMode::Theme(_))) {
+                    self.composer_mode
+                        .as_mut()
+                        .expect("the theme region is active")
+                        .push_custom_theme(view);
+                } else {
+                    self.show_theme_region(view);
+                }
+            }
             AppEvent::RenderThemeChanged(theme) => {
                 self.render_theme = theme;
                 self.render_theme_revision = self.render_theme_revision.wrapping_add(1).max(1);
@@ -1773,11 +1683,11 @@ impl App {
         }
     }
 
-    fn handle_root_navigation_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
+    fn handle_screen_navigation_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
         if key.kind != KeyEventKind::Press {
             return None;
         }
-        if matches!(self.sessions.root(), Some(RootTarget::Manager))
+        if matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.manager().focused()
         {
             let catalog = self.sessions.catalog().to_vec();
@@ -1811,7 +1721,7 @@ impl App {
                 KeyCode::Char(' ') => {
                     let preview = self.sessions.manager_mut().toggle_or_preview(&catalog);
                     if let Some(preview) = preview {
-                        self.quick_view = Some(QuickViewState::new(preview));
+                        self.open_active_overlay(preview);
                     }
                     Some(None)
                 }
@@ -1829,26 +1739,26 @@ impl App {
         if !key.modifiers.is_empty() {
             return None;
         }
-        if self.subagent_pane.focused() {
+        if self.subagent_picker.focused() {
             return match key.code {
                 KeyCode::Up => {
-                    if !self.subagent_pane.select_previous() {
-                        self.subagent_pane.blur();
+                    if !self.subagent_picker.select_previous() {
+                        self.subagent_picker.blur();
                     }
                     Some(None)
                 }
                 KeyCode::Down => {
-                    self.subagent_pane.select_next();
+                    self.subagent_picker.select_next();
                     Some(None)
                 }
                 KeyCode::Enter => Some(
-                    self.subagent_pane
+                    self.subagent_picker
                         .selected()
                         .cloned()
                         .map(|thread_id| AppCommand::SwitchThread { thread_id }),
                 ),
                 KeyCode::Esc => {
-                    self.subagent_pane.blur();
+                    self.subagent_picker.blur();
                     Some(None)
                 }
                 _ => None,
@@ -1857,12 +1767,12 @@ impl App {
         if !self.chat_input_focused() || !self.input().is_empty() {
             return None;
         }
-        let target = match empty_input_navigation(self.sessions.root(), key.code)? {
-            EmptyInputNavigation::PreviousRoot => match self.sessions.previous_root() {
+        let target = match empty_input_navigation(self.sessions.screen(), key.code)? {
+            EmptyInputNavigation::PreviousScreen => match self.sessions.previous_screen() {
                 Some(target) => target,
                 None => return Some(None),
             },
-            EmptyInputNavigation::NextRoot => match self.sessions.next_root() {
+            EmptyInputNavigation::NextScreen => match self.sessions.next_screen() {
                 Some(target) => target,
                 None => return Some(None),
             },
@@ -1871,21 +1781,23 @@ impl App {
                 return Some(None);
             }
             EmptyInputNavigation::FocusSubagents => {
-                self.subagent_pane.focus();
+                self.subagent_picker.focus();
                 return Some(None);
             }
         };
         match target {
-            RootTarget::Manager => {
+            TerminalScreen::Manager => {
+                self.close_transient_surfaces();
                 self.sessions.show_manager();
                 Some(None)
             }
-            RootTarget::Session(session_id) => {
+            TerminalScreen::Session(session_id) => {
                 if self.sessions.active_session_id() == Some(&session_id) {
                     let viewed = self
                         .sessions
                         .restorable_thread(&session_id)
                         .expect("the active Session has an active Thread");
+                    self.close_transient_surfaces();
                     self.sessions.show_session(session_id, viewed);
                     Some(None)
                 } else {
@@ -1898,10 +1810,10 @@ impl App {
         }
     }
 
-    fn reconcile_subagent_pane(&mut self) {
-        let visible_session_id = match self.sessions.root() {
-            Some(RootTarget::Session(session_id)) => Some(session_id.clone()),
-            Some(RootTarget::Manager) | None => None,
+    fn reconcile_subagent_picker(&mut self) {
+        let visible_session_id = match self.sessions.screen() {
+            Some(TerminalScreen::Session(session_id)) => Some(session_id.clone()),
+            Some(TerminalScreen::Manager) | None => None,
         };
         let viewed_thread = visible_session_id
             .as_ref()
@@ -1913,7 +1825,7 @@ impl App {
                 .iter()
                 .find(|session| &session.session_id == session_id)
         });
-        self.subagent_pane
+        self.subagent_picker
             .reconcile(session, viewed_thread.as_ref());
     }
 
@@ -1936,8 +1848,8 @@ impl App {
 
     fn handle_transcript_selection_key(&mut self, key: KeyEvent) -> bool {
         if key.kind != KeyEventKind::Press
-            || !matches!(self.sessions.root(), Some(RootTarget::Session(_)))
-            || self.chat_composer.pane_active()
+            || !matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
+            || self.composer_mode.is_some()
             || self.completion().is_some()
             || !self.input().is_empty()
         {
@@ -2016,11 +1928,11 @@ impl App {
     ) -> Option<AppCommand> {
         match action {
             AppKeymapAction::CycleApprovalMode => Some(AppCommand::CycleNextApprovalMode),
-            AppKeymapAction::RootEscape => match self.root_escape_sequence.press(now) {
-                RootEscapeOutcome::WaitingForSecondPress => None,
-                RootEscapeOutcome::OpenRewind => Some(AppCommand::OpenRewindPane),
+            AppKeymapAction::ScreenEscape => match self.screen_escape_sequence.press(now) {
+                ScreenEscapeOutcome::WaitingForSecondPress => None,
+                ScreenEscapeOutcome::OpenRewind => Some(AppCommand::OpenRewindRegion),
             },
-            AppKeymapAction::OpenRewind => Some(AppCommand::OpenRewindPane),
+            AppKeymapAction::OpenRewind => Some(AppCommand::OpenRewindRegion),
             AppKeymapAction::ReadClipboardImage => Some(AppCommand::ReadClipboardImage),
             AppKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
             AppKeymapAction::CopyLastResponse => Some(AppCommand::CopyLastResponse),
@@ -2032,8 +1944,8 @@ impl App {
         let context = self.app_keymap_context(true);
         let chord_expired = self.app_keymap.expire(context, now);
         let status_notice_expired = self.status_notice.expire(now);
-        let elapsed_changed = self.subagent_pane.refresh_elapsed();
-        let manager_changed = matches!(self.sessions.root(), Some(RootTarget::Manager))
+        let elapsed_changed = self.subagent_picker.refresh_elapsed();
+        let manager_changed = matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.refresh_manager_time(now);
         chord_expired || status_notice_expired || elapsed_changed || manager_changed
     }
@@ -2059,17 +1971,18 @@ impl App {
         if invocation.origin == SlashCommandOrigin::Local && invocation.arguments.is_empty() {
             match local {
                 Some(TuiSlashCommandAction::Sessions | TuiSlashCommandAction::Agents) => {
-                    self.subagent_pane.blur();
+                    self.subagent_picker.blur();
+                    self.close_transient_surfaces();
                     self.sessions.show_manager();
                     return None;
                 }
                 Some(TuiSlashCommandAction::Subagents) => {
-                    self.subagent_pane.focus();
+                    self.subagent_picker.focus();
                     return None;
                 }
                 Some(TuiSlashCommandAction::Queue) => {
-                    let pane_spec = crate::features::queue::pane_spec(&self.queue_view());
-                    self.show_queue_pane(pane_spec);
+                    let spec = crate::features::queue::region_spec(&self.queue_view());
+                    self.show_queue_region(spec);
                     return None;
                 }
                 _ => {}
@@ -2119,22 +2032,22 @@ impl App {
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Shortcuts))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenKeymapPane)
+                Some(AppCommand::OpenKeymapEditor)
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Config))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenConfigPane)
+                Some(AppCommand::OpenConfigEditor)
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::StatusLine))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenStatusLinePane)
+                Some(AppCommand::OpenStatusLineRegion)
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Theme))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenThemePane)
+                Some(AppCommand::OpenThemePicker)
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Theme)) => {
                 Some(AppCommand::SetTheme {
@@ -2142,8 +2055,8 @@ impl App {
                 })
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Help)) => {
-                let spec = help_pane_spec(self.thread_presentations.slash_commands());
-                self.show_list_selection_pane(spec);
+                let spec = help_region_spec(self.thread_presentations.slash_commands());
+                self.open_composer_mode(ComposerMode::help(spec));
                 None
             }
             (SlashCommandOrigin::Server, _) => {

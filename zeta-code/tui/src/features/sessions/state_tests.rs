@@ -1,5 +1,5 @@
-use super::RootTarget;
 use super::SessionsState;
+use super::TerminalScreen;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerStatus;
@@ -17,17 +17,17 @@ fn manager_is_directly_left_of_the_active_session() {
         thread_id("one"),
     );
 
-    assert_eq!(state.previous_root(), Some(RootTarget::Manager));
+    assert_eq!(state.previous_screen(), Some(TerminalScreen::Manager));
     state.show_manager();
-    assert_eq!(state.previous_root(), None);
+    assert_eq!(state.previous_screen(), None);
     assert_eq!(
-        state.next_root(),
-        Some(RootTarget::Session(session_id("one")))
+        state.next_screen(),
+        Some(TerminalScreen::Session(session_id("one")))
     );
 }
 
 #[test]
-fn historical_sessions_are_not_horizontal_roots() {
+fn historical_sessions_are_not_horizontal_screens() {
     let mut completed = session("completed");
     completed.manager.status = SessionManagerStatus::Completed;
     let mut working = session("working");
@@ -43,16 +43,16 @@ fn historical_sessions_are_not_horizontal_roots() {
 
     state.show_manager();
     assert_eq!(
-        state.next_root(),
-        Some(RootTarget::Session(session_id("completed")))
+        state.next_screen(),
+        Some(TerminalScreen::Session(session_id("completed")))
     );
     state.show_session(session_id("working"), thread_id("working"));
-    assert_eq!(state.previous_root(), Some(RootTarget::Manager));
-    assert_eq!(state.next_root(), None);
+    assert_eq!(state.previous_screen(), Some(TerminalScreen::Manager));
+    assert_eq!(state.next_screen(), None);
     state.show_manager();
     assert_eq!(
-        state.next_root(),
-        Some(RootTarget::Session(session_id("working")))
+        state.next_screen(),
+        Some(TerminalScreen::Session(session_id("working")))
     );
 }
 

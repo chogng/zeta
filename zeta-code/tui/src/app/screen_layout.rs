@@ -40,7 +40,7 @@ pub(crate) struct SessionAreas {
     pub(crate) request: Rect,
     pub(crate) composer: Rect,
     pub(crate) status: Rect,
-    pub(crate) subagent_pane: Rect,
+    pub(crate) subagent_picker: Rect,
 }
 
 pub(crate) fn session_areas(
@@ -51,14 +51,14 @@ pub(crate) fn session_areas(
     request_desired_rows: u16,
     composer_desired_rows: u16,
     status_desired_rows: u16,
-    subagent_pane_desired_rows: u16,
+    subagent_picker_desired_rows: u16,
 ) -> SessionAreas {
-    let subagent_pane_rows = subagent_pane_desired_rows.min(area.height);
-    let available_above_subagent_pane = area.height.saturating_sub(subagent_pane_rows);
-    let status_rows = status_desired_rows.min(available_above_subagent_pane);
-    let available_above_status = available_above_subagent_pane.saturating_sub(status_rows);
+    let subagent_picker_rows = subagent_picker_desired_rows.min(area.height);
+    let available_above_subagent_picker = area.height.saturating_sub(subagent_picker_rows);
+    let status_rows = status_desired_rows.min(available_above_subagent_picker);
+    let available_above_status = available_above_subagent_picker.saturating_sub(status_rows);
     let subagent_gap_rows =
-        u16::from(subagent_pane_rows > 0 && status_rows > 0).min(available_above_status);
+        u16::from(subagent_picker_rows > 0 && status_rows > 0).min(available_above_status);
     let available_above_gap = available_above_status.saturating_sub(subagent_gap_rows);
     let transcript_rows = MIN_TRANSCRIPT_ROWS.min(available_above_gap);
     let available_chrome = available_above_gap.saturating_sub(transcript_rows);
@@ -75,8 +75,8 @@ pub(crate) fn session_areas(
             .saturating_sub(plan_rows),
     );
     let bottom = area.y.saturating_add(area.height);
-    let subagent_pane_y = bottom.saturating_sub(subagent_pane_rows);
-    let status_y = subagent_pane_y
+    let subagent_picker_y = bottom.saturating_sub(subagent_picker_rows);
+    let status_y = subagent_picker_y
         .saturating_sub(subagent_gap_rows)
         .saturating_sub(status_rows);
     let composer_y = status_y.saturating_sub(composer_rows);
@@ -120,9 +120,9 @@ pub(crate) fn session_areas(
             height: status_rows,
             ..area
         },
-        subagent_pane: Rect {
-            y: subagent_pane_y,
-            height: subagent_pane_rows,
+        subagent_picker: Rect {
+            y: subagent_picker_y,
+            height: subagent_picker_rows,
             ..area
         },
     }

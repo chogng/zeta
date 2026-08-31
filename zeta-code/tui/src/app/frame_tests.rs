@@ -3,10 +3,12 @@ use super::input_overlay_index_at;
 use super::layout;
 use crate::app::App;
 use crate::app::AppEvent;
+use crate::components::detail_list::DetailList;
+use crate::components::detail_list::DetailListRow;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::pane::PaneSpec;
+use crate::components::region::RegionSpec;
 use crate::components::search_box::SearchBoxModel;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
@@ -83,6 +85,29 @@ fn status_notice_overlays_the_row_above_chat_input_without_changing_layout() {
             .ends_with("Copied 246 chars to clipboard")
     );
     assert!(!rows.last().unwrap().contains("Copied"));
+}
+
+#[test]
+fn application_overlay_keeps_layout_fixed_and_blocks_covered_pointer_targets() {
+    let mut app = App::new();
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    app.insert_text("/");
+    assert!(app.completion().is_some());
+    let before = layout(&app, terminal_area).session;
+
+    app.update(AppEvent::StatusOverlayOpened(DetailList::new(
+        "Status",
+        vec![DetailListRow::new("Model", "openai/gpt")],
+    )));
+
+    assert_eq!(layout(&app, terminal_area).session, before);
+    assert!(app.completion().is_none());
+    assert!(super::input_pointer_target_at(&app, terminal_area, 2, 15).is_none());
+    app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert_eq!(app.input(), "/");
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.active_overlay().is_none());
+    assert_eq!(app.input(), "/");
 }
 
 #[test]
@@ -439,7 +464,7 @@ fn chat_input_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
 }
 
 #[test]
-fn subagent_pane_starts_at_the_empty_input_cursor_column() {
+fn subagent_picker_starts_at_the_empty_input_cursor_column() {
     let mut app = App::new();
     let session_id = SessionId::new("root").unwrap();
     let root_id = ThreadId::new("root").unwrap();
@@ -524,12 +549,12 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn list_selection_pane_replaces_chat_input_and_status_line_with_its_hint_bar() {
+fn list_selection_region_replaces_chat_input_and_status_line_with_its_hint_bar() {
     let mut app = App::new();
     app.update(AppEvent::ProductNotice(
         "Conversation remains visible.".into(),
     ));
-    app.update(AppEvent::ListSelectionPaneOpened(help_view()));
+    app.update(AppEvent::HelpOpened(help_view()));
 
     let rendered = render(&app, 80, 24);
 
@@ -549,14 +574,14 @@ fn list_selection_pane_replaces_chat_input_and_status_line_with_its_hint_bar() {
         .unwrap();
     assert_eq!(hint_bar_row, rows.len() - 1);
     let layout = super::layout(&app, Rect::new(0, 0, 80, 24));
-    assert!(layout.input.input.is_empty());
-    assert_eq!(layout.input.panes[0].area.bottom(), layout.session.status.y);
+    assert!(layout.input.is_empty());
+    assert_eq!(layout.session.composer.bottom(), layout.session.status.y);
 }
 
 #[test]
-fn list_selection_pane_supports_keyboard_tab_switching_and_search() {
+fn list_selection_region_supports_keyboard_tab_switching_and_search() {
     let mut app = App::new();
-    app.update(AppEvent::ListSelectionPaneOpened(help_view()));
+    app.update(AppEvent::HelpOpened(help_view()));
 
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -573,9 +598,9 @@ fn list_selection_pane_supports_keyboard_tab_switching_and_search() {
 }
 
 #[test]
-fn theme_candidate_focus_repaints_only_the_pane_focus_border() {
+fn theme_candidate_focus_repaints_only_the_region_focus_border() {
     let mut app = App::new();
-    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+    app.update(AppEvent::HelpOpened(RegionSpec::new(
         ListSelectionModel::new(
             "Theme",
             vec![ListSelectionGroup::new(
@@ -594,12 +619,8 @@ fn theme_candidate_focus_repaints_only_the_pane_focus_border() {
 
     let first = render_buffer(&app, 80, 24);
     let interaction_y = super::layout(&app, Rect::new(0, 0, 80, 24))
-        .input
-        .panes
-        .iter()
-        .find(|entry| entry.kind == crate::components::chat_composer::ChatComposerPaneKind::Stacked)
-        .unwrap()
-        .area
+        .session
+        .composer
         .y;
     assert_eq!(first[(2, 1)].fg, test_context().accent());
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
@@ -887,8 +908,8 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .join("\n")
 }
 
-fn help_view() -> PaneSpec<ListSelectionModel> {
-    PaneSpec::new(
+fn help_view() -> RegionSpec<ListSelectionModel> {
+    RegionSpec::new(
         ListSelectionModel::new(
             "Help",
             vec![

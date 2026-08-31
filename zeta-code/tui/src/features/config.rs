@@ -1,17 +1,18 @@
-mod pane;
+mod region;
 mod request;
 mod settings;
 
-pub(crate) use pane::ConfigEdit;
-pub(crate) use pane::ConfigPaneSpec;
-pub(crate) use pane::ConfigSelectionAction;
-pub(crate) use pane::PermissionEdit;
-pub(crate) use pane::ProviderApiKeyEdit;
-pub(crate) use pane::config_pane_spec;
-pub(crate) use pane::provider_api_key_prompt;
+pub(crate) use region::ConfigEdit;
+pub(crate) use region::ConfigEditor;
+pub(crate) use region::ConfigEditorOutcome;
+pub(crate) use region::ConfigChoices;
+pub(crate) use region::ConfigSelectionAction;
+pub(crate) use region::PermissionEdit;
+pub(crate) use region::ProviderApiKeyEdit;
+pub(crate) use region::config_choices;
 pub(crate) use request::PreferredModelUpdate;
 pub(crate) use request::preferred_model;
-pub(crate) use request::read_config_pane;
+pub(crate) use request::read_config_region;
 pub(crate) use request::set_permissions;
 pub(crate) use request::set_preferred_model;
 pub(crate) use request::set_provider_api_key;
@@ -23,5 +24,5 @@ pub(crate) use settings::TerminalSettings;
 
 pub(crate) struct ConfigEditResult {
     pub(crate) settings: TerminalSettings,
-    pub(crate) pane_spec: ConfigPaneSpec,
+    pub(crate) region_spec: ConfigChoices,
 }

@@ -3,7 +3,6 @@ use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
-use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -23,15 +22,15 @@ pub(crate) enum DirSelectionAction {
     Remove { path: PathBuf },
 }
 
-pub(crate) struct DirPaneSpec {
-    pub(crate) model: PaneSpec<ListSelectionModel>,
+pub(crate) struct DirChoices {
+    pub(crate) model: ListSelectionModel,
     pub(crate) actions: BTreeMap<ListSelectionItemId, DirSelectionAction>,
 }
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
-) -> Result<DirPaneSpec, ClientError>
+) -> Result<DirChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -39,7 +38,7 @@ where
         .list_session_dirs(SessionDirListParams {
             session_id: session_id.clone(),
         })
-        .map(pane_spec)
+        .map(choices)
 }
 
 pub(crate) fn add<T>(
@@ -62,7 +61,7 @@ pub(crate) fn remove<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
     path: PathBuf,
-) -> Result<DirPaneSpec, ClientError>
+) -> Result<DirChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -72,14 +71,14 @@ where
             path,
         })
         .map(|result| {
-            pane_spec(SessionDirListResult {
+            choices(SessionDirListResult {
                 revision: result.revision,
                 dirs: result.dirs,
             })
         })
 }
 
-fn pane_spec(result: SessionDirListResult) -> DirPaneSpec {
+fn choices(result: SessionDirListResult) -> DirChoices {
     let mut actions = BTreeMap::new();
     let items = result
         .dirs
@@ -106,18 +105,16 @@ fn pane_spec(result: SessionDirListResult) -> DirPaneSpec {
                 })
         })
         .collect();
-    DirPaneSpec {
-        model: PaneSpec::new(
-            ListSelectionModel::new(
-                "Directories",
-                vec![ListSelectionGroup::new("Directories", items)],
-            )
-            .with_activation_mode(ListSelectionActivationMode::Enter)
-            .with_activation_label("remove")
-            .without_tab_bar()
-            .with_search(SearchBoxModel::new("Search directories"))
-            .with_empty_message("No directories"),
-        ),
+    DirChoices {
+        model: ListSelectionModel::new(
+            "Directories",
+            vec![ListSelectionGroup::new("Directories", items)],
+        )
+        .with_activation_mode(ListSelectionActivationMode::Enter)
+        .with_activation_label("remove")
+        .without_tab_bar()
+        .with_search(SearchBoxModel::new("Search directories"))
+        .with_empty_message("No directories"),
         actions,
     }
 }

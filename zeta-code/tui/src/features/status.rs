@@ -1,8 +1,8 @@
-mod pane;
+mod overlay;
 mod request;
 
-pub(crate) use pane::RemainingContextWindow;
-pub(crate) use pane::StatusViewData;
-pub(crate) use pane::status_pane_spec;
+pub(crate) use overlay::RemainingContextWindow;
+pub(crate) use overlay::StatusViewData;
+pub(crate) use overlay::status_overlay;
 pub(crate) use request::StatusRequestScope;
-pub(crate) use request::load_status_pane_spec;
+pub(crate) use request::load_status_overlay;

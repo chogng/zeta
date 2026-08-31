@@ -1,43 +1,43 @@
-use super::RootEscapeOutcome;
-use super::RootEscapeSequence;
+use super::ScreenEscapeOutcome;
+use super::ScreenEscapeSequence;
 use std::time::Duration;
 use std::time::Instant;
 
 #[test]
 fn second_press_inside_the_window_completes_the_sequence() {
-    let mut sequence = RootEscapeSequence::default();
+    let mut sequence = ScreenEscapeSequence::default();
     let started = Instant::now();
 
     assert_eq!(
         sequence.press(started),
-        RootEscapeOutcome::WaitingForSecondPress
+        ScreenEscapeOutcome::WaitingForSecondPress
     );
     assert_eq!(
         sequence.press(started + Duration::from_millis(200)),
-        RootEscapeOutcome::OpenRewind
+        ScreenEscapeOutcome::OpenRewind
     );
 }
 
 #[test]
 fn expired_or_reset_sequences_require_two_new_presses() {
-    let mut sequence = RootEscapeSequence::default();
+    let mut sequence = ScreenEscapeSequence::default();
     let started = Instant::now();
 
     assert_eq!(
         sequence.press(started),
-        RootEscapeOutcome::WaitingForSecondPress
+        ScreenEscapeOutcome::WaitingForSecondPress
     );
     assert_eq!(
         sequence.press(started + Duration::from_millis(600)),
-        RootEscapeOutcome::WaitingForSecondPress
+        ScreenEscapeOutcome::WaitingForSecondPress
     );
     sequence.reset();
     assert_eq!(
         sequence.press(started + Duration::from_millis(700)),
-        RootEscapeOutcome::WaitingForSecondPress
+        ScreenEscapeOutcome::WaitingForSecondPress
     );
     assert_eq!(
         sequence.press(started + Duration::from_millis(800)),
-        RootEscapeOutcome::OpenRewind
+        ScreenEscapeOutcome::OpenRewind
     );
 }

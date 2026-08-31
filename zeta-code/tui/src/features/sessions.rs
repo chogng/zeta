@@ -1,6 +1,6 @@
 mod active;
 mod manager;
-mod pane;
+mod region;
 mod state;
 
 pub(crate) use active::ActiveConversation;
@@ -12,11 +12,11 @@ pub(crate) use manager::SessionManagerPointerTarget;
 pub(crate) use manager::SessionManagerView;
 pub(crate) use manager::draw_manager;
 pub(crate) use manager::pointer_target_at;
-pub(crate) use pane::SessionPaneSpec;
-pub(crate) use pane::SessionSelectionAction;
-pub(crate) use pane::session_pane_spec;
-pub(crate) use state::RootTarget;
+pub(crate) use region::SessionChoices;
+pub(crate) use region::SessionSelectionAction;
+pub(crate) use region::session_choices;
 pub(crate) use state::SessionsState;
+pub(crate) use state::TerminalScreen;
 
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
@@ -29,13 +29,13 @@ use zeta_protocol::SessionId;
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
     active_session_id: &str,
-) -> Result<SessionPaneSpec, ClientError>
+) -> Result<SessionChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
     client
         .list_sessions()
-        .map(|result| session_pane_spec(&result.sessions, active_session_id))
+        .map(|result| session_choices(&result.sessions, active_session_id))
 }
 
 pub(crate) fn load_catalog<T>(

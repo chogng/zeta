@@ -1,5 +1,5 @@
-use super::SkillPaneSpec;
-use super::skills_pane_spec;
+use super::SkillChoices;
+use super::skill_choices;
 use crate::client::new_command_id;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
@@ -14,7 +14,7 @@ pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
     reload: SkillCatalogReloadDto,
-) -> Result<SkillPaneSpec, ClientError>
+) -> Result<SkillChoices, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -23,7 +23,7 @@ where
             reload,
             session_id: Some(session_id.clone()),
         })
-        .map(|catalog| skills_pane_spec(&catalog))
+        .map(|catalog| skill_choices(&catalog))
 }
 
 pub(crate) fn set_enablement<T>(
@@ -31,7 +31,7 @@ pub(crate) fn set_enablement<T>(
     session_id: &SessionId,
     skill_id: SkillId,
     enablement: SkillEnablementDto,
-) -> Result<SkillPaneSpec, ClientError>
+) -> Result<SkillChoices, ClientError>
 where
     T: JsonRpcTransport,
 {

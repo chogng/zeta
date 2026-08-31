@@ -93,7 +93,7 @@ fn apply_color(palette: &mut ThemePalette, name: &str, color: ThemeRgb) -> Resul
         "muted" => &mut palette.muted,
         "pressedBackground" => &mut palette.pressed_background,
         "pressedForeground" => &mut palette.pressed_foreground,
-        "quickViewBackground" => &mut palette.quick_view_background,
+        "quickViewBackground" => &mut palette.overlay_background,
         "removedBackground" => &mut palette.removed_background,
         "removedMarker" => &mut palette.removed_marker,
         "string" => &mut palette.string,

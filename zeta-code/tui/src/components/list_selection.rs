@@ -1,3 +1,4 @@
+mod action;
 mod matcher;
 mod preview;
 mod state;
@@ -15,3 +16,5 @@ pub(crate) use state::ListSelectionState;
 #[cfg(test)]
 pub(crate) use view::draw;
 pub(crate) use view::draw_with_pointer;
+pub(crate) use action::ListSelection;
+pub(crate) use action::ListSelectionOutcome;

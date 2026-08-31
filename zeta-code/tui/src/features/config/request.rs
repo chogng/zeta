@@ -1,10 +1,10 @@
 use super::ConfigEdit;
 use super::ConfigEditResult;
-use super::ConfigPaneSpec;
+use super::ConfigChoices;
 use super::PermissionEdit;
 use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
-use super::config_pane_spec;
+use super::config_choices;
 use crate::client::new_command_id;
 use std::fmt;
 use zeta_app_server_client::AppServerClient;
@@ -23,20 +23,20 @@ use zeta_protocol::SessionId;
 
 pub(crate) struct ProviderApiKeyUpdate {
     pub(crate) provider: String,
-    pub(crate) pane_spec: ConfigPaneSpec,
+    pub(crate) region_spec: ConfigChoices,
 }
 
-pub(crate) fn read_config_pane(
+pub(crate) fn read_config_region(
     client: &mut AppServerRequestHandle,
     session_id: &SessionId,
-) -> Result<ConfigPaneSpec, ConfigCommandError> {
+) -> Result<ConfigChoices, ConfigCommandError> {
     let server_config = client.read_config()?;
     let terminal = TerminalSettings::from_tui(&server_config.tui).map_err(ConfigCommandError)?;
     let providers = client.list_providers()?;
     let dirs = client.list_session_dirs(SessionDirListParams {
         session_id: session_id.clone(),
     })?;
-    Ok(config_pane_spec(
+    Ok(config_choices(
         &server_config,
         &providers,
         terminal,
@@ -52,19 +52,19 @@ pub(crate) fn set_provider_api_key(
 ) -> Result<ProviderApiKeyUpdate, ConfigCommandError> {
     let (provider, api_key) = edit.into_parts();
     client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
-    let pane_spec = read_config_pane(client, session_id)?;
+    let region_spec = read_config_region(client, session_id)?;
     Ok(ProviderApiKeyUpdate {
         provider,
-        pane_spec,
+        region_spec,
     })
 }
 
 pub(crate) fn set_permissions(
     client: &mut AppServerRequestHandle,
     edit: PermissionEdit,
-) -> Result<ConfigPaneSpec, ConfigCommandError> {
+) -> Result<ConfigChoices, ConfigCommandError> {
     let result = client.set_session_dir_permissions(edit.params.clone())?;
-    Ok(config_pane_spec(
+    Ok(config_choices(
         &edit.server_config,
         &edit.providers,
         edit.terminal,
@@ -100,7 +100,7 @@ pub(crate) fn set_terminal_settings(
     let settings = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
     Ok(ConfigEditResult {
         settings,
-        pane_spec: config_pane_spec(
+        region_spec: config_choices(
             &config,
             &edit.providers,
             settings,

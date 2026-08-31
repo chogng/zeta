@@ -50,7 +50,7 @@ pub(crate) struct ThemePalette {
     pub(crate) inserted_marker: ThemeRgb,
     pub(crate) keyword: ThemeRgb,
     pub(crate) muted: ThemeRgb,
-    pub(crate) quick_view_background: ThemeRgb,
+    pub(crate) overlay_background: ThemeRgb,
     pub(crate) pressed_background: ThemeRgb,
     pub(crate) pressed_foreground: ThemeRgb,
     pub(crate) removed_background: ThemeRgb,
@@ -87,7 +87,7 @@ impl ThemePalette {
             inserted_marker: ThemeRgb::new(0x3f, 0xb9, 0x50),
             keyword: ThemeRgb::new(0xff, 0x7b, 0x72),
             muted: ThemeRgb::new(0x8b, 0x94, 0x9e),
-            quick_view_background: ThemeRgb::new(0x25, 0x25, 0x26),
+            overlay_background: ThemeRgb::new(0x25, 0x25, 0x26),
             pressed_background: ThemeRgb::new(0x3b, 0x35, 0x68),
             pressed_foreground: ThemeRgb::new(0xff, 0xff, 0xff),
             removed_background: ThemeRgb::new(0x35, 0x1b, 0x1b),
@@ -124,7 +124,7 @@ impl ThemePalette {
             inserted_marker: ThemeRgb::new(0x1a, 0x7f, 0x37),
             keyword: ThemeRgb::new(0xcf, 0x22, 0x2e),
             muted: ThemeRgb::new(0x57, 0x60, 0x6a),
-            quick_view_background: ThemeRgb::new(0xf8, 0xf8, 0xf8),
+            overlay_background: ThemeRgb::new(0xf8, 0xf8, 0xf8),
             pressed_background: ThemeRgb::new(0xd8, 0xd1, 0xff),
             pressed_foreground: ThemeRgb::new(0x27, 0x1f, 0x63),
             removed_background: ThemeRgb::new(0xff, 0xeb, 0xe9),
@@ -241,7 +241,7 @@ pub(crate) struct RenderTheme {
     pressed_foreground: Color,
     removed_background: Color,
     removed_marker: Color,
-    quick_view_background: Color,
+    overlay_background: Color,
     string: Color,
     success: Color,
     selection_background: Color,
@@ -279,7 +279,7 @@ impl RenderTheme {
             pressed_foreground: projected(palette.pressed_foreground),
             removed_background: projected(palette.removed_background),
             removed_marker: projected(palette.removed_marker),
-            quick_view_background: projected(palette.quick_view_background),
+            overlay_background: projected(palette.overlay_background),
             string: projected(palette.string),
             success: projected(palette.success),
             selection_background: projected(palette.selection_background),
@@ -316,7 +316,7 @@ impl RenderTheme {
             pressed_foreground: hex("#ffffff"),
             removed_background: hex("#37191b"),
             removed_marker: hex("#f85149"),
-            quick_view_background: hex("#252526"),
+            overlay_background: hex("#252526"),
             string: hex("#a5d6ff"),
             success: hex("#5fd28c"),
             selection_background: hex("#2f2b52"),
@@ -395,8 +395,8 @@ impl RenderTheme {
     pub(crate) const fn removed_marker(self) -> Color {
         self.removed_marker
     }
-    pub(crate) const fn quick_view_background(self) -> Color {
-        self.quick_view_background
+    pub(crate) const fn overlay_background(self) -> Color {
+        self.overlay_background
     }
     pub(crate) const fn string(self) -> Color {
         self.string
@@ -489,8 +489,8 @@ impl<'a> RenderContext<'a> {
     pub(crate) const fn pressed_foreground(self) -> Color {
         self.theme.pressed_foreground()
     }
-    pub(crate) const fn quick_view_background(self) -> Color {
-        self.theme.quick_view_background()
+    pub(crate) const fn overlay_background(self) -> Color {
+        self.theme.overlay_background()
     }
     pub(crate) const fn keyword(self) -> Color {
         self.theme.keyword()

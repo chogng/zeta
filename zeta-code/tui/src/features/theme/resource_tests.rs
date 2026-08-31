@@ -114,10 +114,7 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
         selected.theme.selection_background(),
         Color::Rgb(68, 85, 102)
     );
-    assert_eq!(
-        selected.theme.quick_view_background(),
-        Color::Rgb(48, 48, 48)
-    );
+    assert_eq!(selected.theme.overlay_background(), Color::Rgb(48, 48, 48));
     assert_eq!(
         selected.theme.screen_selection_background(),
         Color::Rgb(128, 207, 255)

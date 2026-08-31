@@ -156,7 +156,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
         invocation(TuiSlashCommandAction::Status, ""),
         &mut app,
     );
-    assert_eq!(app.quick_view().unwrap().title(), "Status");
+    assert_eq!(app.active_overlay().unwrap().title(), "Status");
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     conversation.execute(
@@ -166,7 +166,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     );
     assert_eq!(app.list_selection().unwrap().title(), "MCP servers");
     assert!(app.list_selection().unwrap().search().is_some());
-    app.update(AppEvent::ListSelectionPaneClosed);
+    app.update(AppEvent::ComposerModeClosed);
 
     conversation.execute(
         &mut client,
@@ -175,7 +175,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     );
     assert_eq!(app.list_selection().unwrap().title(), "Connectors");
     assert!(app.list_selection().unwrap().search().is_some());
-    app.update(AppEvent::ListSelectionPaneClosed);
+    app.update(AppEvent::ComposerModeClosed);
 
     conversation.execute(
         &mut client,
@@ -249,7 +249,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
         enablement,
     )
     .unwrap();
-    app.update(AppEvent::SkillsPaneReplaced(view));
+    app.update(AppEvent::SkillSettingsUpdated(view));
     app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
     let disabled = app.list_selection().unwrap();
     assert_eq!(disabled.active_tab().label(), "Disabled (1)");
@@ -369,7 +369,7 @@ fn keybindings_and_status_line_are_persisted_in_the_tui_toml_section() {
 }
 
 #[test]
-fn resume_and_model_without_arguments_open_actionable_panes() {
+fn resume_and_model_without_arguments_open_actionable_regions() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();
     let current_session = conversation.session_id().to_string();
@@ -390,7 +390,7 @@ fn resume_and_model_without_arguments_open_actionable_panes() {
             preferred_thread_id: None,
         })
     );
-    app.update(AppEvent::ListSelectionPaneClosed);
+    app.update(AppEvent::ComposerModeClosed);
 
     conversation.execute(
         &mut client,
@@ -410,7 +410,7 @@ fn resume_and_model_without_arguments_open_actionable_panes() {
 }
 
 #[test]
-fn rewind_without_arguments_opens_the_checkpoint_pane() {
+fn rewind_without_arguments_opens_the_checkpoint_region() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "rewind".into()).unwrap();
     let mut app = App::new();
