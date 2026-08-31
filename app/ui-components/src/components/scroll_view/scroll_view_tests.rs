@@ -170,7 +170,9 @@ fn thumb_drag_maps_track_travel_to_absolute_content_offset() {
         ScrollAxis::Vertical,
         style(),
     );
-    let thumb = view.vertical_scrollbar().unwrap().thumb_bounds();
+    let scrollbar = view.vertical_scrollbar().unwrap();
+    let thumb = scrollbar.thumb_bounds();
+    let thumb_travel = scrollbar.track_bounds().size.height - thumb.size.height;
     let pointer = Point::new(thumb.origin.x + 2.0, thumb.origin.y + 4.0);
     let hit = view.hit_test_scrollbar(pointer).unwrap();
     assert_eq!(hit.part(), ScrollbarPart::Thumb);
@@ -178,7 +180,7 @@ fn thumb_drag_maps_track_travel_to_absolute_content_offset() {
     let mut state = ScrollState::default();
 
     assert!(state.apply(
-        drag.command_at(Point::new(pointer.x, 78.0)),
+        drag.command_at(Point::new(pointer.x, pointer.y + thumb_travel)),
         view.metrics(),
         ScrollAxis::Vertical,
     ));
