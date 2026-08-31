@@ -3,12 +3,11 @@ import { createServiceIdentifier } from '../../../platform/instantiation/common/
 import type { LanguageFeatureRegistry } from '../languageFeatureRegistry.js';
 import type { LanguageSelector } from '../languageSelector.js';
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistry } from '../languages/completion/languageCompletionProviders.js';
-import type { DocumentHighlightProvider, MultiDocumentHighlightProvider } from '../languages.js';
+import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider } from '../languages.js';
 import type { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
 import type { LanguageWorkspaceSymbolProvider } from '../languages/workspaceSymbols.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common/languageCodeActions.js';
-import type { LanguageCodeLensProvider } from '../../contrib/codelens/common/languageCodeLenses.js';
 import type { LanguageColorProvider } from '../../contrib/colorPicker/common/languageColors.js';
 import type { LanguageDocumentSymbolProvider } from '../../contrib/documentSymbols/common/languageDocumentSymbols.js';
 import type { LanguageFoldingRangeProvider } from '../../contrib/folding/common/languageFoldingRanges.js';
@@ -17,7 +16,6 @@ import type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageI
 import type { LanguageHoverProvider } from '../../contrib/hover/common/hover.js';
 import type { LanguageInlayHintsProvider } from '../../contrib/inlayHints/common/languageInlayHints.js';
 import type { LanguageInlineCompletionsProvider } from '../../contrib/inlineCompletions/common/inlineCompletions.js';
-import type { LanguageLinkedEditingProvider } from '../../contrib/linkedEditing/common/languageLinkedEditing.js';
 import type { LanguageLinkProvider } from '../../contrib/links/common/languageLinks.js';
 import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
@@ -30,13 +28,13 @@ export interface ILanguageFeaturesService extends IDisposable {
 	readonly syntaxProvider: SyntaxProviderRegistry;
 	readonly completionProvider: LanguageCompletionProviderRegistry;
 	readonly codeActionProvider: LanguageFeatureRegistry<LanguageCodeActionProvider>;
-	readonly codeLensProvider: LanguageFeatureRegistry<LanguageCodeLensProvider>;
+	readonly codeLensProvider: LanguageFeatureRegistry<CodeLensProvider>;
 	readonly documentSymbolProvider: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>;
 	readonly formattingProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
 	readonly hoverProvider: LanguageFeatureRegistry<LanguageHoverProvider>;
 	readonly inlayHintsProvider: LanguageFeatureRegistry<LanguageInlayHintsProvider>;
 	readonly inlineCompletionsProvider: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>;
-	readonly linkedEditingProvider: LanguageFeatureRegistry<LanguageLinkedEditingProvider>;
+	readonly linkedEditingRangeProvider: LanguageFeatureRegistry<LinkedEditingRangeProvider>;
 	readonly linkProvider: LanguageFeatureRegistry<LanguageLinkProvider>;
 	readonly parameterHintsProvider: LanguageFeatureRegistry<LanguageParameterHintsProvider>;
 	readonly renameProvider: LanguageFeatureRegistry<LanguageRenameProvider>;
@@ -71,7 +69,7 @@ export interface LanguageProviderBatch {
 	readonly hovers?: readonly LanguageProviderBatchEntry<LanguageHoverProvider>[];
 	readonly formatting?: readonly LanguageProviderBatchEntry<LanguageFormattingProvider>[];
 	readonly inlayHints?: readonly LanguageProviderBatchEntry<LanguageInlayHintsProvider>[];
-	readonly linkedEditing?: readonly LanguageProviderBatchEntry<LanguageLinkedEditingProvider>[];
+	readonly linkedEditing?: readonly LanguageProviderBatchEntry<LinkedEditingRangeProvider>[];
 	readonly parameterHints?: readonly LanguageProviderBatchEntry<LanguageParameterHintsProvider>[];
 }
 

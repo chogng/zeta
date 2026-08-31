@@ -4,7 +4,7 @@ import type { TextResourceLanguageInput } from '../../../platform/language/commo
 import { RGBA8 } from '../../common/core/misc/rgba.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from '../../common/languages/completion/languageCompletions.js';
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider } from '../../common/languages/completion/languageCompletionProviders.js';
-import { DocumentHighlightKind, type MultiDocumentHighlightProvider } from '../../common/languages.js';
+import { DocumentHighlightKind, type CodeLensProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider } from '../../common/languages.js';
 import * as languages from '../../common/languages.js';
 import { selectLanguageIds, type LanguageSelector } from '../../common/languageSelector.js';
 import { type LanguageConfiguration } from '../../common/languages/languageConfiguration.js';
@@ -15,7 +15,6 @@ import type { SyntaxProvider } from '../../common/languages/syntax/syntaxProvide
 import type { LanguageWorkspaceSymbolProvider } from '../../common/languages/workspaceSymbols.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common/languageCodeActions.js';
-import type { LanguageCodeLensProvider } from '../../contrib/codelens/common/languageCodeLenses.js';
 import type { LanguageColorProvider } from '../../contrib/colorPicker/common/languageColors.js';
 import type { LanguageDocumentSymbolProvider } from '../../contrib/documentSymbols/common/languageDocumentSymbols.js';
 import type { LanguageFoldingRangeProvider } from '../../contrib/folding/common/languageFoldingRanges.js';
@@ -24,7 +23,6 @@ import type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageI
 import type { LanguageHoverProvider } from '../../contrib/hover/common/hover.js';
 import type { LanguageInlayHintsProvider } from '../../contrib/inlayHints/common/languageInlayHints.js';
 import type { LanguageInlineCompletionsProvider } from '../../contrib/inlineCompletions/common/inlineCompletions.js';
-import type { LanguageLinkedEditingProvider } from '../../contrib/linkedEditing/common/languageLinkedEditing.js';
 import type { LanguageLinkProvider } from '../../contrib/links/common/languageLinks.js';
 import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
@@ -110,7 +108,7 @@ export function registerCompletionItemProvider(languageSelector: LanguageSelecto
 }
 
 export function registerCodeActionProvider(languageSelector: LanguageSelector, provider: LanguageCodeActionProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.codeActionProvider.register(languageSelector, provider); }
-export function registerCodeLensProvider(languageSelector: LanguageSelector, provider: LanguageCodeLensProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.codeLensProvider.register(languageSelector, provider); }
+export function registerCodeLensProvider(languageSelector: LanguageSelector, provider: CodeLensProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.codeLensProvider.register(languageSelector, provider); }
 export function registerDocumentSymbolProvider(languageSelector: LanguageSelector, provider: LanguageDocumentSymbolProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.documentSymbolProvider.register(languageSelector, provider); }
 export function registerDocumentFormattingEditProvider(languageSelector: LanguageSelector, provider: LanguageFormattingProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.formattingProvider.register(languageSelector, provider); }
 export function registerDocumentRangeFormattingEditProvider(languageSelector: LanguageSelector, provider: LanguageFormattingProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.formattingProvider.register(languageSelector, provider); }
@@ -118,7 +116,7 @@ export function registerOnTypeFormattingEditProvider(languageSelector: LanguageS
 export function registerHoverProvider(languageSelector: LanguageSelector, provider: LanguageHoverProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.hoverProvider.register(languageSelector, provider); }
 export function registerInlayHintsProvider(languageSelector: LanguageSelector, provider: LanguageInlayHintsProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.inlayHintsProvider.register(languageSelector, provider); }
 export function registerInlineCompletionsProvider(languageSelector: LanguageSelector, provider: LanguageInlineCompletionsProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.inlineCompletionsProvider.register(languageSelector, provider); }
-export function registerLinkedEditingRangeProvider(languageSelector: LanguageSelector, provider: LanguageLinkedEditingProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.linkedEditingProvider.register(languageSelector, provider); }
+export function registerLinkedEditingRangeProvider(languageSelector: LanguageSelector, provider: LinkedEditingRangeProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.linkedEditingRangeProvider.register(languageSelector, provider); }
 export function registerLinkProvider(languageSelector: LanguageSelector, provider: LanguageLinkProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.linkProvider.register(languageSelector, provider); }
 export function registerSignatureHelpProvider(languageSelector: LanguageSelector, provider: LanguageParameterHintsProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.parameterHintsProvider.register(languageSelector, provider); }
 export function registerRenameProvider(languageSelector: LanguageSelector, provider: LanguageRenameProvider): IDisposable { return StandaloneServices.get().languageFeaturesService.renameProvider.register(languageSelector, provider); }

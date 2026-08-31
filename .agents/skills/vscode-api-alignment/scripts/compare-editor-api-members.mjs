@@ -68,7 +68,14 @@ function readMembers(node) {
 	if (ts.isFunctionDeclaration(node)) return [`(${node.parameters.length})`];
 	if (ts.isVariableDeclaration(node)) return readObjectMembers(node.initializer);
 	if (!('members' in node) || !node.members) return [];
-	return node.members.map(memberName).filter(Boolean).sort();
+	return node.members.flatMap(member => {
+		const name = memberName(member);
+		if (!ts.isConstructorDeclaration(member)) return name ? [name] : [];
+		const properties = member.parameters
+			.filter(parameter => ts.isParameterPropertyDeclaration(parameter, member))
+			.map(parameter => parameter.name.getText());
+		return [name, ...properties];
+	}).filter(Boolean).sort();
 }
 
 function readObjectMembers(initializer) {

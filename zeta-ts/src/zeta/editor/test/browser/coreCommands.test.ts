@@ -23,8 +23,9 @@ for (const [name, value] of Object.entries({
 
 const { View } = await import("../../browser/view.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
-const { LineSelectionController } = await import("../../contrib/lineSelection/browser/lineSelectionController.js");
-const { EditorView } = await import('../../browser/editorView.js');
+await import('../../contrib/lineSelection/browser/lineSelection.js');
+const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
+const { ViewController } = await import('../../browser/view/viewController.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -41,7 +42,7 @@ test("core commands select all", () => {
 		selectionController: selections,
 	});
 	viewport.layout({ width: 400, height: 100 });
-	using input = new EditorView(viewport, selections);
+	using input = new ViewController(viewport, selections);
 	using commands = installCoreTextEditorCommands(input.element, viewport, selections);
 
 	const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });
@@ -56,18 +57,16 @@ test("line selection remains an independent editor extension", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
-	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	viewport.layout({ width: 400, height: 100 });
-	using input = new EditorView(viewport, selections);
-	using commands = new LineSelectionController(input.element, viewport, selections);
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	editor.viewport.layout({ width: 400, height: 100 });
+	editor.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 
 	const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
-	input.element.dispatchEvent(first);
+	editor.view.element.dispatchEvent(first);
 	assert.equal(first.defaultPrevented, true);
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
-	input.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
+	assert.deepEqual(editor.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
+	editor.view.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
+	assert.deepEqual(editor.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
 
 	dom.window.close();
 });

@@ -206,7 +206,7 @@ import { IWorkspaceEditService } from "../services/language/common/workspaceEdit
 import { ITextModelResourceService } from "../../editor/common/services/textModelResourceService.js";
 import { registerTreeViewsDnDService } from '../../editor/common/services/treeViewsDndService.js';
 import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
-import { IBulkEditService } from "../contrib/bulkEdit/common/bulkEdit.js";
+import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";

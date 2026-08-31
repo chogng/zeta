@@ -1,15 +1,42 @@
-.stanza-editor-message {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  z-index: 8;
-  max-width: min(420px, calc(100% - 16px));
-  padding: 6px 9px;
-  color: var(--zeta-editor-foreground);
-  font-size: 12px;
-  white-space: pre-wrap;
-  background: var(--zeta-dialog-background);
-  border: 1px solid var(--zeta-widget-border);
-  border-radius: 4px;
-  box-shadow: 0 4px 12px var(--zeta-widget-shadow);
+.stanza-editor .monaco-editor-overlaymessage {
+	z-index: 10;
+	max-width: min(420px, calc(100% - 16px));
+	padding-bottom: 8px;
+}
+
+.stanza-editor .monaco-editor-overlaymessage.below {
+	padding-top: 8px;
+	padding-bottom: 0;
+}
+
+.stanza-editor .monaco-editor-overlaymessage .message {
+	padding: 4px 7px;
+	color: var(--zeta-editor-foreground);
+	white-space: pre-wrap;
+	background: var(--zeta-dialog-background);
+	border: 1px solid var(--zeta-widget-border);
+	border-radius: 4px;
+	box-shadow: 0 4px 12px var(--zeta-widget-shadow);
+}
+
+.stanza-editor .monaco-editor-overlaymessage .message p {
+	margin: 0;
+}
+
+.stanza-editor .monaco-editor-overlaymessage.fadeIn {
+	animation: editor-message-in 120ms ease-out;
+}
+
+.stanza-editor .monaco-editor-overlaymessage.fadeOut {
+	animation: editor-message-out 100ms ease-in forwards;
+}
+
+@keyframes editor-message-in {
+	from { opacity: 0; transform: translateY(2px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes editor-message-out {
+	from { opacity: 1; }
+	to { opacity: 0; }
 }

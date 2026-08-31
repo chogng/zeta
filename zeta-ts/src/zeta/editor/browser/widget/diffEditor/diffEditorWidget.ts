@@ -4,17 +4,21 @@ import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { getClientArea } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Emitter } from '../../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from "../../../../base/common/numbers.js";
 import { DiffModel } from "../../../common/diff/diffModel.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
 import { applyFontInfo } from "../../config/domFontInfo.js";
-import { DiffOverviewRuler } from "./diffOverviewRuler.js";
+import { OverviewRulerFeature } from './features/overviewRulerFeature.js';
 import { createDiffEditorRow } from "./diffEditorRows.js";
+import { type IDiffEditor } from '../../editorBrowser.js';
+import { type ICodeEditorService } from '../../services/codeEditorService.js';
 
 const DEFAULT_LINE_HEIGHT = 20;
 const DEFAULT_OVERSCAN_ROW_COUNT = 8;
+let diffEditorId = 0;
 
 export interface DiffEditorWidgetOptions {
 	readonly container: HTMLElement;
@@ -29,6 +33,7 @@ export interface DiffEditorWidgetOptions {
 	readonly overscanRowCount?: number;
 	readonly originalAriaLabel?: string;
 	readonly modifiedAriaLabel?: string;
+	readonly codeEditorService?: ICodeEditorService;
 }
 
 /**
@@ -38,13 +43,15 @@ export interface DiffEditorWidgetOptions {
  * inline change ranges. This browser component owns only scroll geometry and
  * DOM projection; it never owns source text or diff computation.
  */
-export class DiffEditorWidget extends Disposable {
+export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	readonly element: HTMLDivElement;
+	private readonly id = `zeta-diff-editor-${++diffEditorId}`;
 	private readonly contentElement: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
 	private readonly rowsElement: HTMLDivElement;
 	private readonly rowsNode: FastDomNode<HTMLDivElement>;
-	private readonly overviewRuler: DiffOverviewRuler;
+	private readonly overviewRuler: OverviewRulerFeature;
+	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly accessibilityStatusElement: HTMLDivElement;
 	private readonly model: DiffModel;
 	private readonly lineHeight: number;
@@ -60,6 +67,7 @@ export class DiffEditorWidget extends Disposable {
 
 	constructor(options: DiffEditorWidgetOptions) {
 		super();
+		options.codeEditorService?.willCreateDiffEditor();
 		validateOptions(options);
 		const ownerDocument = options.container.ownerDocument;
 		this.model = options.model;
@@ -73,7 +81,6 @@ export class DiffEditorWidget extends Disposable {
 		this.contentNode = new FastDomNode(this.contentElement);
 		this.rowsElement = h(ownerDocument, "div");
 		this.rowsNode = new FastDomNode(this.rowsElement);
-		this.overviewRuler = new DiffOverviewRuler(this.element);
 		this.accessibilityStatusElement = h(ownerDocument, "div");
 		this.element.className = "stanza-diff-editor";
 		this.element.classList.toggle("hide-line-numbers", options.showLineNumbers === false);
@@ -92,17 +99,26 @@ export class DiffEditorWidget extends Disposable {
 		this.accessibilityStatusElement.setAttribute("aria-live", "polite");
 		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
 		this.contentElement.append(this.rowsElement);
-		this.element.append(this.contentElement, this.overviewRuler.element, this.accessibilityStatusElement);
+		this.element.append(this.contentElement);
 		options.container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
+		this.overviewRuler = this._register(new OverviewRulerFeature(this.element, this.model, this.lineHeight, this.layoutEmitter.event));
+		this.element.append(this.accessibilityStatusElement);
 		this._register(addDisposableListener(this.element, "scroll", () => this.project()));
 		this._register(addDisposableListener(this.element, "keydown", event => this.handleKeydown(event)));
 		this._register(this.model.onDidChange(() => this.refresh()));
 		this._register(observeResize(this.element, ([entry]) => {
 			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
 		}));
-		this.overviewRuler.setDiff(this.currentDiff);
+		if (options.codeEditorService) {
+			options.codeEditorService.addDiffEditor(this);
+			this._register(toDisposable(() => options.codeEditorService?.removeDiffEditor(this)));
+		}
 		this.layout(getClientArea(this.element));
+	}
+
+	getId(): string {
+		return this.id;
 	}
 
 	get diff(): LineDiff | undefined {
@@ -125,7 +141,6 @@ export class DiffEditorWidget extends Disposable {
 
 	private refresh(): void {
 		this.currentDiff = this.model.diff;
-		this.overviewRuler.setDiff(this.currentDiff);
 		this.renderedStartRow = -1;
 		this.renderedEndRow = -1;
 		this.activeChangeRow = -1;
@@ -208,10 +223,10 @@ export class DiffEditorWidget extends Disposable {
 	}
 
 	private project(force = false): void {
+		this.layoutEmitter.fire({ width: this.viewportWidth, height: this.viewportHeight });
 		const rows = this.currentDiff?.rows ?? [];
 		const contentHeight = rows.length * this.lineHeight;
 		this.contentNode.setHeight(contentHeight);
-		this.overviewRuler.layout({ contentHeight, scrollLeft: this.element.scrollLeft, scrollTop: this.element.scrollTop, viewportHeight: this.viewportHeight, viewportWidth: this.viewportWidth });
 		const visibleRowCount = Math.ceil(this.viewportHeight / this.lineHeight);
 		const firstVisibleRow = Math.floor(this.element.scrollTop / this.lineHeight);
 		const startRow = Math.max(0, firstVisibleRow - this.overscanRowCount);

@@ -64,6 +64,10 @@ for (const [name, value] of Object.entries({
 const { View } = await import('../../../../browser/view.js');
 const { TextDropController } = await import('../../browser/textDropController.js');
 
+const progress = {
+	showWhile: <T>(_position: Position, _title: string, promise: Promise<T>): Promise<T> => promise,
+};
+
 test.after(() => browserEnvironment.window.close());
 
 test("Plain-text drops insert at the viewport hit target", () => {
@@ -74,7 +78,7 @@ test("Plain-text drops insert at the viewport hit target", () => {
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 40);
 	viewport.layout({ width: 120, height: 40 });
-	using controller = new TextDropController(viewport, selections);
+	using controller = new TextDropController(viewport, selections, progress);
 	const data = new MemoryDragData(["text/plain"], new Map([["text/plain", "X\r\nY"]]));
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 100, 5);
@@ -98,7 +102,7 @@ test("Non-text drops remain available to their host", () => {
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
-	using controller = new TextDropController(viewport, selections);
+	using controller = new TextDropController(viewport, selections, progress);
 	const data = new MemoryDragData(["Files"], new Map());
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 50, 5);
@@ -123,7 +127,7 @@ test("Read-only editors leave text drops available to their host", () => {
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
-	using controller = new TextDropController(viewport, selections);
+	using controller = new TextDropController(viewport, selections, progress);
 	const data = new MemoryDragData(["text/plain"], new Map([["text/plain", "dropped"]]));
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 50, 5);
@@ -145,7 +149,7 @@ test("Rich HTML drops reduce to inert text when plain text is unavailable", () =
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
-	using controller = new TextDropController(viewport, selections);
+	using controller = new TextDropController(viewport, selections, progress);
 	const data = new MemoryDragData(["text/html"], new Map([["text/html", "<div>first</div><script>ignored()</script><div>second<br>third</div>"]]));
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 100, 5);
@@ -166,7 +170,7 @@ test("One user-provided text file drop inserts at the hit target after decoding"
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 40);
 	viewport.layout({ width: 120, height: 40 });
-	using controller = new TextDropController(viewport, selections);
+	using controller = new TextDropController(viewport, selections, progress);
 	const file = new DeferredTextFile("snippet.rs");
 	const data = new MemoryDragData(["Files"], new Map(), [file as unknown as File]);
 

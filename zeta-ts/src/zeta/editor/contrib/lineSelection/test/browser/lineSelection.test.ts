@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { expandLineSelections } from "../../browser/lineSelection.js";
+import { CursorMoveCommands } from '../../../../common/cursor/cursorMoveCommands.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -9,13 +9,13 @@ test("Line selection expands through successive physical lines and includes thei
 	using model = new TextModel("zero\none\ntwo");
 	let selections: readonly Selection[] = [Selection.fromPositions(new Position((0) + 1, (2) + 1))];
 
-	selections = expandLineSelections(model, selections);
+	selections = CursorMoveCommands.expandLineSelection(model, selections);
 	assert.deepEqual(selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
-	selections = expandLineSelections(model, selections);
+	selections = CursorMoveCommands.expandLineSelection(model, selections);
 	assert.deepEqual(selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
-	selections = expandLineSelections(model, selections);
+	selections = CursorMoveCommands.expandLineSelection(model, selections);
 	assert.deepEqual(selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (3) + 1)));
-	assert.deepEqual(expandLineSelections(model, selections), selections);
+	assert.deepEqual(CursorMoveCommands.expandLineSelection(model, selections), selections);
 });
 
 test("Line selection normalizes reverse multi-selections while retaining the primary item", () => {
@@ -24,7 +24,7 @@ test("Line selection normalizes reverse multi-selections while retaining the pri
 		Selection.fromPositions(new Position((2) + 1, (2) + 1), new Position((1) + 1, (1) + 1)),
 		Selection.fromPositions(new Position((3) + 1, (4) + 1)),
 	], 1);
-	assert.deepEqual(expandLineSelections(model, selections), primaryFirst([
+	assert.deepEqual(CursorMoveCommands.expandLineSelection(model, selections), primaryFirst([
 		Selection.fromPositions(new Position((1) + 1, (0) + 1), new Position((3) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((3) + 1, (0) + 1), new Position((3) + 1, (5) + 1)),
 	], 1));

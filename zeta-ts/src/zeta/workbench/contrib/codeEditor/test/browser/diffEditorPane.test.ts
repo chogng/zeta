@@ -23,6 +23,7 @@ const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { createDiffEditorInput } = await import("../../browser/diffEditorInput.js");
+const { createEditorBrowserServices } = await import('../../../../../editor/browser/services/contribution.js');
 
 test("Stanza diff pane rejects a missing Workbench diff computation service", () => {
 	assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
@@ -34,9 +35,12 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	const textFiles = new BootstrapTextFiles();
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
+	const editorServices = createEditorBrowserServices();
+	using codeEditorService = editorServices.codeEditorService;
 	const pane = new DiffEditorPane(resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
+		codeEditorService,
 		lineHeight: 24,
 		fontFamily: "Test Mono",
 		fontSize: 15,
@@ -57,17 +61,20 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 1);
 	const editor = requiredElement<HTMLElement>(dom.window.document, ".stanza-diff-editor");
 	assert.equal(editor.classList.contains("hide-line-numbers"), true);
-	assert.equal(editor.style.fontFamily, '"Test Mono"');
+	assert.equal(editor.style.fontFamily.startsWith('"Test Mono", '), true);
+	assert.equal(editor.style.fontFamily.endsWith('monospace'), true);
 	assert.equal(editor.style.fontSize, "15px");
-	assert.equal(editor.style.fontVariantLigatures, "normal");
+	assert.equal(editor.style.fontFeatureSettings.includes('"liga" on'), true);
 	assert.equal(parent.querySelector(".stanza-diff-editor-breadcrumbs"), null);
 	assert.match(parent.querySelector(".stanza-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
+	assert.equal(codeEditorService.listDiffEditors().length, 1);
 	pane.focus();
 	assert.equal(dom.window.document.activeElement?.classList.contains("stanza-diff-editor"), true);
 	pane.setVisible(EditorPaneVisibility.Hidden);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
 	pane.clearInput();
 	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 0);
+	assert.equal(codeEditorService.listDiffEditors().length, 0);
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
 	dom.window.close();

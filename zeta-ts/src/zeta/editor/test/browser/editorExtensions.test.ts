@@ -53,6 +53,7 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 		'editor.action.joinLines',
 		'editor.action.rename',
 		'editor.action.transpose',
+		'editor.action.transposeLetters',
 	]) assert.equal(triggerCommands.has(id), true, id);
 });
 

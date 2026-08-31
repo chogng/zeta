@@ -1,7 +1,9 @@
 import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
+import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import { type TextEdit } from "../../../../editor/common/languages.js";
+import { type LinkedEditingRangeProvider, type LinkedEditingRanges, type TextEdit } from "../../../../editor/common/languages.js";
+import { type ITextModel } from '../../../../editor/common/model.js';
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
@@ -9,7 +11,6 @@ import type { LanguageProviderBatch } from '../../../../editor/common/services/l
 import type { LanguageFormattingOptions, LanguageFormattingProvider, LanguageFormattingRequest } from "../../../../editor/contrib/format/common/formatCommands.js";
 import type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
 import type { LanguageInlayHint, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from "../../../../editor/contrib/inlayHints/common/languageInlayHints.js";
-import type { LanguageLinkedEditingProvider, LanguageLinkedEditingRanges, LanguageLinkedEditingRequest } from "../../../../editor/contrib/linkedEditing/common/languageLinkedEditing.js";
 import type { LanguageParameterHints, LanguageParameterHintsProvider, LanguageParameterHintsRequest } from "../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
 import type { ExtensionHostLanguageRegistration, JsonValue } from "../../../../platform/extensionHost/common/extensionHostApi.js";
 
@@ -69,9 +70,13 @@ function inlayHintsProvider(invoke: ExtensionHostProviderInvoker): LanguageInlay
 	});
 }
 
-function linkedEditingProvider(invoke: ExtensionHostProviderInvoker): LanguageLinkedEditingProvider {
+function linkedEditingProvider(invoke: ExtensionHostProviderInvoker): LinkedEditingRangeProvider {
 	return Object.freeze({
-		provideLinkedEditingRanges: async (request: LanguageLinkedEditingRequest, signal: AbortSignal): Promise<LanguageLinkedEditingRanges | undefined> => normalizeLinkedEditingResult(await invoke("linkedEditing", featurePayload(request, { position: positionValue(request.position) }), signal), request.snapshot),
+		provideLinkedEditingRanges: async (model: ITextModel, position: Position, token: CancellationToken): Promise<LinkedEditingRanges | undefined> => {
+			const request = modelRequest(model);
+			const value = await withAbortSignal(token, signal => invoke('linkedEditing', featurePayload(request, { position: positionValue(position) }), signal));
+			return normalizeLinkedEditingResult(value, request.snapshot);
+		},
 	});
 }
 
@@ -213,12 +218,35 @@ function normalizeInlayLabel(value: JsonValue | undefined, snapshot: TextSnapsho
 	return Object.freeze(parts);
 }
 
-function normalizeLinkedEditingResult(value: JsonValue, snapshot: TextSnapshot): LanguageLinkedEditingRanges | undefined {
+function normalizeLinkedEditingResult(value: JsonValue, snapshot: TextSnapshot): LinkedEditingRanges | undefined {
 	if (value === null) return undefined;
 	const result = exactObject(value, "Extension Linked Editing result", ["ranges"]);
 	const ranges = boundedArray(result.ranges, "Extension Linked Editing ranges", 1024).map((range, index) => normalizeRange(range, snapshot, `Extension Linked Editing range ${index}`));
 	if (ranges.length === 0) throw new TypeError("Extension Linked Editing ranges must not be empty");
-	return Object.freeze({ ranges: Object.freeze(ranges) });
+	return Object.freeze({ ranges });
+}
+
+function modelRequest(model: ITextModel): { readonly languageId: string; readonly resource: { toString(): string }; readonly snapshot: TextSnapshot } {
+	const text = model.getValue();
+	const snapshot: TextSnapshot = Object.freeze({
+		version: model.getVersionId(),
+		length: text.length,
+		lineCount: model.getLineCount(),
+		getText: () => text,
+		getTextBetweenOffsets: (startOffset: number, endOffset: number) => text.slice(startOffset, endOffset),
+	});
+	return Object.freeze({ languageId: model.getLanguageId(), resource: model.uri, snapshot });
+}
+
+async function withAbortSignal<T>(token: CancellationToken, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+	const controller = new AbortController();
+	if (token.isCancellationRequested) controller.abort();
+	const listener = token.onCancellationRequested(() => controller.abort());
+	try {
+		return await run(controller.signal);
+	} finally {
+		listener.dispose();
+	}
 }
 
 function normalizeParameterHintsResult(value: JsonValue): LanguageParameterHints | undefined {

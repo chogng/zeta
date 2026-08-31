@@ -11,5 +11,5 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.languageNavigatio
 		typeDefinitions: context.languageFeaturesService.typeDefinitionProvider,
 		references: context.languageFeaturesService.referenceProvider,
 	}));
-	context.register(new LanguageNavigationController(context.view.element, context.viewport, context.viewModel, service, context.options.input.resource, context.languageId, context.options.onOpenLocation, context.onLanguageError));
+	context.register(new LanguageNavigationController(context.view.element, context.editor, context.viewport, context.viewModel, service, context.options.input.resource, context.languageId, context.options.onOpenLocation, context.onLanguageError));
 } });

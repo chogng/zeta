@@ -1,4 +1,5 @@
 import { type CancellationToken } from '../../base/common/cancellation.js';
+import { type Event } from '../../base/common/event.js';
 import { type URI } from '../../base/common/uri.js';
 import { EditOperation, type ISingleEditOperation } from './core/editOperation.js';
 import { type Position } from './core/position.js';
@@ -13,6 +14,38 @@ import { type LanguageTokenResult } from './tokens/languageTokens.js';
 type Thenable<T> = PromiseLike<T>;
 
 export type ProviderResult<T> = T | undefined | null | Thenable<T | undefined | null>;
+
+export interface Command {
+	id: string;
+	title: string;
+	tooltip?: string;
+	arguments?: unknown[];
+}
+
+export namespace Command {
+	export function is(value: unknown): value is Command {
+		if (!value || typeof value !== 'object') return false;
+		const command = value as Command;
+		return typeof command.id === 'string' && typeof command.title === 'string';
+	}
+}
+
+export interface CodeLens {
+	range: IRange;
+	id?: string;
+	command?: Command;
+}
+
+export interface CodeLensList {
+	readonly lenses: readonly CodeLens[];
+	dispose?(): void;
+}
+
+export interface CodeLensProvider {
+	onDidChange?: Event<this>;
+	provideCodeLenses(model: model.ITextModel, token: CancellationToken): ProviderResult<CodeLensList>;
+	resolveCodeLens?(model: model.ITextModel, codeLens: CodeLens, token: CancellationToken): ProviderResult<CodeLens>;
+}
 
 export interface LanguageSemanticTokensRequest {
 	readonly requestId: number;
@@ -115,6 +148,15 @@ export interface DocumentHighlightProvider {
 export interface MultiDocumentHighlightProvider {
 	readonly selector: LanguageSelector;
 	provideMultiDocumentHighlights(primaryModel: model.ITextModel, position: Position, otherModels: model.ITextModel[], token: CancellationToken): ProviderResult<Map<URI, DocumentHighlight[]>>;
+}
+
+export interface LinkedEditingRangeProvider {
+	provideLinkedEditingRanges(model: model.ITextModel, position: Position, token: CancellationToken): ProviderResult<LinkedEditingRanges>;
+}
+
+export interface LinkedEditingRanges {
+	ranges: IRange[];
+	wordPattern?: RegExp;
 }
 
 /** @internal */

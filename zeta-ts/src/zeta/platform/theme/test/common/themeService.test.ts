@@ -45,4 +45,7 @@ test("color identifiers map to stable CSS custom properties", () => {
 		colorCssVariable(ColorId.editorMultiCursorSecondaryBackground),
 		"--zeta-editor-multi-cursor-secondary-background",
 	);
+	assert.equal(colorCssVariable(ColorId.editorFoldBackground), '--zeta-editor-fold-background');
+	assert.equal(colorCssVariable(ColorId.editorFoldPlaceholderForeground), '--zeta-editor-fold-placeholder-foreground');
+	assert.equal(colorCssVariable(ColorId.editorGutterFoldingControlForeground), '--zeta-editor-gutter-folding-control-foreground');
 });

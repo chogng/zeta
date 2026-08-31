@@ -1,4 +1,17 @@
-.stanza-editor.middle-scrolling {
-  cursor: grabbing;
-  user-select: none;
+.stanza-editor .scroll-editor-on-middle-click-dot {
+	position: absolute;
+	z-index: 8;
+	width: 6px;
+	height: 6px;
+	background: var(--zeta-editor-foreground);
+	border: 1px solid var(--zeta-editor-background);
+	border-radius: 50%;
+	opacity: 0.65;
+	transform: translate(-50%, -50%);
+}
+
+.stanza-editor.scroll-editor-on-middle-click-editor,
+.stanza-editor.scroll-editor-on-middle-click-editor * {
+	cursor: all-scroll;
+	user-select: none;
 }

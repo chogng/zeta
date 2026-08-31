@@ -5,6 +5,7 @@ import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorPeekViewWidget } from "../../peekView/browser/editorPeekViewWidget.js";
 import { type LanguageLocation, type LanguageNavigationService } from "../common/languageNavigation.js";
 
@@ -15,7 +16,7 @@ export class LanguageNavigationController extends Disposable {
 	private readonly peek = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly editor: ICodeEditor, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Language navigation dependencies must share one text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -74,7 +75,7 @@ export class LanguageNavigationController extends Disposable {
 
 	private showPeek(kind: LanguageNavigationKind, anchor: Position, locations: readonly LanguageLocation[]): void {
 		this.closePeek();
-		const widget = this.peek.add(new EditorPeekViewWidget(this.viewport, anchor, `${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`));
+		const widget = this.peek.add(new EditorPeekViewWidget(this.editor, anchor, `${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`));
 		const list = h(widget.element.ownerDocument, "div");
 		list.className = "stanza-editor-language-locations";
 		list.setAttribute("role", "listbox");

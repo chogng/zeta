@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Event } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { DefaultEndOfLine } from '../../common/model.js';
@@ -115,6 +115,39 @@ test('ModelService reapplies model options when platform configuration changes',
 	assert.equal(model.getOptions().tabSize, 2);
 	assert.equal(model.getOptions().indentSize, 2);
 	assert.equal(model.getOptions().insertSpaces, false);
+});
+
+test('ModelService owns resource identity, language events, and model removal', () => {
+	using configuration = new TestResourceConfigurationService();
+	using service = new ModelService(configuration, new TestTextResourcePropertiesService(configuration));
+	using languageChanges = new Emitter<string>();
+	const resource = URI.parse('inmemory://model-service/lifecycle.txt');
+	let languageId = 'plaintext';
+	const selection = {
+		get languageId() { return languageId; },
+		onDidChange: languageChanges.event,
+	};
+	const events: string[] = [];
+	using added = service.onModelAdded(model => events.push(`added:${model.uri.toString()}`));
+	using changed = service.onModelLanguageChanged(event => events.push(`language:${event.oldLanguageId}->${event.model.getLanguageId()}`));
+	using removed = service.onModelRemoved(model => events.push(`removed:${model.uri.toString()}`));
+
+	const model = service.createModel('value', selection, resource);
+	assert.strictEqual(service.getModel(resource), model);
+	assert.deepEqual(service.getModels(), [model]);
+	assert.throws(() => service.createModel('duplicate', null, resource), /already exists/);
+
+	languageId = 'typescript';
+	languageChanges.fire(languageId);
+	service.destroyModel(resource);
+
+	assert.equal(service.getModel(resource), null);
+	assert.deepEqual(service.getModels(), []);
+	assert.deepEqual(events, [
+		`added:${resource.toString()}`,
+		'language:plaintext->typescript',
+		`removed:${resource.toString()}`,
+	]);
 });
 
 class TestTextResourcePropertiesService implements ITextResourcePropertiesService {

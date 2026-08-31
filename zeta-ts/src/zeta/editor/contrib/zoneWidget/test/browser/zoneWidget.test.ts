@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
-import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
+import { Color } from '../../../../../base/common/color.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
+import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type ZoneWidgetEditor, type ZoneWidgetOptions } from '../../browser/zoneWidget.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -22,33 +22,28 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import('../../../../browser/view.js');
+const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { EditorLineWrapping } = await import('../../../../common/config/editorOptions.js');
-const { EditorZoneWidget } = await import('../../browser/zoneWidget.js');
+const { ZoneWidget } = await import('../../browser/zoneWidget.js');
 
-test('EditorZoneWidget reserves editor space, tracks its anchor, updates layout, and releases its zone', () => {
+test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and releases its zone', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha\nbeta\ngamma');
-	using viewport = new View({
+	using editor = new CodeEditorWidget({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
 	});
-	viewport.layout({ width: 200, height: 40 });
-	const revealedRanges: Range[] = [];
-	const editor: ZoneWidgetEditor = {
-		viewport,
-		revealRange: range => {
-			revealedRanges.push(range);
-			viewport.revealPosition(range.getStartPosition());
-		},
-	};
+	editor.layout({ width: 200, height: 40 });
+	const viewport = editor.viewport;
 	using widget = new TestZoneWidget(editor, {
 		className: 'peek-widget test-widget',
 		frameWidth: 2,
 		frameColor: '#123456',
-		arrowColor: '#654321',
+		arrowColor: Color.fromHex('#654321'),
 		ordinal: 20,
 	});
 	widget.create();
@@ -65,7 +60,7 @@ test('EditorZoneWidget reserves editor space, tracks its anchor, updates layout,
 		layout: widget.layouts.at(-1),
 		frameColor: widget.domNode.style.getPropertyValue('--stanza-zone-widget-frame-color'),
 		arrowColor: widget.domNode.style.getPropertyValue('--stanza-zone-widget-arrow-color'),
-		revealedRanges,
+		revealedRanges: widget.revealedRanges,
 	}, {
 		position: new Position((1) + 1, (2) + 1),
 		parent: requiredElement(viewport.element, '.stanza-editor-view-zones'),
@@ -73,17 +68,17 @@ test('EditorZoneWidget reserves editor space, tracks its anchor, updates layout,
 		height: '40px',
 		contentHeight: 100,
 		classes: ['stanza-editor-zone-widget', 'peek-widget', 'test-widget', 'show-frame', 'show-arrow', 'stanza-editor-view-zone'],
-		layout: { heightInPixels: 22, widthInPixels: 200 },
+		layout: { heightInPixels: 22, widthInPixels: 160 },
 		frameColor: '#123456',
 		arrowColor: '#654321',
 		revealedRanges: [Range.fromPositions(new Position((1) + 1, (2) + 1))],
 	});
-	viewport.setLineHeight(30);
+	editor.layout({ width: 240, height: 40 });
 	assert.deepEqual({ height: widget.domNode.style.height, layout: widget.layouts.at(-1) }, {
-		height: '60px',
-		layout: { heightInPixels: 36, widthInPixels: 200 },
+		height: '40px',
+		layout: { heightInPixels: 22, widthInPixels: 193 },
 	});
-	viewport.setLineHeight(20);
+	editor.layout({ width: 200, height: 40 });
 
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'new\n' }]);
 	assert.deepEqual({ position: widget.position, top: widget.domNode.style.top }, {
@@ -103,7 +98,7 @@ test('EditorZoneWidget reserves editor space, tracks its anchor, updates layout,
 		top: '20px',
 		height: '20px',
 		contentHeight: 100,
-		layout: { heightInPixels: 2, widthInPixels: 200 },
+		layout: { heightInPixels: 2, widthInPixels: 160 },
 	});
 
 	widget.style({ frameColor: '#abcdef', arrowColor: null });
@@ -125,26 +120,26 @@ test('EditorZoneWidget reserves editor space, tracks its anchor, updates layout,
 	dom.window.close();
 });
 
-test('EditorZoneWidget preserves selection on request and exposes an enabled resize sash while shown', () => {
+test('ZoneWidget preserves selection on request and exposes an enabled resize sash while shown', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha\nbeta');
-	using viewport = new View({
+	using editor = new CodeEditorWidget({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
 	});
-	viewport.layout({ width: 200, height: 40 });
-	let revealRangeCount = 0;
-	const editor: ZoneWidgetEditor = {
-		viewport,
-		revealRange: () => { revealRangeCount += 1; },
-	};
+	editor.layout({ width: 200, height: 40 });
+	const viewport = editor.viewport;
+	const initialSelection = Selection.fromPositions(new Position(2, 2));
+	editor.setSelection(initialSelection);
 	using widget = new TestZoneWidget(editor, {
 		showFrame: false,
 		showArrow: false,
 		isAccessible: true,
-		isResizable: true,
+		isResizeable: true,
 		keepEditorSelection: true,
 	});
 	widget.create();
@@ -152,14 +147,14 @@ test('EditorZoneWidget preserves selection on request and exposes an enabled res
 
 	const sash = requiredElement<HTMLElement>(widget.domNode, '.zeta-sash-horizontal');
 	assert.deepEqual({
-		revealRangeCount,
+		selection: editor.getSelection(),
 		ariaHidden: widget.domNode.getAttribute('aria-hidden'),
 		role: widget.domNode.getAttribute('role'),
 		height: widget.domNode.style.height,
 		sashHidden: sash.hidden,
 		sashDisabled: sash.getAttribute('aria-disabled'),
 	}, {
-		revealRangeCount: 0,
+		selection: initialSelection,
 		ariaHidden: null,
 		role: null,
 		height: '120px',
@@ -170,26 +165,28 @@ test('EditorZoneWidget preserves selection on request and exposes an enabled res
 	widget.resizeTo(8);
 	assert.deepEqual({ height: widget.domNode.style.height, layout: widget.layouts.at(-1) }, {
 		height: '160px',
-		layout: { heightInPixels: 160, widthInPixels: 200 },
+		layout: { heightInPixels: 160, widthInPixels: 160 },
 	});
 	dom.window.close();
 });
 
-test('EditorZoneWidget places an anchor after its wrapped visual line', () => {
+test('ZoneWidget places an anchor after its wrapped visual line', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('abcdefghijklmnopqrst');
-	using viewport = new View({
+	using editor = new CodeEditorWidget({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
 	});
-	viewport.layout({ width: 100, height: 40 });
+	editor.layout({ width: 100, height: 40 });
+	const viewport = editor.viewport;
 	viewport.setLineWrapping(EditorLineWrapping.On);
 	const anchor = new Position((0) + 1, (18) + 1);
 	const visualLineIndex = viewport.getVisualLineProjection().visualLineIndexAt(anchor);
 	assert.ok(visualLineIndex > 0);
-	const editor: ZoneWidgetEditor = { viewport, revealRange: range => viewport.revealPosition(range.getStartPosition()) };
 	using widget = new TestZoneWidget(editor, { showFrame: false, showArrow: false, keepEditorSelection: true });
 	widget.create();
 
@@ -199,21 +196,27 @@ test('EditorZoneWidget places an anchor after its wrapped visual line', () => {
 	dom.window.close();
 });
 
-class TestZoneWidget extends EditorZoneWidget {
+class TestZoneWidget extends ZoneWidget {
 	public readonly layouts: Array<{ readonly heightInPixels: number; readonly widthInPixels: number }> = [];
+	public readonly revealedRanges: Range[] = [];
 
 	public resizeTo(heightInLines: number): void {
-		this.relayout(heightInLines);
+		this._relayout(heightInLines);
 	}
 
-	protected override fillContainer(container: HTMLElement): void {
+	protected override _fillContainer(container: HTMLElement): void {
 		const content = h(container.ownerDocument, 'button');
 		content.textContent = 'Content';
 		container.append(content);
 	}
 
-	protected override layoutContent(heightInPixels: number, widthInPixels: number): void {
+	protected override _doLayout(heightInPixels: number, widthInPixels: number): void {
 		this.layouts.push({ heightInPixels, widthInPixels });
+	}
+
+	protected override revealRange(range: Range, isLastLine: boolean): void {
+		this.revealedRanges.push(range);
+		super.revealRange(range, isLastLine);
 	}
 }
 
@@ -221,17 +224,4 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	const element = root.querySelector<T>(selector);
 	assert.ok(element);
 	return element;
-}
-
-class FixedTextMeasurer implements TextMeasurer {
-	public readonly horizontalPadding = 24;
-	public readonly contentLeftPadding = 12;
-
-	public refresh(): boolean {
-		return false;
-	}
-
-	public measureLineWidth(text: string): number {
-		return text.length * 10;
-	}
 }

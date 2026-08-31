@@ -11,7 +11,7 @@ import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type IEditorAriaOptions } from '../../editorBrowser.js';
 import { type View } from "../../view.js";
-import { type EditorViewTextUpdateEvent, type EditorViewInputController } from "../../view/viewController.js";
+import { type EditorViewTextUpdateEvent } from "../../view/viewController.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { createEditorClipboardCopyEvent, createClipboardPasteEvent, type IEditorClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
 
@@ -72,7 +72,7 @@ export interface EditContextOptions {
 	readonly characterBoundsProvider: (
 		modelOffset: number,
 	) => EditContextCharacterBounds | undefined;
-	readonly viewController: EditorViewInputController;
+	readonly viewController: EditContextViewController;
 	readonly viewport: View;
 	readonly selectionController: CursorsController;
 	readonly accessibilityService?: IAccessibilityService;
@@ -80,6 +80,24 @@ export interface EditContextOptions {
 	readonly accessibilityPageSize?: number;
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly bracketColorizationSource?: BracketColorizationSource;
+}
+
+export interface EditContextViewController {
+	readonly hasExpandedSelections: boolean;
+	type(text: string, inputType?: string): unknown;
+	enter(inputType?: string): unknown;
+	deleteBackward(inputType?: string): unknown;
+	deleteForward(inputType?: string): unknown;
+	deleteWordBackward(inputType?: string): unknown;
+	deleteWordForward(inputType?: string): unknown;
+	deleteSoftLineBackward(inputType?: string): unknown;
+	deleteSoftLineForward(inputType?: string): unknown;
+	insertTab(): unknown;
+	applyTextUpdate(update: EditContextTextUpdate): unknown;
+	undo(): void;
+	redo(): void;
+	toggleOvertype(): boolean;
+	emitKeyDown(event: StandardKeyboardEvent): void;
 }
 
 /** Content coordinates of the primary editor caret. */
@@ -180,7 +198,7 @@ export abstract class EditorInputContext extends Disposable {
 		this.willPasteEmitter.fire(createClipboardPasteEvent(browserEvent));
 	}
 
-	private routeBeforeInput(event: InputEvent, viewController: EditorViewInputController, compositionController: CompositionController): void {
+	private routeBeforeInput(event: InputEvent, viewController: EditContextViewController, compositionController: CompositionController): void {
 		if (event.defaultPrevented || (event.isComposing && compositionController.composing)) return;
 		this.willBeforeInputEmitter.fire(event);
 		if (event.defaultPrevented) return;
@@ -244,7 +262,7 @@ export abstract class EditorInputContext extends Disposable {
 		}
 	}
 
-	private routeTextUpdate(update: EditContextTextUpdate, viewController: EditorViewInputController, compositionController: CompositionController): void {
+	private routeTextUpdate(update: EditContextTextUpdate, viewController: EditContextViewController, compositionController: CompositionController): void {
 		if (compositionController.composing) return;
 		if (update.updateRangeStart === update.updateRangeEnd && update.text.length === 0) return;
 		const event = makeTextUpdateEvent(update);
@@ -253,7 +271,7 @@ export abstract class EditorInputContext extends Disposable {
 		viewController.applyTextUpdate(update);
 	}
 
-	private routeKeydown(event: KeyboardEvent, viewController: EditorViewInputController): void {
+	private routeKeydown(event: KeyboardEvent, viewController: EditContextViewController): void {
 		if (event.defaultPrevented) return;
 		viewController.emitKeyDown(new StandardKeyboardEvent(event));
 		this.willKeydownEmitter.fire(event);

@@ -6,6 +6,13 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { type TrackedRange } from "../../../common/model/trackedRange.js";
 import { EditorFoldingRangeSource, editorFoldingRangeKey, normalizeEditorFoldingRanges, validateEditorFoldingLineIndex, type EditorFoldingRange, type EditorFoldingRegion } from "./foldingRanges.js";
 import { TrackedRangeStickiness } from '../../../common/model.js';
+import type { IModelDecorationOptions, IModelDecorationsChangeAccessor } from '../../../common/model.js';
+
+export interface IDecorationProvider {
+	getDecorationOption(isCollapsed: boolean, isHidden: boolean, isManual: boolean): IModelDecorationOptions;
+	changeDecorations<T>(callback: (changeAccessor: IModelDecorationsChangeAccessor) => T): T | null;
+	removeDecorations(decorationIds: string[]): void;
+}
 
 interface EditorFoldingRegionRecord {
 	readonly range: TrackedRange;

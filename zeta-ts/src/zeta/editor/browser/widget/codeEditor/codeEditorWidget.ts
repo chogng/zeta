@@ -1,18 +1,18 @@
-import { isHTMLElement } from "../../../../base/browser/dom.js";
-import { getClientArea } from "../../../../base/browser/dom.js";
+import { addDisposableListener, getClientArea, isHTMLElement } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
-import { Selection } from "../../../common/core/selection.js";
+import { Selection, type ISelection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
-import { type Range } from "../../../common/core/range.js";
+import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type ICodeEditorViewState } from '../../../common/editorCommon.js';
-import type { ICodeEditor, IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from '../../editorBrowser.js';
-import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from '../../editorView.js';
-import { type View } from "../../view.js";
-import { KeyboardNavigationController } from "../../view/viewController.js";
+import { type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration } from '../../../common/model.js';
+import { type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
+import { type ICommand, type ICodeEditorViewState, type IEditorDecorationsCollection, type ScrollType } from '../../../common/editorCommon.js';
+import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IOverlayWidget, IViewZoneChangeAccessor } from '../../editorBrowser.js';
+import { View, type EditorViewportOptions } from "../../view.js";
+import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
 import { MouseHandler } from "../../controller/mouseHandler.js";
 import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions, type CodeEditorContribution, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
@@ -29,7 +29,7 @@ import { LanguageFeaturesService } from '../../../common/services/languageFeatur
 import { ResolvedSemanticTokensService } from '../../../common/services/resolvedSemanticTokensService.js';
 import { LanguageEditingAdapter } from '../../view/viewController.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
-import { EditorOptions, type EditorLineWrapping, WrappingIndent } from '../../../common/config/editorOptions.js';
+import { EditorOption, EditorOptions, type EditorLayoutInfo, type EditorLineWrapping, type FindComputedEditorOptionValueById, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type LanguageCompletionWorkerFactory } from '../../../common/languages/completion/languageCompletionService.js';
 import { type ILanguageDiagnosticsService } from '../../../common/services/languageDiagnosticsService.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/ownedCompletionsEnablement.js';
@@ -45,8 +45,9 @@ import { type IAccessibilityService } from '../../../../platform/accessibility/c
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
 import { type URI } from '../../../../base/common/uri.js';
+import { type IClipboardPasteEvent } from '../../controller/editContext/clipboardUtils.js';
 
-export type CodeEditorWidgetViewportOptions = EditorViewViewportOptions;
+export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, 'container' | 'model' | 'lineHeight' | 'ariaLabel' | 'selectionController'>;
 
 export interface EditorContextMenuRequest {
 	readonly position: Position;
@@ -107,7 +108,6 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly formatOnSave?: boolean;
 	readonly insertFinalNewLine?: boolean;
 	readonly showUnicodeHighlights?: boolean;
-	readonly fontZoom?: { readonly initialScale?: number };
 	readonly renderRichScreenReaderContent?: boolean;
 	readonly placeholder?: string;
 }
@@ -115,6 +115,8 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 export type CodeEditorWidgetOptions = ICodeEditorWidgetOptions;
 
 export type CodeEditorViewState = ICodeEditorViewState;
+
+let decorationOwnerPool = 0;
 
 /**
  * Canonical browser editing surface for one Stanza text model and editor-local selection controller.
@@ -124,17 +126,30 @@ export type CodeEditorViewState = ICodeEditorViewState;
  * behavior belongs to the host's contribution composition.
  */
 export class CodeEditorWidget extends Disposable implements ICodeEditor {
+	private readonly disposeEmitter = this._register(new Emitter<void>());
+	readonly onDidDispose = this.disposeEmitter.event;
 	readonly onDidChange: Event<void>;
+	readonly onDidAttemptReadOnlyEdit: Event<void>;
+	readonly onDidLayoutChange: Event<EditorLayoutInfo>;
+	readonly onDidChangeCursorSelection: Event<void>;
+	readonly onDidCompositionStart: Event<void>;
+	readonly onDidCompositionEnd: Event<void>;
+	readonly onDidType: Event<string>;
+	readonly onDidPaste: Event<IClipboardPasteEvent>;
+	readonly onMouseMove: Event<IEditorMouseEvent>;
+	readonly onMouseLeave: Event<IEditorMouseEvent>;
 	readonly selections: CursorsController;
 	readonly ownerId: string;
-	readonly view: EditorView;
+	readonly view: ViewController;
 	readonly viewport: View;
-	readonly userInputEvents: EditorView['userInputEvents'];
+	readonly userInputEvents: ViewController['userInputEvents'];
 	readonly contributions: CodeEditorContributions;
 	private readonly instantiationService: IInstantiationService;
+	private readonly decorationOwnerId = ++decorationOwnerPool;
 
 	constructor(options: CodeEditorWidgetOptions) {
 		super();
+		options.codeEditorService?.willCreateCodeEditor();
 		try {
 			validateOptions(options);
 			migrateOptions(options);
@@ -154,6 +169,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				[Selection.fromPositions(new Position(1, 1))],
 				{ readOnly: options.input.readOnly },
 			));
+			this.onDidAttemptReadOnlyEdit = this.selections.onDidAttemptReadOnlyEdit;
+			this.onDidChangeCursorSelection = listener => this.selections.onDidChange(() => listener());
 			const capabilities = new Map<string, unknown>();
 			const commandEmitter = this._register(new Emitter<EditorCommandEvent>());
 			const executeCommand = <T>(commandId: string, operation: () => T): T => executeEditorCommand(commandEmitter, commandId, operation);
@@ -216,15 +233,13 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				languageLexicalContext,
 				options.indentation,
 			));
-			this.view = this._register(new EditorView({
-				ownerId: options.ownerId,
+			this.viewport = this._register(new View({
 				container: options.container,
 				model: options.model,
 				lineHeight: options.lineHeight,
 				ariaLabel: options.ariaLabel ?? editorLabel(options.input),
 				selectionController: this.selections,
-				viewport: {
-					dimension: options.dimension,
+				dimension: options.dimension,
 					automaticLayout: options.automaticLayout,
 					cursorOptions: { readOnly: options.input.readOnly, stickyTabStops: options.stickyTabStops },
 					languageId: options.languageId,
@@ -267,7 +282,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 						left: 12,
 					},
 					indentation: options.indentation,
-				},
+			}));
+			this.onDidLayoutChange = listener => this.viewport.onDidChangeLayout(() => listener(this.getLayoutInfo()));
+			this.view = this._register(new ViewController(this.viewport, this.selections, {
+				ownerId: options.ownerId,
+				ariaLabel: options.ariaLabel ?? editorLabel(options.input),
 				accessibilityService: options.accessibilityService,
 				renderRichScreenReaderContent: options.renderRichScreenReaderContent,
 				accessibilityPageSize: options.accessibilityPageSize,
@@ -277,7 +296,20 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				wordPattern: () => languageConfigurationService.getLanguageConfiguration(options.languageId).getWordDefinition(),
 			}));
 			this.ownerId = this.view.ownerId;
-			this.viewport = this.view.viewport;
+			this.onDidCompositionStart = listener => this.view.editContext.onDidCompositionStart(() => listener());
+			this.onDidCompositionEnd = listener => this.view.editContext.onDidCompositionEnd(() => listener());
+			this.onDidType = listener => this.view.onDidEdit(event => {
+				if (event.insertedText !== undefined) listener(event.insertedText);
+			});
+			this.onDidPaste = listener => this.view.editContext.onWillPaste(listener);
+			this.onMouseMove = listener => addDisposableListener<MouseEvent>(this.element, 'mousemove', event => listener({
+				event,
+				target: this.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY }),
+			}));
+			this.onMouseLeave = listener => addDisposableListener<MouseEvent>(this.element, 'mouseleave', event => listener({ event }));
+			this._register(toDisposable(() => {
+				if (!options.model.isDisposed()) options.model.removeAllDecorationsWithOwnerId(this.decorationOwnerId);
+			}));
 			this.userInputEvents = this.view.userInputEvents;
 			this._register(observableCodeEditor(this));
 			this.contributions = this._register(new CodeEditorContributions());
@@ -302,6 +334,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			}
 			const installContext: TextEditorContributionContext = {
 				kind: 'text',
+				editor: this,
+				instantiationService: this.instantiationService,
 				options,
 				model: options.model,
 				editorWorker,
@@ -336,6 +370,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return this.viewport.element;
 	}
 
+	get inComposition(): boolean {
+		return this.view.compositionController.composing;
+	}
+
 	layout(dimension: IDimension = getClientArea(this.element)): void {
 		this.viewport.layout({ width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) });
 	}
@@ -346,6 +384,29 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	addContentWidget(widget: IContentWidget): void {
 		this.viewport.addContentWidget(widget);
+	}
+
+	getLayoutInfo(): EditorLayoutInfo {
+		return this.viewport.getLayoutInfo();
+	}
+
+	getOption<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T> {
+		return this.viewport.getOption(id);
+	}
+
+	getScrolledVisiblePosition(position: Position): { top: number; left: number; height: number } | null {
+		this.viewport.textModel.offsetAt(position);
+		const coordinates = this.viewport.getPositionContentCoordinates(position);
+		const scroll = this.viewport.currentLayout.scrollPosition;
+		return { top: coordinates.top - scroll.top, left: coordinates.left - scroll.left, height: coordinates.height };
+	}
+
+	getWidthOfLine(lineNumber: number): number {
+		return this.viewport.measureTextWidth(this.viewport.textModel.getLineContent(lineNumber));
+	}
+
+	createDecorationsCollection(decorations: IModelDeltaDecoration[] = []): IEditorDecorationsCollection {
+		return this._register(new EditorDecorationsCollection(this.viewport.textModel, this.decorationOwnerId, decorations));
 	}
 
 	layoutContentWidget(widget: IContentWidget): void {
@@ -385,10 +446,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		this.viewport.textModel.reset(value);
 	}
 
-	revealRange(range: Range): void {
+	revealRange(range: Range, _scrollType?: ScrollType): void {
 		this.viewport.textModel.offsetAt(range.getStartPosition());
 		this.viewport.textModel.offsetAt(range.getEndPosition());
-		this.selections.setSelections([Selection.fromPositions(range.getStartPosition(), range.getEndPosition())]);
 		this.viewport.revealPosition(range.getStartPosition());
 	}
 
@@ -442,6 +502,104 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return this.viewport.textModel;
 	}
 
+	hasModel(): boolean {
+		return true;
+	}
+
+	getPosition(): Position | null {
+		return this.selections.selections[0]?.getPosition() ?? null;
+	}
+
+	getScrollTop(): number {
+		return this.viewport.currentLayout.scrollPosition.top;
+	}
+
+	getScrollLeft(): number {
+		return this.viewport.currentLayout.scrollPosition.left;
+	}
+
+	getContentHeight(): number {
+		return this.viewport.currentLayout.contentSize.height;
+	}
+
+	getContentWidth(): number {
+		return this.viewport.currentLayout.contentSize.width;
+	}
+
+	hasPendingScrollAnimation(): boolean {
+		return false;
+	}
+
+	getVisibleRanges(): Range[] {
+		const layout = this.viewport.currentLayout;
+		const projection = this.viewport.getVisualLineProjection();
+		const ranges: Range[] = [];
+		for (let index = layout.visibleLines.startLineIndex; index < layout.visibleLines.endLineIndexExclusive; index += 1) {
+			const line = projection.lineAt(index);
+			if (!line) continue;
+			const next = new Range(line.logicalLineIndex + 1, line.startColumn + 1, line.logicalLineIndex + 1, line.endColumn + 1);
+			const previous = ranges.at(-1);
+			if (previous && previous.endLineNumber === next.startLineNumber && previous.endColumn >= next.startColumn) {
+				ranges[ranges.length - 1] = previous.plusRange(next);
+			} else if (previous && previous.endLineNumber + 1 === next.startLineNumber) {
+				ranges[ranges.length - 1] = previous.plusRange(next);
+			} else {
+				ranges.push(next);
+			}
+		}
+		return ranges;
+	}
+
+	getTopForPosition(lineNumber: number, column: number): number {
+		const position = this.viewport.textModel.validatePosition(new Position(lineNumber, column));
+		return this.viewport.getPositionContentCoordinates(position).top;
+	}
+
+	getTopForLineNumber(lineNumber: number): number {
+		return this.getTopForPosition(lineNumber, 1);
+	}
+
+	getBottomForLineNumber(lineNumber: number): number {
+		const model = this.viewport.textModel;
+		const position = model.validatePosition(new Position(lineNumber, model.getLineMaxColumn(lineNumber)));
+		const coordinates = this.viewport.getPositionContentCoordinates(position);
+		return coordinates.top + coordinates.height;
+	}
+
+	setScrollTop(newScrollTop: number, _scrollType?: ScrollType): void {
+		const layout = this.viewport.currentLayout;
+		this.viewport.scrollTo({ left: layout.scrollPosition.left, top: newScrollTop });
+	}
+
+	getSelection(): Selection | null {
+		return this.selections.selections[0] ?? null;
+	}
+
+	getSelections(): Selection[] {
+		return [...this.selections.selections];
+	}
+
+	setSelection(selection: ISelection, _source?: string): void {
+		this.selections.setSelections([Selection.liftSelection(selection)]);
+	}
+
+	setSelections(selections: readonly ISelection[], _source?: string): void {
+		this.selections.setSelections(selections.map(selection => Selection.liftSelection(selection)));
+	}
+
+	executeCommand(source: string | null | undefined, command: ICommand): void {
+		this.selections.executeCommand(command, source);
+	}
+
+	executeCommands(source: string | null | undefined, commands: ICommand[]): void {
+		this.selections.executeCommands(commands, source);
+	}
+
+	pushUndoStop(): boolean {
+		this.selections.pushUndoStop();
+		return true;
+	}
+
 	invokeWithinContext<T>(fn: (accessor: import('../../../../platform/instantiation/common/instantiation.js').ServicesAccessor) => T): T {
 		return this.instantiationService.invokeFunction(fn);
 	}
@@ -450,8 +608,28 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return this.element;
 	}
 
+	getDomNode(): HTMLElement {
+		return this.element;
+	}
+
+	override dispose(): void {
+		if (this.isDisposed) return;
+		this.disposeEmitter.fire();
+		super.dispose();
+	}
+
 	applyFontInfo(target: HTMLElement): void {
 		applyFontInfo(target, this.viewport.fontInfo);
+	}
+
+	changeDecorations<T>(callback: (changeAccessor: IModelDecorationsChangeAccessor) => T): T | null {
+		return this.viewport.textModel.changeDecorations(callback, this.decorationOwnerId);
+	}
+
+	removeDecorations(decorationIds: string[]): void {
+		this.viewport.textModel.changeDecorations(accessor => {
+			for (const id of decorationIds) accessor.removeDecoration(id);
+		}, this.decorationOwnerId);
 	}
 
 	removeDecorationsByType(_key: string): void {
@@ -460,6 +638,57 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	public getContribution<T extends import('../../../common/editorCommon.js').IEditorContribution>(id: string): T | null {
 		return this.contributions.get(id) as T | undefined ?? null;
+	}
+}
+
+class EditorDecorationsCollection extends Disposable implements IEditorDecorationsCollection {
+	private ids: string[] = [];
+	private readonly changeEmitter = this._register(new Emitter<IModelDecorationsChangedEvent>());
+	readonly onDidChange = this.changeEmitter.event;
+
+	constructor(private readonly model: TextModel, private readonly ownerId: number, decorations: IModelDeltaDecoration[]) {
+		super();
+		this._register(model.onDidChangeDecorations(event => this.changeEmitter.fire(event)));
+		this.ids = model.deltaDecorations([], decorations, ownerId);
+	}
+
+	get length(): number {
+		return this.ids.length;
+	}
+
+	getRange(index: number): Range | null {
+		const id = this.ids[index];
+		return id === undefined ? null : this.model.getDecorationRange(id);
+	}
+
+	getRanges(): Range[] {
+		return this.ids.map(id => this.model.getDecorationRange(id)).filter((range): range is Range => range !== null);
+	}
+
+	has(decoration: IModelDecoration): boolean {
+		return this.ids.includes(decoration.id);
+	}
+
+	set(decorations: readonly IModelDeltaDecoration[]): string[] {
+		this.ids = this.model.deltaDecorations(this.ids, [...decorations], this.ownerId);
+		return [...this.ids];
+	}
+
+	append(decorations: readonly IModelDeltaDecoration[]): string[] {
+		const added = this.model.deltaDecorations([], [...decorations], this.ownerId);
+		this.ids.push(...added);
+		return added;
+	}
+
+	clear(): void {
+		if (this.ids.length === 0) return;
+		this.model.deltaDecorations(this.ids, [], this.ownerId);
+		this.ids = [];
+	}
+
+	override dispose(): void {
+		this.clear();
+		super.dispose();
 	}
 }
 

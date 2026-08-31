@@ -1,5 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { type EditorView } from '../../../browser/editorView.js';
+import { type ViewController } from '../../../browser/view/viewController.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { type Range } from '../../../common/core/range.js';
 import { USUAL_WORD_SEPARATORS } from '../../../common/core/wordHelper.js';
@@ -31,7 +31,7 @@ export class SelectionHighlighter extends Disposable {
 	private lastKey = '';
 
 	constructor(
-		view: EditorView,
+		view: ViewController,
 		private readonly selections: CursorsController,
 		private readonly decorations: TextDecorationCollection<boolean>,
 		options: SelectionHighlighterOptions,
@@ -81,7 +81,7 @@ export class SelectionHighlighter extends Disposable {
 	}
 }
 
-function validateSelectionHighlighter(view: EditorView, selections: CursorsController, decorations: TextDecorationCollection<boolean>, options: SelectionHighlighterOptions): void {
+function validateSelectionHighlighter(view: ViewController, selections: CursorsController, decorations: TextDecorationCollection<boolean>, options: SelectionHighlighterOptions): void {
 	if (view.viewport.textModel !== selections.textModel || selections.textModel !== decorations.textModel) throw new TypeError('Selection highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.languageId || !options.languageFeaturesService) throw new TypeError('Selection highlighter requires language services');
 	if (options.enabled !== undefined && typeof options.enabled !== 'boolean') throw new TypeError('Selection highlighter enabled option must be boolean');

@@ -24,6 +24,7 @@ import { IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { KeyMod, KeyCode } from '../../base/common/keyCodes.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { getActiveElement } from '../../base/browser/dom.js';
+import { OperatingSystem, operatingSystem } from '../../base/common/platform.js';
 import { TriggerInlineEditCommandsRegistry } from './triggerInlineEditCommandsRegistry.js';
 import { type Event } from '../../base/common/event.js';
 import { type TextModel } from '../common/model/textModel.js';
@@ -33,7 +34,7 @@ import { type ILanguageFeaturesService } from '../common/services/languageFeatur
 import { type IResolvedSemanticTokensService } from '../common/services/resolvedSemanticTokens.js';
 import { type DocumentCollaborationInvite, type DocumentCollaborationMember, type DocumentCollaborationRoomRole } from '../common/services/documentCollaborationService.js';
 import { type ICodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
-import { type EditorView } from './editorView.js';
+import { type ViewController } from './view/viewController.js';
 import { type View } from './view.js';
 import { type DecorationSource } from './viewParts/decorations/decorations.js';
 import { type EditorLineVisibilitySource } from '../common/viewModel/viewModelLines.js';
@@ -154,6 +155,11 @@ export abstract class Command {
 		if (this._kbOpts) {
 			const kbOptsArr = Array.isArray(this._kbOpts) ? this._kbOpts : [this._kbOpts];
 			for (const kbOpts of kbOptsArr) {
+				const platformKeybindings = operatingSystem === OperatingSystem.Macintosh
+					? kbOpts.mac
+					: operatingSystem === OperatingSystem.Windows
+						? kbOpts.win
+						: kbOpts.linux;
 				let kbWhen = kbOpts.kbExpr;
 				if (this.precondition) {
 					if (kbWhen) {
@@ -163,8 +169,8 @@ export abstract class Command {
 					}
 				}
 
-				for (const keybinding of [kbOpts.primary, ...(kbOpts.secondary ?? [])]) {
-					if (keybinding !== undefined) {
+				for (const keybinding of [platformKeybindings?.primary ?? kbOpts.primary, ...(platformKeybindings?.secondary ?? kbOpts.secondary ?? [])]) {
+					if (keybinding !== undefined && keybinding !== 0) {
 						KeybindingsRegistry.registerKeybindingRule({
 							command: this.id,
 							keybinding,
@@ -540,7 +546,9 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 }
 
 export interface TextEditorContributionContext extends SharedTextContext {
-	readonly view: EditorView;
+	readonly editor: ICodeEditor;
+	readonly instantiationService: IInstantiationService;
+	readonly view: ViewController;
 	readonly viewport: View;
 	readonly viewModel: CursorsController;
 	readonly onDidExecuteCommand: Event<EditorCommandEvent>;

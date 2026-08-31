@@ -16,13 +16,13 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 	private readonly rows: ViewPartRows;
 
 	constructor(
-		context: EditorViewContext,
+		_context: EditorViewContext,
 		host: HTMLElement,
 		private readonly model: TextModel,
 		private readonly selectionController: CursorsController | undefined,
 		private readonly mode: WhitespaceRenderingMode,
 	) {
-		super(context);
+		super();
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-whitespace-layer', 'stanza-editor-whitespace-row'));
 		this.domNode = this.rows.domNode;
 	}

@@ -113,7 +113,6 @@ export interface EditorPaneOptions {
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
 	readonly insertFinalNewLine?: boolean;
-	readonly fontZoom?: CodeEditorWidgetOptions["fontZoom"];
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly onSaveError?: (error: unknown) => void;
 }
@@ -228,7 +227,6 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				decorationSources: this.options.createDecorationSources?.(input.resource, modelReference.model),
 				placeholder: this.options.placeholder,
 				showUnicodeHighlights: this.options.showUnicodeHighlights,
-				fontZoom: this.options.fontZoom,
 				registerBeforeSave: hook => {
 					beforeSaveHooks.push(hook);
 					return toDisposable(() => {

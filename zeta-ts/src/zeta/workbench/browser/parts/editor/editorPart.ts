@@ -37,7 +37,7 @@ import type { TextResourceLanguageResolver } from "../../../../platform/language
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
-import type { IBulkEditService } from "../../../contrib/bulkEdit/common/bulkEdit.js";
+import type { IBulkEditService } from "../../../../editor/browser/services/bulkEditService.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import type { OwnedDecorationSource } from "../../../../editor/browser/viewParts/decorations/decorations.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";

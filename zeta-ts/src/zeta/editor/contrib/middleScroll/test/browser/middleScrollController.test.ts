@@ -1,0 +1,88 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { JSDOM } from 'jsdom';
+import { TextModel } from '../../../../common/model/textModel.js';
+import '../../browser/middleScroll.contribution.js';
+
+const environment = new JSDOM('<!doctype html><body></body>');
+for (const [name, value] of Object.entries({
+	window: environment.window,
+	document: environment.window.document,
+	Node: environment.window.Node,
+	Element: environment.window.Element,
+	HTMLElement: environment.window.HTMLElement,
+	HTMLCanvasElement: environment.window.HTMLCanvasElement,
+	Event: environment.window.Event,
+	KeyboardEvent: environment.window.KeyboardEvent,
+	PointerEvent: environment.window.PointerEvent ?? environment.window.MouseEvent,
+	ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
+})) Object.defineProperty(globalThis, name, { configurable: true, value });
+environment.window.HTMLCanvasElement.prototype.getContext = () => null;
+
+const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { MiddleScrollController } = await import('../../browser/middleScrollController.js');
+
+test.after(() => environment.window.close());
+
+test('middle click opens a scroll session and keyboard input closes it', () => {
+	const container = environment.window.document.createElement('main');
+	using model = new TextModel('one\ntwo\nthree');
+	using editor = new CodeEditorWidget({
+		container,
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		scrollOnMiddleClick: true,
+	});
+	editor.layout({ width: 300, height: 60 });
+	assert.ok(MiddleScrollController.get(editor));
+	const pointer = new environment.window.Event('pointerdown', { bubbles: true, cancelable: true });
+	Object.defineProperties(pointer, {
+		button: { value: 1 },
+		pointerId: { value: 4 },
+		clientX: { value: 40 },
+		clientY: { value: 30 },
+	});
+	editor.viewport.element.dispatchEvent(pointer);
+
+	assert.equal(pointer.defaultPrevented, true);
+	assert.equal(editor.viewport.element.classList.contains('scroll-editor-on-middle-click-editor'), true);
+	assert.ok(editor.viewport.element.querySelector('.scroll-editor-on-middle-click-dot'));
+	editor.view.element.dispatchEvent(new environment.window.KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+	assert.equal(editor.viewport.element.classList.contains('scroll-editor-on-middle-click-editor'), false);
+	assert.equal(editor.viewport.element.querySelector('.scroll-editor-on-middle-click-dot'), null);
+});
+
+test('pointer displacement continuously scrolls and release ends an active movement', async () => {
+	const container = environment.window.document.createElement('main');
+	using model = new TextModel(Array.from({ length: 80 }, (_, index) => `line ${index}`).join('\n'));
+	using editor = new CodeEditorWidget({
+		container,
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		scrollOnMiddleClick: true,
+	});
+	editor.layout({ width: 300, height: 60 });
+	MiddleScrollController.get(editor);
+	editor.viewport.element.dispatchEvent(pointerEvent('pointerdown', 1, 7, 40, 30));
+	environment.window.dispatchEvent(pointerEvent('pointermove', 0, 7, 40, 100));
+	await new Promise(resolve => setTimeout(resolve, 50));
+	environment.window.dispatchEvent(pointerEvent('pointerup', 0, 7, 40, 100));
+
+	assert.ok(editor.viewport.currentLayout.scrollPosition.top > 0);
+	assert.equal(editor.viewport.element.classList.contains('scroll-editor-on-middle-click-editor'), false);
+});
+
+function pointerEvent(type: string, button: number, pointerId: number, clientX: number, clientY: number): Event {
+	const event = new environment.window.Event(type, { bubbles: true, cancelable: true });
+	Object.defineProperties(event, {
+		button: { value: button },
+		pointerId: { value: pointerId },
+		clientX: { value: clientX },
+		clientY: { value: clientY },
+	});
+	return event;
+}

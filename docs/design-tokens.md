@@ -11,6 +11,7 @@ Desktop TypeScript registry 是图形界面 token 的唯一声明目录。构建
 | Desktop 或 Rust 桌面端组件的语义颜色 | 修改组件所有者注册的 token | 在组件中复制十六进制颜色 |
 | 图形界面的整套主题外观 | 切换主题入口或覆盖公开 token | 重写组件选择器 |
 | 编辑器语法颜色 | 覆盖 `editor.token.*Foreground` | 让解析器携带固定 RGB |
+| 编辑器折叠状态 | 覆盖 `editor.foldBackground`、`editor.foldPlaceholderForeground`、`editorGutter.foldingControlForeground` | 在组件或 `[gui]` 中硬编码折叠颜色 |
 | Zeta Code TUI 外观 | 修改 `zeta-code/tui/src/render/theme.rs` 或 TUI 用户主题 JSON | 在 `zeta-ts` 注册 `tui.*` token |
 | 跟随操作系统明暗模式 | 选择 `system` | 维护第四套 system 主题值 |
 

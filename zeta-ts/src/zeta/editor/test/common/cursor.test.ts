@@ -7,6 +7,7 @@ import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { ReplaceCommand, ReplaceCommandThatPreservesSelection } from '../../common/commands/replaceCommand.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
@@ -70,6 +71,47 @@ test("CursorsController restores command selections", () => {
 	});
 });
 
+test('CursorsController executes canonical ICommand edits with undoable selections', () => {
+	using model = new TextModel('hello');
+	using controller = new CursorsController(model, single(1, 4));
+
+	controller.executeCommand(new ReplaceCommand(range(1, 4), 'i'));
+	assert.deepEqual({ text: model.getText(), selections: controller.selections }, {
+		text: 'hio',
+		selections: single(2, 2),
+	});
+	controller.undo();
+	assert.deepEqual({ text: model.getText(), selections: controller.selections }, {
+		text: 'hello',
+		selections: single(1, 4),
+	});
+});
+
+test('CommandExecutor keeps the first cursor when canonical commands overlap', () => {
+	using model = new TextModel('abcd');
+	const before = [Selection.fromPositions(position(0, 1)), Selection.fromPositions(position(0, 2))];
+	using controller = new CursorsController(model, before);
+
+	controller.executeCommands([
+		new ReplaceCommand(range(1, 3), 'X'),
+		new ReplaceCommand(range(2, 4), 'Y'),
+	]);
+
+	assert.equal(model.getText(), 'aXd');
+	assert.deepEqual(controller.selections, [Selection.fromPositions(position(0, 2)), before[1]!]);
+});
+
+test('CommandExecutor resolves tracked selections after model edits', () => {
+	using model = new TextModel('abcd');
+	const selection = Selection.fromPositions(position(0, 2), position(0, 4));
+	using controller = new CursorsController(model, [selection]);
+
+	controller.executeCommand(new ReplaceCommandThatPreservesSelection(range(0, 0), 'X', selection));
+
+	assert.equal(model.getText(), 'Xabcd');
+	assert.deepEqual(controller.selections, [Selection.fromPositions(position(0, 3), position(0, 5))]);
+});
+
 test("Read-only editor instances preserve selection while rejecting document commands", () => {
 	using model = new TextModel("abc");
 	using controller = new CursorsController(model, single(0, 0), { readOnly: true });
@@ -109,12 +151,17 @@ test("Cursor-only selection history restores multi-cursor operations without cha
 	controller.setCursorSelections(second);
 	assert.equal(controller.undoCursorOperation(), true);
 	assert.deepEqual(controller.selections, first);
-	assert.equal(controller.undoCursorOperation(), false);
+	assert.equal(controller.redoCursorOperation(), true);
+	assert.deepEqual(controller.selections, second);
+	assert.equal(controller.redoCursorOperation(), false);
+	assert.equal(controller.undoCursorOperation(), true);
 	controller.setCursorSelections(second);
 	controller.setSelections(single(2, 2));
 	assert.equal(controller.undoCursorOperation(), false);
 	assert.equal(model.version, 1);
 	assert.deepEqual(reasons, [
+		CursorChangeReason.Explicit,
+		CursorChangeReason.Explicit,
 		CursorChangeReason.Explicit,
 		CursorChangeReason.Explicit,
 		CursorChangeReason.Explicit,

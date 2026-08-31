@@ -27,7 +27,7 @@ class PieceTreeTextBufferFactory implements ITextBufferFactory {
 		const eol = this._getEOL(defaultEOL);
 		let value = this._chunks.join('');
 		if (this._normalizeEOL) value = value.replace(/\r\n|\r|\n/g, eol);
-		const textBuffer = new PieceTreeTextBuffer(value, eol, this._bom);
+		const textBuffer = new PieceTreeTextBuffer(value, eol, this._bom, this._normalizeEOL);
 		return { textBuffer, disposable: textBuffer };
 	}
 

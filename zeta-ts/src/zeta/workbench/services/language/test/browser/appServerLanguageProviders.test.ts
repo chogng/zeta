@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { CancellationToken } from "../../../../../base/common/cancellation.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
@@ -13,7 +14,6 @@ import { FormatService } from '../../../../../editor/contrib/format/common/forma
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
 import { InlayHintsService } from '../../../../../editor/contrib/inlayHints/common/languageInlayHints.js';
-import { LinkedEditingService } from '../../../../../editor/contrib/linkedEditing/common/languageLinkedEditing.js';
 import { ParameterHintsService } from '../../../../../editor/contrib/parameterHints/common/languageParameterHints.js';
 import { RenameService } from '../../../../../editor/contrib/rename/common/languageRename.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
@@ -96,13 +96,12 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using model = new TextModel("pri");
 	const resource = URI.file("C:\\project\\main.rs");
+	using model = new TextModel("pri", { languageId: "rust", resource });
 	using hover = new LanguageHoverService(model, languages.hoverProvider, resource);
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
 	using parameterHints = new ParameterHintsService(model, languages.parameterHintsProvider, resource);
 	using inlayHints = new InlayHintsService(model, languages.inlayHintsProvider, resource);
-	using linkedEditing = new LinkedEditingService(model, languages.linkedEditingProvider, resource);
 
 	const hoverResult = await hover.provideHover("rust", new Position((0) + 1, (1) + 1));
 	await completions.request("rust", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
@@ -112,7 +111,8 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	await completions.executeCompletionCommand("rust", completionItem, new AbortController().signal);
 	const hints = await parameterHints.provideParameterHints("rust", new Position((0) + 1, (3) + 1), { kind: "triggerCharacter", triggerCharacter: "(" });
 	const inlays = await inlayHints.provideInlayHints("rust", Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)));
-	const linked = await linkedEditing.provideLinkedEditingRanges("rust", new Position((0) + 1, (1) + 1));
+	const linkedEditing = languages.linkedEditingRangeProvider.ordered(model)[0]!;
+	const linked = await linkedEditing.provideLinkedEditingRanges(model, new Position((0) + 1, (1) + 1), CancellationToken.None);
 
 	assert.equal(hoverResult?.contents[0], "hover docs");
 	assert.equal(api.hoverRequests[0]!.document.path, "main.rs");
@@ -126,7 +126,7 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	assert.equal(hints?.signatures[0]!.parameters[1]!.label, "value");
 	assert.equal(api.signatureHelpRequests[0]!.triggerCharacter, "(");
 	assert.equal(inlays[0]!.label, ": &str");
-	assert.equal(linked?.ranges[1]!.getStartPosition().column, 9);
+	assert.equal(Range.lift(linked?.ranges[1]!).getStartPosition().column, 9);
 	assert.equal(linked?.wordPattern?.test("value"), true);
 });
 

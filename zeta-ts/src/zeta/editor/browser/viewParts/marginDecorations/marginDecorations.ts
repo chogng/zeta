@@ -12,8 +12,8 @@ export class MarginViewLineDecorationsOverlay extends DynamicViewOverlay {
 	private readonly decorations: DecorationsOverlay;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, decorations: DecorationsOverlay) {
-		super(context);
+	constructor(_context: EditorViewContext, host: HTMLElement, decorations: DecorationsOverlay) {
+		super();
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-margin-decorations-layer', 'stanza-editor-diagnostic-marker'));
 		this.domNode = this.rows.domNode;
 		this.decorations = decorations;

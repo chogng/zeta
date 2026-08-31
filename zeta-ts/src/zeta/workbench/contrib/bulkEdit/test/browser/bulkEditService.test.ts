@@ -14,7 +14,7 @@ test("bulk edits apply directly for a single entry", async () => {
 
 	const result = await service.apply(edit);
 
-	assert.equal(result.applied, true);
+	assert.equal(result.isApplied, true);
 	assert.equal(applier.calls.length, 1);
 	assert.deepEqual(applier.calls[0], edit);
 });
@@ -27,7 +27,7 @@ test("multi-entry edits fall back to direct apply when preview is unavailable", 
 
 	const result = await service.apply({ entries: [first.entries[0]!, second.entries[0]!] });
 
-	assert.equal(result.applied, true);
+	assert.equal(result.isApplied, true);
 	assert.equal(applier.calls.length, 1);
 });
 
@@ -37,22 +37,22 @@ test("multi-entry edits preview by default and apply the accepted subset", async
 	const first = textEdit("one.ts", "one");
 	const second = textEdit("two.ts", "two");
 	const edit: LanguageWorkspaceEdit = { entries: [...first.entries, ...second.entries] };
-	service.setPreviewHandler(async value => ({ entries: [value.entries[1]!] }));
+	service.setPreviewHandler(async value => [value[1]!]);
 
 	const result = await service.apply(edit);
 
-	assert.equal(result.applied, true);
+	assert.equal(result.isApplied, true);
 	assert.deepEqual(applier.calls[0]?.entries, [second.entries[0]]);
 });
 
 test("cancelling the preview does not mutate through the lower-level applier", async () => {
 	const applier = new RecordingWorkspaceEditService();
 	using service = new BrowserBulkEditService(applier);
-	service.setPreviewHandler(async () => undefined);
+	service.setPreviewHandler(async () => []);
 
 	const result = await service.apply({ entries: [textEdit("one.ts", "one").entries[0]!, textEdit("two.ts", "two").entries[0]!] });
 
-	assert.equal(result.applied, false);
+	assert.equal(result.isApplied, false);
 	assert.equal(applier.calls.length, 0);
 });
 
@@ -65,9 +65,9 @@ test("a caller can force preview for a single entry", async () => {
 		return value;
 	});
 
-	const result = await service.apply(textEdit("one.ts", "one"), { preview: "always" });
+	const result = await service.apply(textEdit("one.ts", "one"), { showPreview: true });
 
-	assert.equal(result.applied, true);
+	assert.equal(result.isApplied, true);
 	assert.equal(previewed, true);
 	assert.equal(applier.calls.length, 1);
 });

@@ -136,7 +136,7 @@ class QuickDiffPeekView extends Disposable {
 		super();
 		const document = context.viewport.element.ownerDocument;
 		const kind = change.kind === LineDiffKind.Added ? 'Added' : change.kind === LineDiffKind.Removed ? 'Deleted' : 'Modified';
-		const peek = this._register(new EditorPeekViewWidget(context.viewport, new Position((change.lineIndex) + 1, (0) + 1), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
+		const peek = this._register(new EditorPeekViewWidget(context.editor, new Position((change.lineIndex) + 1, (0) + 1), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
 		peek.element.classList.add('zeta-quick-diff-peek');
 		const body = h(document, 'div');
 		body.className = 'zeta-quick-diff-peek-body';
@@ -156,6 +156,7 @@ class QuickDiffPeekView extends Disposable {
 		const diffWidget = this._register(new DiffEditorWidget({
 			container: diffContainer,
 			model: change.comparison.model,
+			codeEditorService: context.options.codeEditorService,
 			lineHeight: context.options.lineHeight,
 			fontFamily: context.options.fontFamily,
 			fontSize: context.options.fontSize,

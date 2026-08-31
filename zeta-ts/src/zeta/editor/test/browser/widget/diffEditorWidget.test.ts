@@ -20,6 +20,7 @@ for (const [name, value] of Object.entries({
 
 const { DiffEditorWidget } = await import("../../../browser/widget/diffEditor/diffEditorWidget.js");
 const { DiffModel } = await import("../../../common/diff/diffModel.js");
+const { createEditorBrowserServices } = await import('../../../browser/services/contribution.js');
 
 test("DiffEditorWidget presents side-by-side changed lines and inline ranges", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -29,7 +30,15 @@ test("DiffEditorWidget presents side-by-side changed lines and inline ranges", a
 	using computationService = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, computationService });
 	await waitForReady(model);
-	using editor = new DiffEditorWidget({ container, model, lineHeight: 20 });
+	const services = createEditorBrowserServices();
+	using codeEditorService = services.codeEditorService;
+	const lifecycle: string[] = [];
+	using willCreate = codeEditorService.onWillCreateDiffEditor(() => lifecycle.push('will'));
+	using added = codeEditorService.onDiffEditorAdd(() => lifecycle.push('add'));
+	using removed = codeEditorService.onDiffEditorRemove(() => lifecycle.push('remove'));
+	const editor = new DiffEditorWidget({ container, model, lineHeight: 20, codeEditorService });
+	assert.deepEqual(lifecycle, ['will', 'add']);
+	assert.deepEqual(codeEditorService.listDiffEditors(), [editor]);
 	editor.layout({ width: 400, height: 80 });
 
 	const rows = [...editor.element.querySelectorAll<HTMLElement>(".stanza-diff-editor-row")];
@@ -55,6 +64,9 @@ test("DiffEditorWidget presents side-by-side changed lines and inline ranges", a
 	assert.equal(next.defaultPrevented, true);
 	assert.equal(editor.currentChangeRow, 1);
 	assert.match(editor.element.querySelector(".stanza-diff-editor-accessibility-status")?.textContent ?? "", /Change 1 of 2/);
+	editor.dispose();
+	assert.deepEqual(lifecycle, ['will', 'add', 'remove']);
+	assert.deepEqual(codeEditorService.listDiffEditors(), []);
 	dom.window.close();
 });
 

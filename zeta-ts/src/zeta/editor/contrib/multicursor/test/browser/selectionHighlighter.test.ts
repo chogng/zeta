@@ -30,10 +30,10 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorView } = await import('../../../../browser/editorView.js');
+const { ViewController } = await import('../../../../browser/view/viewController.js');
 const { View } = await import('../../../../browser/view.js');
 const { resolveSelectionHighlightPresentation } = await import('../../../wordHighlighter/browser/highlightDecorations.js');
-const { TextualHighlightTargetRegistration } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
+const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
 const { SelectionHighlighter } = await import('../../browser/multicursor.js');
 
 test('Selection highlighter owns non-empty textual matches and excludes active selections', () => {
@@ -67,7 +67,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, ini
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
 	const selections = new CursorsController(model, [initialSelection]);
-	const textualProvider = new TextualHighlightTargetRegistration(languages, { resource: URI.parse('file:///selection.ts'), model });
+	const textualProvider = new TextualMultiDocumentHighlightFeature(languages);
 	const decorations = new TextDecorationCollection<boolean>(model);
 	const viewport = new View({
 		container,
@@ -77,7 +77,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, ini
 		selectionController: selections,
 		decorationSources: [createStanzaDecorationSource(decorations, decoration => resolveSelectionHighlightPresentation(decoration.metadata))],
 	});
-	const view = new EditorView(viewport, selections);
+	const view = new ViewController(viewport, selections);
 	const controller = new SelectionHighlighter(view, selections, decorations, {
 		languageId: 'typescript',
 		languageFeaturesService: languages,
@@ -93,9 +93,9 @@ class SelectionHarness implements Disposable {
 		readonly selections: CursorsController,
 		readonly decorations: TextDecorationCollection<boolean>,
 		readonly viewport: InstanceType<typeof View>,
-		readonly view: InstanceType<typeof EditorView>,
+		readonly view: InstanceType<typeof ViewController>,
 		readonly controller: InstanceType<typeof SelectionHighlighter>,
-		private readonly textualProvider: InstanceType<typeof TextualHighlightTargetRegistration>,
+		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,
 	) {}
 
 	dispose(): void {

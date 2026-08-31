@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
-import { TextModelChangeReason } from "../../common/core/textChange.js";
+import { Selection } from '../../common/core/selection.js';
+import { TextChange, TextModelChangeReason } from "../../common/core/textChange.js";
 import { EndOfLinePreference, EndOfLineSequence, MinimapPosition, OverviewRulerLane, PositionAffinity, TrackedRangeStickiness, isITextSnapshot } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
+import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
+import type { IViewModel } from '../../common/viewModel.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
@@ -407,6 +410,28 @@ test('TextModel alternative version follows document states through undo and red
 	assert.equal(model.getAlternativeVersionId(), model.getVersionId());
 });
 
+test('TextModel applies external undo and redo payloads without taking history ownership', () => {
+	using model = new TextModel('abc');
+	const events: Array<{ reason: TextModelChangeReason; selection: Selection[] | null }> = [];
+	using listener = model.onDidChangeContent(change => events.push({
+		reason: change.reason,
+		selection: change.resultingSelection,
+	}));
+	const changes = [new TextChange(1, 'b', 1, 'XY')];
+	const redoSelection = [new Selection(1, 3, 1, 3)];
+
+	model._applyRedo(changes, EndOfLineSequence.LF, 7, redoSelection);
+	assert.equal(model.getValue(), 'aXYc');
+	assert.equal(model.getAlternativeVersionId(), 7);
+	assert.deepEqual(events.at(-1), { reason: TextModelChangeReason.Redo, selection: redoSelection });
+
+	const undoSelection = [new Selection(1, 2, 1, 2)];
+	model._applyUndo(changes, EndOfLineSequence.LF, 1, undoSelection);
+	assert.equal(model.getValue(), 'abc');
+	assert.equal(model.getAlternativeVersionId(), 1);
+	assert.deepEqual(events.at(-1), { reason: TextModelChangeReason.Undo, selection: undoSelection });
+});
+
 test("TextModel clears redo on a new edit and ignores exact no-ops", () => {
 	using model = new TextModel("abc");
 	let eventCount = 0;
@@ -527,6 +552,151 @@ test("TextModel rejects an invalid decoration delta atomically", () => {
 		{ range: new Range(1, 3, 1, 4), options: { description: "" } },
 	]), /non-empty description/);
 	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 1, 1, 2));
+});
+
+test('TextModel changes one decoration owner atomically through an accessor', () => {
+	using model = new TextModel('alpha\nbeta\ngamma');
+	let changeCount = 0;
+	using listener = model.onDidChangeDecorations(() => changeCount += 1);
+	let first = '';
+	let second = '';
+	const result = model.changeDecorations(accessor => {
+		first = accessor.addDecoration(new Range(1, 1, 1, 3), { description: 'first' });
+		second = accessor.addDecoration(new Range(2, 1, 2, 3), { description: 'second' });
+		accessor.changeDecoration(first, new Range(1, 2, 1, 4));
+		accessor.changeDecorationOptions(second, { description: 'second-updated', className: 'mark' });
+		return 42;
+	}, 7);
+
+	assert.equal(result, 42);
+	assert.equal(changeCount, 1);
+	assert.deepEqual(model.getDecorationRange(first), new Range(1, 2, 1, 4));
+	assert.equal(model.getDecorationOptions(second)?.description, 'second-updated');
+	assert.deepEqual(model.getLineDecorations(1, 7).map(decoration => decoration.id), [first]);
+	assert.deepEqual(model.getLinesDecorations(1, 2, 7).map(decoration => decoration.id), [first, second]);
+	assert.deepEqual(model.getAllDecorations(7).map(decoration => decoration.id), [first, second]);
+
+	const other = model.deltaDecorations([], [{
+		range: new Range(3, 1, 3, 2),
+		options: { description: 'other-owner' },
+	}], 8)[0]!;
+	model.removeAllDecorationsWithOwnerId(7);
+	assert.equal(model.getDecorationRange(first), null);
+	assert.equal(model.getDecorationRange(second), null);
+	assert.deepEqual(model.getDecorationRange(other), new Range(3, 1, 3, 2));
+});
+
+test('TextModel rolls back accessor changes when the callback fails', () => {
+	using model = new TextModel('alpha');
+	const [id] = model.deltaDecorations([], [{
+		range: new Range(1, 1, 1, 2),
+		options: { description: 'original' },
+	}], 4);
+	let changeCount = 0;
+	using listener = model.onDidChangeDecorations(() => changeCount += 1);
+
+	assert.throws(() => model.changeDecorations(accessor => {
+		accessor.changeDecoration(id!, new Range(1, 2, 1, 4));
+		accessor.addDecoration(new Range(1, 4, 1, 5), { description: 'temporary' });
+		throw new Error('stop');
+	}, 4), /stop/);
+
+	assert.equal(changeCount, 0);
+	assert.deepEqual(model.getDecorationRange(id!), new Range(1, 1, 1, 2));
+	assert.deepEqual(model.getAllDecorations(4).map(decoration => decoration.id), [id]);
+});
+
+test('TextModel exposes owner-filtered margin, injected text, and word-prefix queries', () => {
+	using model = new TextModel('alpha beta\n');
+	const [margin, injected, regular] = model.deltaDecorations([], [
+		{
+			range: new Range(1, 1, 1, 2),
+			options: { description: 'margin', glyphMarginClassName: 'fold-control' },
+		},
+		{
+			range: new Range(1, 6, 1, 6),
+			options: { description: 'injected', before: { content: '>' } },
+		},
+		{
+			range: new Range(1, 7, 1, 11),
+			options: { description: 'regular', className: 'mark' },
+		},
+	], 7);
+	const [otherInjected] = model.deltaDecorations([], [{
+		range: new Range(1, 11, 1, 11),
+		options: { description: 'other-injected', after: { content: '!' } },
+	}], 8);
+
+	assert.deepEqual(model.getAllMarginDecorations(7).map(decoration => decoration.id), [margin]);
+	assert.deepEqual(model.getInjectedTextDecorations(7).map(decoration => decoration.id), [injected]);
+	assert.deepEqual(model.getInjectedTextDecorations().map(decoration => decoration.id), [injected, otherInjected]);
+	assert.ok(!model.getAllMarginDecorations(7).some(decoration => decoration.id === regular));
+	assert.deepEqual(model.getWordUntilPosition(new Position(1, 4)), {
+		word: 'alp',
+		startColumn: 1,
+		endColumn: 4,
+	});
+	assert.deepEqual(model.getWordUntilPosition(new Position(2, 1)), {
+		word: '',
+		startColumn: 1,
+		endColumn: 1,
+	});
+});
+
+test('TextModel owns view-model delivery and model-part events', () => {
+	using configurations = createBuiltinLanguageConfigurationService();
+	using model = new TextModel('alpha\nbeta', { languageConfigurationService: configurations });
+	const order: string[] = [];
+	const lineHeights: Array<{ line: number; height: number | null }> = [];
+	const fontLines: number[][] = [];
+	const tokenRanges: Array<{ fromLineNumber: number; toLineNumber: number }[]> = [];
+	let languageConfigurationChanges = 0;
+	using contentListener = model.onDidChangeContent(() => order.push('content'));
+	using lineHeightListener = model.onDidChangeLineHeight(event => {
+		lineHeights.push(...event.changes.map(change => ({ line: change.lineNumber, height: change.lineHeightMultiplier })));
+	});
+	using fontListener = model.onDidChangeFont(event => fontLines.push(event.changes.map(change => change.lineNumber)));
+	using tokensListener = model.onDidChangeTokens(event => tokenRanges.push([...event.ranges]));
+	using languageConfigurationListener = model.onDidChangeLanguageConfiguration(() => languageConfigurationChanges += 1);
+	const viewModel = {
+		onDidChangeContentOrInjectedText: () => order.push('view-update'),
+		emitContentChangeEvent: () => order.push('view-emit'),
+	} as unknown as IViewModel;
+
+	model.registerViewModel(viewModel);
+	assert.throws(() => model.registerViewModel(viewModel), /already registered/);
+	model.applyOperations([{ range: new Range(1, 1, 1, 2), text: 'A' }]);
+	assert.deepEqual(order, ['view-update', 'content', 'view-emit']);
+
+	order.length = 0;
+	const [decoration] = model.deltaDecorations([], [{
+		range: new Range(2, 1, 2, 2),
+		options: {
+			description: 'variable-line',
+			lineHeight: 1.5,
+			affectsFont: true,
+			fontFamily: 'serif',
+			before: { content: '>' },
+		},
+	}], 9);
+	assert.deepEqual(order, ['view-update', 'view-emit']);
+	assert.deepEqual(lineHeights, [{ line: 2, height: 1.5 }]);
+	assert.deepEqual(fontLines, [[2]]);
+
+	tokenRanges.length = 0;
+	model.tokenization.setSemanticTokens(null, false);
+	assert.deepEqual(tokenRanges, [[{ fromLineNumber: 1, toLineNumber: 2 }]]);
+	using configuration = configurations.register('plaintext', { comments: { lineComment: '//' } });
+	assert.equal(languageConfigurationChanges, 1);
+
+	model.deltaDecorations([decoration!], [], 9);
+	assert.deepEqual(lineHeights.at(-1), { line: 2, height: null });
+	assert.deepEqual(fontLines.at(-1), [2]);
+	model.unregisterViewModel(viewModel);
+	assert.throws(() => model.unregisterViewModel(viewModel), /not registered/);
+	order.length = 0;
+	model.applyOperations([{ range: new Range(1, 1, 1, 2), text: 'a' }]);
+	assert.deepEqual(order, ['content']);
 });
 
 test("TextModel commits history before reentrant change listeners run", () => {

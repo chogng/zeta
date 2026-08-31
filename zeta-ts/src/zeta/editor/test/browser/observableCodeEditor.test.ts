@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { autorun } from '../../../base/common/observable.js';
+import { autorun, observableValue } from '../../../base/common/observable.js';
 import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
 import { Selection } from '../../common/core/selection.js';
 import { TextModel } from '../../common/model/textModel.js';
 
@@ -53,7 +54,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	assert.equal(observableEditor.valueIsEmpty.get(), false);
 
 	editor.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (2) + 1))]);
-	assert.equal(observableEditor.cursorPosition.get().column, 3);
+	assert.equal(observableEditor.cursorPosition.get()?.column, 3);
 
 	observableEditor.value.set('');
 	assert.equal(model.getText(), '');
@@ -84,5 +85,24 @@ test('observable code editor line APIs use one-based line numbers', () => {
 	assert.doesNotThrow(() => observableEditor.getWidthOfLine(1));
 	assert.throws(() => observableEditor.getWidthOfLine(0), /Line number/);
 
+	dom.window.close();
+});
+
+test('observable code editor owns reactive decorations and follows editor disposal', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using model = new TextModel('alpha');
+	const editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	const observableEditor = observableCodeEditor(editor);
+	const source = observableValue('decorations', [{ range: new Range(1, 1, 1, 3), options: { description: 'observable' } }]);
+	using decorationOwner = observableEditor.setDecorations(source);
+
+	assert.deepEqual(model.getAllDecorations().map(decoration => decoration.range), [new Range(1, 1, 1, 3)]);
+	source.set([]);
+	assert.equal(model.getAllDecorations().length, 0);
+
+	editor.dispose();
+	assert.equal(observableEditor.isDisposed, true);
 	dom.window.close();
 });

@@ -146,7 +146,7 @@ flowchart LR
 
 Browser controller 的职责是把一个 DOM event 解析成一个 editor intent，然后调用 common command 或 selection transition。它不得重新实现事务、range mapping 或 model history。
 
-- `EditorInputContext`：browser input contract；`BrowserEditContext` 使用浏览器原生 EditContext，`EditorTextAreaInputContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`EditorView` 只选择并暴露这份契约，`EditorViewInputController` 执行 common command，`EditorSuggestController` 通过 `EditorView.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
+- `EditorInputContext`：browser input contract；`BrowserEditContext` 使用浏览器 EditContext，`EditorTextAreaInputContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`ViewController` 选择并暴露这份契约、执行 common command，suggest widget 通过 `ViewController.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
 - `PointerEventRouter`：pointer dispatch、drag session 和浏览器 capture 的 browser adapter。

@@ -1,51 +1,37 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-.monaco-editor .margin-view-overlays .codicon-folding-manual-collapsed,
-.monaco-editor .margin-view-overlays .codicon-folding-manual-expanded,
-.monaco-editor .margin-view-overlays .codicon-folding-expanded,
-.monaco-editor .margin-view-overlays .codicon-folding-collapsed {
-	cursor: pointer;
-	opacity: 0;
-	transition: opacity 0.5s;
+.stanza-editor .stanza-editor-line-decoration.zeta-icon-folding-expanded,
+.stanza-editor .stanza-editor-line-decoration.zeta-icon-folding-collapsed,
+.stanza-editor .stanza-editor-line-decoration.zeta-icon-folding-manual-expanded,
+.stanza-editor .stanza-editor-line-decoration.zeta-icon-folding-manual-collapsed {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 140%;
-	margin-left: 2px;
+	color: var(--zeta-editor-gutter-folding-control-foreground);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 120ms ease-out;
 }
 
-.monaco-reduce-motion .monaco-editor .margin-view-overlays .codicon-folding-manual-collapsed,
-.monaco-reduce-motion .monaco-editor .margin-view-overlays .codicon-folding-manual-expanded,
-.monaco-reduce-motion .monaco-editor .margin-view-overlays .codicon-folding-expanded,
-.monaco-reduce-motion .monaco-editor .margin-view-overlays .codicon-folding-collapsed {
-	transition: initial;
-}
-
-.monaco-editor .margin-view-overlays:hover .codicon,
-.monaco-editor .margin-view-overlays .codicon.codicon-folding-collapsed,
-.monaco-editor .margin-view-overlays .codicon.codicon-folding-manual-collapsed,
-.monaco-editor .margin-view-overlays .codicon.alwaysShowFoldIcons {
+.stanza-editor .stanza-editor-lines-decorations-layer:hover .stanza-editor-line-decoration.zeta-icon,
+.stanza-editor .stanza-editor-line-decoration.zeta-icon-folding-collapsed,
+.stanza-editor .stanza-editor-line-decoration.zeta-icon-folding-manual-collapsed,
+.stanza-editor .stanza-editor-line-decoration.alwaysShowFoldIcons {
 	opacity: 1;
 }
 
-.monaco-editor .inline-folded:after {
-	color: var(--vscode-editor-foldPlaceholderForeground);
-	margin: 0.1em 0.2em 0 0.2em;
-	content: "\22EF"; /* ellipses unicode character */
+.stanza-editor .inline-folded::after {
 	display: inline;
-	line-height: 1em;
+	margin-inline: 0.2em;
+	color: var(--zeta-editor-fold-placeholder-foreground);
+	content: "\22ef";
 	cursor: pointer;
 }
 
-.monaco-editor .folded-background {
-	background-color: var(--vscode-editor-foldBackground);
+.stanza-editor .folded-background {
+	background: var(--zeta-editor-fold-background);
 }
 
-.monaco-editor .cldr.codicon.codicon-folding-expanded,
-.monaco-editor .cldr.codicon.codicon-folding-collapsed,
-.monaco-editor .cldr.codicon.codicon-folding-manual-expanded,
-.monaco-editor .cldr.codicon.codicon-folding-manual-collapsed {
-	color: var(--vscode-editorGutter-foldingControlForeground) !important;
+@media (prefers-reduced-motion: reduce) {
+	.stanza-editor .stanza-editor-line-decoration.zeta-icon {
+		transition: none;
+	}
 }

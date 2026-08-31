@@ -1,6 +1,7 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { IBulkEditService, ResourceEdit } from '../../../../editor/browser/services/bulkEditService.js';
 import { ITextModelResourceService } from "../../../../editor/common/services/textModelResourceService.js";
 import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
@@ -9,9 +10,9 @@ import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/c
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import { IBulkEditService } from "../common/bulkEdit.js";
 import { createBulkEditPreview } from "./preview/bulkEditPreview.js";
 import { BulkEditPreviewPane, BULK_EDIT_VIEW_ID } from "./preview/bulkEditPreviewPane.js";
+import { toLanguageWorkspaceEdit } from './bulkEditService.js';
 import "./media/bulkEdit.css";
 
 /** Registers the Workbench panel that hosts the transient bulk-edit preview. */
@@ -34,11 +35,12 @@ export class BulkEditPreviewContribution extends Disposable {
 
 	constructor(private readonly bulkEdits: IBulkEditService, private readonly views: IViewsService, private readonly files: IFileService, private readonly models: ITextModelResourceService, private readonly workingCopies: IWorkingCopyService, private readonly dialogs: IDialogService) {
 		super();
-		this._register(bulkEdits.setPreviewHandler((edit, signal) => this.preview(edit, signal)));
+		this._register(bulkEdits.setPreviewHandler((edits, options) => this.preview(edits, options?.token ?? new AbortController().signal)));
 		this._register(toDisposable(() => this.activeSession?.controller.abort()));
 	}
 
-	private async preview(edit: LanguageWorkspaceEdit, signal: AbortSignal): Promise<LanguageWorkspaceEdit | undefined> {
+	private async preview(edits: ResourceEdit[], signal: AbortSignal): Promise<ResourceEdit[]> {
+		const edit: LanguageWorkspaceEdit = toLanguageWorkspaceEdit(edits);
 		const view = this.views.openView(BULK_EDIT_VIEW_ID);
 		if (!(view instanceof BulkEditPreviewPane)) throw new Error("Bulk edit preview view is not available");
 		if (this.activeSession) {
@@ -49,7 +51,7 @@ export class BulkEditPreviewContribution extends Disposable {
 				primaryButton: "Continue",
 				cancelButton: "Cancel",
 			});
-			if (!confirmed) return undefined;
+			if (!confirmed) return [];
 			this.activeSession.controller.abort();
 			view.cancelInput();
 		}
@@ -61,9 +63,10 @@ export class BulkEditPreviewContribution extends Disposable {
 		this.activeSession = session;
 		try {
 			const model = await createBulkEditPreview(edit, { files: this.files, models: this.models, workingCopies: this.workingCopies }, controller.signal);
-			return await view.setInput(model, controller.signal);
+			const accepted = await view.setInput(model, controller.signal);
+			return accepted ? ResourceEdit.convert(accepted) : [];
 		} catch (error) {
-			if (isCancellationError(error) || controller.signal.aborted) return undefined;
+			if (isCancellationError(error) || controller.signal.aborted) return [];
 			throw error;
 		} finally {
 			signal.removeEventListener("abort", abort);

@@ -85,9 +85,12 @@ export class ViewOverlayWidgets extends EditorViewPart {
 		this._updateMaxMinWidth();
 	}
 
-	public setWidgetPosition(widget: IOverlayWidget, position: IOverlayWidgetPosition | null): void {
+	public setWidgetPosition(widget: IOverlayWidget, position: IOverlayWidgetPosition | null): boolean {
 		const candidate = findOverlayWidget(this._widgets, widget);
-		if (candidate?.actual === widget) candidate.setPosition(position);
+		if (candidate?.actual !== widget) return false;
+		const changed = candidate.setPosition(position);
+		this._updateMaxMinWidth();
+		return changed;
 	}
 
 	public removeWidget(widget: IOverlayWidget): void {
@@ -172,8 +175,10 @@ class OverlayWidget extends Disposable {
 		return typeof width === 'number' && Number.isFinite(width) && width > 0 ? width : 0;
 	}
 
-	public setPosition(position: IOverlayWidgetPosition | null): void {
+	public setPosition(position: IOverlayWidgetPosition | null): boolean {
+		if (samePosition(this.position, position)) return false;
 		this.position = position;
+		return true;
 	}
 
 	public render(context: EditorRenderingContext, viewPagePosition: IDomNodePagePosition | null, stackOffset: number, layout: OverlayWidgetLayout): void {
@@ -220,4 +225,16 @@ class OverlayWidget extends Disposable {
 
 function isCoordinates(value: OverlayWidgetPositionPreference | IOverlayWidgetPositionCoordinates): value is IOverlayWidgetPositionCoordinates {
 	return typeof value === 'object';
+}
+
+function samePosition(left: IOverlayWidgetPosition | null, right: IOverlayWidgetPosition | null): boolean {
+	if (left === right) return true;
+	if (!left || !right || left.stackOrdinal !== right.stackOrdinal) return false;
+	const leftPreference = left.preference;
+	const rightPreference = right.preference;
+	if (leftPreference === rightPreference) return true;
+	if (leftPreference === null || rightPreference === null) return false;
+	return isCoordinates(leftPreference) && isCoordinates(rightPreference)
+		&& leftPreference.top === rightPreference.top
+		&& leftPreference.left === rightPreference.left;
 }

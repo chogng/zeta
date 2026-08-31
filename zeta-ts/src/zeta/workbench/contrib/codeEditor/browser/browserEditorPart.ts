@@ -3,14 +3,14 @@ import { createEditorBrowserServices } from '../../../../editor/browser/services
 
 export type BrowserEditorPartOptions = CodeEditorWidgetOptions;
 
-const browserServices = createEditorBrowserServices();
+export const editorBrowserServices = createEditorBrowserServices();
 
 /** Creates a browser editor for a model whose language state is already model-owned. */
 export function createBrowserEditorPart(options: BrowserEditorPartOptions): CodeEditorWidget {
-	const editorWorkers = browserServices.workers;
+	const editorWorkers = editorBrowserServices.workers;
 	return new CodeEditorWidget({
 		...options,
-		codeEditorService: browserServices.codeEditorService,
+		codeEditorService: editorBrowserServices.codeEditorService,
 		editorWorkerFactory: editorWorkers.editorWorkerFactory,
 		...(options.languageFeaturesService ? {} : { completionWorkerFactory: editorWorkers.completionWorkerFactory }),
 	});

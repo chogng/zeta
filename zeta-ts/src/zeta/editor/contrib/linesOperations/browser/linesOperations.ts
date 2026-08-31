@@ -1,10 +1,30 @@
-import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
+import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type TextEdit } from '../../../common/languages.js';
+import * as nls from '../../../../nls.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
+import { MoveOperations } from '../../../common/cursor/cursorMoveOperations.js';
+import { type ICommand, type IEditorContribution } from '../../../common/editorCommon.js';
+import { type IActionOptions } from '../../../browser/editorExtensions.js';
+import { CopyLinesCommand } from './copyLinesCommand.js';
+import { MoveLinesCommand } from './moveLinesCommand.js';
+import { SortLinesCommand } from './sortLinesCommand.js';
+import { ReplaceCommandThatSelectsText } from '../../../common/commands/replaceCommand.js';
+import { ShiftCommand } from '../../../common/commands/shiftCommand.js';
+import { EditorAutoIndentStrategy } from '../../../common/config/editorOptions.js';
+import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
+import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
+import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import { EditorContributionInstantiation, registerTextEditorCapabilityContribution, type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
+
+const linesOperationsContributionId = 'editor.contrib.linesOperations';
 
 export enum EditorLineDuplicateDirection {
 	Up = "up",
@@ -27,6 +47,273 @@ interface OffsetEdit {
 	readonly endOffset: number;
 	readonly text: string;
 	readonly edit: TextEdit;
+}
+
+interface TransposeOperation {
+	readonly selectionIndex: number;
+	readonly startOffset: number;
+	readonly endOffset: number;
+	readonly edit: TextEdit;
+}
+
+class LinesOperationsContribution extends Disposable implements IEditorContribution {
+	constructor(private readonly context: TextEditorContributionContext) {
+		super();
+		this._register(addDisposableListener(context.view.element, 'keydown', event => this.onKeydown(event)));
+	}
+
+	transpose(): void {
+		const command = createTransposeCommand(this.context.model, this.context.viewModel.selections);
+		if (!command) return;
+		this.run('editor.action.transpose', command);
+	}
+
+	private onKeydown(event: KeyboardEvent): void {
+		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
+		if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+			const hasRange = this.context.viewModel.selections.some(selection => !selection.isEmpty());
+			if (!event.shiftKey && !hasRange) return;
+			stopEvent(event);
+			const unshift = event.shiftKey;
+			const options = this.context.model.getOptions();
+			this.runCommands(
+				unshift ? 'editor.action.outdentLines' : 'editor.action.indentLines',
+				this.context.viewModel.selections.map(selection => new ShiftCommand(selection, {
+					isUnshift: unshift,
+					tabSize: options.tabSize,
+					indentSize: options.indentSize,
+					insertSpaces: options.insertSpaces,
+					useTabStops: true,
+					autoIndent: EditorAutoIndentStrategy.None,
+				}, this.context.configurations)),
+			);
+			return;
+		}
+		if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'k') {
+			stopEvent(event);
+			this.run('editor.action.deleteLines', createDeleteLinesCommand(this.context.model, this.context.viewModel.selections));
+			return;
+		}
+		if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key === 'Enter') {
+			stopEvent(event);
+			const direction = event.shiftKey ? EditorLineInsertDirection.Before : EditorLineInsertDirection.After;
+			this.run(
+				direction === EditorLineInsertDirection.Before ? 'editor.action.insertLineBefore' : 'editor.action.insertLineAfter',
+				createInsertLineCommand(this.context.model, this.context.viewModel.selections, direction),
+			);
+			return;
+		}
+		if (isJoinChord(event)) {
+			stopEvent(event);
+			this.run('editor.action.joinLines', createJoinLinesCommand(this.context.model, this.context.viewModel.selections));
+			return;
+		}
+		if (!event.altKey || event.ctrlKey || event.metaKey) return;
+		const direction = event.key === 'ArrowUp' ? 'up' : event.key === 'ArrowDown' ? 'down' : undefined;
+		if (!direction) return;
+		if (!event.shiftKey) {
+			stopEvent(event);
+			this.runCommands(
+				direction === 'up' ? 'editor.action.moveLinesUpAction' : 'editor.action.moveLinesDownAction',
+				this.context.viewModel.selections.map(selection => new MoveLinesCommand(
+					selection,
+					direction === 'down',
+					EditorAutoIndentStrategy.None,
+					this.context.configurations,
+				)),
+			);
+			return;
+		}
+		if (operatingSystem === OperatingSystem.Linux) return;
+		stopEvent(event);
+		this.runCommands(
+			direction === 'up' ? 'editor.action.copyLinesUpAction' : 'editor.action.copyLinesDownAction',
+			this.context.viewModel.selections.map(selection => new CopyLinesCommand(selection, direction === 'down')),
+		);
+	}
+
+	private run(id: string, command: EditorEditCommand): void {
+		this.context.executeCommand(id, () => this.context.viewModel.execute(command));
+		this.context.viewport.revealPosition(this.context.viewModel.selections[0]!.getPosition());
+	}
+
+	private runCommands(id: string, commands: readonly ICommand[]): void {
+		this.context.executeCommand(id, () => this.context.viewModel.executeCommands(commands, id));
+		this.context.viewport.revealPosition(this.context.viewModel.selections[0]!.getPosition());
+	}
+}
+
+function isJoinChord(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>): boolean {
+	if (event.shiftKey || event.altKey || event.key.toLowerCase() !== 'j') return false;
+	return operatingSystem === OperatingSystem.Macintosh
+		? event.metaKey && !event.ctrlKey
+		: event.ctrlKey && !event.metaKey;
+}
+
+abstract class CopyLinesAction extends EditorAction {
+	constructor(private readonly down: boolean, options: IActionOptions) {
+		super(options);
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		const selections = editor.getSelections() ?? [];
+		editor.executeCommands(this.id, selections.map(selection => new CopyLinesCommand(selection, this.down)));
+	}
+}
+
+class CopyLinesUpAction extends CopyLinesAction {
+	constructor() {
+		super(false, { id: 'editor.action.copyLinesUpAction', label: nls.localize2('lines.copyUp', 'Copy Line Up'), precondition: undefined, canTriggerInlineEdits: true });
+	}
+}
+
+class CopyLinesDownAction extends CopyLinesAction {
+	constructor() {
+		super(true, { id: 'editor.action.copyLinesDownAction', label: nls.localize2('lines.copyDown', 'Copy Line Down'), precondition: undefined, canTriggerInlineEdits: true });
+	}
+}
+
+/** Duplicates selected text, or the selected physical line for an empty selection. */
+export class DuplicateSelectionAction extends EditorAction {
+	constructor() {
+		super({ id: 'editor.action.duplicateSelection', label: nls.localize2('duplicateSelection', 'Duplicate Selection'), precondition: undefined, canTriggerInlineEdits: true });
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		const model = editor.getModel();
+		if (!model) return;
+		const commands = (editor.getSelections() ?? []).map(selection => selection.isEmpty()
+			? new CopyLinesCommand(selection, true)
+			: new ReplaceCommandThatSelectsText(
+				Selection.fromPositions(selection.getEndPosition()),
+				model.getValueInRange(selection),
+			));
+		editor.executeCommands(this.id, commands);
+	}
+}
+
+abstract class MoveLinesAction extends EditorAction {
+	constructor(private readonly down: boolean, options: IActionOptions) {
+		super(options);
+	}
+
+	public run(accessor: ServicesAccessor, editor: ICodeEditor): void {
+		const configurations = accessor.get(ILanguageConfigurationService);
+		const commands = (editor.getSelections() ?? []).map(selection => new MoveLinesCommand(
+			selection,
+			this.down,
+			EditorAutoIndentStrategy.None,
+			configurations,
+		));
+		editor.executeCommands(this.id, commands);
+	}
+}
+
+class MoveLinesUpAction extends MoveLinesAction {
+	constructor() {
+		super(false, { id: 'editor.action.moveLinesUpAction', label: nls.localize2('lines.moveUp', 'Move Line Up'), precondition: undefined, canTriggerInlineEdits: true });
+	}
+}
+
+class MoveLinesDownAction extends MoveLinesAction {
+	constructor() {
+		super(true, { id: 'editor.action.moveLinesDownAction', label: nls.localize2('lines.moveDown', 'Move Line Down'), precondition: undefined, canTriggerInlineEdits: true });
+	}
+}
+
+export abstract class AbstractSortLinesAction extends EditorAction {
+	constructor(private readonly descending: boolean, options: IActionOptions) {
+		super(options);
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		const model = editor.getModel();
+		if (!model) return;
+		let selections = editor.getSelections() ?? [];
+		if (selections.length === 1 && selections[0]!.isSingleLine()) {
+			selections = [new Selection(1, 1, model.getLineCount(), model.getLineMaxColumn(model.getLineCount()))];
+		}
+		if (!selections.every(selection => SortLinesCommand.canRun(model, selection, this.descending))) return;
+		editor.executeCommands(this.id, selections.map(selection => new SortLinesCommand(selection, this.descending)));
+	}
+}
+
+export class SortLinesAscendingAction extends AbstractSortLinesAction {
+	constructor() {
+		super(false, { id: 'editor.action.sortLinesAscending', label: nls.localize2('lines.sortAscending', 'Sort Lines Ascending'), precondition: undefined, canTriggerInlineEdits: true });
+	}
+}
+
+export class SortLinesDescendingAction extends AbstractSortLinesAction {
+	constructor() {
+		super(true, { id: 'editor.action.sortLinesDescending', label: nls.localize2('lines.sortDescending', 'Sort Lines Descending'), precondition: undefined, canTriggerInlineEdits: true });
+	}
+}
+
+export class TransposeAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'editor.action.transpose',
+			label: nls.localize2('editor.transpose', 'Transpose Characters around the Cursor'),
+			precondition: undefined,
+			canTriggerInlineEdits: true,
+		});
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		editor.getContribution<LinesOperationsContribution>(linesOperationsContributionId)?.transpose();
+	}
+}
+
+/** Creates the line-operations transpose transaction for all collapsed selections. */
+export function createTransposeCommand(model: TextModel, selections: readonly Selection[]): EditorEditCommand | undefined {
+	const candidates = selections.flatMap((selection, selectionIndex) => {
+		if (!selection.isEmpty()) return [];
+		const cursor = selection.getPosition();
+		const isLineEnd = cursor.column === model.getLineContent(cursor.lineNumber).length + 1;
+		if (isLineEnd && cursor.lineNumber === model.lineCount) return [];
+		const begin = cursor.column === 1 ? cursor : MoveOperations.leftPosition(model, cursor);
+		const end = MoveOperations.rightPosition(model, cursor);
+		if (Position.compare(cursor, end) === 0) return [];
+		const range = Range.fromPositions(begin, end);
+		const left = model.getTextInRange(Range.fromPositions(begin, cursor));
+		const right = model.getTextInRange(Range.fromPositions(cursor, end));
+		return [Object.freeze({
+			selectionIndex,
+			startOffset: model.offsetAt(begin),
+			endOffset: model.offsetAt(end),
+			edit: Object.freeze({ range, text: `${right}${left}` }),
+		})];
+	});
+	const operations = selectTransposeOperations(candidates);
+	if (operations.length === 0) return undefined;
+	const operationBySelection = new Map(operations.map(operation => [operation.selectionIndex, operation]));
+	return Object.freeze({
+		edits: Object.freeze(operations.map(operation => operation.edit)),
+		selectionsAfter: Object.freeze(selections.map((selection, selectionIndex) => {
+			const operation = operationBySelection.get(selectionIndex);
+			const activeOffset = operation?.endOffset ?? model.offsetAt(selection.getPosition());
+			return Object.freeze({
+				anchorOffset: operation ? activeOffset : model.offsetAt(selection.getSelectionStart()),
+				activeOffset,
+			});
+		})),
+		primarySelectionIndex: 0,
+		historyMode: EditorCommandHistoryMode.Isolated,
+	});
+}
+
+function selectTransposeOperations(candidates: readonly TransposeOperation[]): readonly TransposeOperation[] {
+	const selected: TransposeOperation[] = [];
+	for (const candidate of [...candidates].sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset || left.selectionIndex - right.selectionIndex)) {
+		const overlapIndex = selected.findIndex(existing => candidate.startOffset < existing.endOffset && existing.startOffset < candidate.endOffset);
+		if (overlapIndex < 0) {
+			selected.push(candidate);
+			continue;
+		}
+		if (candidate.selectionIndex === 0 && selected[overlapIndex]!.selectionIndex !== 0) selected[overlapIndex] = candidate;
+	}
+	return Object.freeze(selected.sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset));
 }
 
 /** Deletes the union of physical lines selected by every cursor. */
@@ -87,6 +374,139 @@ export function createInsertLineCommand(model: TextModel, selections: readonly S
 		primarySelectionIndex: primaryIndex,
 		historyMode: EditorCommandHistoryMode.Isolated,
 	});
+}
+
+interface JoinTarget {
+	readonly start: Position;
+	readonly end: Position;
+	readonly primary: boolean;
+}
+
+interface JoinEdit {
+	readonly target: JoinTarget;
+	readonly range: Range;
+	readonly startOffset: number;
+	readonly endOffset: number;
+	readonly text: string;
+	readonly selectionStart: number;
+	readonly selectionEnd: number;
+}
+
+/** Joins each non-overlapping cursor or range group as one editor transaction. */
+export function createJoinLinesCommand(model: TextModel, selections: readonly Selection[]): EditorEditCommand {
+	const edits = reduceJoinTargets(selections).map(target => joinEdit(model, target));
+	if (edits.every(edit => edit.startOffset === edit.endOffset)) return unchangedLineCommand(model, selections);
+	const operations: TextEdit[] = [];
+	const selectionsAfter: TextSelectionOffsets[] = [];
+	let primarySelectionIndex = 0;
+	let delta = 0;
+	for (const edit of edits) {
+		const base = edit.startOffset + delta;
+		selectionsAfter.push({ anchorOffset: base + edit.selectionStart, activeOffset: base + edit.selectionEnd });
+		if (edit.target.primary) primarySelectionIndex = selectionsAfter.length - 1;
+		if (edit.startOffset === edit.endOffset) continue;
+		operations.push({ range: edit.range, text: edit.text });
+		delta += edit.text.length - (edit.endOffset - edit.startOffset);
+	}
+	return {
+		edits: Object.freeze(operations),
+		selectionsAfter: Object.freeze(selectionsAfter),
+		primarySelectionIndex,
+		historyMode: EditorCommandHistoryMode.Isolated,
+	};
+}
+
+function reduceJoinTargets(selections: readonly Selection[]): readonly JoinTarget[] {
+	const ordered = selections.map((selection, index) => ({
+		start: selection.getStartPosition(),
+		end: selection.getEndPosition(),
+		primary: index === 0,
+	})).sort((left, right) => Position.compare(left.start, right.start) || Position.compare(left.end, right.end));
+	const result: JoinTarget[] = [];
+	for (const target of ordered) {
+		const previous = result.at(-1);
+		if (!previous) {
+			result.push(target);
+			continue;
+		}
+		const previousCollapsed = Position.compare(previous.start, previous.end) === 0;
+		if (previousCollapsed && previous.end.lineNumber === target.start.lineNumber) {
+			result[result.length - 1] = { ...target, primary: previous.primary || target.primary };
+			continue;
+		}
+		const separate = previousCollapsed
+			? target.start.lineNumber > previous.end.lineNumber + 1
+			: target.start.lineNumber > previous.end.lineNumber;
+		if (separate) {
+			result.push(target);
+			continue;
+		}
+		result[result.length - 1] = { start: previous.start, end: target.end, primary: previous.primary || target.primary };
+	}
+	return result;
+}
+
+function joinEdit(model: TextModel, target: JoinTarget): JoinEdit {
+	const collapsed = Position.compare(target.start, target.end) === 0;
+	const endLineNumber = collapsed ? Math.min(target.start.lineNumber + 1, model.lineCount) : target.end.lineNumber;
+	if (endLineNumber === target.start.lineNumber) {
+		const lineStart = new Position(target.start.lineNumber, 1);
+		const offset = model.offsetAt(lineStart);
+		return {
+			target,
+			range: Range.fromPositions(lineStart),
+			startOffset: offset,
+			endOffset: offset,
+			text: '',
+			selectionStart: target.start.column - 1,
+			selectionEnd: target.end.column - 1,
+		};
+	}
+	const end = new Position(endLineNumber, model.getLineMaxColumn(endLineNumber));
+	const joined = joinText(model, target.start.lineNumber, endLineNumber);
+	const selectionTail = model.getLineContent(target.end.lineNumber).length - (target.end.column - 1);
+	const boundary = collapsed ? joined.text.length - joined.lastPartLength : target.start.column - 1;
+	return {
+		target: { ...target, end },
+		range: Range.fromPositions(new Position(target.start.lineNumber, 1), end),
+		startOffset: model.offsetAt(new Position(target.start.lineNumber, 1)),
+		endOffset: model.offsetAt(end),
+		text: joined.text,
+		selectionStart: boundary,
+		selectionEnd: collapsed ? boundary : joined.text.length - selectionTail,
+	};
+}
+
+function joinText(model: TextModel, startLineNumber: number, endLineNumber: number): { readonly text: string; readonly lastPartLength: number } {
+	let text = model.getLineContent(startLineNumber);
+	let lastPartLength = 0;
+	for (let lineNumber = startLineNumber + 1; lineNumber <= endLineNumber; lineNumber += 1) {
+		const part = model.getLineContent(lineNumber).replace(/^[\s\uFEFF\xA0]+/u, '');
+		if (!part) {
+			lastPartLength = 0;
+			continue;
+		}
+		let separator = text.length > 0 ? ' ' : '';
+		if (separator && /[\s\uFEFF\xA0]$/u.test(text)) {
+			text = text.replace(/[\s\uFEFF\xA0]+$/u, ' ');
+			separator = '';
+		}
+		text += separator + part;
+		lastPartLength = separator.length + part.length;
+	}
+	return { text, lastPartLength };
+}
+
+function unchangedLineCommand(model: TextModel, selections: readonly Selection[]): EditorEditCommand {
+	return {
+		edits: Object.freeze([]),
+		selectionsAfter: Object.freeze(selections.map(selection => ({
+			anchorOffset: model.offsetAt(selection.getSelectionStart()),
+			activeOffset: model.offsetAt(selection.getPosition()),
+		}))),
+		primarySelectionIndex: 0,
+		historyMode: EditorCommandHistoryMode.Isolated,
+	};
 }
 
 function deleteLineGroup(model: TextModel, group: EditorLineGroup): readonly OffsetEdit[] {
@@ -274,3 +694,33 @@ function offsetInText(text: string, position: Position): number {
 	if (position.column < 1 || position.column > length + 1) throw new RangeError("Moved line position exceeds its result line");
 	return offset + position.column - 1;
 }
+
+registerEditorAction(CopyLinesUpAction);
+registerEditorAction(CopyLinesDownAction);
+registerEditorAction(DuplicateSelectionAction);
+registerEditorAction(MoveLinesUpAction);
+registerEditorAction(MoveLinesDownAction);
+registerEditorAction(SortLinesAscendingAction);
+registerEditorAction(SortLinesDescendingAction);
+registerEditorAction(TransposeAction);
+
+registerTextEditorCapabilityContribution({
+	id: linesOperationsContributionId,
+	commands: [
+		'editor.action.indentLines',
+		'editor.action.outdentLines',
+		'editor.action.deleteLines',
+		'editor.action.insertLineBefore',
+		'editor.action.insertLineAfter',
+		'editor.action.moveLinesUpAction',
+		'editor.action.moveLinesDownAction',
+		'editor.action.copyLinesUpAction',
+		'editor.action.copyLinesDownAction',
+		'editor.action.joinLines',
+		'editor.action.transpose',
+	].map(id => ({ id, canTriggerInlineEdits: true })),
+	runtime: {
+		descriptor: new ServiceConstructionDescriptor(LinesOperationsContribution),
+		instantiation: EditorContributionInstantiation.Eager,
+	},
+});

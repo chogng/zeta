@@ -4,14 +4,13 @@ import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver }
 import { type URI } from '../../../base/common/uri.js';
 import { LanguageCompletionProviderRegistry, type LanguageCompletionProviderRegistration } from '../languages/completion/languageCompletionProviders.js';
 import { createLanguageWordCompletionProvider } from '../languages/completion/languageWordCompletionProvider.js';
-import type { DocumentHighlightProvider, MultiDocumentHighlightProvider } from '../languages.js';
+import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider } from '../languages.js';
 import { createLanguageLexicalSyntaxProvider } from '../languages/languageLexicalSyntaxProvider.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
 import type { LanguageWorkspaceSymbolProvider } from '../languages/workspaceSymbols.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common/languageCodeActions.js';
-import type { LanguageCodeLensProvider } from '../../contrib/codelens/common/languageCodeLenses.js';
 import type { LanguageColorProvider } from '../../contrib/colorPicker/common/languageColors.js';
 import type { LanguageDocumentSymbolProvider } from '../../contrib/documentSymbols/common/languageDocumentSymbols.js';
 import type { LanguageFoldingRangeProvider } from '../../contrib/folding/common/languageFoldingRanges.js';
@@ -20,7 +19,6 @@ import type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageI
 import type { LanguageHoverProvider } from '../../contrib/hover/common/hover.js';
 import type { LanguageInlayHintsProvider } from '../../contrib/inlayHints/common/languageInlayHints.js';
 import type { LanguageInlineCompletionsProvider } from '../../contrib/inlineCompletions/common/inlineCompletions.js';
-import type { LanguageLinkedEditingProvider } from '../../contrib/linkedEditing/common/languageLinkedEditing.js';
 import type { LanguageLinkProvider } from '../../contrib/links/common/languageLinks.js';
 import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
@@ -34,13 +32,13 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public readonly syntaxProvider: SyntaxProviderRegistry;
 	public readonly completionProvider: LanguageCompletionProviderRegistry;
 	public readonly codeActionProvider: LanguageFeatureRegistry<LanguageCodeActionProvider>;
-	public readonly codeLensProvider: LanguageFeatureRegistry<LanguageCodeLensProvider>;
+	public readonly codeLensProvider: LanguageFeatureRegistry<CodeLensProvider>;
 	public readonly documentSymbolProvider: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>;
 	public readonly formattingProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
 	public readonly hoverProvider: LanguageFeatureRegistry<LanguageHoverProvider>;
 	public readonly inlayHintsProvider: LanguageFeatureRegistry<LanguageInlayHintsProvider>;
 	public readonly inlineCompletionsProvider: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>;
-	public readonly linkedEditingProvider: LanguageFeatureRegistry<LanguageLinkedEditingProvider>;
+	public readonly linkedEditingRangeProvider: LanguageFeatureRegistry<LinkedEditingRangeProvider>;
 	public readonly linkProvider: LanguageFeatureRegistry<LanguageLinkProvider>;
 	public readonly parameterHintsProvider: LanguageFeatureRegistry<LanguageParameterHintsProvider>;
 	public readonly renameProvider: LanguageFeatureRegistry<LanguageRenameProvider>;
@@ -73,7 +71,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 		this.hoverProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.inlayHintsProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.inlineCompletionsProvider = new LanguageFeatureRegistry(this._score.bind(this));
-		this.linkedEditingProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.linkedEditingRangeProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.linkProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.parameterHintsProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.renameProvider = new LanguageFeatureRegistry(this._score.bind(this));
@@ -106,7 +104,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 		const hovers = new LanguageFeatureBatchRegistration(this.hoverProvider);
 		const formatting = new LanguageFeatureBatchRegistration(this.formattingProvider);
 		const inlayHints = new LanguageFeatureBatchRegistration(this.inlayHintsProvider);
-		const linkedEditing = new LanguageFeatureBatchRegistration(this.linkedEditingProvider);
+		const linkedEditing = new LanguageFeatureBatchRegistration(this.linkedEditingRangeProvider);
 		const parameterHints = new LanguageFeatureBatchRegistration(this.parameterHintsProvider);
 		const registrations = { completions, hovers, formatting, inlayHints, linkedEditing, parameterHints };
 		let current = emptyProviderBatch();
@@ -151,7 +149,7 @@ interface LanguageProviderRegistrations {
 	readonly hovers: LanguageFeatureBatchRegistration<LanguageHoverProvider>;
 	readonly formatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
 	readonly inlayHints: LanguageFeatureBatchRegistration<LanguageInlayHintsProvider>;
-	readonly linkedEditing: LanguageFeatureBatchRegistration<LanguageLinkedEditingProvider>;
+	readonly linkedEditing: LanguageFeatureBatchRegistration<LinkedEditingRangeProvider>;
 	readonly parameterHints: LanguageFeatureBatchRegistration<LanguageParameterHintsProvider>;
 }
 

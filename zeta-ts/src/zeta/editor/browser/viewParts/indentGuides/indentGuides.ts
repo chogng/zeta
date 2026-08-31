@@ -26,8 +26,8 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	private readonly selectionController: CursorsController | undefined;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, options: IndentGuidesOptions) {
-		super(context);
+	constructor(_context: EditorViewContext, options: IndentGuidesOptions) {
+		super();
 		this.rows = this._register(new ViewPartRows(options.host, 'stanza-editor-indent-guides-layer', 'stanza-editor-line-indent-guides'));
 		this.domNode = this.rows.domNode;
 		this.guides = options.guides;

@@ -5,6 +5,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { type Position } from "../../../common/core/position.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
 import { EditorPeekViewWidget } from "../../peekView/browser/editorPeekViewWidget.js";
 import { type LanguageHierarchyItem, type LanguageHierarchyService, type PreparedCallHierarchy, type PreparedTypeHierarchy } from "../common/languageHierarchy.js";
@@ -23,7 +24,7 @@ export class LanguageHierarchyController extends Disposable {
 	private readonly peek = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly editor: ICodeEditor, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
 		super();
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		this._register(viewport.textModel.onDidChangeContent(() => this.closePeek()));
@@ -62,7 +63,7 @@ export class LanguageHierarchyController extends Disposable {
 
 	private showSessions(anchor: Position, sessions: readonly HierarchySession[]): void {
 		this.closePeek();
-		const widget = this.peek.add(new EditorPeekViewWidget(this.viewport, anchor, `${sessions[0]!.kind === "call" ? "Call" : "Type"} Hierarchy`));
+		const widget = this.peek.add(new EditorPeekViewWidget(this.editor, anchor, `${sessions[0]!.kind === "call" ? "Call" : "Type"} Hierarchy`));
 		const body = h(widget.element.ownerDocument, "div");
 		body.className = "stanza-editor-language-hierarchy";
 		widget.setBody(body);

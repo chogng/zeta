@@ -17,8 +17,8 @@ export class BlockDecorations extends DynamicViewOverlay {
 	private readonly decorations: DecorationsOverlay;
 	private readonly blocks: FastDomNode<HTMLDivElement>[] = [];
 
-	constructor(context: EditorViewContext, decorations: DecorationsOverlay, host: HTMLElement) {
-		super(context);
+	constructor(_context: EditorViewContext, decorations: DecorationsOverlay, host: HTMLElement) {
+		super();
 
 		this.decorations = decorations;
 		const domNode = h(host.ownerDocument, 'div');

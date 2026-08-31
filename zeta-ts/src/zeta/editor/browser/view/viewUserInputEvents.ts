@@ -43,7 +43,7 @@ export type EditorViewPartialMouseEvent = EditorViewMouseEvent;
  * preserves that contract and only isolates the target object at the boundary.
  * It does not own pointer gestures, selection, editing, or drag/drop policy.
  */
-export class EditorViewUserInputEvents {
+export class ViewUserInputEvents {
 	public onKeyDown: EventCallback<IKeyboardEvent> | null = null;
 	public onKeyUp: EventCallback<KeyboardEvent> | null = null;
 	public onContextMenu: EventCallback<EditorViewMouseEvent> | null = null;

@@ -1,7 +1,7 @@
 import { getBrowserTextModelService } from "../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
 import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
-import { createBrowserEditorPart } from "./browserEditorPart.js";
+import { createBrowserEditorPart, editorBrowserServices } from "./browserEditorPart.js";
 import { CODE_EDITOR_ID, matchCodeEditor } from "./codeEditorInput.js";
 import { CodeEditorPane } from "./codeEditorPane.js";
 import { DIFF_EDITOR_ID, matchDiffEditor } from "./diffEditorInput.js";
@@ -100,6 +100,7 @@ registerEditorPane({
 		return new DiffEditorPane(resourceStore, {
 			modelService: getBrowserTextModelService(resourceStore),
 			createComputationService: () => diffService.createComputationService(),
+			codeEditorService: editorBrowserServices.codeEditorService,
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
 			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),

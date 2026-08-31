@@ -21,6 +21,10 @@ export class CursorMoveCommands {
 		return addCursorsToSelectedLineEnds(model, selections);
 	}
 
+	public static expandLineSelection(model: TextModel, selections: readonly Selection[]): readonly Selection[] {
+		return expandLineSelections(model, selections);
+	}
+
 	public static readPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
 		const resolved = value ?? PointerMultiCursorModifier.Alt;
 		if (resolved !== PointerMultiCursorModifier.Alt && resolved !== PointerMultiCursorModifier.ControlOrMeta) {
@@ -43,6 +47,17 @@ export class CursorMoveCommands {
 		const index = base.findIndex(candidate => selectionsHaveSameRange(candidate, selection));
 		return index >= 0 ? index : undefined;
 	}
+}
+
+function expandLineSelections(model: TextModel, selections: readonly Selection[]): readonly Selection[] {
+	return Object.freeze(selections.map(selection => {
+		const start = new Position(selection.startLineNumber, 1);
+		const endLineNumber = selection.endLineNumber;
+		const end = endLineNumber === model.lineCount
+			? new Position(endLineNumber, model.getLineContent(endLineNumber).length + 1)
+			: new Position(endLineNumber + 1, 1);
+		return Selection.fromPositions(start, end);
+	}));
 }
 
 function addAdjacentLineCursors(model: TextModel, selections: readonly Selection[], direction: 'above' | 'below'): readonly Selection[] {

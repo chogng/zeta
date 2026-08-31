@@ -122,7 +122,7 @@ for (const [name, value] of Object.entries({
 const { View } = await import("../../../../browser/view.js");
 const { ClipboardController, ClipboardLineEnding, EDITOR_CLIPBOARD_MIME, EDITOR_HTML_CLIPBOARD_MIME, EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../browser/clipboardController.js");
 const { SemanticTokenPresentation } = await import("../../../../browser/viewParts/viewLines/viewLine.js");
-const { EditorView } = await import('../../../../browser/editorView.js');
+const { ViewController: EditorView } = await import('../../../../browser/view/viewController.js');
 
 function attachClipboard(
 	input: InstanceType<typeof EditorView>,

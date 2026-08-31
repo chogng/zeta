@@ -41,8 +41,8 @@ export class ViewCursors extends DynamicViewOverlay {
 	private movementRenderGeneration = 0;
 	private renderData: IViewCursorRenderData[] = [];
 
-	constructor(context: EditorViewContext, options: ViewCursorsOptions, model: TextModel, selectionController: CursorsController | undefined) {
-		super(context);
+	constructor(private readonly context: EditorViewContext, options: ViewCursorsOptions, model: TextModel, selectionController: CursorsController | undefined) {
+		super();
 		this.domNode = h(options.host.ownerDocument, 'div');
 		this.fastDomNode = createFastDomNode(this.domNode);
 		this.fastDomNode.setClassName('stanza-editor-cursors-layer');

@@ -32,10 +32,10 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorView } = await import('../../../../browser/editorView.js');
+const { ViewController } = await import('../../../../browser/view/viewController.js');
 const { View } = await import('../../../../browser/view.js');
 const { resolveDocumentHighlightPresentation } = await import('../../browser/highlightDecorations.js');
-const { TextualHighlightTargetRegistration } = await import('../../browser/textualHighlightProvider.js');
+const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
 const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.contribution.js');
 
 test('Word highlighter uses the textual provider for complete Unicode words', async () => {
@@ -123,7 +123,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, res
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text, { languageId: 'typescript', resource });
 	const selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
-	const textualProvider = new TextualHighlightTargetRegistration(languages, { resource, model });
+	const textualProvider = new TextualMultiDocumentHighlightFeature(languages);
 	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
 	const viewport = new View({
 		container,
@@ -133,7 +133,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, res
 		selectionController: selections,
 		decorationSources: [createStanzaDecorationSource(decorations, decoration => resolveDocumentHighlightPresentation(decoration.metadata))],
 	});
-	const view = new EditorView(viewport, selections);
+	const view = new ViewController(viewport, selections);
 	const controller = new WordHighlighterContribution(view, selections, decorations, {
 		resource,
 		languageId: 'typescript',
@@ -152,9 +152,9 @@ class EditorHarness implements Disposable {
 		readonly selections: CursorsController,
 		readonly decorations: TextDecorationCollection<DocumentHighlightKind | undefined>,
 		readonly viewport: InstanceType<typeof View>,
-		readonly view: InstanceType<typeof EditorView>,
+		readonly view: InstanceType<typeof ViewController>,
 		readonly controller: InstanceType<typeof WordHighlighterContribution>,
-		private readonly textualProvider: InstanceType<typeof TextualHighlightTargetRegistration>,
+		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,
 	) {}
 
 	dispose(): void {

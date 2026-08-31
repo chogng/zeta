@@ -19,7 +19,7 @@ import { createBuiltinLanguageConfigurationService } from '../common/languages/l
 import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel/editorViewportContracts.js';
-import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
+import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
 import { createBareFontInfoFromRawSettings } from '../common/config/fontInfoFromSettings.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
@@ -189,6 +189,14 @@ export class View extends Disposable {
 
 	get currentLayout(): EditorViewportLayout {
 		return this.viewport.layout;
+	}
+
+	getLayoutInfo(): EditorLayoutInfo {
+		return this.editorConfiguration.options.get(EditorOption.layoutInfo);
+	}
+
+	getOption<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T> {
+		return this.editorConfiguration.options.get(id);
 	}
 
 	get fontInfo(): FontInfo {
@@ -381,6 +389,12 @@ export class View extends Disposable {
 			host: this.element,
 			viewLayout: this.viewport,
 			readVisualLineCount: () => this.visualProjection.visualLineCount,
+			readVisualLineIndexAfterPosition: (lineNumber, column) => {
+				if (lineNumber === 0) return -1;
+				const position = new Position(lineNumber, column ?? this.model.getLineMaxColumn(lineNumber));
+				this.model.offsetAt(position);
+				return this.visualProjection.visualLineIndexAt(position);
+			},
 			readContentLeft: () => this.contentOffsetLeft + this.textLeft,
 			readContentWidth: () => Math.max(0, this.viewport.layout.viewportSize.width - this.contentOffsetLeft - this.textLeft),
 			setMinimumContentWidth: width => this.setViewZonesMinimumContentWidth(width),
@@ -754,12 +768,14 @@ export class View extends Disposable {
 	}
 
 	layoutOverlayWidget(widget: IOverlayWidget): void {
-		this.overlayWidgets.setWidgetPosition(widget, widget.getPosition());
-		this.project(this.viewport.layout);
+		if (this.overlayWidgets.setWidgetPosition(widget, widget.getPosition())) {
+			this.project(this.viewport.layout);
+		}
 	}
 
 	removeOverlayWidget(widget: IOverlayWidget): void {
 		this.overlayWidgets.removeWidget(widget);
+		this.project(this.viewport.layout);
 	}
 
 	scrollTo(position: EditorScrollPosition): EditorViewportLayout {

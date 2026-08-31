@@ -17,6 +17,7 @@ interface ViewZonesOptions {
 	readonly host: HTMLElement;
 	readonly viewLayout: EditorViewportLayoutManager;
 	readonly readVisualLineCount: () => number;
+	readonly readVisualLineIndexAfterPosition: (lineNumber: number, column: number | undefined) => number;
 	readonly readContentLeft: () => number;
 	readonly readContentWidth: () => number;
 	readonly setMinimumContentWidth: (width: number) => void;
@@ -106,13 +107,13 @@ export class ViewZones extends EditorViewPart {
 		this.lineHeight = lineHeight;
 		for (const [id, zone] of this.zones) {
 			if (zone.heightInPx !== undefined) continue;
-			this.viewLayout.changeViewZone(id, zone.afterLineNumber - 1, this.zoneHeight(zone), zone.ordinal);
+			this.viewLayout.changeViewZone(id, this.zoneLineIndex(zone), this.zoneHeight(zone), zone.ordinal);
 		}
 	}
 
 	private addZoneData(zone: EditorViewZone): string {
 		this.validateZone(zone);
-		const id = this.viewLayout.addViewZone(zone.afterLineNumber - 1, this.zoneHeight(zone), zone.ordinal);
+		const id = this.viewLayout.addViewZone(this.zoneLineIndex(zone), this.zoneHeight(zone), zone.ordinal);
 		this.zones.set(id, zone);
 		zone.domNode.classList.add('stanza-editor-view-zone');
 		this.domNode.append(zone.domNode);
@@ -132,7 +133,7 @@ export class ViewZones extends EditorViewPart {
 			return;
 		}
 		this.validateZone(zone);
-		this.layoutZones(this.viewLayout.changeViewZone(id, zone.afterLineNumber - 1, this.zoneHeight(zone), zone.ordinal));
+		this.layoutZones(this.viewLayout.changeViewZone(id, this.zoneLineIndex(zone), this.zoneHeight(zone), zone.ordinal));
 	}
 
 	private removeZone(id: string): void {
@@ -187,9 +188,10 @@ export class ViewZones extends EditorViewPart {
 		if (!zone || !(zone.domNode instanceof this.domNode.ownerDocument.defaultView!.HTMLElement)) {
 			throw new TypeError('Editor view zone requires a DOM root from the editor document');
 		}
-		if (!Number.isSafeInteger(zone.afterLineNumber) || zone.afterLineNumber < 0 || zone.afterLineNumber > this.readVisualLineCount()) {
+		if (!Number.isSafeInteger(zone.afterLineNumber) || zone.afterLineNumber < 0) {
 			throw new RangeError('Editor view zone line number is outside the visual line collection');
 		}
+		this.zoneLineIndex(zone);
 		if (zone.heightInPx !== undefined && (!isFiniteNumber(zone.heightInPx) || zone.heightInPx <= 0)) {
 			throw new RangeError('Editor view zone height must be finite and positive');
 		}
@@ -206,6 +208,14 @@ export class ViewZones extends EditorViewPart {
 
 	private zoneHeight(zone: EditorViewZone): number {
 		return zone.heightInPx ?? (zone.heightInLines ?? 1) * this.lineHeight;
+	}
+
+	private zoneLineIndex(zone: EditorViewZone): number {
+		const index = this.options.readVisualLineIndexAfterPosition(zone.afterLineNumber, zone.afterColumn);
+		if (!Number.isSafeInteger(index) || index < -1 || index >= this.readVisualLineCount()) {
+			throw new RangeError('Editor view zone line number is outside the visual line collection');
+		}
+		return index;
 	}
 }
 

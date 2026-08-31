@@ -1,45 +1,29 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { EditorIndentationKind } from "../../../../common/core/misc/indentation.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { createLineIndentCommand, EditorLineIndentDirection } from "../../browser/lineIndentCommands.js";
-import { Selection } from "../../../../common/core/selection.js";
-import { Position } from "../../../../common/core/position.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { ShiftCommand } from '../../../../common/commands/shiftCommand.js';
+import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
+import { CursorsController } from '../../../../common/cursor/cursor.js';
+import { Position } from '../../../../common/core/position.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { createBuiltinLanguageConfigurationService } from '../../../../common/languages/languageBuiltinConfigurations.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 
-test("line indent touches selected rows once and preserves selection direction", () => {
-	using model = new TextModel("one\n  two\nthree");
-	const initial = primaryFirst([
-		Selection.fromPositions(new Position((1) + 1, (3) + 1), new Position((0) + 1, (0) + 1)),
-		Selection.fromPositions(new Position((1) + 1, (2) + 1)),
-	], 0);
-	using selections = new CursorsController(model, initial);
-
-	selections.execute(createLineIndentCommand(model, selections.selections, EditorLineIndentDirection.Indent, {
-		kind: EditorIndentationKind.Spaces,
+test('ShiftCommand owns selected-line indentation after the legacy helper retires', () => {
+	using configurations = createBuiltinLanguageConfigurationService();
+	using model = new TextModel('one\n  two\nthree', { tabSize: 2, indentSize: 2, insertSpaces: true });
+	const initial = Selection.fromPositions(new Position(1, 1), new Position(2, 6));
+	using cursors = new CursorsController(model, [initial]);
+	const options = {
+		isUnshift: false,
 		tabSize: 2,
-	}));
+		indentSize: 2,
+		insertSpaces: true,
+		useTabStops: true,
+		autoIndent: EditorAutoIndentStrategy.None,
+	};
 
-	assert.equal(model.getText(), "  one\n    two\nthree");
-	assert.deepEqual(selections.selections[0]!.getSelectionStart(), new Position((1) + 1, (5) + 1));
-	assert.deepEqual(selections.selections[0]!.getPosition(), new Position((0) + 1, (2) + 1));
-	selections.undo();
-	assert.equal(model.getText(), "one\n  two\nthree");
-	assert.deepEqual(selections.selections, initial);
+	cursors.executeCommand(new ShiftCommand(initial, options, configurations));
+	assert.equal(model.getText(), '  one\n    two\nthree');
+	cursors.executeCommand(new ShiftCommand(cursors.selections[0]!, { ...options, isUnshift: true }, configurations));
+	assert.equal(model.getText(), 'one\n  two\nthree');
 });
-
-test("line outdent removes one mixed indentation unit and excludes an ending line start", () => {
-	using model = new TextModel("\talpha\n   beta\n  untouched");
-	const initial = [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1))];
-	using selections = new CursorsController(model, initial);
-
-	selections.execute(createLineIndentCommand(model, selections.selections, EditorLineIndentDirection.Outdent, { tabSize: 2 }));
-
-	assert.equal(model.getText(), "alpha\n beta\n  untouched");
-	assert.deepEqual(selections.selections[0]!.getEndPosition(), new Position((2) + 1, (0) + 1));
-});
-
-function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
-	if (primaryIndex === 0) return Object.freeze([...items]);
-	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
-}

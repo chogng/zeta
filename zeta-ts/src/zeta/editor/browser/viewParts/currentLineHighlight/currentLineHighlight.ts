@@ -10,8 +10,8 @@ export class CurrentLineHighlightOverlay extends DynamicViewOverlay {
 	private readonly selectionController: CursorsController | undefined;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, selectionController: CursorsController | undefined) {
-		super(context);
+	constructor(_context: EditorViewContext, host: HTMLElement, selectionController: CursorsController | undefined) {
+		super();
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-current-line-highlight-layer', 'stanza-editor-current-line-highlight'));
 		this.domNode = this.rows.domNode;
 		this.selectionController = selectionController;

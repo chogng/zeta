@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
-import { type EditorView } from '../../../browser/editorView.js';
+import { type ViewController } from '../../../browser/view/viewController.js';
 import { createStanzaDecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
@@ -18,7 +18,7 @@ import { type TextModel } from '../../../common/model/textModel.js';
 
 import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { resolveDocumentHighlightPresentation } from './highlightDecorations.js';
-import { TextualHighlightTargetRegistration } from './textualHighlightProvider.js';
+import { TextualMultiDocumentHighlightFeature } from './textualHighlightProvider.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 type OccurrencesHighlightMode = 'off' | 'singleFile' | 'multiFile';
@@ -57,7 +57,7 @@ class WordHighlighter extends Disposable {
 	private changingSelection = false;
 
 	constructor(
-		private readonly view: EditorView,
+		private readonly view: ViewController,
 		private readonly selections: CursorsController,
 		private readonly decorations: TextDecorationCollection<DocumentHighlightKind | undefined>,
 		options: WordHighlighterOptions,
@@ -365,7 +365,7 @@ function acquireCoordinator(service: ILanguageFeaturesService, controller: WordH
 	return coordinator;
 }
 
-function validateControllerDependencies(view: EditorView, selections: CursorsController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions): void {
+function validateControllerDependencies(view: ViewController, selections: CursorsController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions): void {
 	if (view.viewport.textModel !== selections.textModel || selections.textModel !== decorations.textModel) throw new TypeError('Word highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.resource || !options.languageId || !options.languageFeaturesService) throw new TypeError('Word highlighter requires resource and language services');
 	if (options.mode !== undefined && options.mode !== 'off' && options.mode !== 'singleFile' && options.mode !== 'multiFile') throw new TypeError('Word highlighter mode is invalid');
@@ -385,7 +385,7 @@ export class WordHighlighterContribution extends Disposable {
 	static readonly ID = 'editor.contrib.wordHighlighter';
 	private readonly wordHighlighter: WordHighlighter;
 
-	constructor(view: EditorView, selections: CursorsController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions) {
+	constructor(view: ViewController, selections: CursorsController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions) {
 		super();
 		this.wordHighlighter = this._register(new WordHighlighter(view, selections, decorations, options));
 	}
@@ -423,10 +423,7 @@ registerTextEditorCapabilityContribution({
 		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
 		context.provideCapability(occurrenceDecorations, decorations);
 		context.addDecorationSource(createStanzaDecorationSource(decorations, decoration => resolveDocumentHighlightPresentation(decoration.metadata)));
-		context.register(new TextualHighlightTargetRegistration(context.languageFeaturesService, {
-			resource: context.options.input.resource,
-			model: context.model,
-		}));
+		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService));
 	},
 	install: context => {
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;

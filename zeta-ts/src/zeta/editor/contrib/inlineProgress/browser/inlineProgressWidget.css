@@ -1,12 +1,37 @@
-.stanza-editor-inline-progress {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 8;
-  padding: 3px 7px;
-  color: var(--zeta-description-foreground);
-  font-size: 11px;
-  background: color-mix(in srgb, var(--zeta-editor-background) 94%, transparent);
-  border: 1px solid var(--zeta-widget-border);
-  border-radius: 3px;
+.inline-progress-widget {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.25em;
+	height: 1.25em;
+	padding: 0;
+	color: var(--zeta-description-foreground);
+	background: var(--zeta-editor-background);
+	border: 0;
+	border-radius: 50%;
+	cursor: pointer;
+}
+
+.inline-progress-widget .icon {
+	width: 0.75em;
+	height: 0.75em;
+	border: 1px solid currentcolor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: inline-progress-spin 800ms linear infinite;
+}
+
+.inline-progress-widget:hover .icon {
+	width: auto;
+	height: auto;
+	border: 0;
+	animation: none;
+}
+
+.inline-progress-widget:hover .icon::before {
+	content: '×';
+}
+
+@keyframes inline-progress-spin {
+	to { transform: rotate(360deg); }
 }

@@ -5,6 +5,45 @@ import { createDeleteLinesCommand, createDuplicateLinesCommand, createInsertLine
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { CopyLinesCommand } from '../../browser/copyLinesCommand.js';
+import { MoveLinesCommand } from '../../browser/moveLinesCommand.js';
+import { SortLinesCommand } from '../../browser/sortLinesCommand.js';
+import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
+import { createBuiltinLanguageConfigurationService } from '../../../../common/languages/languageBuiltinConfigurations.js';
+
+test('Canonical line commands execute through ICommand without the legacy controller', () => {
+	using configurations = createBuiltinLanguageConfigurationService();
+	using model = new TextModel('zero\none\ntwo');
+	using selections = new CursorsController(model, [caret(1, 1)]);
+
+	selections.executeCommand(new CopyLinesCommand(selections.selections[0]!, true));
+	assert.deepEqual({ text: model.getText(), selection: selections.selections[0] }, {
+		text: 'zero\none\none\ntwo',
+		selection: caret(2, 1),
+	});
+	selections.executeCommand(new MoveLinesCommand(
+		selections.selections[0]!,
+		true,
+		EditorAutoIndentStrategy.None,
+		configurations,
+	));
+	assert.deepEqual({ text: model.getText(), selection: selections.selections[0] }, {
+		text: 'zero\none\ntwo\none',
+		selection: caret(3, 1),
+	});
+	selections.setSelections([Selection.fromPositions(new Position(1, 1), new Position(4, 4))]);
+	selections.executeCommand(new SortLinesCommand(selections.selections[0]!, false));
+	assert.equal(model.getText(), 'one\none\ntwo\nzero');
+	selections.undo();
+	assert.equal(model.getText(), 'zero\none\ntwo\none');
+});
+
+test('SortLinesCommand rejects single-line and already-sorted work', () => {
+	using model = new TextModel('a\nb');
+	assert.equal(SortLinesCommand.canRun(model, caret(0, 0), false), false);
+	assert.equal(SortLinesCommand.canRun(model, Selection.fromPositions(new Position(1, 1), new Position(2, 2)), false), false);
+	assert.equal(SortLinesCommand.canRun(model, Selection.fromPositions(new Position(1, 1), new Position(2, 2)), true), true);
+});
 
 test("Delete lines removes selected physical line groups and keeps a valid final line", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");

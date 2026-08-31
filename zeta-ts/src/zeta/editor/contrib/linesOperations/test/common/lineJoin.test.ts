@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { createJoinLinesCommand } from "../../common/lineJoin.js";
+import { createJoinLinesCommand } from '../../browser/linesOperations.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";

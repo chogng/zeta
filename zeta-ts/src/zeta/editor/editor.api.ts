@@ -26,7 +26,7 @@ export type { TextResourceLanguageInput } from '../platform/language/common/text
 export type { LanguageProviderBatch, LanguageProviderBatchRegistration } from './common/services/languageFeatures.js';
 export type { CharacterPair, IAutoClosingPair, IAutoClosingPairConditional, LanguageConfiguration } from './common/languages/languageConfiguration.js';
 export { RGBA8 } from './common/core/misc/rgba.js';
-export type { DocumentColorProvider, IColor, IColorInformation, IColorPresentation, TextEdit } from './common/languages.js';
+export type { CodeLens, CodeLensList, CodeLensProvider, Command, DocumentColorProvider, IColor, IColorInformation, IColorPresentation, LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit } from './common/languages.js';
 export type { TextSnapshot } from './common/core/textChange.js';
 export { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from './common/languages/completion/languageCompletions.js';
 export type { LanguageCompletionCommand, LanguageCompletionItem, LanguageCompletionItemDetails, LanguageCompletionResult, LanguageCompletionTextEdit } from './common/languages/completion/languageCompletions.js';
@@ -43,7 +43,6 @@ export type { SyntaxProvider, SyntaxProviderRequest, SyntaxRequest } from './com
 export type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolKind, LanguageWorkspaceSymbolProvider } from './common/languages/workspaceSymbols.js';
 export type { LanguageCallHierarchyEntry, LanguageCallHierarchyProvider, LanguageHierarchyFollowupRequest, LanguageHierarchyItem, LanguageHierarchyRequest, LanguageTypeHierarchyProvider } from './contrib/callHierarchy/common/languageHierarchy.js';
 export type { LanguageCodeAction, LanguageCodeActionProvider, LanguageCodeActionRequest } from './contrib/codeAction/common/languageCodeActions.js';
-export type { LanguageCodeLens, LanguageCodeLensCommand, LanguageCodeLensProvider, LanguageCodeLensRequest } from './contrib/codelens/common/languageCodeLenses.js';
 export type { LanguageColorPresentationRequest, LanguageColorProvider, LanguageColorRequest } from './contrib/colorPicker/common/languageColors.js';
 export type { LanguageDocumentSymbol, LanguageDocumentSymbolProvider, LanguageDocumentSymbolRequest, LanguageSymbolKind } from './contrib/documentSymbols/common/languageDocumentSymbols.js';
 export type { LanguageFoldingRange, LanguageFoldingRangeKind, LanguageFoldingRangeProvider, LanguageFoldingRangeRequest } from './contrib/folding/common/languageFoldingRanges.js';
@@ -52,7 +51,6 @@ export type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageI
 export type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from './contrib/hover/common/hover.js';
 export type { LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from './contrib/inlayHints/common/languageInlayHints.js';
 export type { LanguageInlineCompletionItem, LanguageInlineCompletionsProvider, LanguageInlineCompletionsRequest } from './contrib/inlineCompletions/common/inlineCompletions.js';
-export type { LanguageLinkedEditingProvider, LanguageLinkedEditingRanges, LanguageLinkedEditingRequest } from './contrib/linkedEditing/common/languageLinkedEditing.js';
 export type { LanguageLink, LanguageLinkProvider, LanguageLinkRequest } from './contrib/links/common/languageLinks.js';
 export type { LanguageParameterHints, LanguageParameterHintsContext, LanguageParameterHintsProvider, LanguageParameterHintsRequest, LanguageParameterInformation, LanguageSignatureInformation } from './contrib/parameterHints/common/languageParameterHints.js';
 export type { LanguageRenamePreparation, LanguageRenameProvider, LanguageRenameRequest } from './contrib/rename/common/languageRename.js';

@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
-import { type EditorView } from '../../../browser/editorView.js';
+import { type ViewController } from '../../../browser/view/viewController.js';
 import { type View } from "../../../browser/view.js";
 
 let nextCompletionWidgetId = 1;
@@ -15,7 +15,7 @@ export class CompletionWidget extends Disposable {
 	private readonly widgetId: string;
 
 	constructor(
-		private readonly view: EditorView,
+		private readonly view: ViewController,
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		private readonly session: LanguageCompletionSessionController,

@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { type TextMeasurer } from '../../common/viewModel/textMeasurer.js';
-import { CursorsController } from '../../common/cursor/cursor.js';
+import { type ICodeEditor } from '../../browser/editorBrowser.js';
+import { type View as EditorView } from '../../browser/view.js';
 import { Position } from '../../common/core/position.js';
-import { Selection } from '../../common/core/selection.js';
+import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -28,7 +29,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import('../../browser/view.js');
-const { ViewStableEditorBottomScrollState, ViewStableEditorScrollState } = await import('../../browser/stableEditorScroll.js');
+const { StableEditorBottomScrollState, StableEditorScrollState } = await import('../../browser/stableEditorScroll.js');
 
 test('StableEditorScrollState preserves the first visible row offset', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -61,9 +62,10 @@ test('StableEditorScrollState preserves the first visible row offset', () => {
 	const initialDelta = initialLayout.scrollPosition.top - initialAnchorTop;
 	const initialLeft = initialLayout.scrollPosition.left;
 
-	const state = ViewStableEditorScrollState.capture(viewport);
+	const editor = editorFor(viewport);
+	const state = StableEditorScrollState.capture(editor);
 	viewport.setLineHeight(30);
-	state.restore(viewport);
+	state.restore(editor);
 
 	const restoredLayout = viewport.currentLayout;
 	assert.equal(restoredLayout.scrollPosition.left, initialLeft);
@@ -105,9 +107,10 @@ test('StableEditorBottomScrollState preserves the last visible row offset', () =
 	const initialCoordinates = viewport.getPositionContentCoordinates(anchor);
 	const initialDelta = initialCoordinates.top + initialCoordinates.height - initialLayout.scrollPosition.top;
 
-	const state = ViewStableEditorBottomScrollState.capture(viewport);
+	const editor = editorFor(viewport);
+	const state = StableEditorBottomScrollState.capture(editor);
 	viewport.setLineHeight(30);
-	state.restore(viewport);
+	state.restore(editor);
 
 	const restoredLayout = viewport.currentLayout;
 	const restoredCoordinates = viewport.getPositionContentCoordinates(anchor);
@@ -131,24 +134,21 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 		'seven',
 		'eight',
 	].join('\n'));
-	using selections = new CursorsController(
-		model,
-		[Selection.fromPositions(new Position((1) + 1, (0) + 1))],
-	);
 	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
-		selectionController: selections,
 		textMeasurer: fixedTextMeasurer(),
 	});
 	viewport.layout({ width: 200, height: 60 });
 	viewport.scrollTo({ left: 0, top: 40 });
+	let cursorPosition = new Position((1) + 1, (0) + 1);
+	const editor = editorFor(viewport, () => cursorPosition);
 
-	const state = ViewStableEditorScrollState.capture(viewport, selections);
-	selections.setSelections([Selection.fromPositions(new Position((4) + 1, (0) + 1))]);
+	const state = StableEditorScrollState.capture(editor);
+	cursorPosition = new Position((4) + 1, (0) + 1);
 	viewport.setLineHeight(30);
-	state.restoreRelativeVerticalPositionOfCursor(viewport, selections);
+	state.restoreRelativeVerticalPositionOfCursor(editor);
 
 	assert.equal(viewport.currentLayout.scrollPosition.top, 150);
 	dom.window.close();
@@ -169,4 +169,27 @@ function fixedTextMeasurer(): TextMeasurer {
 		contentLeftPadding: 12,
 		measureLineWidth: text => [...text].length * 8,
 	};
+}
+
+function editorFor(viewport: EditorView, getPosition: () => Position | null = () => null): ICodeEditor {
+	return {
+		getScrollTop: () => viewport.currentLayout.scrollPosition.top,
+		getContentHeight: () => viewport.currentLayout.contentSize.height,
+		hasPendingScrollAnimation: () => false,
+		getPosition,
+		getVisibleRanges: () => {
+			const visible = viewport.currentLayout.visibleLines;
+			const projection = viewport.getVisualLineProjection();
+			const first = projection.lineAt(visible.startLineIndex);
+			const last = projection.lineAt(visible.endLineIndexExclusive - 1);
+			return first && last ? [new Range(first.logicalLineIndex + 1, first.startColumn + 1, last.logicalLineIndex + 1, last.endColumn + 1)] : [];
+		},
+		getTopForPosition: (lineNumber: number, column: number) => viewport.getPositionContentCoordinates(new Position(lineNumber, column)).top,
+		getTopForLineNumber: (lineNumber: number) => viewport.getPositionContentCoordinates(new Position(lineNumber, 1)).top,
+		getBottomForLineNumber: (lineNumber: number) => {
+			const coordinates = viewport.getPositionContentCoordinates(new Position(lineNumber, viewport.textModel.getLineMaxColumn(lineNumber)));
+			return coordinates.top + coordinates.height;
+		},
+		setScrollTop: (top: number) => viewport.scrollTo({ left: viewport.currentLayout.scrollPosition.left, top }),
+	} as unknown as ICodeEditor;
 }

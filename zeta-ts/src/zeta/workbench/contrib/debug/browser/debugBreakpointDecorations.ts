@@ -4,7 +4,7 @@ import { register } from '../../../../base/common/icon.js';
 import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from '../../../../editor/browser/controller/semanticMouseTarget.js';
+import { MouseTargetFactory, MouseTargetKind } from '../../../../editor/browser/controller/mouseTarget.js';
 import { type TextEditorContributionContext } from '../../../../editor/browser/editorExtensions.js';
 import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../../editor/browser/viewParts/decorations/decorations.js';
 import { Position } from '../../../../editor/common/core/position.js';
@@ -62,16 +62,16 @@ export class DebugBreakpointDecorationProvider extends Disposable implements Own
 
 /** Routes empty-lane and existing-breakpoint pointer targets to Debug state. */
 export class DebugBreakpointController extends Disposable {
-	private readonly mouseTargets: SemanticMouseTargetFactory;
+	private readonly mouseTargets: MouseTargetFactory;
 
 	constructor(context: TextEditorContributionContext, private readonly debug: IDebugService) {
 		super();
-		this.mouseTargets = new SemanticMouseTargetFactory(context.viewport);
+		this.mouseTargets = new MouseTargetFactory(context.viewport);
 		const resource = context.options.input.resource;
 		if (resource.scheme !== 'file' && !isRemoteResource(resource)) return;
 		this._register(addDisposableListener(context.viewport.element, 'pointerdown', event => {
 			const target = this.mouseTargets.create(event);
-			if (target?.kind !== SemanticMouseTargetKind.GutterDecoration || target.glyphMarginLane !== GlyphMarginLane.Left) return;
+			if (target?.kind !== MouseTargetKind.GutterDecoration || target.glyphMarginLane !== GlyphMarginLane.Left) return;
 			const lineNumber = target.editorTarget?.position.lineNumber;
 			if (lineNumber === undefined) return;
 			stopEvent(event);

@@ -9,12 +9,30 @@ import { type SyntaxWorkerFactory } from '../../common/languages/syntax/syntaxSe
 import { SyntaxModuleWorkerClient } from '../../common/languages/syntax/syntaxModuleWorkerClient.js';
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from './editorWorkerService.js';
 import { editorWorkerWireCodec } from '../../common/services/editorWorkerWire.js';
+import { NullRenameSymbolTrackerService } from './renameSymbolTrackerService.js';
+import { OpenerService } from './openerService.js';
 
 export function registerEditorBrowserContributions(): void {
 	registerTextEditorCapabilityContribution(MarkerDecorationsContribution);
 }
 
-class BrowserCodeEditorService extends AbstractCodeEditorService {}
+class BrowserCodeEditorService extends AbstractCodeEditorService {
+	private activeEditor: import('../editorBrowser.js').ICodeEditor | null = null;
+
+	constructor() {
+		super();
+		this._register(this.onCodeEditorAdd(editor => this.activeEditor = editor));
+		this._register(this.onCodeEditorRemove(editor => {
+			if (this.activeEditor === editor) {
+				this.activeEditor = this.listCodeEditors().at(-1) ?? null;
+			}
+		}));
+	}
+
+	getActiveCodeEditor(): import('../editorBrowser.js').ICodeEditor | null {
+		return this.getFocusedCodeEditor() ?? this.activeEditor;
+	}
+}
 
 export interface EditorBrowserServices {
 	readonly codeEditorService: BrowserCodeEditorService;
@@ -23,13 +41,18 @@ export interface EditorBrowserServices {
 		readonly syntaxWorkerFactory: SyntaxWorkerFactory;
 		readonly completionWorkerFactory: LanguageCompletionWorkerFactory;
 	};
+	readonly renameSymbolTrackerService: NullRenameSymbolTrackerService;
+	readonly openerService: OpenerService;
 }
 
 /** Creates the browser-owned editor services used by a composition root. */
 export function createEditorBrowserServices(): EditorBrowserServices {
+	const codeEditorService = new BrowserCodeEditorService();
 	return Object.freeze({
-		codeEditorService: new BrowserCodeEditorService(),
+		codeEditorService,
 		workers: createWorkers(),
+		renameSymbolTrackerService: new NullRenameSymbolTrackerService(),
+		openerService: new OpenerService(codeEditorService),
 	});
 }
 

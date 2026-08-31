@@ -1,4 +1,5 @@
 import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
+import { addDisposableListener, getClientArea } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
@@ -12,6 +13,7 @@ import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEdit
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../common/core/selection.js';
 import { type Position } from '../../common/core/position.js';
+import { type IDimension } from '../../common/core/2d/dimension.js';
 import { Range } from '../../common/core/range.js';
 import { type TextModelChange } from '../../common/core/textChange.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
@@ -21,8 +23,13 @@ import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
 import { type View } from '../view.js';
-import { type EditContextTextUpdate } from '../controller/editContext/editContext.js';
-import { EditorViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
+import { type CompositionController, type EditContextCharacterBounds, type EditContextOptions, type EditContextTextUpdate, type EditorInputContext } from '../controller/editContext/editContext.js';
+import { createNativeEditContext, supportsNativeEditContext } from '../controller/editContext/native/editContextFactory.js';
+import { EditorTextAreaInputContext } from '../controller/editContext/textArea/textAreaEditContext.js';
+import { ViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
+import { type IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { type IEditorAriaOptions } from '../editorBrowser.js';
+import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
 
 export interface EditorCommandContext {
 	readonly inputType: string;
@@ -59,37 +66,52 @@ export interface EditorViewDidEditEvent {
 }
 
 export interface ViewControllerOptions {
+	readonly ownerId?: string;
+	readonly ariaLabel?: string;
+	readonly accessibilityService?: IAccessibilityService;
+	readonly renderRichScreenReaderContent?: boolean;
+	readonly accessibilityPageSize?: number;
+	readonly semanticTokenSource?: SemanticTokenSource;
+	readonly bracketColorizationSource?: BracketColorizationSource;
 	readonly languageEditing?: EditorLanguageEditingAdapter;
 	readonly wordPattern?: () => RegExp | undefined;
-	readonly userInputEvents?: EditorViewUserInputEvents;
+	readonly userInputEvents?: ViewUserInputEvents;
 }
 
 /**
  * Routes semantic editor commands into common editing operations.
  *
- * This is the Stanza equivalent of VS Code's EditorViewInputController: browser input
- * adapters normalize raw events, while this class owns command execution,
- * command transformation, overtype, and contribution-facing edit events.
+ * Browser input adapters normalize raw events, while this class owns their lifecycle,
+ * command execution, command transformation, overtype, and contribution-facing events.
  */
-export class EditorViewInputController extends Disposable {
+export class ViewController extends Disposable {
 	private readonly didChangeOvertypeEmitter = this._register(new Emitter<boolean>());
 	private readonly didEditEmitter = this._register(new Emitter<EditorViewDidEditEvent>());
 	private readonly commandTransformers: EditorCommandTransformer[] = [];
 	private readonly languageEditing: EditorLanguageEditingAdapter | undefined;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
-	private readonly userInputEvents: EditorViewUserInputEvents;
+	readonly userInputEvents: ViewUserInputEvents;
+	readonly ownerId: string;
+	readonly editContext: EditorInputContext;
+	readonly element: HTMLElement;
+	readonly textArea: HTMLTextAreaElement | undefined;
+	readonly compositionController: CompositionController;
+	readonly onWillBeforeInput: Event<InputEvent>;
+	readonly onWillTextUpdate: Event<EditorViewTextUpdateEvent>;
+	readonly onWillKeydown: Event<KeyboardEvent>;
 	private overtype = false;
 
 	readonly onDidChangeOvertype: Event<boolean> = this.didChangeOvertypeEmitter.event;
 	readonly onDidEdit: Event<EditorViewDidEditEvent> = this.didEditEmitter.event;
 
 	constructor(
-		private readonly viewport: View,
-		private readonly selectionController: CursorsController,
+		readonly viewport: View,
+		readonly selectionController: CursorsController,
 		options: ViewControllerOptions = {},
 	) {
 		super();
 		try {
+			validateAccessibilityPageSize(options.accessibilityPageSize);
 			if (viewport.textModel !== selectionController.textModel) {
 				throw new TypeError('Stanza view and selection controllers must share one text model');
 			}
@@ -101,12 +123,70 @@ export class EditorViewInputController extends Disposable {
 			}
 			this.languageEditing = options.languageEditing;
 			this.wordPattern = options.wordPattern;
-			this.userInputEvents = options.userInputEvents ?? new EditorViewUserInputEvents();
+			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents();
+			this.ownerId = options.ownerId === undefined ? nextViewId() : validateOwnerId(options.ownerId);
+			this.editContext = this._register(createEditContext(viewport.element, {
+				ariaLabel: options.ariaLabel,
+				readOnly: selectionController.readOnly,
+				textDirection: viewport.editorTextDirection,
+				ownerId: this.ownerId,
+				characterBoundsProvider: modelOffset => this.characterBoundsAt(modelOffset),
+				viewController: this,
+				viewport,
+				selectionController,
+				accessibilityService: options.accessibilityService,
+				renderRichScreenReaderContent: options.renderRichScreenReaderContent,
+				accessibilityPageSize: options.accessibilityPageSize,
+				semanticTokenSource: options.semanticTokenSource,
+				bracketColorizationSource: options.bracketColorizationSource,
+			}));
+			this.element = this.editContext.domNode;
+			this.textArea = this.editContext instanceof EditorTextAreaInputContext ? this.editContext.domNode : undefined;
+			this.compositionController = this.editContext.compositionController;
+			this.onWillBeforeInput = this.editContext.onWillBeforeInput;
+			this.onWillTextUpdate = this.editContext.onWillTextUpdate;
+			this.onWillKeydown = this.editContext.onWillKeydown;
+			this._register(this.onDidChangeOvertype(overtyping => {
+				viewport.element.classList.toggle('overtype', overtyping);
+				viewport.setOvertype(overtyping);
+			}));
+			this._register(this.compositionController.onDidChange(composing => {
+				if (!composing) this.synchronizeEditContext();
+			}));
+			this._register(toDisposable(() => {
+				viewport.element.classList.remove('input-focused');
+				viewport.element.classList.remove('overtype');
+				viewport.setOvertype(false);
+			}));
+			this._register(addDisposableListener(viewport.element, 'focus', event => {
+				if (event.target === viewport.element) this.focus();
+			}));
+			this._register(this.editContext.onDidFocus(() => viewport.element.classList.add('input-focused')));
+			this._register(this.editContext.onDidBlur(() => {
+				viewport.element.classList.remove('input-focused');
+				this.editContext.clear();
+			}));
+			this._register(selectionController.onDidChange(() => this.synchronizeEditContext()));
+			this._register(viewport.textModel.onDidChangeContent(() => this.synchronizeEditContext()));
+			this.synchronizeEditContext();
+			this.editContext.connect();
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
 	}
+
+	layout(dimension: IDimension = getClientArea(this.viewport.element)): void {
+		this.viewport.layout({ width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) });
+	}
+
+	focus(): void { this.editContext.focus(); }
+	isFocused(): boolean { return this.editContext.isFocused(); }
+	refreshFocusState(): void { this.editContext.refreshFocusState(); }
+	setAriaOptions(options: IEditorAriaOptions): void { this.editContext.setAriaOptions(options); }
+	writeScreenReaderContent(reason: string): void { this.editContext.writeScreenReaderContent(reason); }
+	revealPosition(position: Position): void { this.viewport.revealPosition(position); }
+	clearInput(): void { this.editContext.clear(); }
 
 	get overtyping(): boolean {
 		return this.overtype;
@@ -287,6 +367,54 @@ export class EditorViewInputController extends Disposable {
 	emitMouseWheel(event: WheelEvent): void {
 		this.userInputEvents.emitMouseWheel(event);
 	}
+
+	private synchronizeEditContext(): void {
+		const selection = this.selectionController.selections[0]!;
+		this.editContext.syncState({
+			text: this.viewport.textModel.getText(),
+			selectionStart: this.viewport.textModel.offsetAt(selection.getStartPosition()),
+			selectionEnd: this.viewport.textModel.offsetAt(selection.getEndPosition()),
+			position: selection.getPosition(),
+		});
+		this.editContext.updateBounds(this.viewport.getPositionContentCoordinates(selection.getPosition()));
+		this.editContext.writeScreenReaderContent('editor state changed');
+	}
+
+	private characterBoundsAt(modelOffset: number): EditContextCharacterBounds | undefined {
+		const model = this.viewport.textModel;
+		if (!Number.isSafeInteger(modelOffset) || modelOffset < 0 || modelOffset >= model.length) return undefined;
+		const position = model.positionAt(modelOffset);
+		const next = model.positionAt(Math.min(model.length, modelOffset + 1));
+		const start = this.viewport.getPositionContentCoordinates(position);
+		const end = this.viewport.getPositionContentCoordinates(next);
+		return Object.freeze({
+			left: Math.min(start.left, end.left),
+			top: start.top,
+			width: position.lineNumber === next.lineNumber ? Math.max(1, Math.abs(end.left - start.left)) : Math.max(1, this.viewport.measureTextWidth(' ')),
+			height: start.height,
+		});
+	}
+}
+
+function createEditContext(container: HTMLElement, options: EditContextOptions): EditorInputContext {
+	return supportsNativeEditContext(container)
+		? createNativeEditContext(container, options)
+		: new EditorTextAreaInputContext(container, options);
+}
+
+let viewId = 1;
+
+function nextViewId(): string { return `zeta-editor-view-${viewId++}`; }
+
+function validateOwnerId(value: string): string {
+	if (typeof value !== 'string' || value.trim().length === 0) throw new TypeError('Editor view ownerId must be a non-empty string');
+	return value;
+}
+
+function validateAccessibilityPageSize(value: number | undefined): void {
+	if (value !== undefined && (!Number.isSafeInteger(value) || value < 1 || value > 10_000)) {
+		throw new RangeError('Editor accessibility page size must be a safe integer between 1 and 10000');
+	}
 }
 
 /** Browser input adapter for DOM-free language editing commands. */
@@ -371,7 +499,7 @@ export class KeyboardNavigationController extends Disposable {
 	constructor(
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
-		userInputEvents: EditorViewUserInputEvents,
+		userInputEvents: ViewUserInputEvents,
 		options: KeyboardNavigationControllerOptions = {},
 	) {
 		super();

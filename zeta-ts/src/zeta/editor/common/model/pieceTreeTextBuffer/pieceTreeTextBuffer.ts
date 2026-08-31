@@ -50,7 +50,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	private eol: '\n' | '\r\n';
 	private mightContainUnusualLineTerminatorsValue: boolean;
 
-	constructor(text: string, eol: '\n' | '\r\n' = preferredEOL(text), bom = '') {
+	constructor(text: string, eol: '\n' | '\r\n' = preferredEOL(text), bom = '', shouldNormalizeEOL = true) {
 		super();
 		if (bom !== '' && bom !== '\uFEFF') throw new TypeError('PieceTreeTextBuffer BOM must be empty or UTF-8 BOM');
 		if (!bom && text.startsWith('\uFEFF')) {
@@ -59,7 +59,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		}
 		this.bom = bom;
 		this.eol = eol;
-		this.originalBuffer = normalizeEOL(text, eol);
+		this.originalBuffer = shouldNormalizeEOL ? normalizeEOL(text, eol) : text;
 		this.mightContainUnusualLineTerminatorsValue = text.includes('\u2028') || text.includes('\u2029');
 		if (this.originalBuffer.length > 0) this.root = this.createRootNode(createPiece(PieceBuffer.Original, 0, this.originalBuffer));
 	}

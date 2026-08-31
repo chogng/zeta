@@ -1,15 +1,11 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { JSDOM } from "jsdom";
-import { OperatingSystem } from "../../../../../base/common/platform.js";
-import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { Selection } from "../../../../common/core/selection.js";
-import { Position } from "../../../../common/core/position.js";
-import { TextModel } from "../../../../common/model/textModel.js";
-import { h } from "../../../../../base/browser/dom.js";
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { JSDOM } from 'jsdom';
+import { Position } from '../../../../common/core/position.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -17,6 +13,7 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
+	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	ResizeObserver: class TestResizeObserver {
 		observe(): void {}
@@ -27,55 +24,53 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { View } = await import("../../../../browser/view.js");
-const { TransposeCommandId, TransposeController } = await import("../../browser/transposeController.js");
+const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
+await import('../../../caretOperations/browser/transpose.js');
+await import('../../../linesOperations/browser/linesOperations.js');
 
-test("Transpose consumes Ctrl+T only for the VS Code macOS binding", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	using model = new TextModel("abc");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
-	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	viewport.layout({ width: 200, height: 60 });
-	const input = h(dom.window.document, "textarea");
-	container.append(input);
-	const executedCommands: string[] = [];
-	using controller = new TransposeController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh }, (commandId, operation) => {
-		executedCommands.push(commandId);
-		return operation();
-	});
+test.after(() => browserEnvironment.window.close());
 
-	const transpose = keydown(dom.window, "t", { ctrlKey: true });
-	input.dispatchEvent(transpose);
-	assert.equal(transpose.defaultPrevented, true);
-	assert.equal(model.getText(), "bac");
-	assert.deepEqual(executedCommands, [TransposeCommandId]);
-	const other = keydown(dom.window, "t", { ctrlKey: true, metaKey: true });
-	input.dispatchEvent(other);
-	assert.equal(other.defaultPrevented, false);
+test('Transpose Letters uses its canonical action and contribution owner', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using model = new TextModel('a😊b');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	editor.selections.setSelections([Selection.fromPositions(new Position(1, 2))]);
+	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transposeLetters');
+	assert.ok(action);
 
+	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
+
+	assert.equal(model.getText(), '😊ab');
+	assert.deepEqual(editor.selections.selections, [Selection.fromPositions(new Position(1, 4))]);
+	editor.selections.undo();
+	assert.equal(model.getText(), 'a😊b');
+	model.reset('ab\ncd');
+	editor.selections.setSelections([Selection.fromPositions(new Position(2, 1))]);
+	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
+	assert.equal(model.getText(), 'abc\nd');
+	assert.deepEqual(editor.selections.selections, [Selection.fromPositions(new Position(2, 1))]);
+	editor.selections.setSelections([Selection.fromPositions(new Position(1, 1), new Position(1, 2))]);
+	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
+	assert.equal(model.getText(), 'abc\nd');
 	dom.window.close();
 });
 
-class FixedTextMeasurer implements TextMeasurer {
-	readonly horizontalPadding = 24;
-	readonly contentLeftPadding = 12;
+test('Transpose Action uses the lines-operations owner at a line end', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using model = new TextModel('hello\nworld');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	editor.selections.setSelections([Selection.fromPositions(new Position(1, 6))]);
+	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transpose');
+	assert.ok(action);
 
-	refresh(): boolean {
-		return false;
-	}
+	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 
-	measureLineWidth(text: string): number {
-		return text.length * 10;
-	}
-}
-
-function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: { readonly ctrlKey?: boolean; readonly metaKey?: boolean } = {}): KeyboardEvent {
-	return new targetWindow.KeyboardEvent("keydown", {
-		bubbles: true,
-		cancelable: true,
-		key,
-		ctrlKey: options.ctrlKey,
-		metaKey: options.metaKey,
-	}) as unknown as KeyboardEvent;
-}
+	assert.equal(model.getText(), 'hell\noworld');
+	assert.deepEqual(editor.selections.selections, [Selection.fromPositions(new Position(2, 2))]);
+	dom.window.close();
+});

@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { type IEditorConfiguration } from '../../../common/config/editorConfiguration.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { type ICoordinatesConverter } from '../../../common/coordinatesConverter.js';
+import { Range } from '../../../common/core/range.js';
+import { type IModelDecoration } from '../../../common/model.js';
 import { CustomLineHeightData, LineHeightsManager } from '../../../common/viewLayout/lineHeights.js';
 
 test('line heights resolve the tallest overlapping decoration', () => {
@@ -35,4 +40,32 @@ test('changing and removing a decoration takes effect immediately', () => {
 	assert.deepEqual([2, 4].map(line => heights.heightForLineNumber(line)), [12, 28]);
 	heights.removeCustomLineHeight('active');
 	assert.equal(heights.heightForLineNumber(4), 12);
+});
+
+test('custom line height data uses visual ranges and the configured base height', () => {
+	const modelRange = new Range(2, 1, 4, 1);
+	const viewRange = new Range(3, 1, 6, 1);
+	const decorations = [{
+		id: 'block',
+		range: modelRange,
+		options: { lineHeight: 1.5 },
+	}] as IModelDecoration[];
+	const coordinates = {
+		convertModelRangeToViewRange: (range: Range) => {
+			assert.strictEqual(range, modelRange);
+			return viewRange;
+		},
+	} as unknown as ICoordinatesConverter;
+	const configuration = {
+		options: {
+			get: (option: EditorOption) => {
+				assert.equal(option, EditorOption.lineHeight);
+				return 20;
+			},
+		},
+	} as unknown as IEditorConfiguration;
+
+	assert.deepEqual(CustomLineHeightData.fromDecorations(decorations, coordinates, configuration), [
+		new CustomLineHeightData('block', 3, 6, 30),
+	]);
 });

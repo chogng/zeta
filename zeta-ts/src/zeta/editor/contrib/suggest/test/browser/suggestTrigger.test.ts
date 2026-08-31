@@ -34,7 +34,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import("../../../../browser/view.js");
-const { EditorView } = await import('../../../../browser/editorView.js');
+const { ViewController } = await import('../../../../browser/view/viewController.js');
 test("Ctrl+Space requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
@@ -175,7 +175,7 @@ test("Completion request wiring rejects a same-model session from another servic
 		selectionController: selections,
 	});
 
-	using input = new EditorView(viewport, selections);
+	using input = new ViewController(viewport, selections);
 	assert.throws(() => new SuggestController(input, selections, secondService, session, "typescript"), /must share one text model and completion result store/);
 	dom.window.close();
 });
@@ -185,7 +185,7 @@ interface TriggerFixture extends Disposable {
 	readonly model: TextModel;
 	readonly service: LanguageCompletionService;
 	readonly session: LanguageCompletionSessionController;
-	readonly input: InstanceType<typeof EditorView>;
+	readonly input: InstanceType<typeof ViewController>;
 	readonly suggest: SuggestController;
 }
 
@@ -208,7 +208,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
-	const input = new EditorView(viewport, selections, { languageEditing });
+	const input = new ViewController(viewport, selections, { languageEditing });
 	const suggest = new SuggestController(input, selections, service, session, "typescript");
 	input.focus();
 	return {

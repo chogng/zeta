@@ -14,7 +14,7 @@ export interface IModelService {
 	destroyModel(resource: URI): void;
 	getModel(resource: URI): ITextModel | null;
 	getModels(): ITextModel[];
-	getCreationOptions(languageIdOrSelection: string | ILanguageSelection, resource: URI | undefined, isForSimpleWidget: boolean): ITextModelCreationOptions;
+	getCreationOptions(language: string, resource: URI, isForSimpleWidget: boolean): ITextModelCreationOptions;
 	readonly onModelAdded: Event<ITextModel>;
 	readonly onModelRemoved: Event<ITextModel>;
 	readonly onModelLanguageChanged: Event<{ readonly model: ITextModel; readonly oldLanguageId: string }>;

@@ -21,8 +21,8 @@ export class LinesDecorationsOverlay extends DynamicViewOverlay {
 	private readonly lanes: ReadonlyMap<string, LinesDecorationLaneLayout>;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, decorations: DecorationsOverlay, sources: readonly DecorationSource[]) {
-		super(context);
+	constructor(_context: EditorViewContext, host: HTMLElement, decorations: DecorationsOverlay, sources: readonly DecorationSource[]) {
+		super();
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-lines-decorations-layer', 'stanza-editor-line-lines-decorations'));
 		this.domNode = this.rows.domNode;
 		this.decorations = decorations;

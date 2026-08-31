@@ -103,6 +103,20 @@ test('PieceTreeTextBufferBuilder owns BOM and the predominant EOL', () => {
 	assert.equal(buffer.getOffsetAt(2, 3), 8);
 });
 
+test('PieceTreeTextBufferBuilder joins split surrogate pairs without normalizing when disabled', () => {
+	const builder = new PieceTreeTextBufferBuilder();
+	builder.acceptChunk('alpha\r\nbeta\uD83D');
+	builder.acceptChunk('\uDE03\ngamma');
+	const factory = builder.finish(false);
+	const { textBuffer: buffer, disposable } = factory.create(DefaultEndOfLine.CRLF);
+
+	assert.equal(factory.getFirstLineText(3), 'alp');
+	assert.equal(buffer.getEOL(), '\n');
+	assert.equal(buffer.createSnapshot().getText(), 'alpha\r\nbeta😃\ngamma');
+	assert.equal(buffer.getLineContent(2), 'beta😃');
+	disposable.dispose();
+});
+
 test('PieceTreeTextBuffer exposes the ITextBuffer query contract', () => {
 	using buffer = new PieceTreeTextBuffer('alpha\n\u05D0mega');
 	using equal = new PieceTreeTextBuffer('alpha\n\u05D0mega');

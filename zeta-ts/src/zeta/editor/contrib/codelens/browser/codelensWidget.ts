@@ -3,21 +3,22 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { type View, type EditorViewZone, type EditorViewZoneHandle } from '../../../browser/view.js';
-import { type LanguageCodeLens, type LanguageCodeLensCommand } from '../common/languageCodeLenses.js';
-import { type LanguageCodeLensItem } from './codelens.js';
+import { Position } from '../../../common/core/position.js';
+import { type CodeLens, type Command } from '../../../common/languages.js';
+import { type CodeLensItem } from './codelens.js';
 
-export type ExecuteCodeLensCommand = (command: LanguageCodeLensCommand) => void;
+export type ExecuteCodeLensCommand = (command: Command) => void;
 
 /** Owns the stable DOM and interactions for one line of code lenses. */
 export class CodeLensWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
-	private items: readonly LanguageCodeLensItem[];
-	private currentCommands: readonly LanguageCodeLensCommand[] = [];
+	private items: readonly CodeLensItem[];
+	private currentCommands: readonly Command[] = [];
 	private commandsResolved = false;
 	private readonly viewZone: EditorViewZone;
 	private readonly viewZoneHandle: EditorViewZoneHandle;
 
-	public constructor(private readonly viewport: View, items: readonly LanguageCodeLensItem[], private readonly executeCommand?: ExecuteCodeLensCommand) {
+	public constructor(private readonly viewport: View, items: readonly CodeLensItem[], private readonly executeCommand?: ExecuteCodeLensCommand) {
 		super();
 		this.items = items;
 		this.domNode = h(viewport.element.ownerDocument, 'div');
@@ -40,7 +41,7 @@ export class CodeLensWidget extends Disposable {
 		this.layout();
 	}
 
-	public get codeLensItems(): readonly LanguageCodeLensItem[] {
+	public get codeLensItems(): readonly CodeLensItem[] {
 		return this.items;
 	}
 
@@ -48,14 +49,14 @@ export class CodeLensWidget extends Disposable {
 		return !this.commandsResolved && this.items.some(item => !item.symbol.command && item.provider.resolveCodeLens !== undefined);
 	}
 
-	public updateCodeLensItems(items: readonly LanguageCodeLensItem[]): void {
+	public updateCodeLensItems(items: readonly CodeLensItem[]): void {
 		this.items = items;
 		this.commandsResolved = false;
 		this.render(this.initialSymbols);
 		this.layout();
 	}
 
-	public updateResolvedCodeLensItems(items: readonly LanguageCodeLensItem[]): void {
+	public updateResolvedCodeLensItems(items: readonly CodeLensItem[]): void {
 		this.items = items;
 		this.commandsResolved = true;
 		this.render(this.initialSymbols);
@@ -65,7 +66,8 @@ export class CodeLensWidget extends Disposable {
 		this.viewZone.afterLineNumber = this.afterVisualLineIndex + 1;
 		this.viewZone.heightInPx = this.codeLensHeight;
 		this.viewZoneHandle.layout();
-		const coordinates = this.viewport.getPositionContentCoordinates(this.items[0]!.symbol.range.getStartPosition());
+		const range = this.items[0]!.symbol.range;
+		const coordinates = this.viewport.getPositionContentCoordinates(new Position(range.startLineNumber, range.startColumn));
 		this.domNode.style.left = `${Math.max(4, coordinates.left)}px`;
 	}
 
@@ -75,18 +77,19 @@ export class CodeLensWidget extends Disposable {
 	}
 
 	private get afterVisualLineIndex(): number {
-		return this.viewport.getVisualLineProjection().visualLineIndexAt(this.items[0]!.symbol.range.getStartPosition()) - 1;
+		const range = this.items[0]!.symbol.range;
+		return this.viewport.getVisualLineProjection().visualLineIndexAt(new Position(range.startLineNumber, range.startColumn)) - 1;
 	}
 
 	private get codeLensHeight(): number {
 		return Math.max(11, Math.floor(this.viewport.viewportLayout.lineHeight * 0.7));
 	}
 
-	private get initialSymbols(): readonly (LanguageCodeLens | undefined)[] {
+	private get initialSymbols(): readonly (CodeLens | undefined)[] {
 		return this.items.map(item => item.symbol.command ? item.symbol : undefined);
 	}
 
-	private render(symbols: readonly (LanguageCodeLens | undefined)[]): void {
+	private render(symbols: readonly (CodeLens | undefined)[]): void {
 		const commands = symbols.flatMap(symbol => symbol?.command ? [symbol.command] : []);
 		this.currentCommands = commands;
 		if (commands.length === 0) {

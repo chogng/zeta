@@ -5,8 +5,8 @@ import { scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IInstantiationService, type ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
-import { type EditorView } from '../../editorView.js';
 import { type View } from '../../view.js';
+import { type ViewController } from '../../view/viewController.js';
 import { type CodeEditorWidget } from './codeEditorWidget.js';
 import { EditorContributionInstantiation } from '../../editorExtensions.js';
 
@@ -16,7 +16,7 @@ export interface CodeEditorContributionContext {
 	readonly model: TextModel;
 	readonly selectionController: CursorsController;
 	readonly viewport: View;
-	readonly view: EditorView;
+	readonly view: ViewController;
 	readonly placeholder: string | undefined;
 }
 

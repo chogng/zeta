@@ -540,8 +540,8 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-	constructor(context: EditorViewContext, host: HTMLElement, model: TextModel, decorationSources: readonly DecorationSource[]) {
-		super(context);
+	constructor(_context: EditorViewContext, host: HTMLElement, model: TextModel, decorationSources: readonly DecorationSource[]) {
+		super();
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-decorations-layer', 'stanza-editor-line-decorations'));
 		this.domNode = this.rows.domNode;
 		this.model = model;

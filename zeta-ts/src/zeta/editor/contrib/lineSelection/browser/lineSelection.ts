@@ -1,22 +1,29 @@
-import { Selection } from "../../../common/core/selection.js";
-import { Position } from "../../../common/core/position.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { type View } from '../../../browser/view.js';
+import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { CursorMoveCommands } from '../../../common/cursor/cursorMoveCommands.js';
 
-/**
- * Expands each selection through its next physical line, matching VS Code's
- * repeated line-selection action.
- *
- * Every result is forward from the first selected line's start. A complete
- * non-final line ends at the next line's start so it includes its line break.
- */
-export function expandLineSelections(model: TextModel, selections: readonly Selection[]): readonly Selection[] {
-	const expanded = selections.map(selection => {
-		const start = new Position(selection.startLineNumber, 1);
-		const selectedEndLineNumber = selection.endLineNumber;
-		const end = selectedEndLineNumber === model.lineCount
-			? new Position(selectedEndLineNumber, model.getLineContent(selectedEndLineNumber).length + 1)
-			: new Position(selectedEndLineNumber + 1, 1);
-		return Selection.fromPositions(start, end);
-	});
-	return Object.freeze(expanded);
+/** Routes the line-expansion command through the text editor input owner. */
+class LineSelectionController extends Disposable {
+	constructor(input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController) {
+		super();
+		if (viewport.textModel !== selections.textModel) throw new TypeError('Line selection dependencies must share one text model');
+		this._register(addDisposableListener(input, 'keydown', event => {
+			if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph') || (!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 'l') return;
+			stopEvent(event);
+			const next = CursorMoveCommands.expandLineSelection(viewport.textModel, selections.selections);
+			selections.setSelections(next);
+			viewport.revealPosition(next[0]!.getPosition());
+		}));
+	}
 }
+
+registerTextEditorCapabilityContribution({
+	id: 'editor.contrib.lineSelection',
+	install: context => {
+		if (context.kind !== 'text') return;
+		context.register(new LineSelectionController(context.view.element, context.viewport, context.viewModel));
+	},
+});

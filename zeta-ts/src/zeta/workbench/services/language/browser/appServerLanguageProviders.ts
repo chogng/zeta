@@ -1,8 +1,10 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
+import { type CancellationToken } from "../../../../base/common/cancellation.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
+import { Range, type IRange } from "../../../../editor/common/core/range.js";
+import { type ITextModel } from "../../../../editor/common/model.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
@@ -16,9 +18,7 @@ import { type LanguageCodeAction, type LanguageCodeActionProvider, type Language
 import { type LanguageFormattingProvider, type LanguageFormattingRequest } from "../../../../editor/contrib/format/common/formatCommands.js";
 import { type LanguageParameterHintsProvider, type LanguageParameterHintsRequest } from "../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
 import { type LanguageInlayHintsProvider, type LanguageInlayHintsRequest } from "../../../../editor/contrib/inlayHints/common/languageInlayHints.js";
-import { type LanguageLinkedEditingProvider, type LanguageLinkedEditingRequest } from "../../../../editor/contrib/linkedEditing/common/languageLinkedEditing.js";
-import { type LanguageSemanticTokensProvider, type LanguageSemanticTokensRequest } from "../../../../editor/common/languages.js";
-import { type LanguageCodeLens, type LanguageCodeLensProvider, type LanguageCodeLensRequest } from "../../../../editor/contrib/codelens/common/languageCodeLenses.js";
+import { type CodeLens, type CodeLensList, type CodeLensProvider, type LanguageSemanticTokensProvider, type LanguageSemanticTokensRequest, type LinkedEditingRangeProvider, type LinkedEditingRanges } from "../../../../editor/common/languages.js";
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest } from "../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js";
 import { type LanguageLink, type LanguageLinkProvider, type LanguageLinkRequest } from "../../../../editor/contrib/links/common/languageLinks.js";
 import { type LanguageColorProvider, type LanguageColorPresentationRequest, type LanguageColorRequest } from "../../../../editor/contrib/colorPicker/common/languageColors.js";
@@ -83,7 +83,7 @@ export class AppServerLanguageProviders extends Disposable {
 		registrations.add(this.languageFeatures.formattingProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.parameterHintsProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.inlayHintsProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.linkedEditingProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.linkedEditingRangeProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.semanticTokensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.documentSymbolProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.codeLensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
@@ -124,7 +124,7 @@ export interface AppServerLanguageProvidersOptions {
 	readonly events?: IServerEventApi;
 }
 
-class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageHoverProvider, LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageTypeDefinitionProvider, LanguageReferenceProvider, LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider, LanguageRenameProvider, LanguageCodeActionProvider, LanguageFormattingProvider, LanguageParameterHintsProvider, LanguageInlayHintsProvider, LanguageLinkedEditingProvider, LanguageSemanticTokensProvider, LanguageDocumentSymbolProvider, LanguageCodeLensProvider, LanguageLinkProvider, LanguageColorProvider, LanguageFoldingRangeProvider {
+class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageHoverProvider, LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageTypeDefinitionProvider, LanguageReferenceProvider, LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider, LanguageRenameProvider, LanguageCodeActionProvider, LanguageFormattingProvider, LanguageParameterHintsProvider, LanguageInlayHintsProvider, LinkedEditingRangeProvider, LanguageSemanticTokensProvider, LanguageDocumentSymbolProvider, CodeLensProvider, LanguageLinkProvider, LanguageColorProvider, LanguageFoldingRangeProvider {
 	readonly languageIds = APP_SERVER_LANGUAGE_IDS;
 	readonly id = "zeta.appServer.completions";
 	readonly triggerCharacters = Object.freeze([".", ":", "<", "\"", "'", "/", "@", "#"]);
@@ -278,17 +278,16 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 			paddingRight: hint.paddingRight,
 		})));
 	}
-	async provideLinkedEditingRanges(request: LanguageLinkedEditingRequest, signal: AbortSignal) {
-		const root = workspaceRootForResource(this.workspace, request.resource);
-		const document = languageLinkedEditingDocument(root, request);
+	async provideLinkedEditingRanges(model: ITextModel, position: Position, token: CancellationToken): Promise<LinkedEditingRanges | undefined> {
+		const document = this.documentForModel(model);
 		if (!document) return undefined;
-		const result = await this.api.linkedEditingRanges({ document, position: dtoPosition(request.position) }, { signal });
-		if (result.revision !== request.snapshot.version || result.ranges.length < 2) return undefined;
+		const result = await withAbortSignal(token, signal => this.api.linkedEditingRanges({ document, position: dtoPosition(position) }, { signal }));
+		if (result.revision !== model.getVersionId() || result.ranges.length < 2) return undefined;
 		let wordPattern: RegExp | undefined;
 		if (result.wordPattern) {
 			try { wordPattern = new RegExp(result.wordPattern, "u"); } catch { wordPattern = undefined; }
 		}
-		return Object.freeze({ ranges: Object.freeze(result.ranges.map(value => range(value))), ...(wordPattern ? { wordPattern } : {}) });
+		return Object.freeze({ ranges: result.ranges.map(value => range(value)), ...(wordPattern ? { wordPattern } : {}) });
 	}
 
 	async provideSemanticTokens(request: LanguageSemanticTokensRequest, signal: AbortSignal) {
@@ -311,22 +310,20 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 		return result.revision === request.snapshot.version ? Object.freeze(result.symbols.map(documentSymbol)) : Object.freeze([]);
 	}
 
-	async provideCodeLenses(request: LanguageCodeLensRequest, signal: AbortSignal): Promise<readonly LanguageCodeLens[]> {
-		const document = this.documentForRequest(request);
-		if (!document) return Object.freeze([]);
-		signal.throwIfAborted();
-		const result = await this.api.codeLenses({ document }, { signal });
-		signal.throwIfAborted();
-		return result.revision === request.snapshot.version ? Object.freeze(result.lenses.map(codeLens)) : Object.freeze([]);
+	async provideCodeLenses(model: ITextModel, token: CancellationToken): Promise<CodeLensList> {
+		const document = this.documentForModel(model);
+		if (!document) return Object.freeze({ lenses: Object.freeze([]) });
+		const result = await withAbortSignal(token, signal => this.api.codeLenses({ document }, { signal }));
+		return Object.freeze({
+			lenses: result.revision === model.getVersionId() ? Object.freeze(result.lenses.map(codeLens)) : Object.freeze([]),
+		});
 	}
 
-	async resolveCodeLens(lens: LanguageCodeLens, request: LanguageCodeLensRequest, signal: AbortSignal): Promise<LanguageCodeLens> {
-		const document = this.documentForRequest(request);
+	async resolveCodeLens(model: ITextModel, lens: CodeLens, token: CancellationToken): Promise<CodeLens> {
+		const document = this.documentForModel(model);
 		if (!document) return lens;
-		signal.throwIfAborted();
-		const result = await this.api.resolveCodeLens({ document, lens: codeLensDto(lens) }, { signal });
-		signal.throwIfAborted();
-		return result.revision === request.snapshot.version && result.lenses[0] ? codeLens(result.lenses[0]) : lens;
+		const result = await withAbortSignal(token, signal => this.api.resolveCodeLens({ document, lens: codeLensDto(lens) }, { signal }));
+		return result.revision === model.getVersionId() && result.lenses[0] ? codeLens(result.lenses[0]) : lens;
 	}
 
 	async provideLinks(request: LanguageLinkRequest, signal: AbortSignal): Promise<readonly LanguageLink[]> {
@@ -373,6 +370,15 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	private documentForRequest(request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string }; readonly model: { readonly largeFile: { readonly tooLargeForSynchronization: boolean } } }) {
 		if (request.model.largeFile.tooLargeForSynchronization) return undefined;
 		return languageSnapshotDocument(workspaceRootForResource(this.workspace, request.resource), request);
+	}
+
+	private documentForModel(model: ITextModel) {
+		if (model.isTooLargeForSyncing()) return undefined;
+		return languageSnapshotDocument(workspaceRootForResource(this.workspace, model.uri), {
+			resource: model.uri,
+			languageId: model.getLanguageId(),
+			snapshot: { version: model.getVersionId(), getText: () => model.getValue() },
+		});
 	}
 
 	private async resolveDocumentLink(document: NonNullable<ReturnType<AppServerLanguageProvider["documentForRequest"]>>, link: LanguageDocumentLinkDto, signal: AbortSignal): Promise<LanguageDocumentLinkDto> {
@@ -488,11 +494,6 @@ function languageInlayHintsDocument(root: LanguageWorkspaceRoot, request: Langua
 	return languageSnapshotDocument(root, request);
 }
 
-function languageLinkedEditingDocument(root: LanguageWorkspaceRoot, request: LanguageLinkedEditingRequest) {
-	if (!request.resource || request.model.largeFile.tooLargeForSynchronization) return undefined;
-	return languageSnapshotDocument(root, request);
-}
-
 function appServerCompletionResolveData(value: unknown): { readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>; readonly providerData: unknown } {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("App Server completion resolve data must be an object");
 	const data = value as { readonly document?: unknown; readonly providerData?: unknown };
@@ -547,7 +548,10 @@ function hierarchyItemDto(root: LanguageWorkspaceRoot, item: LanguageHierarchyIt
 	return { name: item.name, symbolKind: item.symbolKind, detail: item.detail ?? null, path: workspaceRelativePath(root.uri, item.resource), range: dtoRange(item.range), selectionRange: dtoRange(item.selectionRange), data: item.data };
 }
 
-function dtoRange(value: Range) { return { start: dtoPosition(value.getStartPosition()), end: dtoPosition(value.getEndPosition()) }; }
+function dtoRange(value: IRange) {
+	const range = Range.lift(value);
+	return { start: dtoPosition(range.getStartPosition()), end: dtoPosition(range.getEndPosition()) };
+}
 
 function workspaceEdit(root: LanguageWorkspaceRoot, edit: LanguageDirectoryEditDto) {
 	return Object.freeze({ entries: Object.freeze(edit.entries.map(entry => {
@@ -568,12 +572,25 @@ function documentSymbol(value: LanguageDocumentSymbolDto): LanguageDocumentSymbo
 	return Object.freeze({ name: value.name, ...(value.detail ? { detail: value.detail } : {}), kind: value.symbolKind, range: range(value.range), selectionRange: range(value.selectionRange), ...(value.children.length > 0 ? { children: Object.freeze(value.children.map(documentSymbol)) } : {}) });
 }
 
-function codeLens(value: LanguageCodeLensDto): LanguageCodeLens {
-	return Object.freeze({ range: range(value.range), ...(value.command ? { command: Object.freeze({ id: value.command.id, title: value.command.title, arguments: Object.freeze([...value.command.arguments]) }) } : {}), ...(value.providerData === undefined ? {} : { data: value.providerData }) });
+type AppServerCodeLens = CodeLens & { readonly providerData?: unknown };
+
+function codeLens(value: LanguageCodeLensDto): CodeLens {
+	return Object.freeze({ range: range(value.range), ...(value.command ? { command: Object.freeze({ id: value.command.id, title: value.command.title, arguments: [...value.command.arguments] }) } : {}), ...(value.providerData === undefined ? {} : { providerData: value.providerData }) });
 }
 
-function codeLensDto(value: LanguageCodeLens): LanguageCodeLensDto {
-	return { range: dtoRange(value.range), command: value.command ? { id: value.command.id, title: value.command.title, arguments: [...(value.command.arguments ?? [])] } : null, providerData: value.data };
+function codeLensDto(value: CodeLens): LanguageCodeLensDto {
+	return { range: dtoRange(value.range), command: value.command ? { id: value.command.id, title: value.command.title, arguments: [...(value.command.arguments ?? [])] } : null, providerData: (value as AppServerCodeLens).providerData };
+}
+
+async function withAbortSignal<T>(token: CancellationToken, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+	const controller = new AbortController();
+	if (token.isCancellationRequested) controller.abort();
+	const listener = token.onCancellationRequested(() => controller.abort());
+	try {
+		return await run(controller.signal);
+	} finally {
+		listener.dispose();
+	}
 }
 
 function diagnosticSeverity(severity: LanguageDiagnosticSeverity): "error" | "warning" | "information" | "hint" {

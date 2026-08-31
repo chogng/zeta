@@ -14,10 +14,12 @@ import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/d
 import { type TextModelReference, type ITextModelResourceService } from "../../../../editor/common/services/textModelResourceService.js";
 import { DiffEditorBreadcrumbsController } from "../../../../editor/contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
 import { h } from "../../../../base/browser/dom.js";
+import { type ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 
 export interface DiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;
 	readonly createComputationService: () => IDiffComputationService;
+	readonly codeEditorService: ICodeEditorService;
 	readonly lineHeight?: number;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
@@ -137,6 +139,7 @@ class DiffEditorPaneSession extends Disposable {
 		this.editor = this._register(new DiffEditorWidget({
 			container,
 			model,
+			codeEditorService: options.codeEditorService,
 			lineHeight: options.lineHeight,
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,

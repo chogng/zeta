@@ -13,8 +13,8 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 	private readonly selectionController: CursorsController | undefined;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, selectionController: CursorsController | undefined) {
-		super(context);
+	constructor(_context: EditorViewContext, host: HTMLElement, selectionController: CursorsController | undefined) {
+		super();
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-selections-layer', 'stanza-editor-line-selections'));
 		this.domNode = this.rows.domNode;
 		this.selectionController = selectionController;

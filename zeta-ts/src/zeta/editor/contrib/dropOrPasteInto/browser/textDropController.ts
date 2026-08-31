@@ -7,13 +7,18 @@ import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { TypeOperations } from '../../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../../common/core/selection.js';
 import { type Position } from '../../../common/core/position.js';
+import { InlineProgressManager } from '../../inlineProgress/browser/inlineProgress.js';
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from './textFileTransfer.js';
 
 /** Owns text and text-file drop operations for one editor. */
 export class TextDropController extends Disposable {
 	private asynchronousDropRequest = 0;
 
-	constructor(private readonly viewport: View, private readonly selections: CursorsController) {
+	constructor(
+		private readonly viewport: View,
+		private readonly selections: CursorsController,
+		private readonly progress: Pick<InlineProgressManager, 'showWhile'>,
+	) {
 		super();
 		if (viewport.textModel !== selections.textModel) {
 			this.dispose();
@@ -56,7 +61,12 @@ export class TextDropController extends Disposable {
 		const request = ++this.asynchronousDropRequest;
 		stopEvent(event);
 		this.viewport.element.focus({ preventScroll: true });
-		void file.text().then(text => {
+		const text = this.progress.showWhile(position, 'Reading dropped file', file.text(), {
+			cancel: () => {
+				if (request === this.asynchronousDropRequest) this.asynchronousDropRequest += 1;
+			},
+		});
+		void text.then(text => {
 			if (this.isDisposed || request !== this.asynchronousDropRequest || text.length > TEXT_FILE_TRANSFER_MAX_BYTES || model.version !== expectedVersion) return;
 			this.selections.execute(TypeOperations.paste(model, [Selection.fromPositions(position)], text));
 			this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
@@ -70,7 +80,8 @@ registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.dropOrPasteInto',
 	install: context => {
 		if (context.kind !== 'text') return;
-		context.register(new TextDropController(context.viewport, context.viewModel));
+		const progress = context.register(new InlineProgressManager('dropIntoEditor', context.editor, context.instantiationService));
+		context.register(new TextDropController(context.viewport, context.viewModel, progress));
 	},
 });
 
