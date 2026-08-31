@@ -3,7 +3,8 @@ import { h, reset, fragment as createFragment } from "../../../../base/browser/d
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
-import { ViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { type RestrictedRenderingContext } from "../../view/renderingContext.js";
+import { ViewPart } from "../../view/viewPart.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 /** One 1-based editor column at which a vertical guide is rendered. */
@@ -42,10 +43,9 @@ export class Rulers extends ViewPart {
 		this.domNode.setAttribute("aria-hidden", "true");
 	}
 
-	render(context: EditorRenderingContext): void {
-		const layout = context.layout;
-		const height = Math.min(layout.contentSize.height, 1_000_000);
-		this.root.setWidth(layout.contentSize.width);
+	render(context: RestrictedRenderingContext): void {
+		const height = Math.min(context.scrollHeight, 1_000_000);
+		this.root.setWidth(context.scrollWidth);
 		this.root.setHeight(height);
 		if (this.renderedRulers.length !== this.rulers.length) {
 			const fragment = createFragment(this.domNode.ownerDocument);

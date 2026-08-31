@@ -11,14 +11,20 @@ import { Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
-import { type EditorLineVisibleRange, type EditorOverlayContext, type EditorRenderingContext, type EditorVisiblePosition } from '../../view/renderingContext.js';
+import { type HorizontalRange, type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
+import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 
 export interface ViewCursorOptions {
 	readonly style: TextEditorCursorStyle;
 	readonly lineWidth: number;
 	readonly lineHeight: number;
 	readonly fontInfo: BareFontInfo;
+	readonly readVisualProjection: () => EditorVisualLineProjection;
+	readonly readTextLeft: () => number;
+	readonly textMeasurer: TextMeasurer;
+	readonly isRightToLeftAtPosition: (position: Position) => boolean;
 }
 
 export interface IViewCursorRenderData {
@@ -60,8 +66,11 @@ interface CursorGrapheme {
 	readonly character: string;
 }
 
-interface DomCaretGeometry extends EditorVisiblePosition {
-	readonly characterRange?: EditorLineVisibleRange;
+interface DomCaretGeometry {
+	readonly visualLineIndex: number;
+	readonly left: number;
+	readonly isRightToLeft: boolean;
+	readonly characterRange?: HorizontalRange;
 }
 
 /** Owns one retained caret, its position, rendering data, and DOM writes. */
@@ -75,6 +84,10 @@ export class ViewCursor extends AbstractDisposable {
 	private lineHeight: number;
 	private renderData: ViewCursorRenderData | undefined;
 	private lastRenderedContent = '';
+	private readonly readVisualProjection: () => EditorVisualLineProjection;
+	private readonly readTextLeft: () => number;
+	private readonly textMeasurer: TextMeasurer;
+	private readonly isRightToLeftAtPosition: (position: Position) => boolean;
 
 	constructor(
 		private readonly context: ViewContext,
@@ -86,6 +99,10 @@ export class ViewCursor extends AbstractDisposable {
 		plurality: CursorPlurality,
 	) {
 		super();
+		this.readVisualProjection = options.readVisualProjection;
+		this.readTextLeft = options.readTextLeft;
+		this.textMeasurer = options.textMeasurer;
+		this.isRightToLeftAtPosition = options.isRightToLeftAtPosition;
 		this.style = options.style;
 		this.lineWidth = options.lineWidth;
 		this.lineHeight = options.lineHeight;
@@ -140,19 +157,14 @@ export class ViewCursor extends AbstractDisposable {
 		return true;
 	}
 
-	public prepareRender(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			this.renderData = undefined;
-			return;
-		}
+	public prepareRender(context: RenderingContext): void {
 		const grapheme = this.getGraphemeAwarePosition();
-		const caret = this.getCaretGeometry(overlay, grapheme);
+		const caret = this.getCaretGeometry(context, grapheme);
 		if (!caret) {
 			this.renderData = undefined;
 			return;
 		}
-		const characterWidth = caret.characterRange?.width ?? this.getCharacterWidth(overlay, grapheme);
+		const characterWidth = caret.characterRange?.width ?? this.getCharacterWidth(grapheme);
 		const characterLeft = caret.characterRange?.left ?? (caret.isRightToLeft ? caret.left - characterWidth : caret.left);
 		const width = cursorWidth(dom.getWindow(this.fastDomNode.domNode), this.style, this.lineWidth, characterWidth);
 		let left = cursorLeft(this.style, caret.left, characterLeft);
@@ -161,11 +173,11 @@ export class ViewCursor extends AbstractDisposable {
 			paddingLeft = 1;
 			left -= paddingLeft;
 		}
-		const rowHeight = context.layout.lineHeight;
+		const rowHeight = context.viewportData.lineHeight;
 		const height = cursorHeight(this.style, this.lineHeight, rowHeight);
 		const rendersCharacter = this.style === TextEditorCursorStyle.Block || (this.style === TextEditorCursorStyle.Line && width > 2);
 		this.renderData = new ViewCursorRenderData(
-			context.viewportData.getLineTop(caret.visualLineIndex) + cursorTop(this.style, rowHeight, height),
+			context.getVerticalOffsetForLineNumber(caret.visualLineIndex + 1) + cursorTop(this.style, rowHeight, height),
 			left,
 			paddingLeft,
 			width,
@@ -175,7 +187,7 @@ export class ViewCursor extends AbstractDisposable {
 		);
 	}
 
-	public render(_context: EditorRenderingContext): IViewCursorRenderData | null {
+	public render(_context: RenderingContext): IViewCursorRenderData | null {
 		const renderData = this.renderData;
 		if (!renderData) {
 			this.fastDomNode.setDisplay('none');
@@ -226,33 +238,42 @@ export class ViewCursor extends AbstractDisposable {
 		});
 	}
 
-	private getCaretGeometry(context: EditorOverlayContext, grapheme: CursorGrapheme): DomCaretGeometry | undefined {
+	private getCaretGeometry(context: RenderingContext, grapheme: CursorGrapheme): DomCaretGeometry | undefined {
 		const caret = context.visibleRangeForPosition(grapheme.position);
 		if (caret) {
-			if (grapheme.endColumn === grapheme.position.column) return caret;
+			const visualLineIndex = this.readVisualProjection().visualLineIndexAt(grapheme.position);
+			const geometry: DomCaretGeometry = Object.freeze({
+				visualLineIndex,
+				left: caret.originalLeft,
+				isRightToLeft: this.isRightToLeftAtPosition(grapheme.position),
+			});
+			if (grapheme.endColumn === grapheme.position.column) return geometry;
 			const range = Range.fromPositions(grapheme.position, new Position(grapheme.position.lineNumber, grapheme.endColumn));
-			const characterRange = context.linesVisibleRangesForRange(range, false)?.find(candidate => candidate.visualLineIndex === caret.visualLineIndex);
-			return characterRange ? Object.freeze({ ...caret, characterRange }) : caret;
+			const characterRange = context.linesVisibleRangesForRange(range, false)
+				?.find(candidate => candidate.lineNumber === visualLineIndex + 1)
+				?.ranges[0];
+			return characterRange ? Object.freeze({ ...geometry, characterRange }) : geometry;
 		}
 		const geometry = createStanzaVisualSelectionGeometry(
-			context.model,
+			this.model,
 			[Selection.fromPositions(grapheme.position)],
-			context.visualLineProjection,
-			context.renderLines,
-			context.textLeft,
-			context.textMeasurer,
+			this.readVisualProjection(),
+			{ startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber },
+			this.readTextLeft(),
+			this.textMeasurer,
 		).carets[0];
 		return geometry ? Object.freeze({ visualLineIndex: geometry.visualLineIndex, left: geometry.left, isRightToLeft: false }) : undefined;
 	}
 
-	private getCharacterWidth(context: EditorOverlayContext, grapheme: CursorGrapheme): number {
-		const line = context.model.getLineContent(grapheme.position.lineNumber);
-		const visualLineIndex = context.visualLineProjection.visualLineIndexAt(grapheme.position);
-		const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
+	private getCharacterWidth(grapheme: CursorGrapheme): number {
+		const line = this.model.getLineContent(grapheme.position.lineNumber);
+		const projection = this.readVisualProjection();
+		const visualLineIndex = projection.visualLineIndexAt(grapheme.position);
+		const visualLine = projection.lineAt(visualLineIndex);
 		const startColumn = visualLine?.logicalLineIndex === grapheme.position.lineNumber - 1 ? visualLine.startColumn : 0;
 		const prefix = line.slice(startColumn, grapheme.position.column - 1);
 		const throughCursor = grapheme.character === '\u00a0' ? `${prefix} ` : `${prefix}${grapheme.character}`;
-		return Math.max(1, context.textMeasurer.measureLineWidth(throughCursor) - context.textMeasurer.measureLineWidth(prefix));
+		return Math.max(1, this.textMeasurer.measureLineWidth(throughCursor) - this.textMeasurer.measureLineWidth(prefix));
 	}
 
 	private getCharacterPresentation(position: Position): ViewCursorCharacterPresentation | undefined {

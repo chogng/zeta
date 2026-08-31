@@ -4,7 +4,8 @@ import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
-import { ViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { type RestrictedRenderingContext } from "../../view/renderingContext.js";
+import { ViewPart } from "../../view/viewPart.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 const GUTTER_HORIZONTAL_PADDING = 16;
@@ -97,12 +98,11 @@ export class Margin extends ViewPart {
 		this.lineHeight = lineHeight;
 	}
 
-	render(context: EditorRenderingContext): void {
-		const layout = context.layout;
+	render(context: RestrictedRenderingContext): void {
 		const gutterWidth = this.gutterWidth;
 		const lineNumbersWidth = this.lineNumbersWidth;
 		this.root.setWidth(gutterWidth);
-		this.root.setHeight(layout.contentSize.height);
+		this.root.setHeight(context.scrollHeight);
 		const hidden = gutterWidth === 0;
 		if (this.domNode.hidden !== hidden) this.domNode.hidden = hidden;
 		this.host.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);

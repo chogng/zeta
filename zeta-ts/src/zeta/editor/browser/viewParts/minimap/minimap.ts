@@ -9,7 +9,8 @@ import { type SemanticTokenSource } from '../../../common/services/resolvedSeman
 import { type EditorScrollPosition } from '../../../common/viewModel/editorViewportContracts.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
-import { type EditorRenderingContext, ViewPart, PartFingerprint, PartFingerprints } from '../../view/viewPart.js';
+import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewPart, PartFingerprint, PartFingerprints } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationsOverlayMarker } from '../decorations/decorations.js';
 
@@ -64,25 +65,24 @@ export class Minimap extends ViewPart {
 		this._register(addDisposableListener(this.domNode, 'pointercancel', () => this.dragging = false));
 	}
 
-	render(context: EditorRenderingContext): void {
+	render(context: RestrictedRenderingContext): void {
 		const geometry = this.source.readMinimapLayout();
 		const visible = this.source.options.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0;
 		this.domNode.style.display = visible ? '' : 'none';
 		if (!visible) return;
 
-		const layout = context.layout;
-		this.domNode.style.left = `${layout.scrollPosition.left + geometry.minimapLeft}px`;
-		this.domNode.style.top = `${layout.scrollPosition.top}px`;
+		this.domNode.style.left = `${context.scrollLeft + geometry.minimapLeft}px`;
+		this.domNode.style.top = `${context.scrollTop}px`;
 		this.domNode.style.width = `${geometry.minimapWidth}px`;
-		this.domNode.style.height = `${layout.viewportSize.height}px`;
+		this.domNode.style.height = `${context.viewportHeight}px`;
 		this.canvas.style.width = `${geometry.minimapCanvasOuterWidth}px`;
 		this.canvas.style.height = `${geometry.minimapCanvasOuterHeight}px`;
 		this.canvas.width = Math.max(1, Math.round(geometry.minimapCanvasInnerWidth));
 		this.canvas.height = Math.max(1, Math.round(geometry.minimapCanvasInnerHeight));
-		this.paint(layout, geometry);
+		this.paint(context, geometry);
 	}
 
-	private paint(layout: EditorViewportLayout, geometry: EditorMinimapLayoutInfo): void {
+	private paint(context: RestrictedRenderingContext, geometry: EditorMinimapLayoutInfo): void {
 		const painter = this.canvas.getContext('2d');
 		if (!painter) return;
 		const width = this.canvas.width;
@@ -112,9 +112,9 @@ export class Minimap extends ViewPart {
 			painter.fillRect(Math.max(0, width - 3), top, 3, markerHeight);
 		}
 
-		const contentHeight = Math.max(layout.viewportSize.height, layout.contentSize.height);
-		const sliderTop = layout.scrollPosition.top / contentHeight * height;
-		const sliderHeight = Math.max(8, layout.viewportSize.height / contentHeight * height);
+		const contentHeight = Math.max(context.viewportHeight, context.scrollHeight);
+		const sliderTop = context.scrollTop / contentHeight * height;
+		const sliderHeight = Math.max(8, context.viewportHeight / contentHeight * height);
 		painter.fillStyle = styles.getPropertyValue('--vscode-minimapSlider-background').trim() || 'rgba(128, 128, 128, 0.25)';
 		painter.fillRect(0, sliderTop, width, Math.min(height - sliderTop, sliderHeight));
 	}

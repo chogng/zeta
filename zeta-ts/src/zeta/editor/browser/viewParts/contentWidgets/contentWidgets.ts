@@ -6,8 +6,12 @@ import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidg
 import { type IPosition, Position } from '../../../common/core/position.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { PositionAffinity } from '../../../common/model.js';
-import { PartFingerprint, PartFingerprints, type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type RenderingContext } from '../../view/renderingContext.js';
+import { PartFingerprint, PartFingerprints, ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
+import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 
 interface ViewContentWidgetsOptions {
 	readonly viewDomNode: HTMLElement;
@@ -15,6 +19,10 @@ interface ViewContentWidgetsOptions {
 	readonly fixedOverflowWidgets: boolean;
 	readonly readContentLeft: () => number;
 	readonly readContentWidth: () => number;
+	readonly model: TextModel;
+	readonly readVisualProjection: () => EditorVisualLineProjection;
+	readonly readTextLeft: () => number;
+	readonly textMeasurer: TextMeasurer;
 }
 
 interface BoxLayoutResult {
@@ -82,11 +90,11 @@ export class ViewContentWidgets extends ViewPart {
 		this.widgets.deleteAndDispose(id);
 	}
 
-	public override prepareRender(context: EditorRenderingContext): void {
+	public override prepareRender(context: RenderingContext): void {
 		for (const [, widget] of this.widgets) widget.prepareRender(context);
 	}
 
-	public render(context: EditorRenderingContext): void {
+	public render(context: RenderingContext): void {
 		for (const [, widget] of this.widgets) widget.render(context);
 	}
 
@@ -140,11 +148,11 @@ class ContentWidget extends Disposable {
 		this.cachedHeight = -1;
 	}
 
-	public prepareRender(context: EditorRenderingContext): void {
+	public prepareRender(context: RenderingContext): void {
 		this.renderData = this.prepareRenderData(context);
 	}
 
-	public render(_context: EditorRenderingContext): void {
+	public render(_context: RenderingContext): void {
 		const renderData = this.renderData;
 		if (!renderData || renderData.kind === 'offViewport') {
 			if (renderData?.preserveFocus) {
@@ -171,19 +179,19 @@ class ContentWidget extends Disposable {
 		safeInvoke(this.actual.afterRender, this.actual, renderData.position, renderData.coordinate);
 	}
 
-	private prepareRenderData(context: EditorRenderingContext): RenderData | null {
+	private prepareRenderData(context: RenderingContext): RenderData | null {
 		const position = this.position;
 		if (this.useDisplayNone || !position || !position.position || position.preference.length === 0) return null;
-		const primary = anchorCoordinate(context, position.position, position.positionAffinity);
+		const primary = anchorCoordinate(context, this.options, position.position, position.positionAffinity);
 		if (!primary) {
 			return {
 				kind: 'offViewport',
 				preserveFocus: this.domNode.domNode.contains(this.domNode.domNode.ownerDocument.activeElement),
 			};
 		}
-		const secondary = position.secondaryPosition ? anchorCoordinate(context, position.secondaryPosition, position.positionAffinity) : null;
+		const secondary = position.secondaryPosition ? anchorCoordinate(context, this.options, position.secondaryPosition, position.positionAffinity) : null;
 		this.updateDimensions();
-		const anchor = reduceAnchor(primary, secondary?.visualLineIndex === primary.visualLineIndex ? secondary : null, this.cachedWidth, context);
+		const anchor = reduceAnchor(primary, secondary?.visualLineIndex === primary.visualLineIndex ? secondary : null, this.cachedWidth, this.options);
 		const placement = this.allowEditorOverflow
 			? this.layoutBoxInPage(anchor, context)
 			: layoutBoxInViewport(anchor, this.cachedWidth, this.cachedHeight, context);
@@ -225,15 +233,15 @@ class ContentWidget extends Disposable {
 		this.cachedHeight = Math.round(rectangle.height);
 	}
 
-	private layoutBoxInPage(anchor: AnchorCoordinate, context: EditorRenderingContext): BoxLayoutResult {
+	private layoutBoxInPage(anchor: AnchorCoordinate, context: RenderingContext): BoxLayoutResult {
 		const viewPosition = getDomNodePagePosition(this.options.viewDomNode);
 		const ownerWindow = this.options.viewDomNode.ownerDocument.defaultView;
 		const windowScrollLeft = ownerWindow?.scrollX ?? 0;
 		const windowScrollTop = ownerWindow?.scrollY ?? 0;
 		const viewport = getClientArea(this.options.viewDomNode.ownerDocument.body);
 		const fixed = this.fixedOverflowWidgets;
-		const anchorLeft = viewPosition.left + this.options.readContentLeft() + anchor.left - context.layout.scrollPosition.left - (fixed ? windowScrollLeft : 0);
-		const anchorTop = viewPosition.top + anchor.top - context.layout.scrollPosition.top - (fixed ? windowScrollTop : 0);
+		const anchorLeft = viewPosition.left + this.options.readContentLeft() + anchor.left - context.scrollLeft - (fixed ? windowScrollLeft : 0);
+		const anchorTop = viewPosition.top + anchor.top - context.scrollTop - (fixed ? windowScrollTop : 0);
 		const minimumLeft = (fixed ? 0 : windowScrollLeft) + 15;
 		const maximumRight = (fixed ? viewport.width : windowScrollLeft + viewport.width) - 15;
 		const left = Math.min(Math.max(anchorLeft, minimumLeft), Math.max(minimumLeft, maximumRight - this.cachedWidth));
@@ -248,13 +256,13 @@ class ContentWidget extends Disposable {
 		};
 	}
 
-	private exactCoordinate(anchor: AnchorCoordinate, context: EditorRenderingContext): RenderedCoordinate {
+	private exactCoordinate(anchor: AnchorCoordinate, context: RenderingContext): RenderedCoordinate {
 		if (!this.allowEditorOverflow) return new RenderedCoordinate(anchor.top, anchor.left);
 		const placement = this.layoutBoxInPage(anchor, context);
 		const viewPosition = getDomNodePagePosition(this.options.viewDomNode);
 		const ownerWindow = this.options.viewDomNode.ownerDocument.defaultView;
 		return new RenderedCoordinate(
-			viewPosition.top + anchor.top - context.layout.scrollPosition.top - (this.fixedOverflowWidgets ? ownerWindow?.scrollY ?? 0 : 0),
+			viewPosition.top + anchor.top - context.scrollTop - (this.fixedOverflowWidgets ? ownerWindow?.scrollY ?? 0 : 0),
 			placement.left,
 		);
 	}
@@ -276,43 +284,42 @@ class RenderedCoordinate implements IContentWidgetRenderedCoordinate {
 	) {}
 }
 
-function anchorCoordinate(context: EditorRenderingContext, position: IPosition, affinity: PositionAffinity | undefined): AnchorCoordinate | null {
-	const overlay = context.overlay;
-	if (!overlay) return null;
+function anchorCoordinate(context: RenderingContext, options: ViewContentWidgetsOptions, position: IPosition, affinity: PositionAffinity | undefined): AnchorCoordinate | null {
 	let validPosition: Position;
 	try {
 		validPosition = Position.lift(position);
-		overlay.model.offsetAt(validPosition);
+		options.model.offsetAt(validPosition);
 	} catch {
 		return null;
 	}
-	const visualLineIndex = overlay.visualLineProjection.visualLineIndexAt(validPosition);
-	if (visualLineIndex < context.layout.visibleLines.startLineIndex || visualLineIndex >= context.layout.visibleLines.endLineIndexExclusive) return null;
-	const visualLine = overlay.visualLineProjection.lineAt(visualLineIndex);
+	const projection = options.readVisualProjection();
+	const visualLineIndex = projection.visualLineIndexAt(validPosition);
+	if (visualLineIndex < context.viewportData.startLineNumber - 1 || visualLineIndex >= context.viewportData.endLineNumber) return null;
+	const visualLine = projection.lineAt(visualLineIndex);
 	if (!visualLine) return null;
-	const renderedPosition = overlay.visibleRangeForPosition(validPosition);
+	const renderedPosition = context.visibleRangeForPosition(validPosition);
 	const left = validPosition.column === 1 && affinity === PositionAffinity.LeftOfInjectedText
 		? 0
-		: renderedPosition?.left ?? overlay.textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + overlay.textMeasurer.measureLineWidth(
-			overlay.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, validPosition.column - 1),
+		: renderedPosition?.left ?? options.readTextLeft() + (visualLine.wrappedTextIndentWidth ?? 0) + options.textMeasurer.measureLineWidth(
+			options.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, validPosition.column - 1),
 		);
-	return new AnchorCoordinate(context.viewportData.getLineTop(visualLineIndex), left, context.layout.lineHeight, visualLineIndex);
+	return new AnchorCoordinate(context.getVerticalOffsetForLineNumber(visualLineIndex + 1), left, context.viewportData.lineHeight, visualLineIndex);
 }
 
-function reduceAnchor(primary: AnchorCoordinate, secondary: AnchorCoordinate | null, width: number, context: EditorRenderingContext): AnchorCoordinate {
+function reduceAnchor(primary: AnchorCoordinate, secondary: AnchorCoordinate | null, width: number, options: ViewContentWidgetsOptions): AnchorCoordinate {
 	if (!secondary) return primary;
-	const clearance = context.overlay?.textMeasurer.measureLineWidth('Ｍ') ?? 0;
+	const clearance = options.textMeasurer.measureLineWidth('Ｍ');
 	const left = secondary.left < primary.left
 		? Math.max(secondary.left, primary.left - width + clearance)
 		: Math.min(secondary.left, primary.left + width - clearance);
 	return new AnchorCoordinate(primary.top, left, primary.height, primary.visualLineIndex);
 }
 
-function layoutBoxInViewport(anchor: AnchorCoordinate, width: number, height: number, context: EditorRenderingContext): BoxLayoutResult {
-	const scrollTop = context.layout.scrollPosition.top;
-	const scrollLeft = context.layout.scrollPosition.left;
-	const viewportBottom = scrollTop + context.layout.viewportSize.height;
-	const viewportRight = scrollLeft + context.layout.viewportSize.width;
+function layoutBoxInViewport(anchor: AnchorCoordinate, width: number, height: number, context: RenderingContext): BoxLayoutResult {
+	const scrollTop = context.scrollTop;
+	const scrollLeft = context.scrollLeft;
+	const viewportBottom = scrollTop + context.viewportHeight;
+	const viewportRight = scrollLeft + context.viewportWidth;
 	return {
 		fitsAbove: anchor.top - scrollTop >= height,
 		aboveTop: anchor.top - height,

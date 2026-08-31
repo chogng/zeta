@@ -3,7 +3,8 @@ import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fa
 import { getDomNodePagePosition, type IDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type IOverlayWidget, type IOverlayWidgetPosition, type IOverlayWidgetPositionCoordinates, OverlayWidgetPositionPreference } from '../../editorBrowser.js';
-import { PartFingerprint, PartFingerprints, type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { PartFingerprint, PartFingerprints, ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 interface ViewOverlayWidgetsOptions {
@@ -100,9 +101,9 @@ export class ViewOverlayWidgets extends ViewPart {
 		this._viewDomNodeRect = getDomNodePagePosition(this._viewDomNode);
 	}
 
-	public render(context: EditorRenderingContext): void {
-		this._editorWidth = context.layout.viewportSize.width;
-		this._editorHeight = context.layout.viewportSize.height;
+	public render(context: RestrictedRenderingContext): void {
+		this._editorWidth = context.viewportWidth;
+		this._editorHeight = context.viewportHeight;
 		this._minimapWidth = this.options.readMinimapWidth();
 		this._domNode.setWidth(this._editorWidth);
 		const stacks = new Map<OverlayWidgetPositionPreference, number>();
@@ -119,7 +120,7 @@ export class ViewOverlayWidgets extends ViewPart {
 		}
 	}
 
-	private _renderWidget(widget: OverlayWidget, context: EditorRenderingContext, stackOffset: number): void {
+	private _renderWidget(widget: OverlayWidget, context: RestrictedRenderingContext, stackOffset: number): void {
 		widget.render(context, this._viewDomNodeRect, stackOffset, {
 			editorWidth: this._editorWidth,
 			editorHeight: this._editorHeight,
@@ -176,7 +177,7 @@ class OverlayWidget extends Disposable {
 		return true;
 	}
 
-	public render(context: EditorRenderingContext, viewPagePosition: IDomNodePagePosition | null, stackOffset: number, layout: OverlayWidgetLayout): void {
+	public render(context: RestrictedRenderingContext, viewPagePosition: IDomNodePagePosition | null, stackOffset: number, layout: OverlayWidgetLayout): void {
 		const preference = this.position?.preference;
 		this.domNode.setDisplay(preference === null || preference === undefined ? 'none' : 'block');
 		if (preference === null || preference === undefined) return;
@@ -190,7 +191,7 @@ class OverlayWidget extends Disposable {
 		this.domNode.setTop(coordinates.top);
 	}
 
-	private coordinatePosition(position: IOverlayWidgetPositionCoordinates, context: EditorRenderingContext, viewPagePosition: IDomNodePagePosition | null): IOverlayWidgetPositionCoordinates {
+	private coordinatePosition(position: IOverlayWidgetPositionCoordinates, context: RestrictedRenderingContext, viewPagePosition: IDomNodePagePosition | null): IOverlayWidgetPositionCoordinates {
 		if (!this.allowEditorOverflow || !viewPagePosition) return position;
 		const targetWindow = this.options.viewDomNode.ownerDocument.defaultView;
 		const fixed = this.options.fixedOverflowWidgets;
@@ -200,7 +201,7 @@ class OverlayWidget extends Disposable {
 		};
 	}
 
-	private preferredPosition(preference: OverlayWidgetPositionPreference, context: EditorRenderingContext, width: number, height: number, stackOffset: number, viewPagePosition: IDomNodePagePosition | null, layout: OverlayWidgetLayout): IOverlayWidgetPositionCoordinates {
+	private preferredPosition(preference: OverlayWidgetPositionPreference, context: RestrictedRenderingContext, width: number, height: number, stackOffset: number, viewPagePosition: IDomNodePagePosition | null, layout: OverlayWidgetLayout): IOverlayWidgetPositionCoordinates {
 		const right = Math.max(0, layout.editorWidth - layout.verticalScrollbarWidth - layout.minimapWidth);
 		let left = 0;
 		let top = 0;

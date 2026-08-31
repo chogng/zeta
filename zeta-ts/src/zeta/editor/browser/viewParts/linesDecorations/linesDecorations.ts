@@ -3,10 +3,10 @@ import { h, reset } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
 import { DecorationsOverlay } from "../decorations/decorations.js";
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext } from "../../view/viewPart.js";
+import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorations.js";
-import { type EditorOverlayContext } from '../../view/renderingContext.js';
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 
 export interface LinesDecorationLaneLayout {
 	readonly owner: string;
@@ -19,7 +19,7 @@ export class LinesDecorationsOverlay extends DynamicViewOverlay {
 	private readonly decorations: DecorationsOverlay;
 	private readonly lanes: ReadonlyMap<string, LinesDecorationLaneLayout>;
 
-	constructor(private readonly context: ViewContext, decorations: DecorationsOverlay, sources: readonly DecorationSource[]) {
+	constructor(private readonly context: ViewContext, decorations: DecorationsOverlay, sources: readonly DecorationSource[], private readonly ownerDocument: Document, private readonly readVisualProjection: () => EditorVisualLineProjection) {
 		super();
 		this.context.addEventHandler(this);
 		this.decorations = decorations;
@@ -31,12 +31,12 @@ export class LinesDecorationsOverlay extends DynamicViewOverlay {
 		super.dispose();
 	}
 
-	public prepareRender(context: EditorRenderingContext): void {
-		this.prepareRows(context, (overlay, rows) => projectStanzaLinesDecorations(
-			overlay,
-			this.decorations.visibleDecorations(overlay),
+	public prepareRender(context: RenderingContext): void {
+		this.prepareRows(context, this.ownerDocument, rows => projectStanzaLinesDecorations(
+			this.readVisualProjection(),
+			this.decorations.visibleDecorations(context),
 			this.lanes,
-			context.layout.scrollPosition.left,
+			context.scrollLeft,
 			rows,
 		));
 	}
@@ -44,7 +44,7 @@ export class LinesDecorationsOverlay extends DynamicViewOverlay {
 
 /** Projects line-side decoration classes into the currently rendered rows. */
 function projectStanzaLinesDecorations(
-	context: EditorOverlayContext,
+	projection: EditorVisualLineProjection,
 	decorations: readonly ResolvedDecoration[],
 	lanes: ReadonlyMap<string, LinesDecorationLaneLayout>,
 	scrollLeft: number,
@@ -66,7 +66,7 @@ function projectStanzaLinesDecorations(
 
 	for (const row of rows.values()) reset(row);
 	for (const [visualLineIndex, row] of rows) {
-		const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
+		const visualLine = projection.lineAt(visualLineIndex);
 		if (!visualLine || !visualLine.firstForLogicalLine) continue;
 		for (const decoration of decorationsByLogicalLine.get(visualLine.logicalLineIndex) ?? []) {
 			const presentation = decoration.linesDecoration!;
@@ -76,7 +76,7 @@ function projectStanzaLinesDecorations(
 				presentation.className,
 				visualLine.logicalLineIndex === decoration.range.startLineNumber - 1 ? presentation.firstLineClassName : undefined,
 			].filter((className): className is string => className !== undefined);
-			const element = presentation.icon ? h(context.ownerDocument, 'button') : h(context.ownerDocument, 'div');
+			const element = presentation.icon ? h(row.ownerDocument, 'button') : h(row.ownerDocument, 'div');
 			if (presentation.icon) {
 				const button = element as HTMLButtonElement;
 				button.type = 'button';

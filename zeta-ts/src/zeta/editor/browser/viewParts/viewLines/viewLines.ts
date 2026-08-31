@@ -7,13 +7,13 @@ import { type EditorLineRange } from '../../../common/viewModel/editorViewportCo
 import { type Position } from '../../../common/core/position.js';
 import { type Range } from '../../../common/core/range.js';
 import { type TextModelChange } from '../../../common/core/textChange.js';
-import { type EditorViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
+import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { ViewLine, type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
 import { type ViewLineOptions } from './viewLineOptions.js';
 import { ViewLayer } from '../../view/viewLayer.js';
-import { type EditorLineVisibleRange, type EditorVisiblePosition } from '../../view/renderingContext.js';
+import { FloatHorizontalRange, HorizontalPosition, HorizontalRange, type IViewLines, LineVisibleRanges } from '../../view/renderingContext.js';
 
 export interface ViewLinesOptions {
 	readonly host: HTMLElement;
@@ -24,10 +24,11 @@ export interface ViewLinesOptions {
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly viewLineOptions: ViewLineOptions;
 	readonly typicalHalfwidthCharacterWidth: number;
+	readonly readGpuLineIndexes?: () => ReadonlySet<number>;
 }
 
 /** Projects text and semantic tokens into the generic virtualized ViewLayer. */
-export class ViewLines extends Disposable {
+export class ViewLines extends Disposable implements IViewLines {
 	public readonly domNode: HTMLDivElement;
 	private readonly model: TextModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -35,6 +36,7 @@ export class ViewLines extends Disposable {
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	private readonly layer: ViewLayer<ViewLine>;
 	private readonly typicalHalfwidthCharacterWidth: number;
+	private readonly readGpuLineIndexes: () => ReadonlySet<number>;
 
 	constructor(options: ViewLinesOptions) {
 		super();
@@ -44,6 +46,7 @@ export class ViewLines extends Disposable {
 		this.bracketColorizationSource = options.bracketColorizationSource;
 		if (!Number.isFinite(options.typicalHalfwidthCharacterWidth) || options.typicalHalfwidthCharacterWidth <= 0) throw new RangeError('Stanza view-line halfwidth character width must be positive');
 		this.typicalHalfwidthCharacterWidth = options.typicalHalfwidthCharacterWidth;
+		this.readGpuLineIndexes = options.readGpuLineIndexes ?? (() => EMPTY_LINE_INDEXES);
 		this.layer = this._register(new ViewLayer<ViewLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
@@ -68,18 +71,20 @@ export class ViewLines extends Disposable {
 		return this.layer.renderedLines;
 	}
 
-	public render(viewportData: EditorViewportData): void {
+	public render(viewportData: ViewportData): void {
 		this.layer.render(viewportData);
 	}
 
-	public linesVisibleRangesForRange(range: Range, includeNewLines: boolean): readonly EditorLineVisibleRange[] | undefined {
+	public linesVisibleRangesForRange(range: Range, includeNewLines: boolean): LineVisibleRanges[] | null {
 		this.model.offsetAt(range.getStartPosition());
 		this.model.offsetAt(range.getEndPosition());
 		const projection = this.readVisualProjection();
-		if (projection.modelVersion !== this.model.version) return undefined;
-		const result: EditorLineVisibleRange[] = [];
-		let intersectsRenderedLine = false;
+		if (projection.modelVersion !== this.model.version) return null;
+		const result: LineVisibleRanges[] = [];
+		const endVisualLineIndex = projection.visualLineIndexAt(range.getEndPosition());
+		const gpuLineIndexes = this.readGpuLineIndexes();
 		for (const [visualLineIndex, renderedLine] of this.layer.renderedLines) {
+			if (gpuLineIndexes.has(visualLineIndex)) continue;
 			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine || visualLine.logicalLineIndex < range.startLineNumber - 1 || visualLine.logicalLineIndex > range.endLineNumber - 1) continue;
 			const startColumn = visualLine.logicalLineIndex === range.startLineNumber - 1
@@ -90,40 +95,46 @@ export class ViewLines extends Disposable {
 				: visualLine.endColumn;
 			const includesNewLine = includeNewLines && visualLine.lastForLogicalLine && visualLine.logicalLineIndex < range.endLineNumber - 1;
 			if (endColumn < startColumn || (endColumn === startColumn && !includesNewLine)) continue;
-			intersectsRenderedLine = true;
 			const startOffset = startColumn - visualLine.startColumn;
 			const endOffset = endColumn - visualLine.startColumn;
-			if (!renderedLine.hasTextOffset(startOffset) || !renderedLine.hasTextOffset(endOffset)) return undefined;
+			if (!renderedLine.hasTextOffset(startOffset) || !renderedLine.hasTextOffset(endOffset)) return null;
 			const ranges = renderedLine.getHorizontalRanges(startOffset, endOffset);
-			if (!ranges) return undefined;
-			const lineRanges = ranges.map(horizontalRange => ({
-				visualLineIndex,
-				left: horizontalRange.left,
-				width: horizontalRange.width,
-			}));
+			if (!ranges) return null;
+			const lineRanges = ranges.map(range => new FloatHorizontalRange(range.left, range.width));
 			if (includesNewLine) {
 				const lastRange = lineRanges[lineRanges.length - 1];
-				if (!lastRange) return undefined;
+				if (!lastRange) return null;
 				lastRange.width += this.typicalHalfwidthCharacterWidth;
 				if (renderedLine.isRightToLeft()) lastRange.left -= this.typicalHalfwidthCharacterWidth;
 			}
-			result.push(...lineRanges.map(lineRange => Object.freeze(lineRange)));
+			result.push(new LineVisibleRanges(
+				false,
+				visualLineIndex + 1,
+				HorizontalRange.from(lineRanges),
+				visualLineIndex < endVisualLineIndex,
+			));
 		}
-		return intersectsRenderedLine ? Object.freeze(result) : undefined;
+		return result.length > 0 ? result : null;
 	}
 
-	public visibleRangeForPosition(position: Position): EditorVisiblePosition | undefined {
+	public visibleRangeForPosition(position: Position): HorizontalPosition | null {
 		this.model.offsetAt(position);
 		const projection = this.readVisualProjection();
-		if (projection.modelVersion !== this.model.version) return undefined;
+		if (projection.modelVersion !== this.model.version) return null;
 		const visualLineIndex = projection.visualLineIndexAt(position);
+		if (this.readGpuLineIndexes().has(visualLineIndex)) return null;
 		const visualLine = projection.lineAt(visualLineIndex);
 		const renderedLine = this.layer.renderedLines.get(visualLineIndex);
-		if (!visualLine || !renderedLine) return undefined;
+		if (!visualLine || !renderedLine) return null;
 		const offset = position.column - 1 - visualLine.startColumn;
-		if (!renderedLine.hasTextOffset(offset)) return undefined;
+		if (!renderedLine.hasTextOffset(offset)) return null;
 		const left = renderedLine.getCaretLeft(offset);
-		return left === undefined ? undefined : Object.freeze({ visualLineIndex, left, isRightToLeft: renderedLine.isRightToLeft() });
+		return left === undefined ? null : new HorizontalPosition(false, left);
+	}
+
+	public isRightToLeftAtPosition(position: Position): boolean {
+		const visualLineIndex = this.readVisualProjection().visualLineIndexAt(position);
+		return this.layer.renderedLines.get(visualLineIndex)?.isRightToLeft() ?? false;
 	}
 
 	/** Reprojects semantic tokens without rebuilding the visible row window. */
@@ -163,6 +174,8 @@ export class ViewLines extends Disposable {
 		return tokens;
 	}
 }
+
+const EMPTY_LINE_INDEXES: ReadonlySet<number> = new Set();
 
 function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColumn: number, endColumn: number): readonly ResolvedSemanticToken[] {
 	return Object.freeze(tokens.flatMap(token => {

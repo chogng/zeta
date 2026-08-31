@@ -3,7 +3,7 @@ import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { GPULifecycle } from '../../gpu/gpuDisposable.js';
 import { GlyphRasterizer } from '../../gpu/raster/glyphRasterizer.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
+import { type EditorViewportLayout, type ViewLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type SemanticTokenSource, type ViewLine } from '../viewLines/viewLine.js';
 import { type ViewLineOptions } from '../viewLines/viewLineOptions.js';
@@ -11,13 +11,19 @@ import { type ViewLines } from '../viewLines/viewLines.js';
 import { BindingId, type GpuFrame, type IGpuRenderStrategy } from '../../gpu/gpu.js';
 import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
 import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
-import { type EditorRenderingContext } from '../../view/renderingContext.js';
+import { type RenderingContext } from '../../view/renderingContext.js';
 import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { Position } from '../../../common/core/position.js';
+import { type Range } from '../../../common/core/range.js';
+import { HorizontalPosition, HorizontalRange, type IViewLines, LineVisibleRanges } from '../../view/renderingContext.js';
 
 export interface ViewLinesGpuOptions {
 	readonly host: HTMLElement;
+	readonly viewLayout: ViewLayout;
 	readonly model: TextModel;
+	readonly readVisualProjection: () => EditorVisualLineProjection;
+	readonly readTextLeft: () => number;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly paddingTop: number;
@@ -34,7 +40,7 @@ interface PreparedGpuFrame {
 const VERTEX_FLOAT_COUNT = 5;
 
 /** Draws eligible visible text rows through the VS Code-aligned WebGPU glyph-atlas path. */
-export class ViewLinesGpu extends ViewPart {
+export class ViewLinesGpu extends ViewPart implements IViewLines {
 	private readonly context: ViewGpuContext;
 	private readonly vertexBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly uniformBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
@@ -47,10 +53,12 @@ export class ViewLinesGpu extends ViewPart {
 	private atlasRevision = -1;
 	private uploadedPageVersions: number[] = [];
 	private rasterizer: GlyphRasterizer | undefined;
-	private lastRenderingContext: EditorRenderingContext | undefined;
-	private pendingRenderingContext: EditorRenderingContext | undefined;
+	private lastRenderingContext: RenderingContext | undefined;
+	private pendingRenderingContext: RenderingContext | undefined;
 	private rendering = false;
 	private renderedGpuLineIndexes = new Set<number>();
+	private lastFrame: GpuFrame | undefined;
+	private lastVisualLines: EditorVisualLineProjection | undefined;
 
 	constructor(context: ViewContext, private readonly options: ViewLinesGpuOptions) {
 		super(context);
@@ -68,7 +76,7 @@ export class ViewLinesGpu extends ViewPart {
 		return this.renderedGpuLineIndexes;
 	}
 
-	public prepareRender(_context: EditorRenderingContext): void {
+	public prepareRender(_context: RenderingContext): void {
 	}
 
 	public override onConfigurationChanged(): boolean { return true; }
@@ -83,7 +91,7 @@ export class ViewLinesGpu extends ViewPart {
 	public override onThemeChanged(): boolean { return true; }
 	public override onZonesChanged(): boolean { return true; }
 
-	public render(context: EditorRenderingContext): void {
+	public render(context: RenderingContext): void {
 		this.lastRenderingContext = context;
 		this.pendingRenderingContext = context;
 		if (this.rendering) return;
@@ -103,22 +111,87 @@ export class ViewLinesGpu extends ViewPart {
 		}
 	}
 
-	private renderFrame(context: EditorRenderingContext): void {
-		const layout = context.layout;
+	public linesVisibleRangesForRange(range: Range, includeNewLines: boolean): LineVisibleRanges[] | null {
+		this.options.model.offsetAt(range.getStartPosition());
+		this.options.model.offsetAt(range.getEndPosition());
+		const frame = this.lastFrame;
+		const projection = this.lastVisualLines;
+		if (!frame || !projection || !this.isVisualProjectionCurrent(projection)) return null;
+		const endVisualLineIndex = projection.visualLineIndexAt(range.getEndPosition());
+		const result: LineVisibleRanges[] = [];
+		for (const [visualLineIndex, geometry] of frame.lineGeometries) {
+			const visualLine = projection.lineAt(visualLineIndex);
+			if (!visualLine || visualLine.logicalLineIndex < range.startLineNumber - 1 || visualLine.logicalLineIndex > range.endLineNumber - 1) continue;
+			const startColumn = visualLine.logicalLineIndex === range.startLineNumber - 1 ? Math.max(visualLine.startColumn, range.startColumn - 1) : visualLine.startColumn;
+			const endColumn = visualLine.logicalLineIndex === range.endLineNumber - 1 ? Math.min(visualLine.endColumn, range.endColumn - 1) : visualLine.endColumn;
+			const includeNewLine = includeNewLines && visualLine.lastForLogicalLine && visualLine.logicalLineIndex < range.endLineNumber - 1;
+			if (endColumn < startColumn || (endColumn === startColumn && !includeNewLine)) continue;
+			const startOffset = startColumn - visualLine.startColumn;
+			const endOffset = endColumn - visualLine.startColumn;
+			const left = geometry.leftByOffset[startOffset];
+			const right = geometry.leftByOffset[endOffset];
+			if (left === undefined || right === undefined) continue;
+			result.push(new LineVisibleRanges(
+				false,
+				visualLineIndex + 1,
+				[new HorizontalRange(left, Math.max(0, right - left) + (includeNewLine ? geometry.newLineWidth : 0))],
+				visualLineIndex < endVisualLineIndex,
+			));
+		}
+		return result.length > 0 ? result : null;
+	}
+
+	public visibleRangeForPosition(position: Position): HorizontalPosition | null {
+		this.options.model.offsetAt(position);
+		const projection = this.lastVisualLines;
+		if (!projection || !this.lastFrame || !this.isVisualProjectionCurrent(projection)) return null;
+		const visualLineIndex = projection.visualLineIndexAt(position);
+		const visualLine = projection.lineAt(visualLineIndex);
+		const geometry = this.lastFrame.lineGeometries.get(visualLineIndex);
+		if (!visualLine || !geometry) return null;
+		const left = geometry.leftByOffset[position.column - 1 - visualLine.startColumn];
+		return left === undefined ? null : new HorizontalPosition(false, left);
+	}
+
+	public getLineWidth(lineNumber: number): number | undefined {
+		const geometry = this.lastFrame?.lineGeometries.get(lineNumber - 1);
+		return geometry?.leftByOffset.at(-1);
+	}
+
+	public getPositionAtCoordinate(lineNumber: number, mouseContentHorizontalOffset: number): Position | undefined {
+		if (!Number.isFinite(mouseContentHorizontalOffset)) throw new RangeError('GPU hit-test offset must be finite');
+		const geometry = this.lastFrame?.lineGeometries.get(lineNumber - 1);
+		if (!geometry) return undefined;
+		const offsets = geometry.leftByOffset;
+		let column = 0;
+		while (column + 1 < offsets.length) {
+			const left = offsets[column];
+			let nextColumn = column + 1;
+			while (nextColumn < offsets.length && offsets[nextColumn] === left) nextColumn += 1;
+			const right = offsets[nextColumn];
+			if (left === undefined || right === undefined || mouseContentHorizontalOffset < left + (right - left) / 2) break;
+			column = nextColumn;
+		}
+		return new Position(lineNumber, column + 1);
+	}
+
+	private renderFrame(context: RenderingContext): void {
+		const layout = this.options.viewLayout.layout;
 		this.context.layout(layout.viewportSize.width, layout.viewportSize.height, layout.scrollPosition.left, layout.scrollPosition.top);
-		const overlay = context.overlay;
-		if (layout.viewZones || this.context.status !== 'ready' || this.isForcedColors() || !overlay || !this.isRenderingContextCurrent(context, overlay.visualLineProjection)) {
+		const visualLines = this.options.readVisualProjection();
+		if (layout.viewZones || this.context.status !== 'ready' || this.isForcedColors() || !this.isVisualProjectionCurrent(visualLines)) {
 			this.showDomText();
 			this.context.hideCanvas();
 			return;
 		}
-		const visualLines = overlay.visualLineProjection;
 		this.validateRenderedLines(visualLines, this.options.viewLines.renderedLines);
 		this.ensureResources(visualLines);
 		const prepared = this.createFrame(context, visualLines);
 		this.uploadAtlas();
 		this.draw(prepared.frame, layout);
 		this.applyRenderedLines(prepared.renderedLines, prepared.frame.gpuLineIndexes);
+		this.lastFrame = prepared.frame;
+		this.lastVisualLines = visualLines;
 		this.context.showCanvas();
 	}
 
@@ -202,20 +275,18 @@ export class ViewLinesGpu extends ViewPart {
 		});
 	}
 
-	private createFrame(context: EditorRenderingContext, visualLines: EditorVisualLineProjection): PreparedGpuFrame {
-		const overlay = context.overlay;
-		if (!overlay) throw new Error('WebGPU frame requires a version-bound overlay snapshot');
+	private createFrame(_context: RenderingContext, visualLines: EditorVisualLineProjection): PreparedGpuFrame {
 		const rootStyle = this.context.canvas.ownerDocument.defaultView!.getComputedStyle(this.options.host);
 		this.ensureRenderStrategy(visualLines);
 		const renderedLines = new Map(this.options.viewLines.renderedLines);
 		const frame = this.renderStrategy.value!.update({
-			layout: context.layout,
+			layout: this.options.viewLayout.layout,
 			model: this.options.model,
 			visualLines,
 			visibleLineIndexes: new Set(renderedLines.keys()),
 			semanticTokenSource: this.options.semanticTokenSource,
 			bracketColorizationSource: this.options.bracketColorizationSource,
-			textLeft: overlay.textLeft,
+			textLeft: this.options.readTextLeft(),
 			paddingTop: this.options.paddingTop,
 			textDirection: this.options.viewLineOptions.textDirection,
 			fontLigatures: this.options.viewLineOptions.fontLigatures,
@@ -288,6 +359,8 @@ export class ViewLinesGpu extends ViewPart {
 	}
 
 	private showDomText(): void {
+		this.lastFrame = undefined;
+		this.lastVisualLines = undefined;
 		this.renderedGpuLineIndexes.clear();
 		for (const line of this.options.viewLines.renderedLines.values()) line.domNode.domNode.classList.remove('gpu-rendered');
 	}
@@ -309,8 +382,8 @@ export class ViewLinesGpu extends ViewPart {
 			: new ViewportRenderStrategy(rasterizer);
 	}
 
-	private isRenderingContextCurrent(context: EditorRenderingContext, visualLines: EditorVisualLineProjection): boolean {
-		return context.viewportData.modelVersion === this.options.model.version && visualLines.modelVersion === this.options.model.version;
+	private isVisualProjectionCurrent(visualLines: EditorVisualLineProjection): boolean {
+		return visualLines.modelVersion === this.options.model.version;
 	}
 
 	private validateRenderedLines(visualLines: EditorVisualLineProjection, renderedLines: ReadonlyMap<number, ViewLine>): void {

@@ -1,7 +1,7 @@
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../viewParts/viewLines/viewLine.js';
 import { type IStyledTextureAtlasPageGlyph } from './atlas/atlas.js';
 import { segmentContent } from './contentSegmenter.js';
-import { type GpuFrame, type GpuRenderInput } from './gpu.js';
+import { type GpuFrame, type GpuLineGeometry, type GpuRenderInput } from './gpu.js';
 import { type GlyphRasterizer } from './raster/glyphRasterizer.js';
 import { type IStyledGlyphStyle } from './raster/raster.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -38,6 +38,7 @@ export function observeDevicePixelDimensions(element: HTMLElement, ownerWindow: 
 export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: GpuRenderInput, lineIndexes: Iterable<number>): GpuFrame {
 		const vertices: number[] = [];
 		const gpuLineIndexes = new Set<number>();
+		const lineGeometries = new Map<number, GpuLineGeometry>();
 		const baseStyle = readBaseStyle(input.rootStyle);
 		const tabSize = positiveNumber(Number.parseFloat(input.rootStyle.tabSize), 4);
 		for (const visualLineIndex of lineIndexes) {
@@ -49,28 +50,39 @@ export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: Gp
 			if (!canRenderLine(input, text, tokens)) continue;
 			const lineStart = (input.textLeft + (visualLine.wrappedTextIndentWidth ?? 0)) * glyphRasterizer.devicePixelRatio;
 			let deviceX = lineStart;
+			const leftByOffset = new Array<number>(text.length + 1);
+			leftByOffset[0] = lineStart / glyphRasterizer.devicePixelRatio;
 			const lineTop = (input.paddingTop + visualLineIndex * input.layout.lineHeight) * glyphRasterizer.devicePixelRatio;
 			const segments = segmentContent(text, isBasicASCII(text), false);
 			for (let index = 0; index < text.length; index += 1) {
 				const segment = segments.getSegmentData(index);
 				if (!segment) continue;
+				const segmentStart = deviceX / glyphRasterizer.devicePixelRatio;
 				const logicalColumn = visualLine.startColumn + segment.index;
 				const style = resolveGlyphStyle(baseStyle, input.rootStyle, tokens, brackets, logicalColumn);
 				if (segment.segment === '\t') {
 					const space = input.atlas.getGlyph(glyphRasterizer, ' ', style, deviceX);
 					const tabStop = Math.max(1, space.advance * tabSize);
 					deviceX = lineStart + (Math.floor((deviceX - lineStart) / tabStop) + 1) * tabStop;
-					continue;
+				} else {
+					const glyph = input.atlas.getGlyph(glyphRasterizer, segment.segment, style, deviceX);
+					const fontHeight = glyph.fontBoundingBoxAscent + glyph.fontBoundingBoxDescent;
+					const baseline = Math.round(lineTop + Math.floor((input.layout.lineHeight * glyphRasterizer.devicePixelRatio - fontHeight) / 2) + glyph.fontBoundingBoxAscent);
+					appendGlyphQuad(vertices, glyph, Math.floor(deviceX) + glyph.originOffsetX, baseline + glyph.originOffsetY);
+					deviceX += glyph.advance;
 				}
-				const glyph = input.atlas.getGlyph(glyphRasterizer, segment.segment, style, deviceX);
-				const fontHeight = glyph.fontBoundingBoxAscent + glyph.fontBoundingBoxDescent;
-				const baseline = Math.round(lineTop + Math.floor((input.layout.lineHeight * glyphRasterizer.devicePixelRatio - fontHeight) / 2) + glyph.fontBoundingBoxAscent);
-				appendGlyphQuad(vertices, glyph, Math.floor(deviceX) + glyph.originOffsetX, baseline + glyph.originOffsetY);
-				deviceX += glyph.advance;
+				for (let offset = segment.index; offset < segment.index + segment.segment.length; offset += 1) leftByOffset[offset] = segmentStart;
+				leftByOffset[segment.index + segment.segment.length] = deviceX / glyphRasterizer.devicePixelRatio;
 			}
-			if (input.visibleLineIndexes.has(visualLineIndex)) gpuLineIndexes.add(visualLineIndex);
+			if (input.visibleLineIndexes.has(visualLineIndex)) {
+				gpuLineIndexes.add(visualLineIndex);
+				lineGeometries.set(visualLineIndex, Object.freeze({
+					leftByOffset: Object.freeze(leftByOffset),
+					newLineWidth: (glyphRasterizer.getTextMetrics(' ', baseStyle).width / glyphRasterizer.devicePixelRatio) + baseStyle.letterSpacing,
+				}));
+			}
 		}
-		return Object.freeze({ vertices: new Float32Array(vertices), gpuLineIndexes });
+		return Object.freeze({ vertices: new Float32Array(vertices), gpuLineIndexes, lineGeometries });
 	}
 
 function canRenderLine(input: GpuRenderInput, text: string, tokens: readonly ResolvedSemanticToken[]): boolean {

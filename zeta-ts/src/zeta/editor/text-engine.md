@@ -103,7 +103,7 @@ flowchart LR
     Change[Model / layout / decoration change] --> Project[View.project]
     Layout[Current EditorViewportLayout] --> Project
     Project --> Lines[ViewLines]
-    Lines --> Context[EditorRenderingContext]
+    Lines --> Context[RenderingContext]
     Context --> Prepare[Part prepareRender]
     Prepare --> Parts[Part render]
     Parts --> DOM[DOM / GPU mutation]
@@ -113,9 +113,9 @@ flowchart LR
 - `ContentViewOverlays` 和 `MarginViewOverlays` 分别持有一份可见行 DOM；`DynamicViewOverlay` 只准备数据并按行返回内容。
 - 光标与块装饰持有跨行稳定 DOM，因此作为独立 `ViewPart`；旧的 `EditorViewPartCollection` 和各覆盖层独立行容器已经移除。
 
-### 待对齐：渲染上下文与输入 Part
+### 渲染上下文与输入 Part
 
-下一步收敛 `RenderingContext` 的精确成员、GPU 的 `IViewLines` 几何查询，以及两个输入实现的 `ViewPart` 渲染阶段；不再建立第二套调度链。
+`RestrictedRenderingContext` 只发布一次渲染所需的滚动、视口、纵向坐标与装饰查询；`RenderingContext` 在此基础上合并 DOM/GPU `IViewLines` 几何。特性状态由各 Part 显式接收，不再通过共享元数据容器查找。剩余工作是让两个输入实现进入同一 `ViewPart` 渲染阶段。
 
 ### DOM 与 Part 边界
 
@@ -203,7 +203,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | --- | --- | --- |
 | TextModel、ITextBuffer、history、snapshot、tracked range | 部分具备 | 行为可用；`ITextModel`、PieceTree 与 ModelService 契约仍在待处理账目 |
 | Multi-selection、IME、clipboard、pointer/keyboard input | 部分具备 | 本地链可用；cursor 与 edit-context owner 尚未对齐 |
-| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | ViewPart 生命周期和统一覆盖层已接通；渲染上下文与 GPU 几何查询仍待收敛 |
+| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | ViewPart 生命周期、统一覆盖层、标准渲染上下文和 DOM/GPU `IViewLines` 几何已接通；GPU 初始化 owner 仍待收敛 |
 | Token、diagnostic、completion、TextMate 和 App Server parser provider | 部分具备 | 异步版本边界存在；language service 与 tokenization owner 尚未对齐 |
 | Diff editor 与 App Server diff | 部分具备 | 本地 review widget 可用；canonical DiffEditorWidget/MultiDiffEditorWidget 契约尚未完成 |
 | `ViewContext → ViewPart → View` | 部分具备 | 事件、渲染阶段和释放已统一；两个输入实现仍待进入同一 Part 生命周期 |
@@ -221,7 +221,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | `common/viewModel/viewModelLines.ts` | wrapping、visibility 和 model-versioned visual-line collection | folding、viewport、line-count changes |
 | `browser/view/domLineBreaksComputer.ts` | browser font measurement for logical-line breaks | DOM measurement、grapheme boundaries |
 | `browser/view.ts` | 当前 view host 和 scheduler | Part order、DOM topology、scroll |
-| `browser/view/renderingContext.ts` | 单次 render pass 的 layout、viewport data 和 version-gated overlay snapshot | 全部 View Parts 与 rendering-context tests |
+| `browser/view/renderingContext.ts` | 单次 render pass 的标准视口字段、纵向坐标、装饰与行几何查询 | 全部 View Parts 与 rendering-context tests |
 | `browser/viewParts/viewPart.ts` | view context、Part contract 和 collection | 全部 View Parts 与 render tests |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | canonical browser editing surface | input、accessibility、contribution integration |
 | `browser/editorExtensions.ts` | feature-neutral registry/capability seam | `editor.*.all.ts` 与 contribution order |

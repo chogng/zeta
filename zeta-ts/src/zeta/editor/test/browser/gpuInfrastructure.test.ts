@@ -51,7 +51,10 @@ test('ContentSegmenter returns one entry for a complete grapheme', () => {
 test('Full-file GPU rendering starts at canonical coordinates and leaves subpixel placement to the atlas', () => {
 	using model = new TextModel('abcd');
 	const visualLines = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4]], [16]);
-	using strategy = new FullFileRenderStrategy({ devicePixelRatio: 1 } as unknown as GlyphRasterizer);
+	using strategy = new FullFileRenderStrategy({
+		devicePixelRatio: 1,
+		getTextMetrics: () => ({ width: 8 }),
+	} as unknown as GlyphRasterizer);
 	const frame = strategy.update({
 		layout: {
 			lineHeight: 20,
@@ -81,6 +84,8 @@ test('Full-file GPU rendering starts at canonical coordinates and leaves subpixe
 	assert.equal(frame.vertices[60], 60);
 	assert.equal(frame.vertices[90], 68);
 	assert.equal(frame.vertices.length, 4 * 6 * 5);
+	assert.deepEqual(frame.lineGeometries.get(0), { leftByOffset: [44.2, 52.45, 60.7], newLineWidth: 8 });
+	assert.deepEqual(frame.lineGeometries.get(1), { leftByOffset: [60.2, 68.45, 76.7], newLineWidth: 8 });
 	const glyphBounds = Array.from({ length: 4 }, (_, glyphIndex) => {
 		const yCoordinates = Array.from({ length: 6 }, (_, vertexIndex) => frame.vertices[glyphIndex * 30 + vertexIndex * 5 + 1]!);
 		return {
@@ -90,6 +95,40 @@ test('Full-file GPU rendering starts at canonical coordinates and leaves subpixe
 	});
 	assert.deepEqual(glyphBounds.map(bounds => Math.floor((bounds.top + bounds.bottom) / 2 / 20)), [0, 0, 1, 1]);
 	assert.ok(Math.max(glyphBounds[0]!.bottom, glyphBounds[1]!.bottom) < Math.min(glyphBounds[2]!.top, glyphBounds[3]!.top));
+});
+
+test('GPU frame geometry preserves tab stops and complete grapheme boundaries', () => {
+	using model = new TextModel('a\t👩‍💻b');
+	const visualLines = EditorVisualLineProjection.fromBreakColumns(model, [[model.getLineMaxColumn(1) - 1]]);
+	using strategy = new FullFileRenderStrategy({
+		devicePixelRatio: 1,
+		getTextMetrics: () => ({ width: 8 }),
+	} as unknown as GlyphRasterizer);
+	const frame = strategy.update({
+		layout: {
+			lineHeight: 20,
+			viewportSize: { width: 200, height: 20 },
+			contentSize: { width: 200, height: 20 },
+			scrollPosition: { left: 0, top: 0 },
+			maximumScrollPosition: { left: 0, top: 0 },
+			visibleLines: { startLineIndex: 0, endLineIndexExclusive: 1 },
+			renderLines: { startLineIndex: 0, endLineIndexExclusive: 1 },
+			renderTop: 0,
+		},
+		model,
+		visualLines,
+		visibleLineIndexes: new Set([0]),
+		semanticTokenSource: undefined,
+		bracketColorizationSource: undefined,
+		textLeft: 10,
+		paddingTop: 0,
+		textDirection: EditorTextDirection.LeftToRight,
+		fontLigatures: false,
+		rootStyle: gpuRootStyle(),
+		atlas: fixedGlyphAtlas(),
+	});
+
+	assert.deepEqual(frame.lineGeometries.get(0)?.leftByOffset, [10, 18, 42, 42, 42, 42, 42, 50, 58]);
 });
 
 test('Rectangle GPU rendering encodes a clear pass into the caller-owned frame', () => {

@@ -103,13 +103,13 @@
 | `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 已从逐行覆盖层移回独立 `ViewPart`，持有光标 DOM、组合输入显示和移动动画 |
 | `browser/viewParts/viewLines/viewLine.ts` | `ViewLine` | 本地 scheduler 实现改为 `ViewLine` |
 | `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 本地 scheduler 实现改为 `ViewLineOptions` |
-| `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 本地 scheduler 实现改为 `ViewLines` |
+| `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 已实现 `IViewLines`，DOM 行按逐行 `LineVisibleRanges` 与 `HorizontalPosition` 提供真实浏览器几何；GPU 接管的行不再触发 DOM 几何读取 |
 | `browser/viewParts/viewZones/viewZones.ts` | `ViewZones` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
 | `browser/viewParts/whitespace/whitespace.ts` | `WhitespaceOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
 | `browser/widget/codeEditor/codeEditorContributions.ts` | `CodeEditorContributions` | 本地多 context contribution owner 改为 `WidgetContributionCollection` |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | `DiffEditorWidget` | 本地只读虚拟化审阅面板改为 `EditorDiffWidget` |
 | `browser/widget/multiDiffEditor/multiDiffEditorWidget.ts` | `MultiDiffEditorWidget` | 本地多文件审阅面板改为 `EditorMultiDiffWidget` |
-| `browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | `ViewLinesGpu` | 已接入 `ViewPart` 事件、渲染和释放链；`IViewLines` 几何查询契约及 GPU 私有成员仍待继续收敛 |
+| `browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | `ViewLinesGpu` | 已接入 `ViewPart` 事件、渲染和释放链，并由实际绘制帧实现 `IViewLines`、行宽与横坐标命中；初始化和渲染阶段的内部 owner 仍待继续收敛 |
 | `common/services/languageService.ts` | `LanguageService` | 已按上游契约对齐 |
 | `common/services/languageFeatures.ts` | `ILanguageFeaturesService` | 本地 provider 集合契约改为 `IEditorLanguageFeaturesService` |
 | `common/services/languageFeaturesService.ts` | `LanguageFeaturesService` | 本地 provider registry 改为 `EditorLanguageFeaturesService` |
@@ -164,7 +164,7 @@
 | 1 | Platform 配置与语言身份 | 配置 override 事件、全局 Registry、Modes Registry、语言实例 Registry 和语言配置 Registry 未形成上游链；现有语言配置服务有 28 个生产调用方 | 先统一配置键、override 与 Registry，再迁移语言身份和语言配置调用方，删除旧 owner |
 | 2 | TextModel parts | `ITextModel` 成员、模型部件事件和 ViewModel 注册链已闭合；实现类仍保留 Zeta 文档块、行身份与历史能力，并与上游私有阶段存在差异 | 明确这些 Zeta 能力在同一 TextModel 内的长期边界，继续统一基础模型私有 owner，不为私有常量或字段制造同名壳 |
 | 3 | ViewModel 与 Cursor | 生产构造链已收敛为 `CodeEditorWidget → ViewModel → View`；行映射、坐标转换、光标、布局、装饰和事件只有一份，`ViewModelLinesFromProjectedModel` 只由 `ViewModel` 创建。当前缺口是输入与 contribution 仍通过内部光标执行器工作，Widget 还保留获取该执行器的内部入口 | 将选择、输入、组合输入、命令执行和只读事件逐项改为 `ViewModel` 契约，删除内部执行器入口；相关调用方完成迁移后再把本切片计为完成 |
-| 4 | ViewContext、ViewPart 与 View | `ViewContext → ViewPart → View` 生命周期已经接通，`EditorViewPart` 与手工集合已移除；内容/margin 覆盖层统一逐行 DOM，块装饰和光标回到独立 Part。当前缺口集中在输入 Part、`RenderingContext` 精确成员和 GPU 的 `IViewLines` 几何查询 | 继续迁移输入 Part 与渲染上下文成员，再完成 GPU 几何查询；不保留第二套调度框架 |
+| 4 | ViewContext、ViewPart 与 View | `ViewContext → ViewPart → View` 生命周期已经接通，内容/margin 覆盖层统一逐行 DOM，块装饰和光标回到独立 Part；标准渲染上下文与 DOM/GPU `IViewLines` 几何已接通。当前缺口只剩两个输入实现尚未进入同一 Part 渲染阶段 | 迁移输入 Part，不保留第二套调度框架 |
 | 5 | CodeEditor Widget 与服务 | `CodeEditorWidget`、`ICodeEditor`、编辑器服务和 contribution 生命周期不完整；Workbench 仍导入缺失的 Diff/MultiDiff canonical export | Widget、服务、贡献初始化、model attach/detach、view state 和公开对象身份同批闭环 |
 | 6 | GPU 与 Editor contribution | Styled GPU 是一条独立生产链；19 个 contribution 通过改成 `Editor*` 隐藏同路径声明缺口 | GPU 按 atlas→rasterizer→strategy→context→ViewLinesGpu 整链迁移；contribution 随各自 Widget/服务 owner 迁移 |
 
@@ -172,6 +172,6 @@
 
 - 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、348 个仅上游；Zeta 590 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
 - 118 项账本校验通过：28 项已处理、90 项待处理、总计 118 个唯一声明。
-- `tsconfig.stanza.json --noEmit` 与 `tsconfig.extensions-test.json --noEmit` 通过；整个 `editor` 测试集合通过。完整测试类型检查仍只有 Sessions 与 Workbench Chat 的 9 个既有错误；生产 Widget 已接入唯一 ViewModel，但输入与 contribution 尚未移除内部光标入口，因此当前不从 118 项账目中扣减。
+- `tsconfig.stanza.json --noEmit` 与 `tsconfig.extensions-test.json --noEmit` 通过；渲染/GPU、指针命中和 Widget 的 26 个相关用例通过。整个 `editor` 批跑没有行为断言失败，但一个单独运行可通过的指针命中用例被测试运行器报告事件循环提前结束，仍需继续定位该批跑残留句柄。完整测试类型检查仍只有 Sessions 与 Workbench Chat 的 9 个既有错误；生产 Widget 已接入唯一 ViewModel，但输入与 contribution 尚未移除内部光标入口，因此当前不从 118 项账目中扣减。
 - `tsconfig.test.json` 仍报告 9 个已有错误，集中在 Sessions 与 Workbench Chat；本轮 Editor 文件没有新增类型错误。
-- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 96 项中扣减。
+- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 90 项中扣减。

@@ -3,7 +3,8 @@ import { AbstractDisposable, DisposableMap, toDisposable, type IDisposable } fro
 import { isFiniteNumber } from '../../../../base/common/numbers.js';
 import { type EditorViewportLayout, ViewLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type IViewZone, type IViewZoneChangeAccessor } from '../../editorBrowser.js';
-import { ViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
+import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export type EditorViewZone = IViewZone;
@@ -99,8 +100,8 @@ export class ViewZones extends ViewPart {
 		}
 	}
 
-	public render(context: EditorRenderingContext): void {
-		this.layoutZones(context.layout);
+	public render(_context: RestrictedRenderingContext): void {
+		this.layoutZones(this.viewLayout.layout);
 	}
 
 	public setLineHeight(lineHeight: number): void {

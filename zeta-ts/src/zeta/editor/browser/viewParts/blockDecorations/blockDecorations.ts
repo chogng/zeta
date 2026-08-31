@@ -5,11 +5,9 @@ import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { DecorationsOverlay } from '../decorations/decorations.js';
 import { type ResolvedDecoration } from '../decorations/decorations.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
-import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type RenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-
 export class BlockDecorations extends ViewPart {
 	public readonly domNode: HTMLDivElement;
 
@@ -17,7 +15,7 @@ export class BlockDecorations extends ViewPart {
 	private readonly decorations: DecorationsOverlay;
 	private readonly blocks: FastDomNode<HTMLDivElement>[] = [];
 
-	constructor(context: ViewContext, decorations: DecorationsOverlay, host: HTMLElement) {
+	constructor(context: ViewContext, decorations: DecorationsOverlay, host: HTMLElement, private readonly readVisualProjection: () => EditorVisualLineProjection, private readonly readTextLeft: () => number) {
 		super(context);
 
 		this.decorations = decorations;
@@ -30,25 +28,19 @@ export class BlockDecorations extends ViewPart {
 		this.domNode.setAttribute('aria-hidden', 'true');
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		const layout = context.layout;
-
-		this.root.setWidth(layout.contentSize.width);
-		this.root.setHeight(layout.contentSize.height);
+	public render(context: RenderingContext): void {
+		this.root.setWidth(context.scrollWidth);
+		this.root.setHeight(context.scrollHeight);
 
 		let count = 0;
-		const decorations = this.decorations.visibleDecorations(overlay);
+		const decorations = this.decorations.visibleDecorations(context);
 		for (const decoration of decorations) {
 			const presentation = decoration.blockDecoration;
 			if (!presentation) {
 				continue;
 			}
 
-			const geometry = resolveStanzaBlockDecorationGeometry(overlay, layout, decoration);
+			const geometry = resolveStanzaBlockDecorationGeometry(context, this.readVisualProjection(), this.readTextLeft(), decoration);
 			if (!geometry) {
 				continue;
 			}
@@ -87,17 +79,19 @@ interface BlockDecorationGeometry {
 }
 
 function resolveStanzaBlockDecorationGeometry(
-	context: EditorOverlayContext,
-	layout: EditorViewportLayout,
+	context: RenderingContext,
+	projection: EditorVisualLineProjection,
+	textLeft: number,
 	decoration: ResolvedDecoration,
 ): BlockDecorationGeometry | undefined {
 	const presentation = decoration.blockDecoration;
 	if (!presentation) return undefined;
-	const projection = context.visualLineProjection;
 	const startVisualLineIndex = firstVisualLineIndex(projection, decoration.range.startLineNumber - 1);
 	if (startVisualLineIndex === undefined) return undefined;
 
-	const lineTop = createLineTopReader(layout);
+	const lineTop = (visualLineIndex: number): number => visualLineIndex >= projection.visualLineCount
+		? context.getVerticalOffsetAfterLineNumber(projection.visualLineCount)
+		: context.getVerticalOffsetForLineNumber(visualLineIndex + 1);
 	let top: number;
 	let bottom: number;
 	if (presentation.isAfterEnd) {
@@ -114,12 +108,12 @@ function resolveStanzaBlockDecorationGeometry(
 	}
 
 	const padding = presentation.padding ?? [0, 0, 0, 0];
-	const contentLeft = context.textLeft;
+	const contentLeft = textLeft;
 	return Object.freeze({
 		top,
 		bottom,
 		left: contentLeft - padding[3],
-		width: Math.max(0, layout.contentSize.width - contentLeft) + padding[1] + padding[3],
+		width: Math.max(0, context.scrollWidth - contentLeft) + padding[1] + padding[3],
 		padding,
 	});
 }
@@ -144,18 +138,4 @@ function lastVisualLineIndex(projection: EditorVisualLineProjection, logicalLine
 		last = visualLineIndex;
 	}
 	return last;
-}
-
-function createLineTopReader(layout: EditorViewportLayout): (visualLineIndex: number) => number {
-	const offsets = layout.relativeVerticalOffset;
-	if (offsets) {
-		return visualLineIndex => {
-			const offsetIndex = visualLineIndex - layout.renderLines.startLineIndex;
-			if (offsetIndex >= 0 && offsetIndex < offsets.length) return offsets[offsetIndex]!;
-			if (offsetIndex === offsets.length && offsets.length > 0) return offsets[offsets.length - 1]! + layout.lineHeight;
-			return layout.renderTop + offsetIndex * layout.lineHeight;
-		};
-	}
-	const paddingTop = layout.renderTop - layout.renderLines.startLineIndex * layout.lineHeight;
-	return visualLineIndex => paddingTop + visualLineIndex * layout.lineHeight;
 }

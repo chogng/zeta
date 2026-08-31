@@ -11,6 +11,7 @@ import { type IDimension } from '../common/core/2d/dimension.js';
 import { ScrollType } from '../common/editorCommon.js';
 import { type Range } from '../common/core/range.js';
 import { TextModel } from '../common/model/textModel.js';
+import { TextDirection } from '../common/model.js';
 import { type IViewModel } from '../common/viewModel.js';
 import { ViewEventHandler } from '../common/viewEventHandler.js';
 import * as viewEvents from '../common/viewEvents.js';
@@ -56,10 +57,12 @@ import { EditorTextDirection, ViewLineOptions } from './viewParts/viewLines/view
 import { ViewLinesGpu } from './viewParts/viewLinesGpu/viewLinesGpu.js';
 import { ViewZones, type EditorViewZone, type EditorViewZoneHandle } from './viewParts/viewZones/viewZones.js';
 import { linesDecorationsWidth } from './viewParts/linesDecorations/linesDecorations.js';
-import { createEditorRenderingContext, createEditorViewportData, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
+import { RenderingContext } from './view/renderingContext.js';
+import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
 import './widget/codeEditor/editor.css';
 
 const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
+const EMPTY_LINE_INDEXES: ReadonlySet<number> = new Set();
 
 export type EditorViewportPresentation = "document" | "embedded";
 
@@ -366,6 +369,10 @@ export class View extends ViewEventHandler {
 			fixedOverflowWidgets: options.fixedOverflowWidgets ?? false,
 			readContentLeft: () => this.contentOffsetLeft,
 			readContentWidth: () => Math.max(0, this.viewport.layout.viewportSize.width - this.contentOffsetLeft),
+			model: this.model,
+			readVisualProjection: () => this.visualProjection,
+			readTextLeft: () => this.textLeft,
+			textMeasurer: this.textMeasurer,
 		}));
 		this.overlayWidgets = this.registerViewPart(new ViewOverlayWidgets(this.viewContext, {
 			viewDomNode: this.element,
@@ -388,11 +395,15 @@ export class View extends ViewEventHandler {
 			bracketColorizationSource: options.bracketColorizationSource,
 			viewLineOptions: this.viewLineOptions,
 			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth(' ')),
+			readGpuLineIndexes: () => this.viewLinesGpu?.gpuLineIndexes ?? EMPTY_LINE_INDEXES,
 		}));
 		this.viewLinesGpu = this.viewLineOptions.useGpu
 			? this.registerViewPart(new ViewLinesGpu(this.viewContext, {
 				host: this.element,
+				viewLayout: this.viewport,
 				model: this.model,
+				readVisualProjection: () => this.visualProjection,
+				readTextLeft: () => this.textLeft,
 				semanticTokenSource: options.semanticTokenSource,
 				bracketColorizationSource: options.bracketColorizationSource,
 				paddingTop: this.padding.top,
@@ -407,14 +418,18 @@ export class View extends ViewEventHandler {
 		const glyphMarginSources = this.showGlyphMargin ? decorationSources : Object.freeze([]);
 		const glyphMarginLanes = resolveGlyphMarginLanes(glyphMarginSources, this.showGlyphMargin);
 		this.contentViewOverlays = this.registerViewPart(new ContentViewOverlays(this.viewContext, this.contentElement));
-		this.decorations = new DecorationsOverlay(this.viewContext, this.model, decorationSources);
-		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext, this.viewModel));
-		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel));
+		this.decorations = new DecorationsOverlay(this.viewContext, this.model, decorationSources, this.element.ownerDocument, () => this.visualProjection, () => this.textLeft, this.textMeasurer);
+		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext, this.viewModel, this.element.ownerDocument, () => this.visualProjection, this.renderLineHighlight, this.renderLineHighlightOnlyWhenFocus));
+		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.element.ownerDocument, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
 		this.contentViewOverlays.addDynamicOverlay(new IndentGuidesOverlay(this.viewContext, {
 			guides: this.guides,
 			tabSize: this.indentation.tabSize,
 			bracketColorizationSource: options.bracketColorizationSource,
 			viewModel: this.viewModel,
+			ownerDocument: this.element.ownerDocument,
+			readVisualProjection: () => this.visualProjection,
+			readTextLeft: () => this.textLeft,
+			textMeasurer: this.textMeasurer,
 		}));
 		this.contentViewOverlays.addDynamicOverlay(this.decorations);
 		this.contentViewOverlays.addDynamicOverlay(new WhitespaceOverlay(
@@ -422,6 +437,10 @@ export class View extends ViewEventHandler {
 			this.model,
 			this.viewModel,
 			options.renderWhitespace ?? 'none',
+			this.element.ownerDocument,
+			() => this.visualProjection,
+			() => this.textLeft,
+			this.textMeasurer,
 		));
 		this.viewCursors = this.registerViewPart(new ViewCursors(this.viewContext, {
 			host: this.contentElement,
@@ -432,8 +451,12 @@ export class View extends ViewEventHandler {
 			lineWidth: cursorWidth,
 			lineHeight: cursorHeight,
 			fontInfo: this.fontInfo,
+			readVisualProjection: () => this.visualProjection,
+			readTextLeft: () => this.textLeft,
+			textMeasurer: this.textMeasurer,
+			isRightToLeftAtPosition: position => this.viewModel.getTextDirection(position.lineNumber) === TextDirection.RTL,
 		}, this.model, this.viewModel));
-		const blockDecorations = this.registerViewPart(new BlockDecorations(this.viewContext, this.decorations, this.contentElement));
+		const blockDecorations = this.registerViewPart(new BlockDecorations(this.viewContext, this.decorations, this.contentElement, () => this.visualProjection, () => this.textLeft));
 		this.margin = this.registerViewPart(new Margin(this.viewContext, {
 			host: this.element,
 			contentElement: this.contentElement,
@@ -446,12 +469,13 @@ export class View extends ViewEventHandler {
 			lineDecorationsWidth: linesDecorationsWidth(decorationSources),
 		}));
 		this.marginViewOverlays = this.registerViewPart(new MarginViewOverlays(this.viewContext, this.contentElement));
-		this.marginViewOverlays.addDynamicOverlay(new MarginViewLineDecorationsOverlay(this.viewContext, this.decorations));
-		this.marginViewOverlays.addDynamicOverlay(new LinesDecorationsOverlay(this.viewContext, this.decorations, decorationSources));
+		this.marginViewOverlays.addDynamicOverlay(new MarginViewLineDecorationsOverlay(this.viewContext, this.decorations, this.element.ownerDocument, () => this.visualProjection));
+		this.marginViewOverlays.addDynamicOverlay(new LinesDecorationsOverlay(this.viewContext, this.decorations, decorationSources, this.element.ownerDocument, () => this.visualProjection));
 		this.marginViewOverlays.addDynamicOverlay(new LineNumbersOverlay(this.viewContext, {
 			lineNumbers: this.lineNumbers,
 			viewModel: this.viewModel,
 			readVisualProjection: () => this.visualProjection,
+			ownerDocument: this.element.ownerDocument,
 		}));
 		const glyphMarginWidgets = this.registerViewPart(new GlyphMarginWidgets(this.viewContext, {
 			host: this.contentElement,
@@ -561,7 +585,7 @@ export class View extends ViewEventHandler {
 			this._register(semanticTokenSource.onDidChange(() => {
 				this.viewLines.renderVisibleLineText();
 				this.viewLinesGpu?.invalidateTokens();
-				const context = this.createRenderingContext(this.viewport.layout);
+				const context = this.createRenderingContext(this.createViewportData());
 				this.viewLinesGpu?.render(context);
 				this.viewCursors.renderTokens(context);
 				minimapPart.renderNow(context);
@@ -982,9 +1006,9 @@ export class View extends ViewEventHandler {
 			this.viewModel.setViewport(startLineNumber, endLineNumber, Math.floor((startLineNumber + endLineNumber) / 2));
 			this.viewModel.visibleLinesStabilized();
 		}
-		const viewportData = createEditorViewportData(layout, this.model.version);
+		const viewportData = this.createViewportData();
 		this.viewLines.render(viewportData);
-		const context = this.createRenderingContext(layout, viewportData);
+		const context = this.createRenderingContext(viewportData);
 		this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
 		this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
 		this.contentNode.setWidth(layout.contentSize.width);
@@ -1032,25 +1056,17 @@ export class View extends ViewEventHandler {
 			: `Line ${position.lineNumber}, column ${position.column}, ${selectedLength} characters selected`);
 	}
 
-	private createRenderingContext(layout: EditorViewportLayout, viewportData = createEditorViewportData(layout, this.model.version)): EditorRenderingContext {
-		const useDomTextGeometry = this.viewLineOptions.textDirection !== EditorTextDirection.LeftToRight;
-		const overlay: EditorOverlayContext = {
-			ownerDocument: this.element.ownerDocument,
-			model: this.model,
-			visualLineProjection: this.visualProjection,
-			renderLines: layout.renderLines,
-			textLeft: this.textLeft,
-			textMeasurer: this.textMeasurer,
-			renderLineHighlight: this.renderLineHighlight,
-			renderLineHighlightOnlyWhenFocus: this.renderLineHighlightOnlyWhenFocus,
-			linesVisibleRangesForRange: (range, includeNewLines) => useDomTextGeometry
-				? this.viewLines.linesVisibleRangesForRange(range, includeNewLines)
-				: undefined,
-			visibleRangeForPosition: position => useDomTextGeometry
-				? this.viewLines.visibleRangeForPosition(position)
-				: undefined,
-		};
-		return createEditorRenderingContext(layout, overlay, viewportData);
+	private createViewportData(): ViewportData {
+		return new ViewportData(
+			this.viewModel.getCursorStates().map(state => state.viewState.selection),
+			this.viewport.getLinesViewportData(),
+			this.viewport.getWhitespaceViewportData(),
+			this.viewModel,
+		);
+	}
+
+	private createRenderingContext(viewportData: ViewportData): RenderingContext {
+		return new RenderingContext(this.viewport, viewportData, this.viewLines, this.viewLinesGpu);
 	}
 
 	private get visualProjection(): EditorVisualLineProjection {

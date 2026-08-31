@@ -1,7 +1,8 @@
 import { createFastDomNode, type FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { type ViewContext } from '../../common/viewModel/viewContext.js';
 import { DynamicViewOverlay } from './dynamicViewOverlay.js';
-import { type EditorRenderingContext, ViewPart } from './viewPart.js';
+import { type RenderingContext, type RestrictedRenderingContext } from './renderingContext.js';
+import { ViewPart } from './viewPart.js';
 import { ViewPartRows } from './viewLayer.js';
 
 export class ViewOverlays extends ViewPart {
@@ -32,15 +33,15 @@ export class ViewOverlays extends ViewPart {
 		this.dynamicOverlays.push(overlay);
 	}
 
-	public prepareRender(context: EditorRenderingContext): void {
+	public prepareRender(context: RenderingContext): void {
 		for (const overlay of this.dynamicOverlays) {
 			overlay.prepareRender(context);
 			overlay.onDidRender();
 		}
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const startLineNumber = context.layout.renderLines.startLineIndex + 1;
+	public render(context: RestrictedRenderingContext): void {
+		const startLineNumber = context.viewportData.startLineNumber;
 		for (const [lineIndex, row] of this.rows.render(context)) {
 			const lineNumber = lineIndex + 1;
 			row.innerHTML = this.dynamicOverlays
@@ -56,9 +57,9 @@ export class ContentViewOverlays extends ViewOverlays {
 		this.domNode.setHeight(0);
 	}
 
-	public override render(context: EditorRenderingContext): void {
+	public override render(context: RestrictedRenderingContext): void {
 		super.render(context);
-		this.domNode.setWidth(Math.max(context.layout.contentSize.width, context.layout.viewportSize.width));
+		this.domNode.setWidth(Math.max(context.scrollWidth, context.viewportWidth));
 	}
 }
 
@@ -67,8 +68,8 @@ export class MarginViewOverlays extends ViewOverlays {
 		super(context, host, 'margin-view-overlays');
 	}
 
-	public override render(context: EditorRenderingContext): void {
+	public override render(context: RestrictedRenderingContext): void {
 		super.render(context);
-		this.domNode.setHeight(Math.min(context.layout.contentSize.height, 1_000_000));
+		this.domNode.setHeight(Math.min(context.scrollHeight, 1_000_000));
 	}
 }

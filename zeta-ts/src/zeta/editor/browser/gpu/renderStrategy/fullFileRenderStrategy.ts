@@ -1,5 +1,5 @@
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type GpuFrame, type GpuRenderInput } from '../gpu.js';
+import { type GpuFrame, type GpuLineGeometry, type GpuRenderInput } from '../gpu.js';
 import { createGpuRenderFrame } from '../gpuUtils.js';
 import { type GlyphRasterizer } from '../raster/glyphRasterizer.js';
 import { BaseRenderStrategy } from './baseRenderStrategy.js';
@@ -15,6 +15,7 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 	private cachedProjection: EditorVisualLineProjection | undefined;
 	private cachedVertices: Float32Array<ArrayBuffer> | undefined;
 	private cachedGpuLineIndexes: ReadonlySet<number> = new Set();
+	private cachedLineGeometries: ReadonlyMap<number, GpuLineGeometry> = new Map();
 
 	constructor(glyphRasterizer: GlyphRasterizer) { super(glyphRasterizer); }
 
@@ -23,6 +24,7 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 		this.cachedProjection = undefined;
 		this.cachedVertices = undefined;
 		this.cachedGpuLineIndexes = new Set();
+		this.cachedLineGeometries = new Map();
 	}
 
 	public draw(pass: GPURenderPassEncoder, frame: GpuFrame): void {
@@ -38,10 +40,16 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 			this.cachedProjection = input.visualLines;
 			this.cachedVertices = frame.vertices;
 			this.cachedGpuLineIndexes = frame.gpuLineIndexes;
+			this.cachedLineGeometries = frame.lineGeometries;
 		}
+		const gpuLineIndexes = new Set([...input.visibleLineIndexes].filter(index => this.cachedGpuLineIndexes.has(index)));
 		return Object.freeze({
 			vertices: this.cachedVertices,
-			gpuLineIndexes: new Set([...input.visibleLineIndexes].filter(index => this.cachedGpuLineIndexes.has(index))),
+			gpuLineIndexes,
+			lineGeometries: new Map([...gpuLineIndexes].flatMap(index => {
+				const geometry = this.cachedLineGeometries.get(index);
+				return geometry ? [[index, geometry] as const] : [];
+			})),
 		});
 	}
 }

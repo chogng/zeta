@@ -1,6 +1,7 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
-import { type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type EditorRuler, validateRuler } from '../rulers/rulers.js';
 
@@ -14,7 +15,7 @@ export class RulersGpu extends ViewPart {
 		this.rulers = Object.freeze(rulers.map(validateRuler));
 	}
 
-	public render(context: EditorRenderingContext): void {
+	public render(context: RestrictedRenderingContext): void {
 		this.entries.clear();
 		if (this.gpuContext.status !== 'ready') return;
 		const devicePixelRatio = this.gpuContext.devicePixelRatio;
@@ -24,7 +25,7 @@ export class RulersGpu extends ViewPart {
 				this.measureColumn(ruler.column) * devicePixelRatio,
 				0,
 				Math.max(1, Math.ceil(devicePixelRatio)),
-				Math.min(context.layout.contentSize.height * devicePixelRatio, 1_000_000),
+				Math.min(context.scrollHeight * devicePixelRatio, 1_000_000),
 				color[0], color[1], color[2], color[3],
 			));
 		}

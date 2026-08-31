@@ -1,14 +1,14 @@
 import "./marginDecorations.css";
 import { DecorationsOverlay } from "../decorations/decorations.js";
 import { type ResolvedDecoration, DecorationPresentation } from '../decorations/decorations.js';
-import { type EditorOverlayContext } from '../../view/renderingContext.js';
+import { type RenderingContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext } from "../../view/viewPart.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 
 /** Projects line-level diagnostics into the editor margin. */
 export class MarginViewLineDecorationsOverlay extends DynamicViewOverlay {
-	constructor(private readonly context: ViewContext, private readonly decorations: DecorationsOverlay) {
+	constructor(private readonly context: ViewContext, private readonly decorations: DecorationsOverlay, private readonly ownerDocument: Document, private readonly readVisualProjection: () => EditorVisualLineProjection) {
 		super();
 		this.context.addEventHandler(this);
 	}
@@ -18,9 +18,9 @@ export class MarginViewLineDecorationsOverlay extends DynamicViewOverlay {
 		super.dispose();
 	}
 
-	public prepareRender(context: EditorRenderingContext): void {
-		this.prepareRows(context, (overlay, rows) => {
-			projectStanzaDiagnosticMarginDecorations(overlay, this.decorations.visibleDecorations(overlay), rows);
+	public prepareRender(context: RenderingContext): void {
+		this.prepareRows(context, this.ownerDocument, rows => {
+			projectStanzaDiagnosticMarginDecorations(this.readVisualProjection(), this.decorations.visibleDecorations(context), rows);
 		});
 	}
 }
@@ -33,7 +33,7 @@ const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<ResolvedDecoration['presentatio
 ]);
 
 function projectStanzaDiagnosticMarginDecorations(
-	context: EditorOverlayContext,
+	projection: EditorVisualLineProjection,
 	decorations: readonly ResolvedDecoration[],
 	rows: ReadonlyMap<number, HTMLElement>,
 ): void {
@@ -53,7 +53,7 @@ function projectStanzaDiagnosticMarginDecorations(
 	for (const [visualLineIndex, row] of rows) {
 		const marker = h(row.ownerDocument, 'div');
 		row.append(marker);
-		const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
+		const visualLine = projection.lineAt(visualLineIndex);
 		const diagnostics = visualLine?.firstForLogicalLine ? diagnosticsByLine.get(visualLine.logicalLineIndex) ?? [] : [];
 		marker.hidden = diagnostics.length === 0;
 		delete marker.dataset.diagnosticHoverText;

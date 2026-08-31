@@ -5,7 +5,8 @@ import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { ViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
+import { type RenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationGlyphMarginPresentation, type DecorationSource, type ResolvedDecoration } from '../decorations/decorations.js';
 import { GlyphMarginLane } from '../../../common/model.js';
@@ -51,35 +52,30 @@ export class GlyphMarginWidgets extends ViewPart {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	public render(context: EditorRenderingContext): void {
+	public render(context: RenderingContext): void {
 		const laneWidth = this.readLaneWidth();
-		this.root.setLeft(context.layout.scrollPosition.left + this.readLeft());
+		this.root.setLeft(context.scrollLeft + this.readLeft());
 		this.root.setWidth(this.laneDomNodes.size * laneWidth);
-		this.root.setHeight(context.layout.contentSize.height);
+		this.root.setHeight(context.scrollHeight);
 		let laneIndex = 0;
 		for (const laneDomNode of this.laneDomNodes.values()) {
 			laneDomNode.style.left = `${laneIndex * laneWidth}px`;
 			laneDomNode.style.width = `${laneWidth}px`;
-			laneDomNode.style.height = `${context.layout.contentSize.height}px`;
+			laneDomNode.style.height = `${context.scrollHeight}px`;
 			laneIndex += 1;
 		}
-		const overlay = context.overlay;
-		if (!overlay) {
-			this.clearButtons();
-			return;
-		}
 		const visualLines = this.readVisualLines();
-		const visible = this.decorations.visibleDecorations(overlay)
+		const visible = this.decorations.visibleDecorations(context)
 			.filter((decoration): decoration is ResolvedDecoration & { readonly glyphMargin: DecorationGlyphMarginPresentation } => decoration.glyphMargin !== undefined)
 			.sort(compareGlyphDecorations);
 		const renderedIds = new Set<TextDecorationId>();
 		for (const decoration of visible) {
 			const visualLineIndex = visualLines.visualLineIndexAt(decoration.range.getStartPosition());
-			if (visualLineIndex < context.viewportData.startLineIndex || visualLineIndex >= context.viewportData.endLineIndexExclusive) continue;
+			if (visualLineIndex < context.viewportData.startLineNumber - 1 || visualLineIndex >= context.viewportData.endLineNumber) continue;
 			const laneDomNode = this.laneDomNodes.get(decoration.glyphMargin.lane);
 			if (!laneDomNode) continue;
 			const button = this.buttons.get(decoration.id) ?? this.createButton(decoration.id, laneDomNode);
-			this.renderButton(button, decoration, context.viewportData.getLineTop(visualLineIndex), context.viewportData.lineHeight);
+			this.renderButton(button, decoration, context.getVerticalOffsetForLineNumber(visualLineIndex + 1), context.getLineHeightForLineNumber(visualLineIndex + 1));
 			renderedIds.add(decoration.id);
 		}
 		for (const [id, button] of this.buttons) {

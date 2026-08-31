@@ -3,7 +3,7 @@ import { h, reset } from "../../../../base/browser/dom.js";
 import { type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type IViewModel } from '../../../common/viewModel.js';
-import { type EditorRenderingContext } from "../../view/viewPart.js";
+import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 
@@ -11,6 +11,7 @@ interface LineNumbersOverlayOptions {
 	readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	readonly viewModel: IViewModel;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
+	readonly ownerDocument: Document;
 }
 
 /** Projects line numbers into virtual rows. */
@@ -19,6 +20,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	private readonly viewModel: IViewModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
+	private readonly ownerDocument: Document;
 
 	constructor(private readonly context: ViewContext, options: LineNumbersOverlayOptions) {
 		super();
@@ -26,6 +28,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		this.lineNumbers = options.lineNumbers;
 		this.viewModel = options.viewModel;
 		this.readVisualProjection = options.readVisualProjection;
+		this.ownerDocument = options.ownerDocument;
 	}
 
 	public override dispose(): void {
@@ -33,10 +36,10 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		super.dispose();
 	}
 
-	public prepareRender(context: EditorRenderingContext): void {
+	public prepareRender(context: RenderingContext): void {
 		const visualProjection = this.readVisualProjection();
 		const activeLineIndex = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber - 1;
-		this.prepareRows(context, (_overlay, rows) => {
+		this.prepareRows(context, this.ownerDocument, rows => {
 		for (const [visualLineIndex, row] of rows) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) continue;

@@ -2,7 +2,8 @@ import { h, reset, fragment as createFragment } from '../../../../base/browser/d
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { OverviewRulerZone, OverviewZoneManager } from '../../../common/viewModel/overviewZoneManager.js';
-import { type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationPresentation } from '../decorations/decorations.js';
 
@@ -58,19 +59,18 @@ export class OverviewRuler extends ViewPart {
 		this.domNode.setAttribute('aria-hidden', 'true');
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const layout = context.layout;
-		this.root.setLeft(layout.scrollPosition.left + Math.max(
+	public render(context: RestrictedRenderingContext): void {
+		this.root.setLeft(context.scrollLeft + Math.max(
 			0,
-			layout.viewportSize.width - this.options.verticalScrollbarWidth + (this.options.verticalScrollbarWidth - this.options.width) / 2,
+			context.viewportWidth - this.options.verticalScrollbarWidth + (this.options.verticalScrollbarWidth - this.options.width) / 2,
 		));
-		this.root.setTop(layout.scrollPosition.top);
+		this.root.setTop(context.scrollTop);
 		this.root.setWidth(this.options.width);
-		this.root.setHeight(layout.viewportSize.height);
-		let geometryChanged = this.zoneManager.setLineHeight(layout.lineHeight);
+		this.root.setHeight(context.viewportHeight);
+		let geometryChanged = this.zoneManager.setLineHeight(context.viewportData.lineHeight);
 		geometryChanged = this.zoneManager.setDOMWidth(this.options.width) || geometryChanged;
-		geometryChanged = this.zoneManager.setDOMHeight(layout.viewportSize.height) || geometryChanged;
-		geometryChanged = this.zoneManager.setOuterHeight(layout.contentSize.height) || geometryChanged;
+		geometryChanged = this.zoneManager.setDOMHeight(context.viewportHeight) || geometryChanged;
+		geometryChanged = this.zoneManager.setOuterHeight(context.scrollHeight) || geometryChanged;
 		const revision = this.options.readEntriesRevision();
 		if (revision !== this.renderedRevision) {
 			this.entries = Object.freeze(this.options.readEntries().map(entry => Object.freeze({

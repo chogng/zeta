@@ -4,8 +4,8 @@ import { FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type EditorLineRange } from '../../common/viewModel/editorViewportContracts.js';
-import { type EditorViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
-import { type EditorRenderingContext } from './renderingContext.js';
+import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
+import { type RestrictedRenderingContext } from './renderingContext.js';
 
 export interface ViewLayerLineRenderer<TLine> {
 	createLine(visualLineIndex: number): TLine;
@@ -60,38 +60,38 @@ export class ViewLayer<TLine> extends Disposable {
 		return this.renderedRange;
 	}
 
-	render(viewportData: EditorViewportData): void {
-		this.root.setTop(viewportData.renderTop);
+	render(viewportData: ViewportData): void {
+		this.root.setTop(viewportData.bigNumbersDelta);
 		const visualProjection = this.readVisualProjection();
 		const projectionRevision = this.readProjectionRevision();
-		if (visualProjection.modelVersion !== viewportData.modelVersion) return;
+		const renderRange = { startLineIndex: viewportData.startLineNumber - 1, endLineIndexExclusive: viewportData.endLineNumber };
 		if (
-			this.renderedModelVersion === viewportData.modelVersion &&
+			this.renderedModelVersion === visualProjection.modelVersion &&
 			this.renderedLineHeight === viewportData.lineHeight &&
 			this.renderedProjectionRevision === projectionRevision &&
 			numberArraysEqual(this.renderedVerticalOffsets, viewportData.relativeVerticalOffset) &&
-			lineRangesEqual(this.renderedRange, viewportData.renderLines)
+			lineRangesEqual(this.renderedRange, renderRange)
 		) return;
 
 		const fragment = createFragment(this.domNode.ownerDocument);
 		const next = new Map<number, TLine>();
-		for (let visualLineIndex = viewportData.renderLines.startLineIndex; visualLineIndex < viewportData.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
+		for (let visualLineIndex = renderRange.startLineIndex; visualLineIndex < renderRange.endLineIndexExclusive; visualLineIndex += 1) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) throw new Error('Viewport render range exceeds the visual line projection');
 			const existing = this.lines.get(visualLineIndex);
 			const line = existing ?? this.lineRenderer.createLine(visualLineIndex);
-			const needsLineRender = !existing || this.renderedModelVersion !== viewportData.modelVersion || this.renderedProjectionRevision !== projectionRevision;
+			const needsLineRender = !existing || this.renderedModelVersion !== visualProjection.modelVersion || this.renderedProjectionRevision !== projectionRevision;
 			if (needsLineRender) this.lineRenderer.renderLine(line, visualLine);
 			if (!existing || this.renderedLineHeight !== viewportData.lineHeight) this.lineRenderer.layoutLine(line, viewportData.lineHeight);
 			const domNode = this.lineRenderer.getDomNode(line);
-			domNode.style.top = `${viewportData.getLineTop(visualLineIndex) - viewportData.renderTop}px`;
+			domNode.style.top = `${viewportData.relativeVerticalOffset[visualLineIndex - renderRange.startLineIndex]}px`;
 			next.set(visualLineIndex, line);
 			fragment.append(domNode);
 		}
 		reset(this.domNode, fragment);
 		this.lines = next;
-		this.renderedRange = viewportData.renderLines;
-		this.renderedModelVersion = viewportData.modelVersion;
+		this.renderedRange = renderRange;
+		this.renderedModelVersion = visualProjection.modelVersion;
 		this.renderedLineHeight = viewportData.lineHeight;
 		this.renderedProjectionRevision = projectionRevision;
 		this.renderedVerticalOffsets = viewportData.relativeVerticalOffset;
@@ -121,12 +121,13 @@ export class ViewPartRows extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	public render(context: EditorRenderingContext): ReadonlyMap<number, HTMLElement> {
+	public render(context: RestrictedRenderingContext): ReadonlyMap<number, HTMLElement> {
 		const fragment = createFragment(this.domNode.ownerDocument);
 		const next = new Map<number, FastDomNode<HTMLDivElement>>();
 		const projected = new Map<number, HTMLElement>();
-		this.root.setTop(context.layout.renderTop);
-		for (let lineIndex = context.layout.renderLines.startLineIndex; lineIndex < context.layout.renderLines.endLineIndexExclusive; lineIndex += 1) {
+		this.root.setTop(context.bigNumbersDelta);
+		for (let lineNumber = context.viewportData.startLineNumber; lineNumber <= context.viewportData.endLineNumber; lineNumber += 1) {
+			const lineIndex = lineNumber - 1;
 			let row = this.rows.get(lineIndex);
 			if (!row) {
 				const element = h(this.domNode.ownerDocument, 'div');
@@ -134,10 +135,10 @@ export class ViewPartRows extends Disposable {
 				element.dataset.lineIndex = String(lineIndex);
 				row = new FastDomNode(element);
 			}
-			row.setHeight(context.layout.lineHeight);
-			row.setLineHeight(context.layout.lineHeight);
+			row.setHeight(context.viewportData.lineHeight);
+			row.setLineHeight(context.viewportData.lineHeight);
 			row.setPosition('absolute');
-			row.setTop(context.viewportData.getLineTop(lineIndex) - context.layout.renderTop);
+			row.setTop(context.viewportData.relativeVerticalOffset[lineNumber - context.viewportData.startLineNumber]!);
 			next.set(lineIndex, row);
 			projected.set(lineIndex, row.domNode);
 			fragment.append(row.domNode);

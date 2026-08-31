@@ -12,10 +12,9 @@ import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
 import { type EditorLineRange } from '../../../common/viewModel/editorViewportContracts.js';
 import { type DiagnosticOverviewMarker, type DiffOverviewMarker } from "../overviewRuler/overviewRuler.js";
-import { type EditorOverlayContext } from "../../view/renderingContext.js";
+import { type RenderingContext } from "../../view/renderingContext.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext } from "../../view/viewPart.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export type DecorationsOverlayMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
@@ -534,14 +533,22 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private decorationLineIndex = new DecorationLineIndex([]);
 	private markerRevision = 0;
+	private readonly ownerDocument: Document;
+	private readonly readVisualProjection: () => EditorVisualLineProjection;
+	private readonly readTextLeft: () => number;
+	private readonly textMeasurer: TextMeasurer;
 
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-	constructor(private readonly context: ViewContext, model: TextModel, decorationSources: readonly DecorationSource[]) {
+	constructor(private readonly context: ViewContext, model: TextModel, decorationSources: readonly DecorationSource[], ownerDocument: Document, readVisualProjection: () => EditorVisualLineProjection, readTextLeft: () => number, textMeasurer: TextMeasurer) {
 		super();
 		this.context.addEventHandler(this);
 		this.model = model;
 		this.decorationSources = Object.freeze([...decorationSources]);
+		this.ownerDocument = ownerDocument;
+		this.readVisualProjection = readVisualProjection;
+		this.readTextLeft = readTextLeft;
+		this.textMeasurer = textMeasurer;
 		for (const source of this.decorationSources) {
 			this.decorationSnapshots.set(source, source.decorations);
 			this._register(source.onDidChange(() => {
@@ -562,13 +569,21 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		return this.markerRevision;
 	}
 
-	public prepareRender(context: EditorRenderingContext): void {
-		this.prepareRows(context, (overlay, rows) => {
-			projectStanzaDecorationOverlays(overlay, this.resolveVisibleDecorations(overlay), rows);
+	public prepareRender(context: RenderingContext): void {
+		this.prepareRows(context, this.ownerDocument, rows => {
+			projectStanzaDecorationOverlays(
+				context,
+				this.model,
+				this.readVisualProjection(),
+				this.readTextLeft(),
+				this.textMeasurer,
+				this.resolveVisibleDecorations(context),
+				rows,
+			);
 		});
 	}
 
-	public visibleDecorations(context: EditorOverlayContext): readonly ResolvedDecoration[] {
+	public visibleDecorations(context: RenderingContext): readonly ResolvedDecoration[] {
 		return this.resolveVisibleDecorations(context);
 	}
 
@@ -591,12 +606,13 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		this.markerRevision += 1;
 	}
 
-	private resolveVisibleDecorations(context: EditorOverlayContext): readonly ResolvedDecoration[] {
-		const renderLines = context.renderLines;
+	private resolveVisibleDecorations(context: RenderingContext): readonly ResolvedDecoration[] {
+		const projection = this.readVisualProjection();
+		const renderLines = { startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber };
 		let minimumLogicalLineIndex = Number.POSITIVE_INFINITY;
 		let maximumLogicalLineIndex = -1;
 		for (let visualLineIndex = renderLines.startLineIndex; visualLineIndex < renderLines.endLineIndexExclusive; visualLineIndex += 1) {
-			const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
+			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
 			minimumLogicalLineIndex = Math.min(minimumLogicalLineIndex, visualLine.logicalLineIndex);
 			maximumLogicalLineIndex = Math.max(maximumLogicalLineIndex, visualLine.logicalLineIndex);
@@ -678,16 +694,18 @@ function uniqueHoverText(decorations: readonly ResolvedDecoration[]): string | u
 	return values.length > 0 ? values.join('\n') : undefined;
 }
 
-function projectStanzaDecorationOverlays(context: EditorOverlayContext, decorations: readonly ResolvedDecoration[], rows: ReadonlyMap<number, HTMLElement>): void {
+function projectStanzaDecorationOverlays(context: RenderingContext, model: TextModel, projection: EditorVisualLineProjection, textLeft: number, textMeasurer: TextMeasurer, decorations: readonly ResolvedDecoration[], rows: ReadonlyMap<number, HTMLElement>): void {
 	const inlineDecorations = decorations.filter(decoration => (
 		decoration.presentation !== DecorationPresentation.GlyphMargin
 		&& decoration.presentation !== DecorationPresentation.LineDecoration
 	));
-	const rectangles = createStanzaVisualDecorationRectangles(context.model, inlineDecorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+	const renderLines = { startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber };
+	const rectangles = createStanzaVisualDecorationRectangles(model, inlineDecorations, projection, renderLines, textLeft, textMeasurer);
 	const domRectangles = new Map(inlineDecorations.map(decoration => [decoration.id, context.linesVisibleRangesForRange(decoration.range, false)] as const));
 	const decorationsById = new Map(inlineDecorations.map(decoration => [decoration.id, decoration] as const));
 	for (const row of rows.values()) reset(row);
-	const ownerDocument = context.ownerDocument;
+	const ownerDocument = rows.values().next().value?.ownerDocument;
+	if (!ownerDocument) return;
 	for (const rectangle of rectangles) {
 		if (domRectangles.get(rectangle.id)) continue;
 		const row = rows.get(rectangle.visualLineIndex);
@@ -697,10 +715,10 @@ function projectStanzaDecorationOverlays(context: EditorOverlayContext, decorati
 	for (const decoration of inlineDecorations) {
 		const geometry = domRectangles.get(decoration.id);
 		if (!geometry) continue;
-		for (const rectangle of geometry) {
-			const row = rows.get(rectangle.visualLineIndex);
+		for (const line of geometry) {
+			const row = rows.get(line.lineNumber - 1);
 			if (!row) continue;
-			row.append(createDecorationElement(ownerDocument, decoration, rectangle.left, rectangle.width));
+			for (const range of line.ranges) row.append(createDecorationElement(ownerDocument, decoration, range.left, range.width));
 		}
 	}
 }

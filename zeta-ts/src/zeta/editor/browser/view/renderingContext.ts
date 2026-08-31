@@ -1,47 +1,76 @@
 import { type Position } from '../../common/core/position.js';
 import { type Range } from '../../common/core/range.js';
-import { type TextModel } from '../../common/model/textModel.js';
-import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
-import { type TextMeasurer } from '../../common/viewModel/textMeasurer.js';
-import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
-import { EditorViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
+import { type IViewLayout } from '../../common/viewModel.js';
+import { type ViewModelDecoration } from '../../common/viewModel/viewModelDecoration.js';
+import { ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 
-export interface EditorLineVisibleRange {
-	readonly visualLineIndex: number;
-	readonly left: number;
-	readonly width: number;
+export interface IViewLines {
+	linesVisibleRangesForRange(range: Range, includeNewLines: boolean): LineVisibleRanges[] | null;
+	visibleRangeForPosition(position: Position): HorizontalPosition | null;
 }
 
-export interface EditorVisiblePosition {
-	readonly visualLineIndex: number;
-	readonly left: number;
-	readonly isRightToLeft: boolean;
+export abstract class RestrictedRenderingContext {
+	_restrictedRenderingContextBrand: void = undefined;
+	public readonly scrollWidth: number;
+	public readonly scrollHeight: number;
+	public readonly visibleRange: Range;
+	public readonly bigNumbersDelta: number;
+	public readonly scrollTop: number;
+	public readonly scrollLeft: number;
+	public readonly viewportWidth: number;
+	public readonly viewportHeight: number;
+
+	constructor(private readonly viewLayout: IViewLayout, public readonly viewportData: ViewportData) {
+		this.scrollWidth = viewLayout.getScrollWidth();
+		this.scrollHeight = viewLayout.getScrollHeight();
+		this.visibleRange = viewportData.visibleRange;
+		this.bigNumbersDelta = viewportData.bigNumbersDelta;
+		const viewport = viewLayout.getCurrentViewport();
+		this.scrollTop = viewport.top;
+		this.scrollLeft = viewport.left;
+		this.viewportWidth = viewport.width;
+		this.viewportHeight = viewport.height;
+	}
+
+	public getScrolledTopFromAbsoluteTop(absoluteTop: number): number {
+		return absoluteTop - this.scrollTop;
+	}
+
+	public getVerticalOffsetForLineNumber(lineNumber: number, includeViewZones?: boolean): number {
+		return this.viewLayout.getVerticalOffsetForLineNumber(lineNumber, includeViewZones);
+	}
+
+	public getVerticalOffsetAfterLineNumber(lineNumber: number, includeViewZones?: boolean): number {
+		return this.viewLayout.getVerticalOffsetAfterLineNumber(lineNumber, includeViewZones);
+	}
+
+	public getLineHeightForLineNumber(lineNumber: number): number {
+		return this.viewLayout.getLineHeightForLineNumber(lineNumber);
+	}
+
+	public getDecorationsInViewport(): ViewModelDecoration[] {
+		return this.viewportData.getDecorationsInViewport();
+	}
 }
 
-export interface EditorOverlayContext {
-	readonly ownerDocument: Document;
-	readonly model: TextModel;
-	readonly visualLineProjection: EditorVisualLineProjection;
-	readonly renderLines: EditorViewportLayout['renderLines'];
-	readonly textLeft: number;
-	readonly textMeasurer: TextMeasurer;
-	readonly renderLineHighlight: 'none' | 'gutter' | 'line' | 'all';
-	readonly renderLineHighlightOnlyWhenFocus: boolean;
-	linesVisibleRangesForRange(range: Range, includeNewLines: boolean): readonly EditorLineVisibleRange[] | undefined;
-	visibleRangeForPosition(position: Position): EditorVisiblePosition | undefined;
-}
+export class RenderingContext extends RestrictedRenderingContext {
+	_renderingContextBrand: void = undefined;
 
-/**
- * Immutable state shared by every Part during one synchronous render pass.
- *
- * The overlay snapshot is omitted when the visual projection is not at the
- * same model version as the layout. Non-overlay Parts can still project the
- * layout while overlay consumers skip stale geometry as one group.
- */
-export interface EditorRenderingContext {
-	readonly layout: EditorViewportLayout;
-	readonly viewportData: EditorViewportData;
-	readonly overlay: EditorOverlayContext | undefined;
+	constructor(viewLayout: IViewLayout, viewportData: ViewportData, private readonly viewLines: IViewLines, private readonly viewLinesGpu?: IViewLines) {
+		super(viewLayout, viewportData);
+	}
+
+	public linesVisibleRangesForRange(range: Range, includeNewLines: boolean): LineVisibleRanges[] | null {
+		const domRanges = this.viewLines.linesVisibleRangesForRange(range, includeNewLines);
+		const gpuRanges = this.viewLinesGpu?.linesVisibleRangesForRange(range, includeNewLines) ?? null;
+		if (!domRanges) return gpuRanges;
+		if (!gpuRanges) return domRanges;
+		return domRanges.concat(gpuRanges).sort((left, right) => left.lineNumber - right.lineNumber);
+	}
+
+	public visibleRangeForPosition(position: Position): HorizontalPosition | null {
+		return this.viewLines.visibleRangeForPosition(position) ?? this.viewLinesGpu?.visibleRangeForPosition(position) ?? null;
+	}
 }
 
 export class FloatHorizontalRange {
@@ -63,23 +92,57 @@ export class FloatHorizontalRange {
 	}
 }
 
-/** Creates the version-bound context used by one render pass. */
-export function createEditorRenderingContext(layout: EditorViewportLayout, overlay: EditorOverlayContext, viewportData = createEditorViewportData(layout, overlay.model.version)): EditorRenderingContext {
-	return Object.freeze({
-		layout,
-		viewportData,
-		overlay: overlay.model.version === viewportData.modelVersion && overlay.visualLineProjection.modelVersion === viewportData.modelVersion ? overlay : undefined,
-	});
+export class HorizontalRange {
+	_horizontalRangeBrand: void = undefined;
+	public left: number;
+	public width: number;
+
+	public static from(ranges: FloatHorizontalRange[]): HorizontalRange[] {
+		return ranges.map(range => new HorizontalRange(range.left, range.width));
+	}
+
+	constructor(left: number, width: number) {
+		this.left = Math.round(left);
+		this.width = Math.round(width);
+	}
+
+	public toString(): string {
+		return `[${this.left},${this.width}]`;
+	}
 }
 
-/** Adapts the common layout snapshot to the line-rendering viewport contract. */
-export function createEditorViewportData(layout: EditorViewportLayout, modelVersion: number): EditorViewportData {
-	return new EditorViewportData({
-		modelVersion,
-		lineHeight: layout.lineHeight,
-		visibleLines: layout.visibleLines,
-		renderLines: layout.renderLines,
-		renderTop: layout.renderTop,
-		relativeVerticalOffset: layout.relativeVerticalOffset,
-	});
+export class HorizontalPosition {
+	public outsideRenderedLine: boolean;
+	public left: number;
+	public originalLeft: number;
+
+	constructor(outsideRenderedLine: boolean, left: number) {
+		this.outsideRenderedLine = outsideRenderedLine;
+		this.originalLeft = left;
+		this.left = Math.round(left);
+	}
+}
+
+export class VisibleRanges {
+	constructor(
+		public readonly outsideRenderedLine: boolean,
+		public readonly ranges: FloatHorizontalRange[],
+	) { }
+}
+
+export class LineVisibleRanges {
+	public static firstLine(ranges: LineVisibleRanges[] | null): LineVisibleRanges | null {
+		return ranges?.reduce<LineVisibleRanges | null>((first, range) => !first || range.lineNumber < first.lineNumber ? range : first, null) ?? null;
+	}
+
+	public static lastLine(ranges: LineVisibleRanges[] | null): LineVisibleRanges | null {
+		return ranges?.reduce<LineVisibleRanges | null>((last, range) => !last || range.lineNumber > last.lineNumber ? range : last, null) ?? null;
+	}
+
+	constructor(
+		public readonly outsideRenderedLine: boolean,
+		public readonly lineNumber: number,
+		public readonly ranges: HorizontalRange[],
+		public readonly continuesOnNextLine: boolean,
+	) { }
 }

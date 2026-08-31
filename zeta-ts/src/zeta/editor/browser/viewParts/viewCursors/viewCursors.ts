@@ -11,11 +11,13 @@ import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type TrackedRange } from '../../../common/model/trackedRange.js';
 import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
-import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { type EditorRenderingContext, ViewPart } from '../../view/viewPart.js';
+import { type RenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 import { ViewPartRows } from '../../view/viewLayer.js';
 import { CursorPlurality, ViewCursor, type IViewCursorRenderData, type ViewCursorOptions } from './viewCursor.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
+import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 
 export interface ViewCursorsOptions extends ViewCursorOptions {
 	readonly host: HTMLElement;
@@ -88,16 +90,16 @@ export class ViewCursors extends ViewPart {
 		for (const cursor of this.cursors) cursor.onConfigurationChanged(this.cursorOptions);
 	}
 
-	public override prepareRender(context: EditorRenderingContext): void {
+	public override prepareRender(context: RenderingContext): void {
 		if (this.cursors.length !== this.viewModel.getCursorStates().length) this.reconcileCursors(this.pauseMovementAnimation);
 		else this.updateCursorPositions(this.pauseMovementAnimation);
 		for (const cursor of this.cursors) cursor.prepareRender(context);
 	}
 
-	public render(context: EditorRenderingContext): void {
+	public render(context: RenderingContext): void {
 		const rows = this.compositionRows.render(context);
 		for (const row of rows.values()) reset(row);
-		if (context.overlay) projectStanzaCompositionOverlay(context.overlay, this.compositionRange?.range, rows);
+		projectStanzaCompositionOverlay(context, this.model, this.cursorOptions.readVisualProjection(), this.cursorOptions.readTextLeft(), this.cursorOptions.textMeasurer, this.compositionRange?.range, rows);
 		this.renderData = [];
 		for (const cursor of this.cursors) {
 			const renderData = cursor.render(context);
@@ -109,7 +111,7 @@ export class ViewCursors extends ViewPart {
 		return this.renderData;
 	}
 
-	public renderSelection(context: EditorRenderingContext, reason: CursorChangeReason): void {
+	public renderSelection(context: RenderingContext, reason: CursorChangeReason): void {
 		const selectionCount = this.viewModel.getCursorStates().length;
 		this.pauseMovementAnimation = !this.shouldAnimateMovement(reason, selectionCount);
 		this.previousSelectionCount = selectionCount;
@@ -123,7 +125,7 @@ export class ViewCursors extends ViewPart {
 		});
 	}
 
-	public renderTokens(context: EditorRenderingContext): void {
+	public renderTokens(context: RenderingContext): void {
 		this.movementRenderGeneration += 1;
 		this.pauseMovementAnimation = true;
 		this.prepareRender(context);
@@ -182,17 +184,27 @@ function cursorBlinkingClass(blinking: TextEditorCursorBlinkingStyle): string {
 	}
 }
 
-function projectStanzaCompositionOverlay(context: EditorOverlayContext, range: Range | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
+function projectStanzaCompositionOverlay(context: RenderingContext, model: TextModel, projection: EditorVisualLineProjection, textLeft: number, textMeasurer: TextMeasurer, range: Range | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
 	if (!range) return;
-	const rectangles = context.linesVisibleRangesForRange(range, false)
-		?? createStanzaVisualRangeRectangles(context.model, [{ range, value: undefined }], context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
-	for (const rectangle of rectangles) {
-		const row = rows.get(rectangle.visualLineIndex);
-		if (!row) continue;
-		const element = h(context.ownerDocument, 'div');
-		element.className = 'stanza-editor-composition';
-		element.style.left = `${rectangle.left}px`;
-		element.style.width = `${rectangle.width}px`;
-		row.append(element);
+	const visibleRanges = context.linesVisibleRangesForRange(range, false);
+	if (visibleRanges) {
+		for (const line of visibleRanges) {
+			for (const horizontalRange of line.ranges) appendCompositionRange(rows, line.lineNumber - 1, horizontalRange.left, horizontalRange.width);
+		}
+		return;
 	}
+	const renderLines = { startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber };
+	const rectangles = createStanzaVisualRangeRectangles(model, [{ range, value: undefined }], projection, renderLines, textLeft, textMeasurer);
+	for (const rectangle of rectangles) appendCompositionRange(rows, rectangle.visualLineIndex, rectangle.left, rectangle.width);
+}
+
+
+function appendCompositionRange(rows: ReadonlyMap<number, HTMLElement>, visualLineIndex: number, left: number, width: number): void {
+	const row = rows.get(visualLineIndex);
+	if (!row) return;
+	const element = h(row.ownerDocument, 'div');
+	element.className = 'stanza-editor-composition';
+	element.style.left = `${left}px`;
+	element.style.width = `${width}px`;
+	row.append(element);
 }

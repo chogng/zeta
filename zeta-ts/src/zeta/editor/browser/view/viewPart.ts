@@ -1,9 +1,8 @@
 import { type FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { ViewEventHandler } from '../../common/viewEventHandler.js';
 import { type ViewContext } from '../../common/viewModel/viewContext.js';
-import { type EditorRenderingContext } from './renderingContext.js';
-
-export type { EditorRenderingContext } from './renderingContext.js';
+import { type RenderingContext, type RestrictedRenderingContext } from './renderingContext.js';
+import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 
 export abstract class ViewPart extends ViewEventHandler {
 	protected readonly _context: ViewContext;
@@ -19,18 +18,18 @@ export abstract class ViewPart extends ViewEventHandler {
 		super.dispose();
 	}
 
-	public onBeforeRender(_viewportData: EditorRenderingContext['viewportData']): void {
+	public onBeforeRender(_viewportData: ViewportData): void {
 	}
 
-	public prepareRender(_context: EditorRenderingContext): void {
+	public prepareRender(_context: RenderingContext): void {
 	}
 
-	public renderNow(context: EditorRenderingContext): void {
+	public renderNow(context: RenderingContext): void {
 		this.prepareRender(context);
 		this.render(context);
 	}
 
-	public abstract render(context: EditorRenderingContext): void;
+	public abstract render(context: RestrictedRenderingContext): void;
 }
 
 export const enum PartFingerprint {

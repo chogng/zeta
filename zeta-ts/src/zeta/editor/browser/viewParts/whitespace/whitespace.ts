@@ -5,8 +5,10 @@ import { Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type EditorRenderingContext } from '../../view/viewPart.js';
+import { type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
+import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 
 export type WhitespaceRenderingMode = 'none' | 'boundary' | 'selection' | 'trailing' | 'all';
 
@@ -17,6 +19,10 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 		private readonly model: TextModel,
 		private readonly viewModel: IViewModel,
 		private readonly mode: WhitespaceRenderingMode,
+		private readonly ownerDocument: Document,
+		private readonly readVisualProjection: () => EditorVisualLineProjection,
+		private readonly readTextLeft: () => number,
+		private readonly textMeasurer: TextMeasurer,
 	) {
 		super();
 		this.context.addEventHandler(this);
@@ -27,13 +33,15 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 		super.dispose();
 	}
 
-	public prepareRender(context: EditorRenderingContext): void {
-		this.prepareRows(context, (overlay, rows) => {
+	public prepareRender(context: RenderingContext): void {
+		const projection = this.readVisualProjection();
+		const textLeft = this.readTextLeft();
+		this.prepareRows(context, this.ownerDocument, rows => {
 		for (const [visualLineIndex, row] of rows) {
 			if (this.mode === 'none') {
 				continue;
 			}
-			const visualLine = overlay.visualLineProjection.lineAt(visualLineIndex);
+			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine) {
 				continue;
 			}
@@ -56,7 +64,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 				const marker = h(row.ownerDocument, 'span');
 				marker.className = 'mwh stanza-editor-whitespace';
 				marker.textContent = character === '\t' ? '→' : '·';
-				marker.style.left = `${overlay.textLeft + overlay.textMeasurer.measureLineWidth(text.slice(0, index))}px`;
+				marker.style.left = `${textLeft + this.textMeasurer.measureLineWidth(text.slice(0, index))}px`;
 				row.append(marker);
 			}
 		}

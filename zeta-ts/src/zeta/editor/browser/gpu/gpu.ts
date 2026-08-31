@@ -26,6 +26,12 @@ export interface GpuRenderInput {
 export interface GpuFrame {
 	readonly vertices: Float32Array<ArrayBuffer>;
 	readonly gpuLineIndexes: ReadonlySet<number>;
+	readonly lineGeometries: ReadonlyMap<number, GpuLineGeometry>;
+}
+
+export interface GpuLineGeometry {
+	readonly leftByOffset: readonly number[];
+	readonly newLineWidth: number;
 }
 
 export interface IGpuRenderStrategy extends IDisposable {

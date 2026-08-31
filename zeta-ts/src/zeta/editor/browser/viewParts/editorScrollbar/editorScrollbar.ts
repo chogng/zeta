@@ -5,7 +5,8 @@ import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/vertica
 import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
 import { EditorOptions } from "../../../common/config/editorOptions.js";
 import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
-import { ViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+import { type RestrictedRenderingContext } from "../../view/renderingContext.js";
+import { ViewPart } from "../../view/viewPart.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 
 export type EditorScrollbarVisibility = "auto" | "visible" | "hidden";
@@ -87,48 +88,48 @@ export class EditorScrollbar extends ViewPart {
 		}, 700));
 	}
 
-	render(context: EditorRenderingContext): void {
-		const layout = context.layout;
+	render(context: RestrictedRenderingContext): void {
+		const scrollPosition = { left: context.scrollLeft, top: context.scrollTop };
 		if (
 			this.lastScrollPosition !== undefined &&
-			(this.lastScrollPosition.left !== layout.scrollPosition.left ||
-				this.lastScrollPosition.top !== layout.scrollPosition.top)
+			(this.lastScrollPosition.left !== scrollPosition.left ||
+				this.lastScrollPosition.top !== scrollPosition.top)
 		) {
 			this.showScrollbars();
 		}
-		this.lastScrollPosition = layout.scrollPosition;
+		this.lastScrollPosition = scrollPosition;
 		const horizontalRendered = isRendered(
 			this.horizontalVisibility,
-			layout.maximumScrollPosition.left > 0,
+			context.scrollWidth > context.viewportWidth,
 		);
 		const verticalRendered = isRendered(
 			this.verticalVisibility,
-			layout.maximumScrollPosition.top > 0,
+			context.scrollHeight > context.viewportHeight,
 		);
 		const horizontalTrackSize = Math.max(
 			0,
-			layout.viewportSize.width - (verticalRendered ? this.verticalScrollbarSize : 0),
+			context.viewportWidth - (verticalRendered ? this.verticalScrollbarSize : 0),
 		);
 		const verticalTrackSize = Math.max(
 			0,
-			layout.viewportSize.height - (horizontalRendered ? this.horizontalScrollbarSize : 0),
+			context.viewportHeight - (horizontalRendered ? this.horizontalScrollbarSize : 0),
 		);
 		this.horizontal.trackNode.setRight(verticalRendered ? this.verticalScrollbarSize : 0);
 		this.vertical.trackNode.setBottom(horizontalRendered ? this.horizontalScrollbarSize : 0);
-		const scrollTransform = `translate3d(${layout.scrollPosition.left}px, ${layout.scrollPosition.top}px, 0)`;
+		const scrollTransform = `translate3d(${context.scrollLeft}px, ${context.scrollTop}px, 0)`;
 		this.horizontal.trackNode.setTransform(scrollTransform);
 		this.vertical.trackNode.setTransform(scrollTransform);
 		this.horizontalMetrics = createScrollbarAxisMetrics(
-			layout.viewportSize.width,
-			layout.contentSize.width,
-			layout.scrollPosition.left,
+			context.viewportWidth,
+			context.scrollWidth,
+			context.scrollLeft,
 			horizontalTrackSize,
 			this.minimumThumbSize,
 		);
 		this.verticalMetrics = createScrollbarAxisMetrics(
-			layout.viewportSize.height,
-			layout.contentSize.height,
-			layout.scrollPosition.top,
+			context.viewportHeight,
+			context.scrollHeight,
+			context.scrollTop,
 			verticalTrackSize,
 			this.minimumThumbSize,
 		);
