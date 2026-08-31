@@ -36,8 +36,13 @@ pub const SCROLLBAR_SLIDER_BACKGROUND: &str = "scrollbar.sliderBackground";
 pub const SCROLLBAR_SLIDER_HOVER_BACKGROUND: &str = "scrollbar.sliderHoverBackground";
 pub const SCROLLBAR_SLIDER_ACTIVE_BACKGROUND: &str = "scrollbar.sliderActiveBackground";
 
+pub const FONT_SIZE_HEADING2: &str = "fontSize.heading2";
 pub const FONT_SIZE_BODY1: &str = "fontSize.body1";
+pub const FONT_SIZE_BODY2: &str = "fontSize.body2";
 pub const FONT_SIZE_LABEL1: &str = "fontSize.label1";
+pub const FONT_SIZE_LABEL2: &str = "fontSize.label2";
+pub const FONT_WEIGHT_REGULAR: &str = "fontWeight.regular";
+pub const FONT_WEIGHT_MEDIUM: &str = "fontWeight.medium";
 pub const FONT_WEIGHT_SEMI_BOLD: &str = "fontWeight.semiBold";
 pub const SCROLLBAR_SIZE: &str = "scrollbar.size";
 

@@ -231,10 +231,11 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`TabL
 | 常规正文 | `fontSize.body1` | `fontWeight.regular` |
 | 常规标签 / 次级标题 | `fontSize.label1` | `fontWeight.regular` |
 | 元数据 | `fontSize.label2` | `fontWeight.regular` |
+| 控件 / 导航 / 当前项 | `fontSize.body1` 或 `fontSize.label1` | `fontWeight.medium` |
 | 强调正文 / Pane tab | `fontSize.body1` | `fontWeight.semiBold` |
 | 强调标题 | 对应 `fontSize.heading*` 或 `fontSize.label1` | `fontWeight.semiBold` |
 
-`TabList` 基座拥有 tab label 的统一强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；其 `inset` presentation 统一拥有 Editor 与 Chat 使用的内缩、圆角、截断渐变和 focus 几何，两个组合控件只投影各自的非选中背景 token。`CompositeBar`、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。Part 不得用深层 selector 改写这些字体规则。系统仅提供 regular（400）与 strong（600）两级；不引入 700 的第三层级。
+`TabList` 基座拥有 tab label 的统一强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；其 `inset` presentation 统一拥有 Editor 与 Chat 使用的内缩、圆角、截断渐变和 focus 几何，两个组合控件只投影各自的非选中背景 token。`CompositeBar`、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。Part 不得用深层 selector 改写这些字体规则。系统提供 regular（400）、medium（500）与 semiBold（600）三级，不使用 700 弥补层级或间距问题。
 
 新增视觉规则时：
 

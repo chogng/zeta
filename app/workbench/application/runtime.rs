@@ -1,6 +1,8 @@
 use super::*;
 
 const DEFAULT_GUI_THEME: &str = "system";
+const DEFAULT_INTERFACE_FONT_FAMILY: &str = "sans-serif";
+const DEFAULT_INTERFACE_FONT_SIZE: u16 = 13;
 const DEFAULT_EDITOR_FONT_FAMILY: &str = "monospace";
 const DEFAULT_EDITOR_FONT_SIZE: u16 = 13;
 const DEFAULT_EDITOR_LINE_HEIGHT: u16 = 20;
@@ -8,6 +10,8 @@ const DEFAULT_EDITOR_LINE_HEIGHT: u16 = 20;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct GuiConfig {
     pub(super) theme: String,
+    pub(super) interface_font_family: String,
+    pub(super) interface_font_size: u16,
     pub(super) editor_font_family: String,
     pub(super) editor_font_size: u16,
     pub(super) editor_line_height: u16,
@@ -17,6 +21,8 @@ impl Default for GuiConfig {
     fn default() -> Self {
         Self {
             theme: DEFAULT_GUI_THEME.into(),
+            interface_font_family: DEFAULT_INTERFACE_FONT_FAMILY.into(),
+            interface_font_size: DEFAULT_INTERFACE_FONT_SIZE,
             editor_font_family: DEFAULT_EDITOR_FONT_FAMILY.into(),
             editor_font_size: DEFAULT_EDITOR_FONT_SIZE,
             editor_line_height: DEFAULT_EDITOR_LINE_HEIGHT,
@@ -25,10 +31,16 @@ impl Default for GuiConfig {
 }
 
 impl GuiConfig {
-    fn from_section(section: &FrontendConfigDto) -> Result<Self, String> {
+    pub(super) fn from_section(section: &FrontendConfigDto) -> Result<Self, String> {
         let mut config = Self::default();
         if let Some(value) = section.0.get("theme") {
             config.theme = string_value("gui.theme", value)?;
+        }
+        if let Some(value) = section.0.get("interfaceFontFamily") {
+            config.interface_font_family = string_value("gui.interfaceFontFamily", value)?;
+        }
+        if let Some(value) = section.0.get("interfaceFontSize") {
+            config.interface_font_size = integer_value("gui.interfaceFontSize", value, 6, 96)?;
         }
         if let Some(value) = section.0.get("editorFontFamily") {
             config.editor_font_family = string_value("gui.editorFontFamily", value)?;
@@ -90,6 +102,7 @@ impl WorkbenchApplication {
         let Ok(palette) = UiTheme::from_snapshot(&loaded.snapshot) else {
             return;
         };
+        let typography = gui_interface_typography(&self.gui, palette);
         let text_style = gui_editor_text_style(&self.gui, palette.editor_foreground);
         let Ok(editor_style) =
             CodeEditorStyle::from_theme_and_text_style(palette, text_style, &mut self.text_layout)
@@ -97,6 +110,7 @@ impl WorkbenchApplication {
             return;
         };
         self.palette = palette;
+        self.typography = typography;
         self.theme_scheme = loaded.snapshot.color_scheme();
         self.theme_follows_system = loaded.follows_system;
         self.session_pane.set_composer_style(editor_style.clone());
@@ -392,4 +406,12 @@ pub(super) fn gui_editor_text_style(gui: &GuiConfig, color: Color) -> TextStyle 
     TextStyle::new(f32::from(gui.editor_font_size), color)
         .with_family(gui_font_family(&gui.editor_font_family))
         .with_line_height(f32::from(gui.editor_line_height))
+}
+
+pub(super) fn gui_interface_typography(gui: &GuiConfig, theme: UiTheme) -> UiTypography {
+    UiTypography::from_theme(
+        theme,
+        gui_font_family(&gui.interface_font_family),
+        f32::from(gui.interface_font_size),
+    )
 }

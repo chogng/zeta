@@ -14,6 +14,7 @@ export const fontSizeLabel1 = dimension("fontSize.label1", 12, "Section title an
 export const fontSizeLabel2 = dimension("fontSize.label2", 11, "Metadata label font size.");
 export const fontSizeLabel3 = dimension("fontSize.label3", 10, "Badge label font size.");
 export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font weight for un-emphasized text.");
+export const fontWeightMedium = scalar("fontWeight.medium", 500, "Medium font weight for controls, navigation, and other compact emphasized text.");
 export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.");
 
 export const animationDurationFast = duration("animation.durationFast", 120, "Short UI state transition duration.");

@@ -56,11 +56,12 @@ Zeta App 使用紧凑、克制、低噪声的桌面界面：信息密度高，�
 | --- | --- | --- | --- |
 | 辅助信息 | 11 / 16px | Regular | 状态、时间、次要元数据 |
 | 次级正文 | 12 / 18px | Regular | 描述、提示、输入框文字 |
-| 主正文与控件 | 13 / 18px | Regular | 按钮、列表、菜单、正文 |
-| 强调控件 | 13 / 18px | SemiBold | ContextMenu 动作、当前模式 |
-| Dialog 标题 | 17 / 22px | Regular | 模态弹窗标题 |
+| 主正文 | 13 / 18px | Regular | 列表内容、说明文字、正文 |
+| 控件与导航 | 13 / 18px | Medium | 按钮、当前模式、设置导航 |
+| 强调控件 | 13 / 18px | SemiBold | ContextMenu 动作、Pane tab |
+| 页面标题 | 18 / 24px | SemiBold | 设置页及模态内容标题 |
 
-正文默认使用 Regular。只有动作、当前选择或短标签使用 Medium/SemiBold；不要用粗体弥补层级或间距不足。
+正文默认使用 Regular。动作、当前选择或短标签使用 Medium，标题和需要更强区分的短标签使用 SemiBold；不要使用 Bold 弥补层级或间距不足。字体族和基础字号由 `[gui]` 的 `interfaceFontFamily` 与 `interfaceFontSize` 决定，组件只选择字体角色。
 
 ### 2.4 边框与阴影
 

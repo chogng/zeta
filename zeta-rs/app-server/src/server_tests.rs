@@ -2983,6 +2983,8 @@ fn gui_config_updates_round_trip_without_backend_field_interpretation() {
                 "commandId":"configure-gui","expectedRevision":0,
                 "gui":{
                     "theme":"zeta-dark",
+                    "interfaceFontFamily":"Inter",
+                    "interfaceFontSize":15,
                     "editorFontFamily":"JetBrains Mono",
                     "editorFontSize":15,
                     "editorLineHeight":24
@@ -3000,6 +3002,8 @@ fn gui_config_updates_round_trip_without_backend_field_interpretation() {
         read["result"]["gui"],
         serde_json::json!({
             "theme":"zeta-dark",
+            "interfaceFontFamily":"Inter",
+            "interfaceFontSize":15,
             "editorFontFamily":"JetBrains Mono",
             "editorFontSize":15,
             "editorLineHeight":24

@@ -55,14 +55,14 @@ API key、OAuth token、authorization header 或 refresh 状态。
 ```toml
 [gui]
 theme = "system"
+interfaceFontFamily = "sans-serif"
+interfaceFontSize = 13
 editorFontFamily = "monospace"
 editorFontSize = 13
 editorLineHeight = 20
 ```
 
-`theme` 使用内置主题入口、用户主题 ID 或 `system`；字体族可用 `monospace`、`sans-serif`、
-`serif` 或具体字体名称。字号范围为 6–96 px，行高不能小于字号且不能超过 192 px。这些默认值、
-校验和生效方式都属于图形界面，不进入 Config 或 App Server 的领域类型。
+`theme` 使用内置主题入口、用户主题 ID 或 `system`。`interfaceFontFamily` 和 `interfaceFontSize` 控制 Workbench 导航和设置页等界面文字；`editorFontFamily`、`editorFontSize` 和 `editorLineHeight` 只控制编辑器。字体族可用 `monospace`、`sans-serif`、`serif` 或具体字体名称，字号范围为 6–96 px，编辑器行高不能小于字号且不能超过 192 px。这些默认值、校验和生效方式都属于图形界面，不进入 Config 或 App Server 的领域类型。
 
 TUI 独立解释根级 `[tui]`，其中保存主题、鼠标交互、后续消息模式、输入模式和新增目录默认权限：
 

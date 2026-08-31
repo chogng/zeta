@@ -161,6 +161,8 @@ Rust GUI 的选择值保存在 profile `config.toml` 根级 `[gui]`，并可同�
 ```toml
 [gui]
 theme = "zeta-aurora"
+interfaceFontFamily = "sans-serif"
+interfaceFontSize = 13
 editorFontFamily = "monospace"
 editorFontSize = 13
 editorLineHeight = 20
@@ -177,7 +179,7 @@ Desktop 的选择值保存在 profile `configuration.json`；图形界面主题�
 }
 ```
 
-各字段都可省略，省略时使用对应界面的 `system` 默认入口。`system` 表示跟随操作系统并在内置 Light/Dark 之间切换。Rust GUI 收到新的 Config generation 后即时应用主题选择与编辑器字体；Desktop 保存和预览也会即时更新。外部修改主题文件后，Rust GUI 仍需重启才能重新读取文件内容。Zeta Code TUI 使用独立主题格式，选择值写入 `config.toml` 的 `[tui].theme`，不消费本模板描述的图形界面主题。
+各字段都可省略。`system` 表示跟随操作系统并在内置 Light/Dark 之间切换；界面字体默认使用 `sans-serif` 13px，编辑器默认使用 `monospace` 13px / 20px。Rust GUI 收到新的 Config generation 后即时应用主题选择、界面字体与编辑器字体；Desktop 保存和预览也会即时更新。外部修改主题文件后，Rust GUI 仍需重启才能重新读取文件内容。Zeta Code TUI 使用独立主题格式，选择值写入 `config.toml` 的 `[tui].theme`，不消费本模板描述的图形界面主题。
 
 ## 开发与验证
 

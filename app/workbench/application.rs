@@ -51,7 +51,10 @@ use zeta_terminal_runtime::TerminalPaneViews;
 use zeta_terminal_runtime::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, default_device_root};
 use zeta_ui_components::SashOrientation;
-use zeta_ui_theme::{DEFAULT_UI_THEME, UiTheme};
+use zeta_ui_theme::DEFAULT_UI_THEME;
+use zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY;
+use zeta_ui_theme::UiTheme;
+use zeta_ui_theme::UiTypography;
 use zui::ui::{
     CaretBlinkAdvance, CaretBlinkController, Color, FontFamily, Point, TextInputLayoutEngine,
     TextStyle,

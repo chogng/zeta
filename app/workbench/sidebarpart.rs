@@ -91,6 +91,12 @@ pub(crate) fn test_style() -> WorkbenchUiStyle {
                 .with_hovered_colors(Color::TRANSPARENT, Color::rgb(90, 90, 96))
                 .with_active_colors(Color::TRANSPARENT, Color::rgb(64, 64, 70)),
         ),
+        TextStyle::new(13.0, Color::rgb(38, 38, 41)).with_line_height(18.0),
+        TextStyle::new(13.0, Color::rgb(38, 38, 41))
+            .with_weight(crate::FontWeight::Medium)
+            .with_line_height(18.0),
+        TextStyle::new(12.0, Color::rgb(38, 38, 41)).with_line_height(18.0),
+        TextStyle::new(11.0, Color::rgb(126, 126, 132)).with_line_height(16.0),
         icons::GEAR,
         icons::ADD,
         icons::CLOSE,

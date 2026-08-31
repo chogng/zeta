@@ -286,7 +286,7 @@ impl Component for SettingsPage {
             scene,
             "Settings",
             self.layout.navigation_label_bounds(),
-            TextStyle::new(12.0, self.style.text_muted).with_line_height(18.0),
+            self.style.navigation_label.clone(),
         );
         for button in &self.navigation {
             scene.draw_component(button);

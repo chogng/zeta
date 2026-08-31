@@ -16,6 +16,7 @@ pub(crate) fn shaping_family(family: &FontFamily) -> Family<'_> {
 pub(crate) fn shaping_weight(weight: FontWeight) -> Weight {
     match weight {
         FontWeight::Normal => Weight::NORMAL,
+        FontWeight::Medium => Weight::MEDIUM,
         FontWeight::SemiBold => Weight::SEMIBOLD,
         FontWeight::Bold => Weight::BOLD,
     }

@@ -22,7 +22,6 @@ use crate::ContextViewStyle;
 use crate::CornerRadii;
 use crate::Edges;
 use crate::Element;
-use crate::FontWeight;
 use crate::InteractionRegion;
 use crate::PaintRect;
 use crate::Point;
@@ -30,7 +29,6 @@ use crate::Rect;
 use crate::Size;
 use crate::TextBlock;
 use crate::TextSpan;
-use crate::TextStyle;
 use crate::UiScene;
 use zeta_icons::icons;
 use zui::ui::CursorFeedback;
@@ -84,11 +82,19 @@ impl<'a> ItemDirsPreview<'a> {
     }
 
     fn header(&self, bounds: Rect) -> TextBlock {
-        let name = TextStyle::new(13.0, self.style.colors.hover_foreground)
-            .with_weight(FontWeight::Bold)
+        let name = self
+            .style
+            .control_text
+            .clone()
+            .with_color(self.style.colors.hover_foreground)
             .with_line_height(20.0);
         let status_color = self.style.session_status_color(self.item.status.kind());
-        let status = TextStyle::new(11.0, status_color).with_line_height(20.0);
+        let status = self
+            .style
+            .metadata_text
+            .clone()
+            .with_color(status_color)
+            .with_line_height(20.0);
         TextBlock::from_spans(
             [
                 TextSpan::new(format!("{}  ", self.item.name), name.clone()),
@@ -103,7 +109,10 @@ impl<'a> ItemDirsPreview<'a> {
     fn action_list(&self, bounds: Rect) -> ActionList {
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(Color::TRANSPARENT),
-            TextStyle::new(12.0, self.style.colors.hover_foreground).with_line_height(18.0),
+            self.style
+                .label_text
+                .clone()
+                .with_color(self.style.colors.hover_foreground),
         )
         .with_corner_radii(CornerRadii::uniform(0.0))
         .with_padding(Edges::new(3.0, 0.0, 3.0, 0.0))

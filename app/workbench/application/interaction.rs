@@ -496,7 +496,8 @@ impl WorkbenchApplication {
             bounds,
             zeta_commands::AppCommandId::BINDABLE.len(),
             self.keybinding_diagnostics.len(),
-            zeta_settings::SettingsSectionStyle::from_theme(self.palette).scroll_view,
+            zeta_settings::SettingsSectionStyle::from_theme(self.palette, &self.typography)
+                .scroll_view,
         ))
     }
 

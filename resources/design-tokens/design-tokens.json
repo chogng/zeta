@@ -2422,6 +2422,82 @@
       }
     },
     {
+      "id": "editor.foldBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-fold-background",
+      "owner": "editor.presentation",
+      "description": "Background behind collapsed editor ranges.",
+      "needsTransparency": true,
+      "defaults": {
+        "dark": {
+          "op": "transparent",
+          "value": "selection.background",
+          "factor": 0.3
+        },
+        "light": {
+          "op": "transparent",
+          "value": "selection.background",
+          "factor": 0.3
+        },
+        "high-contrast-dark": {
+          "op": "transparent",
+          "value": "selection.background",
+          "factor": 0.3
+        },
+        "high-contrast-light": {
+          "op": "transparent",
+          "value": "selection.background",
+          "factor": 0.3
+        }
+      },
+      "values": {
+        "dark": "rgba(38, 79, 120, 0.3)",
+        "light": "rgba(173, 214, 255, 0.3)",
+        "high-contrast-dark": "rgba(38, 79, 120, 0.3)",
+        "high-contrast-light": "rgba(173, 214, 255, 0.3)"
+      }
+    },
+    {
+      "id": "editor.foldPlaceholderForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-fold-placeholder-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for the collapsed-range placeholder.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#808080",
+        "light": "#808080",
+        "high-contrast-dark": "#808080",
+        "high-contrast-light": "#808080"
+      },
+      "values": {
+        "dark": "#808080",
+        "light": "#808080",
+        "high-contrast-dark": "#808080",
+        "high-contrast-light": "#808080"
+      }
+    },
+    {
+      "id": "editorGutter.foldingControlForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-gutter-folding-control-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for editor folding controls.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      },
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
       "id": "editorCursor.foreground",
       "kind": "color",
       "cssVariable": "--zeta-editor-cursor-foreground",
@@ -3575,6 +3651,14 @@
       "owner": "platform.ui",
       "description": "Regular font weight for un-emphasized text.",
       "value": "400"
+    },
+    {
+      "id": "fontWeight.medium",
+      "kind": "size",
+      "cssVariable": "--zeta-font-weight-medium",
+      "owner": "platform.ui",
+      "description": "Medium font weight for controls, navigation, and other compact emphasized text.",
+      "value": "500"
     },
     {
       "id": "fontWeight.semiBold",

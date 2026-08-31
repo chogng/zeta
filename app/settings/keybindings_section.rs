@@ -20,7 +20,6 @@ use zui::ui::PaintRect;
 use zui::ui::Point;
 use zui::ui::Rect;
 use zui::ui::TextBlock;
-use zui::ui::TextStyle;
 use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 use zui::ui::UiScene;
@@ -117,7 +116,7 @@ impl<'a> KeybindingsSection<'a> {
         KeybindingRow {
             bounds,
             row: &self.rows[index],
-            style: self.style,
+            style: &self.style,
             dispatch: self.dispatch,
             interactions_enabled: self.interactions_enabled,
             paint_enabled,
@@ -164,7 +163,7 @@ impl Component for KeybindingsSection<'_> {
             if item.index() < self.rows.len() {
                 context.draw_component(&self.row(item.index(), item.bounds(), true));
             } else if let Some(diagnostic) = self.diagnostics.first() {
-                draw_diagnostic(context.scene_mut(), diagnostic, item.bounds(), self.style);
+                draw_diagnostic(context.scene_mut(), diagnostic, item.bounds(), &self.style);
             }
         });
         if self.interactions_enabled {
@@ -190,7 +189,7 @@ impl Component for KeybindingsSection<'_> {
             if item.index() < self.rows.len() {
                 self.row(item.index(), item.bounds(), true).paint(scene);
             } else if let Some(diagnostic) = self.diagnostics.first() {
-                draw_diagnostic(scene, diagnostic, item.bounds(), self.style);
+                draw_diagnostic(scene, diagnostic, item.bounds(), &self.style);
             }
         });
     }
@@ -199,7 +198,7 @@ impl Component for KeybindingsSection<'_> {
 struct KeybindingRow<'a> {
     bounds: Rect,
     row: &'a SettingsKeybindingRow,
-    style: SettingsSectionStyle,
+    style: &'a SettingsSectionStyle,
     dispatch: &'a UiDispatch,
     interactions_enabled: bool,
     paint_enabled: bool,
@@ -284,13 +283,13 @@ fn draw_row_text(
     scene: &mut UiScene,
     bounds: Rect,
     row: &SettingsKeybindingRow,
-    style: SettingsSectionStyle,
+    style: &SettingsSectionStyle,
 ) {
     scene.draw_text(TextBlock::new(
         &row.label,
         Point::new(bounds.origin.x + 10.0, bounds.origin.y + 8.0),
         zui::ui::Size::new(bounds.size.width * 0.55, 20.0),
-        TextStyle::new(13.0, style.text).with_line_height(20.0),
+        style.control_text.clone().with_line_height(20.0),
     ));
     scene.draw_text(TextBlock::new(
         &row.value,
@@ -299,7 +298,9 @@ fn draw_row_text(
             bounds.origin.y + 8.0,
         ),
         zui::ui::Size::new(bounds.size.width * 0.4, 20.0),
-        TextStyle::new(12.0, style.text_muted)
+        style
+            .label_text
+            .clone()
             .with_family(FontFamily::Monospace)
             .with_line_height(20.0),
     ));
@@ -309,12 +310,16 @@ fn draw_diagnostic(
     scene: &mut UiScene,
     diagnostic: &str,
     bounds: Rect,
-    style: SettingsSectionStyle,
+    style: &SettingsSectionStyle,
 ) {
     scene.draw_text(TextBlock::new(
         diagnostic,
         Point::new(bounds.origin.x + 10.0, bounds.origin.y + 8.0),
         zui::ui::Size::new((bounds.size.width - 20.0).max(1.0), 20.0),
-        TextStyle::new(12.0, style.error).with_line_height(20.0),
+        style
+            .label_text
+            .clone()
+            .with_color(style.error)
+            .with_line_height(20.0),
     ));
 }

@@ -11,6 +11,7 @@ use zeta_ui_components::SearchBoxStyle;
 use zui::ui::Color;
 use zui::ui::CornerRadii;
 use zui::ui::Edges;
+use zui::ui::FontFamily;
 use zui::ui::FontWeight;
 use zui::ui::TextStyle;
 
@@ -42,6 +43,68 @@ impl TypographyStyle {
         TextStyle::new(self.font_size * scale, color)
             .with_line_height(self.line_height * scale)
             .with_weight(self.weight)
+    }
+
+    const fn scaled(self, scale: f32) -> Self {
+        Self::new(
+            self.font_size * scale,
+            self.line_height * scale,
+            self.weight,
+        )
+    }
+}
+
+/// Resolved interface typography after GUI preferences override theme role defaults.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UiTypography {
+    family: FontFamily,
+    body: TypographyStyle,
+    control: TypographyStyle,
+    label: TypographyStyle,
+    metadata: TypographyStyle,
+    heading: TypographyStyle,
+}
+
+impl UiTypography {
+    /// Resolves one interface font family and base size while preserving theme role ratios.
+    pub fn from_theme(theme: UiTheme, family: FontFamily, body_size: f32) -> Self {
+        let scale = body_size / theme.interface_body.font_size;
+        Self {
+            family,
+            body: theme.interface_body.scaled(scale),
+            control: theme.interface_control.scaled(scale),
+            label: theme.interface_label.scaled(scale),
+            metadata: theme.interface_metadata.scaled(scale),
+            heading: theme.interface_heading.scaled(scale),
+        }
+    }
+
+    pub fn body_text(&self, color: Color) -> TextStyle {
+        self.body.text_style(color).with_family(self.family.clone())
+    }
+
+    pub fn control_text(&self, color: Color) -> TextStyle {
+        self.control
+            .text_style(color)
+            .with_family(self.family.clone())
+    }
+
+    pub fn label_text(&self, color: Color) -> TextStyle {
+        self.label
+            .text_style(color)
+            .with_family(self.family.clone())
+    }
+
+    pub fn metadata_text(&self, color: Color) -> TextStyle {
+        self.metadata
+            .text_style(color)
+            .with_family(self.family.clone())
+    }
+
+    pub fn heading_text(&self, color: Color) -> TextStyle {
+        self.heading
+            .text_style(color)
+            .with_family(self.family.clone())
     }
 }
 
@@ -104,6 +167,11 @@ pub struct UiTheme {
     pub editor_text: TypographyStyle,
     pub editor_header: TypographyStyle,
     pub compact_action_label: TypographyStyle,
+    pub interface_body: TypographyStyle,
+    pub interface_control: TypographyStyle,
+    pub interface_label: TypographyStyle,
+    pub interface_metadata: TypographyStyle,
+    pub interface_heading: TypographyStyle,
     pub(crate) font_size_body: f32,
     pub(crate) font_size_label: f32,
     pub(crate) scrollbar_size: f32,
@@ -175,6 +243,11 @@ pub const DEFAULT_UI_THEME: UiTheme = UiTheme {
     editor_text: TypographyStyle::new(13.0, DEFAULT_EDITOR_LINE_HEIGHT, FontWeight::Normal),
     editor_header: TypographyStyle::new(12.0, DEFAULT_EDITOR_HEADER_HEIGHT, FontWeight::Bold),
     compact_action_label: TypographyStyle::new(12.0, 16.0, FontWeight::SemiBold),
+    interface_body: TypographyStyle::new(13.0, 18.0, FontWeight::Normal),
+    interface_control: TypographyStyle::new(13.0, 18.0, FontWeight::Medium),
+    interface_label: TypographyStyle::new(12.0, 18.0, FontWeight::Normal),
+    interface_metadata: TypographyStyle::new(11.0, 16.0, FontWeight::Normal),
+    interface_heading: TypographyStyle::new(18.0, 24.0, FontWeight::SemiBold),
     font_size_body: 13.0,
     font_size_label: 12.0,
     scrollbar_size: 10.0,
@@ -208,6 +281,15 @@ pub const DEFAULT_UI_THEME: UiTheme = UiTheme {
         Color::rgb(49, 146, 170),
         Color::rgb(140, 149, 159),
     ],
+};
+
+pub const DEFAULT_UI_TYPOGRAPHY: UiTypography = UiTypography {
+    family: FontFamily::SansSerif,
+    body: DEFAULT_UI_THEME.interface_body,
+    control: DEFAULT_UI_THEME.interface_control,
+    label: DEFAULT_UI_THEME.interface_label,
+    metadata: DEFAULT_UI_THEME.interface_metadata,
+    heading: DEFAULT_UI_THEME.interface_heading,
 };
 
 impl UiTheme {
@@ -289,6 +371,31 @@ impl UiTheme {
                 16.0,
                 theme_font_weight(theme, tokens::FONT_WEIGHT_SEMI_BOLD)?,
             ),
+            interface_body: TypographyStyle::new(
+                theme.required_pixel_size(tokens::FONT_SIZE_BODY1)?,
+                18.0,
+                theme_font_weight(theme, tokens::FONT_WEIGHT_REGULAR)?,
+            ),
+            interface_control: TypographyStyle::new(
+                theme.required_pixel_size(tokens::FONT_SIZE_BODY1)?,
+                18.0,
+                theme_font_weight(theme, tokens::FONT_WEIGHT_MEDIUM)?,
+            ),
+            interface_label: TypographyStyle::new(
+                theme.required_pixel_size(tokens::FONT_SIZE_LABEL1)?,
+                18.0,
+                theme_font_weight(theme, tokens::FONT_WEIGHT_REGULAR)?,
+            ),
+            interface_metadata: TypographyStyle::new(
+                theme.required_pixel_size(tokens::FONT_SIZE_LABEL2)?,
+                16.0,
+                theme_font_weight(theme, tokens::FONT_WEIGHT_REGULAR)?,
+            ),
+            interface_heading: TypographyStyle::new(
+                theme.required_pixel_size(tokens::FONT_SIZE_HEADING2)?,
+                24.0,
+                theme_font_weight(theme, tokens::FONT_WEIGHT_SEMI_BOLD)?,
+            ),
             font_size_body: theme.required_pixel_size(tokens::FONT_SIZE_BODY1)?,
             font_size_label: theme.required_pixel_size(tokens::FONT_SIZE_LABEL1)?,
             scrollbar_size: theme.required_pixel_size(tokens::SCROLLBAR_SIZE)?,
@@ -319,11 +426,19 @@ impl UiTheme {
     }
 
     pub fn search_box_style(self) -> SearchBoxStyle {
+        self.search_box_style_with_typography(&DEFAULT_UI_TYPOGRAPHY)
+    }
+
+    pub fn search_box_style_with_typography(self, typography: &UiTypography) -> SearchBoxStyle {
         let input_box = InputBoxStyle::new(
             InputBoxStateColors::new(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),
             InputBoxStateColors::new(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),
-            TextStyle::new(self.font_size_label, self.foreground).with_line_height(16.0),
-            TextStyle::new(self.font_size_label, self.muted_foreground).with_line_height(16.0),
+            typography
+                .label_text(self.foreground)
+                .with_line_height(16.0),
+            typography
+                .label_text(self.muted_foreground)
+                .with_line_height(16.0),
         )
         .with_border_width(0.0)
         .with_corner_radii(CornerRadii::uniform(4.0))
@@ -376,6 +491,7 @@ fn theme_font_weight(theme: &ThemeSnapshot, token: &str) -> Result<FontWeight, T
     };
     match value {
         400.0 => Ok(FontWeight::Normal),
+        500.0 => Ok(FontWeight::Medium),
         600.0 => Ok(FontWeight::SemiBold),
         _ => Err(ThemeError::InvalidSizeValue {
             token: token.to_owned(),

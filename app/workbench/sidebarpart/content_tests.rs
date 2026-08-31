@@ -313,7 +313,7 @@ fn body_mount_arranges_tabs_vertically_with_session_names_only() {
             .unwrap()
             .style()
             .weight(),
-        FontWeight::Bold
+        FontWeight::Medium
     );
     assert_eq!(
         frame

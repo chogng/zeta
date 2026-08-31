@@ -113,6 +113,13 @@ fn embedded_snapshots_expose_typed_shared_size_tokens() {
     );
     assert_eq!(
         snapshot
+            .required_size(tokens::FONT_WEIGHT_MEDIUM)
+            .unwrap()
+            .as_unitless(),
+        Some(500.0)
+    );
+    assert_eq!(
+        snapshot
             .required_size("animation.durationFast")
             .unwrap()
             .as_milliseconds(),

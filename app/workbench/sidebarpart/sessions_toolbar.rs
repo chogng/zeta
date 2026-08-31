@@ -4,7 +4,7 @@ use crate::{
     ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentContext,
     ComponentElement, ComputedElement, CornerRadii, Edges, Element, InteractionRegion, Rect,
-    SearchBox, Size, TextInput, TextInputLayoutEngine, TextStyle, UiScene,
+    SearchBox, Size, TextInput, TextInputLayoutEngine, UiScene,
 };
 use zui::ui::{
     AccessibilityRole, CursorFeedback, FocusBehavior, NavigationAxis, NavigationGroupId,
@@ -78,13 +78,10 @@ impl SessionsToolbar {
             .with_hovered(style.colors.control_hover_background)
             .with_focused(style.colors.control_hover_background)
             .with_pressed(style.colors.control_hover_background);
-        let button_style = ButtonStyle::new(
-            button_backgrounds,
-            TextStyle::new(12.0, style.colors.foreground),
-        )
-        .with_corner_radii(CornerRadii::uniform(4.0))
-        .with_padding(Edges::uniform(3.0))
-        .with_icon_size(18.0);
+        let button_style = ButtonStyle::new(button_backgrounds, style.label_text.clone())
+            .with_corner_radii(CornerRadii::uniform(4.0))
+            .with_padding(Edges::uniform(3.0))
+            .with_icon_size(18.0);
         let action_bar = ActionBar::new(
             action_bounds,
             ActionBarOrientation::Horizontal,

@@ -6,8 +6,7 @@ use crate::{
     ComponentContext, ComponentElement, ComputedElement, CornerRadii, Edges, Element, FontWeight,
     Icon, InteractionRegion, ListItem, ListItemBackgrounds, ListItemSelection, ListItemState,
     ListItemStyle, PaintIcon, PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState,
-    ScrollView, ScrollbarPresentation, Size, TextBlock, TextInput, TextInputLayoutEngine,
-    TextStyle, UiScene,
+    ScrollView, ScrollbarPresentation, Size, TextBlock, TextInput, TextInputLayoutEngine, UiScene,
 };
 use zeta_icons::icons;
 use zui::ui::AccessibilityExpansion;
@@ -466,7 +465,10 @@ impl<'a> SidebarView<'a> {
                 .with_hovered(self.style.colors.control_hover_background)
                 .with_focused(Color::TRANSPARENT)
                 .with_pressed(self.style.colors.border),
-            TextStyle::new(12.0, self.style.colors.muted_foreground),
+            self.style
+                .label_text
+                .clone()
+                .with_color(self.style.colors.muted_foreground),
         )
         .with_corner_radii(CornerRadii::uniform(4.0))
         .with_padding(Edges::uniform(3.0))
@@ -606,9 +608,10 @@ impl<'a> SidebarView<'a> {
                 label,
                 Point::new(icon_bounds.right() + 4.0, bounds.origin.y + 5.0),
                 Size::new((bounds.right() - icon_bounds.right() - 4.0).max(1.0), 18.0),
-                TextStyle::new(12.0, self.style.colors.foreground)
-                    .with_weight(FontWeight::SemiBold)
-                    .with_line_height(18.0),
+                self.style
+                    .label_text
+                    .clone()
+                    .with_weight(FontWeight::Medium),
             ));
         }
     }
@@ -661,7 +664,7 @@ impl<'a> SidebarView<'a> {
             tab.name,
             Point::new(text_x, tab_bounds.origin.y + 17.0),
             Size::new(text_width, 18.0),
-            TextStyle::new(13.0, self.style.colors.foreground).with_weight(FontWeight::Bold),
+            self.style.control_text.clone(),
         ));
         if action_bar_visible {
             self.paint_tab_action_bar(scene, tab, tab_bounds);

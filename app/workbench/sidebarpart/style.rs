@@ -5,6 +5,8 @@ use crate::SearchBoxStyle;
 use crate::TabStatusKind;
 use zeta_icons::icons;
 use zeta_ui_theme::UiTheme;
+use zeta_ui_theme::UiTypography;
+use zui::ui::TextStyle;
 
 /// Semantic colors consumed by Workbench chrome components.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,6 +41,10 @@ pub struct WorkbenchUiStyle {
     pub(crate) colors: WorkbenchColors,
     pub(crate) search: SearchBoxStyle,
     pub(crate) scroll_view: ScrollViewStyle,
+    pub(crate) body_text: TextStyle,
+    pub(crate) control_text: TextStyle,
+    pub(crate) label_text: TextStyle,
+    pub(crate) metadata_text: TextStyle,
     pub(crate) settings_icon: Icon,
     pub(crate) add_icon: Icon,
     pub(crate) close_icon: Icon,
@@ -59,7 +65,7 @@ impl WorkbenchUiStyle {
         }
     }
 
-    pub fn from_theme(theme: UiTheme) -> Self {
+    pub fn from_theme(theme: UiTheme, typography: &UiTypography) -> Self {
         Self::new(
             WorkbenchColors {
                 content_background: theme.content_background,
@@ -85,8 +91,12 @@ impl WorkbenchUiStyle {
                 warning: theme.warning,
                 error: theme.error,
             },
-            theme.search_box_style(),
+            theme.search_box_style_with_typography(typography),
             theme.tab_container_scroll_view_style(),
+            typography.body_text(theme.foreground),
+            typography.control_text(theme.foreground),
+            typography.label_text(theme.foreground),
+            typography.metadata_text(theme.muted_foreground),
             icons::GEAR,
             icons::ADD,
             icons::CLOSE,
@@ -101,6 +111,10 @@ impl WorkbenchUiStyle {
         colors: WorkbenchColors,
         search: SearchBoxStyle,
         scroll_view: ScrollViewStyle,
+        body_text: TextStyle,
+        control_text: TextStyle,
+        label_text: TextStyle,
+        metadata_text: TextStyle,
         settings_icon: Icon,
         add_icon: Icon,
         close_icon: Icon,
@@ -113,6 +127,10 @@ impl WorkbenchUiStyle {
             colors,
             search,
             scroll_view,
+            body_text,
+            control_text,
+            label_text,
+            metadata_text,
             settings_icon,
             add_icon,
             close_icon,

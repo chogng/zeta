@@ -314,6 +314,7 @@ fn presentation_with_active_tab_input(
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
+            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal,
             terminal_panes: &[],
             pane_group,
@@ -372,6 +373,7 @@ fn presentation_with_active_tab_input(
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
+            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal,
             terminal_panes: &[],
             pane_group,
@@ -599,6 +601,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
+            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
@@ -890,6 +893,7 @@ fn session_search_filters_tabs_by_session_name() {
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
+            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
@@ -1090,6 +1094,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
+            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: Some(main_pane_group),
@@ -1240,6 +1245,7 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
+            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: Some(pane_group),
@@ -1520,6 +1526,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let closed_model = WorkbenchPresentationModel {
         app_name: APP_DISPLAY_NAME,
         palette: zeta_ui_theme::DEFAULT_UI_THEME,
+        typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
         terminal: None,
         terminal_panes: &[],
         pane_group: None,
@@ -1702,6 +1709,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
+            typography: zeta_ui_theme::DEFAULT_UI_TYPOGRAPHY.clone(),
             terminal: None,
             terminal_panes: &[],
             pane_group: None,

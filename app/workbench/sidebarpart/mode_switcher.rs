@@ -14,7 +14,6 @@ use crate::Edges;
 use crate::Element;
 use crate::ElementId;
 use crate::FocusBehavior;
-use crate::FontWeight;
 use crate::InteractionRegion;
 use crate::NavigationAxis;
 use crate::NavigationGroupId;
@@ -27,7 +26,6 @@ use crate::RadioSelection;
 use crate::Rect;
 use crate::Size;
 use crate::TextInputLayoutEngine;
-use crate::TextStyle;
 use crate::UiDispatch;
 use crate::UiNode;
 use crate::UiScene;
@@ -66,9 +64,7 @@ impl ModeSwitcher {
             .with_hovered(style.colors.control_hover_background)
             .with_focused(style.colors.control_hover_background)
             .with_pressed(style.colors.border);
-        let text_style = TextStyle::new(13.0, style.colors.foreground)
-            .with_weight(FontWeight::SemiBold)
-            .with_line_height(18.0);
+        let text_style = style.control_text.clone();
         let button_style = ButtonStyle::new(backgrounds, text_style.clone())
             .with_selected_backgrounds(ButtonBackgrounds::new(style.colors.content_background))
             .with_centered_text()

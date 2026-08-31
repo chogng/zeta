@@ -319,6 +319,7 @@ pub struct PaneView<'a> {
 pub struct WorkbenchPresentationModel<'a> {
     pub app_name: &'a str,
     pub palette: UiTheme,
+    pub typography: zeta_ui_theme::UiTypography,
     pub terminal: Option<&'a TerminalCore>,
     pub terminal_panes: &'a [PaneView<'a>],
     pub pane_group: Option<&'a PanePart>,
@@ -522,7 +523,7 @@ fn build_workbench_presentation_with_bindings(
     let selected_id = sidebar_selected_item_id(model.sidebar_part, model.active_tab_input);
     let titlebar = Titlebar::new(
         layout.titlebar(),
-        crate::WorkbenchUiStyle::from_theme(palette),
+        crate::WorkbenchUiStyle::from_theme(palette, &model.typography),
         model.tab_container.is_expanded(),
         TitlebarInsets::new(
             model.window_control_insets.left(),
@@ -549,6 +550,7 @@ fn build_workbench_presentation_with_bindings(
                 },
                 text_layout,
                 palette,
+                &model.typography,
             )
         })
     } else {
@@ -1135,6 +1137,7 @@ fn draw_tab_container(
     view: TabContainerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
+    typography: &zeta_ui_theme::UiTypography,
 ) -> TabContainerDrawResult {
     let groups = sidebar_session_groups(view.sidebar_part, |input| {
         input.is_settings()
@@ -1149,7 +1152,7 @@ fn draw_tab_container(
         view.sidebar_part.mode(),
         groups,
         view.selected_id,
-        crate::WorkbenchUiStyle::from_theme(palette),
+        crate::WorkbenchUiStyle::from_theme(palette, typography),
         text_layout,
         view.dispatch,
     )
@@ -1463,8 +1466,8 @@ fn draw_settings_dialog(
                 dispatch: model.dispatch,
             },
             SettingsPaneStyle::new(
-                zeta_settings::SettingsPageStyle::from_theme(palette),
-                zeta_settings::SettingsSectionStyle::from_theme(palette),
+                zeta_settings::SettingsPageStyle::from_theme(palette, &model.typography),
+                zeta_settings::SettingsSectionStyle::from_theme(palette, &model.typography),
                 zeta_settings::RemoteUiStyle::from_theme(palette),
             ),
             text_layout,

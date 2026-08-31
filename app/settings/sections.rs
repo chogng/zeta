@@ -2,6 +2,7 @@ use zeta_ui_components::ScrollState;
 use zeta_ui_components::ScrollViewStyle;
 use zeta_ui_components::ScrollbarPresentation;
 use zeta_ui_theme::UiTheme;
+use zeta_ui_theme::UiTypography;
 use zui::ui::AccessibilityRole;
 use zui::ui::Border;
 use zui::ui::Component;
@@ -11,7 +12,6 @@ use zui::ui::ComputedElement;
 use zui::ui::CornerRadii;
 use zui::ui::Element;
 use zui::ui::ElementId;
-use zui::ui::FontWeight;
 use zui::ui::PaintRect;
 use zui::ui::Rect;
 use zui::ui::TextBlock;
@@ -31,7 +31,7 @@ const SETTINGS_SECTION_SCOPE: u32 = 11;
 
 pub const SETTINGS_SECTION_CONTENT: ElementId = ElementId::scoped(SETTINGS_SECTION_SCOPE, 1);
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SettingsSectionStyle {
     pub background: zui::ui::Color,
     pub surface: zui::ui::Color,
@@ -43,10 +43,14 @@ pub struct SettingsSectionStyle {
     pub accent: zui::ui::Color,
     pub error: zui::ui::Color,
     pub scroll_view: ScrollViewStyle,
+    pub heading_text: TextStyle,
+    pub body_text: TextStyle,
+    pub control_text: TextStyle,
+    pub label_text: TextStyle,
 }
 
 impl SettingsSectionStyle {
-    pub fn from_theme(theme: UiTheme) -> Self {
+    pub fn from_theme(theme: UiTheme, typography: &UiTypography) -> Self {
         Self {
             background: theme.workbench_background,
             surface: theme.content_background,
@@ -58,6 +62,10 @@ impl SettingsSectionStyle {
             accent: theme.accent,
             error: theme.error,
             scroll_view: theme.file_list_scroll_view_style(),
+            heading_text: typography.heading_text(theme.foreground),
+            body_text: typography.body_text(theme.foreground),
+            control_text: typography.control_text(theme.foreground),
+            label_text: typography.label_text(theme.muted_foreground),
         }
     }
 }
@@ -191,7 +199,7 @@ impl<'a> SettingsSectionPane<'a> {
                 160.0,
                 18.0,
             ),
-            TextStyle::new(12.0, self.style.text_muted).with_line_height(18.0),
+            self.style.label_text.clone(),
         );
         for (index, color) in [
             self.style.background,
@@ -232,9 +240,7 @@ impl<'a> SettingsSectionPane<'a> {
             scene,
             title,
             Rect::from_xywh(content.origin.x, content.origin.y, content.size.width, 30.0),
-            TextStyle::new(22.0, self.style.text)
-                .with_weight(FontWeight::Bold)
-                .with_line_height(30.0),
+            self.style.heading_text.clone(),
         );
         draw_label(
             scene,
@@ -245,7 +251,10 @@ impl<'a> SettingsSectionPane<'a> {
                 content.size.width,
                 22.0,
             ),
-            TextStyle::new(13.0, self.style.text_muted).with_line_height(22.0),
+            self.style
+                .body_text
+                .clone()
+                .with_color(self.style.text_muted),
         );
     }
 
@@ -268,7 +277,7 @@ impl<'a> SettingsSectionPane<'a> {
                 scene,
                 label,
                 Rect::from_xywh(bounds.origin.x + 14.0, row_y, 150.0, 20.0),
-                TextStyle::new(12.0, self.style.text_muted).with_line_height(20.0),
+                self.style.label_text.clone(),
             );
             draw_label(
                 scene,
@@ -279,7 +288,7 @@ impl<'a> SettingsSectionPane<'a> {
                     (bounds.size.width - 182.0).max(1.0),
                     20.0,
                 ),
-                TextStyle::new(13.0, self.style.text).with_line_height(20.0),
+                self.style.body_text.clone(),
             );
         }
     }
@@ -295,7 +304,7 @@ impl<'a> SettingsSectionPane<'a> {
                 content.size.width,
                 48.0,
             ),
-            TextStyle::new(12.0, self.style.text_muted).with_line_height(18.0),
+            self.style.label_text.clone(),
         );
     }
 }
@@ -343,7 +352,7 @@ impl SettingsSectionPane<'_> {
             !self.keyboard_shortcuts_visible,
             self.scroll_state,
             self.scrollbar_presentation,
-            self.style,
+            self.style.clone(),
             self.dispatch,
         )
     }

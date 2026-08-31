@@ -43,6 +43,7 @@ use zeta_ui_components::InputBoxStateColors;
 use zeta_ui_components::InputBoxStyle;
 use zeta_ui_components::SearchBoxStyle;
 use zeta_ui_theme::UiTheme;
+use zeta_ui_theme::UiTypography;
 use zui::ui::Border;
 use zui::ui::Color;
 use zui::ui::CornerRadii;
@@ -109,14 +110,14 @@ pub struct SettingsPageStyle {
     background: Color,
     rail_background: Color,
     border: Color,
-    text_muted: Color,
+    navigation_label: zui::ui::TextStyle,
     search_box: SearchBoxStyle,
     nav_button: ButtonStyle,
     close_button: ButtonStyle,
 }
 
 impl SettingsPageStyle {
-    pub fn from_theme(theme: UiTheme) -> Self {
+    pub fn from_theme(theme: UiTheme, typography: &UiTypography) -> Self {
         let search_input = InputBoxStyle::new(
             InputBoxStateColors::new(
                 theme.side_bar_background,
@@ -124,10 +125,8 @@ impl SettingsPageStyle {
                 theme.content_background,
             ),
             InputBoxStateColors::new(theme.border, theme.border, theme.accent),
-            zui::ui::TextStyle::new(theme.font_size_body(), theme.foreground)
-                .with_line_height(18.0),
-            zui::ui::TextStyle::new(theme.font_size_body(), theme.muted_foreground)
-                .with_line_height(18.0),
+            typography.control_text(theme.foreground),
+            typography.body_text(theme.muted_foreground),
         )
         .with_border_width(1.0)
         .with_corner_radii(CornerRadii::uniform(6.0))
@@ -140,14 +139,10 @@ impl SettingsPageStyle {
                 .with_hovered(theme.list_hover_background)
                 .with_focused(theme.list_hover_background)
                 .with_pressed(theme.border),
-            zui::ui::TextStyle::new(theme.font_size_body(), theme.foreground)
-                .with_line_height(18.0),
+            typography.control_text(theme.foreground),
         )
         .with_selected_backgrounds(ButtonBackgrounds::new(theme.list_active_background))
-        .with_disabled_text_style(
-            zui::ui::TextStyle::new(theme.font_size_body(), theme.muted_foreground)
-                .with_line_height(18.0),
-        )
+        .with_disabled_text_style(typography.control_text(theme.muted_foreground))
         .with_corner_radii(CornerRadii::uniform(5.0))
         .with_padding(Edges::new(7.0, 10.0, 7.0, 10.0));
         let close_button = ButtonStyle::new(
@@ -155,8 +150,7 @@ impl SettingsPageStyle {
                 .with_hovered(theme.list_hover_background)
                 .with_focused(theme.list_hover_background)
                 .with_pressed(theme.border),
-            zui::ui::TextStyle::new(theme.font_size_body(), theme.foreground)
-                .with_line_height(18.0),
+            typography.control_text(theme.foreground),
         )
         .with_border(Border::uniform(0.0, Color::TRANSPARENT))
         .with_corner_radii(CornerRadii::uniform(5.0))
@@ -165,7 +159,7 @@ impl SettingsPageStyle {
             theme.workbench_background,
             theme.side_bar_background,
             theme.border,
-            theme.muted_foreground,
+            typography.label_text(theme.muted_foreground),
             SearchBoxStyle::new(search_input, icons::SEARCH, theme.muted_foreground)
                 .with_icon_size(16.0),
             nav_button,
@@ -178,7 +172,7 @@ impl SettingsPageStyle {
         background: Color,
         rail_background: Color,
         border: Color,
-        text_muted: Color,
+        navigation_label: zui::ui::TextStyle,
         search_box: SearchBoxStyle,
         nav_button: ButtonStyle,
         close_button: ButtonStyle,
@@ -187,7 +181,7 @@ impl SettingsPageStyle {
             background,
             rail_background,
             border,
-            text_muted,
+            navigation_label,
             search_box,
             nav_button,
             close_button,

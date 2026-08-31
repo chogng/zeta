@@ -14,6 +14,7 @@ pub(super) fn with_shell_presentation_model<R>(
     let pane_resize_split = app.workbench.pane_resize_split();
     let WorkbenchApplication {
         palette,
+        typography,
         retained_runtime,
         workbench,
         terminal_pane_views,
@@ -123,6 +124,7 @@ pub(super) fn with_shell_presentation_model<R>(
         WorkbenchPresentationModel {
             app_name: APP_DISPLAY_NAME,
             palette: *palette,
+            typography: typography.clone(),
             terminal: terminal_key
                 .and_then(|key| terminal_runtime.terminal(key))
                 .map(TerminalSession::core),

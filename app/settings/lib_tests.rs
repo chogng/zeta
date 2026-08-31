@@ -11,6 +11,8 @@ use zui::ui::CaretVisibility;
 use zui::ui::Color;
 use zui::ui::ElementId;
 use zui::ui::FocusBehavior;
+use zui::ui::FontFamily;
+use zui::ui::FontWeight;
 use zui::ui::InteractionFrame;
 use zui::ui::NodeAction;
 use zui::ui::TextInputLayoutEngine;
@@ -46,7 +48,7 @@ fn style() -> SettingsPageStyle {
         Color::rgb(252, 252, 253),
         Color::rgb(246, 246, 247),
         border,
-        text_muted,
+        TextStyle::new(12.0, text_muted).with_line_height(18.0),
         SearchBoxStyle::new(input, icons::SEARCH, text_muted),
         nav,
         close,
@@ -101,6 +103,39 @@ fn page_registers_host_boundary_and_sections() {
             .iter()
             .all(|node| { node.id != SETTINGS_PAGE || node.role == AccessibilityRole::Group })
     );
+}
+
+#[test]
+fn page_uses_resolved_interface_typography_for_navigation() {
+    let dispatch = UiDispatch::default();
+    let input = zui::ui::TextInput::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+    let typography = zeta_ui_theme::UiTypography::from_theme(
+        zeta_ui_theme::DEFAULT_UI_THEME,
+        FontFamily::Named("Inter".into()),
+        15.0,
+    );
+    let page = SettingsPage::new(
+        zui::ui::Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &input,
+        CaretVisibility::Visible,
+        SettingsPageStyle::from_theme(zeta_ui_theme::DEFAULT_UI_THEME, &typography),
+        &dispatch,
+        &mut text_layout,
+    );
+    let mut frame = UiFrame::<InteractionFrame>::new(zui::ui::Color::WHITE);
+
+    frame.draw_component(&page);
+
+    let general = frame
+        .scene()
+        .text_blocks()
+        .iter()
+        .find(|block| block.text() == "General")
+        .expect("General navigation label");
+    assert_eq!(general.style().family(), &FontFamily::Named("Inter".into()));
+    assert_eq!(general.style().font_size(), 15.0);
+    assert_eq!(general.style().weight(), FontWeight::Medium);
 }
 
 #[test]

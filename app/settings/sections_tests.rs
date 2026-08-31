@@ -9,6 +9,7 @@ use zeta_ui_components::ScrollbarStyle;
 use zui::ui::Color;
 use zui::ui::InteractionFrame;
 use zui::ui::Rect;
+use zui::ui::TextStyle;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;
 
@@ -20,21 +21,26 @@ use crate::SettingsKeybindingRow;
 use crate::SettingsPageSection;
 use zui::ui::Size;
 
-const STYLE: SettingsSectionStyle = SettingsSectionStyle {
-    background: Color::WHITE,
-    surface: Color::rgb(246, 246, 247),
-    surface_raised: Color::rgb(248, 248, 249),
-    surface_hovered: Color::rgb(235, 235, 237),
-    border: Color::rgb(222, 222, 224),
-    text: Color::rgb(38, 38, 41),
-    text_muted: Color::rgb(126, 126, 132),
-    accent: Color::rgb(15, 110, 96),
-    error: Color::rgb(180, 38, 38),
-    scroll_view: ScrollViewStyle::new(ScrollbarStyle::new(
-        Color::TRANSPARENT,
-        Color::rgb(126, 126, 132),
-    )),
-};
+fn style() -> SettingsSectionStyle {
+    let text = Color::rgb(38, 38, 41);
+    let text_muted = Color::rgb(126, 126, 132);
+    SettingsSectionStyle {
+        background: Color::WHITE,
+        surface: Color::rgb(246, 246, 247),
+        surface_raised: Color::rgb(248, 248, 249),
+        surface_hovered: Color::rgb(235, 235, 237),
+        border: Color::rgb(222, 222, 224),
+        text,
+        text_muted,
+        accent: Color::rgb(15, 110, 96),
+        error: Color::rgb(180, 38, 38),
+        scroll_view: ScrollViewStyle::new(ScrollbarStyle::new(Color::TRANSPARENT, text_muted)),
+        heading_text: TextStyle::new(18.0, text).with_line_height(24.0),
+        body_text: TextStyle::new(13.0, text).with_line_height(18.0),
+        control_text: TextStyle::new(13.0, text).with_line_height(18.0),
+        label_text: TextStyle::new(12.0, text_muted).with_line_height(18.0),
+    }
+}
 
 #[test]
 fn keybindings_section_composes_scroll_view_with_translated_visible_rows() {
@@ -56,7 +62,7 @@ fn keybindings_section_composes_scroll_view_with_translated_visible_rows() {
     let pane = SettingsSectionPane::new(
         bounds,
         SettingsPageSection::Keybindings,
-        STYLE,
+        style(),
         "zeta",
         "Local",
         "Agent",

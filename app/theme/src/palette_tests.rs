@@ -3,6 +3,7 @@ use zeta_theme::ColorScheme;
 use zeta_theme::ThemeCatalog;
 use zeta_theme::ThemeDocument;
 use zui::ui::Color;
+use zui::ui::FontFamily;
 use zui::ui::FontWeight;
 
 #[test]
@@ -27,6 +28,18 @@ fn snapshot_projection_resolves_layout_component_tokens_and_standard_sizes() {
     assert_eq!(compact_action_label.font_size(), 12.0);
     assert_eq!(compact_action_label.line_height(), 16.0);
     assert_eq!(compact_action_label.weight(), FontWeight::SemiBold);
+    let typography =
+        super::UiTypography::from_theme(theme, FontFamily::Named("Inter".into()), 15.0);
+    let body = typography.body_text(Color::WHITE);
+    assert_eq!(body.family(), &FontFamily::Named("Inter".into()));
+    assert_eq!(body.font_size(), 15.0);
+    assert_eq!(body.weight(), FontWeight::Normal);
+    let control = typography.control_text(Color::WHITE);
+    assert_eq!(control.font_size(), 15.0);
+    assert_eq!(control.weight(), FontWeight::Medium);
+    let heading = typography.heading_text(Color::WHITE);
+    assert!((heading.font_size() - 18.0 * (15.0 / 13.0)).abs() < f32::EPSILON);
+    assert_eq!(heading.weight(), FontWeight::SemiBold);
     assert_eq!(theme.scrollbar_size, 10.0);
     assert_eq!(theme.hover_foreground, Color::rgb(245, 245, 247));
     assert_eq!(theme.hover_background, Color::rgb(45, 46, 51));

@@ -389,6 +389,8 @@ fn gui_section_is_read_without_interpreting_frontend_fields() {
 
 [gui]
 theme = "zeta-dark"
+interfaceFontFamily = "Inter"
+interfaceFontSize = 15
 editorFontFamily = "JetBrains Mono"
 editorFontSize = 15
 editorLineHeight = 24
@@ -401,6 +403,8 @@ editorLineHeight = 24
     assert_eq!(
         store.read_snapshot().unwrap().values.gui,
         BTreeMap::from([
+            ("interfaceFontFamily".into(), serde_json::json!("Inter")),
+            ("interfaceFontSize".into(), serde_json::json!(15)),
             (
                 "editorFontFamily".into(),
                 serde_json::json!("JetBrains Mono")
@@ -419,6 +423,8 @@ fn frontend_section_patch_is_durable_and_null_clears_the_section() {
     let database_path = config_path("gui-patch");
     let store = ConfigStore::open(&database_path).unwrap();
     let configured = BTreeMap::from([
+        ("interfaceFontFamily".into(), serde_json::json!("Inter")),
+        ("interfaceFontSize".into(), serde_json::json!(15)),
         (
             "editorFontFamily".into(),
             serde_json::json!("JetBrains Mono"),
