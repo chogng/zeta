@@ -80,7 +80,7 @@ use zui::window::WindowControlInsets;
 
 const COMPOSER_HEIGHT: f32 = 44.0;
 const SETTINGS_DIALOG_WIDTH: f32 = 960.0;
-const SETTINGS_DIALOG_HEIGHT: f32 = 640.0;
+const SETTINGS_DIALOG_HEIGHT: f32 = 710.0;
 
 pub const MAIN_SURFACE: ElementId = ElementId::scoped(1, 3);
 pub const TERMINAL_OUTPUT: ElementId = ElementId::scoped(1, 4);

@@ -51,24 +51,24 @@ use zui::ui::ElementId;
 use zui::ui::Rect;
 
 const SETTINGS_SCOPE: u32 = 9;
-const RAIL_WIDTH: f32 = 216.0;
+const RAIL_WIDTH: f32 = 196.0;
 const DEFAULT_HEADER_HEIGHT: f32 = 32.0;
-const PAGE_INSET: f32 = 28.0;
+const CLOSE_INSET: f32 = 12.0;
 const NAV_INSET: f32 = 20.0;
 const NAV_ITEM_HEIGHT: f32 = 34.0;
 const NAV_ITEM_GAP: f32 = 4.0;
-const NAV_TOP: f32 = 62.0;
-const SEARCH_WIDTH: f32 = 320.0;
+const NAV_LABEL_TOP: f32 = 72.0;
+const NAV_TOP: f32 = 102.0;
+const SEARCH_TOP: f32 = 16.0;
+const SEARCH_HEIGHT: f32 = 36.0;
 const CLOSE_SIZE: f32 = 32.0;
 
 /// Root element for Settings content hosted by a surface or dialog.
 pub const SETTINGS_PAGE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 1);
-/// Search input in the Settings header.
+/// Search input at the top of the Settings navigation rail.
 pub const SETTINGS_SEARCH_INPUT: ElementId = ElementId::scoped(SETTINGS_SCOPE, 2);
 /// Header close action.
 pub const SETTINGS_CLOSE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 3);
-/// Returns from the active Settings page to the host surface.
-pub const SETTINGS_NAV_BACK: ElementId = ElementId::scoped(SETTINGS_SCOPE, 4);
 /// General application and environment preferences.
 pub const SETTINGS_NAV_GENERAL: ElementId = ElementId::scoped(SETTINGS_SCOPE, 5);
 /// Remote directory, connection, and Tunnel overview.
@@ -95,10 +95,10 @@ pub enum SettingsPageSection {
 impl SettingsPageSection {
     const fn navigation_index(self) -> usize {
         match self {
-            Self::General => 1,
-            Self::Appearance => 2,
-            Self::Keybindings => 3,
-            Self::Remote => 4,
+            Self::General => 0,
+            Self::Appearance => 1,
+            Self::Keybindings => 2,
+            Self::Remote => 3,
         }
     }
 }
@@ -108,10 +108,8 @@ impl SettingsPageSection {
 pub struct SettingsPageStyle {
     background: Color,
     rail_background: Color,
-    surface: Color,
     border: Color,
-    text: Color,
-    accent: Color,
+    text_muted: Color,
     search_box: SearchBoxStyle,
     nav_button: ButtonStyle,
     close_button: ButtonStyle,
@@ -166,10 +164,8 @@ impl SettingsPageStyle {
         Self::new(
             theme.workbench_background,
             theme.side_bar_background,
-            theme.content_background,
             theme.border,
-            theme.foreground,
-            theme.accent,
+            theme.muted_foreground,
             SearchBoxStyle::new(search_input, icons::SEARCH, theme.muted_foreground)
                 .with_icon_size(16.0),
             nav_button,
@@ -178,14 +174,11 @@ impl SettingsPageStyle {
     }
 
     /// Creates a Settings page style from host palette values and component contracts.
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         background: Color,
         rail_background: Color,
-        surface: Color,
         border: Color,
-        text: Color,
-        accent: Color,
+        text_muted: Color,
         search_box: SearchBoxStyle,
         nav_button: ButtonStyle,
         close_button: ButtonStyle,
@@ -193,10 +186,8 @@ impl SettingsPageStyle {
         Self {
             background,
             rail_background,
-            surface,
             border,
-            text,
-            accent,
+            text_muted,
             search_box,
             nav_button,
             close_button,
@@ -244,15 +235,15 @@ impl SettingsPageLayout {
             right_width,
             (viewport.bottom() - header.bottom()).max(0.0),
         );
-        let search_width = SEARCH_WIDTH.min((header.size.width - PAGE_INSET * 2.0).max(1.0));
+        let search_width = (rail.size.width - NAV_INSET * 2.0).max(1.0);
         let search = Rect::from_xywh(
-            header.origin.x + PAGE_INSET,
-            header.origin.y + (header.size.height - 36.0).max(0.0) * 0.5,
+            rail.origin.x + NAV_INSET,
+            rail.origin.y + SEARCH_TOP,
             search_width,
-            36.0_f32.min(header.size.height.max(1.0)),
+            SEARCH_HEIGHT.min(rail.size.height.max(1.0)),
         );
         let close = Rect::from_xywh(
-            header.right() - PAGE_INSET - CLOSE_SIZE,
+            header.right() - CLOSE_INSET - CLOSE_SIZE,
             header.origin.y + (header.size.height - CLOSE_SIZE).max(0.0) * 0.5,
             CLOSE_SIZE.min(header.size.width.max(1.0)),
             CLOSE_SIZE.min(header.size.height.max(1.0)),
@@ -290,6 +281,15 @@ impl SettingsPageLayout {
 
     pub const fn close(self) -> Rect {
         self.close
+    }
+
+    fn navigation_label_bounds(self) -> Rect {
+        Rect::from_xywh(
+            self.rail.origin.x + NAV_INSET,
+            self.rail.origin.y + NAV_LABEL_TOP,
+            (self.rail.size.width - NAV_INSET * 2.0).max(1.0),
+            18.0,
+        )
     }
 
     fn navigation_bounds(self, index: usize) -> Rect {

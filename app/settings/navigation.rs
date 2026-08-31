@@ -1,7 +1,6 @@
 //! Settings navigation presentation helpers.
 
 use super::SETTINGS_NAV_APPEARANCE;
-use super::SETTINGS_NAV_BACK;
 use super::SETTINGS_NAV_GENERAL;
 use super::SETTINGS_NAV_KEYBINDINGS;
 use super::SETTINGS_NAV_REMOTE;
@@ -21,19 +20,10 @@ pub(super) fn navigation_buttons(
     section: SettingsPageSection,
     dispatch: &UiDispatch,
     style: &ButtonStyle,
-) -> [Button; 5] {
+) -> [Button; 4] {
     [
         navigation_button(
             layout.navigation_bounds(0),
-            SETTINGS_NAV_BACK,
-            icons::ARROW_LEFT,
-            "Back",
-            false,
-            dispatch,
-            style,
-        ),
-        navigation_button(
-            layout.navigation_bounds(1),
             SETTINGS_NAV_GENERAL,
             icons::GEAR,
             "General",
@@ -42,7 +32,7 @@ pub(super) fn navigation_buttons(
             style,
         ),
         navigation_button(
-            layout.navigation_bounds(2),
+            layout.navigation_bounds(1),
             SETTINGS_NAV_APPEARANCE,
             icons::APPEARANCE,
             "Appearance",
@@ -51,7 +41,7 @@ pub(super) fn navigation_buttons(
             style,
         ),
         navigation_button(
-            layout.navigation_bounds(3),
+            layout.navigation_bounds(2),
             SETTINGS_NAV_KEYBINDINGS,
             icons::COMMAND,
             "Keybindings",
@@ -60,7 +50,7 @@ pub(super) fn navigation_buttons(
             style,
         ),
         navigation_button(
-            layout.navigation_bounds(4),
+            layout.navigation_bounds(3),
             SETTINGS_NAV_REMOTE,
             icons::REMOTE,
             "Remote",

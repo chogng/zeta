@@ -6,6 +6,7 @@ use zeta_ui_components::ScrollbarStyle;
 
 use super::SettingsActivation;
 use super::SettingsState;
+use crate::SETTINGS_CLOSE;
 use crate::SETTINGS_NAV_APPEARANCE;
 use crate::SETTINGS_NAV_GENERAL;
 use crate::SETTINGS_NAV_REMOTE;
@@ -54,6 +55,13 @@ fn activation_changes_owned_state_and_returns_host_effects() {
         SettingsActivation::Changed
     );
     assert_eq!(settings.section(), SettingsPageSection::General);
+}
+
+#[test]
+fn close_button_returns_the_host_close_effect() {
+    let mut settings = SettingsState::default();
+
+    assert_eq!(settings.activate(SETTINGS_CLOSE), SettingsActivation::Close);
 }
 
 #[test]

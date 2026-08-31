@@ -19,9 +19,9 @@ use zui::ui::UiDispatch;
 use zui::ui::UiFrame;
 
 use super::{
-    SETTINGS_CLOSE, SETTINGS_NAV_APPEARANCE, SETTINGS_NAV_BACK, SETTINGS_NAV_GENERAL,
-    SETTINGS_NAV_KEYBINDINGS, SETTINGS_NAV_REMOTE, SETTINGS_PAGE, SETTINGS_SEARCH_INPUT,
-    SettingsPage, SettingsPageLayout, SettingsPageSection, SettingsPageStyle,
+    SETTINGS_CLOSE, SETTINGS_NAV_APPEARANCE, SETTINGS_NAV_GENERAL, SETTINGS_NAV_KEYBINDINGS,
+    SETTINGS_NAV_REMOTE, SETTINGS_PAGE, SETTINGS_SEARCH_INPUT, SettingsPage, SettingsPageLayout,
+    SettingsPageSection, SettingsPageStyle,
 };
 
 fn style() -> SettingsPageStyle {
@@ -45,10 +45,8 @@ fn style() -> SettingsPageStyle {
     SettingsPageStyle::new(
         Color::rgb(252, 252, 253),
         Color::rgb(246, 246, 247),
-        Color::WHITE,
         border,
-        text,
-        Color::rgb(15, 110, 96),
+        text_muted,
         SearchBoxStyle::new(input, icons::SEARCH, text_muted),
         nav,
         close,
@@ -62,7 +60,9 @@ fn layout_keeps_rail_header_and_content_separate() {
     assert!(layout.rail().right() <= layout.content().origin.x);
     assert_eq!(layout.header().size.height, 32.0);
     assert_eq!(layout.header().bottom(), layout.content().origin.y);
-    assert!(layout.search().origin.x >= layout.header().origin.x);
+    assert!(layout.search().origin.x >= layout.rail().origin.x);
+    assert!(layout.search().right() <= layout.rail().right());
+    assert!(layout.search().bottom() < layout.navigation_bounds(0).origin.y);
     assert!(layout.close().right() <= layout.header().right());
 }
 
@@ -87,7 +87,6 @@ fn page_registers_host_boundary_and_sections() {
     assert!(nodes.iter().any(|node| node.id == SETTINGS_PAGE));
     assert!(nodes.iter().any(|node| node.id == SETTINGS_SEARCH_INPUT));
     assert!(nodes.iter().any(|node| node.id == SETTINGS_CLOSE));
-    assert!(nodes.iter().any(|node| node.id == SETTINGS_NAV_BACK));
     for id in [
         SETTINGS_NAV_GENERAL,
         SETTINGS_NAV_APPEARANCE,

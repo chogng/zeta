@@ -20,8 +20,8 @@ use zui::ui::TextInputCommand;
 use zui::ui::TextInputCompositionEvent;
 
 use crate::KeyboardShortcutsState;
+use crate::SETTINGS_CLOSE;
 use crate::SETTINGS_NAV_APPEARANCE;
-use crate::SETTINGS_NAV_BACK;
 use crate::SETTINGS_NAV_GENERAL;
 use crate::SETTINGS_NAV_KEYBINDINGS;
 use crate::SETTINGS_NAV_REMOTE;
@@ -224,7 +224,7 @@ impl SettingsState {
 
     pub fn activate(&mut self, id: ElementId) -> SettingsActivation {
         match id {
-            SETTINGS_NAV_BACK => SettingsActivation::Close,
+            SETTINGS_CLOSE => SettingsActivation::Close,
             SETTINGS_NAV_GENERAL => self.select(SettingsPageSection::General),
             SETTINGS_NAV_APPEARANCE => self.select(SettingsPageSection::Appearance),
             SETTINGS_NAV_KEYBINDINGS => self.select(SettingsPageSection::Keybindings),

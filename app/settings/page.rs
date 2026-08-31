@@ -3,7 +3,6 @@
 use super::DEFAULT_HEADER_HEIGHT;
 use super::SETTINGS_CLOSE;
 use super::SETTINGS_NAV_APPEARANCE;
-use super::SETTINGS_NAV_BACK;
 use super::SETTINGS_NAV_GENERAL;
 use super::SETTINGS_NAV_KEYBINDINGS;
 use super::SETTINGS_NAV_REMOTE;
@@ -54,7 +53,7 @@ pub struct SettingsPage {
     search_box: SearchBox,
     search_value: String,
     close_button: Button,
-    navigation: [Button; 5],
+    navigation: [Button; 4],
 }
 
 impl SettingsPage {
@@ -121,7 +120,7 @@ impl SettingsPage {
         };
         let search_box = SearchBox::new(
             layout.search(),
-            "Search settings",
+            "Search",
             search_state,
             style.search_box.clone(),
             search_input,
@@ -194,13 +193,6 @@ impl SettingsPage {
             navigation,
             NavigationAxis::Horizontal,
         ));
-        regions.push(self.button_region(
-            SETTINGS_NAV_BACK,
-            self.navigation[0].bounds(),
-            "Back",
-            navigation,
-            NavigationAxis::Vertical,
-        ));
         for (index, (id, label)) in [
             (SETTINGS_NAV_GENERAL, "General"),
             (SETTINGS_NAV_APPEARANCE, "Appearance"),
@@ -210,12 +202,12 @@ impl SettingsPage {
         .into_iter()
         .enumerate()
         {
-            let selected = index + 1 == self.section.navigation_index();
+            let selected = index == self.section.navigation_index();
             regions.push(
                 InteractionRegion::new(
                     "SettingsNavigationItem",
                     id,
-                    self.navigation[index + 1].bounds(),
+                    self.navigation[index].bounds(),
                     AccessibilityRole::Button,
                     label,
                 )
@@ -290,37 +282,14 @@ impl Component for SettingsPage {
                 zui::ui::Border::new(Edges::new(0.0, 1.0, 0.0, 0.0), self.style.border),
             ),
         );
-        scene.draw_rect(
-            PaintRect::new(self.layout.header(), self.style.surface).with_border(
-                zui::ui::Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.border),
-            ),
-        );
         draw_text(
             scene,
             "Settings",
-            Rect::from_xywh(
-                self.layout.rail().origin.x + super::PAGE_INSET,
-                self.layout.rail().origin.y + 24.0,
-                self.layout.rail().size.width - super::PAGE_INSET * 2.0,
-                24.0,
-            ),
-            TextStyle::new(20.0, self.style.text)
-                .with_line_height(24.0)
-                .with_weight(zui::ui::FontWeight::Bold),
+            self.layout.navigation_label_bounds(),
+            TextStyle::new(12.0, self.style.text_muted).with_line_height(18.0),
         );
-        for (index, button) in self.navigation.iter().enumerate() {
+        for button in &self.navigation {
             scene.draw_component(button);
-            if index == self.section.navigation_index() {
-                scene.draw_rect(PaintRect::new(
-                    Rect::from_xywh(
-                        button.bounds().origin.x,
-                        button.bounds().origin.y,
-                        3.0,
-                        button.bounds().size.height,
-                    ),
-                    self.style.accent,
-                ));
-            }
         }
         scene.draw_component(&self.search_box);
         scene.draw_component(&self.close_button);
