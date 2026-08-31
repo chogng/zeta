@@ -59,7 +59,7 @@ fn context_menu_preserves_anchored_geometry_and_interaction_semantics() {
 
     assert_eq!(menu.menu_root(), ROOT);
     assert_eq!(menu.bounds().origin, Point::new(30.0, 21.0));
-    assert_eq!(menu.content_bounds().origin, Point::new(34.0, 25.0));
+    assert_eq!(menu.content_bounds().origin, Point::new(36.0, 27.0));
     assert_eq!(
         menu.item_bounds(0).unwrap().origin,
         menu.content_bounds().origin
@@ -95,6 +95,6 @@ fn context_menu_composes_header_content_inside_its_surface() {
         menu.item_bounds(0).unwrap().origin.y,
         header_bounds.bottom()
     );
-    assert_eq!(menu.bounds().size.height, 72.0);
+    assert_eq!(menu.bounds().size.height, 76.0);
     assert!(scene.rects().iter().any(|rect| rect.fill() == HEADER));
 }

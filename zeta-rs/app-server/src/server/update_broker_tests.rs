@@ -219,6 +219,24 @@ fn thread_subscription_observes_session_changes() {
 }
 
 #[test]
+fn session_delete_notifies_observers_before_forgetting_the_session() {
+    let broker = UpdateBroker::default();
+    let queue = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    broker.register(1, &queue);
+    broker.subscribe_session(1, session_id.clone());
+
+    broker.publish_session_deleted(&session_id);
+    broker.forget_session(&session_id);
+    broker.publish_session_changed(&session_id);
+
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0]["method"], "session/deleted");
+    assert_eq!(notifications[0]["params"]["sessionId"], "session_1");
+}
+
+#[test]
 fn subagent_turn_start_invalidates_session_for_the_main_thread_subscriber() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();

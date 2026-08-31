@@ -170,6 +170,10 @@ impl WorkbenchApplication {
                         eprintln!("could not refresh App Server configuration: {error}");
                     }
                 }
+                ServerNotification::SessionDeleted(deleted) => {
+                    let tab = TabInputKey::session(deleted.session_id);
+                    self.remove_workbench_tab(&tab);
+                }
                 _ => {}
             },
             SessionRuntimeEvent::Error(error) => {

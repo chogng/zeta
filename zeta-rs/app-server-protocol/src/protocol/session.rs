@@ -52,6 +52,13 @@ pub struct SessionChanged {
     pub session_id: SessionId,
 }
 
+/// Notification that one Session and all of its Threads were permanently removed.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDeleted {
+    pub session_id: SessionId,
+}
+
 /// A typed request routed through one `session_id` grouping boundary.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(

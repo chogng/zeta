@@ -1448,6 +1448,7 @@ fn session_delete_permanently_removes_an_archived_session() {
             }
         }),
     );
+    server.drain_notifications(&mut connection);
 
     let deleted = call(
         &server,
@@ -1463,6 +1464,7 @@ fn session_delete_permanently_removes_an_archived_session() {
             }
         }),
     );
+    let notifications = server.drain_notifications(&mut connection);
     let listed = call(
         &server,
         &mut connection,
@@ -1481,6 +1483,9 @@ fn session_delete_permanently_removes_an_archived_session() {
 
     assert_eq!(deleted["result"]["type"], "deleted");
     assert_eq!(deleted["result"]["value"], session_id);
+    assert_eq!(notifications.len(), 1);
+    assert!(notifications[0].contains("\"method\":\"session/deleted\""));
+    assert!(notifications[0].contains(session_id));
     assert!(listed["result"]["sessions"].as_array().unwrap().is_empty());
     assert_eq!(missing["error"]["message"], "CoreOperationFailed");
 }

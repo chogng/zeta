@@ -7,7 +7,6 @@ use super::result;
 use base64::Engine;
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::common::SchemaHash;
 use zeta_app_server_protocol::protocol::common::ServerInfo;
@@ -34,24 +33,16 @@ use zeta_app_server_protocol::protocol::resources::ResourceReadParams;
 use zeta_app_server_protocol::protocol::resources::ResourceReadResult;
 use zeta_app_server_protocol::protocol::resources::ResourceReleaseParams;
 use zeta_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
-use zeta_app_server_protocol::protocol::session::SessionCreateParams;
-use zeta_app_server_protocol::protocol::session::SessionListResult;
-use zeta_app_server_protocol::protocol::session::SessionReadParams;
 use zeta_app_server_protocol::protocol::session::SessionRequest;
 use zeta_app_server_protocol::protocol::session::SessionRequestParams;
 use zeta_app_server_protocol::protocol::session::SessionRequestResult;
-use zeta_app_server_protocol::protocol::session::SessionResult;
 use zeta_app_server_protocol::protocol::session::SessionRewriteResult;
-use zeta_app_server_protocol::protocol::session::SessionSubscribeParams;
-use zeta_app_server_protocol::protocol::session::SessionSubscribeResult;
-use zeta_app_server_protocol::protocol::session::SessionThreadProjection;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
-use zeta_app_server_protocol::protocol::session::SessionUnsubscribeParams;
 use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::turn::InputItem;
@@ -69,7 +60,6 @@ use zeta_core::SequenceExpectation;
 use zeta_core::ShellTurnInvocation;
 use zeta_core::StartContextCompactionRequest;
 use zeta_core::StartShellTurnRequest;
-use zeta_core::StartThreadRequest;
 use zeta_core::StartTurnDisposition;
 use zeta_core::StartTurnRequest;
 use zeta_core::SteerTurnDisposition;
@@ -81,7 +71,6 @@ use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::Session;
-use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerActivity;
 use zeta_protocol::SessionManagerInfo;
 use zeta_protocol::SessionManagerStatus;
@@ -98,9 +87,9 @@ use zeta_typst::TypstCompileOutcome;
 use zeta_typst::TypstDiagnostic;
 use zeta_typst::TypstDiagnosticSeverity;
 
-struct SessionMutation {
-    command_id: zeta_protocol::CommandId,
-    session_id: zeta_protocol::SessionId,
+pub(super) struct SessionMutation {
+    pub(super) command_id: zeta_protocol::CommandId,
+    pub(super) session_id: zeta_protocol::SessionId,
 }
 
 struct ThreadMutation {
@@ -280,109 +269,10 @@ impl AppServer {
         })
     }
 
-    pub(super) fn session_create(
-        &self,
-        connection: &mut ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: SessionCreateParams = decode(params)?;
-        let created = self
-            .threads
-            .start_thread(StartThreadRequest {
-                command_id: params.command_id,
-                title: params.title,
-            })
-            .map_err(core_error)?;
-        self.updates.bind_session_scope(created.session_id.clone());
-        self.threads
-            .install_session_extensions(
-                created.session_id.clone(),
-                Arc::clone(&self.agent_extensions),
-            )
-            .map_err(core_error)?;
-        self.updates
-            .subscribe_session(connection.connection_id, created.session_id.clone());
-        result(&SessionResult {
-            session: self.session_view(&created.session_id)?,
-        })
-    }
-
-    pub(super) fn session_read(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: SessionReadParams = decode(params)?;
-        result(&SessionResult {
-            session: self.session_view(&params.session_id)?,
-        })
-    }
-
-    pub(super) fn session_list(&self) -> Result<Value, RpcError> {
-        result(&SessionListResult {
-            sessions: self.session_views()?,
-        })
-    }
-
     pub(super) fn model_list(&self) -> Result<Value, RpcError> {
         result(&ModelListResult {
             models: self.model_catalog.list().map_err(core_error)?,
         })
-    }
-
-    pub(super) fn session_subscribe(
-        &self,
-        connection: &mut ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: SessionSubscribeParams = decode(params)?;
-        let session = self.session_view(&params.session_id)?;
-        let thread_snapshots = self
-            .threads
-            .list_session_threads(&params.session_id)
-            .map_err(core_error)?;
-        let thread_projections = thread_snapshots
-            .iter()
-            .map(|thread| {
-                let thread = thread.public_thread();
-                let updates = self
-                    .threads
-                    .thread_updates_after(&thread.thread_id, 0)
-                    .map_err(core_error)?;
-                Ok(SessionThreadProjection {
-                    transcript: self.updates.thread_transcript_snapshot(&thread, true),
-                    thread,
-                    updates,
-                })
-            })
-            .collect::<Result<Vec<_>, RpcError>>()?;
-        self.updates
-            .subscribe_session(connection.connection_id, params.session_id.clone());
-        for projection in &thread_projections {
-            self.updates.subscribe_session_thread(
-                connection.connection_id,
-                params.session_id.clone(),
-                projection.thread.thread_id.clone(),
-                projection.thread.sequence,
-            );
-        }
-        for snapshot in &thread_snapshots {
-            self.offer_pending_interactions(snapshot);
-        }
-        result(&SessionSubscribeResult {
-            agent_tree: zeta_core::project_agent_tree(&thread_snapshots),
-            session,
-            thread_projections,
-        })
-    }
-
-    pub(super) fn session_unsubscribe(
-        &self,
-        connection: &mut ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: SessionUnsubscribeParams = decode(params)?;
-        let lost_dynamic_tools = self
-            .updates
-            .unsubscribe_session(connection.connection_id, &params.session_id);
-        self.cancel_lost_dynamic_tool_owners(lost_dynamic_tools);
-        Ok(Value::Null)
     }
 
     /// Routes one canonical mutation through the owning Session aggregate.
@@ -685,105 +575,6 @@ impl AppServer {
         })
     }
 
-    fn archive_session_request(
-        &self,
-        mutation: SessionMutation,
-    ) -> Result<SessionResult, RpcError> {
-        let session_id = mutation.session_id.clone();
-        let result = self.lifecycle_request(mutation)?;
-        self.clear_session_dirs(&session_id);
-        Ok(result)
-    }
-
-    fn stop_session_request(&self, mutation: SessionMutation) -> Result<SessionResult, RpcError> {
-        let thread_sequences = self
-            .threads
-            .list_session_threads(&mutation.session_id)
-            .map_err(core_error)?
-            .into_iter()
-            .map(|thread| (thread.thread_id, thread.sequence))
-            .collect::<Vec<_>>();
-        self.threads
-            .archive_session_threads(
-                &mutation.session_id,
-                &mutation.command_id,
-                zeta_protocol::ThreadArchiveReason::Stopped,
-            )
-            .map_err(core_error)?;
-        self.clear_session_dirs(&mutation.session_id);
-        for (thread_id, _) in &thread_sequences {
-            self.multi_agent
-                .cancel_descendants(thread_id)
-                .map_err(core_error)?;
-        }
-        for (thread_id, sequence) in thread_sequences {
-            self.notify_thread_updates(&thread_id, sequence)?;
-        }
-        self.updates.publish_session_changed(&mutation.session_id);
-        if let Some(runtime) = &self.turn_changes
-            && let Err(error) = runtime.enforce_cleanup_policy()
-        {
-            log::warn!("Thread worktree cleanup policy failed: {error}");
-        }
-        Ok(SessionResult {
-            session: self.session_view(&mutation.session_id)?,
-        })
-    }
-
-    fn delete_session_request(&self, mutation: SessionMutation) -> Result<SessionId, RpcError> {
-        let session_id = mutation.session_id.clone();
-        let thread_ids = self
-            .threads
-            .list_session_threads(&session_id)
-            .map_err(core_error)?
-            .into_iter()
-            .map(|thread| thread.thread_id)
-            .collect::<Vec<_>>();
-        self.threads
-            .archive_session_threads(
-                &session_id,
-                &mutation.command_id,
-                zeta_protocol::ThreadArchiveReason::Stopped,
-            )
-            .map_err(core_error)?;
-        for thread_id in &thread_ids {
-            self.multi_agent
-                .cancel_descendants(thread_id)
-                .map_err(core_error)?;
-        }
-        self.threads
-            .delete_session_threads(&session_id)
-            .map_err(core_error)?;
-        self.clear_session_dirs(&session_id);
-        self.updates.publish_session_changed(&session_id);
-        self.updates.forget_session(&session_id);
-        if let Some(runtime) = &self.turn_changes
-            && let Err(error) = runtime.enforce_cleanup_policy()
-        {
-            log::warn!("Thread worktree cleanup policy failed: {error}");
-        }
-        Ok(session_id)
-    }
-
-    fn lifecycle_request(&self, mutation: SessionMutation) -> Result<SessionResult, RpcError> {
-        self.threads
-            .archive_session_threads(
-                &mutation.session_id,
-                &mutation.command_id,
-                zeta_protocol::ThreadArchiveReason::Completed,
-            )
-            .map_err(core_error)?;
-        self.updates.publish_session_changed(&mutation.session_id);
-        if let Some(runtime) = &self.turn_changes
-            && let Err(error) = runtime.enforce_cleanup_policy()
-        {
-            log::warn!("Thread worktree cleanup policy failed: {error}");
-        }
-        Ok(SessionResult {
-            session: self.session_view(&mutation.session_id)?,
-        })
-    }
-
     pub(super) fn session_thread_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionThreadReadParams = decode(params)?;
         let include_transient = !matches!(
@@ -968,7 +759,7 @@ impl AppServer {
         Ok(thread)
     }
 
-    fn offer_pending_interactions(&self, thread: &ThreadSnapshot) {
+    pub(super) fn offer_pending_interactions(&self, thread: &ThreadSnapshot) {
         for turn in &thread.turns {
             if let Some(interaction) = &turn.pending_interaction {
                 self.updates.offer_agent_request(AgentRequestEnvelope {
@@ -1549,7 +1340,10 @@ impl AppServer {
         Ok(Value::Null)
     }
 
-    fn session_view(&self, session_id: &zeta_protocol::SessionId) -> Result<Session, RpcError> {
+    pub(super) fn session_view(
+        &self,
+        session_id: &zeta_protocol::SessionId,
+    ) -> Result<Session, RpcError> {
         let mut snapshots = self
             .threads
             .list_session_threads(session_id)
@@ -1595,7 +1389,7 @@ impl AppServer {
         })
     }
 
-    fn session_views(&self) -> Result<Vec<Session>, RpcError> {
+    pub(super) fn session_views(&self) -> Result<Vec<Session>, RpcError> {
         let mut records = BTreeMap::<zeta_protocol::SessionId, Vec<ThreadCatalogRecord>>::new();
         for record in self.threads.list_thread_catalog().map_err(core_error)? {
             records
@@ -1609,7 +1403,7 @@ impl AppServer {
             .collect()
     }
 
-    fn notify_thread_updates(
+    pub(super) fn notify_thread_updates(
         &self,
         thread_id: &zeta_protocol::ThreadId,
         after_sequence: u64,

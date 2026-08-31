@@ -73,8 +73,8 @@ fn menu_owns_current_generic_tab_actions() {
             "Delete"
         ]
     );
-    assert_eq!(menu.item_bounds(0).unwrap().size.width, 160.0);
-    assert_eq!(menu.item_bounds(0).unwrap().size.height, 32.0);
+    assert_eq!(menu.item_bounds(0).unwrap().size.width, 140.0);
+    assert_eq!(menu.item_bounds(0).unwrap().size.height, 28.0);
     assert_eq!(
         menu.item_bounds(4).unwrap().origin.y - menu.item_bounds(2).unwrap().bottom(),
         8.0
@@ -112,6 +112,18 @@ fn menu_owns_current_generic_tab_actions() {
         Border::uniform(1.0, Color::rgb(220, 220, 220))
     );
     assert_eq!(surface.corner_radii(), CornerRadii::uniform(10.0));
+    let first_item = menu.item_bounds(0).unwrap();
+    assert_eq!(first_item.origin.x - surface.bounds().origin.x, 6.0);
+    assert_eq!(
+        frame
+            .scene()
+            .rects()
+            .iter()
+            .find(|rect| rect.bounds() == first_item)
+            .expect("menu item background")
+            .corner_radii(),
+        CornerRadii::uniform(10.0)
+    );
     assert!(
         frame
             .scene()
@@ -322,6 +334,37 @@ fn move_to_group_opens_a_secondary_menu_with_existing_and_new_group_targets() {
             .iter()
             .any(|node| node.id == TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP)
     );
+    let move_bounds = menu
+        .item_bounds(TabContextMenuAction::MoveToGroup.menu_index())
+        .unwrap();
+    let group_bounds = frame
+        .interaction()
+        .node(super::TAB_CONTEXT_MENU_GROUPS)
+        .unwrap()
+        .bounds();
+    let bridge = Point::new(
+        (move_bounds.right() + group_bounds.origin.x) * 0.5,
+        move_bounds.origin.y + 1.0,
+    );
+    assert!(super::tab_context_menu_groups_contain_pointer(
+        Point::new(move_bounds.origin.x + 1.0, move_bounds.origin.y + 1.0),
+        frame.interaction()
+    ));
+    assert!(super::tab_context_menu_groups_contain_pointer(
+        Point::new(group_bounds.origin.x + 1.0, group_bounds.origin.y + 1.0),
+        frame.interaction()
+    ));
+    assert!(super::tab_context_menu_groups_contain_pointer(
+        bridge,
+        frame.interaction()
+    ));
+    assert!(!super::tab_context_menu_groups_contain_pointer(
+        Point::new(
+            menu.item_bounds(0).unwrap().origin.x + 1.0,
+            menu.item_bounds(0).unwrap().origin.y + 1.0,
+        ),
+        frame.interaction()
+    ));
 }
 
 #[test]
@@ -355,6 +398,17 @@ fn move_to_group_hover_exposes_the_submenu_transition() {
     assert!(dispatch.is_hovered(TabContextMenuAction::MoveToGroup.element_id()));
     assert!(state.open_group_menu());
     assert!(state.is_group_menu_open());
+}
+
+#[test]
+fn group_menu_closes_back_to_actions() {
+    let mut state = TabContextMenuState::default();
+    state.open_unpinned(session_tab(), Point::new(80.0, 120.0), None);
+
+    assert!(state.open_group_menu());
+    assert!(state.close_group_menu());
+    assert!(!state.is_group_menu_open());
+    assert!(!state.close_group_menu());
 }
 
 #[test]

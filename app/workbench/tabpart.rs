@@ -21,6 +21,7 @@ pub use session_search::SessionSearchState;
 #[cfg(test)]
 use style::WorkbenchColors;
 pub use style::WorkbenchUiStyle;
+pub(crate) use tab_context_menu::tab_context_menu_groups_contain_pointer;
 pub use tab_context_menu::{
     TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP, TAB_RENAME_INPUT, TabContextMenu, TabContextMenuAction,
     TabContextMenuActivation, TabContextMenuState, TabContextMenuStyle, tab_group_menu_element_id,

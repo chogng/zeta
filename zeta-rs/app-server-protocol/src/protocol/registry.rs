@@ -519,6 +519,7 @@ use crate::protocol::search::ContentSearchStartParams;
 use crate::protocol::search::ContentSearchStartResult;
 use crate::protocol::session::SessionChanged;
 use crate::protocol::session::SessionCreateParams;
+use crate::protocol::session::SessionDeleted;
 use crate::protocol::session::SessionListResult;
 use crate::protocol::session::SessionReadParams;
 use crate::protocol::session::SessionRequest;
@@ -2477,6 +2478,9 @@ server_notifications! {
     SessionChanged => "session/changed" {
         params: SessionChanged,
     },
+    SessionDeleted => "session/deleted" {
+        params: SessionDeleted,
+    },
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
@@ -2894,6 +2898,7 @@ typescript_bindings! {
     SessionSubscribeParams,
     SessionUnsubscribeParams,
     SessionChanged,
+    SessionDeleted,
     SessionRequest,
     SessionRequestParams,
     SessionRequestResult,

@@ -18,6 +18,8 @@ use super::MenuItem;
 use super::MenuSelection;
 use super::MenuStyle;
 
+const CONTEXT_MENU_PADDING: f32 = 6.0;
+
 /// Placement and menu presentation used by a [`ContextMenu`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContextMenuStyle {
@@ -28,7 +30,7 @@ pub struct ContextMenuStyle {
 impl ContextMenuStyle {
     pub fn new(menu: MenuStyle) -> Self {
         Self {
-            menu,
+            menu: menu.with_padding(CONTEXT_MENU_PADDING),
             placement: ContextViewPlacement::new(),
         }
     }

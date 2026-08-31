@@ -316,6 +316,10 @@ impl<B> WorkbenchHost<B> {
         self.tab_context_menu.open_group_menu()
     }
 
+    pub(crate) fn close_tab_context_menu_groups(&mut self) -> bool {
+        self.tab_context_menu.close_group_menu()
+    }
+
     /// Applies one tab-menu item to Workbench-owned state.
     pub fn activate_tab_context_menu(&mut self, id: ElementId) -> TabContextMenuOutcome {
         match self.tab_context_menu.activate(id) {

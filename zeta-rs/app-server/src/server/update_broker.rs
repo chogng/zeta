@@ -30,6 +30,7 @@ use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_app_server_protocol::protocol::projects::ProjectChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::session::SessionChanged;
+use zeta_app_server_protocol::protocol::session::SessionDeleted;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::protocol::turn_changes::TurnChangesChanged;
 use zeta_app_server_protocol::protocol::work_runs::WorkRunChanged;
@@ -272,6 +273,26 @@ impl UpdateBroker {
                 queue.push(notification(
                     ServerNotificationMethod::SessionChanged,
                     &SessionChanged {
+                        session_id: session_id.clone(),
+                    },
+                ));
+            }
+            true
+        });
+    }
+
+    pub(super) fn publish_session_deleted(&self, session_id: &SessionId) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber_observes_session(subscriber, session_id) {
+                queue.push(notification(
+                    ServerNotificationMethod::SessionDeleted,
+                    &SessionDeleted {
                         session_id: session_id.clone(),
                     },
                 ));

@@ -126,6 +126,7 @@ mod provider_operations;
 mod request_serialization;
 mod search_operations;
 mod semantic_index_job;
+mod session_operations;
 mod skill_operations;
 mod start_turn;
 mod symbol_index_operations;

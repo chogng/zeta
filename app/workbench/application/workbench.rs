@@ -100,7 +100,7 @@ impl WorkbenchApplication {
         self.remove_workbench_tab(tab_key)
     }
 
-    fn remove_workbench_tab(&mut self, tab_key: &TabInputKey) -> bool {
+    pub(super) fn remove_workbench_tab(&mut self, tab_key: &TabInputKey) -> bool {
         if self
             .workbench
             .workbench()

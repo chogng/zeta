@@ -11,7 +11,7 @@ use std::fmt;
 use ts_rs::TS;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 1;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 22;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 23;
 pub const APP_SERVER_CAPABILITY_VERSION: u32 = 3;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[

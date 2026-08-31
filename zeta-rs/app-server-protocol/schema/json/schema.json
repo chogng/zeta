@@ -22241,6 +22241,22 @@
         {
           "properties": {
             "method": {
+              "const": "session/deleted",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionDeleted"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "document/collaboration/update",
               "type": "string"
             },
@@ -22634,6 +22650,18 @@
       "required": [
         "commandId",
         "title"
+      ],
+      "type": "object"
+    },
+    "SessionDeleted": {
+      "description": "Notification that one Session and all of its Threads were permanently removed.",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
       ],
       "type": "object"
     },

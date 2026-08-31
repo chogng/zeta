@@ -100,6 +100,7 @@ pub struct MenuStyle {
     background: Color,
     border: Border,
     corner_radii: CornerRadii,
+    padding: f32,
     button_style: ButtonStyle,
     item_size: Size,
     header_height: f32,
@@ -112,6 +113,7 @@ impl MenuStyle {
             background,
             border: Border::default(),
             corner_radii: CornerRadii::uniform(MENU_CORNER_RADIUS),
+            padding: MENU_PADDING,
             button_style,
             item_size,
             header_height: 0.0,
@@ -132,6 +134,11 @@ impl MenuStyle {
 
     pub const fn with_corner_radii(mut self, corner_radii: CornerRadii) -> Self {
         self.corner_radii = corner_radii;
+        self
+    }
+
+    pub(crate) const fn with_padding(mut self, padding: f32) -> Self {
+        self.padding = padding;
         self
     }
 
@@ -190,7 +197,8 @@ impl Menu {
         style: MenuStyle,
         scroll: Option<MenuScrollConfiguration>,
     ) -> Self {
-        let content_bounds = inset_rect(bounds, MENU_PADDING);
+        let padding = style.padding.max(0.0);
+        let content_bounds = inset_rect(bounds, padding);
         let header_height = style.header_height.max(0.0).min(content_bounds.size.height);
         let header_bounds = (header_height > 0.0).then(|| {
             Rect::from_xywh(
@@ -235,14 +243,14 @@ impl Menu {
         maximum_visible_items: Option<usize>,
     ) -> Size {
         Size::new(
-            style.item_size.width.max(0.0) + MENU_PADDING * 2.0,
+            style.item_size.width.max(0.0) + style.padding.max(0.0) * 2.0,
             style.header_height.max(0.0)
                 + items
                     .iter()
                     .take(maximum_visible_items.unwrap_or(items.len()))
                     .map(|item| item.main_axis_extent(style))
                     .sum::<f32>()
-                + MENU_PADDING * 2.0,
+                + style.padding.max(0.0) * 2.0,
         )
     }
 
@@ -446,7 +454,7 @@ impl Menu {
 
     fn element_tree(&self) -> ComponentElement {
         Element::leaf("Menu")
-            .padding(Edges::uniform(MENU_PADDING))
+            .padding(Edges::uniform(self.style.padding.max(0.0)))
             .corner_radii(self.style.corner_radii)
             .in_bounds(self.bounds)
             .with_identity(self.ids.root)

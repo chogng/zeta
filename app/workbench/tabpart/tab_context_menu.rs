@@ -13,6 +13,7 @@ mod view;
 
 pub use view::TabContextMenu;
 pub use view::TabContextMenuStyle;
+pub(crate) use view::tab_context_menu_groups_contain_pointer;
 pub use view::update_tab_context_menu_pointer;
 
 const TAB_CONTEXT_MENU_SCOPE: u32 = 22;
@@ -223,6 +224,18 @@ impl TabContextMenuState {
         };
         open.confirm_delete = false;
         open.view = TabContextMenuView::Groups;
+        true
+    }
+
+    pub(crate) fn close_group_menu(&mut self) -> bool {
+        let Some(open) = self
+            .open
+            .as_mut()
+            .filter(|open| open.view == TabContextMenuView::Groups)
+        else {
+            return false;
+        };
+        open.view = TabContextMenuView::Actions;
         true
     }
 

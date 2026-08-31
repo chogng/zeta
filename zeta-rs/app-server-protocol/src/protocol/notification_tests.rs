@@ -1,6 +1,7 @@
 use super::ConnectorsChanged;
 use super::ServerNotification;
 use super::decode_server_notification;
+use crate::protocol::session::SessionDeleted;
 use serde_json::json;
 
 #[test]
@@ -16,6 +17,24 @@ fn registry_decodes_known_notification_payloads() {
     assert_eq!(
         notification,
         ServerNotification::ConnectorsChanged(ConnectorsChanged { generation: 9 })
+    );
+}
+
+#[test]
+fn registry_decodes_session_deleted_notification() {
+    let notification = decode_server_notification(
+        "session/deleted".into(),
+        json!({
+            "sessionId": "session_1",
+        }),
+    )
+    .expect("registered Session deletion should decode");
+
+    assert_eq!(
+        notification,
+        ServerNotification::SessionDeleted(SessionDeleted {
+            session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+        })
     );
 }
 

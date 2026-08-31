@@ -52,8 +52,8 @@ use super::TabContextMenuView;
 use super::tab_group_menu_element_id;
 use crate::TabPart;
 
-const MENU_WIDTH: f32 = 160.0;
-const MENU_ITEM_HEIGHT: f32 = 32.0;
+const MENU_WIDTH: f32 = 140.0;
+const MENU_ITEM_HEIGHT: f32 = 28.0;
 const MENU_GAP: f32 = 2.0;
 const MENU_MARGIN: f32 = 8.0;
 const MENU_CORNER_RADIUS: f32 = 10.0;
@@ -213,11 +213,17 @@ impl TabContextMenu {
                     )
                 })
                 .collect();
-            let anchor = root
+            let item_bounds = root
                 .item_bounds(TabContextMenuAction::MoveToGroup.menu_index())
                 .unwrap_or_else(|| {
                     Rect::from_xywh(root.bounds().right(), root.bounds().origin.y, 1.0, 1.0)
                 });
+            let anchor = Rect::from_xywh(
+                root.bounds().origin.x,
+                item_bounds.origin.y,
+                root.bounds().size.width,
+                item_bounds.size.height,
+            );
             ContextMenu::new(
                 viewport,
                 anchor,
@@ -324,6 +330,27 @@ pub fn update_tab_context_menu_pointer(
     dispatch.pointer_moved(point, frame)
 }
 
+pub(crate) fn tab_context_menu_groups_contain_pointer(
+    point: Point,
+    frame: &InteractionFrame,
+) -> bool {
+    let Some(move_to_group) = frame
+        .node(TabContextMenuAction::MoveToGroup.element_id())
+        .map(|node| node.bounds())
+    else {
+        return false;
+    };
+    let Some(groups) = frame
+        .node(TAB_CONTEXT_MENU_GROUPS)
+        .map(|node| node.bounds())
+    else {
+        return false;
+    };
+    move_to_group.contains(point)
+        || groups.contains(point)
+        || menu_bridge(move_to_group, groups).is_some_and(|bridge| bridge.contains(point))
+}
+
 fn button_state(dispatch: &UiDispatch, id: ElementId, enabled: bool) -> ButtonState {
     if !enabled {
         ButtonState::Disabled
@@ -345,7 +372,7 @@ fn menu_button_style(style: TabContextMenuStyle) -> ButtonStyle {
         .with_pressed(style.hovered);
     ButtonStyle::new(backgrounds, menu_text_style(style.text))
         .with_selected_backgrounds(ButtonBackgrounds::new(Color::TRANSPARENT))
-        .with_corner_radii(CornerRadii::uniform(3.0))
+        .with_corner_radii(CornerRadii::uniform(MENU_CORNER_RADIUS))
         .with_padding(Edges::new(6.0, 8.0, 6.0, 8.0))
         .with_icon_size(12.0)
         .with_content_gap(8.0)
@@ -381,4 +408,25 @@ fn union_rect(left: Rect, right: Rect) -> Rect {
     let right_edge = left.right().max(right.right());
     let bottom = (left.origin.y + left.size.height).max(right.origin.y + right.size.height);
     Rect::from_xywh(x, y, right_edge - x, bottom - y)
+}
+
+fn menu_bridge(parent: Rect, child: Rect) -> Option<Rect> {
+    let top = parent.origin.y.min(child.origin.y);
+    let bottom = parent.bottom().max(child.bottom());
+    if parent.right() <= child.origin.x {
+        return Some(Rect::from_xywh(
+            parent.right(),
+            top,
+            child.origin.x - parent.right(),
+            bottom - top,
+        ));
+    }
+    (child.right() <= parent.origin.x).then(|| {
+        Rect::from_xywh(
+            child.right(),
+            top,
+            parent.origin.x - child.right(),
+            bottom - top,
+        )
+    })
 }

@@ -35,10 +35,17 @@ impl WorkbenchApplication {
         self.update_cursor();
         self.apply_dispatch_outcome(outcome);
         let move_to_group = TabContextMenuAction::MoveToGroup.element_id();
-        if self.ui_dispatch.is_hovered(move_to_group)
-            && !self.workbench.tab_context_menu().is_group_menu_open()
-            && self.workbench.open_tab_context_menu_groups()
-        {
+        let group_menu_open = self.workbench.tab_context_menu().is_group_menu_open();
+        let groups_contain_pointer = self.presentation.as_ref().is_some_and(|presentation| {
+            crate::tab_context_menu_groups_contain_pointer(point, presentation.interaction_frame())
+        });
+        let changed = if group_menu_open {
+            !groups_contain_pointer && self.workbench.close_tab_context_menu_groups()
+        } else {
+            self.ui_dispatch.is_hovered(move_to_group)
+                && self.workbench.open_tab_context_menu_groups()
+        };
+        if changed {
             self.rebuild_presentation();
             self.request_redraw();
         }
