@@ -1,128 +1,88 @@
+import { addDisposableListener } from '../../../base/browser/dom.js';
+import { StandardMouseEvent, StandardWheelEvent } from '../../../base/browser/mouseEvent.js';
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
-import { type CursorsController } from "../../common/cursor/cursor.js";
-import { ColumnSelection } from "../../common/cursor/cursorColumnSelection.js";
-import { SelectionDirection, Selection } from "../../common/core/selection.js";
-import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
-import { type TextModel } from "../../common/model/textModel.js";
-import { type TrackedRange } from "../../common/model/trackedRange.js";
-import { WordOperations } from "../../common/cursor/cursorWordOperations.js";
 import { type View } from "../view.js";
 import { DragScrolling } from "./dragScrolling.js";
 import { PointerHandler } from "./pointerHandler.js";
 import { MouseTargetFactory, MouseTargetKind } from "./mouseTarget.js";
+import { type MouseTarget } from './mouseTarget.js';
 import { EditorHitTargetKind, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
-import { CursorMoveCommands, PointerMultiCursorModifier, type PointerModifierState } from "../../common/cursor/cursorMoveCommands.js";
-import { TrackedRangeStickiness } from '../../common/model.js';
+import { type IMouseDispatchData, type ViewController } from '../view/viewController.js';
+import { type IEditorMouseEvent, type IMouseTarget, MouseTargetType } from '../editorBrowser.js';
+import { NavigationCommandRevealType } from '../coreCommands.js';
 
-enum MouseSelectionKind {
-	Character = "character",
-	Word = "word",
-	WholeLine = "wholeLine",
-	ExtendToWord = "extendToWord",
-	ExtendToLine = "extendToLine",
-	Column = "column",
-}
-
-interface ActiveMouseSelection {
-	readonly kind: MouseSelectionKind;
+interface PointerGesture {
 	readonly pointerId: number | undefined;
-	readonly anchor: TrackedRange;
-	readonly columnFallbackAnchor: TrackedRange | undefined;
-	readonly additionalSelections: AdditionalMouseSelections | undefined;
-	columnMoved: boolean;
+	readonly startedOnLineNumbers: boolean;
+	readonly mouseDownCount: number;
+	readonly altKey: boolean;
+	readonly ctrlKey: boolean;
+	readonly metaKey: boolean;
+	readonly shiftKey: boolean;
+	readonly leftButton: boolean;
+	readonly middleButton: boolean;
 }
 
-interface TrackedMouseSelection {
-	readonly range: TrackedRange;
-	readonly direction: SelectionDirection;
-}
-
-interface AdditionalMouseSelections {
-	readonly selections: readonly TrackedMouseSelection[];
-	readonly primaryIndex: number;
-	readonly toggleCandidateIndex: number | undefined;
-}
-
-export interface MouseHandlerOptions {
-	readonly multiCursorModifier?: PointerMultiCursorModifier;
-	/** Resolves the current language-specific word pattern for double-click selection. */
-	readonly wordPattern?: () => RegExp | undefined;
-}
-
-/**
- * Browser mouse and pointer policy for one Stanza viewport and selection controller.
- *
- * PointerHandler owns browser dispatch/capture. This controller owns gesture
- * policy and maps semantic hit targets to common selection state.
- */
+/** Owns pointer capture, drag scrolling, target resolution, and browser event publication. */
 export class MouseHandler extends Disposable {
 	private readonly dragListeners =
 		this._register(new DisposableStore());
 	private readonly pointerHandler: PointerHandler;
 	private readonly mouseTargetFactory: MouseTargetFactory;
-	private readonly multiCursorModifier: PointerMultiCursorModifier;
-	private readonly wordPattern: (() => RegExp | undefined) | undefined;
-	private activeSelection: ActiveMouseSelection | undefined;
+	private gesture: PointerGesture | undefined;
 	private autoScroller: DragScrolling | undefined;
 
 	constructor(
 		private readonly viewport: View,
-		private readonly selectionController: CursorsController,
-		options: MouseHandlerOptions = {},
+		private readonly viewController: ViewController,
 	) {
 		super();
-		try {
-			this.multiCursorModifier = CursorMoveCommands.readPointerMultiCursorModifier(
-				options.multiCursorModifier,
-			);
-			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
-				throw new TypeError("Stanza pointer word pattern resolver must be a function");
-			}
-			this.wordPattern = options.wordPattern;
-		} catch (error) {
-			this.dispose();
-			throw error;
-		}
-		if (viewport.textModel !== selectionController.textModel) {
-			this.dispose();
-			throw new TypeError(
-				"Stanza pointer and selection controllers must share one text model",
-			);
-		}
 		this.pointerHandler = this._register(new PointerHandler(viewport.element));
 		this.mouseTargetFactory = new MouseTargetFactory(viewport);
 		this._register(this.pointerHandler.onDidPointerDown(event => this.beginPointerSelection(event)));
 		this._register(this.pointerHandler.onDidContextMenu(event => this.handleContextMenu(event)));
+		this._register(addDisposableListener<MouseEvent>(viewport.element, 'mousemove', event => this.handleMouseMove(event)));
+		this._register(addDisposableListener<MouseEvent>(viewport.element, 'mouseleave', event => this.handleMouseLeave(event)));
+		this._register(addDisposableListener<WheelEvent>(viewport.element, 'wheel', event => this.viewController.emitMouseWheel(new StandardWheelEvent(event, { lineHeight: viewport.currentLayout.lineHeight }))));
+		this._register(addDisposableListener<DragEvent>(viewport.element, 'drop', event => {
+			const target = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+				? this.mouseTargetFactory.create(event, true)
+				: undefined;
+			this.viewController.emitMouseDrop({ event: new StandardMouseEvent(event), target: target ? this.toViewMouseTarget(target) : null });
+		}));
 		this._register(toDisposable(() => this.stopPointerSelection()));
 	}
 
 	private beginPointerSelection(event: PointerEvent): void {
-		if (event.defaultPrevented || event.button !== 0) return;
 		const target = this.mouseTargetFactory.create(event);
-		if (!target || target.kind === MouseTargetKind.Scrollbar || target.kind === MouseTargetKind.Widget || target.kind === MouseTargetKind.ViewZone) return;
+		const editorEvent = this.toEditorMouseEvent(event, target);
+		if (event.defaultPrevented || (event.button !== 0 && event.button !== 1) || !target || target.kind === MouseTargetKind.Scrollbar || target.kind === MouseTargetKind.Widget || target.kind === MouseTargetKind.ViewZone) {
+			this.viewController.emitMouseDown(editorEvent);
+			return;
+		}
 		const hitTarget = target.editorTarget;
-		if (!hitTarget) return;
+		if (!hitTarget) {
+			this.viewController.emitMouseDown(editorEvent);
+			return;
+		}
 		event.preventDefault();
 		this.viewport.element.focus({ preventScroll: true });
 		this.stopPointerSelection();
 		const pointerId = readPointerId(event);
-		const addSelection = CursorMoveCommands.isPointerMultiCursorGesture(
-			event,
-			this.multiCursorModifier,
-		);
 		try {
-			this.activeSelection = this.createActiveSelection(
-				hitTarget,
+			this.gesture = {
 				pointerId,
-				event.shiftKey,
-				event.altKey && event.shiftKey && hitTarget.kind !== EditorHitTargetKind.Gutter,
-				readClickCount(event),
-				addSelection,
-			);
-			if (this.activeSelection.kind !== MouseSelectionKind.Column) {
-				this.applyHitTarget(hitTarget);
-			}
+				startedOnLineNumbers: target.kind === MouseTargetKind.LineNumber,
+				mouseDownCount: readClickCount(event),
+				altKey: event.altKey,
+				ctrlKey: event.ctrlKey,
+				metaKey: event.metaKey,
+				shiftKey: event.shiftKey,
+				leftButton: event.button === 0,
+				middleButton: event.button === 1,
+			};
+			this.dispatchTarget(hitTarget, false);
 			this.pointerHandler.capturePointer(pointerId);
 
 			const targetWindow = this.pointerHandler.targetWindow;
@@ -130,7 +90,7 @@ export class MouseHandler extends Disposable {
 				new DragScrolling(
 					targetWindow,
 					this.viewport,
-					target => this.applyHitTarget(target),
+					target => this.dispatchTarget(target, true),
 				),
 			);
 			this.dragListeners.add(this.pointerHandler.startTracking(pointerId, {
@@ -143,140 +103,36 @@ export class MouseHandler extends Disposable {
 			this.stopPointerSelection();
 			throw error;
 		}
+		this.viewController.emitMouseDown(editorEvent);
 	}
 
 	private handleContextMenu(event: MouseEvent): void {
 		const target = this.mouseTargetFactory.create(event, true);
-		if (!target || target.kind === MouseTargetKind.Scrollbar || target.kind === MouseTargetKind.Widget || target.kind === MouseTargetKind.ViewZone) return;
-		const hitTarget = target?.editorTarget;
-		if (!hitTarget) return;
-		this.viewport.element.focus({ preventScroll: true });
-		if (isPositionInSelections(hitTarget.position, this.selectionController.selections)) return;
-		this.selectionController.setSelections([Selection.fromPositions(hitTarget.position)]);
+		this.viewController.emitContextMenu(this.toEditorMouseEvent(event, target));
 	}
 
-	private createActiveSelection(
-		hitTarget: EditorHitTarget,
-		pointerId: number | undefined,
-		extend: boolean,
-		column: boolean,
-		clickCount: number,
-		addSelection: boolean,
-	): ActiveMouseSelection {
-		let kind: MouseSelectionKind;
-		let anchorRange: Range;
-		if (column && clickCount === 1) {
-			kind = MouseSelectionKind.Column;
-			anchorRange = Range.fromPositions(hitTarget.position);
-		} else if (hitTarget.kind === EditorHitTargetKind.Gutter) {
-			if (extend) {
-				kind = MouseSelectionKind.ExtendToLine;
-				anchorRange = Range.fromPositions(
-					this.selectionController.selections[0]!.getSelectionStart(),
-				);
-			} else {
-				kind = MouseSelectionKind.WholeLine;
-				anchorRange = Range.fromPositions(
-					lineStart(hitTarget.position.lineNumber),
-				);
-			}
-		} else if (clickCount >= 3) {
-			if (extend) {
-				kind = MouseSelectionKind.ExtendToLine;
-				anchorRange = Range.fromPositions(
-					this.selectionController.selections[0]!.getSelectionStart(),
-				);
-			} else {
-				kind = MouseSelectionKind.WholeLine;
-				anchorRange = Range.fromPositions(
-					lineStart(hitTarget.position.lineNumber),
-				);
-			}
-		} else if (clickCount === 2) {
-			if (extend) {
-				kind = MouseSelectionKind.ExtendToWord;
-				anchorRange = Range.fromPositions(
-					this.selectionController.selections[0]!.getSelectionStart(),
-				);
-			} else {
-				kind = MouseSelectionKind.Word;
-				anchorRange = WordOperations.getWordSelectionRange(this.viewport.textModel, hitTarget.position, this.wordPattern?.());
-			}
-		} else {
-			kind = MouseSelectionKind.Character;
-			anchorRange = Range.fromPositions(extend
-				? this.selectionController.selections[0]!.getSelectionStart()
-				: hitTarget.position);
-		}
-		const anchor = this.dragListeners.add(this.viewport.textModel.trackRange(
-			anchorRange,
-			TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		));
-		const initialSelection = selectionForTarget(
-			kind,
-			this.viewport.textModel,
-			anchorRange,
-			hitTarget,
-			this.wordPattern?.(),
-		);
-		return {
-			kind,
-			pointerId,
-			anchor,
-			columnFallbackAnchor: kind === MouseSelectionKind.Column
-				? this.dragListeners.add(this.viewport.textModel.trackRange(
-					Range.fromPositions(this.selectionController.selections[0]!.getSelectionStart()),
-					TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				))
-				: undefined,
-			additionalSelections: addSelection
-				? this.trackAdditionalSelections(initialSelection)
-				: undefined,
-			columnMoved: false,
-		};
+	private handleMouseMove(event: MouseEvent): void {
+		if (this.gesture) return;
+		this.viewController.emitMouseMove(this.toEditorMouseEvent(event, this.mouseTargetFactory.create(event, true)));
 	}
 
-	private trackAdditionalSelections(initialSelection: Selection): AdditionalMouseSelections {
-		const base = this.selectionController.selections;
-		return {
-			selections: base.map(selection => ({
-				range: this.dragListeners.add(this.viewport.textModel.trackRange(
-					selection,
-					TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				)),
-				direction: selection.getDirection(),
-			})),
-			primaryIndex: 0,
-			toggleCandidateIndex: CursorMoveCommands.findPointerToggleCandidate(
-				base,
-				initialSelection,
-			),
-		};
+	private handleMouseLeave(event: MouseEvent): void {
+		this.viewController.emitMouseLeave({ event: new StandardMouseEvent(event), target: null });
 	}
 
 	private updatePointerSelection(event: PointerEvent): void {
 		if (!this.accepts(event)) return;
 		const hitTarget = this.viewport.getNearestTargetAtClientPoint(event);
-		if (hitTarget) {
-			if (this.activeSelection?.kind === MouseSelectionKind.Column) {
-				this.activeSelection.columnMoved = true;
-			}
-			this.applyHitTarget(hitTarget);
-		}
+		if (hitTarget) this.dispatchTarget(hitTarget, true);
 		this.autoScroller?.updatePointer(event);
+		this.viewController.emitMouseDrag(this.toEditorMouseEvent(event, this.mouseTargetFactory.create(event, true)));
 	}
 
 	private finishPointerSelection(event: PointerEvent): void {
 		if (!this.accepts(event)) return;
 		const hitTarget = this.viewport.getNearestTargetAtClientPoint(event);
-		if (hitTarget) {
-			const active = this.activeSelection;
-			if (active?.kind === MouseSelectionKind.Column && !active.columnMoved) {
-				this.applyColumnFallback(active, hitTarget);
-			} else {
-				this.applyHitTarget(hitTarget);
-			}
-		}
+		if (hitTarget) this.dispatchTarget(hitTarget, true);
+		this.viewController.emitMouseUp(this.toEditorMouseEvent(event, this.mouseTargetFactory.create(event, true)));
 		this.stopPointerSelection();
 	}
 
@@ -285,160 +141,89 @@ export class MouseHandler extends Disposable {
 		this.stopPointerSelection();
 	}
 
-	private applyHitTarget(hitTarget: EditorHitTarget): void {
-		const active = this.activeSelection;
-		if (!active) return;
-		const anchorRange = active.anchor.range;
-		if (active.kind === MouseSelectionKind.Column) {
-			this.selectionController.setSelections(ColumnSelection.columnSelect(
-				this.viewport.textModel,
-				anchorRange.getStartPosition(),
-				hitTarget.position,
-			));
-			return;
-		}
-		const selection = selectionForTarget(
-			active.kind,
-			this.viewport.textModel,
-			anchorRange,
-			hitTarget,
-			this.wordPattern?.(),
-		);
-		const additional = active.additionalSelections;
-		if (!additional) {
-			this.selectionController.setSelections([selection]);
-			return;
-		}
-		const base = trackedSelectionSet(additional);
-		this.selectionController.setSelections(CursorMoveCommands.combinePointerSelection(
-			base,
-			selection,
-			additional.toggleCandidateIndex,
-		));
-	}
-
-	private applyColumnFallback(active: ActiveMouseSelection, hitTarget: EditorHitTarget): void {
-		const anchor = active.columnFallbackAnchor?.range.getStartPosition();
-		if (!anchor) return;
-		this.selectionController.setSelections([Selection.fromPositions(anchor, hitTarget.position)]);
+	private dispatchTarget(hitTarget: EditorHitTarget, inSelectionMode: boolean): void {
+		const gesture = this.gesture;
+		if (!gesture) return;
+		const position = this.viewport.coordinatesConverter.convertModelPositionToViewPosition(hitTarget.position);
+		const data: IMouseDispatchData = {
+			position,
+			mouseColumn: position.column,
+			revealType: NavigationCommandRevealType.Minimal,
+			startedOnLineNumbers: gesture.startedOnLineNumbers,
+			inSelectionMode,
+			mouseDownCount: gesture.mouseDownCount,
+			altKey: gesture.altKey,
+			ctrlKey: gesture.ctrlKey,
+			metaKey: gesture.metaKey,
+			shiftKey: gesture.shiftKey,
+			leftButton: gesture.leftButton,
+			middleButton: gesture.middleButton,
+			onInjectedText: false,
+		};
+		this.viewController.dispatchMouse(data);
 	}
 
 	private accepts(event: PointerEvent): boolean {
-		const active = this.activeSelection;
-		if (!active) return false;
+		const gesture = this.gesture;
+		if (!gesture) return false;
 		const pointerId = readPointerId(event);
-		return active.pointerId === undefined ||
+		return gesture.pointerId === undefined ||
 			pointerId === undefined ||
-			pointerId === active.pointerId;
+			pointerId === gesture.pointerId;
 	}
 
 	private stopPointerSelection(): void {
-		const active = this.activeSelection;
-		this.activeSelection = undefined;
+		const gesture = this.gesture;
+		this.gesture = undefined;
 		this.autoScroller = undefined;
 		this.dragListeners.clear();
-		const pointerId = active?.pointerId;
+		const pointerId = gesture?.pointerId;
 		this.pointerHandler.releasePointer(pointerId);
 	}
-}
 
-/** Returns whether a context-menu point belongs to existing selected content. */
-export function isPositionInSelections(position: Position, selections: readonly Selection[]): boolean {
-	return selections.some(selection => !selection.isEmpty() && Position.compare(position, selection.getStartPosition()) >= 0 && Position.compare(position, selection.getEndPosition()) < 0);
-}
-
-function selectionForTarget(kind: MouseSelectionKind, model: TextModel, anchorRange: Range, hitTarget: EditorHitTarget, wordPattern: RegExp | undefined): Selection {
-	const anchor = anchorRange.getStartPosition();
-	if (kind === MouseSelectionKind.Character) {
-		return Selection.fromPositions(anchor, hitTarget.position);
+	private toEditorMouseEvent(event: MouseEvent | PointerEvent, target: MouseTarget | undefined): IEditorMouseEvent {
+		return { event: new StandardMouseEvent(event), target: this.toViewMouseTarget(target) };
 	}
-	if (kind === MouseSelectionKind.Column) return Selection.fromPositions(anchor);
-	if (kind === MouseSelectionKind.Word) {
-		return wordSelection(model, anchorRange, hitTarget.position, wordPattern);
+
+	private toViewMouseTarget(target: MouseTarget | undefined): IMouseTarget {
+		const elementConstructor = this.viewport.element.ownerDocument.defaultView?.HTMLElement;
+		const element = elementConstructor && target?.element instanceof elementConstructor ? target.element as HTMLElement : null;
+		const modelPosition = target?.editorTarget?.position;
+		const position = modelPosition ? this.viewport.coordinatesConverter.convertModelPositionToViewPosition(modelPosition) : null;
+		const range = position ? Range.fromPositions(position) : null;
+		const mouseColumn = position?.column ?? 0;
+		if (!target) return { type: MouseTargetType.UNKNOWN, element, mouseColumn, position, range };
+		if (!position || !range) {
+			if (target.kind === MouseTargetKind.Widget) {
+				return { type: MouseTargetType.CONTENT_WIDGET, element, mouseColumn, position: null, range: null, detail: element?.id ?? '' };
+			}
+			return { type: MouseTargetType.UNKNOWN, element, mouseColumn, position, range };
+		}
+		switch (target.kind) {
+			case MouseTargetKind.Text:
+				return { type: MouseTargetType.CONTENT_TEXT, element, mouseColumn, position, range, detail: { mightBeForeignElement: false, injectedText: null } };
+			case MouseTargetKind.EmptyContent:
+			case MouseTargetKind.AfterLines:
+				return { type: MouseTargetType.CONTENT_EMPTY, element, mouseColumn, position, range, detail: { isAfterLines: target.kind === MouseTargetKind.AfterLines } };
+			case MouseTargetKind.Gutter:
+			case MouseTargetKind.LineNumber:
+			case MouseTargetKind.GutterDecoration: {
+				const layout = this.viewport.getLayoutInfo();
+				const type = target.kind === MouseTargetKind.LineNumber
+					? MouseTargetType.GUTTER_LINE_NUMBERS
+					: target.glyphMarginLane === undefined ? MouseTargetType.GUTTER_LINE_DECORATIONS : MouseTargetType.GUTTER_GLYPH_MARGIN;
+				return { type, element, mouseColumn, position, range, detail: { isAfterLines: target.editorTarget?.kind === EditorHitTargetKind.AfterLines, glyphMarginLeft: layout.glyphMarginLeft, glyphMarginWidth: layout.glyphMarginWidth, glyphMarginLane: target.glyphMarginLane, lineNumbersWidth: layout.lineNumbersWidth, offsetX: 0 } };
+			}
+			case MouseTargetKind.Widget:
+				return { type: MouseTargetType.CONTENT_WIDGET, element, mouseColumn, position: null, range: null, detail: element?.id ?? '' };
+			case MouseTargetKind.Scrollbar:
+				return position && range
+					? { type: MouseTargetType.SCROLLBAR, element, mouseColumn, position, range }
+					: { type: MouseTargetType.UNKNOWN, element, mouseColumn, position, range };
+			case MouseTargetKind.ViewZone:
+				return { type: MouseTargetType.UNKNOWN, element, mouseColumn, position, range };
+		}
 	}
-	if (kind === MouseSelectionKind.WholeLine) {
-		return wholeLineSelection(
-			model,
-			anchor.lineNumber,
-			hitTarget.position.lineNumber,
-		);
-	}
-	if (kind === MouseSelectionKind.ExtendToWord) {
-		return extendSelectionToWord(model, anchor, hitTarget.position, wordPattern);
-	}
-	return extendSelectionToLine(model, anchor, hitTarget.position.lineNumber);
-}
-
-function trackedSelectionSet(additional: AdditionalMouseSelections): readonly Selection[] {
-	const selections = additional.selections.map(selection => {
-			const range = selection.range.range;
-			return selection.direction === SelectionDirection.RTL
-				? Selection.fromPositions(range.getEndPosition(), range.getStartPosition())
-				: Selection.fromPositions(range.getStartPosition(), range.getEndPosition());
-		});
-	return primaryFirst(selections, additional.primaryIndex);
-}
-
-function wordSelection(model: TextModel, anchorRange: Range, activePosition: Position, wordPattern: RegExp | undefined): Selection {
-	const activeRange = WordOperations.getWordSelectionRange(model, activePosition, wordPattern);
-	return Position.compare(activeRange.getStartPosition(), anchorRange.getStartPosition()) < 0
-		? Selection.fromPositions(anchorRange.getEndPosition(), activeRange.getStartPosition())
-		: Selection.fromPositions(anchorRange.getStartPosition(), activeRange.getEndPosition());
-}
-
-function primaryFirst(selections: readonly Selection[], primaryIndex: number): readonly Selection[] {
-	if (primaryIndex === 0) return Object.freeze([...selections]);
-	return Object.freeze([selections[primaryIndex]!, ...selections.slice(0, primaryIndex), ...selections.slice(primaryIndex + 1)]);
-}
-
-function extendSelectionToWord(model: TextModel, anchor: Position, activePosition: Position, wordPattern: RegExp | undefined): Selection {
-	const activeRange = WordOperations.getWordSelectionRange(model, activePosition, wordPattern);
-	const active = Position.compare(activeRange.getStartPosition(), anchor) < 0
-		? activeRange.getStartPosition()
-		: activeRange.getEndPosition();
-	return Selection.fromPositions(anchor, active);
-}
-
-function wholeLineSelection(
-	model: TextModel,
-	anchorLineNumber: number,
-	activeLineNumber: number,
-): Selection {
-	if (activeLineNumber >= anchorLineNumber) {
-		return Selection.fromPositions(
-			lineStart(anchorLineNumber),
-			lineEndExclusive(model, activeLineNumber),
-		);
-	}
-	return Selection.fromPositions(
-		lineEndExclusive(model, anchorLineNumber),
-		lineStart(activeLineNumber),
-	);
-}
-
-function extendSelectionToLine(
-	model: TextModel,
-	anchor: Position,
-	activeLineNumber: number,
-): Selection {
-	const active = activeLineNumber < anchor.lineNumber
-		? lineStart(activeLineNumber)
-		: lineEndExclusive(model, activeLineNumber);
-	return Selection.fromPositions(anchor, active);
-}
-
-function lineStart(lineNumber: number): Position {
-	return new Position(lineNumber, 1);
-}
-
-function lineEndExclusive(
-	model: TextModel,
-	lineNumber: number,
-): Position {
-	if (lineNumber < model.lineCount) {
-		return new Position(lineNumber + 1, 1);
-	}
-	return new Position(lineNumber, model.getLineContent(lineNumber).length + 1);
 }
 
 function readPointerId(event: PointerEvent): number | undefined {
@@ -449,6 +234,6 @@ function readPointerId(event: PointerEvent): number | undefined {
 
 function readClickCount(event: PointerEvent): number {
 	return Number.isSafeInteger(event.detail) && event.detail > 0
-		? Math.min(event.detail, 3)
+		? Math.min(event.detail, 4)
 		: 1;
 }

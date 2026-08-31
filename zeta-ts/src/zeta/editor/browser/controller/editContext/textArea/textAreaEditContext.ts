@@ -40,6 +40,7 @@ export class EditorTextAreaInputContext extends EditorInputContext implements IT
 	get onDidInput(): Event<InputEvent> { return this.textAreaInput.onDidInput; }
 	get onDidSelect(): Event<void> { return this.textAreaInput.onDidSelect; }
 	get onDidKeydown(): Event<KeyboardEvent> { return this.textAreaInput.onDidKeydown; }
+	get onDidKeyup(): Event<KeyboardEvent> { return this.textAreaInput.onDidKeyup; }
 	get onDidCompositionStart(): Event<EditContextCompositionEvent> { return this.textAreaInput.onDidCompositionStart; }
 	get onDidCompositionUpdate(): Event<EditContextCompositionEvent> { return this.textAreaInput.onDidCompositionUpdate; }
 	get onDidCompositionEnd(): Event<EditContextCompositionEvent> { return this.textAreaInput.onDidCompositionEnd; }

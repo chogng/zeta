@@ -98,6 +98,7 @@ export interface EditContextViewController {
 	redo(): void;
 	toggleOvertype(): boolean;
 	emitKeyDown(event: StandardKeyboardEvent): void;
+	emitKeyUp(event: StandardKeyboardEvent): void;
 }
 
 /** Content coordinates of the primary editor caret. */
@@ -139,6 +140,7 @@ export abstract class EditorInputContext extends Disposable {
 	readonly onDidTextFormatUpdate: EditorEvent<EditContextTextFormatUpdate> = Event.None;
 	abstract readonly onDidSelect: EditorEvent<void>;
 	abstract readonly onDidKeydown: EditorEvent<KeyboardEvent>;
+	abstract readonly onDidKeyup: EditorEvent<KeyboardEvent>;
 	abstract readonly onDidCompositionStart: EditorEvent<EditContextCompositionEvent>;
 	abstract readonly onDidCompositionUpdate: EditorEvent<EditContextCompositionEvent>;
 	abstract readonly onDidCompositionEnd: EditorEvent<EditContextCompositionEvent>;
@@ -186,6 +188,7 @@ export abstract class EditorInputContext extends Disposable {
 		}));
 		this._register(this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)));
 		this._register(this.onDidKeydown(event => this.routeKeydown(event, viewController)));
+		this._register(this.onDidKeyup(event => viewController.emitKeyUp(new StandardKeyboardEvent(event))));
 		return compositionController;
 	}
 

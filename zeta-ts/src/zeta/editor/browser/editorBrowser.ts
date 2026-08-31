@@ -1,20 +1,148 @@
 import { type Event } from '../../base/common/event.js';
+import { type IKeyboardEvent } from '../../base/browser/keyboardEvent.js';
+import { type IMouseEvent, type IMouseWheelEvent } from '../../base/browser/mouseEvent.js';
 import { type IDimension } from '../common/core/2d/dimension.js';
-import { type IPosition } from '../common/core/position.js';
+import { type IPosition, type Position } from '../common/core/position.js';
 import { type Range } from '../common/core/range.js';
 import { type ISelection, type Selection } from '../common/core/selection.js';
-import { type IModelDecorationsChangeAccessor, type PositionAffinity } from '../common/model.js';
+import { type GlyphMarginLane, type IModelDecorationsChangeAccessor, type PositionAffinity } from '../common/model.js';
 import { type IModelDeltaDecoration } from '../common/model.js';
+import { type InjectedText } from '../common/modelLineProjectionData.js';
 import { type EditorLayoutInfo, type EditorOption, type FindComputedEditorOptionValueById } from '../common/config/editorOptions.js';
 import { type ICommand, type IEditorContribution, type IEditorDecorationsCollection, type ScrollType } from '../common/editorCommon.js';
 import { type ITextModel } from '../common/model.js';
 import { type ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
-import { type EditorViewMouseTarget } from './view/viewUserInputEvents.js';
+
+export const enum MouseTargetType {
+	UNKNOWN,
+	TEXTAREA,
+	GUTTER_GLYPH_MARGIN,
+	GUTTER_LINE_NUMBERS,
+	GUTTER_LINE_DECORATIONS,
+	GUTTER_VIEW_ZONE,
+	CONTENT_TEXT,
+	CONTENT_EMPTY,
+	CONTENT_VIEW_ZONE,
+	CONTENT_WIDGET,
+	OVERVIEW_RULER,
+	SCROLLBAR,
+	OVERLAY_WIDGET,
+	OUTSIDE_EDITOR,
+}
+
+export interface IBaseMouseTarget {
+	readonly element: HTMLElement | null;
+	readonly position: Position | null;
+	readonly mouseColumn: number;
+	readonly range: Range | null;
+}
+
+export interface IMouseTargetUnknown extends IBaseMouseTarget {
+	readonly type: MouseTargetType.UNKNOWN;
+}
+
+export interface IMouseTargetTextarea extends IBaseMouseTarget {
+	readonly type: MouseTargetType.TEXTAREA;
+	readonly position: null;
+	readonly range: null;
+}
+
+export interface IMouseTargetMarginData {
+	readonly isAfterLines: boolean;
+	readonly glyphMarginLeft: number;
+	readonly glyphMarginWidth: number;
+	readonly glyphMarginLane?: GlyphMarginLane;
+	readonly lineNumbersWidth: number;
+	readonly offsetX: number;
+}
+
+export interface IMouseTargetMargin extends IBaseMouseTarget {
+	readonly type: MouseTargetType.GUTTER_GLYPH_MARGIN | MouseTargetType.GUTTER_LINE_NUMBERS | MouseTargetType.GUTTER_LINE_DECORATIONS;
+	readonly position: Position;
+	readonly range: Range;
+	readonly detail: IMouseTargetMarginData;
+}
+
+export interface IMouseTargetViewZoneData {
+	readonly viewZoneId: string;
+	readonly positionBefore: Position | null;
+	readonly positionAfter: Position | null;
+	readonly position: Position;
+	readonly afterLineNumber: number;
+}
+
+export interface IMouseTargetViewZone extends IBaseMouseTarget {
+	readonly type: MouseTargetType.GUTTER_VIEW_ZONE | MouseTargetType.CONTENT_VIEW_ZONE;
+	readonly position: Position;
+	readonly range: Range;
+	readonly detail: IMouseTargetViewZoneData;
+}
+
+export interface IMouseTargetContentTextData {
+	readonly mightBeForeignElement: boolean;
+	readonly injectedText: InjectedText | null;
+}
+
+export interface IMouseTargetContentText extends IBaseMouseTarget {
+	readonly type: MouseTargetType.CONTENT_TEXT;
+	readonly position: Position;
+	readonly range: Range;
+	readonly detail: IMouseTargetContentTextData;
+}
+
+export interface IMouseTargetContentEmptyData {
+	readonly isAfterLines: boolean;
+	readonly horizontalDistanceToText?: number;
+}
+
+export interface IMouseTargetContentEmpty extends IBaseMouseTarget {
+	readonly type: MouseTargetType.CONTENT_EMPTY;
+	readonly position: Position;
+	readonly range: Range;
+	readonly detail: IMouseTargetContentEmptyData;
+}
+
+export interface IMouseTargetContentWidget extends IBaseMouseTarget {
+	readonly type: MouseTargetType.CONTENT_WIDGET;
+	readonly position: null;
+	readonly range: null;
+	readonly detail: string;
+}
+
+export interface IMouseTargetOverlayWidget extends IBaseMouseTarget {
+	readonly type: MouseTargetType.OVERLAY_WIDGET;
+	readonly position: null;
+	readonly range: null;
+	readonly detail: string;
+}
+
+export interface IMouseTargetScrollbar extends IBaseMouseTarget {
+	readonly type: MouseTargetType.SCROLLBAR;
+	readonly position: Position;
+	readonly range: Range;
+}
+
+export interface IMouseTargetOverviewRuler extends IBaseMouseTarget {
+	readonly type: MouseTargetType.OVERVIEW_RULER;
+}
+
+export interface IMouseTargetOutsideEditor extends IBaseMouseTarget {
+	readonly type: MouseTargetType.OUTSIDE_EDITOR;
+	readonly outsidePosition: 'above' | 'below' | 'left' | 'right';
+	readonly outsideDistance: number;
+}
+
+export type IMouseTarget = IMouseTargetUnknown | IMouseTargetTextarea | IMouseTargetMargin | IMouseTargetViewZone | IMouseTargetContentText | IMouseTargetContentEmpty | IMouseTargetContentWidget | IMouseTargetOverlayWidget | IMouseTargetScrollbar | IMouseTargetOverviewRuler | IMouseTargetOutsideEditor;
 
 export interface IEditorMouseEvent {
-	readonly event: MouseEvent | PointerEvent;
-	readonly target?: EditorViewMouseTarget;
+	readonly event: IMouseEvent;
+	readonly target: IMouseTarget;
+}
+
+export interface IPartialEditorMouseEvent {
+	readonly event: IMouseEvent;
+	readonly target: IMouseTarget | null;
 }
 
 /** Browser-facing contract shared by editor services and contributions. */
@@ -27,8 +155,17 @@ export interface ICodeEditor {
 	readonly onDidCompositionEnd: Event<void>;
 	readonly onDidType: Event<string>;
 	readonly onDidPaste: Event<IClipboardPasteEvent>;
+	readonly onMouseUp: Event<IEditorMouseEvent>;
+	readonly onMouseDown: Event<IEditorMouseEvent>;
+	readonly onMouseDrag: Event<IEditorMouseEvent>;
+	readonly onMouseDrop: Event<IPartialEditorMouseEvent>;
+	readonly onMouseDropCanceled: Event<void>;
+	readonly onContextMenu: Event<IEditorMouseEvent>;
 	readonly onMouseMove: Event<IEditorMouseEvent>;
-	readonly onMouseLeave: Event<IEditorMouseEvent>;
+	readonly onMouseLeave: Event<IPartialEditorMouseEvent>;
+	readonly onMouseWheel: Event<IMouseWheelEvent>;
+	readonly onKeyUp: Event<IKeyboardEvent>;
+	readonly onKeyDown: Event<IKeyboardEvent>;
 	readonly inComposition: boolean;
 	getId(): string;
 	focus(): void;

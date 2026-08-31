@@ -20,6 +20,7 @@ export class EditorTextAreaInput extends Disposable implements ITextAreaWrapper 
 	private readonly inputEmitter = this._register(new Emitter<InputEvent>());
 	private readonly selectEmitter = this._register(new Emitter<void>());
 	private readonly keydownEmitter = this._register(new Emitter<KeyboardEvent>());
+	private readonly keyupEmitter = this._register(new Emitter<KeyboardEvent>());
 	private readonly compositionStartEmitter = this._register(new Emitter<EditContextCompositionEvent>());
 	private readonly compositionUpdateEmitter = this._register(new Emitter<EditContextCompositionEvent>());
 	private readonly compositionEndEmitter = this._register(new Emitter<EditContextCompositionEvent>());
@@ -37,6 +38,7 @@ export class EditorTextAreaInput extends Disposable implements ITextAreaWrapper 
 	readonly onDidInput: Event<InputEvent> = this.inputEmitter.event;
 	readonly onDidSelect: Event<void> = this.selectEmitter.event;
 	readonly onDidKeydown: Event<KeyboardEvent> = this.keydownEmitter.event;
+	readonly onDidKeyup: Event<KeyboardEvent> = this.keyupEmitter.event;
 	readonly onDidCompositionStart: Event<EditContextCompositionEvent> = this.compositionStartEmitter.event;
 	readonly onDidCompositionUpdate: Event<EditContextCompositionEvent> = this.compositionUpdateEmitter.event;
 	readonly onDidCompositionEnd: Event<EditContextCompositionEvent> = this.compositionEndEmitter.event;
@@ -98,6 +100,11 @@ export class EditorTextAreaInput extends Disposable implements ITextAreaWrapper 
 			this.element,
 			"keydown",
 			event => this.keydownEmitter.fire(event),
+		));
+		this._register(addDisposableListener<KeyboardEvent>(
+			this.element,
+			'keyup',
+			event => this.keyupEmitter.fire(event),
 		));
 	}
 

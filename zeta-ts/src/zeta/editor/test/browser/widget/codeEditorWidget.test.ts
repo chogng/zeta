@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { StandardMouseEvent } from '../../../../base/browser/mouseEvent.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { MouseTargetType, type IMouseTarget } from '../../../browser/editorBrowser.js';
+import { NavigationCommandRevealType } from '../../../browser/coreCommands.js';
+import { ViewUserInputEvents } from '../../../browser/view/viewUserInputEvents.js';
+import { type ICoordinatesConverter } from '../../../common/coordinatesConverter.js';
 import type { CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
@@ -60,6 +65,132 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(editor.element.isConnected, false);
 	assert.equal(model.getText(), "alpha");
 	assert.throws(() => editor.selections.textModel, /already disposed/);
+	dom.window.close();
+});
+
+test('ViewUserInputEvents converts view targets once and CodeEditorWidget publishes the shared event', () => {
+	const converter: ICoordinatesConverter = {
+		convertViewPositionToModelPosition: position => new Position(position.lineNumber + 10, position.column + 20),
+		convertViewRangeToModelRange: range => new Range(range.startLineNumber + 10, range.startColumn + 20, range.endLineNumber + 10, range.endColumn + 20),
+		validateViewPosition: position => position,
+		validateViewRange: range => range,
+		convertModelPositionToViewPosition: position => position,
+		convertModelRangeToViewRange: range => range,
+		modelPositionIsVisible: () => true,
+		getModelLineViewLineCount: () => 1,
+		getViewLineNumberOfModelPosition: lineNumber => lineNumber,
+	};
+	const viewZone: IMouseTarget = {
+		type: MouseTargetType.CONTENT_VIEW_ZONE,
+		element: null,
+		mouseColumn: 3,
+		position: new Position(2, 3),
+		range: new Range(2, 3, 2, 4),
+		detail: {
+			viewZoneId: 'zone',
+			positionBefore: new Position(1, 2),
+			positionAfter: new Position(3, 4),
+			position: new Position(2, 3),
+			afterLineNumber: 2,
+		},
+	};
+
+	assert.deepEqual(ViewUserInputEvents.convertViewToModelMouseTarget(viewZone, converter), {
+		...viewZone,
+		position: new Position(12, 23),
+		range: new Range(12, 23, 12, 24),
+		detail: {
+			viewZoneId: 'zone',
+			positionBefore: new Position(11, 22),
+			positionAfter: new Position(13, 24),
+			position: new Position(12, 23),
+			afterLineNumber: 12,
+		},
+	});
+
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	const editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	editor.layout({ width: 240, height: 40 });
+	editor.element.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON: () => ({}) });
+	let received: Parameters<Parameters<typeof editor.onMouseMove>[0]>[0] | undefined;
+	let releasedKey: string | undefined;
+	let dropped = false;
+	using listener = editor.onMouseMove(event => received = event);
+	using keyListener = editor.onKeyUp(event => releasedKey = event.key);
+	using dropListener = editor.onMouseDrop(event => dropped = event.target !== null);
+	const browserEvent = new dom.window.MouseEvent('mousemove', { bubbles: true, clientX: 80, clientY: 10 });
+	editor.element.dispatchEvent(browserEvent);
+	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+	editor.element.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, clientX: 80, clientY: 10 }) as unknown as DragEvent);
+
+	assert.ok(received);
+	assert.ok(received.event instanceof StandardMouseEvent);
+	assert.strictEqual(received.event.browserEvent, browserEvent);
+	assert.equal(received.target.type, MouseTargetType.CONTENT_TEXT);
+	assert.equal(received.target.position?.lineNumber, 1);
+	assert.equal(releasedKey, 'a');
+	assert.equal(dropped, true);
+	editor.dispose();
+	dom.window.close();
+});
+
+test('ViewController owns mouse selection policy for pointer dispatch', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha beta\nsecond\nthird');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	editor.layout({ width: 240, height: 60 });
+	editor.element.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 60, width: 240, height: 60, toJSON: () => ({}) });
+	editor.element.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 80, clientY: 25 }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 80, clientY: 25 }));
+	assert.equal(editor.getPosition()?.lineNumber, 2);
+
+	const dispatch = (position: Position, options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean } = {}) => editor.view.dispatchMouse({
+		position,
+		mouseColumn: position.column,
+		revealType: NavigationCommandRevealType.None,
+		startedOnLineNumbers: options.lineNumbers ?? false,
+		inSelectionMode: options.selecting ?? false,
+		mouseDownCount: options.count ?? 1,
+		altKey: options.altKey ?? false,
+		ctrlKey: false,
+		metaKey: false,
+		shiftKey: false,
+		leftButton: true,
+		middleButton: false,
+		onInjectedText: false,
+	});
+
+	dispatch(new Position(1, 2));
+	dispatch(new Position(2, 4), { selecting: true });
+	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(1, 2), new Position(2, 4)));
+
+	dispatch(new Position(1, 3), { count: 2 });
+	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(1, 1), new Position(1, 6)));
+
+	dispatch(new Position(2, 2), { lineNumbers: true });
+	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(2, 1), new Position(3, 1)));
+
+	editor.setSelection(Selection.fromPositions(new Position(1, 1)));
+	dispatch(new Position(3, 2), { altKey: true });
+	assert.deepEqual(editor.getSelections(), [
+		Selection.fromPositions(new Position(3, 2)),
+		Selection.fromPositions(new Position(1, 1)),
+	]);
 	dom.window.close();
 });
 

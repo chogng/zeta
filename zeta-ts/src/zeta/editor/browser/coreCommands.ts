@@ -10,6 +10,12 @@ export const EditorCoreCommandId = Object.freeze({
 	selectAll: "editor.action.selectAll",
 });
 
+export const enum NavigationCommandRevealType {
+	Regular = 0,
+	Minimal = 1,
+	None = 2,
+}
+
 export interface CoreTextEditorCommandContext {
 	readonly model: TextModel;
 	readonly viewport: View;

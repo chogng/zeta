@@ -1,94 +1,61 @@
 import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
-import { type Position } from '../../common/core/position.js';
-import { type Range } from '../../common/core/range.js';
-import { EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
+import { type IMouseWheelEvent } from '../../../base/browser/mouseEvent.js';
+import { type ICoordinatesConverter } from '../../common/coordinatesConverter.js';
+import { Position } from '../../common/core/position.js';
+import { type IEditorMouseEvent, type IMouseTarget, type IMouseTargetViewZoneData, type IPartialEditorMouseEvent, MouseTargetType } from '../editorBrowser.js';
 
-/** Callback shape used by the view/input bridge, matching VS Code's boundary. */
 export interface EventCallback<T> {
 	(event: T): void;
 }
 
-/** Browser-owned regions are kept distinct from common-layer hit-test targets. */
-export type EditorViewMouseTargetKind =
-	| EditorHitTargetKind
-	| 'lineNumber'
-	| 'gutterDecoration'
-	| 'widget'
-	| 'scrollbar'
-	| 'viewZone';
-
-/** Mouse target exposed by the browser view without depending on controller policy. */
-export interface EditorViewMouseTarget {
-	readonly kind: EditorViewMouseTargetKind;
-	readonly position?: Position;
-	readonly range?: Range;
-	readonly element?: Element;
-	readonly detail?: unknown;
-}
-
-/** A mouse event whose target has already been resolved by the browser view. */
-export interface EditorViewMouseEvent {
-	readonly event: MouseEvent | PointerEvent;
-	readonly target?: EditorViewMouseTarget;
-}
-
-/** Events such as leave/drop may omit a semantic target. */
-export type EditorViewPartialMouseEvent = EditorViewMouseEvent;
-
-/**
- * Transport between browser view input producers and editor-facing consumers.
- *
- * VS Code performs view-to-model coordinate conversion here. Stanza's hit-test
- * contract already returns model-relative Position values, so this class
- * preserves that contract and only isolates the target object at the boundary.
- * It does not own pointer gestures, selection, editing, or drag/drop policy.
- */
 export class ViewUserInputEvents {
 	public onKeyDown: EventCallback<IKeyboardEvent> | null = null;
-	public onKeyUp: EventCallback<KeyboardEvent> | null = null;
-	public onContextMenu: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseMove: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseLeave: EventCallback<EditorViewPartialMouseEvent> | null = null;
-	public onMouseDown: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseUp: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseDrag: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseDrop: EventCallback<EditorViewPartialMouseEvent> | null = null;
+	public onKeyUp: EventCallback<IKeyboardEvent> | null = null;
+	public onContextMenu: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseMove: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseLeave: EventCallback<IPartialEditorMouseEvent> | null = null;
+	public onMouseDown: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseUp: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseDrag: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseDrop: EventCallback<IPartialEditorMouseEvent> | null = null;
 	public onMouseDropCanceled: EventCallback<void> | null = null;
-	public onMouseWheel: EventCallback<WheelEvent> | null = null;
+	public onMouseWheel: EventCallback<IMouseWheelEvent> | null = null;
+
+	constructor(private readonly coordinatesConverter: ICoordinatesConverter) {}
 
 	public emitKeyDown(event: IKeyboardEvent): void {
 		this.onKeyDown?.(event);
 	}
 
-	public emitKeyUp(event: KeyboardEvent): void {
+	public emitKeyUp(event: IKeyboardEvent): void {
 		this.onKeyUp?.(event);
 	}
 
-	public emitContextMenu(event: EditorViewMouseEvent): void {
+	public emitContextMenu(event: IEditorMouseEvent): void {
 		this.onContextMenu?.(this.convertViewToModelMouseEvent(event));
 	}
 
-	public emitMouseMove(event: EditorViewMouseEvent): void {
+	public emitMouseMove(event: IEditorMouseEvent): void {
 		this.onMouseMove?.(this.convertViewToModelMouseEvent(event));
 	}
 
-	public emitMouseLeave(event: EditorViewPartialMouseEvent): void {
+	public emitMouseLeave(event: IPartialEditorMouseEvent): void {
 		this.onMouseLeave?.(this.convertViewToModelMouseEvent(event));
 	}
 
-	public emitMouseDown(event: EditorViewMouseEvent): void {
+	public emitMouseDown(event: IEditorMouseEvent): void {
 		this.onMouseDown?.(this.convertViewToModelMouseEvent(event));
 	}
 
-	public emitMouseUp(event: EditorViewMouseEvent): void {
+	public emitMouseUp(event: IEditorMouseEvent): void {
 		this.onMouseUp?.(this.convertViewToModelMouseEvent(event));
 	}
 
-	public emitMouseDrag(event: EditorViewMouseEvent): void {
+	public emitMouseDrag(event: IEditorMouseEvent): void {
 		this.onMouseDrag?.(this.convertViewToModelMouseEvent(event));
 	}
 
-	public emitMouseDrop(event: EditorViewPartialMouseEvent): void {
+	public emitMouseDrop(event: IPartialEditorMouseEvent): void {
 		this.onMouseDrop?.(this.convertViewToModelMouseEvent(event));
 	}
 
@@ -96,15 +63,43 @@ export class ViewUserInputEvents {
 		this.onMouseDropCanceled?.();
 	}
 
-	public emitMouseWheel(event: WheelEvent): void {
+	public emitMouseWheel(event: IMouseWheelEvent): void {
 		this.onMouseWheel?.(event);
 	}
 
-	private convertViewToModelMouseEvent<T extends EditorViewMouseEvent>(event: T): T {
-		if (!event.target) return event;
-		return Object.freeze({
-			...event,
-			target: Object.freeze({ ...event.target }),
-		}) as T;
+	private convertViewToModelMouseEvent(event: IEditorMouseEvent): IEditorMouseEvent;
+	private convertViewToModelMouseEvent(event: IPartialEditorMouseEvent): IPartialEditorMouseEvent;
+	private convertViewToModelMouseEvent(event: IEditorMouseEvent | IPartialEditorMouseEvent): IEditorMouseEvent | IPartialEditorMouseEvent {
+		return event.target === null
+			? event
+			: { event: event.event, target: this.convertViewToModelMouseTarget(event.target) };
+	}
+
+	private convertViewToModelMouseTarget(target: IMouseTarget): IMouseTarget {
+		return ViewUserInputEvents.convertViewToModelMouseTarget(target, this.coordinatesConverter);
+	}
+
+	public static convertViewToModelMouseTarget(target: IMouseTarget, coordinatesConverter: ICoordinatesConverter): IMouseTarget {
+		const position = target.position ? coordinatesConverter.convertViewPositionToModelPosition(target.position) : null;
+		const range = target.range ? coordinatesConverter.convertViewRangeToModelRange(target.range) : null;
+		if (target.type === MouseTargetType.GUTTER_VIEW_ZONE || target.type === MouseTargetType.CONTENT_VIEW_ZONE) {
+			return {
+				...target,
+				position: position!,
+				range: range!,
+				detail: this.convertViewToModelViewZoneData(target.detail, coordinatesConverter),
+			};
+		}
+		return { ...target, position, range } as IMouseTarget;
+	}
+
+	private static convertViewToModelViewZoneData(data: IMouseTargetViewZoneData, coordinatesConverter: ICoordinatesConverter): IMouseTargetViewZoneData {
+		return {
+			viewZoneId: data.viewZoneId,
+			positionBefore: data.positionBefore ? coordinatesConverter.convertViewPositionToModelPosition(data.positionBefore) : null,
+			positionAfter: data.positionAfter ? coordinatesConverter.convertViewPositionToModelPosition(data.positionAfter) : null,
+			position: coordinatesConverter.convertViewPositionToModelPosition(data.position),
+			afterLineNumber: coordinatesConverter.convertViewPositionToModelPosition(new Position(data.afterLineNumber, 1)).lineNumber,
+		};
 	}
 }

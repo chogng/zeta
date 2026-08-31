@@ -1,4 +1,6 @@
-import { addDisposableListener, getClientArea, isHTMLElement } from "../../../../base/browser/dom.js";
+import { getClientArea, isHTMLElement } from "../../../../base/browser/dom.js";
+import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
@@ -10,7 +12,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration } from '../../../common/model.js';
 import { type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
 import { type ICommand, type ICodeEditorViewState, type IEditorDecorationsCollection, type ScrollType } from '../../../common/editorCommon.js';
-import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IOverlayWidget, IViewZoneChangeAccessor } from '../../editorBrowser.js';
+import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IOverlayWidget, IPartialEditorMouseEvent, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { View, type EditorViewportOptions } from "../../view.js";
 import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
 import { MouseHandler } from "../../controller/mouseHandler.js";
@@ -127,6 +129,17 @@ let decorationOwnerPool = 0;
  */
 export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly disposeEmitter = this._register(new Emitter<void>());
+	private readonly keyDownEmitter = this._register(new Emitter<IKeyboardEvent>());
+	private readonly keyUpEmitter = this._register(new Emitter<IKeyboardEvent>());
+	private readonly contextMenuEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseMoveEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseLeaveEmitter = this._register(new Emitter<IPartialEditorMouseEvent>());
+	private readonly mouseDownEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseUpEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseDragEmitter = this._register(new Emitter<IEditorMouseEvent>());
+	private readonly mouseDropEmitter = this._register(new Emitter<IPartialEditorMouseEvent>());
+	private readonly mouseDropCanceledEmitter = this._register(new Emitter<void>());
+	private readonly mouseWheelEmitter = this._register(new Emitter<IMouseWheelEvent>());
 	readonly onDidDispose = this.disposeEmitter.event;
 	readonly onDidChange: Event<void>;
 	readonly onDidAttemptReadOnlyEdit: Event<void>;
@@ -136,8 +149,17 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	readonly onDidCompositionEnd: Event<void>;
 	readonly onDidType: Event<string>;
 	readonly onDidPaste: Event<IClipboardPasteEvent>;
-	readonly onMouseMove: Event<IEditorMouseEvent>;
-	readonly onMouseLeave: Event<IEditorMouseEvent>;
+	readonly onKeyDown = this.keyDownEmitter.event;
+	readonly onKeyUp = this.keyUpEmitter.event;
+	readonly onContextMenu = this.contextMenuEmitter.event;
+	readonly onMouseMove = this.mouseMoveEmitter.event;
+	readonly onMouseLeave = this.mouseLeaveEmitter.event;
+	readonly onMouseDown = this.mouseDownEmitter.event;
+	readonly onMouseUp = this.mouseUpEmitter.event;
+	readonly onMouseDrag = this.mouseDragEmitter.event;
+	readonly onMouseDrop = this.mouseDropEmitter.event;
+	readonly onMouseDropCanceled = this.mouseDropCanceledEmitter.event;
+	readonly onMouseWheel = this.mouseWheelEmitter.event;
 	readonly selections: CursorsController;
 	readonly ownerId: string;
 	readonly view: ViewController;
@@ -302,15 +324,45 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				if (event.insertedText !== undefined) listener(event.insertedText);
 			});
 			this.onDidPaste = listener => this.view.editContext.onWillPaste(listener);
-			this.onMouseMove = listener => addDisposableListener<MouseEvent>(this.element, 'mousemove', event => listener({
-				event,
-				target: this.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY }),
+			this.userInputEvents = this.view.userInputEvents;
+			const handleKeyDown = (event: IKeyboardEvent): void => this.keyDownEmitter.fire(event);
+			const handleKeyUp = (event: IKeyboardEvent): void => this.keyUpEmitter.fire(event);
+			const handleContextMenu = (event: IEditorMouseEvent): void => this.contextMenuEmitter.fire(event);
+			const handleMouseMove = (event: IEditorMouseEvent): void => this.mouseMoveEmitter.fire(event);
+			const handleMouseLeave = (event: IPartialEditorMouseEvent): void => this.mouseLeaveEmitter.fire(event);
+			const handleMouseDown = (event: IEditorMouseEvent): void => this.mouseDownEmitter.fire(event);
+			const handleMouseUp = (event: IEditorMouseEvent): void => this.mouseUpEmitter.fire(event);
+			const handleMouseDrag = (event: IEditorMouseEvent): void => this.mouseDragEmitter.fire(event);
+			const handleMouseDrop = (event: IPartialEditorMouseEvent): void => this.mouseDropEmitter.fire(event);
+			const handleMouseDropCanceled = (): void => this.mouseDropCanceledEmitter.fire();
+			const handleMouseWheel = (event: IMouseWheelEvent): void => this.mouseWheelEmitter.fire(event);
+			this.userInputEvents.onKeyDown = handleKeyDown;
+			this.userInputEvents.onKeyUp = handleKeyUp;
+			this.userInputEvents.onContextMenu = handleContextMenu;
+			this.userInputEvents.onMouseMove = handleMouseMove;
+			this.userInputEvents.onMouseLeave = handleMouseLeave;
+			this.userInputEvents.onMouseDown = handleMouseDown;
+			this.userInputEvents.onMouseUp = handleMouseUp;
+			this.userInputEvents.onMouseDrag = handleMouseDrag;
+			this.userInputEvents.onMouseDrop = handleMouseDrop;
+			this.userInputEvents.onMouseDropCanceled = handleMouseDropCanceled;
+			this.userInputEvents.onMouseWheel = handleMouseWheel;
+			this._register(toDisposable(() => {
+				if (this.userInputEvents.onKeyDown === handleKeyDown) this.userInputEvents.onKeyDown = null;
+				if (this.userInputEvents.onKeyUp === handleKeyUp) this.userInputEvents.onKeyUp = null;
+				if (this.userInputEvents.onContextMenu === handleContextMenu) this.userInputEvents.onContextMenu = null;
+				if (this.userInputEvents.onMouseMove === handleMouseMove) this.userInputEvents.onMouseMove = null;
+				if (this.userInputEvents.onMouseLeave === handleMouseLeave) this.userInputEvents.onMouseLeave = null;
+				if (this.userInputEvents.onMouseDown === handleMouseDown) this.userInputEvents.onMouseDown = null;
+				if (this.userInputEvents.onMouseUp === handleMouseUp) this.userInputEvents.onMouseUp = null;
+				if (this.userInputEvents.onMouseDrag === handleMouseDrag) this.userInputEvents.onMouseDrag = null;
+				if (this.userInputEvents.onMouseDrop === handleMouseDrop) this.userInputEvents.onMouseDrop = null;
+				if (this.userInputEvents.onMouseDropCanceled === handleMouseDropCanceled) this.userInputEvents.onMouseDropCanceled = null;
+				if (this.userInputEvents.onMouseWheel === handleMouseWheel) this.userInputEvents.onMouseWheel = null;
 			}));
-			this.onMouseLeave = listener => addDisposableListener<MouseEvent>(this.element, 'mouseleave', event => listener({ event }));
 			this._register(toDisposable(() => {
 				if (!options.model.isDisposed()) options.model.removeAllDecorationsWithOwnerId(this.decorationOwnerId);
 			}));
-			this.userInputEvents = this.view.userInputEvents;
 			this._register(observableCodeEditor(this));
 			this.contributions = this._register(new CodeEditorContributions());
 			this.instantiationService = this._register(options.instantiationService?.createChild() ?? new ServiceContainer());
@@ -327,7 +379,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				stickyTabStops: EditorOptions.stickyTabStops.validate(options.stickyTabStops) as boolean,
 				tabSize: resolveEditorIndentationOptions(options.indentation).tabSize,
 			}));
-			this._register(new MouseHandler(this.viewport, this.selections));
+			this._register(new MouseHandler(this.viewport, this.view));
 			if (options.codeEditorService) {
 				options.codeEditorService.addCodeEditor(this);
 				this._register(toDisposable(() => options.codeEditorService?.removeCodeEditor(this)));

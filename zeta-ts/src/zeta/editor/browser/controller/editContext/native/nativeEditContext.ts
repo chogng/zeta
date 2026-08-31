@@ -74,6 +74,7 @@ export class BrowserEditContext extends EditorInputContext {
 	private readonly textFormatUpdateEmitter = this._register(new Emitter<EditContextTextFormatUpdate>());
 	private readonly selectEmitter = this._register(new Emitter<void>());
 	private readonly keydownEmitter = this._register(new Emitter<KeyboardEvent>());
+	private readonly keyupEmitter = this._register(new Emitter<KeyboardEvent>());
 	private readonly compositionStartEmitter = this._register(new Emitter<EditContextCompositionEvent>());
 	private readonly compositionUpdateEmitter = this._register(new Emitter<EditContextCompositionEvent>());
 	private readonly compositionEndEmitter = this._register(new Emitter<EditContextCompositionEvent>());
@@ -106,6 +107,7 @@ export class BrowserEditContext extends EditorInputContext {
 	readonly onDidTextFormatUpdate: Event<EditContextTextFormatUpdate> = this.textFormatUpdateEmitter.event;
 	readonly onDidSelect: Event<void> = this.selectEmitter.event;
 	readonly onDidKeydown: Event<KeyboardEvent> = this.keydownEmitter.event;
+	readonly onDidKeyup: Event<KeyboardEvent> = this.keyupEmitter.event;
 	readonly onDidCompositionStart: Event<EditContextCompositionEvent> = this.compositionStartEmitter.event;
 	readonly onDidCompositionUpdate: Event<EditContextCompositionEvent> = this.compositionUpdateEmitter.event;
 	readonly onDidCompositionEnd: Event<EditContextCompositionEvent> = this.compositionEndEmitter.event;
@@ -210,9 +212,19 @@ export class BrowserEditContext extends EditorInputContext {
 			event => this.keydownEmitter.fire(event),
 		));
 		this._register(addDisposableListener<KeyboardEvent>(
+			this.domNode,
+			'keyup',
+			event => this.keyupEmitter.fire(event),
+		));
+		this._register(addDisposableListener<KeyboardEvent>(
 			this.imeTextArea,
 			"keydown",
 			event => this.keydownEmitter.fire(event),
+		));
+		this._register(addDisposableListener<KeyboardEvent>(
+			this.imeTextArea,
+			'keyup',
+			event => this.keyupEmitter.fire(event),
 		));
 		this._register(addDisposableListener(this.imeTextArea, "blur", () => {
 			if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.domNode) {

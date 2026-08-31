@@ -1,10 +1,13 @@
 import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
+import { type IMouseWheelEvent } from '../../../base/browser/mouseEvent.js';
 import { addDisposableListener, getClientArea } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
+import { isLinux, operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
-import { EditorLineWrapping } from '../../common/config/editorOptions.js';
+import { EditorLineWrapping, EditorOption } from '../../common/config/editorOptions.js';
+import { ColumnSelection } from '../../common/cursor/cursorColumnSelection.js';
+import { CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations } from '../../common/cursor/cursorMoveOperations.js';
 import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
 import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
@@ -12,7 +15,7 @@ import { type CursorsController } from '../../common/cursor/cursor.js';
 import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../common/core/selection.js';
-import { type Position } from '../../common/core/position.js';
+import { Position } from '../../common/core/position.js';
 import { type IDimension } from '../../common/core/2d/dimension.js';
 import { Range } from '../../common/core/range.js';
 import { type TextModelChange } from '../../common/core/textChange.js';
@@ -23,12 +26,13 @@ import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
 import { type View } from '../view.js';
+import { NavigationCommandRevealType } from '../coreCommands.js';
 import { type CompositionController, type EditContextCharacterBounds, type EditContextOptions, type EditContextTextUpdate, type EditorInputContext } from '../controller/editContext/editContext.js';
 import { createNativeEditContext, supportsNativeEditContext } from '../controller/editContext/native/editContextFactory.js';
 import { EditorTextAreaInputContext } from '../controller/editContext/textArea/textAreaEditContext.js';
-import { ViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
+import { ViewUserInputEvents } from './viewUserInputEvents.js';
 import { type IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
-import { type IEditorAriaOptions } from '../editorBrowser.js';
+import { type IEditorAriaOptions, type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editorBrowser.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
 
 export interface EditorCommandContext {
@@ -78,6 +82,38 @@ export interface ViewControllerOptions {
 	readonly userInputEvents?: ViewUserInputEvents;
 }
 
+export interface IMouseDispatchData {
+	position: Position;
+	mouseColumn: number;
+	revealType: NavigationCommandRevealType;
+	startedOnLineNumbers: boolean;
+	inSelectionMode: boolean;
+	mouseDownCount: number;
+	altKey: boolean;
+	ctrlKey: boolean;
+	metaKey: boolean;
+	shiftKey: boolean;
+	leftButton: boolean;
+	middleButton: boolean;
+	onInjectedText: boolean;
+}
+
+const enum MouseSelectionKind {
+	Character,
+	Word,
+	WholeLine,
+	ExtendToWord,
+	ExtendToLine,
+	Column,
+}
+
+interface MouseSelectionState {
+	readonly kind: MouseSelectionKind;
+	readonly anchorRange: Range;
+	readonly baseSelections: readonly Selection[] | undefined;
+	readonly toggleCandidateIndex: number | undefined;
+}
+
 /**
  * Routes semantic editor commands into common editing operations.
  *
@@ -100,6 +136,7 @@ export class ViewController extends Disposable {
 	readonly onWillTextUpdate: Event<EditorViewTextUpdateEvent>;
 	readonly onWillKeydown: Event<KeyboardEvent>;
 	private overtype = false;
+	private mouseSelection: MouseSelectionState | undefined;
 
 	readonly onDidChangeOvertype: Event<boolean> = this.didChangeOvertypeEmitter.event;
 	readonly onDidEdit: Event<EditorViewDidEditEvent> = this.didEditEmitter.event;
@@ -123,7 +160,7 @@ export class ViewController extends Disposable {
 			}
 			this.languageEditing = options.languageEditing;
 			this.wordPattern = options.wordPattern;
-			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents();
+			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents(viewport.coordinatesConverter);
 			this.ownerId = options.ownerId === undefined ? nextViewId() : validateOwnerId(options.ownerId);
 			this.editContext = this._register(createEditContext(viewport.element, {
 				ariaLabel: options.ariaLabel,
@@ -194,6 +231,128 @@ export class ViewController extends Disposable {
 
 	get hasExpandedSelections(): boolean {
 		return this.selectionController.selections.some(selection => !selection.isEmpty());
+	}
+
+	public setSelection(modelSelection: Selection): void {
+		this.viewport.textModel.validateRange(modelSelection);
+		this.selectionController.setSelections([modelSelection]);
+		this.viewport.revealPosition(modelSelection.getPosition());
+	}
+
+	public moveTo(viewPosition: Position, revealType: NavigationCommandRevealType): void {
+		const position = this.viewport.coordinatesConverter.convertViewPositionToModelPosition(viewPosition);
+		this.selectionController.setSelections([Selection.fromPositions(position)]);
+		this.revealMousePosition(position, revealType);
+	}
+
+	public dispatchMouse(data: IMouseDispatchData): void {
+		const position = this.viewport.coordinatesConverter.convertViewPositionToModelPosition(data.position);
+		if (data.inSelectionMode && this.mouseSelection) {
+			this.applyMouseSelection(this.mouseSelection, position, data.revealType);
+			return;
+		}
+
+		this.mouseSelection = undefined;
+		const options = this.viewport;
+		const selectionClipboard = isLinux && options.getOption(EditorOption.selectionClipboard);
+		if (data.middleButton && !selectionClipboard) {
+			if (!options.getOption(EditorOption.scrollOnMiddleClick)) {
+				this.beginMouseSelection(MouseSelectionKind.Column, position, data, false);
+			}
+			return;
+		}
+
+		const multiCursor = this.hasMultiCursorModifier(data);
+		if (data.startedOnLineNumbers) {
+			this.beginMouseSelection(data.shiftKey ? MouseSelectionKind.ExtendToLine : MouseSelectionKind.WholeLine, position, data, multiCursor);
+			return;
+		}
+		if (data.mouseDownCount >= 4) {
+			const model = this.viewport.textModel;
+			this.setSelection(Selection.fromPositions(model.positionAt(0), model.positionAt(model.length)));
+			return;
+		}
+		if (data.mouseDownCount === 3) {
+			this.beginMouseSelection(data.shiftKey ? MouseSelectionKind.ExtendToLine : MouseSelectionKind.WholeLine, position, data, multiCursor);
+			return;
+		}
+		if (data.mouseDownCount === 2) {
+			if (!data.onInjectedText) {
+				this.beginMouseSelection(data.shiftKey ? MouseSelectionKind.ExtendToWord : MouseSelectionKind.Word, position, data, multiCursor);
+			}
+			return;
+		}
+
+		if (multiCursor) {
+			if (this.hasNonMultiCursorModifier(data)) return;
+			this.beginMouseSelection(data.shiftKey ? MouseSelectionKind.Column : MouseSelectionKind.Character, position, data, !data.shiftKey);
+			return;
+		}
+		if (data.altKey || options.getOption(EditorOption.columnSelection)) {
+			this.beginMouseSelection(MouseSelectionKind.Column, position, data, false);
+			return;
+		}
+		this.beginMouseSelection(MouseSelectionKind.Character, position, data, false);
+	}
+
+	private beginMouseSelection(kind: MouseSelectionKind, position: Position, data: IMouseDispatchData, addSelection: boolean): void {
+		const primary = this.selectionController.selections[0]!;
+		const extend = data.shiftKey || data.inSelectionMode;
+		let anchorRange: Range;
+		switch (kind) {
+			case MouseSelectionKind.Word:
+				anchorRange = WordOperations.getWordSelectionRange(this.viewport.textModel, position, this.currentWordPattern);
+				break;
+			case MouseSelectionKind.WholeLine:
+				anchorRange = Range.fromPositions(lineStart(position.lineNumber));
+				break;
+			case MouseSelectionKind.ExtendToWord:
+			case MouseSelectionKind.ExtendToLine:
+				anchorRange = Range.fromPositions(primary.getSelectionStart());
+				break;
+			case MouseSelectionKind.Column:
+			case MouseSelectionKind.Character:
+				anchorRange = Range.fromPositions(extend ? primary.getSelectionStart() : position);
+				break;
+		}
+		const initialSelection = selectionForMouseTarget(kind, this.viewport.textModel, anchorRange, position, this.currentWordPattern);
+		const baseSelections = addSelection ? Object.freeze([...this.selectionController.selections]) : undefined;
+		this.mouseSelection = {
+			kind,
+			anchorRange,
+			baseSelections,
+			toggleCandidateIndex: baseSelections ? CursorMoveCommands.findPointerToggleCandidate(baseSelections, initialSelection) : undefined,
+		};
+		this.applyMouseSelection(this.mouseSelection, position, data.revealType);
+	}
+
+	private applyMouseSelection(state: MouseSelectionState, position: Position, revealType: NavigationCommandRevealType): void {
+		if (state.kind === MouseSelectionKind.Column) {
+			this.selectionController.setSelections(ColumnSelection.columnSelect(this.viewport.textModel, state.anchorRange.getStartPosition(), position));
+			this.revealMousePosition(position, revealType);
+			return;
+		}
+		const selection = selectionForMouseTarget(state.kind, this.viewport.textModel, state.anchorRange, position, this.currentWordPattern);
+		this.selectionController.setSelections(state.baseSelections
+			? CursorMoveCommands.combinePointerSelection(state.baseSelections, selection, state.toggleCandidateIndex)
+			: [selection]);
+		this.revealMousePosition(position, revealType);
+	}
+
+	private revealMousePosition(position: Position, revealType: NavigationCommandRevealType): void {
+		if (revealType !== NavigationCommandRevealType.None) this.viewport.revealPosition(position);
+	}
+
+	private hasMultiCursorModifier(data: IMouseDispatchData): boolean {
+		return data[this.viewport.getOption(EditorOption.multiCursorModifier)];
+	}
+
+	private hasNonMultiCursorModifier(data: IMouseDispatchData): boolean {
+		switch (this.viewport.getOption(EditorOption.multiCursorModifier)) {
+			case 'altKey': return data.ctrlKey || data.metaKey;
+			case 'ctrlKey': return data.altKey || data.metaKey;
+			case 'metaKey': return data.ctrlKey || data.altKey;
+		}
 	}
 
 	registerCommandTransformer(transformer: EditorCommandTransformer): IDisposable {
@@ -328,35 +487,35 @@ export class ViewController extends Disposable {
 		this.userInputEvents.emitKeyDown(event);
 	}
 
-	emitKeyUp(event: KeyboardEvent): void {
+	emitKeyUp(event: IKeyboardEvent): void {
 		this.userInputEvents.emitKeyUp(event);
 	}
 
-	emitContextMenu(event: EditorViewMouseEvent): void {
+	emitContextMenu(event: IEditorMouseEvent): void {
 		this.userInputEvents.emitContextMenu(event);
 	}
 
-	emitMouseMove(event: EditorViewMouseEvent): void {
+	emitMouseMove(event: IEditorMouseEvent): void {
 		this.userInputEvents.emitMouseMove(event);
 	}
 
-	emitMouseLeave(event: EditorViewPartialMouseEvent): void {
+	emitMouseLeave(event: IPartialEditorMouseEvent): void {
 		this.userInputEvents.emitMouseLeave(event);
 	}
 
-	emitMouseDown(event: EditorViewMouseEvent): void {
+	emitMouseDown(event: IEditorMouseEvent): void {
 		this.userInputEvents.emitMouseDown(event);
 	}
 
-	emitMouseUp(event: EditorViewMouseEvent): void {
+	emitMouseUp(event: IEditorMouseEvent): void {
 		this.userInputEvents.emitMouseUp(event);
 	}
 
-	emitMouseDrag(event: EditorViewMouseEvent): void {
+	emitMouseDrag(event: IEditorMouseEvent): void {
 		this.userInputEvents.emitMouseDrag(event);
 	}
 
-	emitMouseDrop(event: EditorViewPartialMouseEvent): void {
+	emitMouseDrop(event: IPartialEditorMouseEvent): void {
 		this.userInputEvents.emitMouseDrop(event);
 	}
 
@@ -364,7 +523,7 @@ export class ViewController extends Disposable {
 		this.userInputEvents.emitMouseDropCanceled();
 	}
 
-	emitMouseWheel(event: WheelEvent): void {
+	emitMouseWheel(event: IMouseWheelEvent): void {
 		this.userInputEvents.emitMouseWheel(event);
 	}
 
@@ -394,6 +553,58 @@ export class ViewController extends Disposable {
 			height: start.height,
 		});
 	}
+}
+
+function selectionForMouseTarget(kind: MouseSelectionKind, model: TextModel, anchorRange: Range, position: Position, wordPattern: RegExp | undefined): Selection {
+	const anchor = anchorRange.getStartPosition();
+	switch (kind) {
+		case MouseSelectionKind.Character:
+			return Selection.fromPositions(anchor, position);
+		case MouseSelectionKind.Column:
+			return Selection.fromPositions(anchor);
+		case MouseSelectionKind.Word:
+			return wordSelection(model, anchorRange, position, wordPattern);
+		case MouseSelectionKind.WholeLine:
+			return wholeLineSelection(model, anchor.lineNumber, position.lineNumber);
+		case MouseSelectionKind.ExtendToWord:
+			return extendSelectionToWord(model, anchor, position, wordPattern);
+		case MouseSelectionKind.ExtendToLine:
+			return extendSelectionToLine(model, anchor, position.lineNumber);
+	}
+}
+
+function wordSelection(model: TextModel, anchorRange: Range, position: Position, wordPattern: RegExp | undefined): Selection {
+	const activeRange = WordOperations.getWordSelectionRange(model, position, wordPattern);
+	return Position.compare(activeRange.getStartPosition(), anchorRange.getStartPosition()) < 0
+		? Selection.fromPositions(anchorRange.getEndPosition(), activeRange.getStartPosition())
+		: Selection.fromPositions(anchorRange.getStartPosition(), activeRange.getEndPosition());
+}
+
+function extendSelectionToWord(model: TextModel, anchor: Position, position: Position, wordPattern: RegExp | undefined): Selection {
+	const range = WordOperations.getWordSelectionRange(model, position, wordPattern);
+	const active = Position.compare(range.getStartPosition(), anchor) < 0 ? range.getStartPosition() : range.getEndPosition();
+	return Selection.fromPositions(anchor, active);
+}
+
+function wholeLineSelection(model: TextModel, anchorLineNumber: number, activeLineNumber: number): Selection {
+	return activeLineNumber >= anchorLineNumber
+		? Selection.fromPositions(lineStart(anchorLineNumber), lineEndExclusive(model, activeLineNumber))
+		: Selection.fromPositions(lineEndExclusive(model, anchorLineNumber), lineStart(activeLineNumber));
+}
+
+function extendSelectionToLine(model: TextModel, anchor: Position, activeLineNumber: number): Selection {
+	const active = activeLineNumber < anchor.lineNumber ? lineStart(activeLineNumber) : lineEndExclusive(model, activeLineNumber);
+	return Selection.fromPositions(anchor, active);
+}
+
+function lineStart(lineNumber: number): Position {
+	return new Position(lineNumber, 1);
+}
+
+function lineEndExclusive(model: TextModel, lineNumber: number): Position {
+	return lineNumber < model.lineCount
+		? new Position(lineNumber + 1, 1)
+		: new Position(lineNumber, model.getLineContent(lineNumber).length + 1);
 }
 
 function createEditContext(container: HTMLElement, options: EditContextOptions): EditorInputContext {
