@@ -4,7 +4,7 @@ use crate::ui::presentation::UiScene;
 use crate::window::PhysicalExtent;
 use crate::window::RenderWindow;
 
-use super::ui_renderer::{UiRenderError, UiRenderer, UiViewport};
+use super::ui_renderer::{CLIP_FORMAT, UiRenderError, UiRenderer, UiViewport};
 use super::viewport::{SurfaceExtent, Viewport};
 
 const CLEAR_COLOR: wgpu::Color = wgpu::Color {
@@ -42,6 +42,8 @@ pub struct WgpuRenderer {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     viewport: Viewport,
+    clip_texture: wgpu::Texture,
+    clip_view: wgpu::TextureView,
     ui_renderer: UiRenderer,
 }
 
@@ -97,6 +99,7 @@ impl WgpuRenderer {
             .get_default_config(&adapter, extent.width, extent.height)
             .ok_or(WgpuRendererError::UnsupportedSurface)?;
         surface.configure(&device, &config);
+        let (clip_texture, clip_view) = create_clip_target(&device, config.width, config.height);
         let ui_renderer = UiRenderer::new(&device, &queue, config.format);
 
         Ok(Self {
@@ -107,6 +110,8 @@ impl WgpuRenderer {
             queue,
             config,
             viewport,
+            clip_texture,
+            clip_view,
             ui_renderer,
         })
     }
@@ -198,7 +203,14 @@ impl WgpuRenderer {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.clip_view,
+                    depth_ops: None,
+                    stencil_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
@@ -232,7 +244,32 @@ impl WgpuRenderer {
         self.config.width = extent.width;
         self.config.height = extent.height;
         self.surface.configure(&self.device, &self.config);
+        (self.clip_texture, self.clip_view) =
+            create_clip_target(&self.device, self.config.width, self.config.height);
     }
+}
+
+fn create_clip_target(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+) -> (wgpu::Texture, wgpu::TextureView) {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("zeta-ui rounded clip target"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: CLIP_FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    (texture, view)
 }
 
 fn wgpu_color(color: Color) -> wgpu::Color {

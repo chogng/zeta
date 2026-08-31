@@ -6,6 +6,7 @@ use crate::PaneBinding;
 use anyhow::Result;
 use anyhow::anyhow;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
+use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use zeta_app_server_protocol::protocol::fs::FsGetMetadataResult;
@@ -53,7 +54,7 @@ impl WorkbenchApplication {
 
     /// Mounts the Session Pane selected by Workbench. Tab selection itself stays in Workbench.
     pub(crate) fn mount_session_pane(&mut self, key: &TabInputKey) {
-        let Some(tab) = self.workbench.workbench().tab_part().input(key) else {
+        let Some(tab) = self.workbench.workbench().sidebar_part().input(key) else {
             return;
         };
         let Some(session_id) = tab.session_id().cloned() else {
@@ -79,23 +80,48 @@ impl WorkbenchApplication {
     }
 
     fn upsert_session_tab(&mut self, session: &Session) {
-        let cwd_label = self.env.working_directory_label().to_owned();
+        let dirs = self.session_dirs(session);
         let _ = self.workbench.upsert_session_input_with(
-            crate::session_tab_input(session, &cwd_label),
+            crate::session_tab_input(session, dirs),
             PaneInput::terminal(session.session_id.clone()),
             PaneBinding::new,
         );
     }
 
     fn upsert_session_catalog(&mut self, sessions: &[Session]) {
-        let cwd_label = self.env.working_directory_label().to_owned();
         for session in sessions {
+            let dirs = self.session_dirs(session);
             self.workbench.upsert_catalog_session_input_with(
-                crate::session_tab_input(session, &cwd_label),
+                crate::session_tab_input(session, dirs),
                 PaneInput::terminal(session.session_id.clone()),
                 PaneBinding::new,
             );
         }
+    }
+
+    fn session_dirs(&mut self, session: &Session) -> Vec<PathBuf> {
+        let mut dirs = vec![self.env.working_directory().to_path_buf()];
+        let Some(client) = self.app_server_client.as_mut() else {
+            return dirs;
+        };
+        match client.list_session_dirs(SessionDirListParams {
+            session_id: session.session_id.clone(),
+        }) {
+            Ok(result) => {
+                for dir in result.dirs {
+                    if !dirs.contains(&dir.path) {
+                        dirs.push(dir.path);
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!(
+                    "could not read directories for Session {}: {error}",
+                    session.session_id
+                );
+            }
+        }
+        dirs
     }
 
     pub(crate) fn handle_session_runtime_event(&mut self, event: SessionRuntimeEvent) {

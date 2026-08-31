@@ -40,7 +40,7 @@ flowchart LR
 | private `zui::render/wgpu` | physical conversion、batch execution、resource cache、shader、submit、present | 产品 layout、identity、input、accessibility |
 | `zui::window` / `zui::input` private native integration | native window、keyboard/IME、chrome capability | scene、GPU pipeline、产品 reducer |
 | `zui::app` | event loop、backend 选择、window/renderer registry、resize/scale 与 retry orchestration | 产品领域状态、具体组件 |
-| `zeta-ui-components` | Button、ActionBar、TabList、ContextView 等通用控件 | scene/backend ownership、Workbench 或产品状态 |
+| `zeta-ui-components` | Button、RadioGroup、ActionBar、ContextView 等通用控件 | scene/backend ownership、Workbench 或产品状态 |
 | `zeta-workbench` | Workbench Tab/Pane 模型、布局、标题栏、Tab 导航、交互标识和界面状态 | Session、Terminal、Editor 等具体内容生命周期和命令执行 |
 | Product | Session、PTY、App Server、command 与 authoritative state transition | 直接依赖内部 platform/GPU 实现 |
 

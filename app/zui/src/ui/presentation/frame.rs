@@ -342,6 +342,43 @@ impl<'frame, 'animation> ComponentContext<'frame, 'animation> {
         result
     }
 
+    /// Clips child paint to a rounded rectangle while preserving interaction ancestry.
+    pub fn with_rounded_clip<R>(
+        &mut self,
+        bounds: Rect,
+        corner_radii: crate::ui::foundation::CornerRadii,
+        draw: impl FnOnce(&mut ComponentContext<'_, '_>) -> R,
+    ) -> R {
+        let parent = self.interaction_parent;
+        let now = self.now;
+        let interaction = &mut *self.interaction;
+        let scene = &mut *self.scene;
+        let animation_bindings = self.animation_bindings.take();
+        let component_runtime = self.component_runtime.take();
+        let component_identity = self.component_identity;
+        let (result, animation_bindings, component_runtime) =
+            scene.with_rounded_clip(bounds, corner_radii, |scene| {
+                let mut context = ComponentContext {
+                    scene,
+                    interaction,
+                    interaction_parent: parent,
+                    animation_bindings,
+                    component_runtime,
+                    component_identity,
+                    now,
+                };
+                let result = draw(&mut context);
+                (
+                    result,
+                    context.animation_bindings,
+                    context.component_runtime,
+                )
+            });
+        self.animation_bindings = animation_bindings;
+        self.component_runtime = component_runtime;
+        result
+    }
+
     /// Runs custom paint and child composition under one component's inspection and interaction
     /// root without invoking that component's default [`Component::compose`] implementation.
     ///

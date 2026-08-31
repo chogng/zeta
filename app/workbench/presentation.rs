@@ -15,13 +15,13 @@ use zeta_settings::RemoteTunnelManager;
 use zeta_settings::RemoteTunnelManagerState;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore, TerminalMousePosition};
 use zeta_ui_components::{
-    InteractionRegion, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics, ScrollView,
-    ScrollbarPresentation,
+    Dialog, DialogIds, DialogStyle, InteractionRegion, Sash, SashOrientation, SashState, SashStyle,
+    ScrollMetrics, ScrollView, ScrollbarPresentation,
 };
 use zui::ui::{
-    Border, CaretVisibility, Color, CornerRadii, FontWeight, PaintRect, Rect, SceneCheckpoint,
-    SplitViewOrientation, SplitViewResizeSnapshot, TextBlock, TextInputLayoutEngine, TextStyle,
-    UiScene,
+    Border, BoxShadow, CaretVisibility, Color, CornerRadii, FontWeight, PaintRect, Rect,
+    SceneCheckpoint, Size, SplitViewOrientation, SplitViewResizeSnapshot, TextBlock,
+    TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::PaneBinding;
@@ -29,9 +29,9 @@ use crate::QuickAccess;
 use crate::SessionSearchState;
 use crate::{
     InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
-    PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerState, TabInput, TabInputKey, TabPart,
-    Titlebar, TitlebarInsets, mounted_tab_element_id, pane_group_element_id, tab_input_element_id,
-    workbench_tab_groups,
+    PaneSplitId, SidebarPart, SidebarView, TITLEBAR_HEIGHT, TabContainerState, TabInputKey,
+    Titlebar, TitlebarInsets, mounted_sidebar_item_id, pane_group_element_id,
+    sidebar_selected_item_id, sidebar_session_groups,
 };
 use crate::{
     MainSurfaceKind, SESSION_SEARCH_INPUT, TabContextMenu, TabContextMenuState, WINDOW,
@@ -79,11 +79,14 @@ use zui::ui::{
 use zui::window::WindowControlInsets;
 
 const COMPOSER_HEIGHT: f32 = 44.0;
+const SETTINGS_DIALOG_WIDTH: f32 = 960.0;
+const SETTINGS_DIALOG_HEIGHT: f32 = 640.0;
 
 pub const MAIN_SURFACE: ElementId = ElementId::scoped(1, 3);
 pub const TERMINAL_OUTPUT: ElementId = ElementId::scoped(1, 4);
 pub const TAB_CONTAINER_RESIZE_HANDLE: ElementId = ElementId::scoped(1, 16);
 pub const INSPECTOR_RESIZE_HANDLE: ElementId = ElementId::scoped(1, 51);
+pub const SETTINGS_DIALOG: ElementId = ElementId::scoped(1, 56);
 
 pub(crate) use crate::LogicalViewport;
 
@@ -288,8 +291,6 @@ struct WorkbenchBaseCheckpoint {
     scene: SceneCheckpoint,
     interaction: InteractionFrameCheckpoint,
     ime_cursor_area: Option<Rect>,
-    remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
-    remote_connection_manager_list_viewport: Option<Rect>,
 }
 
 struct WorkbenchOverlayPresentation {
@@ -338,7 +339,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub session_pane: &'a SessionPaneState,
     pub environment_context: EnvironmentContextView<'a>,
     pub session_search: &'a SessionSearchState,
-    pub tab_part: &'a TabPart,
+    pub sidebar_part: &'a SidebarPart,
     pub active_tab_input: Option<&'a TabInputKey>,
     pub caret_visibility: CaretVisibility,
     pub dispatch: &'a UiDispatch,
@@ -366,7 +367,7 @@ pub struct WorkbenchPresentationModel<'a> {
 #[derive(Clone)]
 struct TabContainerView<'a> {
     search: &'a SessionSearchState,
-    tab_part: &'a TabPart,
+    sidebar_part: &'a SidebarPart,
     selected_id: ElementId,
     visible_action_bar_tab: Option<&'a TabInputKey>,
     scroll: zeta_ui_components::ScrollState,
@@ -398,9 +399,6 @@ struct MainPresentationView<'a> {
     active_pane: Option<PaneViewMount<'a>>,
     terminal_pane_resize_split: Option<PaneSplitId>,
     main_surface: MainSurfaceKind,
-    active_tab_input: Option<&'a TabInputKey>,
-    settings: &'a SettingsState,
-    remote_connection_manager: &'a RemoteConnectionManagerState,
     session_title: &'a str,
     session_pane: &'a SessionPaneState,
     session_pane_context: &'a SessionPaneContext,
@@ -408,11 +406,6 @@ struct MainPresentationView<'a> {
     scm: &'a ScmState,
     files_pane_expanded: bool,
     environment_context: EnvironmentContextView<'a>,
-    keybindings: &'a dyn WorkbenchKeybindings,
-    keyboard_shortcuts_visible: bool,
-    keybinding_diagnostics: &'a [String],
-    theme_scheme: zeta_theme::ColorScheme,
-    theme_follows_system: bool,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -420,8 +413,6 @@ struct MainPresentationView<'a> {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct MainDrawResult {
     ime_cursor_area: Option<Rect>,
-    remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
-    remote_connection_manager_list_viewport: Option<Rect>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -508,10 +499,19 @@ fn build_workbench_presentation_with_bindings(
         };
     };
 
-    let session_title = model
+    let session_input = model
         .active_tab_input
-        .and_then(|selected| model.tab_part.input(selected))
-        .map(TabInput::title)
+        .filter(|input| input.is_session())
+        .and_then(|selected| model.sidebar_part.input(selected))
+        .or_else(|| {
+            let selected = model.sidebar_part.selected_session()?;
+            model
+                .sidebar_part
+                .inputs()
+                .find(|input| input.session_id() == Some(selected))
+        });
+    let session_title = session_input
+        .map(|input| model.sidebar_part.tab_name(input))
         .unwrap_or("New session");
     let session_pane_context = SessionPaneContext::new(
         model.environment_context.location,
@@ -519,7 +519,7 @@ fn build_workbench_presentation_with_bindings(
         model.environment_context.git_branch,
         &model.environment_context.diff_summary,
     );
-    let selected_id = tab_input_element_id(model.tab_part, model.active_tab_input);
+    let selected_id = sidebar_selected_item_id(model.sidebar_part, model.active_tab_input);
     let titlebar = Titlebar::new(
         layout.titlebar(),
         crate::WorkbenchUiStyle::from_theme(palette),
@@ -539,7 +539,7 @@ fn build_workbench_presentation_with_bindings(
                 Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
                 TabContainerView {
                     search: model.session_search,
-                    tab_part: model.tab_part,
+                    sidebar_part: model.sidebar_part,
                     selected_id,
                     visible_action_bar_tab: model.tab_context_menu.target_tab(),
                     scroll: model.tab_container.scroll_state(),
@@ -602,9 +602,6 @@ fn build_workbench_presentation_with_bindings(
                 active_pane: model.active_pane,
                 terminal_pane_resize_split: model.terminal_pane_resize_split,
                 main_surface: model.main_surface,
-                active_tab_input: model.active_tab_input,
-                settings: model.settings,
-                remote_connection_manager: model.remote_connection_manager,
                 session_title,
                 session_pane: model.session_pane,
                 session_pane_context: &session_pane_context,
@@ -612,11 +609,6 @@ fn build_workbench_presentation_with_bindings(
                 scm: model.scm,
                 files_pane_expanded: model.files_pane_expanded,
                 environment_context: model.environment_context.clone(),
-                keybindings: model.keybindings,
-                keyboard_shortcuts_visible: model.quick_access.shortcuts_open(),
-                keybinding_diagnostics: model.keybinding_diagnostics,
-                theme_scheme: model.theme_scheme,
-                theme_follows_system: model.theme_follows_system,
                 caret_visibility: model.caret_visibility,
                 dispatch: model.dispatch,
             },
@@ -673,9 +665,6 @@ fn build_workbench_presentation_with_bindings(
         scene: frame.scene().checkpoint(),
         interaction: frame.interaction().checkpoint(),
         ime_cursor_area,
-        remote_connection_manager_scroll_metrics: main_draw
-            .remote_connection_manager_scroll_metrics,
-        remote_connection_manager_list_viewport: main_draw.remote_connection_manager_list_viewport,
     };
     let overlay =
         draw_workbench_overlays(&mut frame, viewport, &model, text_layout, ime_cursor_area);
@@ -688,12 +677,8 @@ fn build_workbench_presentation_with_bindings(
         directory_picker_item_viewport: overlay.directory_picker_item_viewport,
         remote_connection_picker_scroll_metrics: overlay.remote_connection_picker_scroll_metrics,
         remote_connection_picker_item_viewport: overlay.remote_connection_picker_item_viewport,
-        remote_connection_manager_scroll_metrics: overlay
-            .remote_connection_manager_scroll_metrics
-            .or(main_draw.remote_connection_manager_scroll_metrics),
-        remote_connection_manager_list_viewport: overlay
-            .remote_connection_manager_list_viewport
-            .or(main_draw.remote_connection_manager_list_viewport),
+        remote_connection_manager_scroll_metrics: overlay.remote_connection_manager_scroll_metrics,
+        remote_connection_manager_list_viewport: overlay.remote_connection_manager_list_viewport,
         remote_tunnel_manager_scroll_metrics: overlay.remote_tunnel_manager_scroll_metrics,
         remote_tunnel_manager_list_viewport: overlay.remote_tunnel_manager_list_viewport,
         base_checkpoint: Some(base_checkpoint),
@@ -728,12 +713,10 @@ pub fn rebuild_workbench_overlays(
         overlay.remote_connection_picker_scroll_metrics;
     presentation.remote_connection_picker_item_viewport =
         overlay.remote_connection_picker_item_viewport;
-    presentation.remote_connection_manager_scroll_metrics = overlay
-        .remote_connection_manager_scroll_metrics
-        .or(base.remote_connection_manager_scroll_metrics);
-    presentation.remote_connection_manager_list_viewport = overlay
-        .remote_connection_manager_list_viewport
-        .or(base.remote_connection_manager_list_viewport);
+    presentation.remote_connection_manager_scroll_metrics =
+        overlay.remote_connection_manager_scroll_metrics;
+    presentation.remote_connection_manager_list_viewport =
+        overlay.remote_connection_manager_list_viewport;
     presentation.remote_tunnel_manager_scroll_metrics =
         overlay.remote_tunnel_manager_scroll_metrics;
     presentation.remote_tunnel_manager_list_viewport = overlay.remote_tunnel_manager_list_viewport;
@@ -748,6 +731,7 @@ fn draw_workbench_overlays(
     mut ime_cursor_area: Option<Rect>,
 ) -> WorkbenchOverlayPresentation {
     let palette = model.palette;
+    let viewport_bounds = Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height);
     let mut directory_picker_scroll_metrics = None;
     let mut directory_picker_item_viewport = None;
     let mut remote_connection_picker_scroll_metrics = None;
@@ -756,9 +740,22 @@ fn draw_workbench_overlays(
     let mut remote_connection_manager_list_viewport = None;
     let mut remote_tunnel_manager_scroll_metrics = None;
     let mut remote_tunnel_manager_list_viewport = None;
+    if model
+        .active_tab_input
+        .is_some_and(|input| input.is_settings())
+    {
+        let draw = frame.with_context(|context| {
+            draw_settings_dialog(context, viewport_bounds, model, text_layout)
+        });
+        if draw.ime_cursor_area.is_some() {
+            ime_cursor_area = draw.ime_cursor_area;
+        }
+        remote_connection_manager_scroll_metrics = draw.remote_connection_scroll_metrics;
+        remote_connection_manager_list_viewport = draw.remote_connection_list_viewport;
+    }
     if let Some(context_menu) = TabContextMenu::new(
-        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
-        model.tab_part,
+        viewport_bounds,
+        model.sidebar_part,
         &model.tab_context_menu,
         model.caret_visibility,
         crate::TabContextMenuStyle::from_theme(palette),
@@ -769,7 +766,7 @@ fn draw_workbench_overlays(
         frame.draw_component(&context_menu);
     }
     if let Some(directory_picker) = DirectoryPicker::new(
-        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        viewport_bounds,
         model.directory_picker,
         model.caret_visibility,
         palette,
@@ -784,7 +781,7 @@ fn draw_workbench_overlays(
         frame.draw_component(&directory_picker);
     }
     if let Some(connection_picker) = RemoteConnectionPicker::new(
-        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        viewport_bounds,
         model.remote_connection_picker,
         model.caret_visibility,
         zeta_settings::RemoteUiStyle::from_theme(palette),
@@ -800,7 +797,7 @@ fn draw_workbench_overlays(
         frame.draw_component(&connection_picker);
     }
     if let Some(connection_manager) = RemoteConnectionManager::new(
-        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        viewport_bounds,
         model.remote_connection_manager,
         model.caret_visibility,
         zeta_settings::RemoteUiStyle::from_theme(palette),
@@ -822,7 +819,7 @@ fn draw_workbench_overlays(
         frame.draw_component(&connection_manager);
     }
     if let Some(tunnel_manager) = RemoteTunnelManager::new(
-        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        viewport_bounds,
         model.remote_tunnel_manager,
         model.caret_visibility,
         zeta_settings::RemoteUiStyle::from_theme(palette),
@@ -838,7 +835,7 @@ fn draw_workbench_overlays(
         frame.draw_component(&tunnel_manager);
     }
     if let Some(branch_picker) = GitBranchPicker::new(
-        Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        viewport_bounds,
         model.git_branch_picker,
         model.caret_visibility,
         palette,
@@ -850,7 +847,6 @@ fn draw_workbench_overlays(
         }
         frame.draw_component(&branch_picker);
     }
-    let viewport_bounds = Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height);
     if let Some((keybinding, entered)) = model.keybindings.pending_keybinding() {
         paint_chord_hint(
             frame.scene_mut(),
@@ -1140,13 +1136,17 @@ fn draw_tab_container(
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
 ) -> TabContainerDrawResult {
-    let groups = workbench_tab_groups(view.tab_part, |input| {
-        input.is_settings() || view.search.matches_session_name(input.title())
+    let groups = sidebar_session_groups(view.sidebar_part, |input| {
+        input.is_settings()
+            || view
+                .search
+                .matches_session_name(view.sidebar_part.tab_name(input))
     });
-    let mut tab_container = TabContainer::new(
+    let mut tab_container = SidebarView::new(
         bounds,
         view.search.input(),
         view.caret_visibility,
+        view.sidebar_part.mode(),
         groups,
         view.selected_id,
         crate::WorkbenchUiStyle::from_theme(palette),
@@ -1158,7 +1158,7 @@ fn draw_tab_container(
     .with_scrollbar_presentation(view.scrollbar_presentation);
     if let Some(tab) = view
         .visible_action_bar_tab
-        .and_then(|tab| mounted_tab_element_id(view.tab_part, tab))
+        .and_then(|tab| mounted_sidebar_item_id(view.sidebar_part, tab))
     {
         tab_container = tab_container.with_visible_action_bar(tab);
     }
@@ -1214,17 +1214,10 @@ fn draw_main(
         MainSurfaceKind::Terminal => ScreenBuffer::Alternate,
         MainSurfaceKind::Agent | MainSurfaceKind::Editor => ScreenBuffer::Primary,
     };
-    let main_label = if view
-        .active_tab_input
-        .is_some_and(|input| input.is_settings())
-    {
-        "Settings"
-    } else {
-        match view.main_surface {
-            MainSurfaceKind::Agent => "Agent",
-            MainSurfaceKind::Editor => "Agent session with file inspector",
-            MainSurfaceKind::Terminal => "Interactive terminal",
-        }
+    let main_label = match view.main_surface {
+        MainSurfaceKind::Agent => "Agent",
+        MainSurfaceKind::Editor => "Agent session with file inspector",
+        MainSurfaceKind::Terminal => "Interactive terminal",
     };
     let main_surface = InteractionRegion::new(
         "MainSurface",
@@ -1241,240 +1234,241 @@ fn draw_main(
             .draw_rect(PaintRect::new(layout.main(), palette.workbench_background));
         context.with_clip(layout.main(), |context| {
             let mut ime_cursor_area = None;
-            let mut remote_connection_manager_scroll_metrics = None;
-            let mut remote_connection_manager_list_viewport = None;
-            if view
-                .active_tab_input
-                .is_some_and(|input| input.is_settings())
-            {
-                let platform = view.keybindings.platform();
-                let keybinding_rows =
-                    zeta_settings::settings_keybinding_rows(platform, |command| {
-                        view.keybindings.binding_for_command(command)
-                    });
-                let surface_label = match view.main_surface {
-                    MainSurfaceKind::Agent => "Agent",
-                    MainSurfaceKind::Editor => "Editor",
-                    MainSurfaceKind::Terminal => "Terminal",
-                };
-                let theme_scheme =
-                    match view.theme_scheme {
-                        zeta_theme::ColorScheme::Dark
-                        | zeta_theme::ColorScheme::HighContrastDark => "Dark",
-                        zeta_theme::ColorScheme::Light
-                        | zeta_theme::ColorScheme::HighContrastLight => "Light",
-                    };
-                let draw = zeta_settings::draw_settings_pane(
-                    context,
+            let active_file_input = view.active_pane.filter(|pane| {
+                !matches!(view.main_surface, MainSurfaceKind::Editor)
+                    && matches!(pane.kind(), PaneInputKind::Files | PaneInputKind::Diff)
+            });
+            if let Some(pane) = active_file_input {
+                let pane_group_id = pane_group_element_id(pane.pane_id());
+                let pane_group = InteractionRegion::new(
+                    "PaneGroup",
+                    pane_group_id,
                     layout.main(),
-                    TITLEBAR_HEIGHT,
-                    MAIN_SURFACE,
-                    SettingsPaneView {
-                        state: view.settings,
-                        keyboard_shortcuts_visible: view.keyboard_shortcuts_visible,
-                        features: SettingsFeatureSnapshot {
-                            general: GeneralSettingsSnapshot {
-                                directory_label: view.environment_context.working_directory,
-                                connection_label: view.environment_context.location,
-                                surface_label,
-                            },
-                            appearance: AppearanceSettingsSnapshot {
-                                scheme: theme_scheme,
-                                follows_system: view.theme_follows_system,
-                            },
-                            keybindings: KeybindingSettingsSnapshot {
-                                keybinding_rows: &keybinding_rows,
-                                keybinding_diagnostics: view.keybinding_diagnostics,
-                            },
-                            remote: RemoteSettingsSnapshot {
-                                connection_manager: view.remote_connection_manager,
-                            },
-                        },
-                        caret_visibility: view.caret_visibility,
-                        dispatch: view.dispatch,
+                    AccessibilityRole::Group,
+                    match pane.kind() {
+                        PaneInputKind::Files => "Files pane group",
+                        PaneInputKind::Diff => "Changes pane group",
+                        _ => unreachable!("file input kind was checked above"),
                     },
-                    SettingsPaneStyle::new(
-                        zeta_settings::SettingsPageStyle::from_theme(palette),
-                        zeta_settings::SettingsSectionStyle::from_theme(palette),
-                        zeta_settings::RemoteUiStyle::from_theme(palette),
-                    ),
-                    text_layout,
-                );
-                ime_cursor_area = draw.ime_cursor_area;
-                remote_connection_manager_scroll_metrics = draw.remote_connection_scroll_metrics;
-                remote_connection_manager_list_viewport = draw.remote_connection_list_viewport;
+                )
+                .with_parent(MAIN_SURFACE);
+                ime_cursor_area =
+                    context.with_component(&pane_group, |context, _| match pane.kind() {
+                        PaneInputKind::Files => draw_files_pane(
+                            context,
+                            layout.main(),
+                            view.files,
+                            &view.environment_context,
+                            pane_group_id,
+                            view.caret_visibility,
+                            view.dispatch,
+                            text_layout,
+                            palette,
+                        ),
+                        PaneInputKind::Diff => draw_changes_pane(
+                            context,
+                            layout.main(),
+                            view.scm,
+                            view.files_pane_expanded,
+                            view.files,
+                            &view.environment_context,
+                            pane_group_id,
+                            view.caret_visibility,
+                            palette,
+                            view.dispatch,
+                            text_layout,
+                        ),
+                        _ => unreachable!("file input kind was checked above"),
+                    });
             } else {
-                let active_file_input = view.active_pane.filter(|pane| {
-                    !matches!(view.main_surface, MainSurfaceKind::Editor)
-                        && matches!(pane.kind(), PaneInputKind::Files | PaneInputKind::Diff)
-                });
-                if let Some(pane) = active_file_input {
-                    let pane_group_id = pane_group_element_id(pane.pane_id());
-                    let pane_group = InteractionRegion::new(
-                        "PaneGroup",
-                        pane_group_id,
-                        layout.main(),
-                        AccessibilityRole::Group,
-                        match pane.kind() {
-                            PaneInputKind::Files => "Files pane group",
-                            PaneInputKind::Diff => "Changes pane group",
-                            _ => unreachable!("file input kind was checked above"),
-                        },
-                    )
-                    .with_parent(MAIN_SURFACE);
-                    ime_cursor_area =
-                        context.with_component(&pane_group, |context, _| match pane.kind() {
-                            PaneInputKind::Files => draw_files_pane(
-                                context,
-                                layout.main(),
-                                view.files,
-                                &view.environment_context,
-                                pane_group_id,
-                                view.caret_visibility,
-                                view.dispatch,
-                                text_layout,
-                                palette,
-                            ),
-                            PaneInputKind::Diff => draw_changes_pane(
-                                context,
-                                layout.main(),
-                                view.scm,
-                                view.files_pane_expanded,
-                                view.files,
-                                &view.environment_context,
-                                pane_group_id,
-                                view.caret_visibility,
-                                palette,
-                                view.dispatch,
-                                text_layout,
-                            ),
-                            _ => unreachable!("file input kind was checked above"),
-                        });
-                } else {
-                    match view.main_surface {
-                        MainSurfaceKind::Terminal => {
-                            let terminal_bounds = terminal_content_bounds(layout, active_screen);
-                            if view.terminal_panes.is_empty() {
+                match view.main_surface {
+                    MainSurfaceKind::Terminal => {
+                        let terminal_bounds = terminal_content_bounds(layout, active_screen);
+                        if view.terminal_panes.is_empty() {
+                            let terminal_region = InteractionRegion::new(
+                                "TerminalOutput",
+                                TERMINAL_OUTPUT,
+                                terminal_bounds,
+                                AccessibilityRole::Terminal,
+                                "Interactive terminal",
+                            )
+                            .with_parent(MAIN_SURFACE)
+                            .with_cursor(CursorFeedback::Text);
+                            context.with_component(&terminal_region, |context, _| {
+                                draw_terminal(
+                                    context.scene_mut(),
+                                    layout,
+                                    view.terminal,
+                                    active_screen,
+                                    palette,
+                                );
+                            });
+                        } else if let Some(group) = view.pane_group {
+                            let pane_geometry =
+                                PaneGroupLayout::for_tree(terminal_bounds, group.tree());
+                            for pane in view.terminal_panes {
+                                if pane.kind != PaneInputKind::Terminal {
+                                    continue;
+                                }
+                                let Some(pane_id) = pane.pane_id else {
+                                    continue;
+                                };
+                                let Some(bounds) =
+                                    pane_geometry.leaf(pane_id).map(|leaf| leaf.bounds())
+                                else {
+                                    continue;
+                                };
                                 let terminal_region = InteractionRegion::new(
-                                    "TerminalOutput",
-                                    TERMINAL_OUTPUT,
-                                    terminal_bounds,
+                                    "TerminalPane",
+                                    pane_group_element_id(pane_id),
+                                    bounds,
                                     AccessibilityRole::Terminal,
-                                    "Interactive terminal",
+                                    "Interactive terminal Pane",
                                 )
                                 .with_parent(MAIN_SURFACE)
                                 .with_cursor(CursorFeedback::Text);
                                 context.with_component(&terminal_region, |context, _| {
-                                    draw_terminal(
+                                    draw_terminal_in_bounds(
                                         context.scene_mut(),
-                                        layout,
-                                        view.terminal,
+                                        bounds,
+                                        *pane,
                                         active_screen,
                                         palette,
                                     );
                                 });
-                            } else if let Some(group) = view.pane_group {
-                                let pane_geometry =
-                                    PaneGroupLayout::for_tree(terminal_bounds, group.tree());
-                                for pane in view.terminal_panes {
-                                    if pane.kind != PaneInputKind::Terminal {
-                                        continue;
-                                    }
-                                    let Some(pane_id) = pane.pane_id else {
-                                        continue;
-                                    };
-                                    let Some(bounds) =
-                                        pane_geometry.leaf(pane_id).map(|leaf| leaf.bounds())
-                                    else {
-                                        continue;
-                                    };
-                                    let terminal_region = InteractionRegion::new(
-                                        "TerminalPane",
-                                        pane_group_element_id(pane_id),
-                                        bounds,
-                                        AccessibilityRole::Terminal,
-                                        "Interactive terminal Pane",
-                                    )
-                                    .with_parent(MAIN_SURFACE)
-                                    .with_cursor(CursorFeedback::Text);
-                                    context.with_component(&terminal_region, |context, _| {
-                                        draw_terminal_in_bounds(
-                                            context.scene_mut(),
-                                            bounds,
-                                            *pane,
-                                            active_screen,
-                                            palette,
-                                        );
-                                    });
-                                }
-                                context.draw_component(&PanePartSashes::new(
-                                    &pane_geometry,
-                                    MAIN_SURFACE,
-                                    palette.border,
-                                    palette.accent,
-                                    view.dispatch,
-                                    view.terminal_pane_resize_split,
-                                ));
                             }
+                            context.draw_component(&PanePartSashes::new(
+                                &pane_geometry,
+                                MAIN_SURFACE,
+                                palette.border,
+                                palette.accent,
+                                view.dispatch,
+                                view.terminal_pane_resize_split,
+                            ));
                         }
-                        MainSurfaceKind::Agent | MainSurfaceKind::Editor => {
-                            ime_cursor_area = draw_session_pane(
-                                context,
-                                layout.session_pane_layout,
-                                SessionPaneView {
-                                    title: view.session_title,
-                                    state: view.session_pane,
-                                    context: view.session_pane_context,
-                                    caret_visibility: view.caret_visibility,
-                                    dispatch: view.dispatch,
-                                    parent: MAIN_SURFACE,
-                                },
-                                text_layout,
-                                zeta_session::SessionPaneStyle::from_theme(palette),
-                            );
-                        }
+                    }
+                    MainSurfaceKind::Agent | MainSurfaceKind::Editor => {
+                        ime_cursor_area = draw_session_pane(
+                            context,
+                            layout.session_pane_layout,
+                            SessionPaneView {
+                                title: view.session_title,
+                                state: view.session_pane,
+                                context: view.session_pane_context,
+                                caret_visibility: view.caret_visibility,
+                                dispatch: view.dispatch,
+                                parent: MAIN_SURFACE,
+                            },
+                            text_layout,
+                            zeta_session::SessionPaneStyle::from_theme(palette),
+                        );
                     }
                 }
             }
-            let ime_cursor_area = if view
-                .active_tab_input
-                .is_some_and(|input| input.is_settings())
-            {
-                ime_cursor_area
-            } else {
-                match view.main_surface {
-                    MainSurfaceKind::Terminal if !view.terminal_panes.is_empty() => {
-                        let active_pane = view.pane_group.map(PanePart::active_pane);
-                        let terminal_bounds = terminal_content_bounds(layout, active_screen);
-                        view.terminal_panes
-                            .iter()
-                            .find(|pane| pane.pane_id == active_pane)
-                            .and_then(|pane| {
-                                pane.core.and_then(|terminal| {
-                                    terminal_cursor_area_for_bounds(
-                                        terminal_bounds_for_pane(
-                                            view.pane_group,
-                                            terminal_bounds,
-                                            pane.pane_id,
-                                        )?,
-                                        terminal,
-                                        pane.scroll_offset,
-                                    )
-                                })
+            let ime_cursor_area = match view.main_surface {
+                MainSurfaceKind::Terminal if !view.terminal_panes.is_empty() => {
+                    let active_pane = view.pane_group.map(PanePart::active_pane);
+                    let terminal_bounds = terminal_content_bounds(layout, active_screen);
+                    view.terminal_panes
+                        .iter()
+                        .find(|pane| pane.pane_id == active_pane)
+                        .and_then(|pane| {
+                            pane.core.and_then(|terminal| {
+                                terminal_cursor_area_for_bounds(
+                                    terminal_bounds_for_pane(
+                                        view.pane_group,
+                                        terminal_bounds,
+                                        pane.pane_id,
+                                    )?,
+                                    terminal,
+                                    pane.scroll_offset,
+                                )
                             })
-                    }
-                    MainSurfaceKind::Terminal => view.terminal.core.and_then(|terminal| {
-                        terminal_cursor_area(layout, terminal, view.terminal.scroll_offset)
-                    }),
-                    MainSurfaceKind::Agent | MainSurfaceKind::Editor => ime_cursor_area,
+                        })
                 }
+                MainSurfaceKind::Terminal => view.terminal.core.and_then(|terminal| {
+                    terminal_cursor_area(layout, terminal, view.terminal.scroll_offset)
+                }),
+                MainSurfaceKind::Agent | MainSurfaceKind::Editor => ime_cursor_area,
             };
-            MainDrawResult {
-                ime_cursor_area,
-                remote_connection_manager_scroll_metrics,
-                remote_connection_manager_list_viewport,
-            }
+            MainDrawResult { ime_cursor_area }
         })
+    })
+}
+
+fn draw_settings_dialog(
+    context: &mut ComponentContext<'_, '_>,
+    viewport: Rect,
+    model: &WorkbenchPresentationModel<'_>,
+    text_layout: &mut TextInputLayoutEngine,
+) -> zeta_settings::SettingsPaneDrawResult {
+    let palette = model.palette;
+    let dialog = Dialog::new(
+        viewport,
+        Size::new(SETTINGS_DIALOG_WIDTH, SETTINGS_DIALOG_HEIGHT),
+        "Settings",
+        DialogIds::new(WINDOW, SETTINGS_DIALOG),
+        DialogStyle::new(Color::rgba(0, 0, 0, 72), palette.content_background)
+            .with_border(Border::uniform(1.0, palette.border))
+            .with_corner_radii(CornerRadii::uniform(10.0))
+            .with_shadow(
+                BoxShadow::new(Color::rgba(0, 0, 0, 64))
+                    .with_offset(zui::ui::Point::new(0.0, 8.0))
+                    .with_blur_radius(24.0),
+            )
+            .with_viewport_margin(24.0),
+    );
+    let parent = dialog.root_id();
+    let platform = model.keybindings.platform();
+    let keybinding_rows = zeta_settings::settings_keybinding_rows(platform, |command| {
+        model.keybindings.binding_for_command(command)
+    });
+    let surface_label = match model.main_surface {
+        MainSurfaceKind::Agent => "Agent",
+        MainSurfaceKind::Editor => "Editor",
+        MainSurfaceKind::Terminal => "Terminal",
+    };
+    let theme_scheme = match model.theme_scheme {
+        zeta_theme::ColorScheme::Dark | zeta_theme::ColorScheme::HighContrastDark => "Dark",
+        zeta_theme::ColorScheme::Light | zeta_theme::ColorScheme::HighContrastLight => "Light",
+    };
+    dialog.draw_components(context, |context, bounds| {
+        zeta_settings::draw_settings_pane(
+            context,
+            bounds,
+            TITLEBAR_HEIGHT,
+            parent,
+            SettingsPaneView {
+                state: model.settings,
+                keyboard_shortcuts_visible: model.quick_access.shortcuts_open(),
+                features: SettingsFeatureSnapshot {
+                    general: GeneralSettingsSnapshot {
+                        directory_label: model.environment_context.working_directory,
+                        connection_label: model.environment_context.location,
+                        surface_label,
+                    },
+                    appearance: AppearanceSettingsSnapshot {
+                        scheme: theme_scheme,
+                        follows_system: model.theme_follows_system,
+                    },
+                    keybindings: KeybindingSettingsSnapshot {
+                        keybinding_rows: &keybinding_rows,
+                        keybinding_diagnostics: model.keybinding_diagnostics,
+                    },
+                    remote: RemoteSettingsSnapshot {
+                        connection_manager: model.remote_connection_manager,
+                    },
+                },
+                caret_visibility: model.caret_visibility,
+                dispatch: model.dispatch,
+            },
+            SettingsPaneStyle::new(
+                zeta_settings::SettingsPageStyle::from_theme(palette),
+                zeta_settings::SettingsSectionStyle::from_theme(palette),
+                zeta_settings::RemoteUiStyle::from_theme(palette),
+            ),
+            text_layout,
+        )
     })
 }
 

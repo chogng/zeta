@@ -1,3 +1,4 @@
+use super::ClipRect;
 use super::ComponentElement;
 use super::ComputedElement;
 use super::InspectionFrame;
@@ -30,10 +31,12 @@ pub struct SceneCheckpoint {
     icon_count: usize,
     image_count: usize,
     text_count: usize,
+    clip_count: usize,
     layer_primitive_counts: Vec<usize>,
     layer_count: usize,
     inspection_count: usize,
     active_clip: Option<Rect>,
+    active_rounded_clip_depth: u32,
     active_layer: usize,
     active_inspection_parent: Option<InspectionNodeId>,
     fragment_count: usize,
@@ -58,6 +61,7 @@ pub struct TextBlock {
     bounds: Size,
     style: TextStyle,
     wrap: TextBlockWrap,
+    text_centered: bool,
     clip_bounds: Option<Rect>,
 }
 
@@ -70,6 +74,7 @@ impl TextBlock {
             bounds,
             style,
             wrap: TextBlockWrap::WordOrGlyph,
+            text_centered: false,
             clip_bounds: None,
         }
     }
@@ -93,12 +98,18 @@ impl TextBlock {
             bounds,
             style,
             wrap: TextBlockWrap::WordOrGlyph,
+            text_centered: false,
             clip_bounds: None,
         }
     }
 
     pub const fn with_wrap(mut self, wrap: TextBlockWrap) -> Self {
         self.wrap = wrap;
+        self
+    }
+
+    pub const fn with_centered_text(mut self) -> Self {
+        self.text_centered = true;
         self
     }
 
@@ -126,6 +137,10 @@ impl TextBlock {
         self.wrap
     }
 
+    pub const fn is_text_centered(&self) -> bool {
+        self.text_centered
+    }
+
     /// Returns the resolved scene clip consumed by renderer backends.
     pub const fn clip_bounds(&self) -> Option<Rect> {
         self.clip_bounds
@@ -151,8 +166,10 @@ pub struct UiScene {
     image_layers: Vec<usize>,
     text_blocks: Vec<TextBlock>,
     text_layers: Vec<usize>,
+    clips: Vec<ClipRect>,
     layer_primitives: Vec<Vec<ScenePrimitive>>,
     active_clip: Option<Rect>,
+    active_rounded_clip_depth: u32,
     active_layer: usize,
     layer_count: usize,
     inspection: InspectionFrame,
@@ -172,8 +189,10 @@ impl UiScene {
             image_layers: Vec::new(),
             text_blocks: Vec::new(),
             text_layers: Vec::new(),
+            clips: Vec::new(),
             layer_primitives: vec![Vec::new()],
             active_clip: None,
+            active_rounded_clip_depth: 0,
             active_layer: 0,
             layer_count: 1,
             inspection: InspectionFrame::default(),
@@ -193,10 +212,12 @@ impl UiScene {
             icon_count: self.icons.len(),
             image_count: self.images.len(),
             text_count: self.text_blocks.len(),
+            clip_count: self.clips.len(),
             layer_primitive_counts: self.layer_primitives.iter().map(Vec::len).collect(),
             layer_count: self.layer_count,
             inspection_count: self.inspection.len(),
             active_clip: self.active_clip,
+            active_rounded_clip_depth: self.active_rounded_clip_depth,
             active_layer: self.active_layer,
             active_inspection_parent: self.active_inspection_parent,
             fragment_count: self.fragments.len(),
@@ -210,6 +231,7 @@ impl UiScene {
                 && checkpoint.icon_count <= self.icons.len()
                 && checkpoint.image_count <= self.images.len()
                 && checkpoint.text_count <= self.text_blocks.len()
+                && checkpoint.clip_count <= self.clips.len()
                 && checkpoint.layer_count <= self.layer_count
                 && checkpoint.layer_primitive_counts.len() <= self.layer_primitives.len()
                 && checkpoint.inspection_count <= self.inspection.len()
@@ -224,6 +246,7 @@ impl UiScene {
         self.image_layers.truncate(checkpoint.image_count);
         self.text_blocks.truncate(checkpoint.text_count);
         self.text_layers.truncate(checkpoint.text_count);
+        self.clips.truncate(checkpoint.clip_count);
         self.layer_primitives
             .truncate(checkpoint.layer_primitive_counts.len());
         for (primitives, &count) in self
@@ -240,6 +263,7 @@ impl UiScene {
         self.layer_count = checkpoint.layer_count;
         self.inspection.truncate(checkpoint.inspection_count);
         self.active_clip = checkpoint.active_clip;
+        self.active_rounded_clip_depth = checkpoint.active_rounded_clip_depth;
         self.active_layer = checkpoint.active_layer;
         self.active_inspection_parent = checkpoint.active_inspection_parent;
         self.fragments.truncate(checkpoint.fragment_count);
@@ -257,7 +281,8 @@ impl UiScene {
         let index = self.rects.len();
         self.rects.push(rect);
         self.rect_layers.push(self.active_layer);
-        self.layer_primitives[self.active_layer].push(ScenePrimitive::Rect(index));
+        self.layer_primitives[self.active_layer]
+            .push(ScenePrimitive::rect(index, self.active_rounded_clip_depth));
     }
 
     pub fn draw_icon(&mut self, mut icon: PaintIcon) {
@@ -270,7 +295,8 @@ impl UiScene {
         let index = self.icons.len();
         self.icons.push(icon);
         self.icon_layers.push(self.active_layer);
-        self.layer_primitives[self.active_layer].push(ScenePrimitive::Icon(index));
+        self.layer_primitives[self.active_layer]
+            .push(ScenePrimitive::icon(index, self.active_rounded_clip_depth));
     }
 
     pub fn draw_image(&mut self, mut image: PaintImage) {
@@ -283,7 +309,8 @@ impl UiScene {
         let index = self.images.len();
         self.images.push(image);
         self.image_layers.push(self.active_layer);
-        self.layer_primitives[self.active_layer].push(ScenePrimitive::Image(index));
+        self.layer_primitives[self.active_layer]
+            .push(ScenePrimitive::image(index, self.active_rounded_clip_depth));
     }
 
     pub fn draw_text(&mut self, mut block: TextBlock) {
@@ -297,7 +324,8 @@ impl UiScene {
         let index = self.text_blocks.len();
         self.text_blocks.push(block);
         self.text_layers.push(self.active_layer);
-        self.layer_primitives[self.active_layer].push(ScenePrimitive::Text(index));
+        self.layer_primitives[self.active_layer]
+            .push(ScenePrimitive::text(index, self.active_rounded_clip_depth));
     }
 
     /// Resolves a declarative element once and shares it with inspection and custom composition.
@@ -367,13 +395,16 @@ impl UiScene {
     pub fn with_overlay<R>(&mut self, draw: impl FnOnce(&mut Self) -> R) -> R {
         let previous_layer = self.active_layer;
         let previous_clip = self.active_clip;
+        let previous_rounded_clip_depth = self.active_rounded_clip_depth;
         self.active_layer = self.layer_count;
         self.active_clip = None;
+        self.active_rounded_clip_depth = 0;
         self.layer_count += 1;
         self.layer_primitives.push(Vec::new());
         let result = draw(self);
         self.active_layer = previous_layer;
         self.active_clip = previous_clip;
+        self.active_rounded_clip_depth = previous_rounded_clip_depth;
         result
     }
 
@@ -395,6 +426,10 @@ impl UiScene {
 
     pub fn text_blocks(&self) -> &[TextBlock] {
         &self.text_blocks
+    }
+
+    pub fn clips(&self) -> &[ClipRect] {
+        &self.clips
     }
 
     pub const fn inspection(&self) -> &InspectionFrame {

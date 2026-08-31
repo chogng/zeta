@@ -1,5 +1,8 @@
 use super::{InspectionFrame, InspectionNode};
-use crate::{CornerRadii, Edges, Element, ElementDirection, ElementLength, Point, Rect};
+use crate::{
+    AlignItems, CornerRadii, Edges, Element, ElementDirection, ElementLength, JustifyContent,
+    Point, Rect,
+};
 
 #[test]
 fn reverse_hit_test_prefers_the_deepest_recent_node() {
@@ -100,6 +103,8 @@ fn exposes_the_authored_style_from_a_declarative_element() {
     assert_eq!(style.direction(), ElementDirection::Vertical);
     assert_eq!(style.width(), ElementLength::px(240.0));
     assert_eq!(style.height(), ElementLength::Fill);
+    assert_eq!(style.justify_content(), JustifyContent::Start);
+    assert_eq!(style.align_items(), AlignItems::Start);
     assert_eq!(style.padding(), Some(Edges::uniform(80.0)));
     assert_eq!(node.padding(), Some(Edges::new(30.0, 0.0, 0.0, 40.0)));
 }

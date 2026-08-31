@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use zeta_protocol::SessionId;
-
 use super::Pane;
 use super::PaneContainer;
 use super::PaneGroupId;
@@ -10,11 +8,11 @@ use super::PaneInputId;
 use super::PanePart;
 use super::PaneSplitDirection;
 use super::PaneSplitId;
+use super::SidebarMode;
+use super::SidebarPart;
 use super::TabInput;
 use super::TabInputChange;
 use super::TabInputKey;
-use super::TabPart;
-use super::TabStatus;
 
 /// Logical state removed together with one Workbench tab.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,39 +43,49 @@ impl ClosedTab {
 
 /// The Workbench state model.
 ///
-/// `TabPart` owns orientation-neutral groups and tab inputs, and the Workbench owns one
+/// `SidebarPart` owns the Sidebar groups and inputs, and the Workbench owns one
 /// [`PaneContainer`] per tab input. Each container owns its complete [`PanePart`] group topology.
-/// Application hosts can present the same Tab Part vertically or horizontally without moving renderer,
-/// terminal, or App Server state into this model.
+/// The Sidebar view and main content can consume this state without moving renderer, terminal, or
+/// App Server state into the model.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Workbench {
-    tab_part: TabPart,
+    sidebar_part: SidebarPart,
     pane_containers: HashMap<TabInputKey, PaneContainer>,
 }
 
 impl Default for Workbench {
     fn default() -> Self {
-        let tab_part = TabPart::default();
+        let sidebar_part = SidebarPart::default();
         let pane_containers = HashMap::from([(
             TabInputKey::Settings,
             PaneContainer::with_input(PaneInput::settings()),
         )]);
         Self {
-            tab_part,
+            sidebar_part,
             pane_containers,
         }
     }
 }
 
 impl Workbench {
-    /// Creates a Workbench with the default Tab Part and no Session content.
+    /// Creates a Workbench with the default Sidebar Part and no Session content.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Returns the orientation-neutral Tab Part.
-    pub const fn tab_part(&self) -> &TabPart {
-        &self.tab_part
+    /// Returns the Sidebar Part.
+    pub const fn sidebar_part(&self) -> &SidebarPart {
+        &self.sidebar_part
+    }
+
+    /// Selects the active Sidebar product mode.
+    pub fn set_sidebar_mode(&mut self, mode: SidebarMode) -> bool {
+        self.sidebar_part.set_mode(mode)
+    }
+
+    /// Expands or collapses one named Session group root.
+    pub fn toggle_sidebar_group(&mut self, group: super::TabGroupId) -> bool {
+        self.sidebar_part.toggle_group(group)
     }
 
     /// Returns the pane container owned by a tab item.
@@ -88,7 +96,7 @@ impl Workbench {
     #[cfg(test)]
     /// Returns the active tab's pane container.
     pub fn active_pane_container(&self) -> Option<&PaneContainer> {
-        self.tab_part
+        self.sidebar_part
             .active_tab_key()
             .and_then(|tab_key| self.pane_container(tab_key))
     }
@@ -141,20 +149,20 @@ impl Workbench {
 
     /// Closes a tab and its owned pane container as one logical operation.
     pub fn close_tab(&mut self, tab_key: &TabInputKey) -> Option<ClosedTab> {
-        self.tab_part.close_tab(tab_key)?;
+        self.sidebar_part.close_tab(tab_key)?;
         let panes = self
             .remove_pane_container(tab_key)
             .expect("every TabInput must own a PaneContainer");
         Some(ClosedTab {
             key: tab_key.clone(),
             panes,
-            active_tab: self.tab_part.active_tab_key().cloned(),
+            active_tab: self.sidebar_part.active_tab_key().cloned(),
         })
     }
 
     /// Activates a known tab.
     pub fn activate_tab(&mut self, key: TabInputKey) -> bool {
-        self.tab_part.activate_tab(key)
+        self.sidebar_part.activate_tab(key)
     }
 
     /// Opens or activates the singleton Settings tab.
@@ -162,7 +170,7 @@ impl Workbench {
         self.pane_containers
             .entry(TabInputKey::Settings)
             .or_insert_with(|| PaneContainer::with_input(PaneInput::settings()));
-        self.tab_part.activate_settings()
+        self.sidebar_part.activate_settings()
     }
 
     /// Inserts or refreshes a Session tab and atomically creates its initial pane container.
@@ -172,7 +180,7 @@ impl Workbench {
         initial_pane_input: PaneInput,
     ) -> TabInputChange {
         let key = tab_input.key().clone();
-        let change = self.tab_part.upsert_session_input(tab_input);
+        let change = self.sidebar_part.upsert_session_input(tab_input);
         self.finish_session_upsert(&key, &change, initial_pane_input);
         change
     }
@@ -184,24 +192,19 @@ impl Workbench {
         initial_pane_input: PaneInput,
     ) -> TabInputChange {
         let key = tab_input.key().clone();
-        let change = self.tab_part.upsert_catalog_session_input(tab_input);
+        let change = self.sidebar_part.upsert_catalog_session_input(tab_input);
         self.finish_session_upsert(&key, &change, initial_pane_input);
         change
     }
 
-    /// Updates one Session tab's status metadata without exposing mutable TabPart access.
-    pub fn update_session_status(&mut self, session_id: &SessionId, status: TabStatus) {
-        self.tab_part.update_status(session_id, status);
-    }
-
     /// Toggles one tab's Workbench-owned pinned state.
     pub fn toggle_tab_pin(&mut self, key: &TabInputKey) -> Option<bool> {
-        self.tab_part.toggle_tab_pin(key)
+        self.sidebar_part.toggle_tab_pin(key)
     }
 
     /// Renames one Workbench tab without changing its Session-owned title.
     pub fn rename_tab(&mut self, key: &TabInputKey, title: impl Into<String>) -> bool {
-        self.tab_part.rename_tab(key, title)
+        self.sidebar_part.rename_tab(key, title)
     }
 
     /// Moves one tab to an existing Workbench group.
@@ -211,7 +214,7 @@ impl Workbench {
         group: super::TabGroupId,
         index: usize,
     ) -> bool {
-        self.tab_part.move_tab_to_group(key, group, index)
+        self.sidebar_part.move_tab_to_group(key, group, index)
     }
 
     /// Moves one tab into a newly created named group.
@@ -220,12 +223,12 @@ impl Workbench {
         key: &TabInputKey,
         label: impl Into<String>,
     ) -> Option<super::TabGroupId> {
-        self.tab_part.group_tabs([key.clone()], label)
+        self.sidebar_part.group_tabs([key.clone()], label)
     }
 
     /// Returns to the last selected Session tab.
     pub fn activate_last_session(&mut self) -> bool {
-        self.tab_part.activate_last_session()
+        self.sidebar_part.activate_last_session()
     }
 
     #[cfg(test)]
@@ -240,7 +243,7 @@ impl Workbench {
         input: PaneInput,
         direction: PaneSplitDirection,
     ) -> Option<PaneGroupId> {
-        let tab_key = self.tab_part.active_tab_key()?.clone();
+        let tab_key = self.sidebar_part.active_tab_key()?.clone();
         let pane_part = self
             .pane_containers
             .get_mut(&tab_key)
@@ -251,7 +254,7 @@ impl Workbench {
 
     /// Destroys the active group in the active tab and returns all of its inputs.
     pub fn destroy_pane(&mut self) -> Option<Vec<Pane>> {
-        let tab_key = self.tab_part.active_tab_key()?.clone();
+        let tab_key = self.sidebar_part.active_tab_key()?.clone();
         let pane_part = self.pane_part_mut(&tab_key)?;
         pane_part.destroy_active_panes()
     }

@@ -119,6 +119,7 @@ pub(crate) fn list_button_style(palette: RemoteUiStyle) -> ButtonStyle {
         TextStyle::new(13.0, palette.text).with_line_height(18.0),
     )
     .with_selected_backgrounds(selected)
+    .with_leading_text()
     .with_padding(Edges::new(0.0, 10.0, 0.0, 10.0))
 }
 

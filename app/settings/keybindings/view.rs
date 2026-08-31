@@ -63,7 +63,7 @@ impl<'a, Command> KeyboardShortcutRow<'a, Command> {
     }
 }
 
-/// Modal shortcut quick-access presentation built from host-owned command rows.
+/// Shortcut quick-access dialog built from host-owned command rows.
 pub struct KeyboardShortcuts<'a, Command> {
     quick_pick: QuickPick<'a>,
     state: &'a KeyboardShortcutsState<Command>,

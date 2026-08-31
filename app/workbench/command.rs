@@ -190,7 +190,7 @@ fn execute_tab_context_menu_action(app: &mut WorkbenchApplication, command: AppC
         .or_else(|| {
             app.workbench
                 .workbench()
-                .tab_part()
+                .sidebar_part()
                 .active_tab_key()
                 .cloned()
         });

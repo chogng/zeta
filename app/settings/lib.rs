@@ -61,17 +61,7 @@ const NAV_TOP: f32 = 62.0;
 const SEARCH_WIDTH: f32 = 320.0;
 const CLOSE_SIZE: f32 = 32.0;
 
-/// Controls whether the Settings page owns a modal interaction boundary.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum SettingsPageMode {
-    /// The page is hosted inside a workbench surface and leaves sibling parts interactive.
-    Surface,
-    /// The page is hosted as a standalone modal surface and traps interaction in its subtree.
-    #[default]
-    Modal,
-}
-
-/// Root element for the Settings page and its optional modal focus boundary.
+/// Root element for Settings content hosted by a surface or dialog.
 pub const SETTINGS_PAGE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 1);
 /// Search input in the Settings header.
 pub const SETTINGS_SEARCH_INPUT: ElementId = ElementId::scoped(SETTINGS_SCOPE, 2);

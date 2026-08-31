@@ -15,8 +15,9 @@ mod pane_binding;
 mod panepart;
 mod presentation;
 mod quick_access;
+mod sidebarpart;
 mod surface;
-mod tabpart;
+mod titlebar;
 
 pub(crate) use application::command::command_for_element;
 pub use application::run;
@@ -28,8 +29,9 @@ pub(crate) use layout::{
 };
 pub(crate) use model::{
     ClosedTab, Pane, PaneGroup, PaneGroupId, PaneInput, PaneInputId, PaneInputKind, PaneNode,
-    PanePart, PaneSplitDirection, PaneSplitId, TabGroup, TabGroupId, TabId, TabInput,
-    TabInputChange, TabInputKey, TabInputMetadata, TabPart, TabStatus, TabStatusKind, Workbench,
+    PanePart, PaneSplitDirection, PaneSplitId, SidebarMode, SidebarPart, TabGroup, TabGroupId,
+    TabId, TabInput, TabInputChange, TabInputKey, TabInputMetadata, TabStatus, TabStatusKind,
+    Workbench,
 };
 pub(crate) use pane_binding::PaneBinding;
 pub(crate) use panepart::PaneGroupLayout;
@@ -50,8 +52,11 @@ pub(crate) use presentation::{
     WorkbenchKeybindings, WorkbenchSceneLayout, build_workbench_presentation, draw_inspector_border,
 };
 pub(crate) use quick_access::QuickAccess;
+pub(crate) use sidebarpart::*;
 pub(crate) use surface::{MainSurface, MainSurfaceKind};
-pub(crate) use tabpart::*;
+#[cfg(test)]
+pub(crate) use titlebar::TITLEBAR;
+pub(crate) use titlebar::{TITLEBAR_HEIGHT, TITLEBAR_SETTINGS_BUTTON, Titlebar, TitlebarInsets};
 
 #[allow(unused_imports)]
 pub(crate) use application::{

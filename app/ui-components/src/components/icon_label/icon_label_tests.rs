@@ -1,5 +1,5 @@
 use super::{IconLabel, IconLabelStyle};
-use crate::{Color, Component, Rect, TextSpan, TextStyle, UiScene};
+use crate::{Color, Component, Rect, Size, TextSpan, TextStyle, UiScene};
 use zui::ui::{Icon, IconDefinition, IconId};
 
 const TEST_ICON: Icon = Icon::new(
@@ -32,6 +32,29 @@ fn icon_label_aligns_semantic_icon_and_text_inside_its_bounds() {
     assert_eq!(scene.icons()[0].color(), Color::rgb(30, 60, 90));
     assert_eq!(scene.text_blocks()[0].origin().x, 42.0);
     assert_eq!(scene.text_blocks()[0].text(), "Files");
+}
+
+#[test]
+fn icon_label_uses_element_flow_to_center_measured_content() {
+    let label = IconLabel::new(
+        Rect::from_xywh(20.0, 10.0, 140.0, 28.0),
+        TEST_ICON,
+        "Code",
+        IconLabelStyle::new(TextStyle::new(13.0, Color::WHITE))
+            .with_icon_size(16.0)
+            .with_content_gap(6.0),
+    )
+    .with_measured_label_size(Size::new(30.0, 16.0));
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&label);
+
+    assert_eq!(
+        scene.icons()[0].bounds(),
+        Rect::from_xywh(64.0, 16.0, 16.0, 16.0)
+    );
+    assert_eq!(scene.text_blocks()[0].origin().x, 86.0);
+    assert_eq!(scene.text_blocks()[0].bounds(), Size::new(30.0, 16.0));
 }
 
 #[test]

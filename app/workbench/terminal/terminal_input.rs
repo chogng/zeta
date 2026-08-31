@@ -145,7 +145,7 @@ impl WorkbenchApplication {
     }
 
     fn route_settings_keyboard(&mut self, event: &KeyEvent) -> bool {
-        if !self.workbench.workbench().tab_part().is_settings()
+        if !self.workbench.workbench().sidebar_part().is_settings()
             || event.state != ElementState::Pressed
         {
             return false;

@@ -14,7 +14,7 @@ impl WorkbenchApplication {
         if self
             .workbench
             .workbench()
-            .tab_part()
+            .sidebar_part()
             .input(tab_key)
             .is_none()
         {
@@ -34,7 +34,7 @@ impl WorkbenchApplication {
         if self
             .workbench
             .workbench()
-            .tab_part()
+            .sidebar_part()
             .input(tab_key)
             .is_none()
         {
@@ -58,7 +58,7 @@ impl WorkbenchApplication {
         if self
             .workbench
             .workbench()
-            .tab_part()
+            .sidebar_part()
             .input(tab_key)
             .is_none()
         {
@@ -81,7 +81,7 @@ impl WorkbenchApplication {
         if self
             .workbench
             .workbench()
-            .tab_part()
+            .sidebar_part()
             .input(tab_key)
             .is_none()
         {
@@ -104,7 +104,7 @@ impl WorkbenchApplication {
         if self
             .workbench
             .workbench()
-            .tab_part()
+            .sidebar_part()
             .input(tab_key)
             .is_none()
         {
@@ -113,7 +113,8 @@ impl WorkbenchApplication {
         if tab_key.is_settings() && self.remote_connection_manager.is_settings() {
             self.dismiss_remote_connection_manager();
         }
-        let was_active = self.workbench.workbench().tab_part().active_tab_key() == Some(tab_key);
+        let was_active =
+            self.workbench.workbench().sidebar_part().active_tab_key() == Some(tab_key);
         let Some((closed, bindings)) = self.workbench.close_tab(tab_key) else {
             return false;
         };
@@ -243,17 +244,6 @@ impl WorkbenchApplication {
             .or_else(|| self.terminal_runtime.active_key())
     }
 
-    pub(super) fn update_terminal_status(
-        &mut self,
-        key: TerminalSessionKey,
-        status: crate::TabStatus,
-    ) {
-        let Some(session_id) = self.terminal_runtime.session_id_for_key(key) else {
-            return;
-        };
-        self.workbench.update_session_status(&session_id, status);
-    }
-
     pub(super) fn active_terminal(&self) -> Option<&TerminalSession> {
         self.active_pane_terminal_key()
             .and_then(|key| self.terminal_runtime.terminal(key))
@@ -267,7 +257,7 @@ impl WorkbenchApplication {
     pub(super) fn active_session_tab_key(&self) -> Option<TabInputKey> {
         self.workbench
             .workbench()
-            .tab_part()
+            .sidebar_part()
             .active_tab_key()
             .filter(|key| key.is_session())
             .cloned()
@@ -484,7 +474,7 @@ impl WorkbenchApplication {
         if let Some(session_id) = self
             .workbench
             .workbench()
-            .tab_part()
+            .sidebar_part()
             .selected_session()
             .cloned()
         {

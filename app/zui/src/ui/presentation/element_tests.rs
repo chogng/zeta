@@ -1,5 +1,11 @@
-use super::{Element, ElementLength};
-use crate::{CornerRadii, Edges, Rect};
+use super::AlignItems;
+use super::Element;
+use super::ElementLength;
+use super::JustifyContent;
+use crate::CornerRadii;
+use crate::Edges;
+use crate::Rect;
+use crate::Size;
 
 #[test]
 fn row_resolves_padding_fixed_fill_children_and_exact_gap_regions() {
@@ -54,5 +60,103 @@ fn column_clips_children_and_gap_regions_to_the_available_bounds() {
     assert_eq!(
         layout.gap_regions(),
         &[Rect::from_xywh(0.0, 20.0, 40.0, 6.0)]
+    );
+}
+
+#[test]
+fn row_centers_content_sized_children_on_both_axes() {
+    let layout = Element::row("ButtonContent")
+        .gap(6.0)
+        .justify_content(JustifyContent::Center)
+        .align_items(AlignItems::Center)
+        .child(
+            Element::leaf("Icon")
+                .width(ElementLength::px(14.0))
+                .height(ElementLength::px(14.0)),
+        )
+        .child(
+            Element::leaf("Label")
+                .width(ElementLength::Content)
+                .height(ElementLength::Content)
+                .content_size(Size::new(30.0, 18.0)),
+        )
+        .in_bounds(Rect::from_xywh(10.0, 5.0, 100.0, 30.0))
+        .compute();
+
+    assert_eq!(
+        layout.children()[0].bounds(),
+        Rect::from_xywh(35.0, 13.0, 14.0, 14.0)
+    );
+    assert_eq!(
+        layout.children()[1].bounds(),
+        Rect::from_xywh(55.0, 11.0, 30.0, 18.0)
+    );
+    assert_eq!(
+        layout.gap_regions(),
+        &[Rect::from_xywh(49.0, 5.0, 6.0, 30.0)]
+    );
+}
+
+#[test]
+fn content_sized_container_derives_its_natural_size_from_children() {
+    let layout = Element::row("Outer")
+        .justify_content(JustifyContent::Center)
+        .align_items(AlignItems::Center)
+        .child(
+            Element::row("Content")
+                .width(ElementLength::Content)
+                .height(ElementLength::Content)
+                .gap(4.0)
+                .child(
+                    Element::leaf("Icon")
+                        .width(ElementLength::px(10.0))
+                        .height(ElementLength::px(8.0)),
+                )
+                .child(
+                    Element::leaf("Label")
+                        .width(ElementLength::Content)
+                        .height(ElementLength::Content)
+                        .content_size(Size::new(20.0, 12.0)),
+                ),
+        )
+        .in_bounds(Rect::from_xywh(0.0, 0.0, 100.0, 30.0))
+        .compute();
+
+    let content = layout.children()[0].bounds();
+    assert_eq!(content, Rect::from_xywh(33.0, 9.0, 34.0, 12.0));
+    assert_eq!(
+        layout.children()[0].children()[1].bounds(),
+        Rect::from_xywh(47.0, 9.0, 20.0, 12.0)
+    );
+}
+
+#[test]
+fn space_between_distributes_free_space_and_cross_axis_end_alignment() {
+    let layout = Element::row("Actions")
+        .gap(4.0)
+        .justify_content(JustifyContent::SpaceBetween)
+        .align_items(AlignItems::End)
+        .children([
+            Element::leaf("First")
+                .width(ElementLength::px(10.0))
+                .height(ElementLength::px(8.0)),
+            Element::leaf("Second")
+                .width(ElementLength::px(10.0))
+                .height(ElementLength::px(12.0)),
+        ])
+        .in_bounds(Rect::from_xywh(0.0, 0.0, 100.0, 30.0))
+        .compute();
+
+    assert_eq!(
+        layout.children()[0].bounds(),
+        Rect::from_xywh(0.0, 22.0, 10.0, 8.0)
+    );
+    assert_eq!(
+        layout.children()[1].bounds(),
+        Rect::from_xywh(90.0, 18.0, 10.0, 12.0)
+    );
+    assert_eq!(
+        layout.gap_regions(),
+        &[Rect::from_xywh(10.0, 0.0, 80.0, 30.0)]
     );
 }

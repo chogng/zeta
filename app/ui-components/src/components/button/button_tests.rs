@@ -26,6 +26,7 @@ fn test_style() -> ButtonStyle {
             .with_pressed(Color::rgb(60, 70, 80))
             .with_disabled(Color::rgb(20, 25, 30)),
     )
+    .with_selected_text_style(TextStyle::new(11.0, Color::rgb(180, 190, 200)))
     .with_disabled_text_style(TextStyle::new(11.0, Color::rgb(50, 60, 70)))
     .with_border(Border::uniform(1.0, Color::WHITE))
     .with_corner_radii(CornerRadii::uniform(8.0))
@@ -64,6 +65,22 @@ fn button_selects_background_from_host_provided_state() {
     assert_eq!(scene.rects()[0].fill(), Color::rgb(20, 30, 40));
     assert!(scene.icons().is_empty());
     assert_eq!(scene.text_blocks()[0].text(), "Action");
+    assert!(scene.text_blocks()[0].is_text_centered());
+}
+
+#[test]
+fn button_style_can_keep_list_text_leading_aligned() {
+    let button = Button::new(
+        Rect::from_xywh(0.0, 0.0, 100.0, 27.0),
+        "Leading",
+        ButtonState::Resting,
+        test_style().with_leading_text(),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert!(!scene.text_blocks()[0].is_text_centered());
 }
 
 #[test]
@@ -136,6 +153,24 @@ fn button_lays_out_icon_and_label_inside_content_padding() {
 }
 
 #[test]
+fn button_centers_a_measured_icon_and_label_footprint() {
+    let button = Button::icon_and_label(
+        Rect::from_xywh(20.0, 4.0, 100.0, 27.0),
+        TEST_ICON,
+        "Code",
+        ButtonState::Resting,
+        test_style(),
+    )
+    .with_measured_label_size(crate::Size::new(30.0, 13.0));
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(scene.icons()[0].bounds().origin.x, 46.5);
+    assert_eq!(scene.text_blocks()[0].origin().x, 65.5);
+}
+
+#[test]
 fn button_style_derives_icon_and_label_width_from_internal_geometry() {
     assert_eq!(
         test_style().preferred_icon_and_label_width(42.0),
@@ -200,5 +235,24 @@ fn button_projects_selected_and_disabled_presentation_independently() {
     assert_eq!(
         scene.text_blocks()[0].style().color(),
         Color::rgb(50, 60, 70)
+    );
+}
+
+#[test]
+fn button_projects_selected_text_style() {
+    let button = Button::new(
+        Rect::from_xywh(0.0, 0.0, 100.0, 27.0),
+        "Selected",
+        ButtonState::Resting,
+        test_style(),
+    )
+    .with_selection(ButtonSelection::Selected);
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(
+        scene.text_blocks()[0].style().color(),
+        Color::rgb(180, 190, 200)
     );
 }

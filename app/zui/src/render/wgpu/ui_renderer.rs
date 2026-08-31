@@ -6,49 +6,23 @@ use glyphon::{
     Attrs, Buffer, Cache, Color as GlyphColor, Metrics, Resolution, Shaping, SwashCache, TextArea,
     TextAtlas, TextBounds, TextRenderer, Viewport, Wrap,
 };
-use std::ops::Range;
 use std::sync::Arc;
 
+use self::clip::{ClipRenderer, PreparedBatch, content_depth_stencil};
 use self::icon::IconRenderer;
 use self::image::ImageRenderer;
 use self::rect::RectRenderer;
 
+mod clip;
 mod error;
 mod icon;
 mod image;
 mod rect;
+mod target;
 
+pub(super) use clip::CLIP_FORMAT;
 pub(super) use error::UiRenderError;
-
-/// Physical render-target extent paired with the logical-to-physical UI scale.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct UiViewport {
-    width: u32,
-    height: u32,
-    scale_factor: f32,
-}
-
-impl UiViewport {
-    pub const fn new(width: u32, height: u32, scale_factor: f32) -> Self {
-        Self {
-            width,
-            height,
-            scale_factor,
-        }
-    }
-
-    pub const fn width(self) -> u32 {
-        self.width
-    }
-
-    pub const fn height(self) -> u32 {
-        self.height
-    }
-
-    pub const fn scale_factor(self) -> f32 {
-        self.scale_factor
-    }
-}
+pub use target::UiViewport;
 
 struct PreparedArea {
     left: f32,
@@ -76,17 +50,15 @@ impl CachedTextBuffer {
     }
 }
 
-enum PreparedBatch {
-    Rects(Range<usize>),
-    Icons(Range<usize>),
-    Images(Range<usize>),
-    Text(usize),
-}
-
 impl TextLayer {
     fn new(atlas: &mut TextAtlas, device: &wgpu::Device) -> Self {
         Self {
-            renderer: TextRenderer::new(atlas, device, wgpu::MultisampleState::default(), None),
+            renderer: TextRenderer::new(
+                atlas,
+                device,
+                wgpu::MultisampleState::default(),
+                Some(content_depth_stencil()),
+            ),
             buffers: Vec::new(),
             areas: Vec::new(),
         }
@@ -95,6 +67,7 @@ impl TextLayer {
 
 /// Owns the font shaping, glyph cache, atlas, and GPU pipeline for a native UI surface.
 pub struct UiRenderer {
+    clip_renderer: ClipRenderer,
     rect_renderer: RectRenderer,
     icon_renderer: IconRenderer,
     image_renderer: ImageRenderer,
@@ -121,9 +94,10 @@ impl UiRenderer {
         let mut atlas = TextAtlas::new(device, queue, &cache, surface_format);
         let text_batches = vec![TextLayer::new(&mut atlas, device)];
         Self {
-            rect_renderer: RectRenderer::new(device, surface_format),
-            icon_renderer: IconRenderer::new(device, surface_format),
-            image_renderer: ImageRenderer::new(device, surface_format),
+            clip_renderer: ClipRenderer::new(device, surface_format),
+            rect_renderer: RectRenderer::new(device, surface_format, content_depth_stencil()),
+            icon_renderer: IconRenderer::new(device, surface_format, content_depth_stencil()),
+            image_renderer: ImageRenderer::new(device, surface_format, content_depth_stencil()),
             font_system: create_font_system(),
             swash_cache: SwashCache::new(),
             viewport,
@@ -144,7 +118,7 @@ impl UiRenderer {
         scene: &UiScene,
         target: UiViewport,
     ) -> Result<(), UiRenderError> {
-        let scale_factor = target.scale_factor;
+        let scale_factor = target.scale_factor();
         if !scale_factor.is_finite() || scale_factor <= 0.0 {
             return Err(UiRenderError::InvalidScaleFactor(scale_factor));
         }
@@ -153,11 +127,12 @@ impl UiRenderer {
             self.viewport.update(
                 queue,
                 Resolution {
-                    width: target.width,
-                    height: target.height,
+                    width: target.width(),
+                    height: target.height(),
                 },
             );
         }
+        self.clip_renderer.prepare(device, queue, scene, target)?;
         self.rect_renderer.prepare(device, queue, scene, target)?;
         self.icon_renderer.prepare(device, queue, scene, target)?;
         self.image_renderer.prepare(device, queue, scene, target)?;
@@ -171,19 +146,45 @@ impl UiRenderer {
             let mut text_batch_index = 0;
             for batch in &scene_batches {
                 match batch {
-                    SceneBatch::Rects { range, .. } => {
-                        self.prepared_batches
-                            .push(PreparedBatch::Rects(range.clone()));
+                    SceneBatch::ClipStart { index, depth, .. } => {
+                        self.prepared_batches.push(PreparedBatch::ClipStart {
+                            index: *index,
+                            depth: *depth,
+                        });
                     }
-                    SceneBatch::Icons { range, .. } => {
-                        self.prepared_batches
-                            .push(PreparedBatch::Icons(range.clone()));
+                    SceneBatch::ClipEnd { index, depth, .. } => {
+                        self.prepared_batches.push(PreparedBatch::ClipEnd {
+                            index: *index,
+                            depth: *depth,
+                        });
                     }
-                    SceneBatch::Images { range, .. } => {
-                        self.prepared_batches
-                            .push(PreparedBatch::Images(range.clone()));
+                    SceneBatch::Rects {
+                        range, clip_depth, ..
+                    } => {
+                        self.prepared_batches.push(PreparedBatch::Rects {
+                            range: range.clone(),
+                            clip_depth: *clip_depth,
+                        });
                     }
-                    SceneBatch::Text { range, .. } => {
+                    SceneBatch::Icons {
+                        range, clip_depth, ..
+                    } => {
+                        self.prepared_batches.push(PreparedBatch::Icons {
+                            range: range.clone(),
+                            clip_depth: *clip_depth,
+                        });
+                    }
+                    SceneBatch::Images {
+                        range, clip_depth, ..
+                    } => {
+                        self.prepared_batches.push(PreparedBatch::Images {
+                            range: range.clone(),
+                            clip_depth: *clip_depth,
+                        });
+                    }
+                    SceneBatch::Text {
+                        range, clip_depth, ..
+                    } => {
                         if text_batch_index == self.text_batches.len() {
                             self.text_batches
                                 .push(TextLayer::new(&mut self.atlas, device));
@@ -223,8 +224,10 @@ impl UiRenderer {
                             text_areas,
                             &mut self.swash_cache,
                         )?;
-                        self.prepared_batches
-                            .push(PreparedBatch::Text(text_batch_index));
+                        self.prepared_batches.push(PreparedBatch::Text {
+                            index: text_batch_index,
+                            clip_depth: *clip_depth,
+                        });
                         text_batch_index += 1;
                     }
                 }
@@ -279,20 +282,32 @@ impl UiRenderer {
     ) -> Result<(), UiRenderError> {
         for batch in &self.prepared_batches {
             match batch {
-                PreparedBatch::Rects(range) => {
+                PreparedBatch::ClipStart { index, depth } => {
+                    self.clip_renderer.render_start(render_pass, *index, *depth);
+                }
+                PreparedBatch::ClipEnd { index, depth } => {
+                    self.clip_renderer.render_end(render_pass, *index, *depth);
+                }
+                PreparedBatch::Rects { range, clip_depth } => {
+                    render_pass.set_stencil_reference(*clip_depth);
                     self.rect_renderer.render_range(render_pass, range.clone());
                 }
-                PreparedBatch::Icons(range) => {
+                PreparedBatch::Icons { range, clip_depth } => {
+                    render_pass.set_stencil_reference(*clip_depth);
                     self.icon_renderer.render_range(render_pass, range.clone());
                 }
-                PreparedBatch::Images(range) => {
+                PreparedBatch::Images { range, clip_depth } => {
+                    render_pass.set_stencil_reference(*clip_depth);
                     self.image_renderer.render_range(render_pass, range.clone());
                 }
-                PreparedBatch::Text(index) => self.text_batches[*index].renderer.render(
-                    &self.atlas,
-                    &self.viewport,
-                    render_pass,
-                )?,
+                PreparedBatch::Text { index, clip_depth } => {
+                    render_pass.set_stencil_reference(*clip_depth);
+                    self.text_batches[*index].renderer.render(
+                        &self.atlas,
+                        &self.viewport,
+                        render_pass,
+                    )?;
+                }
             }
         }
         Ok(())
@@ -308,6 +323,7 @@ fn same_text_buffer_layout(left: &TextBlock, right: &TextBlock) -> bool {
         && left.spans() == right.spans()
         && left.bounds() == right.bounds()
         && left.wrap() == right.wrap()
+        && left.is_text_centered() == right.is_text_centered()
         && same_shaping_style(left.style(), right.style())
 }
 
@@ -418,8 +434,11 @@ fn prepare_text_buffer(
         .family(font_family(style.family()))
         .weight(font_weight(style.weight()))
         .style(font_style(style.style()));
+    let alignment = block
+        .is_text_centered()
+        .then_some(glyphon::cosmic_text::Align::Center);
     if block.spans().is_empty() {
-        buffer.set_text(block.text(), &attrs, Shaping::Advanced, None);
+        buffer.set_text(block.text(), &attrs, Shaping::Advanced, alignment);
     } else {
         buffer.set_rich_text(
             block
@@ -428,7 +447,7 @@ fn prepare_text_buffer(
                 .map(|span| (span.text(), attrs_for_style(span.style(), scale_factor))),
             &attrs,
             Shaping::Advanced,
-            None,
+            alignment,
         );
     }
     buffer.shape_until_scroll(font_system, false);

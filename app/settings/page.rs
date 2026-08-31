@@ -10,7 +10,6 @@ use super::SETTINGS_NAV_REMOTE;
 use super::SETTINGS_PAGE;
 use super::SETTINGS_SEARCH_INPUT;
 use super::SettingsPageLayout;
-use super::SettingsPageMode;
 use super::SettingsPageSection;
 use super::SettingsPageStyle;
 use super::navigation::button_state;
@@ -50,7 +49,6 @@ use zui::ui::UiScene;
 pub struct SettingsPage {
     layout: SettingsPageLayout,
     style: SettingsPageStyle,
-    mode: SettingsPageMode,
     section: SettingsPageSection,
     interaction_parent: Option<ElementId>,
     search_box: SearchBox,
@@ -140,7 +138,6 @@ impl SettingsPage {
         Self {
             layout,
             style,
-            mode: SettingsPageMode::default(),
             section,
             interaction_parent: None,
             search_box,
@@ -157,12 +154,6 @@ impl SettingsPage {
     /// Sets the host element that owns this page in the interaction tree.
     pub const fn with_parent(mut self, parent: ElementId) -> Self {
         self.interaction_parent = Some(parent);
-        self
-    }
-
-    /// Selects whether the page is embedded in a workbench surface or acts as a modal page.
-    pub const fn with_mode(mut self, mode: SettingsPageMode) -> Self {
-        self.mode = mode;
         self
     }
 
@@ -285,9 +276,6 @@ impl Component for SettingsPage {
     }
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        if self.mode == SettingsPageMode::Modal {
-            context.set_modal_root(SETTINGS_PAGE);
-        }
         for region in self.child_interaction_regions() {
             context.draw_component(&region);
         }

@@ -1,14 +1,13 @@
 use crate::{
     AccessibilityRole, Border, BoxShadow, CaretVisibility, Color, Component, ComponentContext,
-    ComponentElement, ComputedElement, CornerRadii, CursorFeedback, Element, ElementId,
-    FocusBehavior, InteractionRegion, NodeAction, PaintRect, Point, Rect, SearchBox,
+    ComponentElement, ComputedElement, CornerRadii, CursorFeedback, Dialog, DialogIds, DialogStyle,
+    ElementId, FocusBehavior, InteractionRegion, NodeAction, PaintRect, Point, Rect, SearchBox,
     SearchBoxStyle, Size, TextBlock, TextInput, TextInputLayoutEngine, TextStyle, UiDispatch,
     UiNode, UiScene,
 };
 
 const PANEL_WIDTH: f32 = 660.0;
 const PANEL_HEIGHT: f32 = 470.0;
-const PANEL_MARGIN: f32 = 24.0;
 const TITLE_HEIGHT: f32 = 50.0;
 const SEARCH_HEIGHT: f32 = 34.0;
 const SEARCH_BOTTOM_GAP: f32 = 12.0;
@@ -42,14 +41,16 @@ impl QuickInputIds {
     pub const fn root(self) -> ElementId {
         self.root
     }
+
+    pub const fn dialog_ids(self) -> DialogIds {
+        DialogIds::new(self.parent, self.root)
+    }
 }
 
 /// Visual tokens for the shared quick input shell and its search field.
 #[derive(Clone, Debug, PartialEq)]
 pub struct QuickInputStyle {
-    scrim: Color,
-    surface: Color,
-    border: Color,
+    dialog: DialogStyle,
     text: Color,
     text_muted: Color,
     text_error: Color,
@@ -70,9 +71,15 @@ impl QuickInputStyle {
         search_box: SearchBoxStyle,
     ) -> Self {
         Self {
-            scrim,
-            surface,
-            border,
+            dialog: DialogStyle::new(scrim, surface)
+                .with_border(Border::uniform(1.0, border))
+                .with_corner_radii(CornerRadii::uniform(10.0))
+                .with_shadow(
+                    BoxShadow::new(Color::rgba(0, 0, 0, 64))
+                        .with_offset(Point::new(0.0, 8.0))
+                        .with_blur_radius(24.0),
+                )
+                .with_viewport_margin(24.0),
             text,
             text_muted,
             text_error,
@@ -88,6 +95,10 @@ impl QuickInputStyle {
     pub const fn text_muted(&self) -> Color {
         self.text_muted
     }
+
+    pub(crate) const fn dialog_style(&self) -> DialogStyle {
+        self.dialog
+    }
 }
 
 /// Severity used to present a short message below quick input content.
@@ -98,13 +109,14 @@ pub enum QuickInputMessageKind {
     Error,
 }
 
-/// Centered modal input shell with a built-in search field and host-owned content area.
+/// Centered modal input composed from [`Dialog`] with a built-in search field and host-owned
+/// content area.
 ///
-/// QuickInput owns modal geometry, search presentation, close interaction, and content clipping.
-/// The host owns the retained text input, keyboard and IME routing, filtering, and content.
+/// QuickInput owns search presentation, close interaction, and content clipping. [`Dialog`] owns
+/// modal geometry and interaction scope. The host owns the retained text input, keyboard and IME
+/// routing, filtering, and content.
 pub struct QuickInput<'a> {
-    viewport: Rect,
-    panel: Rect,
+    dialog: Dialog,
     title: String,
     search_box: SearchBox,
     search_value: String,
@@ -127,14 +139,15 @@ impl<'a> QuickInput<'a> {
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &'a UiDispatch,
     ) -> Self {
-        let width = PANEL_WIDTH.min((viewport.size.width - PANEL_MARGIN * 2.0).max(1.0));
-        let height = PANEL_HEIGHT.min((viewport.size.height - PANEL_MARGIN * 2.0).max(1.0));
-        let panel = Rect::from_xywh(
-            viewport.origin.x + (viewport.size.width - width) * 0.5,
-            viewport.origin.y + (viewport.size.height - height) * 0.5,
-            width,
-            height,
+        let title = title.into();
+        let dialog = Dialog::new(
+            viewport,
+            Size::new(PANEL_WIDTH, PANEL_HEIGHT),
+            title.clone(),
+            ids.dialog_ids(),
+            style.dialog_style(),
         );
+        let panel = dialog.bounds();
         let search_bounds = Rect::from_xywh(
             panel.origin.x + CONTENT_INSET,
             panel.origin.y + TITLE_HEIGHT,
@@ -157,9 +170,8 @@ impl<'a> QuickInput<'a> {
             text_layout,
         );
         Self {
-            viewport,
-            panel,
-            title: title.into(),
+            dialog,
+            title,
             search_box,
             search_value: search_input.text().to_owned(),
             message: None,
@@ -175,16 +187,17 @@ impl<'a> QuickInput<'a> {
     }
 
     pub const fn bounds(&self) -> Rect {
-        self.panel
+        self.dialog.bounds()
     }
 
     pub fn content_bounds(&self) -> Rect {
-        let top = self.panel.origin.y + TITLE_HEIGHT + SEARCH_HEIGHT + SEARCH_BOTTOM_GAP;
+        let panel = self.dialog.bounds();
+        let top = panel.origin.y + TITLE_HEIGHT + SEARCH_HEIGHT + SEARCH_BOTTOM_GAP;
         Rect::from_xywh(
-            self.panel.origin.x + CONTENT_INSET,
+            panel.origin.x + CONTENT_INSET,
             top,
-            self.panel.size.width - CONTENT_INSET * 2.0,
-            (self.panel.bottom() - FOOTER_HEIGHT - top).max(0.0),
+            panel.size.width - CONTENT_INSET * 2.0,
+            (panel.bottom() - FOOTER_HEIGHT - top).max(0.0),
         )
     }
 
@@ -197,16 +210,12 @@ impl<'a> QuickInput<'a> {
     }
 
     pub const fn root_id(&self) -> ElementId {
-        self.ids.root
+        self.dialog.root_id()
     }
 
     fn close_bounds(&self) -> Rect {
-        Rect::from_xywh(
-            self.panel.right() - 42.0,
-            self.panel.origin.y + 11.0,
-            28.0,
-            28.0,
-        )
+        let panel = self.dialog.bounds();
+        Rect::from_xywh(panel.right() - 42.0, panel.origin.y + 11.0, 28.0, 28.0)
     }
 
     fn close_region(&self) -> InteractionRegion {
@@ -237,22 +246,13 @@ impl<'a> QuickInput<'a> {
     }
 
     fn paint_shell(&self, scene: &mut UiScene) {
-        scene.draw_rect(PaintRect::new(self.viewport, self.style.scrim));
-        scene.draw_rect(
-            PaintRect::new(self.panel, self.style.surface)
-                .with_shadow(
-                    BoxShadow::new(Color::rgba(0, 0, 0, 64))
-                        .with_offset(Point::new(0.0, 8.0))
-                        .with_blur_radius(24.0),
-                )
-                .with_border(Border::uniform(1.0, self.style.border))
-                .with_corner_radii(CornerRadii::uniform(8.0)),
-        );
+        self.dialog.paint_shell(scene);
+        let panel = self.dialog.bounds();
         draw_label(
             scene,
             &self.title,
-            Point::new(self.panel.origin.x + 20.0, self.panel.origin.y + 14.0),
-            Size::new(self.panel.size.width - 80.0, 24.0),
+            Point::new(panel.origin.x + 20.0, panel.origin.y + 14.0),
+            Size::new(panel.size.width - 80.0, 24.0),
             TextStyle::new(17.0, self.style.text).with_line_height(22.0),
         );
         let close = self.close_bounds();
@@ -278,8 +278,8 @@ impl<'a> QuickInput<'a> {
             draw_label(
                 scene,
                 message,
-                Point::new(self.panel.origin.x + 20.0, self.panel.bottom() - 32.0),
-                Size::new(self.panel.size.width - 40.0, 18.0),
+                Point::new(panel.origin.x + 20.0, panel.bottom() - 32.0),
+                Size::new(panel.size.width - 40.0, 18.0),
                 TextStyle::new(12.0, color).with_line_height(18.0),
             );
         }
@@ -291,7 +291,7 @@ impl<'a> QuickInput<'a> {
         draw_content: impl FnOnce(&mut ComponentContext<'_, '_>, Rect),
     ) {
         context.with_component(self, |context, _element| {
-            context.set_modal_root(self.ids.root);
+            context.set_modal_root(self.dialog.root_id());
             self.paint_shell(context.scene_mut());
             context.draw_component(&self.close_region());
             context.draw_component(&self.search_region());
@@ -317,26 +317,15 @@ impl<'a> QuickInput<'a> {
 
 impl Component for QuickInput<'_> {
     fn element(&self) -> ComponentElement {
-        Element::leaf("QuickInput")
-            .corner_radii(CornerRadii::uniform(8.0))
-            .in_overlay(self.panel)
-            .with_identity(self.ids.root)
+        self.dialog.element_with_name("QuickInput")
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
-        Some(
-            UiNode::new(
-                self.ids.root,
-                element.bounds(),
-                AccessibilityRole::Group,
-                self.title.clone(),
-            )
-            .with_parent(self.ids.parent),
-        )
+        Some(self.dialog.root_interaction_node(element))
     }
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        context.set_modal_root(self.ids.root);
+        context.set_modal_root(self.dialog.root_id());
         self.paint_shell(context.scene_mut());
         context.draw_component(&self.close_region());
         context.draw_component(&self.search_region());

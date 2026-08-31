@@ -75,7 +75,7 @@ impl WorkbenchApplication {
         &self,
         point: zui::ui::Point,
     ) -> Option<(PaneId, TerminalMousePosition)> {
-        let tab_key = self.workbench.workbench().tab_part().active_tab_key()?;
+        let tab_key = self.workbench.workbench().sidebar_part().active_tab_key()?;
         let layout = self.workbench.workbench().pane_part(tab_key)?;
         terminal_pane_mouse_position_for_viewport(
             self.logical_viewport(),
@@ -94,7 +94,7 @@ impl WorkbenchApplication {
         let Some(tab_key) = self
             .workbench
             .workbench()
-            .tab_part()
+            .sidebar_part()
             .active_tab_key()
             .cloned()
         else {
@@ -111,7 +111,7 @@ impl WorkbenchApplication {
             return None;
         }
         if let Some((pane, position)) = self.terminal_pane_hit(point) {
-            let tab = self.workbench.workbench().tab_part().active_tab_key()?;
+            let tab = self.workbench.workbench().sidebar_part().active_tab_key()?;
             return self
                 .terminal_pane_views
                 .active()

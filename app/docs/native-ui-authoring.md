@@ -2,6 +2,8 @@
 
 > 状态：Current contract。本文是 `zui`、`zeta-ui-components`、`zeta-workbench` 与 `app` product host 之间的 UI 编写和样式边界；具体 crate API 由 [`zui` README](../zui/README.md)、[`zeta-ui-components` README](../ui-components/README.md) 和 [`zeta-workbench` README](../workbench/README.md) 维护。
 
+app 的具体圆角、间距和浮层视觉规格由 [`UI 样式设计规范`](ui-design-guidelines.md) 维护；本文只负责样式进入组件的技术边界。
+
 ## 快速理解
 
 Native UI 使用 Rust 声明组件结构和布局，使用 typed style struct 表达组件视觉，使用共享主题快照提供颜色和尺寸值；它不使用 DOM、CSS selector、stylesheet parser 或 cascade。
@@ -9,7 +11,7 @@ Native UI 使用 Rust 声明组件结构和布局，使用 typed style struct �
 | 想表达什么 | 当前写法 | 谁拥有含义 | 是否允许调用方穿透覆盖 |
 | --- | --- | --- | --- |
 | 组件树与基础布局 | `Element::leaf`、`Element::row`、`Element::column` 及其 builder | `zui::ui::presentation` | 否；通过公开的 Element API 表达 |
-| Button、Tab、InputBox 等组件外观 | `ButtonStyle`、`TabStyle`、`InputBoxStyle` 等 typed style | `zeta-ui-components` 组件 | 否；通过 style、state 或 named variant 传入 |
+| Button、RadioGroup、InputBox 等组件外观 | `ButtonStyle`、`RadioGroupStyle`、`InputBoxStyle` 等 typed style | `zeta-ui-components` 组件 | 否；通过 style、state 或 named variant 传入 |
 | 主题颜色和标准尺寸 | `ThemeSnapshot` 到 product palette，再到组件 style | `zeta-theme` 与各宿主投影 | 否；不在组件中复制主题值 |
 | hover、focus、selected、disabled | host 投影的 typed state | 交互/产品 host 判定，组件解释视觉 | 否；组件不自行猜测业务状态 |
 | view-local / projected state 与订阅 | `ViewState<T>`、`ComponentRuntime`、`ComponentContext::{local_state,observe_state,retain_resource}` | `zui` 管理 presentation 生命周期；host 仍拥有产品权威状态与副作用 | 否；只能通过 typed state 和稳定 component identity 连接 |
@@ -54,8 +56,8 @@ Native UI 当前明确不提供以下能力：
 | 层 | 负责什么 | 当前入口 | 明确不负责什么 |
 | --- | --- | --- | --- |
 | `zui` presentation | Element 树、基础 flow、computed geometry、paint primitive、scene、inspection，以及 view-local state/subscription 和 component mount resource | `zui::ui::{Element,Component,ComputedElement,UiScene,ViewState,ComponentRuntime}` | Button 语义、主题选择、产品 reducer、GPU 和业务 action/副作用 |
-| `zeta-ui-components` component | Button、TabList、ScrollView、InputBox 等组件的内部几何、视觉状态解释和 scene composition | `zeta_ui_components::{ButtonStyle,TabStyle,ScrollViewStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
-| `zeta-workbench` | Workbench Titlebar、TabContainer、Toolbar、interaction identity、layout 与 presentation state | `zeta_workbench::{Titlebar,TabContainer,TabContainerState,...}` | Session、Terminal、Editor 等具体内容生命周期与 UI |
+| `zeta-ui-components` component | Button、RadioGroup、ScrollView、InputBox、ContextView、Dialog 等组件的内部几何、视觉状态解释和 scene composition | `zeta_ui_components::{ButtonStyle,RadioGroupStyle,ScrollViewStyle,DialogStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
+| `zeta-workbench` | Workbench Titlebar、Sidebar header/content、interaction identity、layout 与 presentation state | `zeta_workbench::{Titlebar,SidebarView,SidebarPart,...}` | Session、Terminal、Editor 等具体内容生命周期与 UI |
 | Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `zeta_theme::ThemeSnapshot`、`zeta_ui_theme::UiTheme` 及其 typed style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
 | Product host | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action | `app`、`app/workbench/environment`、`zeta-editor` 等 | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
 
@@ -110,7 +112,9 @@ let button_style = ButtonStyle::new(
 | 属性 | 当前语义 | 当前 API |
 | --- | --- | --- |
 | 方向 | 直接子节点沿横轴或纵轴排列 | `Element::row` / `Element::column` |
-| 宽度和高度 | `Fill` 或固定 logical pixels | `.width(...)` / `.height(...)`、`ElementLength::px(...)` |
+| 宽度和高度 | 填满剩余空间、固定逻辑像素或使用内容自然尺寸 | `.width(...)` / `.height(...)`、`ElementLength::{Fill,Pixels,Content}`、`.content_size(...)` |
+| 主轴排列 | 子节点从起点、居中、终点或分散排列 | `.justify_content(JustifyContent)` |
+| 交叉轴排列 | 子节点在交叉轴起点、居中或终点排列 | `.align_items(AlignItems)` |
 | 内边距 | 内容区域的 top/right/bottom/left inset | `.padding(Edges)` |
 | 子节点间距 | 相邻直接子节点之间的 gap | `.gap(f32)` |
 | 圆角 | 当前节点的 rounded-rect presentation metadata | `.corner_radii(CornerRadii)` |
@@ -124,7 +128,7 @@ let button_style = ButtonStyle::new(
 
 组件内部的 Button content、Tab item、scrollbar、input chrome 和浮层 content 由对应 `zeta-ui-components` 组件 style 与 Element tree 负责。产品 host 只提供外部 bounds、数据投影和 interaction identity。
 
-如果组件需要当前 contract 尚未表达的 min/max size、cross-axis alignment、intrinsic measurement、margin 或 wrapping，应先提出一个 typed layout contract；不能通过 host 手工计算一套平行 geometry，也不能用未定义的 CSS-like 字符串逃避类型设计。
+如果组件需要当前 contract 尚未表达的 min/max size、margin、wrapping 或逐项 grow/shrink，应先提出一个 typed layout contract；不能通过 host 手工计算一套平行 geometry，也不能用未定义的 CSS-like 字符串逃避类型设计。
 
 ### 4.3 容器区域命名
 
@@ -132,7 +136,7 @@ let button_style = ButtonStyle::new(
 
 | 结构 | 区域命名 | 区域内容 |
 | --- | --- | --- |
-| Tab Part | `header`、`content` | `header` 组合 `TabContainerToolbar`；`content` 组合 `ScrollView` 和一个或多个 `TabList` |
+| Sidebar Part | `header`、`content` | `SidebarHeader` 挂 Cowork / Code `ModeSwitcher`，`ModeSwitcher` 组合 `RadioGroup`；`content` 挂 Sessions toolbar、`ScrollView`、分组根和 `ListItem` 子项 |
 | Chat Composer | `interaction`、`info_bar`、`editor`、`toolbar` | 各区域按真实职责命名；底部 `toolbar` 不能改称 `header` |
 
 同级区域必须由共同的父布局一次性计算。`header` 可以组合 `Toolbar`，但 `Toolbar` 只计算自己的按钮、搜索框和内部 padding，不能计算或公开兄弟 `content` 的 bounds。出现 `Toolbar::content_bounds`、`Header::body_bounds` 或调用方重复推导同一分区几何，说明布局 ownership 已经漂移，应把分区计算移回容器布局。
@@ -169,7 +173,7 @@ Native 中的 style struct 是组件公开的样式 contract。它可以包含�
 | hover | `UiDispatch` / pointer projection | 读取 `ButtonState::Hovered` 等 typed state 并选择背景 | 自己监听平台 pointer 或猜测业务 hover |
 | focus | `UiDispatch` / focus model | 绘制 focused presentation | 自己抢 focus 或创建第二套 focus tree |
 | pressed | 当前交互 dispatch | 绘制 pressed presentation | 直接执行 command 或修改产品 reducer |
-| selected / checked | 产品 host 投影 | 使用 `ButtonSelection`、`TabSelection` 等 presentation | 把 selected 当作通用 hover 或从 `ElementId` 推断 |
+| selected / checked | 产品 host 投影 | 使用 `ButtonSelection`、`RadioSelection` 等 presentation | 把 selected 当作通用 hover 或从 `ElementId` 推断 |
 | disabled | 产品/交互 host 投影 | 禁止或弱化视觉，并让 host 决定是否注册 action | 读取业务状态、自动禁用其他节点 |
 | theme scheme | `ThemeSnapshot` | 消费 palette-derived style | 在组件中维护第二套 light/dark token 表 |
 
@@ -225,16 +229,16 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 
 ### 当前状态 / 已实现
 
-- `zui` 已提供 `Element`、`ComputedElement`、`Component`、`UiScene`、inspection 和 backend-neutral primitive contract；
+- `zui` 已提供带内容自然尺寸、主轴排列和交叉轴排列的 `Element`、`ComputedElement`、`Component`、`UiScene`、inspection 和 backend-neutral primitive contract；
 - `zui` 已提供 `ViewState` revision/subscription，以及由稳定 `ElementId` 驱动 local state、external observation、RAII resource 和 unmount cleanup 的 `ComponentRuntime`；
-- `zeta-ui-components` 已提供 Button、Switch、Checkbox、ActionBar、Menu、Dropdown、TabList、HorizontalScrollbar、VerticalScrollbar、ScrollView、InputBox、ContextView 等 typed component/style contract；
+- `zeta-ui-components` 已提供 Button、Radio/RadioGroup、Switch、Checkbox、ActionBar、Menu、Dropdown、HorizontalScrollbar、VerticalScrollbar、ScrollView、InputBox、ContextView、Dialog、QuickInput 和 QuickPick 等 typed component/style contract；
 - Native host 已通过主题快照、palette 和领域 style factory 向组件投影颜色与标准尺寸；
 - 组件的 paint、interaction、inspection 和 accessibility 已沿同一 frame/Element contract 组合；
 - DevTools 展示 scene inspection 和 computed layout，但不模拟 DOM/CSS debugger。
 
 ### 当前状态 / 当前限制
 
-- `Element` 目前没有通用 margin、min/max、alignment、intrinsic measurement 或完整 flex/grid property vocabulary；
+- `Element` 目前没有通用 margin、min/max、wrapping、逐项 grow/shrink 或完整 flex/grid 属性集合；
 - Native 没有 style inheritance、selector、cascade、stylesheet 文件或运行时热更新；
 - 主题 token 已跨 Desktop、Native 和 TUI 共享，但各宿主仍需要自己的 palette/style projection；
 - 样式 ownership 主要由 API 和 review 约束，尚未有覆盖所有 Native component 的自动 deep-override lint；

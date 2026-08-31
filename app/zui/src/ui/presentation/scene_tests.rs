@@ -7,8 +7,8 @@ use crate::ui::text::FontWeight;
 use crate::ui::text::TextSpan;
 use crate::ui::text::TextStyle;
 use crate::{
-    Color, Element, ElementId, ImageData, ImageId, PaintIcon, PaintImage, PaintRect, Point, Rect,
-    Size,
+    Color, CornerRadii, Element, ElementId, ImageData, ImageId, PaintIcon, PaintImage, PaintRect,
+    Point, Rect, Size,
 };
 
 const TEST_ICON: Icon = Icon::new(
@@ -90,6 +90,19 @@ fn text_style_defaults_to_readable_line_height() {
 }
 
 #[test]
+fn text_block_retains_explicit_center_alignment() {
+    let block = TextBlock::new(
+        "Centered",
+        Point::new(8.0, 12.0),
+        Size::new(200.0, 24.0),
+        TextStyle::new(16.0, Color::WHITE),
+    )
+    .with_centered_text();
+
+    assert!(block.is_text_centered());
+}
+
+#[test]
 fn scene_applies_nested_clip_to_all_primitives() {
     let mut scene = UiScene::new(Color::TRANSPARENT);
     scene.with_clip(Rect::from_xywh(10.0, 10.0, 100.0, 80.0), |scene| {
@@ -116,6 +129,88 @@ fn scene_applies_nested_clip_to_all_primitives() {
     assert_eq!(scene.rects()[0].clip_bounds(), expected);
     assert_eq!(scene.icons()[0].clip_bounds(), expected);
     assert_eq!(scene.text_blocks()[0].clip_bounds(), expected);
+}
+
+#[test]
+fn scene_records_nested_rounded_clips_and_their_content_depth() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    let outer = Rect::from_xywh(10.0, 10.0, 100.0, 80.0);
+    let inner = Rect::from_xywh(20.0, 20.0, 60.0, 40.0);
+
+    scene.with_rounded_clip(outer, CornerRadii::uniform(10.0), |scene| {
+        scene.draw_rect(PaintRect::new(outer, Color::WHITE));
+        scene.with_rounded_clip(inner, CornerRadii::uniform(4.0), |scene| {
+            scene.draw_text(TextBlock::new(
+                "nested",
+                inner.origin,
+                inner.size,
+                TextStyle::new(12.0, Color::WHITE),
+            ));
+        });
+    });
+
+    assert_eq!(scene.clips()[0].bounds(), outer);
+    assert_eq!(scene.clips()[0].corner_radii(), CornerRadii::uniform(10.0));
+    assert_eq!(scene.clips()[1].bounds(), inner);
+    assert_eq!(
+        scene.batches().collect::<Vec<_>>(),
+        [
+            SceneBatch::ClipStart {
+                layer: 0,
+                index: 0,
+                depth: 0,
+            },
+            SceneBatch::Rects {
+                layer: 0,
+                range: 0..1,
+                clip_depth: 1,
+            },
+            SceneBatch::ClipStart {
+                layer: 0,
+                index: 1,
+                depth: 1,
+            },
+            SceneBatch::Text {
+                layer: 0,
+                range: 0..1,
+                clip_depth: 2,
+            },
+            SceneBatch::ClipEnd {
+                layer: 0,
+                index: 1,
+                depth: 2,
+            },
+            SceneBatch::ClipEnd {
+                layer: 0,
+                index: 0,
+                depth: 1,
+            },
+        ]
+    );
+}
+
+#[test]
+fn overlay_escapes_a_rounded_clip() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    let clip = Rect::from_xywh(10.0, 10.0, 40.0, 40.0);
+
+    scene.with_rounded_clip(clip, CornerRadii::uniform(8.0), |scene| {
+        scene.with_overlay(|scene| {
+            scene.draw_rect(PaintRect::new(
+                Rect::from_xywh(0.0, 0.0, 80.0, 80.0),
+                Color::WHITE,
+            ));
+        });
+    });
+
+    assert_eq!(
+        scene.batches().last(),
+        Some(SceneBatch::Rects {
+            layer: 1,
+            range: 0..1,
+            clip_depth: 0,
+        })
+    );
 }
 
 #[test]
@@ -369,14 +464,17 @@ fn batches_preserve_cross_kind_paint_order_and_coalesce_adjacent_primitives() {
             SceneBatch::Rects {
                 layer: 0,
                 range: 0..2,
+                clip_depth: 0,
             },
             SceneBatch::Text {
                 layer: 0,
                 range: 0..1,
+                clip_depth: 0,
             },
             SceneBatch::Rects {
                 layer: 0,
                 range: 2..3,
+                clip_depth: 0,
             },
         ]
     );
@@ -406,14 +504,17 @@ fn batches_order_overlays_above_base_primitives_drawn_later() {
             SceneBatch::Rects {
                 layer: 0,
                 range: 0..1,
+                clip_depth: 0,
             },
             SceneBatch::Rects {
                 layer: 0,
                 range: 2..3,
+                clip_depth: 0,
             },
             SceneBatch::Rects {
                 layer: 1,
                 range: 1..2,
+                clip_depth: 0,
             },
         ]
     );

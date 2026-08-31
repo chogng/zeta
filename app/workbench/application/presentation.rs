@@ -53,16 +53,27 @@ pub(super) fn with_shell_presentation_model<R>(
     let language_hover = language_service.active_hover(file_editor_host);
     let language_completions = language_service.active_completions(file_editor_host);
     let git_diff_summary = env.diff_summary_label();
-    let active_tab_input = workbench_model.tab_part().active_tab_key();
-    let pane_group = active_tab_input.and_then(|key| workbench_model.pane_part(key));
-    let active_pane = active_tab_input.and_then(|tab_key| {
+    let active_tab_input = workbench_model.sidebar_part().active_tab_key();
+    let content_tab_input = active_tab_input
+        .filter(|input| input.is_session())
+        .cloned()
+        .or_else(|| {
+            workbench_model
+                .sidebar_part()
+                .selected_session()
+                .cloned()
+                .map(TabInputKey::session)
+        });
+    let content_tab_input = content_tab_input.as_ref();
+    let pane_group = content_tab_input.and_then(|key| workbench_model.pane_part(key));
+    let active_pane = content_tab_input.and_then(|tab_key| {
         let layout = workbench_model.pane_part(tab_key)?;
         workbench.mount(tab_key, layout.active_group())
     });
     let active_pane_id = active_pane.map(|mount| mount.pane_id());
     let terminal_panes = pane_group
         .map(|layout| {
-            let Some(tab_key) = active_tab_input else {
+            let Some(tab_key) = content_tab_input else {
                 return Vec::new();
             };
             layout
@@ -140,7 +151,7 @@ pub(super) fn with_shell_presentation_model<R>(
                 upstream_distance: env.upstream_distance(),
             },
             session_search,
-            tab_part: workbench_model.tab_part(),
+            sidebar_part: workbench_model.sidebar_part(),
             active_tab_input,
             caret_visibility: caret_blink.visibility(),
             dispatch: ui_dispatch,

@@ -1,6 +1,6 @@
 use crate::{
-    Color, Component, ComponentElement, Element, PaintIcon, Point, Rect, TextBlock, TextStyle,
-    UiScene,
+    AlignItems, Color, Component, ComponentElement, ComputedElement, Element, ElementLength,
+    JustifyContent, PaintIcon, Rect, Size, TextBlock, TextStyle, UiScene,
 };
 use zui::ui::{Icon, TextSpan};
 
@@ -48,6 +48,7 @@ pub struct IconLabel {
     label: String,
     spans: Vec<TextSpan>,
     style: IconLabelStyle,
+    measured_label_size: Option<Size>,
 }
 
 impl IconLabel {
@@ -58,6 +59,7 @@ impl IconLabel {
             label: label.into(),
             spans: Vec::new(),
             style,
+            measured_label_size: None,
         }
     }
 
@@ -76,22 +78,90 @@ impl IconLabel {
             label,
             spans,
             style,
+            measured_label_size: None,
         }
+    }
+
+    pub fn with_measured_label_size(mut self, size: Size) -> Self {
+        assert!(
+            size.width.is_finite()
+                && size.width >= 0.0
+                && size.height.is_finite()
+                && size.height >= 0.0,
+            "IconLabel measured label size must be finite and non-negative"
+        );
+        self.measured_label_size = Some(size);
+        self
     }
 
     pub const fn bounds(&self) -> Rect {
         self.bounds
     }
-}
 
-impl Component for IconLabel {
-    fn element(&self) -> ComponentElement {
-        Element::leaf("IconLabel")
+    fn element_tree(&self) -> ComponentElement {
+        let element = if let Some(label_size) = self.measured_label_size {
+            let icon_size = self.style.icon_size.max(0.0);
+            Element::row("IconLabel")
+                .gap(self.style.content_gap.max(0.0))
+                .justify_content(JustifyContent::Center)
+                .align_items(AlignItems::Center)
+                .child(
+                    Element::leaf("IconLabelIcon")
+                        .width(ElementLength::px(icon_size))
+                        .height(ElementLength::px(icon_size)),
+                )
+                .child(
+                    Element::leaf("IconLabelText")
+                        .width(ElementLength::Content)
+                        .height(ElementLength::Content)
+                        .content_size(label_size),
+                )
+        } else {
+            Element::leaf("IconLabel")
+        };
+        element
             .in_bounds(self.bounds)
             .with_inspection_label(&self.label)
     }
 
-    fn paint(&self, scene: &mut UiScene) {
+    fn paint_text(&self, scene: &mut UiScene, bounds: Rect) {
+        if self.label.is_empty() || bounds.is_empty() {
+            return;
+        }
+        let text = if self.spans.is_empty() {
+            TextBlock::new(
+                self.label.clone(),
+                bounds.origin,
+                bounds.size,
+                self.style.text_style.clone(),
+            )
+        } else {
+            TextBlock::from_spans(
+                self.spans.clone(),
+                bounds.origin,
+                bounds.size,
+                self.style.text_style.clone(),
+            )
+        };
+        scene.draw_text(text);
+    }
+
+    fn paint_measured(&self, scene: &mut UiScene, element: &ComputedElement) -> bool {
+        let (Some(icon), Some(label)) = (element.child(0), element.child(1)) else {
+            return false;
+        };
+        if !icon.bounds().is_empty() {
+            scene.draw_icon(PaintIcon::new(
+                self.icon,
+                icon.bounds(),
+                self.style.icon_color,
+            ));
+        }
+        self.paint_text(scene, label.bounds());
+        true
+    }
+
+    fn paint_leading(&self, scene: &mut UiScene) {
         if self.bounds.is_empty() {
             return;
         }
@@ -124,28 +194,27 @@ impl Component for IconLabel {
             .line_height()
             .max(0.0)
             .min(self.bounds.size.height);
-        if self.label.is_empty() || text_width <= 0.0 || text_height <= 0.0 {
-            return;
-        }
         let text_y = self.bounds.origin.y + (self.bounds.size.height - text_height) * 0.5;
-        let origin = Point::new(text_x, text_y);
-        let bounds = crate::Size::new(text_width, text_height);
-        let text = if self.spans.is_empty() {
-            TextBlock::new(
-                self.label.clone(),
-                origin,
-                bounds,
-                self.style.text_style.clone(),
-            )
-        } else {
-            TextBlock::from_spans(
-                self.spans.clone(),
-                origin,
-                bounds,
-                self.style.text_style.clone(),
-            )
-        };
-        scene.draw_text(text);
+        self.paint_text(
+            scene,
+            Rect::from_xywh(text_x, text_y, text_width, text_height),
+        );
+    }
+}
+
+impl Component for IconLabel {
+    fn element(&self) -> ComponentElement {
+        self.element_tree()
+    }
+
+    fn paint_element(&self, scene: &mut UiScene, element: &ComputedElement) {
+        if self.measured_label_size.is_none() || !self.paint_measured(scene, element) {
+            self.paint_leading(scene);
+        }
+    }
+
+    fn paint(&self, scene: &mut UiScene) {
+        self.paint_element(scene, &self.element_tree().compute());
     }
 }
 

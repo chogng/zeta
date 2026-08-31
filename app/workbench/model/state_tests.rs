@@ -6,6 +6,7 @@ use crate::TabInput;
 use crate::TabInputChange;
 use crate::TabInputMetadata;
 use crate::TabStatus;
+use crate::TabStatusKind;
 use zeta_protocol::{Session, SessionId, SessionStatus, ThreadId};
 
 fn session(id: &str, title: &str) -> Session {
@@ -26,7 +27,9 @@ fn upsert_session(workbench: &mut Workbench, session: &Session, dir: &str) -> Ta
     workbench.upsert_session_input(
         TabInput::session(
             session.session_id.clone(),
-            TabInputMetadata::new(&session.title, dir).with_status(TabStatus::idle("Active")),
+            TabInputMetadata::new(&session.title)
+                .with_dirs([dir.into()])
+                .with_status(TabStatus::new(TabStatusKind::Idle)),
         ),
         PaneInput::terminal(session.session_id.clone()),
     )
@@ -36,10 +39,10 @@ fn upsert_session(workbench: &mut Workbench, session: &Session, dir: &str) -> Ta
 fn workbench_initializes_one_container_for_its_settings_tab() {
     let workbench = Workbench::new();
 
-    assert_eq!(workbench.tab_part().input_count(), 1);
+    assert_eq!(workbench.sidebar_part().input_count(), 1);
     assert!(
         workbench
-            .tab_part()
+            .sidebar_part()
             .inputs()
             .next()
             .expect("Settings input")
@@ -63,7 +66,7 @@ fn tab_creation_initializes_the_matching_pane_container_terminal_pane() {
 
     upsert_session(&mut workbench, &session, "/dir");
 
-    assert_eq!(workbench.tab_part().active_tab_key(), Some(&key));
+    assert_eq!(workbench.sidebar_part().active_tab_key(), Some(&key));
     let panes = workbench
         .pane_container(&key)
         .expect("session pane container")
@@ -105,11 +108,21 @@ fn settings_tab_close_removes_its_container_and_activation_recreates_it() {
         .expect("closed Settings tab");
 
     assert_eq!(closed.key(), &TabInputKey::Settings);
-    assert!(workbench.tab_part().input(&TabInputKey::Settings).is_none());
+    assert!(
+        workbench
+            .sidebar_part()
+            .input(&TabInputKey::Settings)
+            .is_none()
+    );
     assert!(workbench.pane_container(&TabInputKey::Settings).is_none());
 
     assert!(workbench.activate_settings());
-    assert!(workbench.tab_part().input(&TabInputKey::Settings).is_some());
+    assert!(
+        workbench
+            .sidebar_part()
+            .input(&TabInputKey::Settings)
+            .is_some()
+    );
     assert_eq!(
         workbench
             .pane_part(&TabInputKey::Settings)
@@ -300,7 +313,7 @@ fn closing_a_tab_removes_its_pane_container_and_selects_the_next_tab() {
     assert_eq!(closed.active_tab(), Some(&second_key));
     assert!(workbench.pane_container(&first_key).is_none());
     assert!(workbench.pane_container(&second_key).is_some());
-    assert_eq!(workbench.tab_part().active_tab_key(), Some(&second_key));
+    assert_eq!(workbench.sidebar_part().active_tab_key(), Some(&second_key));
 }
 
 #[test]

@@ -15,6 +15,7 @@ use crate::TabInput;
 use crate::TabInputKey;
 use crate::TabInputMetadata;
 use crate::TabStatus;
+use crate::TabStatusKind;
 use std::time::Instant;
 use zui::ui::Point;
 use zui::ui::TextInputCommand;
@@ -26,7 +27,7 @@ fn session_id(value: &str) -> zeta_protocol::SessionId {
 fn session_input(id: zeta_protocol::SessionId) -> TabInput {
     TabInput::session(
         id,
-        TabInputMetadata::new("Session", "/dir").with_status(TabStatus::idle("Active")),
+        TabInputMetadata::new("Session").with_status(TabStatus::new(TabStatusKind::Idle)),
     )
 }
 
@@ -185,7 +186,7 @@ fn closing_a_tab_detaches_only_its_bindings() {
     assert_eq!(bindings, vec!["first"]);
     assert_eq!(host.binding(&second_key), Some(&"second"));
     assert_eq!(
-        host.workbench().tab_part().active_tab_key(),
+        host.workbench().sidebar_part().active_tab_key(),
         Some(&second_tab)
     );
 }
@@ -238,7 +239,7 @@ fn tab_menu_routes_group_selection_and_rename_through_the_workbench_host() {
         TabContextMenuOutcome::Changed
     );
     assert_eq!(
-        host.workbench().tab_part().input_group(&first_tab),
+        host.workbench().sidebar_part().input_group(&first_tab),
         Some(group)
     );
 
@@ -249,8 +250,34 @@ fn tab_menu_routes_group_selection_and_rename_through_the_workbench_host() {
     );
     assert!(host.apply_tab_rename(TextInputCommand::Insert("Build fixes".to_owned())));
     assert!(host.commit_tab_rename());
-    let input = host.workbench().tab_part().input(&first_tab).unwrap();
-    assert_eq!(host.workbench().tab_part().tab_name(input), "Build fixes");
+    let input = host.workbench().sidebar_part().input(&first_tab).unwrap();
+    assert_eq!(
+        host.workbench().sidebar_part().tab_name(input),
+        "Build fixes"
+    );
+}
+
+#[test]
+fn session_name_editor_opens_directly_at_the_preview_name() {
+    let session = session_id("session-rename");
+    let tab = TabInputKey::session(session.clone());
+    let mut host = WorkbenchHost::new();
+    host.upsert_session_input_with(
+        session_input(session.clone()),
+        PaneInput::terminal(session),
+        || (),
+    );
+
+    assert!(host.open_tab_rename(tab.clone(), Rect::from_xywh(220.0, 80.0, 180.0, 22.0), None,));
+    assert!(host.tab_context_menu().is_renaming());
+    assert!(host.apply_tab_rename(TextInputCommand::Insert("Release summary".to_owned())));
+    assert!(host.commit_tab_rename());
+
+    let input = host.workbench().sidebar_part().input(&tab).unwrap();
+    assert_eq!(
+        host.workbench().sidebar_part().tab_name(input),
+        "Release summary"
+    );
 }
 
 #[test]

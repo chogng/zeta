@@ -5,7 +5,6 @@ pub(super) fn handle_terminal_event(
     key: TerminalSessionKey,
     event: TerminalSessionEvent,
 ) {
-    let terminal_exited = matches!(&event, TerminalSessionEvent::Exited(_));
     if app.terminal_runtime.is_pending(key) {
         app.terminal_runtime.buffer_event_if_pending(key, event);
         return;
@@ -18,10 +17,6 @@ pub(super) fn handle_terminal_event(
             if let Err(error) = terminal.handle_event(event) {
                 eprintln!("could not reply to inactive terminal query: {error}");
             }
-        }
-        if terminal_exited {
-            app.update_terminal_status(key, crate::TabStatus::warning("Exited"));
-            app.rebuild_presentation_on_next_redraw();
         }
         return;
     }
@@ -48,9 +43,6 @@ pub(super) fn handle_terminal_event(
     };
     if let Some(window) = app.window.as_ref() {
         let _ = window.set_title(&title);
-    }
-    if terminal_exited {
-        app.update_terminal_status(key, crate::TabStatus::warning("Exited"));
     }
     let current_block_status = app
         .active_terminal()

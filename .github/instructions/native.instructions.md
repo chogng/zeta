@@ -23,3 +23,4 @@ When modifying existing native files, prefer migrating, deleting, deprecating, o
 
 * 测试界面前先确认实现技术栈：Web 和 Electron 界面使用 Playwright；`app` 中基于 ZUI/WGPU 的窗口没有 DOM/CDP 接口，不要声称可用 Playwright 连接。此类界面的结构、层级和几何优先通过 `InspectionFrame` 断言，运行产品只用于补充交互验证，不以截图作为调试依据。
 * Workbench sidebar浮层菜单沿用已确认的紧凑规格：菜单项宽 140、高 28，菜单项与菜单表面圆角均为 10，ContextMenu 内边距为 6，菜单文字字号为 13、字重为 SemiBold；悬停子菜单移出父项与子菜单区域后收起，并保留跨越两者间隙的连续指针通道。
+* Workbench 组合控件要保留产品壳、产品组合与通用控件三层：例如 SidebarHeader 挂 ModeSwitcher，ModeSwitcher 组合 RadioGroup，Radio 复用 Button。尚未落地且已有明确独立归属的功能区域，不要提前塞进 Workbench 的 Pane 模型。

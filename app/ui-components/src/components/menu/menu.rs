@@ -114,7 +114,7 @@ impl MenuStyle {
             border: Border::default(),
             corner_radii: CornerRadii::uniform(MENU_CORNER_RADIUS),
             padding: MENU_PADDING,
-            button_style,
+            button_style: button_style.with_leading_text(),
             item_size,
             header_height: 0.0,
             separator_style: ActionBarSeparatorStyle::new(Color::TRANSPARENT),

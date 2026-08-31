@@ -38,7 +38,7 @@ fn workbench_composes_titlebar_tab_container_main_and_inspector_parts() {
         Some(Rect::from_xywh(0.0, 0.0, 1_000.0, 32.0))
     );
     assert_eq!(
-        layout.part_bounds(WorkbenchPart::TabContainer),
+        layout.part_bounds(WorkbenchPart::SidebarView),
         Some(Rect::from_xywh(0.0, 32.0, 200.0, 668.0))
     );
     assert_eq!(

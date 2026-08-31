@@ -103,7 +103,11 @@ pub(crate) struct IconRenderer {
 }
 
 impl IconRenderer {
-    pub(crate) fn new(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Self {
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        depth_stencil: wgpu::DepthStencilState,
+    ) -> Self {
         let mask_atlas = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("zeta-ui icon symbolic-mask atlas"),
             size: wgpu::Extent3d {
@@ -223,7 +227,7 @@ impl IconRenderer {
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
+            depth_stencil: Some(depth_stencil),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
             cache: None,

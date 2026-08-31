@@ -21,7 +21,7 @@ use zui::ui::UiFrame;
 use super::{
     SETTINGS_CLOSE, SETTINGS_NAV_APPEARANCE, SETTINGS_NAV_BACK, SETTINGS_NAV_GENERAL,
     SETTINGS_NAV_KEYBINDINGS, SETTINGS_NAV_REMOTE, SETTINGS_PAGE, SETTINGS_SEARCH_INPUT,
-    SettingsPage, SettingsPageLayout, SettingsPageMode, SettingsPageSection, SettingsPageStyle,
+    SettingsPage, SettingsPageLayout, SettingsPageSection, SettingsPageStyle,
 };
 
 fn style() -> SettingsPageStyle {
@@ -172,7 +172,7 @@ fn selected_section_is_projected_to_the_navigation_semantics() {
 }
 
 #[test]
-fn surface_mode_leaves_the_workbench_interactive() {
+fn settings_page_does_not_own_dialog_interaction_scope() {
     let dispatch = UiDispatch::default();
     let input = zui::ui::TextInput::default();
     let mut text_layout = TextInputLayoutEngine::new();
@@ -193,8 +193,7 @@ fn surface_mode_leaves_the_workbench_interactive() {
         style(),
         &dispatch,
         &mut text_layout,
-    )
-    .with_mode(SettingsPageMode::Surface);
+    );
     let mut frame = UiFrame::<InteractionFrame>::new(zui::ui::Color::WHITE);
     frame.draw_component(&host);
     frame.draw_component(&page);

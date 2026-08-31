@@ -10,7 +10,7 @@ const FIRST_EDITOR_CLOSE: u32 = 100;
 
 pub const FILE_EDITOR_PANE: ElementId = ElementId::scoped(EDITOR_SCOPE, 1);
 pub const FILE_EDITOR_DOCUMENT: ElementId = ElementId::scoped(EDITOR_SCOPE, 2);
-pub const FILE_EDITOR_TAB_LIST: ElementId = ElementId::scoped(EDITOR_SCOPE, 3);
+pub const FILE_EDITOR_TABS: ElementId = ElementId::scoped(EDITOR_SCOPE, 3);
 pub const FILE_EDITOR_FIND_INPUT: ElementId = ElementId::scoped(EDITOR_SCOPE, 4);
 pub const FILE_EDITOR_REPLACE_INPUT: ElementId = ElementId::scoped(EDITOR_SCOPE, 5);
 pub const FILE_EDITOR_SEARCH_BAR: ElementId = ElementId::scoped(EDITOR_SCOPE, 6);

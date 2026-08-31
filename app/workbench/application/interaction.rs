@@ -184,19 +184,44 @@ impl WorkbenchApplication {
         if self.activate_tab_context_menu_element(id) {
             return;
         }
+        if id == crate::TITLEBAR_SETTINGS_BUTTON {
+            self.activate_settings_tab();
+            return;
+        }
         if let Some(intent) =
-            crate::tab_intent_for_element(self.workbench.workbench().tab_part(), id)
+            crate::sidebar_intent_for_element(self.workbench.workbench().sidebar_part(), id)
         {
             match intent {
-                crate::TabIntent::Activate(TabInputKey::Settings) => {
+                crate::SidebarIntent::SetMode(mode) => {
+                    if self.workbench.set_sidebar_mode(mode) {
+                        self.rebuild_presentation();
+                        self.request_redraw();
+                    }
+                }
+                crate::SidebarIntent::ToggleGroup(group) => {
+                    if self.workbench.toggle_sidebar_group(group) {
+                        self.rebuild_presentation();
+                        self.request_redraw();
+                    }
+                }
+                crate::SidebarIntent::Activate(TabInputKey::Settings) => {
                     self.activate_settings_tab();
                 }
-                crate::TabIntent::Activate(tab @ TabInputKey::Session(_)) => {
+                crate::SidebarIntent::Activate(tab @ TabInputKey::Session(_)) => {
                     if self.workbench.activate_tab(tab.clone()) {
                         self.mount_session_pane(&tab);
                     }
                 }
-                crate::TabIntent::OpenActions(tab) => {
+                crate::SidebarIntent::Rename(tab) => {
+                    if let Some(bounds) = self
+                        .presentation
+                        .as_ref()
+                        .and_then(|presentation| presentation.element_bounds(id))
+                    {
+                        let _ = self.open_tab_rename(tab, bounds);
+                    }
+                }
+                crate::SidebarIntent::OpenActions(tab) => {
                     if let Some(bounds) = self
                         .presentation
                         .as_ref()
@@ -206,7 +231,7 @@ impl WorkbenchApplication {
                         let _ = self.open_tab_context_menu(tab, point);
                     }
                 }
-                crate::TabIntent::Close(tab) => {
+                crate::SidebarIntent::Close(tab) => {
                     let _ = self.close_workbench_tab(&tab);
                 }
             }
@@ -235,7 +260,7 @@ impl WorkbenchApplication {
     }
 
     fn activate_settings_element(&mut self, id: ElementId) -> bool {
-        if !self.workbench.workbench().tab_part().is_settings() {
+        if !self.workbench.workbench().sidebar_part().is_settings() {
             return false;
         }
         match self.settings.activate(id) {
@@ -457,7 +482,7 @@ impl WorkbenchApplication {
     pub(super) fn settings_keybindings_viewport(
         &self,
     ) -> Option<zeta_settings::SettingsKeybindingsViewport> {
-        if !self.workbench.workbench().tab_part().is_settings()
+        if !self.workbench.workbench().sidebar_part().is_settings()
             || self.settings.section() != zeta_settings::SettingsPageSection::Keybindings
             || self.quick_access.shortcuts_open()
         {

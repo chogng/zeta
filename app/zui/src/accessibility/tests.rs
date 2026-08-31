@@ -1,6 +1,7 @@
 use accesskit::Action;
 use accesskit::ActionRequest;
 use accesskit::NodeId;
+use accesskit::Role;
 use accesskit::TreeId;
 use accesskit::Uuid;
 
@@ -78,6 +79,27 @@ fn full_tree_preserves_optional_semantics() {
     assert_eq!(node.is_selected(), Some(true));
     assert_eq!(node.level(), Some(2));
     assert_eq!(node.is_expanded(), Some(true));
+}
+
+#[test]
+fn full_tree_maps_radio_group_and_radio_button_roles() {
+    let group_id = ElementId::scoped(1, 10);
+    let radio_id = ElementId::scoped(1, 11);
+    let mut group = button(group_id, None);
+    group.role = AccessibilityRole::RadioGroup;
+    group.action = NodeAction::None;
+    group.focusable = false;
+    group.focused = false;
+    let mut radio = button(radio_id, Some(group_id));
+    radio.role = AccessibilityRole::RadioButton;
+    radio.selection = AccessibilitySelection::Selected;
+    let snapshot =
+        AccessibilitySnapshot::with_scale_factor("Test window".to_owned(), vec![group, radio], 1.0);
+
+    let update = snapshot.full_update();
+    assert_eq!(update.nodes[1].1.role(), Role::RadioGroup);
+    assert_eq!(update.nodes[2].1.role(), Role::RadioButton);
+    assert_eq!(update.nodes[2].1.is_selected(), Some(true));
 }
 
 #[test]

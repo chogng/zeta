@@ -1,4 +1,6 @@
-use super::{UiRenderError, glyphon_wrap, same_text_buffer_layout, validate_text_block};
+use super::{
+    UiRenderError, glyphon_wrap, prepare_text_buffer, same_text_buffer_layout, validate_text_block,
+};
 use crate::ui::foundation::{Color, Point, Size};
 use crate::ui::presentation::{TextBlock, TextBlockWrap};
 use crate::ui::text::{TextSpan, TextStyle};
@@ -68,6 +70,25 @@ fn renderer_preserves_the_text_blocks_explicit_wrap_contract() {
 }
 
 #[test]
+fn renderer_applies_explicit_center_alignment_to_text_lines() {
+    let block = TextBlock::new(
+        "Centered",
+        Point::new(0.0, 0.0),
+        Size::new(100.0, 24.0),
+        TextStyle::new(14.0, Color::WHITE),
+    )
+    .with_centered_text();
+    let mut font_system = glyphon::FontSystem::new();
+
+    let buffer = prepare_text_buffer(&mut font_system, &block, 1.0);
+
+    assert_eq!(
+        buffer.lines.first().and_then(|line| line.align()),
+        Some(glyphon::cosmic_text::Align::Center)
+    );
+}
+
+#[test]
 fn text_buffer_layout_ignores_position_clip_and_default_color() {
     let first = TextBlock::new(
         "cached",
@@ -105,7 +126,9 @@ fn text_buffer_layout_invalidates_shape_affecting_changes() {
         Size::new(100.0, 24.0),
         TextStyle::new(14.0, Color::WHITE),
     );
+    let centered = original.clone().with_centered_text();
 
     assert!(!same_text_buffer_layout(&original, &resized));
     assert!(!same_text_buffer_layout(&original, &edited));
+    assert!(!same_text_buffer_layout(&original, &centered));
 }

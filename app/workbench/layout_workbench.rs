@@ -19,7 +19,7 @@ pub enum WorkbenchPart {
     /// Window titlebar content.
     Titlebar,
     /// Optional body-mounted Tab Container projection.
-    TabContainer,
+    SidebarView,
     /// Active Workbench content.
     Main,
     /// Optional right-hand inspection content.
@@ -102,7 +102,7 @@ impl WorkbenchLayout {
     pub const fn part_bounds(self, part: WorkbenchPart) -> Option<Rect> {
         match part {
             WorkbenchPart::Titlebar => Some(self.titlebar),
-            WorkbenchPart::TabContainer => self.tab_container,
+            WorkbenchPart::SidebarView => self.tab_container,
             WorkbenchPart::Main => Some(self.main),
             WorkbenchPart::Inspector => self.inspector,
         }

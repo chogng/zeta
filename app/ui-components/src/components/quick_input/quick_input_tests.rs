@@ -40,7 +40,7 @@ fn style() -> QuickInputStyle {
 }
 
 #[test]
-fn quick_input_registers_search_and_close_inside_one_modal_surface() {
+fn quick_input_registers_search_and_close_inside_one_dialog() {
     let input = TextInput::default();
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::default();

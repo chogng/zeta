@@ -32,6 +32,7 @@ use zeta_ui_components::ScrollbarPresentation;
 use zui::ui::ElementId;
 use zui::ui::HoverPresence;
 use zui::ui::Point;
+use zui::ui::Rect;
 use zui::ui::SplitViewResizeSnapshot;
 use zui::ui::TextInputCommand;
 use zui::ui::TextInputCompositionEvent;
@@ -281,6 +282,16 @@ impl<B> WorkbenchHost<B> {
         &self.workbench
     }
 
+    /// Selects the active product mode in the Sidebar header.
+    pub fn set_sidebar_mode(&mut self, mode: crate::SidebarMode) -> bool {
+        self.workbench.set_sidebar_mode(mode)
+    }
+
+    /// Expands or collapses a named Session group in the Sidebar.
+    pub fn toggle_sidebar_group(&mut self, group: crate::TabGroupId) -> bool {
+        self.workbench.toggle_sidebar_group(group)
+    }
+
     /// Returns the Workbench-owned tab menu presentation state.
     pub const fn tab_context_menu(&self) -> &TabContextMenuState {
         &self.tab_context_menu
@@ -293,16 +304,33 @@ impl<B> WorkbenchHost<B> {
         position: Point,
         restore_focus: Option<ElementId>,
     ) -> bool {
-        if self.workbench.tab_part().input(&tab).is_none() {
+        if self.workbench.sidebar_part().input(&tab).is_none() {
             return false;
         }
-        if self.workbench.tab_part().is_tab_pinned(&tab) {
+        if self.workbench.sidebar_part().is_tab_pinned(&tab) {
             self.tab_context_menu
                 .open_pinned(tab, position, restore_focus);
         } else {
             self.tab_context_menu
                 .open_unpinned(tab, position, restore_focus);
         }
+        true
+    }
+
+    /// Opens the Session-name editor beside its name in the directory details view.
+    pub fn open_tab_rename(
+        &mut self,
+        tab: TabInputKey,
+        anchor: Rect,
+        restore_focus: Option<ElementId>,
+    ) -> bool {
+        let Some(input) = self.workbench.sidebar_part().input(&tab) else {
+            return false;
+        };
+        let title = self.workbench.sidebar_part().tab_name(input).to_owned();
+        let pinned = self.workbench.sidebar_part().is_tab_pinned(&tab);
+        self.tab_context_menu
+            .open_rename(tab, anchor, restore_focus, pinned, &title);
         true
     }
 
@@ -327,10 +355,10 @@ impl<B> WorkbenchHost<B> {
             TabContextMenuActivation::OpenGroupMenu => {
                 let target = self.tab_context_menu.target_tab();
                 let source =
-                    target.and_then(|target| self.workbench.tab_part().input_group(target));
+                    target.and_then(|target| self.workbench.sidebar_part().input_group(target));
                 let focus = self
                     .workbench
-                    .tab_part()
+                    .sidebar_part()
                     .groups()
                     .iter()
                     .find(|group| Some(group.id()) != source)
@@ -365,7 +393,7 @@ impl<B> WorkbenchHost<B> {
             TabContextMenuActivation::MoveToGroup(tab, group) => {
                 let index = self
                     .workbench
-                    .tab_part()
+                    .sidebar_part()
                     .group(group)
                     .map(|group| group.inputs().len())
                     .unwrap_or(0);
@@ -392,9 +420,9 @@ impl<B> WorkbenchHost<B> {
             TabContextMenuActivation::BeginRename(tab) => {
                 let title = self
                     .workbench
-                    .tab_part()
+                    .sidebar_part()
                     .input(&tab)
-                    .map(|input| self.workbench.tab_part().tab_name(input).to_owned());
+                    .map(|input| self.workbench.sidebar_part().tab_name(input).to_owned());
                 if let Some(title) = title {
                     self.tab_context_menu.set_rename_text(&title);
                     TabContextMenuOutcome::Focus(crate::TAB_RENAME_INPUT)
@@ -679,7 +707,7 @@ impl<B> WorkbenchHost<B> {
 
     /// Resolves the active pane input and binding.
     pub fn active_mount(&self) -> Option<PaneMount<'_, B>> {
-        let tab = self.workbench.tab_part().active_tab_key()?;
+        let tab = self.workbench.sidebar_part().active_tab_key()?;
         let pane_part = self.workbench.pane_part(tab)?;
         self.pane_host
             .mount(tab, pane_part, pane_part.active_group())
@@ -825,7 +853,7 @@ impl<B> WorkbenchHost<B> {
         direction: PaneSplitDirection,
         create_binding: impl FnOnce() -> Result<B, E>,
     ) -> Result<Option<PaneKey>, E> {
-        let Some(tab) = self.workbench.tab_part().active_tab_key().cloned() else {
+        let Some(tab) = self.workbench.sidebar_part().active_tab_key().cloned() else {
             return Ok(None);
         };
         let binding = create_binding()?;
@@ -850,7 +878,7 @@ impl<B> WorkbenchHost<B> {
     /// Closes the active pane group and detaches every binding owned by its inputs.
     pub fn close_active_pane(&mut self) -> Option<ClosedPane<B>> {
         self.cancel_pane_resize();
-        let tab = self.workbench.tab_part().active_tab_key()?.clone();
+        let tab = self.workbench.sidebar_part().active_tab_key()?.clone();
         let panes = self.workbench.destroy_pane()?;
         let bindings = self.pane_host.remove_panes(&tab, &panes);
         let active_pane = self.workbench.pane_part(&tab)?.active_group();
@@ -903,15 +931,6 @@ impl<B> WorkbenchHost<B> {
     /// Selects the previous pane group.
     pub fn focus_previous_pane(&mut self, tab: &TabInputKey) -> Option<PaneGroupId> {
         self.workbench.focus_previous_pane(tab)
-    }
-
-    /// Updates Session tab status metadata.
-    pub fn update_session_status(
-        &mut self,
-        session_id: &zeta_protocol::SessionId,
-        status: crate::TabStatus,
-    ) {
-        self.workbench.update_session_status(session_id, status);
     }
 
     /// Toggles one Session tab's pinned state.

@@ -1,9 +1,10 @@
-use super::{
-    FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_REPLACE_INPUT,
-    FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TAB_LIST, FileEditorPane,
-};
+use super::FileEditorPane;
 use crate::FileEditorSearchMode;
-use crate::interaction::{file_editor_close_id, file_editor_fold_id, file_editor_tab_id};
+use crate::interaction::{
+    FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_REPLACE_INPUT,
+    FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TABS, file_editor_close_id, file_editor_fold_id,
+    file_editor_tab_id,
+};
 use zeta_ui_components::InteractionRegion;
 use zui::ui::Rect;
 use zui::ui::{
@@ -22,14 +23,14 @@ pub(super) fn child_interaction_regions(pane: &FileEditorPane<'_>) -> Vec<Intera
                 "FileEditorTab",
                 file_editor_tab_id(index),
                 pane.tab_bounds(index),
-                AccessibilityRole::Tab,
+                AccessibilityRole::RadioButton,
                 tab.label(),
             )
             .with_cursor(CursorFeedback::Pointer)
             .with_focus(FocusBehavior::TabStop)
             .with_action(NodeAction::Activate)
             .with_navigation(
-                NavigationGroupId::new(FILE_EDITOR_TAB_LIST),
+                NavigationGroupId::new(FILE_EDITOR_TABS),
                 NavigationAxis::Horizontal,
             )
             .with_selection(if pane.host.active_index() == Some(index) {
@@ -51,15 +52,15 @@ pub(super) fn child_interaction_regions(pane: &FileEditorPane<'_>) -> Vec<Intera
         .collect::<Vec<_>>();
     let mut regions = vec![
         InteractionRegion::new(
-            "FileEditorTabList",
-            FILE_EDITOR_TAB_LIST,
+            "FileEditorTabs",
+            FILE_EDITOR_TABS,
             Rect::from_xywh(
                 pane.bounds.origin.x,
                 pane.bounds.origin.y,
                 pane.bounds.size.width,
                 super::TAB_BAR_HEIGHT,
             ),
-            AccessibilityRole::TabList,
+            AccessibilityRole::RadioGroup,
             "Open files",
         )
         .with_children(tabs),

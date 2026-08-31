@@ -50,12 +50,12 @@ impl TabContainerLayoutSpec {
     /// Resolves the Tab Container and main Part bounds for one host viewport.
     pub fn for_bounds(self, bounds: Rect) -> TabContainerLayout {
         let tab_part_is_visible = self.is_visible_for(bounds.size.width);
-        let tab_part =
+        let sidebar_part =
             SplitViewPane::new(self.preferred_width, self.minimum_width, self.maximum_width);
-        let tab_part = if tab_part_is_visible {
-            tab_part
+        let sidebar_part = if tab_part_is_visible {
+            sidebar_part
         } else {
-            tab_part.hidden()
+            sidebar_part.hidden()
         };
         let main_preferred_width = if tab_part_is_visible {
             (bounds.size.width - self.preferred_width).max(0.0)
@@ -64,8 +64,11 @@ impl TabContainerLayoutSpec {
         };
         let main = SplitViewPane::new(main_preferred_width, self.minimum_main_width, f32::INFINITY)
             .with_priority(SplitViewLayoutPriority::High);
-        let layout =
-            SplitViewLayout::new(bounds, SplitViewOrientation::Horizontal, &[tab_part, main]);
+        let layout = SplitViewLayout::new(
+            bounds,
+            SplitViewOrientation::Horizontal,
+            &[sidebar_part, main],
+        );
         let tab_container_bounds = layout
             .pane_bounds(TAB_PART_PANE_INDEX)
             .filter(|bounds| !bounds.is_empty());

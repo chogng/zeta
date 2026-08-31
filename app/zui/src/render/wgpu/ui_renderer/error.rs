@@ -2,6 +2,8 @@
 pub(crate) enum UiRenderError {
     #[error("UI scale factor must be finite and positive, got {0}")]
     InvalidScaleFactor(f32),
+    #[error("rounded clip {index} is invalid: {reason}")]
+    InvalidClip { index: usize, reason: &'static str },
     #[error("paint rect {index} is invalid: {reason}")]
     InvalidPaintRect { index: usize, reason: &'static str },
     #[error("paint icon {index} is invalid: {reason}")]

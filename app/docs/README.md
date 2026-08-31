@@ -18,6 +18,7 @@
 | 稳定应用命令身份与 Workbench 执行 | [`zeta-commands`](../commands/README.md) | `AppCommandId` + `WorkbenchApplication::dispatch_command` |
 | UI scene 到 GPU 的依赖方向 | [`rendering-architecture.md`](rendering-architecture.md) | `zui::ui` → `zui::render` contract → private `render/wgpu` |
 | Native UI 编写、布局、样式与主题投影边界 | [`native-ui-authoring.md`](native-ui-authoring.md) | `zui` / `zeta-ui-components` / `app` host |
+| app UI 的圆角、间距、排版、状态和浮层配方 | [`ui-design-guidelines.md`](ui-design-guidelines.md) | `app` 视觉规范；`zeta-ui-components` 只提供组件能力与样式输入 |
 | 通用 application/window、renderer 与平台能力 | [`zui`](../zui/README.md) | 单一 `zui` crate，内部按 `app/window/input/ui/runtime/render/services` 能力目录隔离 |
 | 通用 icon asset 与产品 icon catalog 的边界 | [`rendering-architecture.md`](rendering-architecture.md) + [`zui`](../zui/README.md) | `zui::Icon` contract + optional `zeta-icons` catalog |
 | Workbench 模型、布局、外壳 UI 与 Pane binding | [`zeta-workbench`](../workbench/README.md) | 一个 Workbench crate；领域 crate 负责各自内容 runtime 与 scene |

@@ -3,12 +3,13 @@ use std::path::{Path, PathBuf};
 use crate::PaneBinding;
 use crate::QuickAccess;
 use crate::directory_picker::DirectoryPickerState;
+use crate::presentation::SETTINGS_DIALOG;
 use crate::{
     ADD_SESSION, EnvironmentContextView, INSPECTOR_RESIZE_HANDLE, InspectorPartState,
     LogicalViewport, PaneGroupId, PaneInput, PanePart, PaneSplitDirection, SESSION_SEARCH_INPUT,
-    SessionSearchState, TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_ACTION,
+    SessionSearchState, SidebarPart, TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_ACTION,
     TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB, TAB_CONTEXT_MENU, TITLEBAR,
-    TabContainerState, TabInput, TabInputKey, TabInputMetadata, TabPart, WINDOW, WorkbenchHost,
+    TabContainerState, TabInput, TabInputKey, TabInputMetadata, WINDOW, WorkbenchHost,
     WorkbenchPresentation, WorkbenchPresentationModel, WorkbenchSceneLayout,
     build_workbench_presentation, pane_group_element_id, rebuild_workbench_overlays,
     terminal_grid_size_for_viewport, terminal_mouse_position_for_viewport,
@@ -18,9 +19,7 @@ use crate::{MainSurfaceKind, TabContextMenuState, WorkbenchKeybindings};
 use zeta_commands::AppCommandId;
 use zeta_diff::DiffDocument;
 use zeta_editor::{CodeEditorLanguage, CodeEditorStyle, DiffEditorDocument};
-use zeta_editor_host::{
-    FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FileEditorHost,
-};
+use zeta_editor_host::{FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TABS, FileEditorHost};
 use zeta_files::{
     DirectoryEntry, FILES_PANE, FILES_REFRESH, FILES_SEARCH, FILES_TOOLBAR, FilesState,
 };
@@ -290,7 +289,8 @@ fn presentation_with_active_tab_input(
                 .session_id()
                 .expect("dir tab must carry a session")
                 .clone(),
-            TabInputMetadata::new("Directory", environment_context.working_directory_label()),
+            TabInputMetadata::new("Directory")
+                .with_dirs([environment_context.working_directory().to_path_buf()]),
         ),
         PaneInput::files(environment_context.working_directory().to_path_buf()),
         PaneBinding::new,
@@ -308,7 +308,7 @@ fn presentation_with_active_tab_input(
         .as_ref()
         .or(files_input_enabled.then_some(&dir_tab_key));
     let pane_group = files_input_enabled.then_some(files_pane_part);
-    let tab_part = TabPart::default();
+    let sidebar_part = SidebarPart::default();
     let initial = build_workbench_presentation(
         viewport(),
         WorkbenchPresentationModel {
@@ -340,7 +340,7 @@ fn presentation_with_active_tab_input(
             session_pane: &session_pane,
             environment_context: environment_context_view(&environment_context),
             session_search: &session_search,
-            tab_part: &tab_part,
+            sidebar_part: &sidebar_part,
             active_tab_input,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
@@ -398,7 +398,7 @@ fn presentation_with_active_tab_input(
             session_pane: &session_pane,
             environment_context: environment_context_view(&environment_context),
             session_search: &session_search,
-            tab_part: &tab_part,
+            sidebar_part: &sidebar_part,
             active_tab_input,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
@@ -427,7 +427,7 @@ fn presentation_with_active_tab_input(
 }
 
 #[test]
-fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
+fn settings_tab_input_renders_a_dialog_and_selects_the_tab_container_entry() {
     let files = FilesState::default();
     let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
@@ -443,6 +443,7 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
         Some(TabInputKey::Settings),
     );
     let accessibility_nodes = accessibility_nodes(&presentation, &dispatch);
+    let interaction = presentation.interaction_frame();
 
     assert!(
         presentation
@@ -465,6 +466,27 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
         .find(|node| node.id == TAB_CONTAINER_SETTINGS_TAB)
         .expect("settings workbench item should be mounted");
     assert_eq!(node.selection, zui::ui::AccessibilitySelection::Selected);
+    assert_eq!(
+        interaction
+            .node(SETTINGS_DIALOG)
+            .expect("Settings dialog root")
+            .parent(),
+        Some(WINDOW)
+    );
+    assert_eq!(
+        interaction
+            .node(zeta_settings::SETTINGS_PAGE)
+            .expect("Settings page")
+            .parent(),
+        Some(SETTINGS_DIALOG)
+    );
+    assert!(
+        interaction
+            .focus_order()
+            .any(|id| id == zeta_settings::SETTINGS_SEARCH_INPUT)
+    );
+    assert!(interaction.focus_order().all(|id| id != COMPOSER));
+    assert_eq!(interaction.target_at(Point::new(10.0, 100.0)), None);
     assert_eq!(
         accessibility_nodes
             .iter()
@@ -553,7 +575,7 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
 fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
-    let tab_part = TabPart::default();
+    let sidebar_part = SidebarPart::default();
     let environment_context =
         TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let files = FilesState::default();
@@ -597,7 +619,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             session_pane: &session_pane,
             environment_context: environment_context_view(&environment_context),
             session_search: &session_search,
-            tab_part: &tab_part,
+            sidebar_part: &sidebar_part,
             active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
@@ -625,7 +647,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     );
     let accessibility_nodes = accessibility_nodes(&presentation, &dispatch);
 
-    for id in [FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FILE_EDITOR_DOCUMENT] {
+    for id in [FILE_EDITOR_PANE, FILE_EDITOR_TABS, FILE_EDITOR_DOCUMENT] {
         assert!(accessibility_nodes.iter().any(|node| node.id == id));
     }
     assert!(
@@ -793,7 +815,10 @@ fn expanded_tab_container_reflows_the_terminal_without_a_placeholder_session() {
         .frame()
         .scene()
         .inspection()
-        .target_at(Point::new(20.0, 50.0))
+        .target_at(Point::new(
+            search.bounds.origin.x + 2.0,
+            search.bounds.origin.y + 2.0,
+        ))
         .expect("session search should expose its inspection hierarchy");
     assert_eq!(
         presentation
@@ -804,13 +829,7 @@ fn expanded_tab_container_reflows_the_terminal_without_a_placeholder_session() {
             .iter()
             .map(|node| node.name())
             .collect::<Vec<_>>(),
-        vec![
-            "TabContainer",
-            "TabContainerHeader",
-            "TabContainerToolbar",
-            "SearchBox",
-            "InputBox",
-        ]
+        vec!["SidebarView", "SessionsToolbar", "SearchBox", "InputBox",]
     );
     assert_eq!(search.role, AccessibilityRole::TextInput);
     assert_eq!(add_session.role, AccessibilityRole::Button);
@@ -855,7 +874,7 @@ fn expanded_tab_container_reflows_the_terminal_without_a_placeholder_session() {
 fn session_search_filters_tabs_by_session_name() {
     let session_pane = SessionPaneState::default();
     let mut session_search = SessionSearchState::default();
-    let tab_part = TabPart::default();
+    let sidebar_part = SidebarPart::default();
     session_search.apply(TextInputCommand::Insert("missing session".to_owned()));
     let environment_context =
         TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
@@ -891,7 +910,7 @@ fn session_search_filters_tabs_by_session_name() {
             session_pane: &session_pane,
             environment_context: environment_context_view(&environment_context),
             session_search: &session_search,
-            tab_part: &tab_part,
+            sidebar_part: &sidebar_part,
             active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
@@ -1029,7 +1048,7 @@ fn active_files_input_mounts_directly_in_its_pane_group_with_files_actions() {
 fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
-    let tab_part = TabPart::default();
+    let sidebar_part = SidebarPart::default();
     let environment_context =
         TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
     let files = FilesState::default();
@@ -1051,7 +1070,8 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
                 .session_id()
                 .expect("session tab must carry a session")
                 .clone(),
-            TabInputMetadata::new("Session", environment_context.working_directory_label()),
+            TabInputMetadata::new("Session")
+                .with_dirs([environment_context.working_directory().to_path_buf()]),
         ),
         PaneInput::diff(environment_context.working_directory().to_path_buf()),
         PaneBinding::new,
@@ -1090,7 +1110,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             session_pane: &session_pane,
             environment_context: environment_context_view(&environment_context),
             session_search: &session_search,
-            tab_part: &tab_part,
+            sidebar_part: &sidebar_part,
             active_tab_input: Some(&tab_key),
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
@@ -1165,7 +1185,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
 fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
-    let tab_part = TabPart::default();
+    let sidebar_part = SidebarPart::default();
     let environment_context =
         TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(1));
     let files = FilesState::default();
@@ -1187,7 +1207,8 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
                 .session_id()
                 .expect("session tab must carry a session")
                 .clone(),
-            TabInputMetadata::new("Session", environment_context.working_directory_label()),
+            TabInputMetadata::new("Session")
+                .with_dirs([environment_context.working_directory().to_path_buf()]),
         ),
         PaneInput::diff(environment_context.working_directory().to_path_buf()),
         PaneBinding::new,
@@ -1239,7 +1260,7 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
             session_pane: &session_pane,
             environment_context: environment_context_view(&environment_context),
             session_search: &session_search,
-            tab_part: &tab_part,
+            sidebar_part: &sidebar_part,
             active_tab_input: Some(&tab_key),
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
@@ -1480,7 +1501,7 @@ fn context_toolbar_pointer_clicks_activate_dir_and_branch_pickers() {
 fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
-    let tab_part = TabPart::default();
+    let sidebar_part = SidebarPart::default();
     let environment_context =
         TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let files = FilesState::default();
@@ -1519,7 +1540,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         session_pane: &session_pane,
         environment_context: environment_context_view(&environment_context),
         session_search: &session_search,
-        tab_part: &tab_part,
+        sidebar_part: &sidebar_part,
         active_tab_input: None,
         caret_visibility: CaretVisibility::Visible,
         dispatch: &dispatch,
@@ -1665,7 +1686,7 @@ fn context_toolbar_starts_with_environment_below_the_composer_editor() {
 fn compact_viewport_uses_bounded_fallback_scene() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
-    let tab_part = TabPart::default();
+    let sidebar_part = SidebarPart::default();
     let environment_context = TestEnvironmentContext::fixture("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
@@ -1701,7 +1722,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             session_pane: &session_pane,
             environment_context: environment_context_view(&environment_context),
             session_search: &session_search,
-            tab_part: &tab_part,
+            sidebar_part: &sidebar_part,
             active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,

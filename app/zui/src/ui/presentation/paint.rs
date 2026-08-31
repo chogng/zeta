@@ -4,6 +4,47 @@ use crate::ui::foundation::Edges;
 use crate::ui::foundation::Point;
 use crate::ui::foundation::Rect;
 
+/// One rounded rectangular boundary used to clip composed scene content.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ClipRect {
+    bounds: Rect,
+    corner_radii: CornerRadii,
+    clip_bounds: Option<Rect>,
+}
+
+impl ClipRect {
+    pub const fn new(bounds: Rect, corner_radii: CornerRadii) -> Self {
+        Self {
+            bounds,
+            corner_radii,
+            clip_bounds: None,
+        }
+    }
+
+    pub const fn bounds(self) -> Rect {
+        self.bounds
+    }
+
+    pub fn corner_radii(self) -> CornerRadii {
+        self.corner_radii.clamped_for(self.bounds.size)
+    }
+
+    pub const fn requested_corner_radii(self) -> CornerRadii {
+        self.corner_radii
+    }
+
+    pub const fn clip_bounds(self) -> Option<Rect> {
+        self.clip_bounds
+    }
+
+    pub(crate) fn apply_clip(&mut self, clip_bounds: Rect) {
+        self.clip_bounds = Some(match self.clip_bounds {
+            Some(current) => current.intersection(clip_bounds),
+            None => clip_bounds,
+        });
+    }
+}
+
 /// A colored border with independently configurable edge widths.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Border {

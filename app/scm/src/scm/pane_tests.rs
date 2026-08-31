@@ -341,7 +341,7 @@ fn editor_pane_paints_all_visible_file_diffs_as_unified_sections_without_tab_sel
     assert!(
         nodes
             .iter()
-            .all(|node| node.role != AccessibilityRole::TabList)
+            .all(|node| node.role != AccessibilityRole::RadioGroup)
     );
 }
 

@@ -99,12 +99,17 @@ impl WorkbenchApplication {
         active_screen: ScreenBuffer,
         fallback_size: GridSize,
     ) {
-        let Some(tab_key) = self
-            .workbench
-            .workbench()
-            .tab_part()
+        let sidebar_part = self.workbench.workbench().sidebar_part();
+        let Some(tab_key) = sidebar_part
             .active_tab_key()
+            .filter(|key| key.is_session())
             .cloned()
+            .or_else(|| {
+                sidebar_part
+                    .selected_session()
+                    .cloned()
+                    .map(TabInputKey::session)
+            })
         else {
             self.terminal_runtime.resize_all(fallback_size);
             return;

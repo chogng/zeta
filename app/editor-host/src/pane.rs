@@ -9,15 +9,18 @@ use zeta_editor::{
     CodeEditorLineWrapping, CodeEditorNavigation, CodeEditorPosition, CodeEditorStyle,
 };
 use zeta_text_file::TextFileStatus;
-use zeta_ui_components::{InputBoxState, SearchBox};
+use zeta_ui_components::{
+    ButtonBackgrounds, ButtonState, ButtonStyle, InputBoxState, Radio, RadioGroup,
+    RadioGroupOrientation, RadioGroupStyle, RadioSelection, SearchBox,
+};
 use zui::ui::{
-    CaretVisibility, Component, ComponentElement, Element, PaintRect, Rect, TextBlock,
+    CaretVisibility, Component, ComponentElement, Edges, Element, PaintRect, Rect, Size, TextBlock,
     TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_PANE,
-    FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TAB_LIST, FileEditorAction,
+    FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_SEARCH_BAR, FileEditorAction,
 };
 use zeta_ui_theme::UiTheme;
 use zui::ui::{AccessibilityRole, UiNode};
@@ -264,13 +267,59 @@ impl<'a> FileEditorPane<'a> {
         (self.bounds.size.width / self.host.tabs().len() as f32).clamp(TAB_MIN_WIDTH, TAB_MAX_WIDTH)
     }
 
-    fn tab_bounds(&self, index: usize) -> Rect {
-        Rect::from_xywh(
-            self.bounds.origin.x + index as f32 * self.tab_width(),
-            self.bounds.origin.y,
-            self.tab_width(),
-            TAB_BAR_HEIGHT,
+    fn tab_radio_group(&self) -> RadioGroup {
+        let button_style = ButtonStyle::new(
+            ButtonBackgrounds::new(self.palette.side_bar_background),
+            TextStyle::new(12.0, self.palette.muted_foreground).with_line_height(18.0),
         )
+        .with_selected_backgrounds(ButtonBackgrounds::new(self.palette.content_background))
+        .with_selected_text_style(
+            TextStyle::new(12.0, self.palette.foreground).with_line_height(18.0),
+        )
+        .with_leading_text()
+        .with_padding(Edges::new(
+            7.0,
+            TAB_HORIZONTAL_PADDING + TAB_CLOSE_SIZE,
+            7.0,
+            TAB_HORIZONTAL_PADDING,
+        ));
+        let radios =
+            self.host
+                .tabs()
+                .iter()
+                .enumerate()
+                .map(|(index, tab)| {
+                    let suffix = match tab.status() {
+                        TextFileStatus::Clean => "",
+                        TextFileStatus::Dirty => " •",
+                        TextFileStatus::ReloadAvailable => " ↻",
+                        TextFileStatus::Conflict => " !",
+                    };
+                    Radio::new(format!("{}{suffix}", tab.label()), ButtonState::Resting)
+                        .with_selection(if self.host.active_index() == Some(index) {
+                            RadioSelection::Selected
+                        } else {
+                            RadioSelection::Unselected
+                        })
+                })
+                .collect();
+        RadioGroup::new(
+            Rect::from_xywh(
+                self.bounds.origin.x,
+                self.bounds.origin.y,
+                self.bounds.size.width,
+                TAB_BAR_HEIGHT,
+            ),
+            RadioGroupOrientation::Horizontal,
+            radios,
+            RadioGroupStyle::new(button_style, Size::new(self.tab_width(), TAB_BAR_HEIGHT)),
+        )
+    }
+
+    fn tab_bounds(&self, index: usize) -> Rect {
+        self.tab_radio_group()
+            .radio_bounds(index)
+            .unwrap_or_default()
     }
 
     fn tab_close_bounds(&self, index: usize) -> Rect {
@@ -475,67 +524,19 @@ impl Component for FileEditorPane<'_> {
 
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(PaintRect::new(self.bounds, self.palette.content_background));
-        let tab_bounds = Rect::from_xywh(
-            self.bounds.origin.x,
-            self.bounds.origin.y,
-            self.bounds.size.width,
-            TAB_BAR_HEIGHT,
-        );
-        scene.with_element(
-            Element::leaf("FileEditorTabList")
-                .in_bounds(tab_bounds)
-                .with_identity(FILE_EDITOR_TAB_LIST),
-            |scene, _element| {
-                for (index, tab) in self.host.tabs().iter().enumerate() {
-                    let bounds = self.tab_bounds(index);
-                    let active = self.host.active_index() == Some(index);
-                    scene.draw_rect(PaintRect::new(
-                        bounds,
-                        if active {
-                            self.palette.content_background
-                        } else {
-                            self.palette.side_bar_background
-                        },
-                    ));
-                    let suffix = match tab.status() {
-                        TextFileStatus::Clean => "",
-                        TextFileStatus::Dirty => " •",
-                        TextFileStatus::ReloadAvailable => " ↻",
-                        TextFileStatus::Conflict => " !",
-                    };
-                    scene.draw_text(TextBlock::new(
-                        format!("{}{suffix}", tab.label()),
-                        zui::ui::Point::new(
-                            bounds.origin.x + TAB_HORIZONTAL_PADDING,
-                            bounds.origin.y + 7.0,
-                        ),
-                        zui::ui::Size::new(
-                            (bounds.size.width - TAB_HORIZONTAL_PADDING * 2.0 - TAB_CLOSE_SIZE)
-                                .max(1.0),
-                            18.0,
-                        ),
-                        TextStyle::new(
-                            12.0,
-                            if active {
-                                self.palette.foreground
-                            } else {
-                                self.palette.muted_foreground
-                            },
-                        )
-                        .with_line_height(18.0),
-                    ));
-                    scene.draw_text(TextBlock::new(
-                        "×",
-                        zui::ui::Point::new(
-                            self.tab_close_bounds(index).origin.x + 5.0,
-                            self.tab_close_bounds(index).origin.y + 1.0,
-                        ),
-                        zui::ui::Size::new(TAB_CLOSE_SIZE - 6.0, 18.0),
-                        TextStyle::new(14.0, self.palette.muted_foreground).with_line_height(18.0),
-                    ));
-                }
-            },
-        );
+        let tabs = self.tab_radio_group();
+        scene.draw_component(&tabs);
+        scene.with_clip(tabs.bounds(), |scene| {
+            for index in 0..self.host.tabs().len() {
+                let close = self.tab_close_bounds(index);
+                scene.draw_text(TextBlock::new(
+                    "×",
+                    zui::ui::Point::new(close.origin.x + 5.0, close.origin.y + 1.0),
+                    zui::ui::Size::new(TAB_CLOSE_SIZE - 6.0, 18.0),
+                    TextStyle::new(14.0, self.palette.muted_foreground).with_line_height(18.0),
+                ));
+            }
+        });
         if self.search_mode != FileEditorSearchMode::Hidden {
             scene.with_element(
                 Element::leaf("FileEditorSearchBar")

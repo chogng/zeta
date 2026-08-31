@@ -15,6 +15,7 @@ use zui::ui::FocusDirection;
 use zui::ui::InteractionFrame;
 use zui::ui::NavigationAxis;
 use zui::ui::Point;
+use zui::ui::Rect;
 use zui::ui::UiDispatch;
 
 impl WorkbenchApplication {
@@ -158,6 +159,18 @@ impl WorkbenchApplication {
         true
     }
 
+    pub(crate) fn open_tab_rename(&mut self, tab: crate::TabInputKey, anchor: Rect) -> bool {
+        let restore_focus = self.ui_dispatch.focused();
+        if !self.workbench.open_tab_rename(tab, anchor, restore_focus) {
+            return false;
+        }
+        self.rebuild_presentation();
+        self.focus_tab_context_menu_element(crate::TAB_RENAME_INPUT);
+        self.update_cursor();
+        self.request_redraw();
+        true
+    }
+
     pub(crate) fn activate_tab_context_menu_element(&mut self, id: ElementId) -> bool {
         if !self.workbench.tab_context_menu().is_open()
             || !TabContextMenuAction::is_menu_element(id)
@@ -217,7 +230,10 @@ impl WorkbenchApplication {
         };
         let target_tab = target
             .and_then(|target| {
-                crate::tab_key_for_element(self.workbench.workbench().tab_part(), target)
+                crate::sidebar_item_key_for_element(
+                    self.workbench.workbench().sidebar_part(),
+                    target,
+                )
             })
             .cloned();
         match target_tab {

@@ -86,8 +86,10 @@ pub struct ButtonStyle {
     corner_radii: CornerRadii,
     padding: Edges,
     text_style: TextStyle,
+    selected_text_style: TextStyle,
     hint_text_style: TextStyle,
     disabled_text_style: TextStyle,
+    center_text: bool,
     icon_size: f32,
     content_gap: f32,
     hint_width: f32,
@@ -101,9 +103,11 @@ impl ButtonStyle {
             border: Border::default(),
             corner_radii: CornerRadii::uniform(0.0),
             padding: Edges::uniform(8.0),
+            selected_text_style: text_style.clone(),
             hint_text_style: text_style.clone(),
             disabled_text_style: text_style.clone(),
             text_style,
+            center_text: true,
             icon_size: 16.0,
             content_gap: 6.0,
             hint_width: 40.0,
@@ -130,6 +134,21 @@ impl ButtonStyle {
 
     pub fn with_text_style(mut self, text_style: TextStyle) -> Self {
         self.text_style = text_style;
+        self
+    }
+
+    pub fn with_selected_text_style(mut self, selected_text_style: TextStyle) -> Self {
+        self.selected_text_style = selected_text_style;
+        self
+    }
+
+    pub const fn with_centered_text(mut self) -> Self {
+        self.center_text = true;
+        self
+    }
+
+    pub const fn with_leading_text(mut self) -> Self {
+        self.center_text = false;
         self
     }
 
@@ -187,13 +206,16 @@ impl ButtonStyle {
         }
     }
 
-    fn text_style_for(&self, state: ButtonState) -> &TextStyle {
+    fn text_style_for(&self, state: ButtonState, selection: ButtonSelection) -> &TextStyle {
         match state {
             ButtonState::Disabled => &self.disabled_text_style,
             ButtonState::Resting
             | ButtonState::Hovered
             | ButtonState::Focused
-            | ButtonState::Pressed => &self.text_style,
+            | ButtonState::Pressed => match selection {
+                ButtonSelection::Unselected => &self.text_style,
+                ButtonSelection::Selected => &self.selected_text_style,
+            },
         }
     }
 }
@@ -232,6 +254,7 @@ pub struct Button {
     state: ButtonState,
     selection: ButtonSelection,
     style: ButtonStyle,
+    measured_label_size: Option<crate::Size>,
 }
 
 impl Button {
@@ -247,6 +270,7 @@ impl Button {
             state,
             selection: ButtonSelection::Unselected,
             style,
+            measured_label_size: None,
         }
     }
 
@@ -267,6 +291,7 @@ impl Button {
             state,
             selection: ButtonSelection::Unselected,
             style,
+            measured_label_size: None,
         }
     }
 
@@ -287,6 +312,7 @@ impl Button {
             state,
             selection: ButtonSelection::Unselected,
             style,
+            measured_label_size: None,
         }
     }
 
@@ -307,6 +333,7 @@ impl Button {
             state,
             selection: ButtonSelection::Unselected,
             style,
+            measured_label_size: None,
         }
     }
 
@@ -327,6 +354,7 @@ impl Button {
             state,
             selection: ButtonSelection::Unselected,
             style,
+            measured_label_size: None,
         }
     }
 
@@ -349,11 +377,25 @@ impl Button {
             state,
             selection: ButtonSelection::Unselected,
             style,
+            measured_label_size: None,
         }
     }
 
     pub const fn with_selection(mut self, selection: ButtonSelection) -> Self {
         self.selection = selection;
+        self
+    }
+
+    /// Supplies the shaped label size used by content-aware button layouts.
+    pub fn with_measured_label_size(mut self, size: crate::Size) -> Self {
+        assert!(
+            size.width.is_finite()
+                && size.width >= 0.0
+                && size.height.is_finite()
+                && size.height >= 0.0,
+            "Button measured label size must be finite and non-negative"
+        );
+        self.measured_label_size = Some(size);
         self
     }
 
@@ -401,7 +443,7 @@ impl Component for Button {
         if content.is_empty() {
             return;
         }
-        let text_style = self.style.text_style_for(self.state);
+        let text_style = self.style.text_style_for(self.state, self.selection);
         match &self.content {
             ButtonContent::Icon {
                 icon,
@@ -434,6 +476,11 @@ impl Component for Button {
                         .with_icon_size(self.style.icon_size)
                         .with_content_gap(self.style.content_gap),
                 );
+                let label = if let Some(size) = self.measured_label_size {
+                    label.with_measured_label_size(size)
+                } else {
+                    label
+                };
                 scene.draw_component(&label);
                 return;
             }
@@ -450,6 +497,11 @@ impl Component for Button {
                         .with_icon_size(self.style.icon_size)
                         .with_content_gap(self.style.content_gap),
                 );
+                let label = if let Some(size) = self.measured_label_size {
+                    label.with_measured_label_size(size)
+                } else {
+                    label
+                };
                 scene.draw_component(&label);
                 return;
             }
@@ -527,12 +579,17 @@ impl Component for Button {
             return;
         }
         let text_y = content.origin.y + (content.size.height - text_height) * 0.5;
-        scene.draw_text(TextBlock::new(
+        let text = TextBlock::new(
             label.clone(),
             Point::new(text_x, text_y),
             crate::Size::new(text_width, text_height),
             text_style.clone(),
-        ));
+        );
+        scene.draw_text(if self.style.center_text {
+            text.with_centered_text()
+        } else {
+            text
+        });
     }
 }
 

@@ -9,7 +9,7 @@ use zui::ui::{
 use super::*;
 use crate::interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_PANE,
-    FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_TAB_LIST, FileEditorAction, file_editor_close_id,
+    FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_TABS, FileEditorAction, file_editor_close_id,
     file_editor_tab_id,
 };
 use zeta_ui_theme::DEFAULT_UI_THEME;
@@ -56,6 +56,33 @@ fn pane_paints_tabs_dirty_state_and_only_the_active_document() {
     assert!(texts.contains(&"README.md •"));
     assert!(texts.contains(&"dirty read me"));
     assert!(!texts.contains(&"fn main() {}"));
+    assert_eq!(
+        scene
+            .text_blocks()
+            .iter()
+            .find(|block| block.text() == "main.rs")
+            .unwrap()
+            .style()
+            .color(),
+        DEFAULT_UI_THEME.muted_foreground
+    );
+    assert_eq!(
+        scene
+            .text_blocks()
+            .iter()
+            .find(|block| block.text() == "README.md •")
+            .unwrap()
+            .style()
+            .color(),
+        DEFAULT_UI_THEME.foreground
+    );
+    assert!(
+        scene
+            .inspection()
+            .nodes()
+            .iter()
+            .any(|node| node.name() == "RadioGroup")
+    );
     assert!(pane.caret_bounds().is_some());
 }
 
@@ -154,10 +181,10 @@ fn pane_registers_tabs_and_the_active_document_as_desktop_interactions() {
     assert_eq!(
         nodes
             .iter()
-            .find(|node| node.id == FILE_EDITOR_TAB_LIST)
+            .find(|node| node.id == FILE_EDITOR_TABS)
             .unwrap()
             .role,
-        AccessibilityRole::TabList
+        AccessibilityRole::RadioGroup
     );
     assert_eq!(
         nodes
@@ -165,7 +192,7 @@ fn pane_registers_tabs_and_the_active_document_as_desktop_interactions() {
             .find(|node| node.id == file_editor_tab_id(1))
             .unwrap()
             .role,
-        AccessibilityRole::Tab
+        AccessibilityRole::RadioButton
     );
     assert_eq!(
         nodes

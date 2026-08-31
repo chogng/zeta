@@ -21,7 +21,7 @@ pub use file_host::{FileEditorCloseRequest, FileEditorHost, FileEditorTab};
 pub use input_state::{FileEditorInputState, FileEditorWheelDelta};
 pub use interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_PANE,
-    FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TAB_LIST, FileEditorAction,
+    FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TABS, FileEditorAction,
     file_editor_close_id, file_editor_close_index, file_editor_fold_id, file_editor_fold_index,
     file_editor_tab_id, file_editor_tab_index,
 };

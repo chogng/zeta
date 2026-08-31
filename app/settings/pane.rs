@@ -9,7 +9,6 @@ use zui::ui::UiDispatch;
 use crate::SETTINGS_SEARCH_INPUT;
 use crate::SettingsKeybindingRow;
 use crate::SettingsPage;
-use crate::SettingsPageMode;
 use crate::SettingsPageSection;
 use crate::SettingsPageStyle;
 use crate::SettingsSectionPane;
@@ -112,8 +111,7 @@ pub fn draw_settings_pane(
         view.dispatch,
         text_layout,
     )
-    .with_parent(parent)
-    .with_mode(SettingsPageMode::Surface);
+    .with_parent(parent);
     let mut result = SettingsPaneDrawResult {
         ime_cursor_area: view
             .dispatch

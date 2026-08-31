@@ -50,7 +50,11 @@ pub(crate) struct RectRenderer {
 }
 
 impl RectRenderer {
-    pub(crate) fn new(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Self {
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        depth_stencil: wgpu::DepthStencilState,
+    ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("zeta-ui rect shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("rect.wgsl").into()),
@@ -79,7 +83,7 @@ impl RectRenderer {
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
+            depth_stencil: Some(depth_stencil),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
             cache: None,
@@ -426,7 +430,7 @@ fn expanded_rect(bounds: Rect, extent: f32) -> Rect {
     )
 }
 
-fn scaled_rect(rect: Rect, scale_factor: f32) -> [f32; 4] {
+pub(super) fn scaled_rect(rect: Rect, scale_factor: f32) -> [f32; 4] {
     [
         rect.origin.x * scale_factor,
         rect.origin.y * scale_factor,
