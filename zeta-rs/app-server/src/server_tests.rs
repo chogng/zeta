@@ -1428,6 +1428,64 @@ fn session_archive_is_distinct_from_stop_in_the_manager_view() {
 }
 
 #[test]
+fn session_delete_permanently_removes_an_archived_session() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "delete-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"session/request",
+            "params":{
+                "commandId":"archive-before-delete",
+                "sessionId":session_id,
+                "request":{"type":"archive"}
+            }
+        }),
+    );
+
+    let deleted = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/request",
+            "params":{
+                "commandId":"delete-session",
+                "sessionId":session_id,
+                "request":{"type":"delete"}
+            }
+        }),
+    );
+    let listed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"session/list","params":{}}),
+    );
+    let missing = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":6,
+            "method":"session/read",
+            "params":{"sessionId":session_id}
+        }),
+    );
+
+    assert_eq!(deleted["result"]["type"], "deleted");
+    assert_eq!(deleted["result"]["value"], session_id);
+    assert!(listed["result"]["sessions"].as_array().unwrap().is_empty());
+    assert_eq!(missing["error"]["message"], "CoreOperationFailed");
+}
+
+#[test]
 fn model_catalog_is_global_and_session_views_do_not_own_model_selection() {
     let default = model_ref("gpt-default");
     let alternate = model_ref("gpt-alternate");

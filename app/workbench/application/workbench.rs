@@ -20,15 +20,98 @@ impl WorkbenchApplication {
         {
             return false;
         }
-        if tab_key.is_settings() && self.remote_connection_manager.is_settings() {
-            self.dismiss_remote_connection_manager();
-        }
         if let Some(session) = self.session_runtime.as_ref()
             && let Some(session_id) = tab_key.session_id()
             && let Err(error) = session.stop_session(session_id.clone())
         {
             eprintln!("could not close Session {session_id}: {error}");
             return false;
+        }
+        self.remove_workbench_tab(tab_key)
+    }
+
+    pub(super) fn fork_workbench_session(&mut self, tab_key: &TabInputKey) -> bool {
+        if self
+            .workbench
+            .workbench()
+            .tab_part()
+            .input(tab_key)
+            .is_none()
+        {
+            return false;
+        }
+        let Some(session_id) = tab_key.session_id() else {
+            return false;
+        };
+        let Some(runtime) = self.session_runtime.as_ref() else {
+            return false;
+        };
+        if let Err(error) = runtime.fork_session(session_id.clone()) {
+            eprintln!("could not fork Session {session_id}: {error}");
+            return false;
+        }
+        self.rebuild_presentation_on_next_redraw();
+        true
+    }
+
+    pub(super) fn archive_workbench_session(&mut self, tab_key: &TabInputKey) -> bool {
+        if self
+            .workbench
+            .workbench()
+            .tab_part()
+            .input(tab_key)
+            .is_none()
+        {
+            return false;
+        }
+        let Some(session_id) = tab_key.session_id() else {
+            return false;
+        };
+        let Some(runtime) = self.session_runtime.as_ref() else {
+            return false;
+        };
+        if let Err(error) = runtime.archive_session(session_id.clone()) {
+            eprintln!("could not archive Session {session_id}: {error}");
+            return false;
+        }
+        self.remove_workbench_tab(tab_key)
+    }
+
+    pub(super) fn delete_workbench_session(&mut self, tab_key: &TabInputKey) -> bool {
+        if self
+            .workbench
+            .workbench()
+            .tab_part()
+            .input(tab_key)
+            .is_none()
+        {
+            return false;
+        }
+        let Some(session_id) = tab_key.session_id() else {
+            return false;
+        };
+        let Some(runtime) = self.session_runtime.as_ref() else {
+            return false;
+        };
+        if let Err(error) = runtime.delete_session(session_id.clone()) {
+            eprintln!("could not delete Session {session_id}: {error}");
+            return false;
+        }
+        self.remove_workbench_tab(tab_key)
+    }
+
+    fn remove_workbench_tab(&mut self, tab_key: &TabInputKey) -> bool {
+        if self
+            .workbench
+            .workbench()
+            .tab_part()
+            .input(tab_key)
+            .is_none()
+        {
+            return false;
+        }
+        if tab_key.is_settings() && self.remote_connection_manager.is_settings() {
+            self.dismiss_remote_connection_manager();
         }
         let was_active = self.workbench.workbench().tab_part().active_tab_key() == Some(tab_key);
         let Some((closed, bindings)) = self.workbench.close_tab(tab_key) else {

@@ -49,6 +49,15 @@ fn vertical_tab_list_owns_tab_size_gap_and_surface_presentation() {
         node.gap_regions(),
         &[Rect::from_xywh(10.0, 72.0, 180.0, 6.0)]
     );
+    assert_eq!(
+        scene
+            .inspection()
+            .nodes()
+            .iter()
+            .map(|node| node.name())
+            .collect::<Vec<_>>(),
+        ["TabList"]
+    );
 }
 
 #[test]

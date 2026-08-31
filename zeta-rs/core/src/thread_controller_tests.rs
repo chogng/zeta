@@ -119,6 +119,56 @@ fn create_thread(controller: &ThreadController, title: &str) -> ThreadId {
     thread_id
 }
 
+#[test]
+fn deleting_a_session_forgets_loaded_threads_and_keeps_other_sessions() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store);
+    let deleted_session = SessionId::new("session_1").unwrap();
+    let first = create_thread(&threads, "First");
+    let second = create_thread(&threads, "Second");
+    let kept_session = SessionId::new("session_2").unwrap();
+    let kept = ThreadId::new("thread_kept").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: kept_session.clone(),
+            thread_id: kept.clone(),
+            title: "Kept".into(),
+        })
+        .unwrap();
+    threads.read_thread(&first).unwrap();
+    threads
+        .archive_session_threads(
+            &deleted_session,
+            &CommandId::new("archive-before-delete").unwrap(),
+            zeta_protocol::ThreadArchiveReason::Stopped,
+        )
+        .unwrap();
+
+    let mut expected = vec![first.clone(), second.clone()];
+    expected.sort();
+    assert_eq!(
+        threads.delete_session_threads(&deleted_session).unwrap(),
+        expected
+    );
+
+    assert!(matches!(
+        threads.read_thread(&first),
+        Err(CoreError::NotFound(_))
+    ));
+    assert!(matches!(
+        threads.read_thread(&second),
+        Err(CoreError::NotFound(_))
+    ));
+    assert_eq!(threads.read_thread(&kept).unwrap().session_id, kept_session);
+    assert!(
+        threads
+            .list_loaded_threads()
+            .unwrap()
+            .iter()
+            .all(|thread| thread.session_id != deleted_session)
+    );
+}
+
 fn start_turn(threads: &ThreadController, thread: &ThreadId, key: &str) -> TurnId {
     threads
         .start_turn(thread, start_request(key))
@@ -477,6 +527,10 @@ impl ThreadStore for ToggleStore {
         _: &zeta_thread_store::ThreadCatalogRecord,
     ) -> Result<(), ThreadStoreError> {
         Ok(())
+    }
+
+    fn delete_session(&self, _: &SessionId) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        Ok(Vec::new())
     }
 
     fn append_batch(
@@ -886,6 +940,10 @@ impl ThreadStore for PerThreadBlockingStore {
         record: &zeta_thread_store::ThreadCatalogRecord,
     ) -> Result<(), ThreadStoreError> {
         self.inner.backfill_catalog(record)
+    }
+
+    fn delete_session(&self, session_id: &SessionId) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        self.inner.delete_session(session_id)
     }
 
     fn append_batch(

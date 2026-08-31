@@ -42,20 +42,27 @@ fn session_identity_namespace_does_not_overlap_capability_elements() {
 #[test]
 fn tab_context_menu_actions_have_stable_labels_and_identities() {
     let ids = TabContextMenuAction::ALL.map(TabContextMenuAction::element_id);
-    let labels = TabContextMenuAction::ALL.map(|action| action.label(false));
+    let labels = TabContextMenuAction::ALL.map(|action| action.label(false, false));
 
     assert_eq!(
         labels,
-        ["Pin tab", "Rename tab", "Move to group", "Close tab"]
+        [
+            "Pin",
+            "Rename",
+            "Fork",
+            "Move to group",
+            "Archive",
+            "Delete"
+        ]
     );
     assert_eq!(
         ids.into_iter()
             .collect::<std::collections::HashSet<_>>()
             .len(),
-        4
+        6
     );
     assert_eq!(
-        TabContextMenuAction::from_element_id(ids[2]),
+        TabContextMenuAction::from_element_id(ids[3]),
         Some(TabContextMenuAction::MoveToGroup)
     );
     assert_eq!(

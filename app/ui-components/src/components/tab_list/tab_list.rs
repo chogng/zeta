@@ -117,8 +117,8 @@ impl TabStyle {
 
 /// Presentation state for one selectable surface inside a [`TabList`].
 ///
-/// A `Tab` deliberately carries no product content or identity. Composed controls paint their
-/// labels, icons, status indicators, and close actions inside the bounds returned by
+/// A `Tab` deliberately carries no product content, identity, or inspection node. Hosts that own
+/// tab semantics compose one identified component per item inside the bounds returned by
 /// [`TabList::tab_bounds`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Tab {
@@ -215,6 +215,14 @@ impl TabList {
             .map(ComputedElement::bounds)
     }
 
+    /// Paints the list's state-dependent tab surfaces without registering item components.
+    ///
+    /// Product hosts use this under their identified list root, then compose one semantic
+    /// component for each visible tab.
+    pub fn paint_surfaces(&self, scene: &mut UiScene) {
+        self.paint_layout(scene, &self.element_tree().compute());
+    }
+
     fn element_tree(&self) -> ComponentElement {
         let children = self.tabs.iter().map(|_| {
             Element::row("Tab")
@@ -236,11 +244,7 @@ impl TabList {
                 let Some(bounds) = layout.child(index).map(ComputedElement::bounds) else {
                     continue;
                 };
-                scene.draw_component(&TabSurface {
-                    tab,
-                    bounds,
-                    style: self.style.tab_style,
-                });
+                tab.paint(bounds, self.style.tab_style, scene);
             }
         });
     }
@@ -256,25 +260,7 @@ impl Component for TabList {
     }
 
     fn paint(&self, scene: &mut UiScene) {
-        self.paint_layout(scene, &self.element_tree().compute());
-    }
-}
-
-struct TabSurface {
-    tab: Tab,
-    bounds: Rect,
-    style: TabStyle,
-}
-
-impl Component for TabSurface {
-    fn element(&self) -> ComponentElement {
-        Element::leaf("Tab")
-            .corner_radii(self.style.corner_radii)
-            .in_bounds(self.bounds)
-    }
-
-    fn paint(&self, scene: &mut UiScene) {
-        self.tab.paint(self.bounds, self.style, scene);
+        self.paint_surfaces(scene);
     }
 }
 

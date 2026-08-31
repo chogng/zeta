@@ -152,6 +152,54 @@ impl SessionRuntime {
             .map_err(anyhow::Error::msg)
     }
 
+    /// Archives a Session.
+    pub fn archive_session(&self, session_id: SessionId) -> Result<()> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            SessionRuntimeCommand::ArchiveSession {
+                session_id,
+                response,
+            },
+            "Session archive queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Session archive worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Permanently deletes a Session and all of its durable history.
+    pub fn delete_session(&self, session_id: SessionId) -> Result<()> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            SessionRuntimeCommand::DeleteSession {
+                session_id,
+                response,
+            },
+            "Session delete queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Session delete worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Forks the selected conversation in a Session.
+    pub fn fork_session(&self, session_id: SessionId) -> Result<()> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            SessionRuntimeCommand::ForkSession {
+                session_id,
+                response,
+            },
+            "Session fork queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Session fork worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
     /// Subscribes to a Session.
     pub fn subscribe_session(&self, session_id: SessionId) -> Result<()> {
         let (response, result) = mpsc::sync_channel(1);

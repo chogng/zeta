@@ -1892,6 +1892,44 @@ impl ThreadController {
         self.list_session_threads(session_id)
     }
 
+    /// Permanently removes every durable Thread in one Session tree.
+    ///
+    /// Callers must archive the Session first so its terminal events are committed before the
+    /// durable histories are removed.
+    pub fn delete_session_threads(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadId>, CoreError> {
+        let thread_ids = self
+            .store
+            .list_catalog()?
+            .into_iter()
+            .filter(|record| &record.session_id == session_id)
+            .map(|record| record.thread.thread_id)
+            .collect::<Vec<_>>();
+        if thread_ids.is_empty() {
+            return Err(CoreError::NotFound(session_id.to_string()));
+        }
+        for thread_id in &thread_ids {
+            self.execution_mailboxes.retire(thread_id)?;
+        }
+        let slots = thread_ids
+            .iter()
+            .map(|thread_id| self.loaded_threads.slot(thread_id))
+            .collect::<Result<Vec<_>, _>>()?;
+        let _permits = slots
+            .iter()
+            .map(|slot| slot.enter_mutation())
+            .collect::<Result<Vec<_>, _>>()?;
+        let _leases = thread_ids
+            .iter()
+            .map(|thread_id| self.acquire_writer_lease(thread_id))
+            .collect::<Result<Vec<_>, _>>()?;
+        let deleted = self.store.delete_session(session_id)?;
+        self.loaded_threads.forget(&deleted)?;
+        Ok(deleted)
+    }
+
     pub fn archive_thread(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
         self.archive_thread_with_reason(thread_id, zeta_protocol::ThreadArchiveReason::Completed)
     }
@@ -2733,6 +2771,24 @@ impl ThreadStore for InMemoryThreadStore {
             .catalog
             .insert(record.thread.thread_id.clone(), record.clone());
         Ok(())
+    }
+
+    fn delete_session(&self, session_id: &SessionId) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        let mut state = self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let thread_ids = state
+            .catalog
+            .iter()
+            .filter(|(_, record)| &record.session_id == session_id)
+            .map(|(thread_id, _)| thread_id.clone())
+            .collect::<Vec<_>>();
+        for thread_id in &thread_ids {
+            state.catalog.remove(thread_id);
+            state.threads.remove(thread_id);
+        }
+        Ok(thread_ids)
     }
 
     fn append_batch(

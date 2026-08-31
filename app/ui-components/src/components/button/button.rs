@@ -128,6 +128,11 @@ impl ButtonStyle {
         self
     }
 
+    pub fn with_text_style(mut self, text_style: TextStyle) -> Self {
+        self.text_style = text_style;
+        self
+    }
+
     pub const fn with_border(mut self, border: Border) -> Self {
         self.border = border;
         self
@@ -196,6 +201,10 @@ impl ButtonStyle {
 #[derive(Clone, Debug, PartialEq)]
 enum ButtonContent {
     Label(String),
+    LabelAndTrailingIcon {
+        label: String,
+        icon: Icon,
+    },
     LabelAndHint {
         label: String,
         hint: String,
@@ -254,6 +263,26 @@ impl Button {
             content: ButtonContent::LabelAndHint {
                 label: label.into(),
                 hint: hint.into(),
+            },
+            state,
+            selection: ButtonSelection::Unselected,
+            style,
+        }
+    }
+
+    /// Creates a text button with a trailing disclosure or status icon.
+    pub fn label_and_trailing_icon(
+        bounds: Rect,
+        label: impl Into<String>,
+        icon: Icon,
+        state: ButtonState,
+        style: ButtonStyle,
+    ) -> Self {
+        Self {
+            bounds,
+            content: ButtonContent::LabelAndTrailingIcon {
+                label: label.into(),
+                icon,
             },
             state,
             selection: ButtonSelection::Unselected,
@@ -336,6 +365,7 @@ impl Button {
     pub fn accessible_label(&self) -> &str {
         match &self.content {
             ButtonContent::Label(label)
+            | ButtonContent::LabelAndTrailingIcon { label, .. }
             | ButtonContent::LabelAndHint { label, .. }
             | ButtonContent::Icon {
                 accessible_label: label,
@@ -448,6 +478,39 @@ impl Component for Button {
                         Point::new(content.right() - hint_width, text_y),
                         crate::Size::new(hint_width, text_height),
                         hint_style.clone(),
+                    ));
+                }
+                return;
+            }
+            ButtonContent::LabelAndTrailingIcon { label, icon } => {
+                let icon_size = self
+                    .style
+                    .icon_size
+                    .max(0.0)
+                    .min(content.size.width)
+                    .min(content.size.height);
+                let gap = self.style.content_gap.max(0.0);
+                let label_width = (content.size.width - icon_size - gap).max(0.0);
+                let text_height = text_style.line_height().max(0.0).min(content.size.height);
+                let text_y = content.origin.y + (content.size.height - text_height) * 0.5;
+                if !label.is_empty() && label_width > 0.0 && text_height > 0.0 {
+                    scene.draw_text(TextBlock::new(
+                        label.clone(),
+                        Point::new(content.origin.x, text_y),
+                        crate::Size::new(label_width, text_height),
+                        text_style.clone(),
+                    ));
+                }
+                if icon_size > 0.0 {
+                    scene.draw_icon(PaintIcon::new(
+                        *icon,
+                        Rect::from_xywh(
+                            content.right() - icon_size,
+                            content.origin.y + (content.size.height - icon_size) * 0.5,
+                            icon_size,
+                            icon_size,
+                        ),
+                        text_style.color(),
                     ));
                 }
                 return;

@@ -384,33 +384,27 @@ impl<'a> TabContainer<'a> {
             }
             WorkbenchTabKind::Settings => "Settings".to_owned(),
         };
-        InteractionRegion::new(
-            "WorkbenchTab",
-            tab.id,
-            bounds,
-            AccessibilityRole::Tab,
-            label,
-        )
-        .with_parent(list_id)
-        .with_cursor(CursorFeedback::Pointer)
-        .with_focus(FocusBehavior::TabStop)
-        .with_action(NodeAction::Activate)
-        .with_navigation(
-            NavigationGroupId::new(list_id),
-            zui::ui::NavigationAxis::Vertical,
-        )
-        .with_selection(if tab.id == self.selected_id {
-            AccessibilitySelection::Selected
-        } else {
-            AccessibilitySelection::Unselected
-        })
+        InteractionRegion::new("Tab", tab.id, bounds, AccessibilityRole::Tab, label)
+            .with_parent(list_id)
+            .with_cursor(CursorFeedback::Pointer)
+            .with_focus(FocusBehavior::TabStop)
+            .with_action(NodeAction::Activate)
+            .with_navigation(
+                NavigationGroupId::new(list_id),
+                zui::ui::NavigationAxis::Vertical,
+            )
+            .with_selection(if tab.id == self.selected_id {
+                AccessibilitySelection::Selected
+            } else {
+                AccessibilitySelection::Unselected
+            })
     }
 
     fn action_regions(&self, tab: &WorkbenchTab<'_>, tab_bounds: Rect) -> [InteractionRegion; 2] {
         let action_bar = self.tab_action_bar(tab, tab_bounds);
         [
             InteractionRegion::new(
-                "WorkbenchTabActionsButton",
+                "TabActionsButton",
                 tab.action_id,
                 action_bar
                     .interactive_item_bounds(0)
@@ -423,7 +417,7 @@ impl<'a> TabContainer<'a> {
             .with_focus(FocusBehavior::TabStop)
             .with_action(NodeAction::Activate),
             InteractionRegion::new(
-                "WorkbenchTabClose",
+                "TabClose",
                 tab.close_id,
                 action_bar
                     .interactive_item_bounds(1)
@@ -706,7 +700,7 @@ impl Component for TabGroupView<'_, '_> {
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
         self.container
             .paint_group_label(context.scene_mut(), &self.layout);
-        context.draw_component(&WorkbenchTabListView {
+        context.draw_component(&TabListView {
             container: self.container,
             layout: &self.layout,
         });
@@ -714,19 +708,19 @@ impl Component for TabGroupView<'_, '_> {
 
     fn paint(&self, scene: &mut UiScene) {
         self.container.paint_group_label(scene, &self.layout);
-        scene.draw_component(&WorkbenchTabListView {
+        scene.draw_component(&TabListView {
             container: self.container,
             layout: &self.layout,
         });
     }
 }
 
-struct WorkbenchTabListView<'container, 'layout, 'tabs> {
+struct TabListView<'container, 'layout, 'tabs> {
     container: &'container TabContainer<'tabs>,
     layout: &'layout GroupLayout,
 }
 
-impl Component for WorkbenchTabListView<'_, '_, '_> {
+impl Component for TabListView<'_, '_, '_> {
     fn element(&self) -> ComponentElement {
         Element::leaf("TabList")
             .gap(TAB_GAP)
@@ -750,7 +744,7 @@ impl Component for WorkbenchTabListView<'_, '_, '_> {
     }
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        self.layout.tab_list.paint(context.scene_mut());
+        self.layout.tab_list.paint_surfaces(context.scene_mut());
         let group = &self.container.groups[self.layout.group_index];
         if !group.collapsed {
             for (index, tab) in group.tabs.iter().enumerate() {
@@ -778,8 +772,8 @@ impl Component for WorkbenchTabListView<'_, '_, '_> {
         self.container.paint_tabs(context.scene_mut(), self.layout);
     }
 
-    fn paint(&self, scene: &mut UiScene) {
-        scene.draw_component(&self.layout.tab_list);
+    fn paint_element(&self, scene: &mut UiScene, _element: &ComputedElement) {
+        self.layout.tab_list.paint_surfaces(scene);
         self.container.paint_tabs(scene, self.layout);
     }
 }

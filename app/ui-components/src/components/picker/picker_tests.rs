@@ -52,7 +52,7 @@ fn picker_limits_visible_rows_and_keeps_search_separate() {
     );
 
     assert_eq!(picker.item_viewport_bounds().size.height, 4.0 * 30.0);
-    assert_eq!(picker.bounds().size.height, 36.0 + 4.0 * 30.0 + 4.0);
+    assert_eq!(picker.bounds().size.height, 36.0 + 4.0 * 30.0 + 8.0);
     assert!(picker.scroll_metrics().is_some());
 }
 

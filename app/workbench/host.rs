@@ -12,6 +12,7 @@ use crate::PanePart;
 use crate::PaneResizeState;
 use crate::PaneSplitDirection;
 use crate::PaneSplitId;
+use crate::TabContextMenuAction;
 use crate::TabContextMenuActivation;
 use crate::TabContextMenuState;
 use crate::TabInput;
@@ -250,7 +251,9 @@ pub struct WorkbenchHost<B> {
 pub enum TabContextMenuOutcome {
     Ignored,
     Changed,
-    Close(TabInputKey),
+    Fork(TabInputKey),
+    Archive(TabInputKey),
+    Delete(TabInputKey),
     Focus(ElementId),
 }
 
@@ -308,6 +311,11 @@ impl<B> WorkbenchHost<B> {
         self.tab_context_menu.dismiss()
     }
 
+    /// Opens the tab group submenu without moving keyboard focus into it.
+    pub fn open_tab_context_menu_groups(&mut self) -> bool {
+        self.tab_context_menu.open_group_menu()
+    }
+
     /// Applies one tab-menu item to Workbench-owned state.
     pub fn activate_tab_context_menu(&mut self, id: ElementId) -> TabContextMenuOutcome {
         match self.tab_context_menu.activate(id) {
@@ -335,9 +343,20 @@ impl<B> WorkbenchHost<B> {
                     TabContextMenuOutcome::Ignored
                 }
             }
-            TabContextMenuActivation::Close(tab) => {
+            TabContextMenuActivation::Fork(tab) => {
                 self.tab_context_menu.dismiss();
-                TabContextMenuOutcome::Close(tab)
+                TabContextMenuOutcome::Fork(tab)
+            }
+            TabContextMenuActivation::Archive(tab) => {
+                self.tab_context_menu.dismiss();
+                TabContextMenuOutcome::Archive(tab)
+            }
+            TabContextMenuActivation::ConfirmDelete => {
+                TabContextMenuOutcome::Focus(TabContextMenuAction::Delete.element_id())
+            }
+            TabContextMenuActivation::Delete(tab) => {
+                self.tab_context_menu.dismiss();
+                TabContextMenuOutcome::Delete(tab)
             }
             TabContextMenuActivation::MoveToGroup(tab, group) => {
                 let index = self

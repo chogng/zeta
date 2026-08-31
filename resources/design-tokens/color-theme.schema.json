@@ -71,6 +71,7 @@
           "list.activeSelectionForeground",
           "list.activeSelectionBackground",
           "tree.indentGuidesStroke",
+          "menu.foreground",
           "menu.selectionForeground",
           "menu.selectionBackground",
           "menu.background",

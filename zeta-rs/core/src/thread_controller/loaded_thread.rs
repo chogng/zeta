@@ -140,6 +140,27 @@ impl LoadedThreads {
             .collect()
     }
 
+    pub(super) fn forget(&self, thread_ids: &[ThreadId]) -> Result<(), CoreError> {
+        let removed = {
+            let mut slots = self
+                .slots
+                .lock()
+                .map_err(|_| CoreError::Journal("loaded Thread registry lock poisoned".into()))?;
+            thread_ids
+                .iter()
+                .filter_map(|thread_id| slots.remove(thread_id))
+                .collect::<Vec<_>>()
+        };
+        for slot in removed {
+            *slot
+                .loaded
+                .lock()
+                .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))? =
+                None;
+        }
+        Ok(())
+    }
+
     pub(super) fn ensure_loaded_incarnation(
         &self,
         thread_id: &ThreadId,

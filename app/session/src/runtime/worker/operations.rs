@@ -192,6 +192,77 @@ pub(super) fn stop_session(
     Ok(())
 }
 
+pub(super) fn archive_session(
+    client: &mut AppServerRequestHandle,
+    session_id: &SessionId,
+) -> Result<()> {
+    let result = client
+        .request_session(SessionRequestParams {
+            command_id: next_command_id("archive-session"),
+            session_id: session_id.clone(),
+            request: SessionRequest::Archive,
+        })
+        .map_err(client_error)?;
+    if !matches!(result, SessionRequestResult::Session(_)) {
+        return Err(anyhow!(
+            "Session archive request returned an unexpected result"
+        ));
+    }
+    Ok(())
+}
+
+pub(super) fn delete_session(
+    client: &mut AppServerRequestHandle,
+    session_id: &SessionId,
+) -> Result<()> {
+    let result = client
+        .request_session(SessionRequestParams {
+            command_id: next_command_id("delete-session"),
+            session_id: session_id.clone(),
+            request: SessionRequest::Delete,
+        })
+        .map_err(client_error)?;
+    match result {
+        SessionRequestResult::Deleted(deleted) if &deleted == session_id => Ok(()),
+        _ => Err(anyhow!(
+            "Session delete request returned an unexpected result"
+        )),
+    }
+}
+
+pub(super) fn fork_session(
+    client: &mut AppServerRequestHandle,
+    session_id: &SessionId,
+) -> Result<()> {
+    let session = client
+        .read_session(SessionReadParams {
+            session_id: session_id.clone(),
+        })
+        .map_err(client_error)?
+        .session;
+    if session.status != SessionStatus::Active {
+        return Err(anyhow!("Session is not active: {session_id}"));
+    }
+    let parent = selected_conversation_thread(&session)
+        .ok_or_else(|| anyhow!("Session has no conversation to fork: {session_id}"))?;
+    let result = client
+        .request_session(SessionRequestParams {
+            command_id: next_command_id("fork-session"),
+            session_id: session_id.clone(),
+            request: SessionRequest::ForkThread {
+                parent_thread_id: parent.thread_id.clone(),
+                title: format!("{} (fork)", parent.title),
+            },
+        })
+        .map_err(client_error)?;
+    if !matches!(result, SessionRequestResult::Thread(_)) {
+        return Err(anyhow!(
+            "Session fork request returned an unexpected result"
+        ));
+    }
+    Ok(())
+}
+
 fn ensure_session_thread(
     client: &mut AppServerRequestHandle,
     session: Session,

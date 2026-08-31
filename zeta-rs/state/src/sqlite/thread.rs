@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use zeta_history::StoredEvent;
 use zeta_history::supports_stored_event_schema_version;
+use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_thread_store::AppendBatchResult;
 use zeta_thread_store::ThreadCatalogRecord;
@@ -119,6 +120,63 @@ impl ThreadStore for SqliteThreadStore {
         }
         write_catalog(&transaction, record)?;
         transaction.commit().map_err(storage_error)
+    }
+
+    fn delete_session(&self, session_id: &SessionId) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        let thread_ids = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT thread_id FROM thread_catalog
+                     WHERE session_id = ?1 ORDER BY thread_id",
+                )
+                .map_err(storage_error)?;
+            statement
+                .query_map([session_id.as_str()], |row| row.get::<_, String>(0))
+                .map_err(storage_error)?
+                .map(|row| {
+                    ThreadId::new(row.map_err(storage_error)?)
+                        .map_err(|error| ThreadStoreError::Storage(error.to_string()))
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        for thread_id in &thread_ids {
+            transaction
+                .execute(
+                    "DELETE FROM turn_change_sets WHERE thread_id = ?1",
+                    [thread_id.as_str()],
+                )
+                .map_err(storage_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM thread_catalog WHERE thread_id = ?1",
+                    [thread_id.as_str()],
+                )
+                .map_err(storage_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM thread_events WHERE thread_id = ?1",
+                    [thread_id.as_str()],
+                )
+                .map_err(storage_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM thread_batches WHERE thread_id = ?1",
+                    [thread_id.as_str()],
+                )
+                .map_err(storage_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM thread_streams WHERE thread_id = ?1",
+                    [thread_id.as_str()],
+                )
+                .map_err(storage_error)?;
+        }
+        transaction.commit().map_err(storage_error)?;
+        Ok(thread_ids)
     }
 
     fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError> {

@@ -16,6 +16,7 @@ use zui::ui::CaretVisibility;
 use zui::ui::Color;
 use zui::ui::CornerRadii;
 use zui::ui::ElementId;
+use zui::ui::FontWeight;
 use zui::ui::InteractionFrame;
 use zui::ui::Point;
 use zui::ui::Rect;
@@ -32,8 +33,8 @@ fn style() -> TabContextMenuStyle {
         Color::WHITE,
         Color::rgb(220, 220, 220),
         Color::rgb(30, 30, 30),
-        Color::rgb(120, 120, 124),
         Color::rgb(226, 226, 228),
+        Color::rgb(210, 32, 32),
     )
 }
 
@@ -62,17 +63,20 @@ fn menu_owns_current_generic_tab_actions() {
 
     assert_eq!(state.target_tab(), Some(&target));
     assert_eq!(
-        TabContextMenuAction::ALL.map(|action| action.label(false)),
-        ["Pin tab", "Rename tab", "Move to group", "Close tab"]
+        TabContextMenuAction::ALL.map(|action| action.label(false, false)),
+        [
+            "Pin",
+            "Rename",
+            "Fork",
+            "Move to group",
+            "Archive",
+            "Delete"
+        ]
     );
+    assert_eq!(menu.item_bounds(0).unwrap().size.width, 160.0);
+    assert_eq!(menu.item_bounds(0).unwrap().size.height, 32.0);
     assert_eq!(
-        TabContextMenuAction::ALL.map(TabContextMenuAction::hint),
-        ["P", "R", "›", "W"]
-    );
-    assert_eq!(menu.item_bounds(0).unwrap().size.width, 140.0);
-    assert_eq!(menu.item_bounds(0).unwrap().size.height, 28.0);
-    assert_eq!(
-        menu.item_bounds(3).unwrap().origin.y - menu.item_bounds(1).unwrap().bottom(),
+        menu.item_bounds(4).unwrap().origin.y - menu.item_bounds(2).unwrap().bottom(),
         8.0
     );
     assert_eq!(
@@ -83,15 +87,18 @@ fn menu_owns_current_generic_tab_actions() {
             .map(|text| text.text())
             .collect::<Vec<_>>(),
         [
-            "Pin tab",
-            "Rename tab",
+            "Pin",
+            "Rename",
+            "Fork",
             "Move to group",
-            "Close tab",
-            "P",
-            "R",
-            "›",
-            "W",
+            "Archive",
+            "Delete"
         ]
+    );
+    assert_eq!(frame.scene().icons().len(), 1);
+    assert_eq!(
+        frame.scene().icons()[0].icon(),
+        zeta_icons::icons::CHEVRON_RIGHT
     );
     let surface = frame
         .scene()
@@ -104,7 +111,25 @@ fn menu_owns_current_generic_tab_actions() {
         surface.border(),
         Border::uniform(1.0, Color::rgb(220, 220, 220))
     );
-    assert_eq!(surface.corner_radii(), CornerRadii::uniform(8.0));
+    assert_eq!(surface.corner_radii(), CornerRadii::uniform(10.0));
+    assert!(
+        frame
+            .scene()
+            .text_blocks()
+            .iter()
+            .all(|text| text.style().weight() == FontWeight::SemiBold)
+    );
+    assert_eq!(
+        frame
+            .scene()
+            .text_blocks()
+            .iter()
+            .find(|text| text.text() == "Delete")
+            .unwrap()
+            .style()
+            .color(),
+        Color::rgb(210, 32, 32)
+    );
     assert_eq!(
         nodes
             .iter()
@@ -139,7 +164,7 @@ fn pinned_target_changes_the_first_action_to_unpin() {
     .unwrap();
 
     assert!(state.target_is_pinned());
-    assert_eq!(TabContextMenuAction::TogglePin.label(true), "Unpin tab");
+    assert_eq!(TabContextMenuAction::TogglePin.label(true, false), "Unpin");
     assert!(menu.item_bounds(0).is_some());
 }
 
@@ -296,6 +321,59 @@ fn move_to_group_opens_a_secondary_menu_with_existing_and_new_group_targets() {
         nodes
             .iter()
             .any(|node| node.id == TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP)
+    );
+}
+
+#[test]
+fn move_to_group_hover_exposes_the_submenu_transition() {
+    let mut state = TabContextMenuState::default();
+    state.open_unpinned(session_tab(), Point::new(80.0, 120.0), None);
+    let mut dispatch = UiDispatch::default();
+    let part = TabPart::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+    let menu = TabContextMenu::new(
+        Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &part,
+        &state,
+        CaretVisibility::Visible,
+        style(),
+        WINDOW,
+        &mut text_layout,
+        &dispatch,
+    )
+    .unwrap();
+    let move_bounds = menu.item_bounds(4).unwrap();
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    frame.draw_component(&menu);
+
+    super::update_tab_context_menu_pointer(
+        &mut dispatch,
+        Point::new(move_bounds.origin.x + 2.0, move_bounds.origin.y + 2.0),
+        frame.interaction(),
+    );
+
+    assert!(dispatch.is_hovered(TabContextMenuAction::MoveToGroup.element_id()));
+    assert!(state.open_group_menu());
+    assert!(state.is_group_menu_open());
+}
+
+#[test]
+fn delete_requires_an_explicit_second_activation() {
+    let mut state = TabContextMenuState::default();
+    let target = session_tab();
+    state.open_unpinned(target.clone(), Point::new(80.0, 120.0), None);
+
+    assert_eq!(
+        state.activate(TabContextMenuAction::Delete.element_id()),
+        super::TabContextMenuActivation::ConfirmDelete
+    );
+    assert_eq!(
+        TabContextMenuAction::Delete.label(false, true),
+        "Confirm delete"
+    );
+    assert_eq!(
+        state.activate(TabContextMenuAction::Delete.element_id()),
+        super::TabContextMenuActivation::Delete(target)
     );
 }
 

@@ -89,6 +89,27 @@ pub enum SessionRuntimeCommand {
         /// Completion channel.
         response: SyncSender<CommandResult<()>>,
     },
+    /// Archive a Session and return the server result.
+    ArchiveSession {
+        /// Session to archive.
+        session_id: SessionId,
+        /// Completion channel.
+        response: SyncSender<CommandResult<()>>,
+    },
+    /// Permanently delete a Session and all of its durable history.
+    DeleteSession {
+        /// Session to delete.
+        session_id: SessionId,
+        /// Completion channel.
+        response: SyncSender<CommandResult<()>>,
+    },
+    /// Fork the selected conversation Thread in a Session.
+    ForkSession {
+        /// Session whose selected conversation should be forked.
+        session_id: SessionId,
+        /// Completion channel.
+        response: SyncSender<CommandResult<()>>,
+    },
     /// Subscribe to a Session.
     SubscribeSession {
         /// Session to subscribe to.
@@ -171,6 +192,11 @@ pub fn reject_disconnected_command(command: SessionRuntimeCommand) -> bool {
             let _ = response.send(disconnected_command_error());
         }
         SessionRuntimeCommand::StopSession { response, .. } => {
+            let _ = response.send(disconnected_command_error());
+        }
+        SessionRuntimeCommand::ArchiveSession { response, .. }
+        | SessionRuntimeCommand::DeleteSession { response, .. }
+        | SessionRuntimeCommand::ForkSession { response, .. } => {
             let _ = response.send(disconnected_command_error());
         }
         SessionRuntimeCommand::CreateSession

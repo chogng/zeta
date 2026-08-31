@@ -81,6 +81,7 @@ use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::Session;
+use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerActivity;
 use zeta_protocol::SessionManagerInfo;
 use zeta_protocol::SessionManagerStatus;
@@ -405,6 +406,9 @@ impl AppServer {
             SessionRequest::Archive => result(&SessionRequestResult::Session(
                 self.archive_session_request(mutation)?,
             )),
+            SessionRequest::Delete => result(&SessionRequestResult::Deleted(
+                self.delete_session_request(mutation)?,
+            )),
             SessionRequest::Stop => result(&SessionRequestResult::Session(
                 self.stop_session_request(mutation)?,
             )),
@@ -724,6 +728,41 @@ impl AppServer {
         Ok(SessionResult {
             session: self.session_view(&mutation.session_id)?,
         })
+    }
+
+    fn delete_session_request(&self, mutation: SessionMutation) -> Result<SessionId, RpcError> {
+        let session_id = mutation.session_id.clone();
+        let thread_ids = self
+            .threads
+            .list_session_threads(&session_id)
+            .map_err(core_error)?
+            .into_iter()
+            .map(|thread| thread.thread_id)
+            .collect::<Vec<_>>();
+        self.threads
+            .archive_session_threads(
+                &session_id,
+                &mutation.command_id,
+                zeta_protocol::ThreadArchiveReason::Stopped,
+            )
+            .map_err(core_error)?;
+        for thread_id in &thread_ids {
+            self.multi_agent
+                .cancel_descendants(thread_id)
+                .map_err(core_error)?;
+        }
+        self.threads
+            .delete_session_threads(&session_id)
+            .map_err(core_error)?;
+        self.clear_session_dirs(&session_id);
+        self.updates.publish_session_changed(&session_id);
+        self.updates.forget_session(&session_id);
+        if let Some(runtime) = &self.turn_changes
+            && let Err(error) = runtime.enforce_cleanup_policy()
+        {
+            log::warn!("Thread worktree cleanup policy failed: {error}");
+        }
+        Ok(session_id)
     }
 
     fn lifecycle_request(&self, mutation: SessionMutation) -> Result<SessionResult, RpcError> {

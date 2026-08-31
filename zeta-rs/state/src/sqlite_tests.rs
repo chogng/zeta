@@ -78,6 +78,35 @@ fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> Threa
     }
 }
 
+fn append_created_thread(
+    store: &SqliteThreadStore,
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+    ordinal: u64,
+) {
+    store
+        .append_batch(&ThreadEventBatch {
+            batch_id: format!("thread-batch-{ordinal}"),
+            thread_id: thread_id.clone(),
+            expected_sequence: 0,
+            events: vec![StoredEvent {
+                schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
+                event_id: EventId(format!("thread-event-{ordinal}")),
+                sequence: 1,
+                thread_id: thread_id.clone(),
+                recorded_at: Timestamp(u128::from(ordinal)),
+                command: None,
+                event: ThreadEvent::ThreadCreated {
+                    session_id: session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    title: "Primary".into(),
+                },
+            }],
+            catalog: catalog(session_id, thread_id, 1),
+        })
+        .unwrap();
+}
+
 #[test]
 fn sqlite_turn_changes_compare_and_swap_complete_records() {
     let path = database_path("turn-changes-cas");
@@ -191,6 +220,41 @@ fn sqlite_thread_store_recovers_typed_events() {
     let reopened = SqliteThreadStore::open(&path).unwrap();
     assert_eq!(reopened.load(&thread_id).unwrap(), vec![thread_event]);
     assert_eq!(reopened.list_catalog().unwrap(), vec![expected_catalog]);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_delete_session_removes_all_thread_history_and_change_sets_atomically() {
+    let path = database_path("delete-session");
+    let deleted_session = SessionId::new("session-delete").unwrap();
+    let kept_session = SessionId::new("session-keep").unwrap();
+    let first = ThreadId::new("thread-delete-1").unwrap();
+    let second = ThreadId::new("thread-delete-2").unwrap();
+    let kept = ThreadId::new("thread-keep").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &deleted_session, &first, 1);
+    append_created_thread(&store, &deleted_session, &second, 2);
+    append_created_thread(&store, &kept_session, &kept, 3);
+    let change_store = SqliteTurnChangeStore::open(&path).unwrap();
+    change_store
+        .insert(&open_change_set(first.clone()))
+        .unwrap();
+
+    assert_eq!(
+        store.delete_session(&deleted_session).unwrap(),
+        vec![first.clone(), second.clone()]
+    );
+
+    assert!(store.load(&first).unwrap().is_empty());
+    assert!(store.load(&second).unwrap().is_empty());
+    assert_eq!(store.load(&kept).unwrap().len(), 1);
+    assert_eq!(
+        store.list_catalog().unwrap(),
+        vec![catalog(&kept_session, &kept, 1)]
+    );
+    assert!(change_store.list_for_thread(&first).unwrap().is_empty());
+    drop(change_store);
+    drop(store);
     fs::remove_file(path).unwrap();
 }
 

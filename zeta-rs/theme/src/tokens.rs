@@ -19,6 +19,7 @@ pub const HOVER_BORDER: &str = "hover.border";
 pub const HOVER_SHADOW: &str = "hover.shadow";
 pub const LIST_HOVER_BACKGROUND: &str = "list.hoverBackground";
 pub const LIST_ACTIVE_SELECTION_BACKGROUND: &str = "list.activeSelectionBackground";
+pub const MENU_FOREGROUND: &str = "menu.foreground";
 pub const MENU_BACKGROUND: &str = "menu.background";
 pub const MENU_HOVER_BACKGROUND: &str = "menu.hoverBackground";
 pub const ACTION_BAR_BACKGROUND: &str = "actionBar.background";

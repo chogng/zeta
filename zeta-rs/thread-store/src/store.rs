@@ -49,6 +49,12 @@ pub trait ThreadStore: Send + Sync {
     /// Installs a missing catalog row while upgrading an older event store.
     fn backfill_catalog(&self, record: &ThreadCatalogRecord) -> Result<(), ThreadStoreError>;
 
+    /// Permanently removes every durable Thread owned by one Session.
+    ///
+    /// Implementations must delete the catalog, event history, and related per-Thread state in
+    /// one atomic commit. The returned IDs are the Threads that were removed.
+    fn delete_session(&self, session_id: &SessionId) -> Result<Vec<ThreadId>, ThreadStoreError>;
+
     fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError>;
 
     fn append_batch(&self, batch: &ThreadEventBatch)

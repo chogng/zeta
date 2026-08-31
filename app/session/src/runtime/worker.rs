@@ -305,6 +305,30 @@ fn drive(
                         stop_session(client, &session_id).map_err(|error| error.to_string());
                     let _ = response.send(result);
                 }
+                Ok(SessionRuntimeCommand::ArchiveSession {
+                    session_id,
+                    response,
+                }) => {
+                    let result =
+                        archive_session(client, &session_id).map_err(|error| error.to_string());
+                    let _ = response.send(result);
+                }
+                Ok(SessionRuntimeCommand::DeleteSession {
+                    session_id,
+                    response,
+                }) => {
+                    let result =
+                        delete_session(client, &session_id).map_err(|error| error.to_string());
+                    let _ = response.send(result);
+                }
+                Ok(SessionRuntimeCommand::ForkSession {
+                    session_id,
+                    response,
+                }) => {
+                    let result =
+                        fork_session(client, &session_id).map_err(|error| error.to_string());
+                    let _ = response.send(result);
+                }
                 Ok(SessionRuntimeCommand::SubscribeSession {
                     session_id,
                     response,

@@ -147,7 +147,30 @@ fn body_mount_arranges_tabs_vertically_with_two_line_session_information() {
             "ScrollView",
             "TabGroup",
             "TabList",
-            "WorkbenchTab",
+            "Tab",
+        ]
+    );
+    let tab_list = frame
+        .scene()
+        .inspection()
+        .node(inspected_tab.parent().expect("tab inspection parent"))
+        .expect("tab list inspection node");
+    let inspected_tabs = frame
+        .scene()
+        .inspection()
+        .nodes()
+        .iter()
+        .filter(|node| node.parent() == Some(tab_list.id()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        inspected_tabs
+            .iter()
+            .map(|node| (node.name(), node.label()))
+            .collect::<Vec<_>>(),
+        [
+            ("Tab", Some("First terminal, ~/first, Active")),
+            ("Tab", Some("Second terminal, ~/second, Active")),
+            ("Tab", Some("Settings")),
         ]
     );
 
@@ -278,6 +301,33 @@ fn body_mount_scrolls_overflowing_tabs_inside_its_viewport() {
             .interaction()
             .node(TAB_CONTAINER_SETTINGS_TAB)
             .is_some()
+    );
+    let inspected_tabs = frame
+        .scene()
+        .inspection()
+        .nodes()
+        .iter()
+        .filter(|node| node.name() == "Tab")
+        .collect::<Vec<_>>();
+    assert!(
+        inspected_tabs
+            .iter()
+            .all(|node| node.element_id().is_some())
+    );
+    assert!(
+        inspected_tabs
+            .iter()
+            .all(|node| node.element_id() != Some(first))
+    );
+    assert!(
+        inspected_tabs
+            .iter()
+            .any(|node| node.element_id() == Some(last))
+    );
+    assert!(
+        inspected_tabs
+            .iter()
+            .any(|node| node.element_id() == Some(TAB_CONTAINER_SETTINGS_TAB))
     );
     assert_eq!(
         frame.scene().rects().last().unwrap().fill(),

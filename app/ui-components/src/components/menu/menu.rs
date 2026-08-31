@@ -13,7 +13,7 @@ use super::{
     ActionViewItem, ButtonSelection, ButtonStyle, InteractionRegion,
 };
 
-const MENU_PADDING: f32 = 2.0;
+const MENU_PADDING: f32 = 4.0;
 const MENU_CORNER_RADIUS: f32 = 4.0;
 const MENU_SHADOW: Color = Color::rgba(0, 0, 0, 64);
 const MENU_SHADOW_OFFSET_Y: f32 = 4.0;

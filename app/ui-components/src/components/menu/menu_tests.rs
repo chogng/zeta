@@ -56,10 +56,10 @@ fn owns_native_menu_shadow_padding_and_corner_radius() {
     assert_eq!(
         menu.content_bounds(),
         Rect::from_xywh(
-            menu.bounds().origin.x + 2.0,
-            menu.bounds().origin.y + 2.0,
-            menu.bounds().size.width - 4.0,
-            menu.bounds().size.height - 4.0
+            menu.bounds().origin.x + 4.0,
+            menu.bounds().origin.y + 4.0,
+            menu.bounds().size.width - 8.0,
+            menu.bounds().size.height - 8.0
         )
     );
     assert_eq!(
@@ -224,7 +224,7 @@ fn scrollable_menu_caps_height_and_translates_item_geometry() {
         ScrollAxis::Vertical,
     ));
     let menu = Menu::new_scrollable(
-        Rect::from_xywh(30.0, 20.0, 124.0, 96.0),
+        Rect::from_xywh(30.0, 20.0, 128.0, 100.0),
         "Folders",
         items,
         MenuIds::new(PARENT, ROOT),

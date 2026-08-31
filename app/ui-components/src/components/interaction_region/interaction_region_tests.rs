@@ -64,6 +64,7 @@ fn region_composes_inspection_and_interaction_with_one_identity() {
         .find(|node| node.element_id() == Some(CHILD))
         .expect("child inspection node");
     assert_eq!(child_inspection.name(), "ActionRegion");
+    assert_eq!(child_inspection.label(), Some("Open file"));
     assert_eq!(child_inspection.bounds(), child_bounds);
     assert_eq!(
         frame

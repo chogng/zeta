@@ -19,6 +19,7 @@ export const listHoverBackground = color("list.hoverBackground", "#2a2d2e", "#e8
 export const listActiveSelectionForeground = color("list.activeSelectionForeground", "#ffffff", "#ffffff", "Active list selection foreground.");
 export const listActiveSelectionBackground = color("list.activeSelectionBackground", "#04395e", "#0060c0", "Active list selection background.");
 export const treeIndentGuidesStroke = color("tree.indentGuidesStroke", "#585858", "#a9a9a9", "Tree indentation guide stroke.");
+export const menuForeground = color("menu.foreground", "#cccccc", "#000000", "Command menu item foreground.");
 export const menuSelectionForeground = alias("menu.selectionForeground", foreground, "Selected menu item foreground.");
 export const menuSelectionBackground = alias("menu.selectionBackground", listHoverBackground, "Selected menu item background.");
 export const menuBackground = color("menu.background", "#252526", "#ffffff", "Command menu background.");

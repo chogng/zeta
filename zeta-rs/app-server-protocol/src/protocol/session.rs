@@ -61,6 +61,7 @@ pub struct SessionChanged {
 )]
 pub enum SessionRequest {
     Archive,
+    Delete,
     Stop,
     CreateThread {
         title: String,
@@ -287,6 +288,7 @@ pub struct SessionThreadSubscribeResult {
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
 pub enum SessionRequestResult {
     Session(SessionResult),
+    Deleted(SessionId),
     Thread(SessionThreadResult),
     Rewrite(SessionRewriteResult),
     Turn(TurnStartResult),

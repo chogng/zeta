@@ -108,6 +108,26 @@ fn action_bar_paints_button_variants_and_noninteractive_separator() {
 }
 
 #[test]
+fn separator_inset_follows_the_action_bar_cross_axis() {
+    let action_bar = ActionBar::new(
+        Rect::from_xywh(0.0, 0.0, 100.0, 20.0),
+        ActionBarOrientation::Horizontal,
+        vec![ActionBarItem::Separator],
+        test_style().with_separator_style(
+            ActionBarSeparatorStyle::new(Color::rgb(90, 100, 110)).with_cross_axis_inset(3.0),
+        ),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    action_bar.paint(&mut scene);
+
+    assert_eq!(
+        scene.rects()[0].bounds(),
+        Rect::from_xywh(3.5, 3.0, 1.0, 14.0)
+    );
+}
+
+#[test]
 fn vertical_action_bar_maps_item_extent_to_the_vertical_axis() {
     let action_bar = ActionBar::new(
         Rect::from_xywh(3.0, 7.0, 24.0, 80.0),

@@ -302,6 +302,33 @@ impl UpdateBroker {
         Vec::new()
     }
 
+    pub(super) fn forget_session(&self, session_id: &SessionId) {
+        if let Ok(mut state) = self.state.lock() {
+            state.session_scopes.remove(session_id);
+            let request_ids = state
+                .pending_interactions
+                .iter()
+                .filter(|(_, request)| &request.session_id == session_id)
+                .map(|(request_id, _)| request_id.clone())
+                .collect::<Vec<_>>();
+            for request_id in request_ids {
+                state.pending_interactions.remove(&request_id);
+                state.interaction_assignments.remove(&request_id);
+            }
+            for subscriber in state.subscribers.values_mut() {
+                subscriber.sessions.remove(session_id);
+                subscriber.threads.retain(|_, subscription| {
+                    subscription.session_owners.remove(session_id);
+                    !subscription.session_owners.is_empty()
+                });
+            }
+            reconcile_interaction_assignments(&mut state);
+        }
+        if let Ok(mut transcripts) = self.transcripts.lock() {
+            transcripts.retain(|(transcript_session_id, _), _| transcript_session_id != session_id);
+        }
+    }
+
     pub(super) fn subscribe_document_collaboration(&self, connection_id: u64, room_id: String) {
         if let Ok(mut state) = self.state.lock()
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)

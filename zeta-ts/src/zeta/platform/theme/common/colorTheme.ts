@@ -41,6 +41,7 @@ export const ColorId = Object.freeze({
 	listActiveSelectionForeground: componentColors.listActiveSelectionForeground,
 	listActiveSelectionBackground: componentColors.listActiveSelectionBackground,
 	treeIndentGuidesStroke: componentColors.treeIndentGuidesStroke,
+	menuForeground: componentColors.menuForeground,
 	menuSelectionForeground: componentColors.menuSelectionForeground,
 	menuSelectionBackground: componentColors.menuSelectionBackground,
 	menuBackground: componentColors.menuBackground,

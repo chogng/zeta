@@ -49,8 +49,8 @@ fn anchors_menu_content_and_keeps_its_interaction_tree() {
 
     assert_eq!(dropdown.menu_root(), ROOT);
     assert_eq!(dropdown.bounds().origin, Point::new(30.0, 21.0));
-    assert_eq!(dropdown.bounds().size.height, 72.0);
-    assert_eq!(dropdown.content_bounds().origin, Point::new(32.0, 23.0));
+    assert_eq!(dropdown.bounds().size.height, 76.0);
+    assert_eq!(dropdown.content_bounds().origin, Point::new(34.0, 25.0));
     assert_eq!(
         dropdown.item_bounds(0).unwrap().origin,
         dropdown.content_bounds().origin
@@ -87,6 +87,6 @@ fn header_content_is_composed_inside_the_anchored_menu() {
         dropdown.item_bounds(0).unwrap().origin.y,
         header_bounds.bottom()
     );
-    assert_eq!(dropdown.bounds().size.height, 68.0);
+    assert_eq!(dropdown.bounds().size.height, 72.0);
     assert!(scene.rects().iter().any(|rect| rect.fill() == HEADER));
 }

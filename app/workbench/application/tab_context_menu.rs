@@ -34,6 +34,14 @@ impl WorkbenchApplication {
                 });
         self.update_cursor();
         self.apply_dispatch_outcome(outcome);
+        let move_to_group = TabContextMenuAction::MoveToGroup.element_id();
+        if self.ui_dispatch.is_hovered(move_to_group)
+            && !self.workbench.tab_context_menu().is_group_menu_open()
+            && self.workbench.open_tab_context_menu_groups()
+        {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
         true
     }
 
@@ -155,8 +163,14 @@ impl WorkbenchApplication {
                 self.rebuild_presentation();
                 self.request_redraw();
             }
-            crate::TabContextMenuOutcome::Close(tab) => {
-                let _ = self.close_workbench_tab(&tab);
+            crate::TabContextMenuOutcome::Fork(tab) => {
+                let _ = self.fork_workbench_session(&tab);
+            }
+            crate::TabContextMenuOutcome::Archive(tab) => {
+                let _ = self.archive_workbench_session(&tab);
+            }
+            crate::TabContextMenuOutcome::Delete(tab) => {
+                let _ = self.delete_workbench_session(&tab);
             }
             crate::TabContextMenuOutcome::Focus(element) => {
                 self.rebuild_presentation();

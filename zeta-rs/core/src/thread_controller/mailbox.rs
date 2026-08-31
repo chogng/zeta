@@ -195,6 +195,24 @@ impl ThreadExecutionMailboxes {
         Ok(())
     }
 
+    pub(crate) fn retire(&self, thread_id: &ThreadId) -> Result<(), CoreError> {
+        let mut lanes = self
+            .lanes
+            .lock()
+            .map_err(|_| CoreError::Execution("execution mailbox registry lock poisoned".into()))?;
+        let active = self
+            .active
+            .lock()
+            .map_err(|_| CoreError::Execution("execution mailbox state lock poisoned".into()))?;
+        for ((active_thread_id, _), execution) in active.iter() {
+            if active_thread_id == thread_id {
+                execution.cancellation.cancel();
+            }
+        }
+        lanes.remove(thread_id);
+        Ok(())
+    }
+
     fn enqueue_once(
         &self,
         thread_id: &ThreadId,

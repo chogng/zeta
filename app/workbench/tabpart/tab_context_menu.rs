@@ -21,9 +21,11 @@ pub const TAB_CONTEXT_MENU: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE
 pub const TAB_CONTEXT_MENU_GROUPS: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 6);
 pub const TAB_RENAME_INPUT: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 8);
 const TAB_CONTEXT_MENU_PIN: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 2);
-const TAB_CONTEXT_MENU_CLOSE: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 3);
+const TAB_CONTEXT_MENU_DELETE: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 3);
 const TAB_CONTEXT_MENU_MOVE_TO_GROUP: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 4);
 const TAB_CONTEXT_MENU_RENAME: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 5);
+const TAB_CONTEXT_MENU_ARCHIVE: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 9);
+const TAB_CONTEXT_MENU_FORK: ElementId = ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 10);
 pub const TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP: ElementId =
     ElementId::scoped(TAB_CONTEXT_MENU_SCOPE, 7);
 
@@ -31,35 +33,45 @@ pub const TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP: ElementId =
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TabContextMenuAction {
     TogglePin,
-    Close,
-    MoveToGroup,
     Rename,
+    Fork,
+    MoveToGroup,
+    Archive,
+    Delete,
 }
 
 impl TabContextMenuAction {
-    pub const ALL: [Self; 4] = [
+    #[cfg(test)]
+    pub const ALL: [Self; 6] = [
         Self::TogglePin,
         Self::Rename,
+        Self::Fork,
         Self::MoveToGroup,
-        Self::Close,
+        Self::Archive,
+        Self::Delete,
     ];
 
     pub const fn element_id(self) -> ElementId {
         match self {
             Self::TogglePin => TAB_CONTEXT_MENU_PIN,
-            Self::Close => TAB_CONTEXT_MENU_CLOSE,
-            Self::MoveToGroup => TAB_CONTEXT_MENU_MOVE_TO_GROUP,
             Self::Rename => TAB_CONTEXT_MENU_RENAME,
+            Self::Fork => TAB_CONTEXT_MENU_FORK,
+            Self::MoveToGroup => TAB_CONTEXT_MENU_MOVE_TO_GROUP,
+            Self::Archive => TAB_CONTEXT_MENU_ARCHIVE,
+            Self::Delete => TAB_CONTEXT_MENU_DELETE,
         }
     }
 
-    pub const fn label(self, pinned: bool) -> &'static str {
+    pub const fn label(self, pinned: bool, confirm_delete: bool) -> &'static str {
         match self {
-            Self::TogglePin if pinned => "Unpin tab",
-            Self::TogglePin => "Pin tab",
-            Self::Close => "Close tab",
+            Self::TogglePin if pinned => "Unpin",
+            Self::TogglePin => "Pin",
+            Self::Rename => "Rename",
+            Self::Fork => "Fork",
             Self::MoveToGroup => "Move to group",
-            Self::Rename => "Rename tab",
+            Self::Archive => "Archive",
+            Self::Delete if confirm_delete => "Confirm delete",
+            Self::Delete => "Delete",
         }
     }
 
@@ -67,17 +79,10 @@ impl TabContextMenuAction {
         match self {
             Self::TogglePin => 0,
             Self::Rename => 1,
-            Self::MoveToGroup => 3,
-            Self::Close => 5,
-        }
-    }
-
-    const fn hint(self) -> &'static str {
-        match self {
-            Self::TogglePin => "P",
-            Self::Close => "W",
-            Self::MoveToGroup => "›",
-            Self::Rename => "R",
+            Self::Fork => 2,
+            Self::MoveToGroup => 4,
+            Self::Archive => 6,
+            Self::Delete => 7,
         }
     }
 
@@ -85,7 +90,10 @@ impl TabContextMenuAction {
         match text {
             "p" | "P" => Some(Self::TogglePin),
             "r" | "R" => Some(Self::Rename),
-            "w" | "W" => Some(Self::Close),
+            "f" | "F" => Some(Self::Fork),
+            "m" | "M" => Some(Self::MoveToGroup),
+            "a" | "A" => Some(Self::Archive),
+            "d" | "D" => Some(Self::Delete),
             _ => None,
         }
     }
@@ -93,9 +101,11 @@ impl TabContextMenuAction {
     pub const fn from_element_id(id: ElementId) -> Option<Self> {
         match id {
             TAB_CONTEXT_MENU_PIN => Some(Self::TogglePin),
-            TAB_CONTEXT_MENU_CLOSE => Some(Self::Close),
-            TAB_CONTEXT_MENU_MOVE_TO_GROUP => Some(Self::MoveToGroup),
             TAB_CONTEXT_MENU_RENAME => Some(Self::Rename),
+            TAB_CONTEXT_MENU_FORK => Some(Self::Fork),
+            TAB_CONTEXT_MENU_MOVE_TO_GROUP => Some(Self::MoveToGroup),
+            TAB_CONTEXT_MENU_ARCHIVE => Some(Self::Archive),
+            TAB_CONTEXT_MENU_DELETE => Some(Self::Delete),
             _ => None,
         }
     }
@@ -116,7 +126,10 @@ pub enum TabContextMenuActivation {
     Ignored,
     OpenGroupMenu,
     TogglePin(TabInputKey),
-    Close(TabInputKey),
+    Fork(TabInputKey),
+    Archive(TabInputKey),
+    ConfirmDelete,
+    Delete(TabInputKey),
     MoveToGroup(TabInputKey, TabGroupId),
     MoveToNewGroup(TabInputKey),
     BeginRename(TabInputKey),
@@ -138,6 +151,7 @@ struct OpenTabContextMenu {
     pinned: bool,
     view: TabContextMenuView,
     rename: TextInput,
+    confirm_delete: bool,
 }
 
 /// Workbench-owned transient state for tab actions, group selection, and tab-name editing.
@@ -179,6 +193,7 @@ impl TabContextMenuState {
             pinned,
             view: TabContextMenuView::Actions,
             rename: TextInput::new(),
+            confirm_delete: false,
         });
     }
 
@@ -190,6 +205,25 @@ impl TabContextMenuState {
         self.open
             .as_ref()
             .is_some_and(|open| open.view == TabContextMenuView::Rename)
+    }
+
+    pub fn is_group_menu_open(&self) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|open| open.view == TabContextMenuView::Groups)
+    }
+
+    pub fn open_group_menu(&mut self) -> bool {
+        let Some(open) = self
+            .open
+            .as_mut()
+            .filter(|open| open.view == TabContextMenuView::Actions)
+        else {
+            return false;
+        };
+        open.confirm_delete = false;
+        open.view = TabContextMenuView::Groups;
+        true
     }
 
     pub fn dismiss(&mut self) -> Option<ElementId> {
@@ -219,17 +253,36 @@ impl TabContextMenuState {
             Some(TabContextMenuAction::TogglePin) => {
                 TabContextMenuActivation::TogglePin(open.target_tab.clone())
             }
-            Some(TabContextMenuAction::Close) => {
-                TabContextMenuActivation::Close(open.target_tab.clone())
+            Some(TabContextMenuAction::Fork) if open.target_tab.session_id().is_some() => {
+                open.confirm_delete = false;
+                TabContextMenuActivation::Fork(open.target_tab.clone())
             }
+            Some(TabContextMenuAction::Fork) => TabContextMenuActivation::Ignored,
             Some(TabContextMenuAction::MoveToGroup) => {
+                open.confirm_delete = false;
                 open.view = TabContextMenuView::Groups;
                 TabContextMenuActivation::OpenGroupMenu
             }
             Some(TabContextMenuAction::Rename) => {
+                open.confirm_delete = false;
                 open.view = TabContextMenuView::Rename;
                 TabContextMenuActivation::BeginRename(open.target_tab.clone())
             }
+            Some(TabContextMenuAction::Archive) if open.target_tab.session_id().is_some() => {
+                open.confirm_delete = false;
+                TabContextMenuActivation::Archive(open.target_tab.clone())
+            }
+            Some(TabContextMenuAction::Archive) => TabContextMenuActivation::Ignored,
+            Some(TabContextMenuAction::Delete)
+                if open.target_tab.session_id().is_some() && open.confirm_delete =>
+            {
+                TabContextMenuActivation::Delete(open.target_tab.clone())
+            }
+            Some(TabContextMenuAction::Delete) if open.target_tab.session_id().is_some() => {
+                open.confirm_delete = true;
+                TabContextMenuActivation::ConfirmDelete
+            }
+            Some(TabContextMenuAction::Delete) => TabContextMenuActivation::Ignored,
             None => TabContextMenuActivation::Ignored,
         }
     }

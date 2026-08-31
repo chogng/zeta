@@ -1326,7 +1326,14 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
 
     assert_eq!(
         labels,
-        ["Pin tab", "Rename tab", "Move to group", "Close tab"]
+        [
+            "Pin",
+            "Rename",
+            "Fork",
+            "Move to group",
+            "Archive",
+            "Delete"
+        ]
     );
     assert_eq!(
         presentation.interaction_frame().target_at(Point::new(
@@ -1347,9 +1354,9 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
         presentation
             .frame()
             .scene()
-            .text_blocks()
+            .icons()
             .iter()
-            .any(|text| text.text() == "›")
+            .any(|icon| icon.icon() == zeta_icons::icons::CHEVRON_RIGHT)
     );
 }
 

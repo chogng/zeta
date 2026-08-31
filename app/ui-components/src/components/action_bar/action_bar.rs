@@ -1,6 +1,6 @@
 use crate::{
     Color, Component, ComponentElement, ComputedElement, Element, ElementLength, PaintRect, Point,
-    Rect, Size, TextSpan, UiScene,
+    Rect, Size, TextSpan, TextStyle, UiScene,
 };
 use zui::ui::Icon;
 
@@ -17,6 +17,10 @@ pub enum ActionBarOrientation {
 #[derive(Clone, Debug, PartialEq)]
 enum ActionViewItemContent {
     Label(String),
+    LabelAndTrailingIcon {
+        label: String,
+        icon: Icon,
+    },
     LabelAndHint {
         label: String,
         hint: String,
@@ -43,6 +47,7 @@ pub struct ActionViewItem {
     state: ButtonState,
     selection: ButtonSelection,
     main_axis_extent: Option<f32>,
+    text_style: Option<TextStyle>,
 }
 
 impl ActionViewItem {
@@ -52,6 +57,24 @@ impl ActionViewItem {
             state,
             selection: ButtonSelection::Unselected,
             main_axis_extent: None,
+            text_style: None,
+        }
+    }
+
+    pub fn label_and_trailing_icon(
+        label: impl Into<String>,
+        icon: Icon,
+        state: ButtonState,
+    ) -> Self {
+        Self {
+            content: ActionViewItemContent::LabelAndTrailingIcon {
+                label: label.into(),
+                icon,
+            },
+            state,
+            selection: ButtonSelection::Unselected,
+            main_axis_extent: None,
+            text_style: None,
         }
     }
 
@@ -68,6 +91,7 @@ impl ActionViewItem {
             state,
             selection: ButtonSelection::Unselected,
             main_axis_extent: None,
+            text_style: None,
         }
     }
 
@@ -80,6 +104,7 @@ impl ActionViewItem {
             state,
             selection: ButtonSelection::Unselected,
             main_axis_extent: None,
+            text_style: None,
         }
     }
 
@@ -92,6 +117,7 @@ impl ActionViewItem {
             state,
             selection: ButtonSelection::Unselected,
             main_axis_extent: None,
+            text_style: None,
         }
     }
 
@@ -111,6 +137,7 @@ impl ActionViewItem {
             state,
             selection: ButtonSelection::Unselected,
             main_axis_extent: None,
+            text_style: None,
         }
     }
 
@@ -125,6 +152,11 @@ impl ActionViewItem {
         self
     }
 
+    pub fn with_text_style(mut self, text_style: TextStyle) -> Self {
+        self.text_style = Some(text_style);
+        self
+    }
+
     pub(crate) const fn is_enabled(&self) -> bool {
         !matches!(self.state, ButtonState::Disabled)
     }
@@ -132,6 +164,7 @@ impl ActionViewItem {
     pub(crate) fn accessible_label(&self) -> &str {
         match &self.content {
             ActionViewItemContent::Label(label)
+            | ActionViewItemContent::LabelAndTrailingIcon { label, .. }
             | ActionViewItemContent::LabelAndHint { label, .. }
             | ActionViewItemContent::IconAndLabel { label, .. } => label,
             ActionViewItemContent::Icon {
@@ -148,9 +181,23 @@ impl ActionViewItem {
     }
 
     fn paint(&self, bounds: Rect, style: &ButtonStyle, scene: &mut UiScene) {
+        let style = self
+            .text_style
+            .as_ref()
+            .map(|text_style| style.clone().with_text_style(text_style.clone()))
+            .unwrap_or_else(|| style.clone());
         let button = match &self.content {
             ActionViewItemContent::Label(label) => {
                 Button::new(bounds, label.clone(), self.state, style.clone())
+            }
+            ActionViewItemContent::LabelAndTrailingIcon { label, icon } => {
+                Button::label_and_trailing_icon(
+                    bounds,
+                    label.clone(),
+                    *icon,
+                    self.state,
+                    style.clone(),
+                )
             }
             ActionViewItemContent::LabelAndHint { label, hint } => Button::label_and_hint(
                 bounds,
@@ -211,6 +258,7 @@ pub struct ActionBarStyle {
 pub struct ActionBarSeparatorStyle {
     extent: f32,
     thickness: f32,
+    cross_axis_inset: f32,
     color: Color,
 }
 
@@ -219,6 +267,7 @@ impl ActionBarSeparatorStyle {
         Self {
             extent: 8.0,
             thickness: 1.0,
+            cross_axis_inset: 0.0,
             color,
         }
     }
@@ -230,6 +279,11 @@ impl ActionBarSeparatorStyle {
 
     pub const fn with_thickness(mut self, thickness: f32) -> Self {
         self.thickness = thickness;
+        self
+    }
+
+    pub const fn with_cross_axis_inset(mut self, inset: f32) -> Self {
+        self.cross_axis_inset = inset;
         self
     }
 
@@ -364,17 +418,18 @@ impl ActionBar {
 
     fn separator_bounds(&self, slot: Rect) -> Rect {
         let thickness = self.style.separator_style.thickness.max(0.0);
+        let inset = self.style.separator_style.cross_axis_inset.max(0.0);
         match self.orientation {
             ActionBarOrientation::Horizontal => Rect::from_xywh(
                 slot.origin.x + (slot.size.width - thickness) * 0.5,
-                slot.origin.y,
+                slot.origin.y + inset.min(slot.size.height * 0.5),
                 thickness.min(slot.size.width),
-                slot.size.height,
+                (slot.size.height - inset * 2.0).max(0.0),
             ),
             ActionBarOrientation::Vertical => Rect::from_xywh(
-                slot.origin.x,
+                slot.origin.x + inset.min(slot.size.width * 0.5),
                 slot.origin.y + (slot.size.height - thickness) * 0.5,
-                slot.size.width,
+                (slot.size.width - inset * 2.0).max(0.0),
                 thickness.min(slot.size.height),
             ),
         }

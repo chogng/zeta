@@ -1,3 +1,4 @@
+use zeta_icons::icons;
 use zeta_ui_components::ActionBarSeparatorStyle;
 use zeta_ui_components::ActionViewItem;
 use zeta_ui_components::ButtonBackgrounds;
@@ -32,6 +33,7 @@ use zui::ui::Edges;
 use zui::ui::Element;
 use zui::ui::ElementId;
 use zui::ui::FocusBehavior;
+use zui::ui::FontWeight;
 use zui::ui::InteractionFrame;
 use zui::ui::Point;
 use zui::ui::Rect;
@@ -50,13 +52,13 @@ use super::TabContextMenuView;
 use super::tab_group_menu_element_id;
 use crate::TabPart;
 
-const MENU_WIDTH: f32 = 140.0;
-const MENU_ITEM_HEIGHT: f32 = 28.0;
+const MENU_WIDTH: f32 = 160.0;
+const MENU_ITEM_HEIGHT: f32 = 32.0;
 const MENU_GAP: f32 = 2.0;
 const MENU_MARGIN: f32 = 8.0;
-const MENU_CORNER_RADIUS: f32 = 8.0;
+const MENU_CORNER_RADIUS: f32 = 10.0;
 const MENU_SEPARATOR_EXTENT: f32 = 8.0;
-const MENU_HINT_WIDTH: f32 = 12.0;
+const MENU_SEPARATOR_INSET: f32 = 8.0;
 const RENAME_HEIGHT: f32 = 38.0;
 const RENAME_INSET: f32 = 4.0;
 
@@ -66,8 +68,8 @@ pub struct TabContextMenuStyle {
     surface: Color,
     border: Color,
     text: Color,
-    hint: Color,
     hovered: Color,
+    danger: Color,
 }
 
 impl TabContextMenuStyle {
@@ -75,9 +77,9 @@ impl TabContextMenuStyle {
         Self::new(
             theme.menu_background,
             theme.border,
-            theme.foreground,
-            theme.muted_foreground,
+            theme.menu_foreground,
             theme.menu_hover_background,
+            theme.error,
         )
     }
 
@@ -85,15 +87,15 @@ impl TabContextMenuStyle {
         surface: Color,
         border: Color,
         text: Color,
-        hint: Color,
         hovered: Color,
+        danger: Color,
     ) -> Self {
         Self {
             surface,
             border,
             text,
-            hint,
             hovered,
+            danger,
         }
     }
 }
@@ -122,24 +124,32 @@ impl TabContextMenu {
     ) -> Option<Self> {
         let open = state.open.as_ref()?;
         let button_style = menu_button_style(style);
-        let action = |action: TabContextMenuAction| {
+        let session_action_enabled = open.target_tab.session_id().is_some();
+        let action = |action: TabContextMenuAction, enabled: bool| {
             let id = action.element_id();
-            MenuItem::action(
-                id,
-                ActionViewItem::label_and_hint(
-                    action.label(open.pinned),
-                    action.hint(),
-                    button_state(dispatch, id, true),
-                ),
-            )
+            let state = button_state(dispatch, id, enabled);
+            let label = action.label(open.pinned, open.confirm_delete);
+            let view = if action == TabContextMenuAction::MoveToGroup {
+                ActionViewItem::label_and_trailing_icon(label, icons::CHEVRON_RIGHT, state)
+            } else {
+                ActionViewItem::label(label, state)
+            };
+            let view = if action == TabContextMenuAction::Delete {
+                view.with_text_style(menu_text_style(style.danger))
+            } else {
+                view
+            };
+            MenuItem::action(id, view)
         };
         let root_items = vec![
-            action(TabContextMenuAction::TogglePin),
-            action(TabContextMenuAction::Rename),
+            action(TabContextMenuAction::TogglePin, true),
+            action(TabContextMenuAction::Rename, true),
+            action(TabContextMenuAction::Fork, session_action_enabled),
             MenuItem::separator(),
-            action(TabContextMenuAction::MoveToGroup),
+            action(TabContextMenuAction::MoveToGroup, true),
             MenuItem::separator(),
-            action(TabContextMenuAction::Close),
+            action(TabContextMenuAction::Archive, session_action_enabled),
+            action(TabContextMenuAction::Delete, session_action_enabled),
         ];
         let menu_style = MenuStyle::new(
             style.surface,
@@ -151,7 +161,8 @@ impl TabContextMenu {
         .with_separator_style(
             ActionBarSeparatorStyle::new(style.border)
                 .with_extent(MENU_SEPARATOR_EXTENT)
-                .with_thickness(1.0),
+                .with_thickness(1.0)
+                .with_cross_axis_inset(MENU_SEPARATOR_INSET),
         );
         let menu_style = if open.view == TabContextMenuView::Rename {
             menu_style.with_header_height(RENAME_HEIGHT)
@@ -332,12 +343,16 @@ fn menu_button_style(style: TabContextMenuStyle) -> ButtonStyle {
         .with_hovered(style.hovered)
         .with_focused(Color::TRANSPARENT)
         .with_pressed(style.hovered);
-    ButtonStyle::new(backgrounds, TextStyle::new(12.0, style.text))
-        .with_hint_text_style(TextStyle::new(12.0, style.hint))
+    ButtonStyle::new(backgrounds, menu_text_style(style.text))
         .with_selected_backgrounds(ButtonBackgrounds::new(Color::TRANSPARENT))
         .with_corner_radii(CornerRadii::uniform(3.0))
         .with_padding(Edges::new(6.0, 8.0, 6.0, 8.0))
-        .with_hint_width(MENU_HINT_WIDTH)
+        .with_icon_size(12.0)
+        .with_content_gap(8.0)
+}
+
+fn menu_text_style(color: Color) -> TextStyle {
+    TextStyle::new(13.0, color).with_weight(FontWeight::SemiBold)
 }
 
 fn rename_style(style: TabContextMenuStyle) -> InputBoxStyle {

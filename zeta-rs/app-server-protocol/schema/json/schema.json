@@ -22958,6 +22958,18 @@
         {
           "properties": {
             "type": {
+              "const": "delete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
               "const": "stop",
               "type": "string"
             }
@@ -23328,6 +23340,22 @@
             },
             "value": {
               "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "deleted",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/SessionId"
             }
           },
           "required": [

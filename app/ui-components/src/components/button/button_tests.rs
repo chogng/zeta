@@ -90,6 +90,28 @@ fn button_places_a_trailing_hint_in_its_own_text_column() {
 }
 
 #[test]
+fn button_places_a_trailing_icon_at_the_end_of_its_content() {
+    let button = Button::label_and_trailing_icon(
+        Rect::from_xywh(20.0, 4.0, 100.0, 27.0),
+        "Move to group",
+        TEST_ICON,
+        ButtonState::Resting,
+        test_style(),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(button.accessible_label(), "Move to group");
+    assert_eq!(scene.text_blocks()[0].text(), "Move to group");
+    assert_eq!(scene.text_blocks()[0].origin().x, 30.0);
+    assert_eq!(
+        scene.icons()[0].bounds(),
+        Rect::from_xywh(99.0, 11.0, 13.0, 13.0)
+    );
+}
+
+#[test]
 fn button_lays_out_icon_and_label_inside_content_padding() {
     let button = Button::icon_and_label(
         Rect::from_xywh(20.0, 4.0, 100.0, 27.0),

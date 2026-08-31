@@ -148,6 +148,7 @@ impl Component for InteractionRegion {
         Element::leaf(self.name)
             .in_bounds(self.bounds)
             .with_identity(self.identity)
+            .with_inspection_label(self.label.clone())
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {

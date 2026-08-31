@@ -622,6 +622,26 @@
       }
     },
     {
+      "id": "menu.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-menu-foreground",
+      "owner": "platform.theme.components",
+      "description": "Command menu item foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#cccccc",
+        "light": "#000000",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#000000"
+      },
+      "values": {
+        "dark": "#cccccc",
+        "light": "#000000",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#000000"
+      }
+    },
+    {
       "id": "menu.selectionForeground",
       "kind": "color",
       "cssVariable": "--zeta-menu-selection-foreground",
