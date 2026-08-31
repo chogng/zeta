@@ -51,6 +51,7 @@ mod artwork {
     pub(crate) const COMMAND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/command.svg"));
     pub(crate) const COPY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/copy.svg"));
     pub(crate) const COPY_CODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/copy-code.svg"));
+    pub(crate) const COWORK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/cowork.svg"));
     pub(crate) const CSV: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/csv.svg"));
     pub(crate) const CSV_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/csv-filled.svg"));
     pub(crate) const CSV_GREEN: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/csv-green.svg"));
@@ -244,6 +245,7 @@ pub mod icons {
     pub const COMMAND: Icon = Icon::new(IconId::new("command"), artwork::COMMAND);
     pub const COPY: Icon = Icon::new(IconId::new("copy"), artwork::COPY);
     pub const COPY_CODE: Icon = Icon::new(IconId::new("copy-code"), artwork::COPY_CODE);
+    pub const COWORK: Icon = Icon::new(IconId::new("cowork"), artwork::COWORK);
     pub const CSV: Icon = Icon::new(IconId::new("csv"), artwork::CSV);
     pub const CSV_FILLED: Icon = Icon::new(IconId::new("csv-filled"), artwork::CSV_FILLED);
     pub const CSV_GREEN: Icon = Icon::new(IconId::new("csv-green"), artwork::CSV_GREEN);
@@ -433,6 +435,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::COMMAND,
     icons::COPY,
     icons::COPY_CODE,
+    icons::COWORK,
     icons::CSV,
     icons::CSV_FILLED,
     icons::CSV_GREEN,
@@ -623,6 +626,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("command", artwork::COMMAND),
     ("copy", artwork::COPY),
     ("copy-code", artwork::COPY_CODE),
+    ("cowork", artwork::COWORK),
     ("csv", artwork::CSV),
     ("csv-filled", artwork::CSV_FILLED),
     ("csv-green", artwork::CSV_GREEN),

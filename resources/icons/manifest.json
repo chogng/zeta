@@ -217,6 +217,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "cowork",
+      "file": "cowork.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "csv",
       "file": "csv.svg",
       "rendering": "symbolic"
