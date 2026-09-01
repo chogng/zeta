@@ -87,7 +87,25 @@ test('CursorsController executes canonical ICommand edits with undoable selectio
 	});
 });
 
-test('CommandExecutor keeps the first cursor when canonical commands overlap', () => {
+test('Canonical commands share history until pushUndoStop creates a boundary', () => {
+	using coalescedModel = new TextModel('');
+	using coalesced = new CursorsController(coalescedModel, single(0, 0));
+	coalesced.executeCommand(new ReplaceCommand(range(0, 0), 'a'));
+	coalesced.executeCommand(new ReplaceCommand(range(1, 1), 'b'));
+	assert.equal(coalescedModel.getText(), 'ab');
+	coalesced.undo();
+	assert.equal(coalescedModel.getText(), '');
+
+	using isolatedModel = new TextModel('');
+	using isolated = new CursorsController(isolatedModel, single(0, 0));
+	isolated.executeCommand(new ReplaceCommand(range(0, 0), 'a'));
+	isolated.pushUndoStop();
+	isolated.executeCommand(new ReplaceCommand(range(1, 1), 'b'));
+	isolated.undo();
+	assert.equal(isolatedModel.getText(), 'a');
+});
+
+test('CommandExecutor keeps the first edit and merges converged cursors when commands overlap', () => {
 	using model = new TextModel('abcd');
 	const before = [Selection.fromPositions(position(0, 1)), Selection.fromPositions(position(0, 2))];
 	using controller = new CursorsController(model, before);
@@ -98,7 +116,7 @@ test('CommandExecutor keeps the first cursor when canonical commands overlap', (
 	]);
 
 	assert.equal(model.getText(), 'aXd');
-	assert.deepEqual(controller.selections, [Selection.fromPositions(position(0, 2)), before[1]!]);
+	assert.deepEqual(controller.selections, [Selection.fromPositions(position(0, 2))]);
 });
 
 test('CommandExecutor resolves tracked selections after model edits', () => {

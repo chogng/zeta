@@ -25,7 +25,7 @@ node .agents/skills/vscode-api-alignment/scripts/check-editor-alignment.mjs
 
 该入口依次执行：
 
-- `verify-editor-api-ledger.mjs`：验证 118 项台账的唯一声明和已处理/待处理数量；
+- `verify-editor-api-ledger.mjs`：从摘要读取总数，验证台账的唯一声明及已处理/待处理数量；
 - `audit-editor-file-set.mjs`：审计整个 Editor 生产文件集合；
 - `audit-editor-css-ownership.mjs`：阻止完全复制的上游 CSS、上游产品 root 和本批新增的上游品牌词汇，并报告仅做品牌替换的 CSS；
 - `compare-editor-api-members.mjs`：按台账中的同名声明报告成员名差异；

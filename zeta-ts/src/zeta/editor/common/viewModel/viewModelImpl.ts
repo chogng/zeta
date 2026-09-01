@@ -49,7 +49,6 @@ export class ViewModel extends Disposable implements IViewModel {
 	private hasFocus = false;
 	private previousSelections: Selection[];
 	private columnSelectData: IColumnSelectData = { isReal: false, fromViewLineNumber: 1, fromViewVisualColumn: 0, toViewLineNumber: 1, toViewVisualColumn: 0 };
-	private previousEditOperation = EditOperationType.Other;
 
 	readonly onEvent: Event<OutgoingViewModelEvent> = this.events.onEvent;
 	readonly coordinatesConverter: ICoordinatesConverter;
@@ -454,11 +453,11 @@ export class ViewModel extends Disposable implements IViewModel {
 	}
 
 	getPrevEditOperationType(): EditOperationType {
-		return this.previousEditOperation;
+		return this.cursor.getPrevEditOperationType();
 	}
 
 	setPrevEditOperationType(type: EditOperationType): void {
-		this.previousEditOperation = type;
+		this.cursor.setPrevEditOperationType(type);
 	}
 
 	getSelection(): Selection {

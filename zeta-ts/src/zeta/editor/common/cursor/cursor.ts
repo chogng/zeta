@@ -14,6 +14,7 @@ import { CursorChangeReason } from '../cursorEvents.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import { type ICommand, type IEditOperationBuilder } from '../editorCommon.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
+import { EditOperationType } from '../cursorCommon.js';
 
 export interface CursorSelectionChange {
 	readonly selections: readonly Selection[];
@@ -70,6 +71,10 @@ export class CommandExecutor {
 		editReason: TextModelEditSource = EditSources.unknown({ name: 'executeCommands' }),
 	): Selection[] | null {
 		const tracked = new Map<string, TrackedCommandSelection>();
+		const fallbackSelections = selectionsBefore.map(selection => ({
+			rangeId: model._setTrackedRange(null, selection, trackedSelectionStickiness(model, selection, undefined)),
+			direction: selection.getDirection(),
+		}));
 		let trackedSequence = 0;
 		try {
 			const collected = commands.map((command, index) => command
@@ -82,11 +87,14 @@ export class CommandExecutor {
 			return model.pushEditOperations(
 				selectionsBefore,
 				operations,
-				inverse => computeCommandSelections(model, selectionsBefore, accepted, inverse, tracked),
+				inverse => computeCommandSelections(model, accepted, inverse, tracked, fallbackSelections),
 				undefined,
 				editReason,
 			);
 		} finally {
+			for (const selection of fallbackSelections) {
+				model._setTrackedRange(selection.rangeId, null, TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges);
+			}
 			for (const selection of tracked.values()) {
 				model._setTrackedRange(selection.rangeId, null, TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges);
 			}
@@ -173,10 +181,10 @@ function operationsConflict(model: ITextModel, left: IIdentifiedSingleEditOperat
 
 function computeCommandSelections(
 	model: ITextModel,
-	selectionsBefore: readonly Selection[],
 	commands: readonly (CollectedCommand | null)[],
 	inverse: readonly IValidEditOperation[],
 	tracked: ReadonlyMap<string, TrackedCommandSelection>,
+	fallbackSelections: readonly TrackedCommandSelection[],
 ): Selection[] {
 	const inverseByCommand = new Map<number, IValidEditOperation[]>();
 	for (const operation of inverse) {
@@ -186,10 +194,14 @@ function computeCommandSelections(
 		inverseByCommand.set(operation.identifier.major, list);
 	}
 
-	return selectionsBefore.map((selection, index) => {
+	return fallbackSelections.map((fallback, index) => {
 		const item = commands[index];
 		const commandInverse = inverseByCommand.get(index);
-		if (!item || !commandInverse?.length) return selection;
+		if (!item || !commandInverse?.length) {
+			const range = model._getTrackedRange(fallback.rangeId);
+			if (!range) throw new ReferenceError('Command fallback selection was released early');
+			return Selection.fromRange(range, fallback.direction);
+		}
 		commandInverse.sort((left, right) => (left.identifier?.minor ?? 0) - (right.identifier?.minor ?? 0));
 		return item.command.computeCursorState(model, {
 			getInverseEditOperations: () => commandInverse,
@@ -253,6 +265,7 @@ export class CursorsController extends Disposable {
 	private activeHistoryMode: EditorCommandHistoryMode | undefined;
 	private activeComposition: ActiveComposition | undefined;
 	private executingCommand = false;
+	private previousEditOperationType = EditOperationType.Other;
 
 	readonly onDidChange: Event<CursorSelectionChange> =
 		this.changeEmitter.event;
@@ -296,6 +309,16 @@ export class CursorsController extends Disposable {
 	get textModel(): TextModel {
 		this.assertNotDisposed();
 		return this.model;
+	}
+
+	getPrevEditOperationType(): EditOperationType {
+		this.assertNotDisposed();
+		return this.previousEditOperationType;
+	}
+
+	setPrevEditOperationType(type: EditOperationType): void {
+		this.assertNotDisposed();
+		this.previousEditOperationType = type;
 	}
 
 	/** Returns closing ranges that are still owned by this cursor controller. */
@@ -383,6 +406,7 @@ export class CursorsController extends Disposable {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("push an undo stop");
 		this.breakHistoryGroup();
+		this.model.pushStackElement();
 	}
 
 	execute(command: EditorEditCommand): TextModelChange | undefined {
@@ -414,14 +438,12 @@ export class CursorsController extends Disposable {
 			this.readOnlyEditEmitter.fire();
 			return;
 		}
-		this.breakHistoryGroup();
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
 		const before = [...this.currentSelections];
 		let change: TextModelChange | undefined;
 		const capture = this.model.onDidChangeContent(event => { change = event; });
 		this.executingCommand = true;
-		this.model.pushStackElement();
 		try {
 			const after = CommandExecutor.executeCommands(
 				this.model,
@@ -429,10 +451,9 @@ export class CursorsController extends Disposable {
 				commands,
 				EditSources.unknown({ name: source ?? 'executeCommands' }),
 			);
-			if (after) this.installSelections(after, CursorChangeReason.NotSet);
-			if (change && after) this.rememberSelectionHistory(change.transactionId, { before, after });
+			if (after) this.installSelections(after, CursorChangeReason.NotSet, true);
+			if (change && after) this.rememberSelectionHistory(change.transactionId, { before, after: this.currentSelections });
 		} finally {
-			this.model.pushStackElement();
 			this.executingCommand = false;
 			capture.dispose();
 		}
@@ -666,15 +687,17 @@ export class CursorsController extends Disposable {
 	private installSelections(
 		selections: readonly Selection[],
 		reason?: CursorChangeReason,
+		normalize = false,
 	): void {
 		CursorCollection.validateSelections(this.model, selections);
 		const previous = this.currentSelections;
 		this.cursors.setSelections(selections);
-		this.currentSelections = selections;
+		if (normalize) this.cursors.normalize();
+		this.currentSelections = this.cursors.getSelections();
 		this.pruneAutoClosedActions();
-		if (reason !== undefined && !CursorCollection.selectionsEqual(previous, selections)) {
+		if (reason !== undefined && !CursorCollection.selectionsEqual(previous, this.currentSelections)) {
 			this.changeEmitter.fire(Object.freeze({
-				selections,
+				selections: this.currentSelections,
 				reason,
 				modelVersion: this.model.version,
 			}));

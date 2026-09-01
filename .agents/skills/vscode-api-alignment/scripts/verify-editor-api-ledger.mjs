@@ -11,14 +11,13 @@ const handled = readDeclarations(ledger, '已处理的同名契约');
 const pending = readDeclarations(ledger, '尚未补齐的同名契约');
 const all = [...handled, ...pending];
 const unique = new Set(all);
-const summary = /初始确认\s+(\d+)\s+组.*?已处理\s+(\d+)\s+组，剩余\s+(\d+)\s+组/u.exec(ledger);
-if (!summary) throw new Error('Missing 118-item summary in the ledger');
+const summary = /(?:当前表格记录|初始确认)\s+(\d+)\s+组.*?已处理\s+(\d+)\s+组，剩余\s+(\d+)\s+组/u.exec(ledger);
+if (!summary) throw new Error('Missing total, handled, and pending counts in the ledger summary');
 const [, totalText, handledText, pendingText] = summary;
 
 assertCount('已处理', handled.length, Number(handledText));
 assertCount('待处理', pending.length, Number(pendingText));
 assertCount('总计', all.length, Number(totalText));
-assertCount('基线总计', all.length, 118);
 assertCount('唯一声明', unique.size, all.length);
 
 process.stdout.write(`Editor API ledger: ${handled.length} handled + ${pending.length} pending = ${all.length}\n`);

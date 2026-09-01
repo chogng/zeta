@@ -437,6 +437,10 @@ test("Empty-selection clipboard policy may explicitly preserve browser behavior"
 	input.element.dispatchEvent(copy);
 	assert.equal(copy.defaultPrevented, false);
 	assert.equal(data.getData("text/plain"), "");
+	const cut = clipboardEvent(dom.window, 'cut', data);
+	input.element.dispatchEvent(cut);
+	assert.equal(cut.defaultPrevented, false);
+	assert.equal(model.getText(), 'abc');
 
 	dom.window.close();
 });

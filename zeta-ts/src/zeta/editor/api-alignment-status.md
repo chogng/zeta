@@ -6,7 +6,7 @@
 
 - 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 729 个；381 个同路径，209 个仅本地，348 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：初始确认 118 组同名声明结构差异，已处理 41 组，剩余 77 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
+- 账目摘要：当前表格记录 119 组同名声明结构差异，已处理 42 组，剩余 77 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
 - 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题。上游存在而本地缺失的文件按原相对路径直接建立，先恢复 API 名称并独立实现逻辑，再把现有 import 迁入该 owner；同路径文件只原地修改。
 - 用户已确认仅本地项的处理原则：架构文档明确归属的 Zeta 专属能力按既有职责保留；与 VS Code 重叠的职责迁回对应路径。文件删除仍需在每批执行前按准确路径、原因、剩余调用方和 Git 可恢复性单独确认。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
@@ -144,7 +144,7 @@
 | `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表，并补齐 `setScrollLeft` / `setScrollPosition` 供 contribution 只依赖公开编辑器契约；完整 Widget 声明仍需随 model attach/detach、view state 和对象生命周期继续收敛 |
 | `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；ViewModel 与 cursor context 调用链尚未补齐 |
 | `common/cursor/cursorCollection.ts` | `CursorCollection` | 成员边界、primary-first 状态、marker 生命周期和 overlap normalize 已与上游一致；仍需随统一 `ViewModel` 接入生产 `CursorsController` |
-| `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand` 和自动闭合范围语义；本地 `SelectionSet` 事务位于 `selectionSetDeleteOperations.ts`。仍需随统一 `CursorsController` 接入生产编辑链 |
+| `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
 | `common/cursor/cursorTypeOperations.ts` | `TypeOperations` | 已恢复上游公开名；输入策略仍需逐项核对 |
 | `common/cursor/cursorWordOperations.ts` | `WordOperations` | 文件正文与上游一致，鼠标选词已接入；按词删除仍由仅本地 `selectionSetWordOperations.ts` 承担。历史 `wordSelection.ts` 已删除且无残留 import；仍需随统一 `CursorsController` 接入生产编辑链 |
 | `common/cursor/oneCursor.ts` | `Cursor` | 成员边界、`modelState` / `viewState`、tracked range 与折行坐标转换已与上游一致；仍需随统一 `ViewModel` 进入生产生命周期 |
@@ -172,7 +172,7 @@
 ## 验证状态
 
 - 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、348 个仅上游；Zeta 590 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
-- 118 项账本校验通过：40 项已处理、78 项待处理、总计 118 个唯一声明。
+- 119 项账本：42 项已处理、77 项待处理、总计 119 个唯一声明。
 - `tsconfig.test.json` 编译通过；`MoveOperations` 的 17 个标准入口通过 12 项定向行为测试，真实 `CodeEditorWidget` 连续向下移动测试证明短行后的可视列余量能够恢复。`tsconfig.json --noEmit` 仍只报既有 Electron、Embedded Editor、BrowserView、Workbench 与 TextMate 基线错误，本批文件无新增类型错误。
 - Editor 浏览器总入口仍被 4 个既有测试编译错误阻断：缺少 `styledGlyphRasterizer.js`、`selectionSet.js`，以及 bracket pair 配置和 TextModel 构造参数不匹配。真实 Chromium 集成测试 5 项通过 4 项，其中无障碍契约通过；失败项是既有的 `Control+Home` 光标行为。
 - Editor 完整单测运行到 882 项时为 845 项通过、11 项失败；`codeEditorPane.test.js` 挂起约 4 分钟后终止，后续 26 项被取消。失败覆盖 Cursor Undo/Redo、Folding、Join Lines、输入事件次数、占位符几何、字体配置和换行符等既有基线，本批 4 个定向用例均通过。

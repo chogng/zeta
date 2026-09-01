@@ -5,6 +5,7 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isLinux, operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
+import { ReplaceCommand } from '../../common/commands/replaceCommand.js';
 import { EditorLineWrapping, EditorOption } from '../../common/config/editorOptions.js';
 import { ColumnSelection } from '../../common/cursor/cursorColumnSelection.js';
 import { CursorMove, CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
@@ -12,7 +13,7 @@ import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js'
 import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
 import { type CursorsController } from '../../common/cursor/cursor.js';
 import { CursorChangeReason } from '../../common/cursorEvents.js';
-import { CursorState, type SingleCursorState } from '../../common/cursorCommon.js';
+import { CursorState, EditOperationType, type SingleCursorState } from '../../common/cursorCommon.js';
 import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../common/core/selection.js';
@@ -37,6 +38,7 @@ import { type IAccessibilityService } from '../../../platform/accessibility/comm
 import { type IEditorAriaOptions, type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editorBrowser.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
 import { type ILogService } from '../../../platform/log/common/log.js';
+import { type ICommand } from '../../common/editorCommon.js';
 
 export interface EditorCommandContext {
 	readonly inputType: string;
@@ -56,7 +58,6 @@ export interface EditorLanguageEditingAdapter extends IDisposable {
 	readonly textModel: TextModel;
 	createTypeCommand(selections: readonly Selection[], text: string): EditorLanguageTypeCommand | undefined;
 	createEnterCommand(selections: readonly Selection[]): EditorEditCommand | undefined;
-	createBackspaceCommand(selections: readonly Selection[]): EditorEditCommand | undefined;
 }
 
 /** A native text update that can be consumed by an editor contribution before model routing. */
@@ -363,14 +364,11 @@ export class ViewController extends Disposable {
 	}
 
 	public deleteBackward(inputType = 'deleteContentBackward'): TextModelChange | undefined {
-		return this.execute(
-			this.languageEditing?.createBackspaceCommand(this.selectionController.selections) ?? DeleteOperations.deleteLeft(this.viewport.textModel, this.selectionController.selections),
-			inputType,
-		);
+		return this.executeDelete('left', this.selectionController.selections, inputType);
 	}
 
 	public deleteForward(inputType = 'deleteContentForward'): TextModelChange | undefined {
-		return this.execute(DeleteOperations.deleteRight(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.executeDelete('right', this.selectionController.selections, inputType);
 	}
 
 	public deleteWordBackward(inputType = 'deleteWordBackward'): TextModelChange | undefined {
@@ -382,11 +380,11 @@ export class ViewController extends Disposable {
 	}
 
 	public deleteSoftLineBackward(inputType = 'deleteSoftLineBackward'): TextModelChange | undefined {
-		return this.execute(DeleteOperations.deleteToBeginningOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.selectionController.selections, 'start'), inputType, EditOperationType.Other, true, true);
 	}
 
 	public deleteSoftLineForward(inputType = 'deleteSoftLineForward'): TextModelChange | undefined {
-		return this.execute(DeleteOperations.deleteToEndOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.selectionController.selections, 'end'), inputType, EditOperationType.Other, true, true);
 	}
 
 	public insertTab(): TextModelChange | undefined {
@@ -401,12 +399,9 @@ export class ViewController extends Disposable {
 			if (inputType === 'insertLineBreak' || inputType === 'insertParagraph') return this.executeEnter(selections, inputType, update.text);
 			return this.executeType(selections, update.text, inputType);
 		}
-		if (inputType === 'deleteContentForward') return this.execute(DeleteOperations.deleteRight(model, selections), inputType);
+		if (inputType === 'deleteContentForward') return this.executeDelete('right', selections, inputType);
 		if (inputType === 'deleteContentBackward') {
-			return this.execute(
-				this.languageEditing?.createBackspaceCommand(selections) ?? DeleteOperations.deleteLeft(model, selections),
-				inputType,
-			);
+			return this.executeDelete('left', selections, inputType);
 		}
 		return this.execute(TypeOperations.typeWithoutInterceptors(model, selections, ''), inputType);
 	}
@@ -433,6 +428,36 @@ export class ViewController extends Disposable {
 	private executeEnter(selections: readonly Selection[], inputType: string, text = '\n'): TextModelChange | undefined {
 		const command = this.languageEditing?.createEnterCommand(selections) ?? TypeOperations.typeWithoutInterceptors(this.viewport.textModel, selections, text);
 		return this.execute(command, inputType);
+	}
+
+	private executeDelete(direction: 'left' | 'right', selections: readonly Selection[], inputType: string): TextModelChange | undefined {
+		const previousType = this.selectionController.getPrevEditOperationType();
+		const operation = direction === 'left'
+			? DeleteOperations.deleteLeft(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections], [...this.selectionController.getAutoClosedCharacters()])
+			: DeleteOperations.deleteRight(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections]);
+		return this.executeCommands(
+			operation[1],
+			inputType,
+			direction === 'left' ? EditOperationType.DeletingLeft : EditOperationType.DeletingRight,
+			operation[0],
+			false,
+		);
+	}
+
+	private executeCommands(commands: readonly (ICommand | null)[], inputType: string, type: EditOperationType, pushBefore: boolean, pushAfter: boolean): TextModelChange | undefined {
+		if (pushBefore) this.selectionController.pushUndoStop();
+		let change: TextModelChange | undefined;
+		const capture = this.viewport.textModel.onDidChangeContent(event => { change = event; });
+		try {
+			this.selectionController.executeCommands(commands, inputType);
+		} finally {
+			capture.dispose();
+		}
+		this.selectionController.setPrevEditOperationType(type);
+		if (pushAfter) this.selectionController.pushUndoStop();
+		this.revealPrimary();
+		if (change) this.didEditEmitter.fire(Object.freeze({ inputType, insertedText: undefined, change }));
+		return change;
 	}
 
 	private selectionsForTextUpdate(update: EditContextTextUpdate): readonly Selection[] {
@@ -657,18 +682,21 @@ export class LanguageEditingAdapter extends Disposable implements EditorLanguage
 		return TypeOperations.enter(this.textModel, selections, this.configurationAt(selections[0]!.getPosition()), this.indentation, this.lexicalContext);
 	}
 
-	createBackspaceCommand(selections: readonly Selection[]): EditorEditCommand {
-		return DeleteOperations.deleteLeft(
-			this.textModel,
-			selections,
-			this.configurationAt(selections[0]!.getPosition()),
-			this.selections.getAutoClosedCharacters(),
-		);
-	}
-
 	private configurationAt(position: Position) {
 		return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
 	}
+}
+
+function createDeleteToLineBoundaryCommands(model: TextModel, selections: readonly Selection[], boundary: 'start' | 'end'): Array<ICommand | null> {
+	return selections.map(selection => {
+		const position = selection.getPosition();
+		const range = selection.isEmpty()
+			? boundary === 'start'
+				? Range.fromPositions(new Position(position.lineNumber, 1), position)
+				: Range.fromPositions(position, new Position(position.lineNumber, model.getLineMaxColumn(position.lineNumber)))
+			: selection;
+		return range.isEmpty() ? null : new ReplaceCommand(range, '');
+	});
 }
 
 export interface KeyboardNavigationControllerOptions {

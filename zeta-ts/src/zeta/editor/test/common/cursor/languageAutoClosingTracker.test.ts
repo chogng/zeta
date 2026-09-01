@@ -9,6 +9,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
+import { createTestCursorConfiguration } from '../testCursorConfiguration.js';
 
 test("Auto-closing trust follows external edits and rejects a changed closer", () => {
 	using model = new TextModel("x");
@@ -41,7 +42,7 @@ test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 });
 
 test("User-authored pairs cannot be overtyped or pair-deleted", () => {
-	using model = new TextModel("()");
+	using model = new TextModel("()", { languageId: 'typescript' });
 	using selections = new CursorsController(model, [caret(1)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
@@ -53,7 +54,7 @@ test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 	assert.equal(model.getText(), "())");
 
 	selections.setSelections([caret(1)]);
-	selections.execute(DeleteOperations.deleteLeft(model, selections.selections, configuration, selections.getAutoClosedCharacters()));
+	executeBackspace(model, selections, configurations);
 	assert.equal(model.getText(), "))");
 });
 
@@ -74,7 +75,7 @@ test("Multi-selection auto-closing entries retain independent ownership", () => 
 });
 
 test("Undo removes provenance and redo does not invent it again", () => {
-	using model = new TextModel("");
+	using model = new TextModel("", { languageId: 'typescript' });
 	using selections = new CursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
@@ -86,7 +87,7 @@ test("Undo removes provenance and redo does not invent it again", () => {
 	selections.redo();
 	assert.equal(model.getText(), "()");
 	assert.equal(canOvertype(model, selections, new Position((0) + 1, (1) + 1), ")"), false);
-	selections.execute(DeleteOperations.deleteLeft(model, selections.selections, configuration, selections.getAutoClosedCharacters()));
+	executeBackspace(model, selections, configurations);
 	assert.equal(model.getText(), ")");
 });
 
@@ -116,6 +117,18 @@ function executeAndRecord(model: TextModel, selections: CursorsController, comma
 	const change = selections.execute(command.command);
 	assert.ok(change);
 	recordAutoClosed(model, selections, command, change.version);
+}
+
+function executeBackspace(model: TextModel, selections: CursorsController, configurations: TestLanguageConfigurationService): void {
+	const operation = DeleteOperations.deleteLeft(
+		selections.getPrevEditOperationType(),
+		createTestCursorConfiguration(model, configurations),
+		model,
+		[...selections.selections],
+		[...selections.getAutoClosedCharacters()],
+	);
+	if (operation[0]) selections.pushUndoStop();
+	selections.executeCommands(operation[1]);
 }
 
 function recordAutoClosed(model: TextModel, selections: CursorsController, command: NonNullable<ReturnType<typeof TypeOperations.typeWithInterceptors>>, version: number): void {

@@ -10,6 +10,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
+import { createTestCursorConfiguration } from '../testCursorConfiguration.js';
 
 test("Language pair typing auto-closes and overtypes one existing closer", () => {
 	using model = new TextModel("call");
@@ -38,7 +39,7 @@ test("Language pair typing auto-closes and overtypes one existing closer", () =>
 });
 
 test("Language pair backspace removes both empty sides and remains one undo step", () => {
-	using model = new TextModel("");
+	using model = new TextModel("", { languageId: 'typescript' });
 	using selections = new CursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
@@ -46,8 +47,7 @@ test("Language pair backspace removes both empty sides and remains one undo step
 	const opening = typeCommand(model, selections, "[", configuration)!;
 	executeAndRecord(model, selections, opening);
 
-	const deletion = DeleteOperations.deleteLeft(model, selections.selections, configuration, selections.getAutoClosedCharacters());
-	selections.execute(deletion);
+	executeBackspace(model, selections, configurations);
 	assert.equal(model.getText(), "");
 	assert.deepEqual(selections.selections[0]!, caret(0));
 
@@ -78,7 +78,7 @@ test("Language pair typing surrounds directional selections and auto-closes coll
 });
 
 test("Auto-closing respects following text and supports multi-token pairs", () => {
-	using model = new TextModel("name");
+	using model = new TextModel("name", { languageId: 'template' });
 	using selections = new CursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using custom = configurations.register("template", {
@@ -98,7 +98,7 @@ test("Auto-closing respects following text and supports multi-token pairs", () =
 	executeAndRecord(model, selections, atEnd);
 	assert.equal(model.getText(), "<%name<%%>");
 	assert.deepEqual(selections.selections[0]!, caret(8));
-	selections.execute(DeleteOperations.deleteLeft(model, selections.selections, configuration, selections.getAutoClosedCharacters()));
+	executeBackspace(model, selections, configurations);
 	assert.equal(model.getText(), "<%name");
 });
 
@@ -153,6 +153,18 @@ function executeAndRecord(
 		result.autoClosedEnclosing.map(range => Range.fromPositions(model.positionAt(range.startOffset), model.positionAt(range.endOffset))),
 		change.version,
 	);
+}
+
+function executeBackspace(model: TextModel, selections: CursorsController, configurations: TestLanguageConfigurationService): void {
+	const operation = DeleteOperations.deleteLeft(
+		selections.getPrevEditOperationType(),
+		createTestCursorConfiguration(model, configurations),
+		model,
+		[...selections.selections],
+		[...selections.getAutoClosedCharacters()],
+	);
+	if (operation[0]) selections.pushUndoStop();
+	selections.executeCommands(operation[1]);
 }
 
 function caret(columnIndex: number): Selection {

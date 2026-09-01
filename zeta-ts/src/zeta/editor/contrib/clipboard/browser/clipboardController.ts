@@ -8,7 +8,7 @@ import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.
 import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type Selection } from "../../../common/core/selection.js";
+import { Selection } from "../../../common/core/selection.js";
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { normalizeTextLineEndings } from '../../../common/core/textChange.js';
@@ -231,15 +231,22 @@ export class ClipboardController extends Disposable {
 	}
 
 	private executeCut(): void {
-		this.selectionController.execute(DeleteOperations.cut(
-			this.viewport.textModel,
-			this.selectionController.selections,
-			this.selectionController.selections.map(selection => createClipboardEntry(
-				this.viewport.textModel,
-				selection,
-				this.emptySelectionPolicy,
-			).sourceRange),
-		));
+		const selections = [...this.selectionController.selections];
+		const cutSelections = selections.map(selection => {
+			if (!selection.isEmpty() || this.emptySelectionPolicy === EditorEmptySelectionClipboardPolicy.Ignore) return selection;
+			const range = createClipboardEntry(this.viewport.textModel, selection, this.emptySelectionPolicy).sourceRange;
+			return Selection.fromPositions(range.getStartPosition(), range.getEndPosition());
+		});
+		const operation = DeleteOperations.cut(this.viewport.cursorConfig, this.viewport.textModel, cutSelections);
+		if (this.emptySelectionPolicy === EditorEmptySelectionClipboardPolicy.Ignore) {
+			for (let index = 0; index < selections.length; index += 1) {
+				if (selections[index]!.isEmpty()) operation.commands[index] = null;
+			}
+		}
+		if (operation.shouldPushStackElementBefore) this.selectionController.pushUndoStop();
+		this.selectionController.executeCommands(operation.commands, 'cut');
+		this.selectionController.setPrevEditOperationType(operation.type);
+		if (operation.shouldPushStackElementAfter) this.selectionController.pushUndoStop();
 		this.afterEdit();
 	}
 

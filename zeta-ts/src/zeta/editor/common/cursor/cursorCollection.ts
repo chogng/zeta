@@ -32,6 +32,33 @@ export class CursorCollection extends Disposable {
 		});
 	}
 
+	public normalize(): void {
+		if (this.cursors.length < 2) return;
+		const selections = [...this.getSelections()];
+		for (;;) {
+			const sorted = selections.map((selection, index) => ({ selection, index }))
+				.sort((left, right) => Range.compareRangesUsingStarts(left.selection, right.selection));
+			let merged = false;
+			for (let index = 0; index < sorted.length - 1; index += 1) {
+				const left = sorted[index]!;
+				const right = sorted[index + 1]!;
+				const overlaps = left.selection.isEmpty() || right.selection.isEmpty()
+					? right.selection.getStartPosition().isBeforeOrEqual(left.selection.getEndPosition())
+					: right.selection.getStartPosition().isBefore(left.selection.getEndPosition());
+				if (!overlaps) continue;
+				const winnerIndex = Math.min(left.index, right.index);
+				const loserIndex = Math.max(left.index, right.index);
+				const winner = selections[winnerIndex]!;
+				selections[winnerIndex] = Selection.fromRange(winner.plusRange(selections[loserIndex]!), winner.getDirection());
+				selections.splice(loserIndex, 1);
+				merged = true;
+				break;
+			}
+			if (!merged) break;
+		}
+		this.setSelections(selections);
+	}
+
 	public static calculateResultLength(model: TextModel, edits: readonly TextEdit[]): number {
 		let length = model.length;
 		for (const edit of edits) {
