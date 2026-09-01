@@ -1,50 +1,57 @@
-export enum EditorTextDirection {
-	Auto = 'auto',
-	LeftToRight = 'ltr',
-	RightToLeft = 'rtl',
-}
+import { type ColorScheme } from '../../../../platform/theme/common/theme.js';
+import { type IEditorConfiguration } from '../../../common/config/editorConfiguration.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 
-export interface ViewLineOptionsConfiguration {
-	readonly textDirection: EditorTextDirection;
-	readonly fontLigatures: boolean;
-	readonly useGpu: boolean;
-	readonly useMonospaceOptimizations: boolean;
-	readonly lineHeight: number;
-	readonly tabSize: number;
-}
-
-/** Immutable rendering configuration shared by DOM and GPU line renderers. */
+/** Immutable configuration snapshot used while rendering one set of view lines. */
 export class ViewLineOptions {
-	public readonly textDirection: EditorTextDirection;
-	public readonly fontLigatures: boolean;
-	public readonly useGpu: boolean;
+	public readonly themeType: ColorScheme;
+	public readonly renderWhitespace: 'none' | 'boundary' | 'selection' | 'trailing' | 'all';
+	public readonly experimentalWhitespaceRendering: 'svg' | 'font' | 'off';
+	public readonly renderControlCharacters: boolean;
+	public readonly spaceWidth: number;
+	public readonly middotWidth: number;
+	public readonly wsmiddotWidth: number;
 	public readonly useMonospaceOptimizations: boolean;
+	public readonly canUseHalfwidthRightwardsArrow: boolean;
 	public readonly lineHeight: number;
-	public readonly tabSize: number;
+	public readonly stopRenderingLineAfter: number;
+	public readonly fontLigatures: string;
+	public readonly verticalScrollbarSize: number;
+	public readonly useGpu: boolean;
 
-	constructor(configuration: ViewLineOptionsConfiguration) {
-		if (!Object.values(EditorTextDirection).includes(configuration.textDirection)) {
-			throw new TypeError('Unknown Stanza editor text direction');
-		}
-		if (typeof configuration.fontLigatures !== 'boolean' || typeof configuration.useGpu !== 'boolean' || typeof configuration.useMonospaceOptimizations !== 'boolean') {
-			throw new TypeError('Stanza view-line flags must be boolean');
-		}
-		if (!Number.isFinite(configuration.lineHeight) || configuration.lineHeight <= 0) throw new RangeError('Stanza view-line height must be positive');
-		if (!Number.isSafeInteger(configuration.tabSize) || configuration.tabSize < 1) throw new RangeError('Stanza view-line tab size must be a positive safe integer');
-		this.textDirection = configuration.textDirection;
-		this.fontLigatures = configuration.fontLigatures;
-		this.useGpu = configuration.useGpu;
-		this.useMonospaceOptimizations = configuration.useMonospaceOptimizations;
-		this.lineHeight = configuration.lineHeight;
-		this.tabSize = configuration.tabSize;
+	constructor(config: IEditorConfiguration, themeType: ColorScheme) {
+		const options = config.options;
+		const fontInfo = options.get(EditorOption.fontInfo);
+		this.themeType = themeType;
+		this.renderWhitespace = options.get(EditorOption.renderWhitespace);
+		this.experimentalWhitespaceRendering = options.get(EditorOption.experimentalWhitespaceRendering);
+		this.renderControlCharacters = options.get(EditorOption.renderControlCharacters);
+		this.spaceWidth = fontInfo.spaceWidth;
+		this.middotWidth = fontInfo.middotWidth;
+		this.wsmiddotWidth = fontInfo.wsmiddotWidth;
+		this.useMonospaceOptimizations = fontInfo.isMonospace && !options.get(EditorOption.disableMonospaceOptimizations);
+		this.canUseHalfwidthRightwardsArrow = fontInfo.canUseHalfwidthRightwardsArrow;
+		this.lineHeight = options.get(EditorOption.lineHeight);
+		this.stopRenderingLineAfter = options.get(EditorOption.stopRenderingLineAfter);
+		this.fontLigatures = options.get(EditorOption.fontLigatures);
+		this.verticalScrollbarSize = options.get(EditorOption.scrollbar).verticalScrollbarSize;
+		this.useGpu = options.get(EditorOption.experimentalGpuAcceleration) === 'on';
 	}
 
 	public equals(other: ViewLineOptions): boolean {
-		return this.textDirection === other.textDirection &&
-			this.fontLigatures === other.fontLigatures &&
-			this.useGpu === other.useGpu &&
+		return this.themeType === other.themeType &&
+			this.renderWhitespace === other.renderWhitespace &&
+			this.experimentalWhitespaceRendering === other.experimentalWhitespaceRendering &&
+			this.renderControlCharacters === other.renderControlCharacters &&
+			this.spaceWidth === other.spaceWidth &&
+			this.middotWidth === other.middotWidth &&
+			this.wsmiddotWidth === other.wsmiddotWidth &&
 			this.useMonospaceOptimizations === other.useMonospaceOptimizations &&
+			this.canUseHalfwidthRightwardsArrow === other.canUseHalfwidthRightwardsArrow &&
 			this.lineHeight === other.lineHeight &&
-			this.tabSize === other.tabSize;
+			this.stopRenderingLineAfter === other.stopRenderingLineAfter &&
+			this.fontLigatures === other.fontLigatures &&
+			this.verticalScrollbarSize === other.verticalScrollbarSize &&
+			this.useGpu === other.useGpu;
 	}
 }

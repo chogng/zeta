@@ -10,8 +10,10 @@ import { type TextModelChange } from '../../../common/core/textChange.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
+import { type IEditorConfiguration } from '../../../common/config/editorConfiguration.js';
+import { type ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { ViewLine, type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
-import { type ViewLineOptions } from './viewLineOptions.js';
+import { ViewLineOptions } from './viewLineOptions.js';
 import { ViewLayer } from '../../view/viewLayer.js';
 import { FloatHorizontalRange, HorizontalPosition, HorizontalRange, type IViewLines, LineVisibleRanges } from '../../view/renderingContext.js';
 
@@ -22,7 +24,9 @@ export interface ViewLinesOptions {
 	readonly readProjectionRevision: () => number;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	readonly viewLineOptions: ViewLineOptions;
+	readonly configuration: IEditorConfiguration;
+	readonly themeType: ColorScheme;
+	readonly tabSize: number;
 	readonly typicalHalfwidthCharacterWidth: number;
 	readonly readGpuLineIndexes?: () => ReadonlySet<number>;
 }
@@ -37,6 +41,7 @@ export class ViewLines extends Disposable implements IViewLines {
 	private readonly layer: ViewLayer<ViewLine>;
 	private readonly typicalHalfwidthCharacterWidth: number;
 	private readonly readGpuLineIndexes: () => ReadonlySet<number>;
+	private _viewLineOptions: ViewLineOptions;
 
 	constructor(options: ViewLinesOptions) {
 		super();
@@ -44,6 +49,8 @@ export class ViewLines extends Disposable implements IViewLines {
 		this.readVisualProjection = options.readVisualProjection;
 		this.semanticTokenSource = options.semanticTokenSource;
 		this.bracketColorizationSource = options.bracketColorizationSource;
+		this._viewLineOptions = new ViewLineOptions(options.configuration, options.themeType);
+		if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1) throw new RangeError('Stanza view-line tab size must be a positive safe integer');
 		if (!Number.isFinite(options.typicalHalfwidthCharacterWidth) || options.typicalHalfwidthCharacterWidth <= 0) throw new RangeError('Stanza view-line halfwidth character width must be positive');
 		this.typicalHalfwidthCharacterWidth = options.typicalHalfwidthCharacterWidth;
 		this.readGpuLineIndexes = options.readGpuLineIndexes ?? (() => EMPTY_LINE_INDEXES);
@@ -52,7 +59,7 @@ export class ViewLines extends Disposable implements IViewLines {
 			readVisualProjection: options.readVisualProjection,
 			readProjectionRevision: options.readProjectionRevision,
 			lineRenderer: {
-				createLine: visualLineIndex => new ViewLine(this.domNode, visualLineIndex, options.viewLineOptions),
+				createLine: visualLineIndex => new ViewLine(this.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
 				getDomNode: line => line.domNode.domNode,
 					renderLine: (line, visualLine) => {
 						line.domNode.domNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
@@ -65,6 +72,14 @@ export class ViewLines extends Disposable implements IViewLines {
 			},
 		}));
 		this.domNode = this.layer.domNode;
+		this._register(options.configuration.onDidChange(() => this._onOptionsMaybeChanged(options.configuration, options.themeType)));
+	}
+
+	private _onOptionsMaybeChanged(configuration: IEditorConfiguration, themeType: ColorScheme): void {
+		const next = new ViewLineOptions(configuration, themeType);
+		if (this._viewLineOptions.equals(next)) return;
+		this._viewLineOptions = next;
+		for (const line of this.layer.renderedLines.values()) line.onOptionsChanged(next);
 	}
 
 	public get renderedLines(): ReadonlyMap<number, ViewLine> {

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { ViewLineOptions } from '../../browser/viewParts/viewLines/viewLineOptions.js';
+import { ColorScheme } from '../../../platform/theme/common/theme.js';
+import { createTestConfiguration } from './config/testConfiguration.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -16,18 +19,11 @@ for (const [name, value] of Object.entries({
 
 const { SemanticTokenPresentation } = await import('../../browser/viewParts/viewLines/viewLine.js');
 const { ViewLine } = await import('../../browser/viewParts/viewLines/viewLine.js');
-const { EditorTextDirection, ViewLineOptions } = await import('../../browser/viewParts/viewLines/viewLineOptions.js');
 
 test('ViewLine owns rendering, character mapping, geometry, and DOM hit conversion', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions({
-		textDirection: EditorTextDirection.Auto,
-		fontLigatures: false,
-		useGpu: false,
-		useMonospaceOptimizations: false,
-		lineHeight: 20,
-		tabSize: 4,
-	}));
+	using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none' });
+	const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
 	assert.equal(line.domNode.domNode.children.length, 1);
 	assert.equal(line.domNode.domNode.firstElementChild, line.textElement);
 	line.renderText('ab😊cd', [{ startColumn: 2, endColumn: 4, presentation: SemanticTokenPresentation.String }], []);
@@ -55,6 +51,9 @@ test('ViewLine owns rendering, character mapping, geometry, and DOM hit conversi
 		},
 	});
 	assert.equal(line.getCaretLeft(4), 30);
+	assert.equal(line.onSelectionChanged(), false);
+	line.onOptionsChanged(new ViewLineOptions(configuration, ColorScheme.HighContrastDark));
+	assert.equal(line.onSelectionChanged(), true);
 	dom.window.close();
 });
 

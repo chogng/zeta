@@ -2,7 +2,7 @@ import { h, reset, fragment as createFragment } from "../../../../base/browser/d
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
-import { EditorTextDirection, type ViewLineOptions } from './viewLineOptions.js';
+import { type ViewLineOptions } from './viewLineOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type Range } from '../../../common/core/range.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
@@ -32,18 +32,43 @@ export class ViewLine {
 	public readonly textElement: HTMLSpanElement;
 	private characterMapping: CharacterMapping;
 	private renderedText = '';
+	private _isMaybeInvalid = true;
 
-	constructor(host: HTMLElement, lineIndex: number, private readonly options: ViewLineOptions) {
+	constructor(host: HTMLElement, lineIndex: number, private _options: ViewLineOptions, private readonly tabSize: number) {
 		const domNode = new FastDomNode(h(host.ownerDocument, "div"));
 		const textElement = h(host.ownerDocument, "span");
 		domNode.setClassName(ViewLine.CLASS_NAME);
 		domNode.domNode.dataset.lineIndex = String(lineIndex);
 		textElement.className = "stanza-editor-line-text";
-		textElement.dir = options.textDirection;
 		domNode.domNode.append(textElement);
 		this.domNode = domNode;
 		this.textElement = textElement;
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, '', [], [], this.options.tabSize);
+		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, '', [], [], this.tabSize);
+	}
+
+	public onOptionsChanged(options: ViewLineOptions): void {
+		this._options = options;
+		this._isMaybeInvalid = true;
+	}
+
+	public onContentChanged(): void {
+		this._isMaybeInvalid = true;
+	}
+
+	public onTokensChanged(): void {
+		this._isMaybeInvalid = true;
+	}
+
+	public onDecorationsChanged(): void {
+		this._isMaybeInvalid = true;
+	}
+
+	public onSelectionChanged(): boolean {
+		if (this._options.themeType === 'high-contrast-dark' || this._options.themeType === 'high-contrast-light' || this._options.renderWhitespace === 'selection') {
+			this._isMaybeInvalid = true;
+			return true;
+		}
+		return false;
 	}
 
 	public hasTextOffset(offset: number): boolean {
@@ -51,8 +76,9 @@ export class ViewLine {
 	}
 
 	public renderText(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[]): void {
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, brackets, this.options.tabSize);
+		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, brackets, this.tabSize);
 		this.renderedText = text;
+		this._isMaybeInvalid = false;
 	}
 
 	public layoutLine(lineHeight: number): void {
@@ -74,8 +100,6 @@ export class ViewLine {
 	}
 
 	public isRightToLeft(): boolean {
-		if (this.options.textDirection === EditorTextDirection.RightToLeft) return true;
-		if (this.options.textDirection === EditorTextDirection.LeftToRight) return false;
 		return this.textElement.ownerDocument.defaultView?.getComputedStyle(this.textElement).direction === 'rtl';
 	}
 

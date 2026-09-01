@@ -18,7 +18,7 @@ import { ViewEventHandler } from '../common/viewEventHandler.js';
 import * as viewEvents from '../common/viewEvents.js';
 import { EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel/editorViewportContracts.js';
-import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
+import { ComputeOptionsMemory, EditorFontLigatures, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
 import { createBareFontInfoFromRawSettings } from '../common/config/fontInfoFromSettings.js';
 import { type TextMeasurer } from '../common/viewModel/textMeasurer.js';
@@ -54,7 +54,6 @@ import { type IColorTheme } from '../../platform/theme/common/colorTheme.js';
 import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
 import { ContentViewOverlays, MarginViewOverlays } from './view/viewOverlays.js';
 import { LineWidthIndex, ViewLines } from './viewParts/viewLines/viewLines.js';
-import { EditorTextDirection, ViewLineOptions } from './viewParts/viewLines/viewLineOptions.js';
 import { ViewLinesGpu } from './viewParts/viewLinesGpu/viewLinesGpu.js';
 import { ViewZones, type EditorViewZone, type EditorViewZoneHandle } from './viewParts/viewZones/viewZones.js';
 import { linesDecorationsWidth } from './viewParts/linesDecorations/linesDecorations.js';
@@ -71,6 +70,12 @@ const EMPTY_LINE_INDEXES: ReadonlySet<number> = new Set();
 
 export type EditorViewportPresentation = "document" | "embedded";
 
+export enum EditorTextDirection {
+	Auto = 'auto',
+	LeftToRight = 'ltr',
+	RightToLeft = 'rtl',
+}
+
 /** Chooses which component renders the visible focus outline for an Stanza viewport. */
 export type EditorFocusOutlineOwner = "editor" | "host";
 
@@ -83,9 +88,6 @@ export interface EditorViewportPadding {
 }
 
 export type { EditorRuler } from "./viewParts/rulers/rulers.js";
-
-/** Controls the browser paragraph direction used to shape Stanza's rendered text. */
-export { EditorTextDirection };
 
 export interface EditorViewportOptions {
 	readonly container: HTMLElement;
@@ -194,7 +196,7 @@ export class View extends ViewEventHandler {
 	private readonly indentation: ResolvedEditorIndentationOptions;
 	private readonly minimap: EditorMinimapOptions;
 	private readonly minimapLayoutMemory = new ComputeOptionsMemory();
-	private readonly viewLineOptions: ViewLineOptions;
+	private readonly textDirection: EditorTextDirection;
 	private readonly editorConfiguration: EditorConfiguration;
 	private readonly pixelRatio: IPixelRatioMonitor;
 	private changingLayout = false;
@@ -234,7 +236,6 @@ export class View extends ViewEventHandler {
 			lineHeight: options.lineHeight,
 			letterSpacing: options.cursorOptions?.letterSpacing,
 		}, this.pixelRatio.value, true);
-		const lineHeight = bareFontInfo.lineHeight;
 		if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
 		const viewport = options.viewModel.viewLayout;
 		if (!(viewport instanceof ViewLayout)) throw new TypeError('Editor view requires the editor view layout implementation');
@@ -272,14 +273,8 @@ export class View extends ViewEventHandler {
 		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
 		try {
 			this.indentation = resolveEditorIndentationOptions(options.indentation);
-			this.viewLineOptions = new ViewLineOptions({
-				textDirection: options.textDirection ?? EditorTextDirection.Auto,
-				fontLigatures: options.fontLigatures ?? false,
-				useGpu: options.experimentalGpuAcceleration === 'on',
-				useMonospaceOptimizations: false,
-				lineHeight,
-				tabSize: this.indentation.tabSize,
-			});
+			this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
+			if (!Object.values(EditorTextDirection).includes(this.textDirection)) throw new TypeError('Unknown Stanza editor text direction');
 			if (options.experimentalGpuAcceleration !== undefined && options.experimentalGpuAcceleration !== 'on' && options.experimentalGpuAcceleration !== 'off') {
 				throw new TypeError("Unknown Stanza editor GPU acceleration mode");
 			}
@@ -305,14 +300,14 @@ export class View extends ViewEventHandler {
 		this.element.className = "monaco-editor stanza-editor";
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
-		this.element.classList.add(`stanza-editor-direction-${this.viewLineOptions.textDirection}`);
+		this.element.classList.add(`stanza-editor-direction-${this.textDirection}`);
 		this.element.classList.add(`stanza-editor-mouse-${mouseStyle}`);
 		this.element.classList.toggle("hide-line-numbers", this.lineNumbers.renderType === RenderLineNumbersType.Off);
 		applyFontInfo(this.element, bareFontInfo);
 		this.element.style.tabSize = String(this.indentation.tabSize);
 		this.element.style.setProperty("--stanza-editor-padding-left", `${this.padding.left}px`);
 		this.element.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
-		this.element.dir = this.viewLineOptions.textDirection;
+		this.element.dir = this.textDirection;
 		this.element.classList.toggle("word-wrapped", this.softWrapping);
 		this.element.tabIndex = 0;
 		this.element.setAttribute("role", "region");
@@ -416,11 +411,13 @@ export class View extends ViewEventHandler {
 			readProjectionRevision: () => this.projectionRevision,
 			semanticTokenSource: options.semanticTokenSource,
 			bracketColorizationSource: options.bracketColorizationSource,
-			viewLineOptions: this.viewLineOptions,
+			configuration: this.editorConfiguration,
+			themeType: options.theme.colorScheme,
+			tabSize: this.indentation.tabSize,
 			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth(' ')),
 			readGpuLineIndexes: () => this.viewLinesGpu?.gpuLineIndexes ?? EMPTY_LINE_INDEXES,
 		}));
-		this.viewLinesGpu = this.viewLineOptions.useGpu
+		this.viewLinesGpu = this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on'
 			? this.registerViewPart(new ViewLinesGpu(this.viewContext, {
 				host: this.element,
 				viewLayout: this.viewport,
@@ -430,7 +427,8 @@ export class View extends ViewEventHandler {
 				semanticTokenSource: options.semanticTokenSource,
 				bracketColorizationSource: options.bracketColorizationSource,
 				paddingTop: this.padding.top,
-				viewLineOptions: this.viewLineOptions,
+				textDirection: this.textDirection,
+				fontLigatures: this.editorConfiguration.options.get(EditorOption.fontLigatures) !== EditorFontLigatures.OFF,
 				viewLines: this.viewLines,
 				requestRender: () => {
 					if (!this.isDisposed) this.project(this.viewport.layout);
@@ -656,7 +654,7 @@ export class View extends ViewEventHandler {
 
 	/** Returns the browser paragraph direction used by the text projection. */
 	get editorTextDirection(): EditorTextDirection {
-		return this.viewLineOptions.textDirection;
+		return this.textDirection;
 	}
 
 	/** Changes only this viewport's visual row projection; document text is unaffected. */
@@ -858,7 +856,7 @@ export class View extends ViewEventHandler {
 	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
 	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): Position | undefined {
 		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
-		if (this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight) return undefined;
+		if (this.editorTextDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		const line = this.viewLines.renderedLines.get(visualLineIndex);
 		if (!visualLine || !line) return undefined;
@@ -894,7 +892,7 @@ export class View extends ViewEventHandler {
 		point: ClientPoint,
 	): EditorHitTarget | undefined {
 		validateClientPoint(point);
-		const domTarget = this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight
+		const domTarget = this.editorTextDirection === EditorTextDirection.LeftToRight
 			? undefined
 			: this.getDomTargetAtClientPoint(point);
 		if (domTarget) return domTarget;
@@ -907,7 +905,7 @@ export class View extends ViewEventHandler {
 
 	getNearestTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		validateClientPoint(point);
-		const domTarget = this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight
+		const domTarget = this.editorTextDirection === EditorTextDirection.LeftToRight
 			? undefined
 			: this.getDomTargetAtClientPoint(point);
 		if (domTarget) return domTarget;
@@ -956,7 +954,7 @@ export class View extends ViewEventHandler {
 	}
 
 	private domCaretLeft(visualLineIndex: number, offset: number): number | undefined {
-		if (this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight) return undefined;
+		if (this.editorTextDirection === EditorTextDirection.LeftToRight) return undefined;
 		const line = this.viewLines.renderedLines.get(visualLineIndex);
 		return line?.hasTextOffset(offset)
 			? line.getCaretLeft(offset)

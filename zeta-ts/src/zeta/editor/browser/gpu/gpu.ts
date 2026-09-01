@@ -17,7 +17,7 @@ export interface GpuRenderInput {
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly textLeft: number;
 	readonly paddingTop: number;
-	readonly textDirection: EditorTextDirection;
+	readonly textDirection: 'auto' | 'ltr' | 'rtl';
 	readonly fontLigatures: boolean;
 	readonly rootStyle: CSSStyleDeclaration;
 	readonly atlas: TextureAtlas;
@@ -48,6 +48,5 @@ import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js
 import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
-import { type EditorTextDirection } from '../viewParts/viewLines/viewLineOptions.js';
 import { type TextureAtlas } from './atlas/textureAtlas.js';
 import { type GlyphRasterizer } from './raster/glyphRasterizer.js';

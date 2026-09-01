@@ -9,7 +9,6 @@ import { type TextureAtlas } from '../../browser/gpu/atlas/textureAtlas.js';
 import { FullFileRenderStrategy } from '../../browser/gpu/renderStrategy/fullFileRenderStrategy.js';
 import { type GlyphRasterizer } from '../../browser/gpu/raster/glyphRasterizer.js';
 import { RectangleRenderer } from '../../browser/gpu/rectangleRenderer.js';
-import { EditorTextDirection } from '../../browser/viewParts/viewLines/viewLineOptions.js';
 
 test('BufferDirtyTracker exposes one inclusive dirty range', () => {
 	const tracker = new BufferDirtyTracker();
@@ -73,7 +72,7 @@ test('Full-file GPU rendering starts at canonical coordinates and leaves subpixe
 		bracketColorizationSource: undefined,
 		textLeft: 44.2,
 		paddingTop: 0,
-		textDirection: EditorTextDirection.LeftToRight,
+		textDirection: 'ltr',
 		fontLigatures: false,
 		rootStyle: gpuRootStyle(),
 		atlas: fixedGlyphAtlas(8.25),
@@ -122,7 +121,7 @@ test('GPU frame geometry preserves tab stops and complete grapheme boundaries', 
 		bracketColorizationSource: undefined,
 		textLeft: 10,
 		paddingTop: 0,
-		textDirection: EditorTextDirection.LeftToRight,
+		textDirection: 'ltr',
 		fontLigatures: false,
 		rootStyle: gpuRootStyle(),
 		atlas: fixedGlyphAtlas(),

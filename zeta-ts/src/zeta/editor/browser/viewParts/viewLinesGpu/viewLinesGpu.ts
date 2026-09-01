@@ -6,7 +6,6 @@ import { type EditorVisualLineProjection } from '../../../common/viewModel/model
 import { type EditorViewportLayout, type ViewLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type SemanticTokenSource, type ViewLine } from '../viewLines/viewLine.js';
-import { type ViewLineOptions } from '../viewLines/viewLineOptions.js';
 import { type ViewLines } from '../viewLines/viewLines.js';
 import { BindingId, type GpuFrame, type IGpuRenderStrategy } from '../../gpu/gpu.js';
 import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
@@ -27,7 +26,8 @@ export interface ViewLinesGpuOptions {
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly paddingTop: number;
-	readonly viewLineOptions: ViewLineOptions;
+	readonly textDirection: 'auto' | 'ltr' | 'rtl';
+	readonly fontLigatures: boolean;
 	readonly viewLines: ViewLines;
 	readonly requestRender: () => void;
 }
@@ -288,8 +288,8 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			bracketColorizationSource: this.options.bracketColorizationSource,
 			textLeft: this.options.readTextLeft(),
 			paddingTop: this.options.paddingTop,
-			textDirection: this.options.viewLineOptions.textDirection,
-			fontLigatures: this.options.viewLineOptions.fontLigatures,
+			textDirection: this.options.textDirection,
+			fontLigatures: this.options.fontLigatures,
 			rootStyle,
 			atlas: this.context.atlas,
 		});
