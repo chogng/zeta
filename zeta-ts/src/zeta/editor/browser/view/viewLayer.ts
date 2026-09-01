@@ -148,3 +148,12 @@ export class ViewPartRows extends Disposable {
 		return projected;
 	}
 }
+
+export function renderViewPartRows(context: RestrictedRenderingContext, ownerDocument: Document, project: (rows: ReadonlyMap<number, HTMLElement>) => void): string[] {
+	const rows = new Map<number, HTMLElement>();
+	for (let lineNumber = context.viewportData.startLineNumber; lineNumber <= context.viewportData.endLineNumber; lineNumber += 1) {
+		rows.set(lineNumber - 1, h(ownerDocument, 'div'));
+	}
+	project(rows);
+	return [...rows.values()].map(row => row.innerHTML);
+}

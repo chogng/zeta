@@ -7,6 +7,7 @@ import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorations.js";
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
+import { renderViewPartRows } from '../../view/viewLayer.js';
 
 export interface LinesDecorationLaneLayout {
 	readonly owner: string;
@@ -16,6 +17,7 @@ export interface LinesDecorationLaneLayout {
 
 /** Owns line-side decoration classes and tooltips for rendered logical lines. */
 export class LinesDecorationsOverlay extends DynamicViewOverlay {
+	private _renderResult: string[] = [];
 	private readonly decorations: DecorationsOverlay;
 	private readonly lanes: ReadonlyMap<string, LinesDecorationLaneLayout>;
 
@@ -32,13 +34,17 @@ export class LinesDecorationsOverlay extends DynamicViewOverlay {
 	}
 
 	public prepareRender(context: RenderingContext): void {
-		this.prepareRows(context, this.ownerDocument, rows => projectStanzaLinesDecorations(
+		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => projectStanzaLinesDecorations(
 			this.readVisualProjection(),
 			this.decorations.visibleDecorations(context),
 			this.lanes,
 			context.scrollLeft,
 			rows,
 		));
+	}
+
+	public render(startLineNumber: number, lineNumber: number): string {
+		return this._renderResult[lineNumber - startLineNumber] ?? '';
 	}
 }
 

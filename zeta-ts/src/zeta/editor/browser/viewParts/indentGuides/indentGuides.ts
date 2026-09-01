@@ -10,6 +10,7 @@ import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type BracketColorizationSource, type BracketGuide } from '../viewLines/viewLine.js';
+import { renderViewPartRows } from '../../view/viewLayer.js';
 
 interface IndentGuidesOptions {
 	readonly guides: InternalGuidesOptions;
@@ -24,6 +25,7 @@ interface IndentGuidesOptions {
 
 /** Owns and projects the visible indentation-guide rows. */
 export class IndentGuidesOverlay extends DynamicViewOverlay {
+	private _renderResult: string[] = [];
 	private readonly guides: InternalGuidesOptions;
 	private readonly tabSize: number;
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
@@ -56,7 +58,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		const activeIndentation = this.resolveActiveIndentation(activeBracketGuide);
 		const projection = this.readVisualProjection();
 		const textLeft = this.readTextLeft();
-		this.prepareRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
 		for (const [visualLineIndex, row] of rows) {
 			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
@@ -74,6 +76,10 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 			for (const guide of bracketGuides) this.appendBracketGuide(row, visualLine, context.viewportData.lineHeight, guide, activeBracketGuide, textLeft, this.textMeasurer.measureLineWidth.bind(this.textMeasurer));
 		}
 		});
+	}
+
+	public render(startLineNumber: number, lineNumber: number): string {
+		return this._renderResult[lineNumber - startLineNumber] ?? '';
 	}
 
 	private resolveBracketGuides(context: RenderingContext): readonly BracketGuide[] {

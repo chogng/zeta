@@ -6,6 +6,7 @@ import { type IViewModel } from '../../../common/viewModel.js';
 import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
+import { renderViewPartRows } from '../../view/viewLayer.js';
 
 interface LineNumbersOverlayOptions {
 	readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
@@ -17,6 +18,7 @@ interface LineNumbersOverlayOptions {
 /** Projects line numbers into virtual rows. */
 export class LineNumbersOverlay extends DynamicViewOverlay {
 	public static readonly CLASS_NAME = 'line-numbers';
+	private _renderResult: string[] = [];
 	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	private readonly viewModel: IViewModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -39,7 +41,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	public prepareRender(context: RenderingContext): void {
 		const visualProjection = this.readVisualProjection();
 		const activeLineIndex = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber - 1;
-		this.prepareRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
 		for (const [visualLineIndex, row] of rows) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
@@ -53,6 +55,10 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 			reset(row, number);
 		}
 		});
+	}
+
+	public render(startLineNumber: number, lineNumber: number): string {
+		return this._renderResult[lineNumber - startLineNumber] ?? '';
 	}
 }
 

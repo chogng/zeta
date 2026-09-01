@@ -6,7 +6,7 @@
 
 - 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 729 个；381 个同路径，209 个仅本地，348 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：初始确认 118 组同名声明结构差异，已处理 31 组，剩余 87 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
+- 账目摘要：初始确认 118 组同名声明结构差异，已处理 32 组，剩余 86 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
 - 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题，也不新增 Editor 生产文件。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
 - 输入、参数和返回类型一致不代表行为已经一致。剩余项仍需继续核对状态 owner、事件顺序、失效条件、调度阶段、坐标转换、可见副作用、失败语义和释放时机。
@@ -49,6 +49,7 @@
 | `standalone/browser/standaloneEditor.ts` | `create` | 创建并返回同一个 `StandaloneEditor` 实例；该实例由代码编辑器服务登记并触发创建事件，释放时从服务移除，仅隐式创建的模型随编辑器释放 |
 | `standalone/browser/standaloneEditor.ts` | `getEditors` | 直接读取代码编辑器服务持有的当前实例；与 `create`、`onDidCreateEditor` 共享对象身份和释放时机，Standalone 测试覆盖双编辑器登记、共享模型和独立释放 |
 | `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 公开成员差异归零；从计算后的编辑器配置和主题类型生成不可变行渲染快照，由 `ViewLines` 持有并在配置变化时比较后通知已渲染行；段落方向、制表宽度和 GPU 输入不再错误归入该类型，定向测试覆盖全部快照字段、相等比较与调用链 |
+| `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 类成员差异归零，只保留准备与逐行输出抽象契约；可见行临时 DOM 由 `viewLayer.ts` 的通用行投影负责，各具体 overlay 自己持有输出并实现 `render`，不再由基类藏一份共享状态 |
 
 ## 尚未补齐的同名契约
 
@@ -79,7 +80,6 @@
 | `browser/gpu/viewGpuContext.ts` | `ViewGpuContext` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/overlayWidgets/overlayWidgets.ts` | `ViewOverlayWidgets` | 已恢复公开名、`ViewPart` 生命周期、DOM owner、布局缓存和 widget 生命周期；剩余成员差异继续按真实调用方收敛 |
 | `browser/view/viewOverlays.ts` | `ViewOverlays` | 已恢复 `ViewPart` owner、`addDynamicOverlay`、统一可见行 DOM 和 `ContentViewOverlays` / `MarginViewOverlays`；逐行覆盖层不再各建一套行容器 |
-| `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 已继承 `ViewEventHandler`，渲染契约改为 `prepareRender(context)` 后按行号返回片段；不再继承 Part 或直接持有编辑器 DOM |
 | `browser/view/viewController.ts` | `ViewController` | 已只负责命令、组合输入协调、焦点调用和 `dispatchMouse` 选区策略；输入 Part 的创建、渲染与释放已迁入 `View`，剪贴板委托和剩余公开成员仍待收敛 |
 | `browser/viewParts/gpuMark/gpuMark.ts` | `GpuMarkOverlay` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 本地职责已改名或移出上游 owner |
@@ -102,8 +102,8 @@
 | `browser/viewParts/selections/selections.ts` | `SelectionsOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
 | `browser/viewParts/viewCursors/viewCursor.ts` | `ViewCursor` | 已恢复公开名并由 `ViewCursors` 独立持有 |
 | `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 已从逐行覆盖层移回独立 `ViewPart`，持有光标 DOM、组合输入显示和移动动画 |
-| `browser/viewParts/viewLines/viewLine.ts` | `ViewLine` | 本地 scheduler 实现改为 `ViewLine` |
-| `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 已实现 `IViewLines`，DOM 行按逐行 `LineVisibleRanges` 与 `HorizontalPosition` 提供真实浏览器几何；GPU 接管的行不再触发 DOM 几何读取 |
+| `browser/viewParts/viewLines/viewLine.ts` | `ViewLine` | 类成员名差异归零；单行独立持有 DOM、字符映射、宽度缓存、等宽假设校验和范围测量，调用方不再读取内部文本节点；渲染参数签名仍需随标准 `ViewportData` 输入继续收敛 |
+| `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 已进入 `ViewPart` 事件、渲染和释放链，统一负责逐行定位、DOM 到文档位置转换、范围几何、宽度缓存与等宽假设校验；`View` 与 GPU 层不再读取 `ViewLine` 内部状态，行集合和逐行几何 helper 已回到对应 owner，剩余成员差异从 64 降至 32 |
 | `browser/viewParts/viewZones/viewZones.ts` | `ViewZones` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
 | `browser/viewParts/whitespace/whitespace.ts` | `WhitespaceOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
 | `browser/widget/codeEditor/codeEditorContributions.ts` | `CodeEditorContributions` | 本地多 context contribution owner 改为 `WidgetContributionCollection` |
@@ -173,5 +173,5 @@
 - 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、348 个仅上游；Zeta 590 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
 - 118 项账本校验通过：31 项已处理、87 项待处理、总计 118 个唯一声明。
 - `tsconfig.stanza.json --noEmit` 与 `tsconfig.extensions-test.json --noEmit` 通过；渲染/GPU、指针命中和 Widget 的 26 个相关用例通过。整个 `editor` 批跑没有行为断言失败，但一个单独运行可通过的指针命中用例被测试运行器报告事件循环提前结束，仍需继续定位该批跑残留句柄。完整测试类型检查仍只有 Sessions 与 Workbench Chat 的 9 个既有错误；生产 Widget 已接入唯一 ViewModel，但输入与 contribution 尚未移除内部光标入口，因此当前不从 118 项账目中扣减。
-- `tsconfig.test.json` 仍报告 9 个已有错误，集中在 Sessions 与 Workbench Chat；本轮 Editor 文件没有新增类型错误。`ViewLineOptions`、`ViewLine` 与 GPU 的 9 项定向测试通过。
+- `tsconfig.test.json` 仍报告 9 个已有错误，集中在 Sessions 与 Workbench Chat；本轮 Editor 文件没有新增类型错误。行渲染、GPU、指针命中、语义 token 与装饰链的 23 项定向测试全部通过；`View` 的参数校验已前移，不再在构造失败时调用测试子类尚未完成初始化的释放逻辑。
 - 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 87 项中扣减。

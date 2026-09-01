@@ -4,9 +4,12 @@ import { type EditorVisualLineProjection } from '../../../common/viewModel/model
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { h } from '../../../../base/browser/dom.js';
+import { renderViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects the active logical line independently from selection ranges. */
 export class CurrentLineHighlightOverlay extends DynamicViewOverlay {
+	private _renderResult: string[] = [];
 	constructor(
 		private readonly context: ViewContext,
 		private readonly viewModel: IViewModel,
@@ -29,7 +32,7 @@ export class CurrentLineHighlightOverlay extends DynamicViewOverlay {
 		const activeLineIndexes = new Set(selections.map(selection => selection.getPosition().lineNumber - 1));
 		const selectionIsEmpty = selections.every(selection => selection.isEmpty());
 		const projection = this.readVisualProjection();
-		this.prepareRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
 		for (const [visualLineIndex, row] of rows) {
 			const isActive = activeLineIndexes.has(projection.lineAt(visualLineIndex)?.logicalLineIndex ?? -1);
 			const highlightsLine = selectionIsEmpty && (this.renderLineHighlight === 'line' || this.renderLineHighlight === 'all');
@@ -44,5 +47,8 @@ export class CurrentLineHighlightOverlay extends DynamicViewOverlay {
 		}
 		});
 	}
+
+	public render(startLineNumber: number, lineNumber: number): string {
+		return this._renderResult[lineNumber - startLineNumber] ?? '';
+	}
 }
-import { h } from '../../../../base/browser/dom.js';

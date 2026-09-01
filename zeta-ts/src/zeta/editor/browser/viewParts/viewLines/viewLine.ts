@@ -8,42 +8,39 @@ import { type Range } from '../../../common/core/range.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
-import { type FloatHorizontalRange } from '../../view/renderingContext.js';
-
-interface BrowserCaretPosition {
-	readonly offsetNode: Node;
-	readonly offset: number;
-}
-
-interface BrowserCaretRange {
-	readonly startContainer: Node;
-	readonly startOffset: number;
-}
-
-interface BrowserCaretDocument {
-	caretPositionFromPoint?(x: number, y: number): BrowserCaretPosition | null;
-	caretRangeFromPoint?(x: number, y: number): BrowserCaretRange | null;
-}
+import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
+import { VisibleRanges } from '../../view/renderingContext.js';
 
 /** Owns one reusable virtual-line DOM subtree rendered by ViewLines. */
 export class ViewLine {
 	public static readonly CLASS_NAME = 'view-line';
-	public readonly domNode: FastDomNode<HTMLDivElement>;
-	public readonly textElement: HTMLSpanElement;
-	private characterMapping: CharacterMapping;
-	private renderedText = '';
+	private _renderedViewLine: RenderedViewLine;
+	private readonly _viewGpuContext: ViewGpuContext | undefined;
 	private _isMaybeInvalid = true;
 
-	constructor(host: HTMLElement, lineIndex: number, private _options: ViewLineOptions, private readonly tabSize: number) {
+	constructor(host: HTMLElement, lineIndex: number, private _options: ViewLineOptions, tabSize: number, viewGpuContext?: ViewGpuContext) {
+		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('View line tab size must be a positive safe integer');
 		const domNode = new FastDomNode(h(host.ownerDocument, "div"));
 		const textElement = h(host.ownerDocument, "span");
 		domNode.setClassName(ViewLine.CLASS_NAME);
 		domNode.domNode.dataset.lineIndex = String(lineIndex);
 		textElement.className = "stanza-editor-line-text";
 		domNode.domNode.append(textElement);
-		this.domNode = domNode;
-		this.textElement = textElement;
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, '', [], [], this.tabSize);
+		this._viewGpuContext = viewGpuContext;
+		this._renderedViewLine = new RenderedViewLine(domNode, textElement, tabSize);
+	}
+
+	public getDomNode(): HTMLElement {
+		return this._renderedViewLine.domNode.domNode;
+	}
+
+	public setDomNode(domNode: HTMLElement): void {
+		const textElement = domNode.firstElementChild;
+		if (!(textElement instanceof domNode.ownerDocument.defaultView!.HTMLSpanElement)) {
+			throw new TypeError('A view line DOM node must own one text span');
+		}
+		this._renderedViewLine = new RenderedViewLine(new FastDomNode(domNode), textElement, this._renderedViewLine.tabSize);
+		this._isMaybeInvalid = true;
 	}
 
 	public onOptionsChanged(options: ViewLineOptions): void {
@@ -53,14 +50,17 @@ export class ViewLine {
 
 	public onContentChanged(): void {
 		this._isMaybeInvalid = true;
+		this.resetCachedWidth();
 	}
 
 	public onTokensChanged(): void {
 		this._isMaybeInvalid = true;
+		this.resetCachedWidth();
 	}
 
 	public onDecorationsChanged(): void {
 		this._isMaybeInvalid = true;
+		this.resetCachedWidth();
 	}
 
 	public onSelectionChanged(): boolean {
@@ -71,67 +71,139 @@ export class ViewLine {
 		return false;
 	}
 
-	public hasTextOffset(offset: number): boolean {
-		return Number.isSafeInteger(offset) && offset >= 0 && offset <= this.renderedText.length;
-	}
-
-	public renderText(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[]): void {
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, brackets, this.tabSize);
-		this.renderedText = text;
+	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[], wrappedTextIndentWidth = 0): boolean {
+		if (!Number.isFinite(wrappedTextIndentWidth) || wrappedTextIndentWidth < 0) throw new RangeError('View line indent must be finite and non-negative');
+		this._renderedViewLine.render(text, tokens, brackets, wrappedTextIndentWidth);
 		this._isMaybeInvalid = false;
+		return true;
 	}
 
 	public layoutLine(lineHeight: number): void {
+		this._renderedViewLine.layout(lineHeight);
+	}
+
+	public isRenderedRTL(): boolean {
+		return this._renderedViewLine.isRightToLeft();
+	}
+
+	public getWidth(context: DomReadingContext | null): number {
+		return this._renderedViewLine.getWidth(context);
+	}
+
+	public getWidthIsFast(): boolean {
+		return this._renderedViewLine.hasCachedWidth;
+	}
+
+	public needsMonospaceFontCheck(): boolean {
+		return this._options.useMonospaceOptimizations && this._renderedViewLine.canCheckMonospaceAssumptions;
+	}
+
+	public monospaceAssumptionsAreValid(): boolean {
+		return !this.needsMonospaceFontCheck() || this._renderedViewLine.monospaceAssumptionsAreValid(this._options.spaceWidth);
+	}
+
+	public onMonospaceAssumptionsInvalidated(): void {
+		this._renderedViewLine.disableMonospaceMeasurement();
+		this._isMaybeInvalid = true;
+	}
+
+	public getVisibleRangesForRange(_lineNumber: number, startColumn: number, endColumn: number, context: DomReadingContext): VisibleRanges | null {
+		const ranges = this._renderedViewLine.getVisibleRanges(startColumn, endColumn, context);
+		return ranges ? new VisibleRanges(false, ranges) : null;
+	}
+
+	public getColumnOfNodeOffset(spanNode: HTMLElement, offset: number): number {
+		return this._renderedViewLine.getColumnOfNodeOffset(spanNode, offset);
+	}
+
+	public resetCachedWidth(): void {
+		this._renderedViewLine.resetCachedWidth();
+	}
+}
+
+class RenderedViewLine {
+	private characterMapping: CharacterMapping;
+	private renderedText = '';
+	private wrappedTextIndentWidth = 0;
+	private cachedWidth: number | undefined;
+	private useMonospaceMeasurement = true;
+
+	constructor(
+		readonly domNode: FastDomNode<HTMLElement>,
+		private readonly textElement: HTMLSpanElement,
+		readonly tabSize: number,
+	) {
+		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, '', [], [], this.tabSize);
+	}
+
+	get hasCachedWidth(): boolean {
+		return this.cachedWidth !== undefined;
+	}
+
+	get canCheckMonospaceAssumptions(): boolean {
+		return this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
+	}
+
+	render(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[], wrappedTextIndentWidth: number): void {
+		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, brackets, this.tabSize);
+		this.textElement.style.marginInlineStart = `${wrappedTextIndentWidth}px`;
+		this.renderedText = text;
+		this.wrappedTextIndentWidth = wrappedTextIndentWidth;
+		this.resetCachedWidth();
+	}
+
+	layout(lineHeight: number): void {
 		this.domNode.setHeight(lineHeight);
 		this.domNode.setLineHeight(lineHeight);
 	}
 
-	public getHorizontalRanges(startOffset: number, endOffset: number, context = this.createReadingContext()): readonly FloatHorizontalRange[] | undefined {
-		if (!this.hasTextOffset(startOffset) || !this.hasTextOffset(endOffset) || endOffset < startOffset) {
-			throw new RangeError('View line offsets must be ordered UTF-16 positions');
-		}
-		const start = this.characterMapping.getDomPosition(startOffset + 1);
-		const end = this.characterMapping.getDomPosition(endOffset + 1);
-		return RangeUtil.readHorizontalRanges(this.textElement, start.partIndex, start.charIndex, end.partIndex, end.charIndex, context) ?? undefined;
+	getVisibleRanges(startColumn: number, endColumn: number, context: DomReadingContext): ReturnType<typeof RangeUtil.readHorizontalRanges> {
+		if (!this.hasColumn(startColumn) || !this.hasColumn(endColumn) || endColumn < startColumn) return null;
+		const start = this.characterMapping.getDomPosition(startColumn);
+		const end = this.characterMapping.getDomPosition(endColumn);
+		return RangeUtil.readHorizontalRanges(this.textElement, start.partIndex, start.charIndex, end.partIndex, end.charIndex, context);
 	}
 
-	public getCaretLeft(offset: number): number | undefined {
-		return this.getHorizontalRanges(offset, offset)?.[0]?.left;
+	getColumnOfNodeOffset(spanNode: HTMLElement, offset: number): number {
+		const partIndex = Array.prototype.indexOf.call(this.textElement.children, spanNode) as number;
+		if (partIndex < 0 || !Number.isSafeInteger(offset) || offset < 0) return -1;
+		const partLength = spanNode.textContent?.length ?? 0;
+		if (offset > partLength) return -1;
+		return this.characterMapping.getColumn(new DomPosition(partIndex, offset), partLength);
 	}
 
-	public isRightToLeft(): boolean {
+	isRightToLeft(): boolean {
 		return this.textElement.ownerDocument.defaultView?.getComputedStyle(this.textElement).direction === 'rtl';
 	}
 
-	public getOffsetAtClientPoint(clientX: number, clientY: number): number | undefined {
-		if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) throw new RangeError('View line hit-test coordinates must be finite');
-		const document = this.textElement.ownerDocument as unknown as BrowserCaretDocument;
-		const position = document.caretPositionFromPoint?.(clientX, clientY) ?? document.caretRangeFromPoint?.(clientX, clientY);
-		if (!position) return undefined;
-		const node = 'offsetNode' in position ? position.offsetNode : position.startContainer;
-		const offset = 'offsetNode' in position ? position.offset : position.startOffset;
-		if (!this.textElement.contains(node)) return undefined;
-		if (node === this.textElement) {
-			const spanNode = (this.textElement.children[offset] ?? this.textElement.children[offset - 1]) as HTMLElement | undefined;
-			if (!spanNode) return undefined;
-			return this.getColumnOfNodeOffset(spanNode, spanNode === this.textElement.children[offset] ? 0 : spanNode.textContent?.length ?? 0);
-		}
-		const spanNode = node.nodeType === node.TEXT_NODE ? node.parentElement : node as HTMLElement;
-		if (!spanNode) return undefined;
-		const charOffset = node.nodeType === node.TEXT_NODE ? offset : offset === 0 ? 0 : spanNode.textContent?.length ?? 0;
-		return this.getColumnOfNodeOffset(spanNode, charOffset);
+	getWidth(context: DomReadingContext | null): number {
+		if (this.cachedWidth !== undefined) return this.cachedWidth;
+		const width = context
+			? this.textElement.getBoundingClientRect().width / context.clientRectScale
+			: this.textElement.offsetWidth;
+		context?.markDidDomLayout();
+		this.cachedWidth = this.wrappedTextIndentWidth + Math.max(0, width);
+		return this.cachedWidth;
 	}
 
-	public getColumnOfNodeOffset(spanNode: HTMLElement, offset: number): number | undefined {
-		const partIndex = Array.prototype.indexOf.call(this.textElement.children, spanNode) as number;
-		if (partIndex < 0 || !Number.isSafeInteger(offset) || offset < 0) return undefined;
-		const partLength = spanNode.textContent?.length ?? 0;
-		if (offset > partLength) return undefined;
-		return this.characterMapping.getColumn(new DomPosition(partIndex, offset), partLength) - 1;
+	monospaceAssumptionsAreValid(spaceWidth: number): boolean {
+		if (!this.useMonospaceMeasurement || this.cachedWidth === undefined) return true;
+		const columns = this.characterMapping.getHorizontalOffset(this.renderedText.length + 1);
+		const expected = this.wrappedTextIndentWidth + columns * spaceWidth;
+		return Math.abs(expected - this.cachedWidth) <= Math.max(0.5, spaceWidth * 0.1);
 	}
 
-	private createReadingContext(): DomReadingContext {
-		return new DomReadingContext(this.domNode.domNode, this.textElement);
+	disableMonospaceMeasurement(): void {
+		this.useMonospaceMeasurement = false;
+		this.resetCachedWidth();
+	}
+
+	resetCachedWidth(): void {
+		this.cachedWidth = undefined;
+	}
+
+	private hasColumn(column: number): boolean {
+		return Number.isSafeInteger(column) && column >= 1 && column <= this.renderedText.length + 1;
 	}
 }
 

@@ -16,6 +16,7 @@ import { type RenderingContext } from "../../view/renderingContext.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { renderViewPartRows } from '../../view/viewLayer.js';
 
 export type DecorationsOverlayMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
@@ -527,6 +528,7 @@ function lastCoveredLineIndex(decoration: ResolvedDecoration): number {
 }
 
 export class DecorationsOverlay extends DynamicViewOverlay {
+	private _renderResult: string[] = [];
 	private readonly model: TextModel;
 	private readonly decorationSources: readonly DecorationSource[];
 	private readonly decorationSnapshots = new Map<DecorationSource, readonly ResolvedDecoration[]>();
@@ -570,7 +572,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 	}
 
 	public prepareRender(context: RenderingContext): void {
-		this.prepareRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
 			projectStanzaDecorationOverlays(
 				context,
 				this.model,
@@ -581,6 +583,10 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 				rows,
 			);
 		});
+	}
+
+	public render(startLineNumber: number, lineNumber: number): string {
+		return this._renderResult[lineNumber - startLineNumber] ?? '';
 	}
 
 	public visibleDecorations(context: RenderingContext): readonly ResolvedDecoration[] {

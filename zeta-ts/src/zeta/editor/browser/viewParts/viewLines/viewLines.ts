@@ -1,10 +1,11 @@
 import './viewLines.css';
+import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { CharCode } from '../../../../base/common/charCode.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorLineRange } from '../../../common/viewModel/editorViewportContracts.js';
-import { type Position } from '../../../common/core/position.js';
+import { Position } from '../../../common/core/position.js';
 import { type Range } from '../../../common/core/range.js';
 import { type TextModelChange } from '../../../common/core/textChange.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
@@ -12,10 +13,14 @@ import { type TextModel } from '../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { type IEditorConfiguration } from '../../../common/config/editorConfiguration.js';
 import { type ColorScheme } from '../../../../platform/theme/common/theme.js';
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { type ViewConfigurationChangedEvent, type ViewCursorStateChangedEvent, type ViewDecorationsChangedEvent, type ViewFlushedEvent, type ViewLinesChangedEvent, type ViewLinesDeletedEvent, type ViewLinesInsertedEvent, type ViewScrollChangedEvent, type ViewThemeChangedEvent, type ViewTokensChangedEvent, type ViewZonesChangedEvent } from '../../../common/viewEvents.js';
 import { ViewLine, type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
+import { DomReadingContext } from './domReadingContext.js';
 import { ViewLineOptions } from './viewLineOptions.js';
 import { ViewLayer } from '../../view/viewLayer.js';
-import { FloatHorizontalRange, HorizontalPosition, HorizontalRange, type IViewLines, LineVisibleRanges } from '../../view/renderingContext.js';
+import { FloatHorizontalRange, HorizontalPosition, HorizontalRange, type IViewLines, LineVisibleRanges, type RestrictedRenderingContext, type VisibleRanges } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 
 export interface ViewLinesOptions {
 	readonly host: HTMLElement;
@@ -32,19 +37,20 @@ export interface ViewLinesOptions {
 }
 
 /** Projects text and semantic tokens into the generic virtualized ViewLayer. */
-export class ViewLines extends Disposable implements IViewLines {
-	public readonly domNode: HTMLDivElement;
+export class ViewLines extends ViewPart implements IViewLines {
+	public readonly domNode: FastDomNode<HTMLDivElement>;
 	private readonly model: TextModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	private readonly layer: ViewLayer<ViewLine>;
-	private readonly typicalHalfwidthCharacterWidth: number;
+	private readonly _visibleLines: ViewLayer<ViewLine>;
+	private readonly _typicalHalfwidthCharacterWidth: number;
 	private readonly readGpuLineIndexes: () => ReadonlySet<number>;
 	private _viewLineOptions: ViewLineOptions;
+	private _maxLineWidth = 0;
 
-	constructor(options: ViewLinesOptions) {
-		super();
+	constructor(context: ViewContext, options: ViewLinesOptions) {
+		super(context);
 		this.model = options.model;
 		this.readVisualProjection = options.readVisualProjection;
 		this.semanticTokenSource = options.semanticTokenSource;
@@ -52,18 +58,17 @@ export class ViewLines extends Disposable implements IViewLines {
 		this._viewLineOptions = new ViewLineOptions(options.configuration, options.themeType);
 		if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1) throw new RangeError('Stanza view-line tab size must be a positive safe integer');
 		if (!Number.isFinite(options.typicalHalfwidthCharacterWidth) || options.typicalHalfwidthCharacterWidth <= 0) throw new RangeError('Stanza view-line halfwidth character width must be positive');
-		this.typicalHalfwidthCharacterWidth = options.typicalHalfwidthCharacterWidth;
+		this._typicalHalfwidthCharacterWidth = options.typicalHalfwidthCharacterWidth;
 		this.readGpuLineIndexes = options.readGpuLineIndexes ?? (() => EMPTY_LINE_INDEXES);
-		this.layer = this._register(new ViewLayer<ViewLine>({
+		this._visibleLines = this._register(new ViewLayer<ViewLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
 			readProjectionRevision: options.readProjectionRevision,
 			lineRenderer: {
-				createLine: visualLineIndex => new ViewLine(this.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
-				getDomNode: line => line.domNode.domNode,
-					renderLine: (line, visualLine) => {
-						line.domNode.domNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
-						line.textElement.style.marginInlineStart = `${visualLine.wrappedTextIndentWidth ?? 0}px`;
+				createLine: visualLineIndex => new ViewLine(this.domNode.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
+				getDomNode: line => line.getDomNode(),
+				renderLine: (line, visualLine) => {
+						line.getDomNode().dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
 						this.projectLineText(line, visualLine, this.resolveSemanticTokensForLine(visualLine));
 				},
 				layoutLine: (line, lineHeight) => {
@@ -71,23 +76,139 @@ export class ViewLines extends Disposable implements IViewLines {
 				},
 			},
 		}));
-		this.domNode = this.layer.domNode;
-		this._register(options.configuration.onDidChange(() => this._onOptionsMaybeChanged(options.configuration, options.themeType)));
+		this.domNode = new FastDomNode(this._visibleLines.domNode);
+		this._register(options.configuration.onDidChange(() => this._onOptionsMaybeChanged(options.configuration, this._context.theme.type)));
 	}
 
-	private _onOptionsMaybeChanged(configuration: IEditorConfiguration, themeType: ColorScheme): void {
+	public override dispose(): void {
+		super.dispose();
+	}
+
+	private _onOptionsMaybeChanged(configuration: IEditorConfiguration, themeType: ColorScheme): boolean {
 		const next = new ViewLineOptions(configuration, themeType);
-		if (this._viewLineOptions.equals(next)) return;
+		if (this._viewLineOptions.equals(next)) return false;
 		this._viewLineOptions = next;
-		for (const line of this.layer.renderedLines.values()) line.onOptionsChanged(next);
+		const semanticTokens = this.resolveSemanticTokenRange(this._visibleLines.renderedLineRange);
+		const visualProjection = this.readVisualProjection();
+		for (const [visualLineIndex, line] of this._visibleLines.renderedLines) {
+			line.onOptionsChanged(next);
+			const visualLine = visualProjection.lineAt(visualLineIndex);
+			if (visualLine) this.projectLineText(line, visualLine, semanticTokens.get(visualLine.logicalLineIndex) ?? []);
+		}
+		this.resetLineWidthCaches();
+		return true;
 	}
 
-	public get renderedLines(): ReadonlyMap<number, ViewLine> {
-		return this.layer.renderedLines;
+	public getDomNode(): FastDomNode<HTMLDivElement> {
+		return this.domNode;
 	}
 
-	public render(viewportData: ViewportData): void {
-		this.layer.render(viewportData);
+	public renderText(viewportData: ViewportData): void {
+		this._visibleLines.render(viewportData);
+		this.updateLineWidths();
+	}
+
+	public render(context: RestrictedRenderingContext): void {
+		this.renderText(context.viewportData);
+	}
+
+	public override prepareRender(_context: RestrictedRenderingContext): void {
+		this._checkMonospaceFontAssumptions();
+	}
+
+	public override onConfigurationChanged(_event?: ViewConfigurationChangedEvent): boolean {
+		return this._onOptionsMaybeChanged(this._context.configuration, this._context.theme.type);
+	}
+
+	public override onCursorStateChanged(_event?: ViewCursorStateChangedEvent): boolean {
+		let changed = false;
+		for (const line of this._visibleLines.renderedLines.values()) changed = line.onSelectionChanged() || changed;
+		if (changed) this.onTokensChanged();
+		return changed;
+	}
+
+	public override onDecorationsChanged(_event?: ViewDecorationsChangedEvent): boolean {
+		for (const line of this._visibleLines.renderedLines.values()) line.onDecorationsChanged();
+		if (this._visibleLines.renderedLines.size === 0) return false;
+		this.onTokensChanged();
+		return true;
+	}
+
+	public override onFlushed(_event?: ViewFlushedEvent): boolean {
+		return this.invalidateContent();
+	}
+
+	public override onLinesChanged(_event?: ViewLinesChangedEvent): boolean {
+		return this.invalidateContent();
+	}
+
+	public override onLinesDeleted(_event?: ViewLinesDeletedEvent): boolean {
+		return this.invalidateContent();
+	}
+
+	public override onLinesInserted(_event?: ViewLinesInsertedEvent): boolean {
+		return this.invalidateContent();
+	}
+
+	public override onScrollChanged(event: ViewScrollChangedEvent): boolean {
+		return event.scrollLeftChanged || event.scrollTopChanged;
+	}
+
+	public override onThemeChanged(event: ViewThemeChangedEvent): boolean {
+		return this._onOptionsMaybeChanged(this._context.configuration, event.theme.colorScheme);
+	}
+
+	public override onZonesChanged(_event?: ViewZonesChangedEvent): boolean {
+		return true;
+	}
+
+	public getPositionFromDOMInfo(spanNode: HTMLElement, offset: number): Position | null {
+		if (!Number.isSafeInteger(offset) || offset < 0) return null;
+		const row = this._getViewLineDomNode(spanNode);
+		if (!row) return null;
+		const lineNumber = this._getLineNumberFor(row);
+		const visualLineIndex = lineNumber - 1;
+		const line = this._visibleLines.renderedLines.get(visualLineIndex);
+		const visualLine = this.readVisualProjection().lineAt(visualLineIndex);
+		if (!line || !visualLine) return null;
+		const textElement = row.firstElementChild as HTMLElement | null;
+		if (!textElement) return null;
+		const part = textElement === spanNode
+			? textElement.children[offset] ?? textElement.children[offset - 1]
+			: directChildOf(textElement, spanNode);
+		if (!(part instanceof row.ownerDocument.defaultView!.HTMLElement)) return null;
+		const partOffset = textElement === spanNode
+			? part === textElement.children[offset] ? 0 : part.textContent?.length ?? 0
+			: Math.min(offset, part.textContent?.length ?? 0);
+		const column = line.getColumnOfNodeOffset(part, partOffset);
+		if (column < 1) return null;
+		return new Position((visualLine.logicalLineIndex) + 1, visualLine.startColumn + column);
+	}
+
+	private _getViewLineDomNode(node: HTMLElement | null): HTMLElement | null {
+		const row = node?.closest(`.${ViewLine.CLASS_NAME}`) as HTMLElement | null;
+		return row && row.parentElement === this.domNode.domNode ? row : null;
+	}
+
+	private _getLineNumberFor(domNode: HTMLElement): number {
+		const visualLineIndex = Number(domNode.dataset.lineIndex);
+		if (!Number.isSafeInteger(visualLineIndex) || visualLineIndex < 0) throw new RangeError('View line DOM node has an invalid line index');
+		return visualLineIndex + 1;
+	}
+
+	public getLineWidth(lineNumber: number): number {
+		const line = this._visibleLines.renderedLines.get(lineNumber - 1);
+		return line?.getWidth(line ? readingContext(line) : null) ?? this._maxLineWidth;
+	}
+
+	public resetLineWidthCaches(): void {
+		for (const line of this._visibleLines.renderedLines.values()) line.resetCachedWidth();
+		this._maxLineWidth = 0;
+	}
+
+	public updateLineWidths(): void {
+		this._maxLineWidth = 0;
+		for (const line of this._visibleLines.renderedLines.values()) this._ensureMaxLineWidth(line.getWidth(readingContext(line)));
 	}
 
 	public linesVisibleRangesForRange(range: Range, includeNewLines: boolean): LineVisibleRanges[] | null {
@@ -98,7 +219,7 @@ export class ViewLines extends Disposable implements IViewLines {
 		const result: LineVisibleRanges[] = [];
 		const endVisualLineIndex = projection.visualLineIndexAt(range.getEndPosition());
 		const gpuLineIndexes = this.readGpuLineIndexes();
-		for (const [visualLineIndex, renderedLine] of this.layer.renderedLines) {
+		for (const [visualLineIndex] of this._visibleLines.renderedLines) {
 			if (gpuLineIndexes.has(visualLineIndex)) continue;
 			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine || visualLine.logicalLineIndex < range.startLineNumber - 1 || visualLine.logicalLineIndex > range.endLineNumber - 1) continue;
@@ -112,15 +233,14 @@ export class ViewLines extends Disposable implements IViewLines {
 			if (endColumn < startColumn || (endColumn === startColumn && !includesNewLine)) continue;
 			const startOffset = startColumn - visualLine.startColumn;
 			const endOffset = endColumn - visualLine.startColumn;
-			if (!renderedLine.hasTextOffset(startOffset) || !renderedLine.hasTextOffset(endOffset)) return null;
-			const ranges = renderedLine.getHorizontalRanges(startOffset, endOffset);
-			if (!ranges) return null;
-			const lineRanges = ranges.map(range => new FloatHorizontalRange(range.left, range.width));
+			const visibleRanges = this._visibleRangesForLineRange(visualLineIndex + 1, startOffset + 1, endOffset + 1);
+			if (!visibleRanges) return null;
+			const lineRanges = visibleRanges.ranges.map(range => new FloatHorizontalRange(range.left, range.width));
 			if (includesNewLine) {
 				const lastRange = lineRanges[lineRanges.length - 1];
 				if (!lastRange) return null;
-				lastRange.width += this.typicalHalfwidthCharacterWidth;
-				if (renderedLine.isRightToLeft()) lastRange.left -= this.typicalHalfwidthCharacterWidth;
+				lastRange.width += this._typicalHalfwidthCharacterWidth;
+				if (this._lineIsRenderedRTL(visualLineIndex + 1)) lastRange.left -= this._typicalHalfwidthCharacterWidth;
 			}
 			result.push(new LineVisibleRanges(
 				false,
@@ -132,6 +252,16 @@ export class ViewLines extends Disposable implements IViewLines {
 		return result.length > 0 ? result : null;
 	}
 
+	private _visibleRangesForLineRange(lineNumber: number, startColumn: number, endColumn: number): VisibleRanges | null {
+		const line = this._visibleLines.renderedLines.get(lineNumber - 1);
+		if (!line) return null;
+		return line.getVisibleRangesForRange(lineNumber, startColumn, endColumn, readingContext(line));
+	}
+
+	private _lineIsRenderedRTL(lineNumber: number): boolean {
+		return this._visibleLines.renderedLines.get(lineNumber - 1)?.isRenderedRTL() ?? false;
+	}
+
 	public visibleRangeForPosition(position: Position): HorizontalPosition | null {
 		this.model.offsetAt(position);
 		const projection = this.readVisualProjection();
@@ -139,41 +269,62 @@ export class ViewLines extends Disposable implements IViewLines {
 		const visualLineIndex = projection.visualLineIndexAt(position);
 		if (this.readGpuLineIndexes().has(visualLineIndex)) return null;
 		const visualLine = projection.lineAt(visualLineIndex);
-		const renderedLine = this.layer.renderedLines.get(visualLineIndex);
+		const renderedLine = this._visibleLines.renderedLines.get(visualLineIndex);
 		if (!visualLine || !renderedLine) return null;
 		const offset = position.column - 1 - visualLine.startColumn;
-		if (!renderedLine.hasTextOffset(offset)) return null;
-		const left = renderedLine.getCaretLeft(offset);
+		const visibleRanges = this._visibleRangesForLineRange(visualLineIndex + 1, offset + 1, offset + 1);
+		const left = visibleRanges?.ranges[0]?.left;
 		return left === undefined ? null : new HorizontalPosition(false, left);
 	}
 
-	public isRightToLeftAtPosition(position: Position): boolean {
-		const visualLineIndex = this.readVisualProjection().visualLineIndexAt(position);
-		return this.layer.renderedLines.get(visualLineIndex)?.isRightToLeft() ?? false;
+	/** Reprojects semantic tokens without rebuilding the visible row window. */
+	public override onTokensChanged(_event?: ViewTokensChangedEvent): boolean {
+		const semanticTokens = this.resolveSemanticTokenRange(this._visibleLines.renderedLineRange);
+		const visualProjection = this.readVisualProjection();
+		for (const [visualLineIndex, line] of this._visibleLines.renderedLines) {
+			const visualLine = visualProjection.lineAt(visualLineIndex);
+			if (visualLine) {
+				line.onTokensChanged();
+				this.projectLineText(line, visualLine, semanticTokens.get(visualLine.logicalLineIndex) ?? []);
+			}
+		}
+		return true;
 	}
 
-	/** Reprojects semantic tokens without rebuilding the visible row window. */
-	public renderVisibleLineText(): void {
-		const semanticTokens = this.resolveSemanticTokenRange(this.layer.renderedLineRange);
-		const visualProjection = this.readVisualProjection();
-		for (const [visualLineIndex, line] of this.layer.renderedLines) {
-			const visualLine = visualProjection.lineAt(visualLineIndex);
-			if (visualLine) this.projectLineText(line, visualLine, semanticTokens.get(visualLine.logicalLineIndex) ?? []);
+	private invalidateContent(): boolean {
+		for (const line of this._visibleLines.renderedLines.values()) line.onContentChanged();
+		this._maxLineWidth = 0;
+		return this._visibleLines.renderedLines.size > 0;
+	}
+
+	private _checkMonospaceFontAssumptions(): void {
+		let invalid = false;
+		for (const line of this._visibleLines.renderedLines.values()) {
+			if (!line.needsMonospaceFontCheck() || line.monospaceAssumptionsAreValid()) continue;
+			line.onMonospaceAssumptionsInvalidated();
+			invalid = true;
 		}
+		if (invalid) this.onTokensChanged();
+	}
+
+	private _ensureMaxLineWidth(lineWidth: number): void {
+		if (!Number.isFinite(lineWidth) || lineWidth < 0) throw new RangeError('View line width must be finite and non-negative');
+		this._maxLineWidth = Math.max(this._maxLineWidth, lineWidth);
 	}
 
 	private resolveSemanticTokensForLine(visualLine: EditorVisualLine): readonly ResolvedSemanticToken[] {
 		return this.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 	}
 
-	private projectLineText(line: ViewLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly ResolvedSemanticToken[]): void {
+	private projectLineText(line: ViewLine, visualLine: EditorVisualLine, tokens: readonly ResolvedSemanticToken[]): void {
 		const fullText = this.model.getLineContent((visualLine.logicalLineIndex) + 1);
 		const text = fullText.slice(visualLine.startColumn, visualLine.endColumn);
 		const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
-		line.renderText(
+		line.renderLine(
 			text,
 			clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn),
 			clipBracketColorizations(brackets, visualLine.startColumn, visualLine.endColumn),
+			visualLine.wrappedTextIndentWidth ?? 0,
 		);
 	}
 
@@ -188,6 +339,19 @@ export class ViewLines extends Disposable implements IViewLines {
 		}
 		return tokens;
 	}
+}
+
+function readingContext(line: ViewLine): DomReadingContext {
+	const row = line.getDomNode();
+	const textElement = row.firstElementChild;
+	if (!(textElement instanceof row.ownerDocument.defaultView!.HTMLElement)) throw new Error('Rendered view line has no text element');
+	return new DomReadingContext(row, textElement);
+}
+
+function directChildOf(parent: HTMLElement, descendant: HTMLElement): HTMLElement | null {
+	let current: HTMLElement | null = descendant;
+	while (current && current.parentElement !== parent) current = current.parentElement;
+	return current?.parentElement === parent ? current : null;
 }
 
 const EMPTY_LINE_INDEXES: ReadonlySet<number> = new Set();

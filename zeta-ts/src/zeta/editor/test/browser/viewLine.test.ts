@@ -19,28 +19,23 @@ for (const [name, value] of Object.entries({
 
 const { SemanticTokenPresentation } = await import('../../browser/viewParts/viewLines/viewLine.js');
 const { ViewLine } = await import('../../browser/viewParts/viewLines/viewLine.js');
+const { DomReadingContext } = await import('../../browser/viewParts/viewLines/domReadingContext.js');
 
-test('ViewLine owns rendering, character mapping, geometry, and DOM hit conversion', () => {
+test('ViewLine owns rendering, character mapping, geometry, and width state', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none' });
 	const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
-	assert.equal(line.domNode.domNode.children.length, 1);
-	assert.equal(line.domNode.domNode.firstElementChild, line.textElement);
-	line.renderText('ab😊cd', [{ startColumn: 2, endColumn: 4, presentation: SemanticTokenPresentation.String }], []);
-	assert.equal(line.textElement.textContent, 'ab😊cd');
-	assert.deepEqual([...line.textElement.children].map(child => child.textContent), ['ab', '😊', 'cd']);
-	assert.equal(line.getColumnOfNodeOffset(line.textElement.children[2] as HTMLElement, 1), 5);
+	const row = line.getDomNode();
+	const textElement = row.firstElementChild as HTMLElement;
+	assert.equal(row.children.length, 1);
+	assert.equal(line.renderLine('ab😊cd', [{ startColumn: 2, endColumn: 4, presentation: SemanticTokenPresentation.String }], []), true);
+	assert.equal(textElement.textContent, 'ab😊cd');
+	assert.deepEqual([...textElement.children].map(child => child.textContent), ['ab', '😊', 'cd']);
+	assert.equal(line.getColumnOfNodeOffset(textElement.children[2] as HTMLElement, 1), 6);
 
-	const hitNode = line.textElement.children[1]!.firstChild;
-	assert.ok(hitNode);
-	Object.defineProperty(dom.window.document, 'caretPositionFromPoint', {
-		configurable: true,
-		value: () => ({ offsetNode: hitNode, offset: 2 }),
-	});
-	assert.equal(line.getOffsetAtClientPoint(20, 30), 4);
-
-	Object.defineProperty(line.domNode.domNode, 'getBoundingClientRect', { configurable: true, value: () => rectangle(100, 0, 100) });
-	Object.defineProperty(line.domNode.domNode, 'offsetWidth', { configurable: true, value: 100 });
+	Object.defineProperty(row, 'getBoundingClientRect', { configurable: true, value: () => rectangle(100, 0, 100) });
+	Object.defineProperty(row, 'offsetWidth', { configurable: true, value: 100 });
+	Object.defineProperty(textElement, 'getBoundingClientRect', { configurable: true, value: () => rectangle(100, 0, 50) });
 	const createRange = dom.window.document.createRange.bind(dom.window.document);
 	Object.defineProperty(dom.window.document, 'createRange', {
 		configurable: true,
@@ -50,7 +45,18 @@ test('ViewLine owns rendering, character mapping, geometry, and DOM hit conversi
 			return range;
 		},
 	});
-	assert.equal(line.getCaretLeft(4), 30);
+	const context = new DomReadingContext(row, textElement);
+	assert.equal(line.getVisibleRangesForRange(1, 5, 5, context)?.ranges[0]?.left, 30);
+	assert.equal(line.getWidthIsFast(), false);
+	assert.equal(line.getWidth(context), 50);
+	assert.equal(line.getWidthIsFast(), true);
+	assert.equal(line.needsMonospaceFontCheck(), true);
+	assert.equal(line.monospaceAssumptionsAreValid(), false);
+	line.onMonospaceAssumptionsInvalidated();
+	assert.equal(line.needsMonospaceFontCheck(), false);
+	assert.equal(line.monospaceAssumptionsAreValid(), true);
+	line.resetCachedWidth();
+	assert.equal(line.getWidthIsFast(), false);
 	assert.equal(line.onSelectionChanged(), false);
 	line.onOptionsChanged(new ViewLineOptions(configuration, ColorScheme.HighContrastDark));
 	assert.equal(line.onSelectionChanged(), true);

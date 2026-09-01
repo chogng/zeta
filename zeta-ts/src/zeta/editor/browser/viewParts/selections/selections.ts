@@ -9,9 +9,11 @@ import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { type TextModel } from '../../../common/model/textModel.js';
+import { renderViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects selection ranges and current-line state without owning selection state. */
 export class SelectionsOverlay extends DynamicViewOverlay {
+	private _renderResult: string[] = [];
 	constructor(
 		private readonly context: ViewContext,
 		private readonly viewModel: IViewModel,
@@ -31,7 +33,7 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 	}
 
 	public prepareRender(context: RenderingContext): void {
-		this.prepareRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
 			projectStanzaSelectionOverlays(
 				context,
 				this.model,
@@ -42,6 +44,10 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 				rows,
 			);
 		});
+	}
+
+	public render(startLineNumber: number, lineNumber: number): string {
+		return this._renderResult[lineNumber - startLineNumber] ?? '';
 	}
 }
 

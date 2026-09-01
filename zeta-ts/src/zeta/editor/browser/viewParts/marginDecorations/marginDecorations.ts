@@ -5,9 +5,11 @@ import { type RenderingContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
+import { renderViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects line-level diagnostics into the editor margin. */
 export class MarginViewLineDecorationsOverlay extends DynamicViewOverlay {
+	private _renderResult: string[] = [];
 	constructor(private readonly context: ViewContext, private readonly decorations: DecorationsOverlay, private readonly ownerDocument: Document, private readonly readVisualProjection: () => EditorVisualLineProjection) {
 		super();
 		this.context.addEventHandler(this);
@@ -19,9 +21,13 @@ export class MarginViewLineDecorationsOverlay extends DynamicViewOverlay {
 	}
 
 	public prepareRender(context: RenderingContext): void {
-		this.prepareRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
 			projectStanzaDiagnosticMarginDecorations(this.readVisualProjection(), this.decorations.visibleDecorations(context), rows);
 		});
+	}
+
+	public render(startLineNumber: number, lineNumber: number): string {
+		return this._renderResult[lineNumber - startLineNumber] ?? '';
 	}
 }
 

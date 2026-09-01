@@ -68,6 +68,21 @@ import './widget/codeEditor/editor.css';
 const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
 const EMPTY_LINE_INDEXES: ReadonlySet<number> = new Set();
 
+interface BrowserCaretPosition {
+	readonly offsetNode: Node;
+	readonly offset: number;
+}
+
+interface BrowserCaretRange {
+	readonly startContainer: Node;
+	readonly startOffset: number;
+}
+
+interface BrowserCaretDocument {
+	caretPositionFromPoint?(x: number, y: number): BrowserCaretPosition | null;
+	caretRangeFromPoint?(x: number, y: number): BrowserCaretRange | null;
+}
+
 export type EditorViewportPresentation = "document" | "embedded";
 
 export enum EditorTextDirection {
@@ -222,6 +237,7 @@ export class View extends ViewEventHandler {
 	}
 
 	constructor(options: EditorViewportOptions) {
+		validateEditorViewportOptions(options);
 		super();
 		const ownerDocument = options.container.ownerDocument;
 		const ownerWindow = ownerDocument.defaultView;
@@ -271,32 +287,8 @@ export class View extends ViewEventHandler {
 			enabled: options.minimap?.enabled ?? this.presentation === 'document',
 		}) as EditorMinimapOptions;
 		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
-		try {
-			this.indentation = resolveEditorIndentationOptions(options.indentation);
-			this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
-			if (!Object.values(EditorTextDirection).includes(this.textDirection)) throw new TypeError('Unknown Stanza editor text direction');
-			if (options.experimentalGpuAcceleration !== undefined && options.experimentalGpuAcceleration !== 'on' && options.experimentalGpuAcceleration !== 'off') {
-				throw new TypeError("Unknown Stanza editor GPU acceleration mode");
-			}
-			if (this.focusOutlineOwner !== "editor" && this.focusOutlineOwner !== "host") {
-				throw new TypeError("Unknown Stanza editor focus outline owner");
-			}
-			if (!['none', 'gutter', 'line', 'all'].includes(this.renderLineHighlight)) {
-				throw new TypeError('Unknown Stanza editor line highlight mode');
-			}
-			if (typeof this.renderLineHighlightOnlyWhenFocus !== 'boolean') {
-				throw new TypeError('Stanza editor line highlight focus option must be boolean');
-			}
-			if (options.semanticTokenSource && options.semanticTokenSource.textModel !== this.model) {
-				throw new TypeError("Stanza viewport and semantic token source must share one text model");
-			}
-			if (options.bracketColorizationSource && options.bracketColorizationSource.textModel !== this.model) {
-				throw new TypeError("Stanza viewport and bracket colorization source must share one text model");
-			}
-		} catch (error) {
-			this.dispose();
-			throw error;
-		}
+		this.indentation = resolveEditorIndentationOptions(options.indentation);
+		this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
 		this.element.className = "monaco-editor stanza-editor";
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
@@ -404,7 +396,7 @@ export class View extends ViewEventHandler {
 				if (!this.isDisposed) this.project(this.viewport.layout);
 			},
 		}));
-		this.viewLines = this._register(new ViewLines({
+		this.viewLines = this.registerViewPart(new ViewLines(this.viewContext, {
 			host: this.contentElement,
 			model: this.model,
 			readVisualProjection: () => this.visualProjection,
@@ -561,7 +553,7 @@ export class View extends ViewEventHandler {
 
 		// Root order is the visual stacking contract; Parts own nodes but do not choose their host.
 		this.contentElement.append(
-			this.viewLines.domNode,
+			this.viewLines.getDomNode().domNode,
 			this.contentViewOverlays.getDomNode().domNode,
 			this.viewCursors.domNode,
 			this.contentWidgets.domNode.domNode,
@@ -604,7 +596,7 @@ export class View extends ViewEventHandler {
 		const semanticTokenSource = options.semanticTokenSource;
 		if (semanticTokenSource) {
 			this._register(semanticTokenSource.onDidChange(() => {
-				this.viewLines.renderVisibleLineText();
+				this.viewLines.onTokensChanged();
 				this.viewLinesGpu?.invalidateTokens();
 				const context = this.createRenderingContext(this.createViewportData());
 				this.viewLinesGpu?.render(context);
@@ -858,14 +850,13 @@ export class View extends ViewEventHandler {
 		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
 		if (this.editorTextDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
-		const line = this.viewLines.renderedLines.get(visualLineIndex);
-		if (!visualLine || !line) return undefined;
+		if (!visualLine) return undefined;
 		const text = this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
-		if (line.textElement.textContent?.length !== text.length) return undefined;
 		let nearestColumn: number | undefined;
 		let nearestDistance = Number.POSITIVE_INFINITY;
 		for (const column of getTextGraphemeBoundaries(text)) {
-			const left = line.getCaretLeft(column);
+			const position = new Position((visualLine.logicalLineIndex) + 1, visualLine.startColumn + column + 1);
+			const left = this.viewLines.visibleRangeForPosition(position)?.left;
 			if (left === undefined) return undefined;
 			const distance = Math.abs(left - horizontalOffset);
 			if (distance < nearestDistance) {
@@ -940,25 +931,25 @@ export class View extends ViewEventHandler {
 	}
 
 	private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
-		for (const [visualLineIndex, renderedLine] of this.viewLines.renderedLines) {
-			const offset = renderedLine.getOffsetAtClientPoint(point.clientX, point.clientY);
-			if (offset === undefined) continue;
-			const visualLine = this.visualProjection.lineAt(visualLineIndex);
-			if (!visualLine) continue;
-			return Object.freeze({
-				kind: EditorHitTargetKind.Text,
-				position: new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + offset) + 1),
-			});
-		}
-		return undefined;
+		const document = this.element.ownerDocument as unknown as BrowserCaretDocument;
+		const caret = document.caretPositionFromPoint?.(point.clientX, point.clientY) ?? document.caretRangeFromPoint?.(point.clientX, point.clientY);
+		if (!caret) return undefined;
+		const node = 'offsetNode' in caret ? caret.offsetNode : caret.startContainer;
+		const offset = 'offsetNode' in caret ? caret.offset : caret.startOffset;
+		const element = node.nodeType === node.TEXT_NODE ? node.parentElement : node as HTMLElement;
+		if (!element) return undefined;
+		const position = this.viewLines.getPositionFromDOMInfo(element, offset);
+		return position ? Object.freeze({ kind: EditorHitTargetKind.Text, position }) : undefined;
 	}
 
 	private domCaretLeft(visualLineIndex: number, offset: number): number | undefined {
 		if (this.editorTextDirection === EditorTextDirection.LeftToRight) return undefined;
-		const line = this.viewLines.renderedLines.get(visualLineIndex);
-		return line?.hasTextOffset(offset)
-			? line.getCaretLeft(offset)
-			: undefined;
+		const visualLine = this.visualProjection.lineAt(visualLineIndex);
+		if (!visualLine) return undefined;
+		return this.viewLines.visibleRangeForPosition(new Position(
+			(visualLine.logicalLineIndex) + 1,
+			visualLine.startColumn + offset + 1,
+		))?.left;
 	}
 
 	private get measuredContentWidth(): number {
@@ -1028,7 +1019,6 @@ export class View extends ViewEventHandler {
 			this.viewModel.visibleLinesStabilized();
 		}
 		const viewportData = this.createViewportData();
-		this.viewLines.render(viewportData);
 		const context = this.createRenderingContext(viewportData);
 		this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
 		this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
@@ -1146,6 +1136,29 @@ export class View extends ViewEventHandler {
 	public override onLineMappingChanged(): boolean {
 		this.projectionRevision += 1;
 		return true;
+	}
+}
+
+function validateEditorViewportOptions(options: EditorViewportOptions): void {
+	if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
+	if (!(options.viewModel.viewLayout instanceof ViewLayout)) throw new TypeError('Editor view requires the editor view layout implementation');
+	resolveEditorIndentationOptions(options.indentation);
+	const textDirection = options.textDirection ?? EditorTextDirection.Auto;
+	if (!Object.values(EditorTextDirection).includes(textDirection)) throw new TypeError('Unknown Stanza editor text direction');
+	if (options.experimentalGpuAcceleration !== undefined && options.experimentalGpuAcceleration !== 'on' && options.experimentalGpuAcceleration !== 'off') {
+		throw new TypeError('Unknown Stanza editor GPU acceleration mode');
+	}
+	const focusOutlineOwner = options.focusOutlineOwner ?? 'editor';
+	if (focusOutlineOwner !== 'editor' && focusOutlineOwner !== 'host') throw new TypeError('Unknown Stanza editor focus outline owner');
+	const presentation = options.presentation ?? 'document';
+	const renderLineHighlight = options.renderLineHighlight ?? (presentation === 'embedded' ? 'none' : 'line');
+	if (!['none', 'gutter', 'line', 'all'].includes(renderLineHighlight)) throw new TypeError('Unknown Stanza editor line highlight mode');
+	if (typeof (options.renderLineHighlightOnlyWhenFocus ?? false) !== 'boolean') throw new TypeError('Stanza editor line highlight focus option must be boolean');
+	if (options.semanticTokenSource && options.semanticTokenSource.textModel !== options.viewModel.model) {
+		throw new TypeError('Stanza viewport and semantic token source must share one text model');
+	}
+	if (options.bracketColorizationSource && options.bracketColorizationSource.textModel !== options.viewModel.model) {
+		throw new TypeError('Stanza viewport and bracket colorization source must share one text model');
 	}
 }
 

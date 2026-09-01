@@ -5,7 +5,7 @@ import { GlyphRasterizer } from '../../gpu/raster/glyphRasterizer.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout, type ViewLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type BracketColorizationSource, type SemanticTokenSource, type ViewLine } from '../viewLines/viewLine.js';
+import { type BracketColorizationSource, type SemanticTokenSource } from '../viewLines/viewLine.js';
 import { type ViewLines } from '../viewLines/viewLines.js';
 import { BindingId, type GpuFrame, type IGpuRenderStrategy } from '../../gpu/gpu.js';
 import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
@@ -34,7 +34,7 @@ export interface ViewLinesGpuOptions {
 
 interface PreparedGpuFrame {
 	readonly frame: GpuFrame;
-	readonly renderedLines: ReadonlyMap<number, ViewLine>;
+	readonly visibleLineIndexes: ReadonlySet<number>;
 }
 
 const VERTEX_FLOAT_COUNT = 5;
@@ -184,12 +184,13 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			this.context.hideCanvas();
 			return;
 		}
-		this.validateRenderedLines(visualLines, this.options.viewLines.renderedLines);
+		const visibleLineIndexes = readRenderedLineIndexes(this.options.viewLines);
+		this.validateRenderedLines(visualLines, visibleLineIndexes);
 		this.ensureResources(visualLines);
-		const prepared = this.createFrame(context, visualLines);
+		const prepared = this.createFrame(context, visualLines, visibleLineIndexes);
 		this.uploadAtlas();
 		this.draw(prepared.frame, layout);
-		this.applyRenderedLines(prepared.renderedLines, prepared.frame.gpuLineIndexes);
+		this.applyRenderedLines(prepared.visibleLineIndexes, prepared.frame.gpuLineIndexes);
 		this.lastFrame = prepared.frame;
 		this.lastVisualLines = visualLines;
 		this.context.showCanvas();
@@ -275,15 +276,14 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		});
 	}
 
-	private createFrame(_context: RenderingContext, visualLines: EditorVisualLineProjection): PreparedGpuFrame {
+	private createFrame(_context: RenderingContext, visualLines: EditorVisualLineProjection, visibleLineIndexes: ReadonlySet<number>): PreparedGpuFrame {
 		const rootStyle = this.context.canvas.ownerDocument.defaultView!.getComputedStyle(this.options.host);
 		this.ensureRenderStrategy(visualLines);
-		const renderedLines = new Map(this.options.viewLines.renderedLines);
 		const frame = this.renderStrategy.value!.update({
 			layout: this.options.viewLayout.layout,
 			model: this.options.model,
 			visualLines,
-			visibleLineIndexes: new Set(renderedLines.keys()),
+			visibleLineIndexes,
 			semanticTokenSource: this.options.semanticTokenSource,
 			bracketColorizationSource: this.options.bracketColorizationSource,
 			textLeft: this.options.readTextLeft(),
@@ -293,7 +293,7 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			rootStyle,
 			atlas: this.context.atlas,
 		});
-		return Object.freeze({ frame, renderedLines });
+		return Object.freeze({ frame, visibleLineIndexes });
 	}
 
 	private uploadAtlas(): void {
@@ -353,16 +353,19 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		this.context.device.queue.submit([encoder.finish()]);
 	}
 
-	private applyRenderedLines(renderedLines: ReadonlyMap<number, ViewLine>, gpuLineIndexes: ReadonlySet<number>): void {
+	private applyRenderedLines(visibleLineIndexes: ReadonlySet<number>, gpuLineIndexes: ReadonlySet<number>): void {
 		this.renderedGpuLineIndexes = new Set(gpuLineIndexes);
-		for (const [visualLineIndex, line] of renderedLines) line.domNode.domNode.classList.toggle('gpu-rendered', gpuLineIndexes.has(visualLineIndex));
+		for (const row of this.options.viewLines.getDomNode().domNode.children) {
+			const visualLineIndex = Number((row as HTMLElement).dataset.lineIndex);
+			if (visibleLineIndexes.has(visualLineIndex)) row.classList.toggle('gpu-rendered', gpuLineIndexes.has(visualLineIndex));
+		}
 	}
 
 	private showDomText(): void {
 		this.lastFrame = undefined;
 		this.lastVisualLines = undefined;
 		this.renderedGpuLineIndexes.clear();
-		for (const line of this.options.viewLines.renderedLines.values()) line.domNode.domNode.classList.remove('gpu-rendered');
+		for (const row of this.options.viewLines.getDomNode().domNode.children) row.classList.remove('gpu-rendered');
 	}
 
 	private isForcedColors(): boolean {
@@ -386,8 +389,8 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		return visualLines.modelVersion === this.options.model.version;
 	}
 
-	private validateRenderedLines(visualLines: EditorVisualLineProjection, renderedLines: ReadonlyMap<number, ViewLine>): void {
-		for (const visualLineIndex of renderedLines.keys()) {
+	private validateRenderedLines(visualLines: EditorVisualLineProjection, visibleLineIndexes: ReadonlySet<number>): void {
+		for (const visualLineIndex of visibleLineIndexes) {
 			if (!visualLines.lineAt(visualLineIndex)) throw new Error('WebGPU rendered row is outside the visual-line projection');
 		}
 	}
@@ -399,6 +402,15 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		}
 		return true;
 	}
+}
+
+function readRenderedLineIndexes(viewLines: ViewLines): ReadonlySet<number> {
+	const result = new Set<number>();
+	for (const row of viewLines.getDomNode().domNode.children) {
+		const visualLineIndex = Number((row as HTMLElement).dataset.lineIndex);
+		if (Number.isSafeInteger(visualLineIndex) && visualLineIndex >= 0) result.add(visualLineIndex);
+	}
+	return result;
 }
 
 function asError(error: unknown): Error {
