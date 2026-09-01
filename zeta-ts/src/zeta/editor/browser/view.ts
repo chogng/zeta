@@ -10,6 +10,7 @@ import { Position } from '../common/core/position.js';
 import { type IDimension } from '../common/core/2d/dimension.js';
 import { ScrollType } from '../common/editorCommon.js';
 import { type Range } from '../common/core/range.js';
+import { type CursorsController } from '../common/cursor/cursor.js';
 import { TextModel } from '../common/model/textModel.js';
 import { TextDirection } from '../common/model.js';
 import { type IViewModel } from '../common/viewModel.js';
@@ -59,6 +60,10 @@ import { ViewZones, type EditorViewZone, type EditorViewZoneHandle } from './vie
 import { linesDecorationsWidth } from './viewParts/linesDecorations/linesDecorations.js';
 import { RenderingContext } from './view/renderingContext.js';
 import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
+import { ViewController, type ViewControllerOptions } from './view/viewController.js';
+import { type AbstractEditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
+import { NativeEditContext, type NativeEditContextWindow } from './controller/editContext/native/nativeEditContext.js';
+import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
 import './widget/codeEditor/editor.css';
 
 const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
@@ -85,6 +90,8 @@ export { EditorTextDirection };
 export interface EditorViewportOptions {
 	readonly container: HTMLElement;
 	readonly viewModel: IViewModel;
+	readonly selectionController: CursorsController;
+	readonly controller?: ViewControllerOptions;
 	readonly configuration: EditorConfiguration;
 	readonly theme: IColorTheme;
 	readonly lineHeight?: number;
@@ -148,6 +155,7 @@ export type { EditorViewZone, EditorViewZoneHandle } from './viewParts/viewZones
 export class View extends ViewEventHandler {
 	readonly element: HTMLDivElement;
 	readonly onDidChangeLayout: Event<EditorViewportChange>;
+	readonly controller: ViewController;
 	private _fontInfo: FontInfo;
 	private readonly model: TextModel;
 	private readonly viewport: ViewLayout;
@@ -349,6 +357,21 @@ export class View extends ViewEventHandler {
 		this.viewport = viewport;
 		this.onDidChangeLayout = viewport.onDidChange;
 		this.viewContext = new ViewContext(this.editorConfiguration, options.theme, this.viewModel);
+		if (options.selectionController.textModel !== this.model) throw new TypeError('Editor view and selection controller must share one text model');
+		this.controller = this._register(new ViewController(this, options.selectionController, options.controller ?? {}, controller => {
+			const input = createEditContext(this.viewContext, this.element, {
+				...options.controller,
+				readOnly: options.selectionController.readOnly,
+				textDirection: this.editorTextDirection,
+				ownerId: controller.ownerId,
+				characterBoundsProvider: modelOffset => this.characterBoundsAt(modelOffset),
+				viewController: controller,
+				viewport: this,
+				selectionController: options.selectionController,
+			});
+			this.element.append(input.domNode.domNode);
+			return this.registerViewPart(input);
+		}));
 		this.viewZones = this.registerViewPart(new ViewZones(this.viewContext, {
 			host: this.element,
 			viewLayout: this.viewport,
@@ -1069,6 +1092,20 @@ export class View extends ViewEventHandler {
 		return new RenderingContext(this.viewport, viewportData, this.viewLines, this.viewLinesGpu);
 	}
 
+	private characterBoundsAt(modelOffset: number): EditContextCharacterBounds | undefined {
+		if (!Number.isSafeInteger(modelOffset) || modelOffset < 0 || modelOffset >= this.model.length) return undefined;
+		const position = this.model.positionAt(modelOffset);
+		const next = this.model.positionAt(Math.min(this.model.length, modelOffset + 1));
+		const start = this.getPositionContentCoordinates(position);
+		const end = this.getPositionContentCoordinates(next);
+		return Object.freeze({
+			left: Math.min(start.left, end.left),
+			top: start.top,
+			width: position.lineNumber === next.lineNumber ? Math.max(1, Math.abs(end.left - start.left)) : Math.max(1, this.measureTextWidth(' ')),
+			height: start.height,
+		});
+	}
+
 	private get visualProjection(): EditorVisualLineProjection {
 		return createVisualProjection(this.model, this.viewModel, this.fontInfo.spaceWidth);
 	}
@@ -1132,6 +1169,13 @@ function createVisualProjection(model: TextModel, viewModel: IViewModel, spaceWi
 	});
 	const anchors = Array.from({ length: model.lineCount }, (_, index) => viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(index + 1, 1) - 1);
 	return EditorVisualLineProjection.fromVisibleLines(model.version, model.lineCount, lines, anchors);
+}
+
+function createEditContext(context: ViewContext, container: HTMLElement, options: EditContextOptions): AbstractEditContext {
+	const ownerWindow = container.ownerDocument.defaultView as NativeEditContextWindow | null;
+	return typeof ownerWindow?.EditContext === 'function'
+		? new NativeEditContext(context, container, options)
+		: new TextAreaEditContext(context, container, options);
 }
 
 function rawWrappingIndent(value: WrappingIndent): 'none' | 'same' | 'indent' | 'deepIndent' {

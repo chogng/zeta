@@ -77,7 +77,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, ini
 		selectionController: selections,
 		decorationSources: [createStanzaDecorationSource(decorations, decoration => resolveSelectionHighlightPresentation(decoration.metadata))],
 	});
-	const view = new ViewController(viewport, selections);
+	const view = viewport.controller;
 	const controller = new SelectionHighlighter(view, selections, decorations, {
 		languageId: 'typescript',
 		languageFeaturesService: languages,
@@ -101,7 +101,6 @@ class SelectionHarness implements Disposable {
 	dispose(): void {
 		this.textualProvider.dispose();
 		this.controller.dispose();
-		this.view.dispose();
 		this.viewport.dispose();
 		this.decorations.dispose();
 		this.selections.dispose();

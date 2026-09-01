@@ -175,7 +175,7 @@ test("Completion request wiring rejects a same-model session from another servic
 		selectionController: selections,
 	});
 
-	using input = new ViewController(viewport, selections);
+	const input = viewport.controller;
 	assert.throws(() => new SuggestController(input, selections, secondService, session, "typescript"), /must share one text model and completion result store/);
 	dom.window.close();
 });
@@ -199,16 +199,17 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	const session = new LanguageCompletionSessionController(service.results, selections);
 	const configurations = new TestLanguageConfigurationService();
 	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
+	const languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
 	const viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
+		controller: { languageEditing },
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
-	const input = new ViewController(viewport, selections, { languageEditing });
+	const input = viewport.controller;
 	const suggest = new SuggestController(input, selections, service, session, "typescript");
 	input.focus();
 	return {
@@ -220,7 +221,6 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 		suggest,
 		[Symbol.dispose](): void {
 			suggest.dispose();
-			input.dispose();
 			languageEditing.dispose();
 			viewport.dispose();
 			session.dispose();

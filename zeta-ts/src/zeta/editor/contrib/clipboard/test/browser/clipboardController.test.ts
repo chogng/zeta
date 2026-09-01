@@ -155,7 +155,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 		selectionController: selections,
 	});
 	viewport.layout({ width: 80, height: 40 });
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 	});
@@ -235,7 +235,7 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
 		selectionController: selections,
 	});
 	viewport.layout({ width: 80, height: 20 });
-	const input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	const clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 	});
@@ -296,7 +296,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 		selectionController: selections,
 	});
 	viewport.layout({ width: 80, height: 40 });
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 	});
@@ -379,7 +379,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 	});
@@ -426,7 +426,7 @@ test("Empty-selection clipboard policy may explicitly preserve browser behavior"
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 		emptySelectionPolicy: EditorEmptySelectionClipboardPolicy.Ignore,
@@ -454,7 +454,7 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections);
 
 	const copied = new MemoryClipboardData();
@@ -504,7 +504,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 				}]
 				: [],
 	};
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 		semanticTokens,
@@ -543,7 +543,7 @@ test('Clipboard reads system text only for an empty event transfer', async () =>
 		selectionController: selections,
 	});
 	const clipboardService = new DeferredClipboardService();
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections, {}, clipboardService);
 
 	const fallbackPaste = clipboardEvent(dom.window, "paste", new MemoryClipboardData());
@@ -579,7 +579,7 @@ test('Clipboard owns URI-list and bounded text-file paste', async () => {
 	using model = new TextModel('one');
 	using selections = new CursorsController(model, [caret(0, 3)]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections);
 
 	const uriData = new MemoryClipboardData();
@@ -607,7 +607,7 @@ test('Clipboard writes system text and delays cut until it succeeds', async () =
 	using selections = new CursorsController(model, [selection(0, 0, 0, 3)]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const clipboardService = new DeferredClipboardService();
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections, {}, clipboardService);
 
 	const copy = clipboardEvent(dom.window, "copy", null);
@@ -643,7 +643,7 @@ test("Clipboard preserves an active IME composition by rejecting mutable clipboa
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorView(viewport, selections);
+	const input = viewport.controller;
 	using clipboard = attachClipboard(input, viewport, selections);
 	input.element.dispatchEvent(compositionEvent(dom.window, "compositionstart", ""));
 	assert.equal(input.compositionController.composing, true);

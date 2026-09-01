@@ -302,6 +302,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.viewport = this._register(new View({
 				container: options.container,
 				viewModel: this.viewModel,
+				selectionController: this.selections,
 				configuration: this.configuration,
 				theme: themeService.getColorTheme(),
 				lineHeight: options.lineHeight,
@@ -347,19 +348,20 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 						left: 12,
 					},
 					indentation: options.indentation,
+					controller: {
+						ownerId: options.ownerId,
+						ariaLabel: options.ariaLabel ?? editorLabel(options.input),
+						accessibilityService: options.accessibilityService,
+						renderRichScreenReaderContent: options.renderRichScreenReaderContent,
+						accessibilityPageSize: options.accessibilityPageSize,
+						semanticTokenSource,
+						bracketColorizationSource,
+						languageEditing,
+						wordPattern: () => languageConfigurationService.getLanguageConfiguration(options.languageId).getWordDefinition(),
+					},
 			}));
 			this.onDidLayoutChange = listener => this.viewport.onDidChangeLayout(() => listener(this.getLayoutInfo()));
-			this.view = this._register(new ViewController(this.viewport, this.selections, {
-				ownerId: options.ownerId,
-				ariaLabel: options.ariaLabel ?? editorLabel(options.input),
-				accessibilityService: options.accessibilityService,
-				renderRichScreenReaderContent: options.renderRichScreenReaderContent,
-				accessibilityPageSize: options.accessibilityPageSize,
-				semanticTokenSource,
-				bracketColorizationSource,
-				languageEditing,
-				wordPattern: () => languageConfigurationService.getLanguageConfiguration(options.languageId).getWordDefinition(),
-			}));
+			this.view = this.viewport.controller;
 			this.ownerId = this.view.ownerId;
 			this.onDidCompositionStart = listener => this.view.editContext.onDidCompositionStart(() => listener());
 			this.onDidCompositionEnd = listener => this.view.editContext.onDidCompositionEnd(() => listener());

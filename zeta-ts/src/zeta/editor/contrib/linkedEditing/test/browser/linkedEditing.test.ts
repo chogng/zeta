@@ -92,16 +92,17 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 	const selections = new CursorsController(model, [Selection.fromPositions(new Position(1, 2))]);
 	const configurations = new TestLanguageConfigurationService();
 	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
+	const languageEditing = new LanguageEditingAdapter(model, selections, 'html', configurations);
 	const viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
+		controller: { languageEditing },
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const languageEditing = new LanguageEditingAdapter(model, selections, 'html', configurations);
-	const input = new ViewController(viewport, selections, { languageEditing });
+	const input = viewport.controller;
 	const contribution = new LinkedEditingContribution(input, input.element, viewport, selections, registry, () => /^[a-z]+$/);
 	input.focus();
 	return {
@@ -112,7 +113,6 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 		selections,
 		[Symbol.dispose](): void {
 			contribution.dispose();
-			input.dispose();
 			languageEditing.dispose();
 			viewport.dispose();
 			selections.dispose();

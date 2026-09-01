@@ -31,8 +31,7 @@ import { type IViewModel } from '../../common/viewModel.js';
 import { ViewEventHandler } from '../../common/viewEventHandler.js';
 import { type View } from '../view.js';
 import { NavigationCommandRevealType } from '../coreCommands.js';
-import { type AbstractEditContext, type CompositionController, type EditContextCharacterBounds, type EditContextOptions, type EditContextTextUpdate } from '../controller/editContext/editContext.js';
-import { NativeEditContext, type NativeEditContextWindow } from '../controller/editContext/native/nativeEditContext.js';
+import { type AbstractEditContext, type CompositionController, type EditContextTextUpdate } from '../controller/editContext/editContext.js';
 import { TextAreaEditContext } from '../controller/editContext/textArea/textAreaEditContext.js';
 import { ViewUserInputEvents } from './viewUserInputEvents.js';
 import { type IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
@@ -148,7 +147,8 @@ export class ViewController extends Disposable {
 	constructor(
 		readonly viewport: View,
 		readonly selectionController: CursorsController,
-		options: ViewControllerOptions = {},
+		options: ViewControllerOptions,
+		createEditContext: (viewController: ViewController) => AbstractEditContext,
 	) {
 		super();
 		try {
@@ -166,22 +166,8 @@ export class ViewController extends Disposable {
 			this.wordPattern = options.wordPattern;
 			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents(viewport.coordinatesConverter);
 			this.ownerId = options.ownerId === undefined ? nextViewId() : validateOwnerId(options.ownerId);
-			this.editContext = this._register(createEditContext(viewport.element, {
-				ariaLabel: options.ariaLabel,
-				readOnly: selectionController.readOnly,
-				textDirection: viewport.editorTextDirection,
-				ownerId: this.ownerId,
-				characterBoundsProvider: modelOffset => this.characterBoundsAt(modelOffset),
-				viewController: this,
-				viewport,
-				selectionController,
-				accessibilityService: options.accessibilityService,
-				renderRichScreenReaderContent: options.renderRichScreenReaderContent,
-				accessibilityPageSize: options.accessibilityPageSize,
-				semanticTokenSource: options.semanticTokenSource,
-				bracketColorizationSource: options.bracketColorizationSource,
-			}));
-			this.element = this.editContext.domNode;
+			this.editContext = createEditContext(this);
+			this.element = this.editContext.domNode.domNode;
 			this.textArea = this.editContext instanceof TextAreaEditContext ? this.editContext.getTextAreaDomNode() : undefined;
 			this.compositionController = this.editContext.compositionController;
 			this.onWillBeforeInput = this.editContext.onWillBeforeInput;
@@ -190,9 +176,6 @@ export class ViewController extends Disposable {
 			this._register(this.onDidChangeOvertype(overtyping => {
 				viewport.element.classList.toggle('overtype', overtyping);
 				viewport.setOvertype(overtyping);
-			}));
-			this._register(this.compositionController.onDidChange(composing => {
-				if (!composing) this.synchronizeEditContext();
 			}));
 			this._register(toDisposable(() => {
 				viewport.element.classList.remove('input-focused');
@@ -207,10 +190,6 @@ export class ViewController extends Disposable {
 				viewport.element.classList.remove('input-focused');
 				this.editContext.clear();
 			}));
-			this._register(selectionController.onDidChange(() => this.synchronizeEditContext()));
-			this._register(viewport.textModel.onDidChangeContent(() => this.synchronizeEditContext()));
-			this.synchronizeEditContext();
-			this.editContext.connect();
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -531,32 +510,6 @@ export class ViewController extends Disposable {
 		this.userInputEvents.emitMouseWheel(event);
 	}
 
-	private synchronizeEditContext(): void {
-		const selection = this.selectionController.selections[0]!;
-		this.editContext.syncState({
-			text: this.viewport.textModel.getText(),
-			selectionStart: this.viewport.textModel.offsetAt(selection.getStartPosition()),
-			selectionEnd: this.viewport.textModel.offsetAt(selection.getEndPosition()),
-			position: selection.getPosition(),
-		});
-		this.editContext.updateBounds(this.viewport.getPositionContentCoordinates(selection.getPosition()));
-		this.editContext.writeScreenReaderContent('editor state changed');
-	}
-
-	private characterBoundsAt(modelOffset: number): EditContextCharacterBounds | undefined {
-		const model = this.viewport.textModel;
-		if (!Number.isSafeInteger(modelOffset) || modelOffset < 0 || modelOffset >= model.length) return undefined;
-		const position = model.positionAt(modelOffset);
-		const next = model.positionAt(Math.min(model.length, modelOffset + 1));
-		const start = this.viewport.getPositionContentCoordinates(position);
-		const end = this.viewport.getPositionContentCoordinates(next);
-		return Object.freeze({
-			left: Math.min(start.left, end.left),
-			top: start.top,
-			width: position.lineNumber === next.lineNumber ? Math.max(1, Math.abs(end.left - start.left)) : Math.max(1, this.viewport.measureTextWidth(' ')),
-			height: start.height,
-		});
-	}
 }
 
 function selectionForMouseTarget(kind: MouseSelectionKind, model: TextModel, anchorRange: Range, position: Position, wordPattern: RegExp | undefined): Selection {
@@ -609,13 +562,6 @@ function lineEndExclusive(model: TextModel, lineNumber: number): Position {
 	return lineNumber < model.lineCount
 		? new Position(lineNumber + 1, 1)
 		: new Position(lineNumber, model.getLineContent(lineNumber).length + 1);
-}
-
-function createEditContext(container: HTMLElement, options: EditContextOptions): AbstractEditContext {
-	const ownerWindow = container.ownerDocument.defaultView as NativeEditContextWindow | null;
-	return typeof ownerWindow?.EditContext === 'function'
-		? new NativeEditContext(container, options)
-		: new TextAreaEditContext(container, options);
 }
 
 let viewId = 1;

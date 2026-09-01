@@ -133,7 +133,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, res
 		selectionController: selections,
 		decorationSources: [createStanzaDecorationSource(decorations, decoration => resolveDocumentHighlightPresentation(decoration.metadata))],
 	});
-	const view = new ViewController(viewport, selections);
+	const view = viewport.controller;
 	const controller = new WordHighlighterContribution(view, selections, decorations, {
 		resource,
 		languageId: 'typescript',
@@ -160,7 +160,6 @@ class EditorHarness implements Disposable {
 	dispose(): void {
 		this.textualProvider.dispose();
 		this.controller.dispose();
-		this.view.dispose();
 		this.viewport.dispose();
 		this.decorations.dispose();
 		this.selections.dispose();

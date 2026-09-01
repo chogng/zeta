@@ -1,4 +1,3 @@
-import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { isFirefox } from '../../../../base/browser/browser.js';
 import { UriList } from '../../../../base/common/dataTransfer.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -12,10 +11,11 @@ import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type Selection } from "../../../common/core/selection.js";
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
+import { normalizeTextLineEndings } from '../../../common/core/textChange.js';
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type View } from "../../../browser/view.js";
 import { AbstractEditContext } from "../../../browser/controller/editContext/editContext.js";
-import { createEditorClipboardCopyEvent, createClipboardPasteEvent, InMemoryClipboardMetadataManager, readEditorClipboardText, type ClipboardStoredMetadata, type IEditorClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
+import { InMemoryClipboardMetadataManager, readEditorClipboardText, type ClipboardDataToCopy, type ClipboardStoredMetadata, type IClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewParts/viewLines/viewLine.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from '../../dropOrPasteInto/browser/textFileTransfer.js';
 
@@ -76,21 +76,20 @@ export interface ClipboardControllerOptions {
 export class ClipboardController extends Disposable {
 	private readonly lineEnding: ClipboardLineEnding;
 	private readonly emptySelectionPolicy: EditorEmptySelectionClipboardPolicy;
+	private readonly useEventCopyData: boolean;
 	private readonly semanticTokens: SemanticTokenSource | undefined;
 	private readonly isEditingAllowed: () => boolean;
 	private asynchronousPasteRequest = 0;
 
 	constructor(
-		target: AbstractEditContext | HTMLElement,
+		target: AbstractEditContext,
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		private readonly clipboardService: IClipboardService,
 		options: ClipboardControllerOptions = {},
 	) {
 		super();
-		const editContext = target instanceof AbstractEditContext ? target : undefined;
-		if (target instanceof AbstractEditContext) this.element = target.domNode;
-		else this.element = target;
+		this.element = target.domNode.domNode;
 		if (viewport.textModel !== selectionController.textModel) {
 			this.dispose();
 			throw new TypeError(
@@ -110,65 +109,38 @@ export class ClipboardController extends Disposable {
 			throw new TypeError('Editor clipboard requires the platform clipboard service');
 		}
 		this.lineEnding = resolveClipboardLineEnding(options.lineEnding);
-		this.emptySelectionPolicy = readEmptySelectionPolicy(
-			options.emptySelectionPolicy,
-		);
+		this.useEventCopyData = options.emptySelectionPolicy === undefined;
+		this.emptySelectionPolicy = readEmptySelectionPolicy(options.emptySelectionPolicy);
 		this.semanticTokens = options.semanticTokens;
 		this.isEditingAllowed = options.isEditingAllowed ?? (() => true);
 		this._register(toDisposable(() => {
 			this.asynchronousPasteRequest += 1;
 		}));
-		if (editContext) {
-			this._register(editContext.onWillCopy(event => this.handleCopy(event)));
-			this._register(editContext.onWillCut(event => this.handleCut(event)));
-			this._register(editContext.onWillPaste(event => this.handlePaste(event)));
-		} else {
-			this._register(addDisposableListener<ClipboardEvent>(
-				this.element,
-				"copy",
-				event => this.handleCopy(createEditorClipboardCopyEvent(event, false)),
-			));
-			this._register(addDisposableListener<ClipboardEvent>(
-				this.element,
-				"cut",
-				event => this.handleCut(createEditorClipboardCopyEvent(event, true)),
-			));
-			this._register(addDisposableListener<ClipboardEvent>(
-				this.element,
-				"paste",
-				event => this.handlePaste(createClipboardPasteEvent(event)),
-			));
-		}
+		this._register(target.onWillCopy(event => this.handleCopy(event)));
+		this._register(target.onWillCut(event => this.handleCut(event)));
+		this._register(target.onWillPaste(event => this.handlePaste(event)));
 	}
 
 	private readonly element: HTMLElement;
 
-	private handleCopy(event: IEditorClipboardCopyEvent): void {
-		if (event.isHandled || event.browserEvent.defaultPrevented) return;
-		const entries = getEditorClipboardEntries(
-			this.viewport.textModel,
-			this.selectionController.selections,
-			this.emptySelectionPolicy,
-		);
-		if (event.hasClipboardData && this.writeClipboard(event.clipboardData, entries)) {
+	private handleCopy(event: IClipboardCopyEvent): void {
+		if (event.isHandled) return;
+		const entries = this.getCopyEntries(event.dataToCopy);
+		if (this.writeClipboard(event.clipboardData, entries)) {
 			event.setHandled();
 			return;
 		}
 		this.writeSystemClipboard(event, entries);
 	}
 
-	private handleCut(event: IEditorClipboardCopyEvent): void {
-		if (event.isHandled || event.browserEvent.defaultPrevented) return;
+	private handleCut(event: IClipboardCopyEvent): void {
+		if (event.isHandled) return;
 		if (!this.isEditingAllowed()) {
 			event.setHandled();
 			return;
 		}
-		const entries = getEditorClipboardEntries(
-			this.viewport.textModel,
-			this.selectionController.selections,
-			this.emptySelectionPolicy,
-		);
-		if (event.hasClipboardData && this.writeClipboard(event.clipboardData, entries)) {
+		const entries = this.getCopyEntries(event.dataToCopy);
+		if (this.writeClipboard(event.clipboardData, entries)) {
 			event.setHandled();
 			this.executeCut();
 			return;
@@ -240,7 +212,7 @@ export class ClipboardController extends Disposable {
 		});
 	}
 
-	private writeSystemClipboard(event: IEditorClipboardCopyEvent, entries: readonly EditorClipboardEntry[], cut = false): boolean {
+	private writeSystemClipboard(event: IClipboardCopyEvent, entries: readonly EditorClipboardEntry[], cut = false): boolean {
 		if (!entries.some(entry => entry.text.length > 0)) return false;
 		const model = this.viewport.textModel;
 		const expectedVersion = model.version;
@@ -306,6 +278,23 @@ export class ClipboardController extends Disposable {
 
 	private createClipboardPayload(entries: readonly EditorClipboardEntry[]): EditorClipboardPayload {
 		return createEditorClipboardPayload(entries, this.lineEnding, this.semanticTokens, this.element.ownerDocument);
+	}
+
+	private getCopyEntries(data: ClipboardDataToCopy): readonly EditorClipboardEntry[] {
+		if (!this.useEventCopyData) {
+			return getEditorClipboardEntries(this.viewport.textModel, this.selectionController.selections, this.emptySelectionPolicy);
+		}
+		const selections = [...this.selectionController.selections].sort(Range.compareRangesUsingStarts);
+		const includedSelections = selections.filter(selection => !selection.isEmpty() || this.emptySelectionPolicy === EditorEmptySelectionClipboardPolicy.Line);
+		const texts = data.multicursorText ?? (data.sourceRanges.length === 0 ? [] : [data.text]);
+		if (data.sourceRanges.length !== texts.length || includedSelections.length !== texts.length) {
+			return getEditorClipboardEntries(this.viewport.textModel, selections, this.emptySelectionPolicy);
+		}
+		return Object.freeze(data.sourceRanges.map((sourceRange, index) => Object.freeze({
+			text: normalizeTextLineEndings(texts[index]!),
+			sourceRange,
+			pasteMode: includedSelections[index]!.isEmpty() ? EditorClipboardPasteMode.Line : EditorClipboardPasteMode.Selection,
+		})));
 	}
 
 	private pasteTextFile(event: IClipboardPasteEvent): boolean {

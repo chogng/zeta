@@ -37,6 +37,7 @@ const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/co
 const { NativeEditContext } = await import('../../../browser/controller/editContext/native/nativeEditContext.js');
 const { NativeEditContextRegistry } = await import('../../../browser/controller/editContext/native/nativeEditContextRegistry.js');
 const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
+const { ViewPart } = await import('../../../browser/view/viewPart.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
 const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
@@ -61,6 +62,7 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(editor.element.parentElement, container);
 	assert.equal(editor.element.getAttribute("aria-label"), "Code");
 	assert.equal(editor.view.element.getAttribute("aria-label"), "Code");
+	assert.ok(editor.view.editContext instanceof ViewPart);
 	assert.strictEqual(TextAreaEditContextRegistry.get(editor.ownerId), editor.view.editContext);
 	assert.deepEqual(editor.viewport.viewportLayout.viewportSize, { width: 320, height: 80 });
 	assert.equal(fontTarget.style.fontFamily, editor.element.style.fontFamily);
@@ -81,12 +83,20 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		public text = '';
 		public selectionStart = 0;
 		public selectionEnd = 0;
+		public selectionBounds: DOMRect | undefined;
+		public controlBounds: DOMRect | undefined;
 		public updateText(start: number, end: number, text: string): void {
 			this.text = `${this.text.slice(0, start)}${text}${this.text.slice(end)}`;
 		}
 		public updateSelection(start: number, end: number): void {
 			this.selectionStart = start;
 			this.selectionEnd = end;
+		}
+		public updateSelectionBounds(bounds: DOMRect): void {
+			this.selectionBounds = bounds;
+		}
+		public updateControlBounds(bounds: DOMRect): void {
+			this.controlBounds = bounds;
 		}
 	}
 	Object.defineProperty(dom.window, 'EditContext', { configurable: true, value: TestEditContext });
@@ -101,8 +111,12 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	const ownerId = editor.ownerId;
 	assert.ok(editor.view.editContext instanceof NativeEditContext);
 	const editContext = editor.view.editContext as InstanceType<typeof NativeEditContext>;
+	editor.layout({ width: 320, height: 80 });
 	assert.strictEqual(NativeEditContextRegistry.get(ownerId), editContext);
-	const input = editContext.domNode as HTMLElement & { editContext?: unknown };
+	assert.ok(editContext.nativeContext.updateSelectionBounds);
+	assert.ok((editContext.nativeContext as TestEditContext).selectionBounds);
+	assert.ok((editContext.nativeContext as TestEditContext).controlBounds);
+	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
 
 	const adoptedDom = new JSDOM('<!doctype html><body></body>');

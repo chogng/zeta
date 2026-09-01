@@ -51,7 +51,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 		selectionController: selections,
 	});
 	viewport.layout({ width: 300, height: 40 });
-	using input = new ViewController(viewport, selections);
+	const input = viewport.controller;
 	using suggest = new SuggestController(input, selections, service, session, "plaintext");
 	input.focus();
 	accept(service.results, model, 1, [
@@ -235,7 +235,7 @@ test("Completion widget validates ownership and clears its active descendant on 
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new ViewController(viewport, selections);
+	const input = viewport.controller;
 	assert.throws(() => new SuggestController(input, selections, service, otherSession, "plaintext"), /must share one text model/);
 	using suggest = new SuggestController(input, selections, service, session, "plaintext");
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
@@ -326,7 +326,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		selectionController: selections,
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const input = new ViewController(viewport, selections);
+	const input = viewport.controller;
 	const suggest = new SuggestController(input, selections, service, session, "plaintext");
 	input.focus();
 	return {
@@ -340,7 +340,6 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		suggest,
 		[Symbol.dispose](): void {
 			suggest.dispose();
-			input.dispose();
 			viewport.dispose();
 			session.dispose();
 			service.dispose();

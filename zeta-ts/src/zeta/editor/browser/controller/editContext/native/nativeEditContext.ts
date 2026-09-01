@@ -1,6 +1,6 @@
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import "./nativeEditContext.css";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
+import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { IME } from "../../../../../base/common/ime.js";
 import { AbstractEditContext, type EditContextCharacterBounds, type EditContextCompositionEvent, type EditContextOptions, type EditContextPosition, type EditContextState, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from "../editContext.js";
@@ -12,6 +12,11 @@ import { editContextAddDisposableListener, FocusTracker, MAX_CHARACTER_BOUNDS_RE
 import { NativeEditContextRegistry } from "./nativeEditContextRegistry.js";
 import { ScreenReaderSupport } from './screenReaderSupport.js';
 import { EditContext } from './editContextFactory.js';
+import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
+import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
+import { type ViewportData } from '../../../../common/viewLayout/viewLinesViewportData.js';
+import * as viewEvents from '../../../../common/viewEvents.js';
+import { EditorOption } from '../../../../common/config/editorOptions.js';
 
 /** Minimal local declaration because TypeScript's DOM library does not yet expose EditContext. */
 export interface NativeEditContextObject extends EventTarget {
@@ -62,8 +67,7 @@ export interface NativeTextFormatUpdateEvent extends globalThis.Event {
 
 /** Native EditContext adapter used when the browser exposes the API. */
 export class NativeEditContext extends AbstractEditContext {
-	readonly domNode: HTMLElement;
-	readonly textArea = undefined;
+	readonly domNode: FastDomNode<HTMLElement>;
 	readonly nativeContext: NativeEditContextObject;
 	private readonly imeTextArea: HTMLTextAreaElement;
 
@@ -94,6 +98,10 @@ export class NativeEditContext extends AbstractEditContext {
 	private compositionPosition: EditContextPosition | undefined;
 	private lastPosition: EditContextPosition | undefined;
 	private lastRenderPosition: Position | null = null;
+	private renderPosition: EditContextPosition | undefined;
+	private parentBounds: DOMRect | undefined;
+	private parentScrollLeft = 0;
+	private parentScrollTop = 0;
 	private readonly characterBoundsProvider: (modelOffset: number) => EditContextCharacterBounds | undefined;
 	private readonly focusTracker: FocusTracker;
 	private readonly screenReaderSupport: ScreenReaderSupport;
@@ -114,10 +122,11 @@ export class NativeEditContext extends AbstractEditContext {
 	readonly onDidCompositionEnd: Event<EditContextCompositionEvent> = this.compositionEndEmitter.event;
 
 	constructor(
+		context: ViewContext,
 		private readonly container: HTMLElement,
 		options: EditContextOptions,
 	) {
-		super();
+		super(context);
 		const ownerDocument = container.ownerDocument;
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow || typeof (ownerWindow as NativeEditContextWindow).EditContext !== "function") {
@@ -137,7 +146,7 @@ export class NativeEditContext extends AbstractEditContext {
 		) {
 			throw new Error("The native EditContext implementation is incomplete");
 		}
-		this.domNode = element;
+		this.domNode = new FastDomNode(element);
 		this.nativeContext = nativeContext;
 		this.readOnlyState = options.readOnly;
 		if (typeof options.characterBoundsProvider !== "function") {
@@ -164,14 +173,8 @@ export class NativeEditContext extends AbstractEditContext {
 		imeTextArea.setAttribute("aria-hidden", "true");
 		this.setEditContextOnDomNode();
 		this._register(NativeEditContextRegistry.register(options.ownerId, this));
-		container.append(element);
 		container.append(imeTextArea);
 		this.focusTracker = this._register(new FocusTracker(element, focused => this.handleElementFocusChange(focused)));
-		this._register(toDisposable(() => {
-			(element as NativeEditContextElement).editContext = undefined;
-			element.remove();
-			imeTextArea.remove();
-		}));
 		const compositionController = this.initializeController(options);
 		this.screenReaderSupport = this._register(new ScreenReaderSupport({
 			element,
@@ -187,10 +190,20 @@ export class NativeEditContext extends AbstractEditContext {
 			bracketColorizationSource: options.bracketColorizationSource,
 			isComposing: () => compositionController.composing,
 		}));
+		this.synchronizeState();
+		this.connect();
 	}
 
 	get readOnly(): boolean {
 		return this.readOnlyState;
+	}
+
+	public override dispose(): void {
+		(this.domNode.domNode as NativeEditContextElement).editContext = undefined;
+		this.domNode.domNode.blur();
+		this.domNode.domNode.remove();
+		this.imeTextArea.remove();
+		super.dispose();
 	}
 
 	/** The model range currently represented by the browser's native buffer. */
@@ -202,17 +215,17 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	/** Installs DOM and native-context listeners after semantic consumers subscribe. */
-	connect(): void {
+	private connect(): void {
 		this.assertNotDisposed();
 		if (this.connected) return;
 		this.connected = true;
 		this._register(addDisposableListener<KeyboardEvent>(
-			this.domNode,
+			this.domNode.domNode,
 			"keydown",
 			event => this.keydownEmitter.fire(event),
 		));
 		this._register(addDisposableListener<KeyboardEvent>(
-			this.domNode,
+			this.domNode.domNode,
 			'keyup',
 			event => this.keyupEmitter.fire(event),
 		));
@@ -227,7 +240,7 @@ export class NativeEditContext extends AbstractEditContext {
 			event => this.keyupEmitter.fire(event),
 		));
 		this._register(addDisposableListener(this.imeTextArea, "blur", () => {
-			if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.domNode) {
+			if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.domNode.domNode) {
 				this.imeFallbackFocused = false;
 				this.focusTracker.resume();
 				this.handleElementBlur();
@@ -235,7 +248,7 @@ export class NativeEditContext extends AbstractEditContext {
 		}));
 		this._register(IME.onDidChange(enabled => this.handleImeStateChange(enabled)));
 		this._register(addDisposableListener<InputEvent>(
-			this.domNode,
+			this.domNode.domNode,
 			"beforeinput",
 			event => {
 				if (this.readOnlyState && isEditingInputType(event.inputType)) {
@@ -264,23 +277,23 @@ export class NativeEditContext extends AbstractEditContext {
 			},
 		));
 		this._register(addDisposableListener<InputEvent>(
-			this.domNode,
+			this.domNode.domNode,
 			"input",
 			event => this.inputEmitter.fire(event),
 		));
-		this._register(addDisposableListener(this.domNode, "select", () => this.selectEmitter.fire(undefined)));
+		this._register(addDisposableListener(this.domNode.domNode, "select", () => this.selectEmitter.fire(undefined)));
 		this._register(addDisposableListener<ClipboardEvent>(
-			this.domNode,
+			this.domNode.domNode,
 			"copy",
 			event => this.fireWillCopy(event, false),
 		));
 		this._register(addDisposableListener<ClipboardEvent>(
-			this.domNode,
+			this.domNode.domNode,
 			"cut",
 			event => this.fireWillCopy(event, true),
 		));
 		this._register(addDisposableListener<ClipboardEvent>(
-			this.domNode,
+			this.domNode.domNode,
 			"paste",
 			event => this.fireWillPaste(event),
 		));
@@ -344,7 +357,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	public setEditContextOnDomNode(): void {
-		const element = this.domNode as NativeEditContextElement;
+		const element = this.domNode.domNode as NativeEditContextElement;
 		if (element.editContext !== this.nativeContext) element.editContext = this.nativeContext;
 	}
 
@@ -358,6 +371,83 @@ export class NativeEditContext extends AbstractEditContext {
 
 	writeScreenReaderContent(reason: string): void {
 		this.screenReaderSupport.writeScreenReaderContent(reason);
+	}
+
+	public override onBeforeRender(_viewportData: ViewportData): void {
+		this.parentBounds = this.container.getBoundingClientRect();
+		this.parentScrollLeft = this.container.scrollLeft;
+		this.parentScrollTop = this.container.scrollTop;
+	}
+
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		if (event.hasChanged(EditorOption.readOnly)) {
+			this.setReadOnly(this._context.configuration.options.get(EditorOption.readOnly));
+		}
+		if (event.hasChanged(EditorOption.ariaLabel)) {
+			this.domNode.setAttribute('aria-label', this._context.configuration.options.get(EditorOption.ariaLabel));
+		}
+		this.screenReaderSupport.onConfigurationChanged(event);
+		return event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.ariaLabel);
+	}
+
+	public override onCursorStateChanged(event: viewEvents.ViewCursorStateChangedEvent): boolean {
+		this.synchronizeState();
+		this.screenReaderSupport.onCursorStateChanged(event);
+		return true;
+	}
+
+	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		this.screenReaderSupport.onDecorationsChanged(event);
+		return true;
+	}
+
+	public override onFlushed(event: viewEvents.ViewFlushedEvent): boolean {
+		this.synchronizeState();
+		this.screenReaderSupport.onFlushed(event);
+		return true;
+	}
+
+	public override onLineMappingChanged(_event: viewEvents.ViewLineMappingChangedEvent): boolean {
+		this.synchronizeState();
+		return true;
+	}
+
+	public override onLinesChanged(event: viewEvents.ViewLinesChangedEvent): boolean {
+		this.synchronizeState();
+		this.screenReaderSupport.onLinesChanged(event);
+		return true;
+	}
+
+	public override onLinesDeleted(event: viewEvents.ViewLinesDeletedEvent): boolean {
+		this.synchronizeState();
+		this.screenReaderSupport.onLinesDeleted(event);
+		return true;
+	}
+
+	public override onLinesInserted(event: viewEvents.ViewLinesInsertedEvent): boolean {
+		this.synchronizeState();
+		this.screenReaderSupport.onLinesInserted(event);
+		return true;
+	}
+
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		this.screenReaderSupport.onScrollChanged(event);
+		return true;
+	}
+
+	public override onZonesChanged(event: viewEvents.ViewZonesChangedEvent): boolean {
+		this.screenReaderSupport.onZonesChanged(event);
+		return true;
+	}
+
+	public override prepareRender(context: RenderingContext): void {
+		this.renderPosition = this.readPosition();
+		this.screenReaderSupport.prepareRender(context);
+	}
+
+	public override render(context: RestrictedRenderingContext): void {
+		if (this.renderPosition) this.updateBounds(this.renderPosition);
+		this.screenReaderSupport.render(context);
 	}
 
 	private handleElementFocusChange(focused: boolean): void {
@@ -450,15 +540,15 @@ export class NativeEditContext extends AbstractEditContext {
 		this.pendingHighSurrogate = undefined;
 		this.compositionStartOffset = Math.min(this.shadowSelectionStart, this.shadowSelectionEnd);
 		this.compositionEndOffset = Math.max(this.shadowSelectionStart, this.shadowSelectionEnd);
-		this.domNode.classList.add("ime-input");
+		this.domNode.toggleClassName("ime-input", true);
 	}
 
 	positionComposition(position: EditContextPosition): void {
 		this.compositionPosition = position;
 		this.lastPosition = position;
-		this.domNode.style.left = `${position.left}px`;
-		this.domNode.style.top = `${position.top}px`;
-		this.domNode.style.height = `${position.height}px`;
+		this.domNode.setLeft(position.left);
+		this.domNode.setTop(position.top);
+		this.domNode.setHeight(position.height);
 		this.updateBounds(position);
 	}
 
@@ -466,10 +556,10 @@ export class NativeEditContext extends AbstractEditContext {
 		this.composing = false;
 		this.pendingHighSurrogate = undefined;
 		this.compositionPosition = undefined;
-		this.domNode.classList.remove("ime-input");
-		this.domNode.style.left = "";
-		this.domNode.style.top = "";
-		this.domNode.style.height = "";
+		this.domNode.toggleClassName("ime-input", false);
+		this.domNode.setLeft("");
+		this.domNode.setTop("");
+		this.domNode.setHeight("");
 	}
 
 	private handleTextUpdate(event: NativeTextUpdateEvent): void {
@@ -663,12 +753,15 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	private createBounds(position: EditContextPosition, width = Math.max(1, position.height / 2)): DOMRect | undefined {
-		const Rect = this.domNode.ownerDocument.defaultView?.DOMRect;
+		const Rect = this.domNode.domNode.ownerDocument.defaultView?.DOMRect;
 		if (typeof Rect !== "function") return undefined;
-		const parentBounds = this.container.getBoundingClientRect();
+		const hasPreparedBounds = this.parentBounds !== undefined;
+		const parentBounds = this.parentBounds ?? this.container.getBoundingClientRect();
+		const scrollLeft = hasPreparedBounds ? this.parentScrollLeft : this.container.scrollLeft;
+		const scrollTop = hasPreparedBounds ? this.parentScrollTop : this.container.scrollTop;
 		return new Rect(
-			parentBounds.left + position.left - this.container.scrollLeft,
-			parentBounds.top + position.top - this.container.scrollTop,
+			parentBounds.left + position.left - scrollLeft,
+			parentBounds.top + position.top - scrollTop,
 			Math.max(1, width),
 			Math.max(1, position.height),
 		);

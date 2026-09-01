@@ -1,5 +1,5 @@
 import './textAreaEditContext.css';
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../../base/browser/fastDomNode.js";
 import { type Event } from "../../../../../base/common/event.js";
@@ -11,6 +11,10 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { type View } from '../../../view.js';
+import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
+import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
+import * as viewEvents from '../../../../common/viewEvents.js';
+import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { MappedScreenReaderStrategy, modelOffsetAtContentOffset, type MappedScreenReaderContentState } from '../screenReaderUtils.js';
 import { TextAreaInput } from "./textAreaEditContextInput.js";
 import { TextAreaEditContextRegistry } from "./textAreaEditContextRegistry.js";
@@ -26,12 +30,11 @@ export type TextAreaEditContextOptions = EditContextOptions;
  * focus state, ARIA state, and screen-reader mirror.
  */
 export class TextAreaEditContext extends AbstractEditContext implements ITextAreaWrapper {
-	readonly inputNode: FastDomNode<HTMLTextAreaElement>;
-	readonly domNode: HTMLTextAreaElement;
-	readonly textArea: HTMLTextAreaElement;
+	readonly textArea: FastDomNode<HTMLTextAreaElement>;
 	readonly textAreaInput: TextAreaInput;
 	private readonly accessibilityController: TextAreaAccessibilityController;
 	private lastRenderPosition: Position | null = null;
+	private renderPosition: EditContextPosition | undefined;
 	private connected = false;
 
 	get onDidFocus(): Event<void> { return this.textAreaInput.onDidFocus; }
@@ -46,43 +49,46 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	get onDidCompositionEnd(): Event<EditContextCompositionEvent> { return this.textAreaInput.onDidCompositionEnd; }
 
 	constructor(
-		private readonly container: HTMLElement,
+		context: ViewContext,
+		container: HTMLElement,
 		options: TextAreaEditContextOptions,
 	) {
-		super();
+		super(context);
 		const ownerDocument = container.ownerDocument;
-		this.inputNode = new FastDomNode(h(ownerDocument, "textarea"));
-		this.domNode = this.inputNode.domNode;
-		this.textArea = this.domNode;
-		this.inputNode.setClassName("stanza-editor-input");
-		this.inputNode.domNode.tabIndex = -1;
-		this.domNode.spellcheck = false;
-		this.domNode.readOnly = options.readOnly;
-		this.domNode.wrap = "off";
-		this.domNode.dir = options.textDirection;
-		this.domNode.autocomplete = "off";
-		this.domNode.setAttribute("autocapitalize", "off");
-		this.domNode.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor input");
-		this.domNode.setAttribute("aria-multiline", "true");
-		this.domNode.setAttribute("aria-roledescription", "code editor");
-		this.domNode.setAttribute("aria-readonly", String(this.domNode.readOnly));
-		this.textAreaInput = this._register(new TextAreaInput(this.domNode));
+		this.textArea = new FastDomNode(h(ownerDocument, "textarea"));
+		this.textArea.setClassName("stanza-editor-input");
+		this.textArea.domNode.tabIndex = -1;
+		this.textArea.domNode.spellcheck = false;
+		this.textArea.domNode.readOnly = options.readOnly;
+		this.textArea.domNode.wrap = "off";
+		this.textArea.domNode.dir = options.textDirection;
+		this.textArea.domNode.autocomplete = "off";
+		this.textArea.setAttribute("autocapitalize", "off");
+		this.textArea.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor input");
+		this.textArea.setAttribute("aria-multiline", "true");
+		this.textArea.setAttribute("aria-roledescription", "code editor");
+		this.textArea.setAttribute("aria-readonly", String(this.textArea.domNode.readOnly));
+		this.textAreaInput = this._register(new TextAreaInput(this.textArea.domNode));
 		this._register(TextAreaEditContextRegistry.register(options.ownerId, this));
-		container.append(this.domNode);
-		this._register(toDisposable(() => this.domNode.remove()));
 		const compositionController = this.initializeController(options);
 		this.accessibilityController = this._register(new TextAreaAccessibilityController(this, options.viewport, options.selectionController, compositionController));
+		this.synchronizeState();
+		this.connect();
+	}
+
+	get domNode(): FastDomNode<HTMLElement> {
+		return this.textArea;
 	}
 
 	get readOnly(): boolean {
-		return this.domNode.readOnly;
+		return this.textArea.domNode.readOnly;
 	}
 
 	/**
 	 * Installs DOM listeners after higher-level consumers have subscribed to the
 	 * edit-context events. This preserves completion and clipboard ordering.
 	 */
-	connect(): void {
+	private connect(): void {
 		this.assertNotDisposed();
 		if (this.connected) return;
 		this.connected = true;
@@ -106,15 +112,15 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 
 	setAriaOptions(options: IEditorAriaOptions): void {
 		if (options.activeDescendant) {
-			this.domNode.setAttribute('aria-haspopup', 'true');
-			this.domNode.setAttribute('aria-autocomplete', 'list');
-			this.domNode.setAttribute('aria-activedescendant', options.activeDescendant);
+			this.textArea.setAttribute('aria-haspopup', 'true');
+			this.textArea.setAttribute('aria-autocomplete', 'list');
+			this.textArea.setAttribute('aria-activedescendant', options.activeDescendant);
 		} else {
-			this.domNode.setAttribute('aria-haspopup', 'false');
-			this.domNode.setAttribute('aria-autocomplete', 'both');
-			this.domNode.removeAttribute('aria-activedescendant');
+			this.textArea.setAttribute('aria-haspopup', 'false');
+			this.textArea.setAttribute('aria-autocomplete', 'both');
+			this.textArea.removeAttribute('aria-activedescendant');
 		}
-		if (options.role) this.domNode.setAttribute('role', options.role);
+		if (options.role) this.textArea.setAttribute('role', options.role);
 	}
 
 	getLastRenderData(): Position | null {
@@ -122,7 +128,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	public getTextAreaDomNode(): HTMLTextAreaElement {
-		return this.domNode;
+		return this.textArea.domNode;
 	}
 
 	writeScreenReaderContent(reason: string): void {
@@ -162,27 +168,93 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	updateBounds(_position: EditContextPosition): void {}
 
 	setReadOnly(readOnly: boolean): void {
-		this.domNode.readOnly = readOnly;
-		this.domNode.setAttribute("aria-readonly", String(readOnly));
+		this.textArea.domNode.readOnly = readOnly;
+		this.textArea.setAttribute("aria-readonly", String(readOnly));
 	}
 
 	prepareComposition(): void {
 		this.textAreaInput.clear();
-		this.inputNode.toggleClassName("ime-input", true);
+		this.textArea.toggleClassName("ime-input", true);
 	}
 
 	positionComposition(position: EditContextPosition): void {
-		this.inputNode.setLeft(position.left);
-		this.inputNode.setTop(position.top);
-		this.inputNode.setHeight(position.height);
+		this.textArea.setLeft(position.left);
+		this.textArea.setTop(position.top);
+		this.textArea.setHeight(position.height);
 	}
 
 	clearComposition(): void {
 		this.textAreaInput.clear();
-		this.inputNode.toggleClassName("ime-input", false);
-		this.inputNode.setLeft("");
-		this.inputNode.setTop("");
-		this.inputNode.setHeight("");
+		this.textArea.toggleClassName("ime-input", false);
+		this.textArea.setLeft("");
+		this.textArea.setTop("");
+		this.textArea.setHeight("");
+	}
+
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		if (event.hasChanged(EditorOption.readOnly)) {
+			this.setReadOnly(this._context.configuration.options.get(EditorOption.readOnly));
+		}
+		if (event.hasChanged(EditorOption.ariaLabel)) {
+			this.textArea.setAttribute('aria-label', this._context.configuration.options.get(EditorOption.ariaLabel));
+		}
+		return event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.ariaLabel);
+	}
+
+	public override onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): boolean {
+		this.synchronizeState();
+		return true;
+	}
+
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
+		this.synchronizeState();
+		return true;
+	}
+
+	public override onLineMappingChanged(_event: viewEvents.ViewLineMappingChangedEvent): boolean {
+		this.synchronizeState();
+		return true;
+	}
+
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
+		this.synchronizeState();
+		return true;
+	}
+
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
+		this.synchronizeState();
+		return true;
+	}
+
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
+		this.synchronizeState();
+		return true;
+	}
+
+	public override onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): boolean {
+		return true;
+	}
+
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
+
+	public override prepareRender(_context: RenderingContext): void {
+		this.renderPosition = this.readPosition();
+	}
+
+	public override render(_context: RestrictedRenderingContext): void {
+		if (this.renderPosition) this.updateBounds(this.renderPosition);
+		this.writeScreenReaderContent('render');
+	}
+
+	public override dispose(): void {
+		this.textArea.domNode.remove();
+		super.dispose();
 	}
 }
 
@@ -216,7 +288,8 @@ class TextAreaAccessibilityController extends Disposable {
 
 	writeScreenReaderContent(reason: string): void {
 		void reason;
-		if (this.isDisposed || this.compositionController.composing || this.input.domNode.ownerDocument.activeElement !== this.input.domNode) return;
+		const input = this.input.getTextAreaDomNode();
+		if (this.isDisposed || this.compositionController.composing || input.ownerDocument.activeElement !== input) return;
 		const model = this.viewport.textModel;
 		const selection = this.selectionController.selections[0]!;
 		this.updateAccessibleSelectionDescription();
@@ -282,12 +355,13 @@ class TextAreaAccessibilityController extends Disposable {
 	}
 
 	private acceptAccessibleSelection(): void {
-		if (this.compositionController.composing || this.input.domNode.ownerDocument.activeElement !== this.input.domNode) return;
+		const input = this.input.getTextAreaDomNode();
+		if (this.compositionController.composing || input.ownerDocument.activeElement !== input) return;
 		const model = this.viewport.textModel;
 		this.accessibleInputState = TextAreaState.readFromTextArea(this.input, this.accessibleInputState);
-		const startOffset = this.input.domNode.selectionStart;
-		const endOffset = this.input.domNode.selectionEnd;
-		const backward = this.input.domNode.selectionDirection === 'backward';
+		const startOffset = input.selectionStart;
+		const endOffset = input.selectionEnd;
+		const backward = input.selectionDirection === 'backward';
 		const contentState = this.accessibleScreenReaderContentState;
 		if (!contentState) {
 			const anchorOffset = this.accessibleInputStartOffset + (backward ? endOffset : startOffset);

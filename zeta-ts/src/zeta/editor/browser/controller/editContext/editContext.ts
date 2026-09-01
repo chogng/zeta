@@ -1,4 +1,5 @@
 import { stopEvent } from "../../../../base/browser/dom.js";
+import { type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { StandardKeyboardEvent } from "../../../../base/browser/keyboardEvent.js";
 import { Emitter, Event, type Event as EditorEvent } from "../../../../base/common/event.js";
 import { IME } from "../../../../base/common/ime.js";
@@ -11,9 +12,12 @@ import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type IEditorAriaOptions } from '../../editorBrowser.js';
 import { type View } from "../../view.js";
+import { ViewPart } from '../../view/viewPart.js';
 import { type EditorViewTextUpdateEvent } from "../../view/viewController.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
-import { createEditorClipboardCopyEvent, createClipboardPasteEvent, type IEditorClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
+import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { isFirefox } from '../../../../base/browser/browser.js';
+import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
 
 /** The state that the browser editing surface mirrors from the common editor. */
 export interface EditContextState {
@@ -117,12 +121,11 @@ export interface EditContextPosition {
  * browser. This is the same seam that lets VS Code provide native and
  * textarea edit contexts side by side.
  */
-export abstract class AbstractEditContext extends Disposable {
-	abstract readonly domNode: HTMLElement;
-	abstract readonly textArea: HTMLTextAreaElement | undefined;
-	private readonly willCopyEmitter = this._register(new Emitter<IEditorClipboardCopyEvent>());
-	private readonly willCutEmitter = this._register(new Emitter<IEditorClipboardCopyEvent>());
-	private readonly willPasteEmitter = this._register(new Emitter<IClipboardPasteEvent>());
+export abstract class AbstractEditContext extends ViewPart {
+	abstract readonly domNode: FastDomNode<HTMLElement>;
+	protected readonly _onWillCopy = this._register(new Emitter<IClipboardCopyEvent>());
+	protected readonly _onWillCut = this._register(new Emitter<IClipboardCopyEvent>());
+	protected readonly _onWillPaste = this._register(new Emitter<IClipboardPasteEvent>());
 	private readonly willBeforeInputEmitter = this._register(new Emitter<InputEvent>());
 	private readonly willTextUpdateEmitter = this._register(new Emitter<EditorViewTextUpdateEvent>());
 	private readonly willKeydownEmitter = this._register(new Emitter<KeyboardEvent>());
@@ -145,12 +148,17 @@ export abstract class AbstractEditContext extends Disposable {
 	abstract readonly onDidCompositionUpdate: EditorEvent<EditContextCompositionEvent>;
 	abstract readonly onDidCompositionEnd: EditorEvent<EditContextCompositionEvent>;
 	/** Clipboard events are emitted before the editor's clipboard contribution handles them. */
-	readonly onWillCopy: EditorEvent<IEditorClipboardCopyEvent> = this.willCopyEmitter.event;
-	readonly onWillCut: EditorEvent<IEditorClipboardCopyEvent> = this.willCutEmitter.event;
-	readonly onWillPaste: EditorEvent<IClipboardPasteEvent> = this.willPasteEmitter.event;
+	readonly onWillCopy: EditorEvent<IClipboardCopyEvent> = this._onWillCopy.event;
+	readonly onWillCut: EditorEvent<IClipboardCopyEvent> = this._onWillCut.event;
+	readonly onWillPaste: EditorEvent<IClipboardPasteEvent> = this._onWillPaste.event;
+	private viewport: View | undefined;
+	private selectionController: CursorsController | undefined;
+
+	constructor(context: ViewContext) {
+		super(context);
+	}
 
 	abstract get readOnly(): boolean;
-	abstract connect(): void;
 	abstract focus(): void;
 	abstract isFocused(): boolean;
 	abstract refreshFocusState(): void;
@@ -179,6 +187,8 @@ export abstract class AbstractEditContext extends Disposable {
 
 	protected initializeController(options: EditContextOptions): CompositionController {
 		if (this.compositionControllerValue) throw new ReferenceError('Edit context controller is already initialized');
+		this.viewport = options.viewport;
+		this.selectionController = options.selectionController;
 		const compositionController = this._register(new CompositionController(this, options.viewport, options.selectionController));
 		this.compositionControllerValue = compositionController;
 		const viewController = options.viewController;
@@ -192,13 +202,19 @@ export abstract class AbstractEditContext extends Disposable {
 		return compositionController;
 	}
 
+	protected readPosition(): EditContextPosition {
+		const viewport = this.requireViewport();
+		const position = this.requireSelectionController().selections[0]!.getPosition();
+		return viewport.getPositionContentCoordinates(position);
+	}
+
 	protected fireWillCopy(browserEvent: ClipboardEvent, isCut: boolean): void {
-		const event = createEditorClipboardCopyEvent(browserEvent, isCut);
-		(isCut ? this.willCutEmitter : this.willCopyEmitter).fire(event);
+		const event = createClipboardCopyEvent(browserEvent, isCut, this._context, undefined, isFirefox);
+		(isCut ? this._onWillCut : this._onWillCopy).fire(event);
 	}
 
 	protected fireWillPaste(browserEvent: ClipboardEvent): void {
-		this.willPasteEmitter.fire(createClipboardPasteEvent(browserEvent));
+		this._onWillPaste.fire(createClipboardPasteEvent(browserEvent));
 	}
 
 	private routeBeforeInput(event: InputEvent, viewController: EditContextViewController, compositionController: CompositionController): void {
@@ -312,6 +328,27 @@ export abstract class AbstractEditContext extends Disposable {
 		// out of post-edit consumers such as SuggestController, matching VS Code's
 		// command dispatch ordering.
 		viewController.insertTab();
+	}
+
+	protected synchronizeState(): void {
+		const viewport = this.requireViewport();
+		const selection = this.requireSelectionController().selections[0]!;
+		this.syncState({
+			text: viewport.textModel.getText(),
+			selectionStart: viewport.textModel.offsetAt(selection.getStartPosition()),
+			selectionEnd: viewport.textModel.offsetAt(selection.getEndPosition()),
+			position: selection.getPosition(),
+		});
+	}
+
+	private requireViewport(): View {
+		if (!this.viewport) throw new ReferenceError('Edit context is not initialized');
+		return this.viewport;
+	}
+
+	private requireSelectionController(): CursorsController {
+		if (!this.selectionController) throw new ReferenceError('Edit context is not initialized');
+		return this.selectionController;
 	}
 }
 
@@ -534,7 +571,7 @@ export class CompositionController extends Disposable {
 
 	private clearPresentation(): boolean {
 		const changed = this.viewport.element.classList.contains("composing") ||
-			this.input.domNode.classList.contains("ime-input");
+			this.input.domNode.domNode.classList.contains("ime-input");
 		this.viewport.element.classList.remove("composing");
 		this.input.clearComposition();
 		this.viewport.setCompositionRange(undefined);

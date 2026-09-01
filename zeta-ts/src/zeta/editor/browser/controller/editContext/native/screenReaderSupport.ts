@@ -13,6 +13,8 @@ import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 import { createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, screenReaderLineOffsetAtModelOffset, type IScreenReaderContent } from "./screenReaderUtils.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
+import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
+import * as viewEvents from '../../../../common/viewEvents.js';
 
 export interface NativeScreenReaderSupportOptions {
 	readonly element: HTMLElement;
@@ -103,6 +105,51 @@ export class ScreenReaderSupport extends Disposable {
 
 	writeScreenReaderContent(_reason?: string): void {
 		this.synchronize();
+		this.layoutContent();
+	}
+
+	onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	onFlushed(_event: viewEvents.ViewFlushedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): void {
+		this.scheduleSynchronization();
+	}
+
+	prepareRender(_context: RenderingContext): void {
+		this.synchronize();
+	}
+
+	render(_context: RestrictedRenderingContext): void {
+		this.layoutContent();
 	}
 
 	private handleFocusChange(focused: boolean): void {
@@ -121,6 +168,7 @@ export class ScreenReaderSupport extends Disposable {
 		queueMicrotask(() => {
 			this.syncScheduled = false;
 			this.synchronize();
+			this.layoutContent();
 		});
 	}
 
@@ -140,7 +188,6 @@ export class ScreenReaderSupport extends Disposable {
 			this.options.selectionController.selections[0]!,
 			{ pageSize: this.options.accessibilityPageSize ?? DEFAULT_SCREEN_READER_PAGE_SIZE },
 		));
-		this.layoutContent();
 	}
 
 	private layoutContent(): void {

@@ -25,7 +25,6 @@ const { TestView: View } = await import("./viewModel/testViewModel.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
 await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
-const { ViewController } = await import('../../browser/view/viewController.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -42,7 +41,7 @@ test("core commands select all", () => {
 		selectionController: selections,
 	});
 	viewport.layout({ width: 400, height: 100 });
-	using input = new ViewController(viewport, selections);
+	const input = viewport.controller;
 	using commands = installCoreTextEditorCommands(input.element, viewport, selections);
 
 	const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });

@@ -6,7 +6,7 @@
 
 - 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 729 个；381 个同路径，209 个仅本地，348 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：初始确认 118 组同名声明结构差异，已处理 28 组，剩余 90 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
+- 账目摘要：初始确认 118 组同名声明结构差异，已处理 30 组，剩余 88 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
 - 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题，也不新增 Editor 生产文件。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
 - 输入、参数和返回类型一致不代表行为已经一致。剩余项仍需继续核对状态 owner、事件顺序、失效条件、调度阶段、坐标转换、可见副作用、失败语义和释放时机。
@@ -23,6 +23,8 @@
 | 文件 | 声明 | 结果 |
 | --- | --- | --- |
 | `browser/controller/editContext/clipboardUtils.ts` | `IClipboardPasteEvent` | 字段、构造行为和外部数据转换与上游一致；生产调用经过输入上下文、Clipboard contribution 和 Observable Editor，浏览器测试覆盖 metadata 与外部数据转换 |
+| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 公开成员与上游归零；事件在输入上下文中生成选区文本、来源范围、富文本和内存元数据，Clipboard contribution 直接消费该事件，浏览器测试覆盖复制、剪切、多选区、整行和系统剪贴板回退 |
+| `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 五参数入口与上游一致；由 `ViewContext` 读取配置和选区并负责标准剪贴板数据及元数据写入，旧的无模型事件入口已删除，生产调用只经过两个输入实现 |
 | `browser/services/codeEditorService.ts` | `ICodeEditorOpenHandler` | 由 `AbstractCodeEditorService` 按新注册优先顺序调用，首个返回编辑器的处理器终止链路；单项释放只移除对应处理器，测试覆盖继续查找、短路和释放 |
 | `browser/services/codeEditorService.ts` | `ICodeEditorService` | 公共成员差异归零；代码与差异编辑器的创建、加入和移除由各 Widget 的真实生命周期触发，打开处理器、资源模型属性、临时模型属性、装饰类型和当前编辑器均由同一浏览器服务提供，Workbench 差异窗格与快速差异视图使用同一服务实例 |
 | `browser/services/abstractCodeEditorService.ts` | `AbstractCodeEditorService` | 抽象层只持有跨宿主共享的编辑器注册表、处理器链、资源属性、临时属性和装饰类型；当前编辑器由具体浏览器宿主持有；临时属性按 URI 与模型销毁释放，装饰样式按引用计数和服务生命周期释放，测试覆盖事件顺序、资源身份、父子装饰与释放 |
@@ -55,16 +57,14 @@
 | --- | --- | --- |
 | `browser/controller/dragScrolling.ts` | `DragScrolling` | 当前只有仅本地 `bidirectionalDragScrolling.ts`，其双轴像素滚动职责不同于上游抽象 owner；需随 `ViewContext`、outside-editor target、`MouseTargetFactory`、render/hit-test、RTL 与 `dispatchMouse` 整链迁移后删除旧文件 |
 | `browser/controller/mouseHandler.ts` | `MouseHandler` | 已只保留浏览器指针捕获、拖动、自动滚动、目标解析和输入事件发布；选区策略已迁入 `ViewController.dispatchMouse`，构造参数仍待随 `ViewContext` 和 pointer helper 收敛 |
-| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 本地仍使用 `IEditorClipboardCopyEvent`，且复制数据由 `ClipboardController` 事后生成；需先把选区数据生成迁回此 owner，再删除旧事件形状 |
-| `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 本地仍由无模型上下文的 `createEditorClipboardCopyEvent` 只包装 DOM 事件；需随 `ViewContext` 接入复制数据、元数据写入和内存记录后直接替换旧入口 |
 | `browser/controller/editContext/native/debugEditContext.ts` | `DebugEditContext` | 本地职责已改名或移出上游 owner |
 | `browser/controller/editContext/native/nativeEditContextUtils.ts` | `FocusTracker` | 已恢复公开名并由浏览器输入实现实际持有；构造契约和日志依赖仍待收敛 |
-| `browser/controller/editContext/editContext.ts` | `AbstractEditContext` | 已恢复公开名与剪贴板事件入口；当前仍继承 `Disposable` 且持有输入路由与组合输入状态，需随 `ViewPart` 生命周期迁移 |
-| `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 已恢复公开名、工厂 owner、按编辑器 ID 注册和跨 document 的 EditContext DOM 重新挂接；事件、渲染阶段及 `ViewContext` 构造契约仍待收敛 |
+| `browser/controller/editContext/editContext.ts` | `AbstractEditContext` | 已进入 `ViewPart` 生命周期并统一剪贴板事件、输入路由和组合输入状态；抽象层仍保留 Zeta 的公共输入契约，需继续缩小与上游声明成员的差异 |
+| `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 已由 `View` 持有，接入 `ViewContext`、视图事件、预渲染几何读取、渲染写入、按编辑器 ID 注册及跨 document 重新挂接；浏览器缓冲区和辅助阅读器的成员契约仍待收敛 |
 | `browser/controller/editContext/native/screenReaderContentRich.ts` | `RichScreenReaderContent` | 已恢复公开名并由 `ScreenReaderSupport` 实际选择；配置事件和视图渲染阶段仍待收敛 |
 | `browser/controller/editContext/native/screenReaderContentSimple.ts` | `SimpleScreenReaderContent` | 已恢复公开名并实际承担简单无障碍镜像；选择同步和 `ViewContext` 构造契约仍待收敛 |
-| `browser/controller/editContext/native/screenReaderSupport.ts` | `ScreenReaderSupport` | 已恢复公开名并由 `NativeEditContext` 持有；视图事件与 prepare/render 生命周期仍待收敛 |
-| `browser/controller/editContext/textArea/textAreaEditContext.ts` | `TextAreaEditContext` | 已恢复公开名、按编辑器 ID 注册、`getTextAreaDomNode` 和真实输入调用链；仍缺 `ViewPart` 事件与渲染阶段 |
+| `browser/controller/editContext/native/screenReaderSupport.ts` | `ScreenReaderSupport` | 已由 `NativeEditContext` 持有并接入配置、光标、内容、装饰、滚动、空白区及 prepare/render 生命周期；动态辅助阅读器配置和剩余成员契约仍待收敛 |
+| `browser/controller/editContext/textArea/textAreaEditContext.ts` | `TextAreaEditContext` | 已由 `View` 持有，接入 `ViewContext`、视图事件、渲染阶段、按编辑器 ID 注册、`getTextAreaDomNode` 和真实输入调用链；文本窗口与辅助阅读器成员契约仍待收敛 |
 | `browser/controller/editContext/textArea/textAreaEditContextInput.ts` | `TextAreaInput` | 已恢复公开名并由 `focusTextArea`、DOM 事件、选区和释放形成真实调用链；host 事件契约仍待收敛 |
 | `browser/gpu/atlas/textureAtlas.ts` | `TextureAtlas` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/atlas/textureAtlasPage.ts` | `TextureAtlasPage` | 本地职责已改名或移出上游 owner |
@@ -79,7 +79,7 @@
 | `browser/viewParts/overlayWidgets/overlayWidgets.ts` | `ViewOverlayWidgets` | 已恢复公开名、`ViewPart` 生命周期、DOM owner、布局缓存和 widget 生命周期；剩余成员差异继续按真实调用方收敛 |
 | `browser/view/viewOverlays.ts` | `ViewOverlays` | 已恢复 `ViewPart` owner、`addDynamicOverlay`、统一可见行 DOM 和 `ContentViewOverlays` / `MarginViewOverlays`；逐行覆盖层不再各建一套行容器 |
 | `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 已继承 `ViewEventHandler`，渲染契约改为 `prepareRender(context)` 后按行号返回片段；不再继承 Part 或直接持有编辑器 DOM |
-| `browser/view/viewController.ts` | `ViewController` | 已接管 edit context、组合输入、焦点、命令路由和 `dispatchMouse` 选区策略，真实覆盖拖选、单词、整行、列选及多光标；构造契约、剪贴板委托和剩余公开成员仍待随 `ViewContext` 收敛 |
+| `browser/view/viewController.ts` | `ViewController` | 已只负责命令、组合输入协调、焦点调用和 `dispatchMouse` 选区策略；输入 Part 的创建、渲染与释放已迁入 `View`，剪贴板委托和剩余公开成员仍待收敛 |
 | `browser/viewParts/gpuMark/gpuMark.ts` | `GpuMarkOverlay` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 已作为独立 `ViewPart` 持有块级 DOM，不再混入逐行覆盖层 |
@@ -138,7 +138,7 @@
 
 | 文件 | 声明 | 分类 |
 | --- | --- | --- |
-| `browser/view.ts` | `View` | 视图与布局链路 |
+| `browser/view.ts` | `View` | 已统一持有 `ViewController` 和输入 Part，并把输入纳入视图挂载、渲染、几何更新与释放链；其余视图部件和公开成员仍待逐项收敛 |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 浏览器编辑器契约 |
 | `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；ViewModel 与 cursor context 调用链尚未补齐 |
 | `common/cursor/cursorCollection.ts` | `CursorCollection` | 成员边界、primary-first 状态、marker 生命周期和 overlap normalize 已与上游一致；仍需随统一 `ViewModel` 接入生产 `CursorsController` |

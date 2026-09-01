@@ -9,17 +9,19 @@ import { CursorState } from '../../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
-import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
+import { getViewModelCursorController, ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { createTestConfiguration } from '../config/testConfiguration.js';
 
-export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel'> & {
+export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel' | 'selectionController'> & {
 	readonly model: TextModel;
 	readonly selectionController?: CursorsController;
 };
 
 /** Builds the same configuration-model-view chain used by an editor widget. */
 export class TestView extends View {
+	private readonly setupStore: DisposableStore;
+
 	constructor(options: TestViewOptions) {
 		const setup = createViewModel(options);
 		const { model: _model, selectionController: _selectionController, ...viewOptions } = options;
@@ -28,8 +30,17 @@ export class TestView extends View {
 			configuration: setup.configuration,
 			theme: setup.theme,
 			viewModel: setup.viewModel,
+			selectionController: setup.selectionController,
 		});
-		this._register(setup.store);
+		this.setupStore = setup.store;
+	}
+
+	protected override disposeCore(): void {
+		try {
+			super.disposeCore();
+		} finally {
+			this.setupStore.dispose();
+		}
 	}
 }
 
@@ -37,6 +48,7 @@ function createViewModel(options: TestViewOptions): {
 	readonly configuration: ReturnType<typeof createTestConfiguration>;
 	readonly theme: ReturnType<ThemeService['getColorTheme']>;
 	readonly viewModel: ViewModel;
+	readonly selectionController: CursorsController;
 	readonly store: DisposableStore;
 } {
 	const ownerWindow = options.container.ownerDocument.defaultView;
@@ -88,7 +100,7 @@ function createViewModel(options: TestViewOptions): {
 		synchronizeSelections();
 		store.add(options.selectionController.onDidChange(synchronizeSelections));
 	}
-	return { configuration, theme: themeService.getColorTheme(), viewModel, store };
+	return { configuration, theme: themeService.getColorTheme(), viewModel, selectionController: options.selectionController ?? getViewModelCursorController(viewModel), store };
 }
 
 function testWrappingIndent(value: WrappingIndent | undefined): IEditorOptions['wrappingIndent'] {
