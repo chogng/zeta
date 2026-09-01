@@ -30,7 +30,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 	showNextChange(): void {
 		const model = this.modelReference?.object;
 		if (!model) return;
-		const lineIndex = this.currentChange?.lineIndex ?? this.context.viewModel.selections[0]!.getPosition().lineNumber - 1;
+		const lineIndex = this.currentChange?.lineIndex ?? this.context.selectionController.selections[0]!.getPosition().lineNumber - 1;
 		const change = this.currentChange ? model.findNextChange(lineIndex) : model.findNextChange(lineIndex, true);
 		if (change) this.showChange(change);
 		else this.context.viewport.announceAccessibilityStatus('No Quick Diff changes');
@@ -39,7 +39,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 	showPreviousChange(): void {
 		const model = this.modelReference?.object;
 		if (!model) return;
-		const lineIndex = this.currentChange?.lineIndex ?? this.context.viewModel.selections[0]!.getPosition().lineNumber - 1;
+		const lineIndex = this.currentChange?.lineIndex ?? this.context.selectionController.selections[0]!.getPosition().lineNumber - 1;
 		const change = this.currentChange ? model.findPreviousChange(lineIndex) : model.findPreviousChange(lineIndex, true);
 		if (change) this.showChange(change);
 		else this.context.viewport.announceAccessibilityStatus('No Quick Diff changes');

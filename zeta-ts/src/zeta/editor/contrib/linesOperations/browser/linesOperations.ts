@@ -63,7 +63,7 @@ class LinesOperationsContribution extends Disposable implements IEditorContribut
 	}
 
 	transpose(): void {
-		const command = createTransposeCommand(this.context.model, this.context.viewModel.selections);
+		const command = createTransposeCommand(this.context.model, this.context.selectionController.selections);
 		if (!command) return;
 		this.run('editor.action.transpose', command);
 	}
@@ -71,14 +71,14 @@ class LinesOperationsContribution extends Disposable implements IEditorContribut
 	private onKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
 		if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
-			const hasRange = this.context.viewModel.selections.some(selection => !selection.isEmpty());
+			const hasRange = this.context.selectionController.selections.some(selection => !selection.isEmpty());
 			if (!event.shiftKey && !hasRange) return;
 			stopEvent(event);
 			const unshift = event.shiftKey;
 			const options = this.context.model.getOptions();
 			this.runCommands(
 				unshift ? 'editor.action.outdentLines' : 'editor.action.indentLines',
-				this.context.viewModel.selections.map(selection => new ShiftCommand(selection, {
+				this.context.selectionController.selections.map(selection => new ShiftCommand(selection, {
 					isUnshift: unshift,
 					tabSize: options.tabSize,
 					indentSize: options.indentSize,
@@ -91,7 +91,7 @@ class LinesOperationsContribution extends Disposable implements IEditorContribut
 		}
 		if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'k') {
 			stopEvent(event);
-			this.run('editor.action.deleteLines', createDeleteLinesCommand(this.context.model, this.context.viewModel.selections));
+			this.run('editor.action.deleteLines', createDeleteLinesCommand(this.context.model, this.context.selectionController.selections));
 			return;
 		}
 		if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key === 'Enter') {
@@ -99,13 +99,13 @@ class LinesOperationsContribution extends Disposable implements IEditorContribut
 			const direction = event.shiftKey ? EditorLineInsertDirection.Before : EditorLineInsertDirection.After;
 			this.run(
 				direction === EditorLineInsertDirection.Before ? 'editor.action.insertLineBefore' : 'editor.action.insertLineAfter',
-				createInsertLineCommand(this.context.model, this.context.viewModel.selections, direction),
+				createInsertLineCommand(this.context.model, this.context.selectionController.selections, direction),
 			);
 			return;
 		}
 		if (isJoinChord(event)) {
 			stopEvent(event);
-			this.run('editor.action.joinLines', createJoinLinesCommand(this.context.model, this.context.viewModel.selections));
+			this.run('editor.action.joinLines', createJoinLinesCommand(this.context.model, this.context.selectionController.selections));
 			return;
 		}
 		if (!event.altKey || event.ctrlKey || event.metaKey) return;
@@ -115,7 +115,7 @@ class LinesOperationsContribution extends Disposable implements IEditorContribut
 			stopEvent(event);
 			this.runCommands(
 				direction === 'up' ? 'editor.action.moveLinesUpAction' : 'editor.action.moveLinesDownAction',
-				this.context.viewModel.selections.map(selection => new MoveLinesCommand(
+				this.context.selectionController.selections.map(selection => new MoveLinesCommand(
 					selection,
 					direction === 'down',
 					EditorAutoIndentStrategy.None,
@@ -128,18 +128,18 @@ class LinesOperationsContribution extends Disposable implements IEditorContribut
 		stopEvent(event);
 		this.runCommands(
 			direction === 'up' ? 'editor.action.copyLinesUpAction' : 'editor.action.copyLinesDownAction',
-			this.context.viewModel.selections.map(selection => new CopyLinesCommand(selection, direction === 'down')),
+			this.context.selectionController.selections.map(selection => new CopyLinesCommand(selection, direction === 'down')),
 		);
 	}
 
 	private run(id: string, command: EditorEditCommand): void {
-		this.context.executeCommand(id, () => this.context.viewModel.execute(command));
-		this.context.viewport.revealPosition(this.context.viewModel.selections[0]!.getPosition());
+		this.context.executeCommand(id, () => this.context.selectionController.execute(command));
+		this.context.viewport.revealPosition(this.context.selectionController.selections[0]!.getPosition());
 	}
 
 	private runCommands(id: string, commands: readonly ICommand[]): void {
-		this.context.executeCommand(id, () => this.context.viewModel.executeCommands(commands, id));
-		this.context.viewport.revealPosition(this.context.viewModel.selections[0]!.getPosition());
+		this.context.executeCommand(id, () => this.context.selectionController.executeCommands(commands, id));
+		this.context.viewport.revealPosition(this.context.selectionController.selections[0]!.getPosition());
 	}
 }
 

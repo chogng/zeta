@@ -4,5 +4,5 @@ import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.gotoError", install: context => {
 	if (context.kind !== "text") return;
-	context.register(new DiagnosticNavigationController(context.view.element, context.viewport, context.viewModel, context.getCapability(TextEditorCapability.diagnosticDecorations)));
+	context.register(new DiagnosticNavigationController(context.view.element, context.viewport, context.selectionController, context.getCapability(TextEditorCapability.diagnosticDecorations)));
 } });

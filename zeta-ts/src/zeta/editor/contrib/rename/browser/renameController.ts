@@ -122,5 +122,5 @@ export class RenameController extends Disposable {
 registerTextEditorCapabilityContribution({ id: "editor.contrib.rename", commands: [{ id: RenameCommandId, canTriggerInlineEdits: true }], install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new RenameService(context.model, context.options.input.resource, context.languageFeaturesService.renameProvider));
-	context.register(new RenameController(context.view.element, context.viewport, context.viewModel, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError, context.executeCommand));
+	context.register(new RenameController(context.view.element, context.viewport, context.selectionController, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError, context.executeCommand));
 } });

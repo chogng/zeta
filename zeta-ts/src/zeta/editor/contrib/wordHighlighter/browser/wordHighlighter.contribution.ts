@@ -427,7 +427,7 @@ registerTextEditorCapabilityContribution({
 	},
 	install: context => {
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
-		context.register(new WordHighlighterContribution(context.view, context.viewModel, context.getCapability(occurrenceDecorations), {
+		context.register(new WordHighlighterContribution(context.view, context.selectionController, context.getCapability(occurrenceDecorations), {
 			resource: context.options.input.resource,
 			languageId: context.languageId,
 			languageFeaturesService: context.languageFeaturesService,

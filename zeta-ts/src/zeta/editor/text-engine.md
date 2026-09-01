@@ -78,7 +78,7 @@ flowchart LR
 
 一个 `TextModel` 可以由多个编辑器共享，但 selection、cursor 和 composition 状态属于各自的 `ViewModelImpl`。目标生产链固定为 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor`；模型只保存文本、装饰和 undo/redo 数据，不保存某个编辑器的 cursor 状态。
 
-当前生产构造已经是 `ViewModelImpl → CursorsController`，`CodeEditorWidget` 只通过内部入口取得同一个 controller，不再创建第二份 selection owner。键盘移动已删除统一 `navigate` 入口，浏览器控制器按命令直接调用 `MoveOperations` 的标准状态 API；删除、输入、转置和行操作也使用同一位置 API。剩余缺口是 selection 存储仍以简化 controller 为主，`CursorCollection`、`CursorContext`、`CursorMoveCommands` 和 `Cursor` 尚未完整进入 ViewModel 命令与折行坐标链。
+当前生产构造已经是 `ViewModelImpl → CursorsController`，`CodeEditorWidget` 只通过内部入口取得同一个 controller，不再创建第二份 selection owner。Contribution context 分别暴露真实 `IViewModel` 和同一份 `selectionController`，不再用选择 owner 冒充视图模型。键盘、行选择和上下添加多光标通过 `CursorMoveCommands` 的标准模型/视图状态 API；删除、输入、转置和行操作使用 `MoveOperations` 的标准位置 API。剩余缺口是 selection 存储仍以简化 controller 为主，`CursorCollection`、`CursorContext` 和 `Cursor` 尚未完整进入 ViewModel 命令链。
 
 `common/cursor` 的目标文件集合与 VS Code 保持一致：12 个同路径文件，不保留额外的 SelectionSet、导航或语言输入 owner。当前 12 个同路径文件中有 8 个正文一致，但除 `ColumnSelection` 外，多数仍缺生产调用闭环；文件内容一致不代表完成。完成状态以 [`api-alignment-status.md`](./api-alignment-status.md) 的调用者与生命周期证据为准。
 
@@ -147,9 +147,9 @@ Browser controller 的职责是把一个 DOM event 解析成一个 editor intent
 
 - `EditorInputContext`：browser input contract；`BrowserEditContext` 使用浏览器 EditContext，`EditorTextAreaInputContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`ViewController` 选择并暴露这份契约、执行 common command，suggest widget 通过 `ViewController.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
-- `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
+- `KeyboardNavigationController`：把平台 chord 转成 `CursorMoveCommands` 使用的无 DOM 移动参数，并保留连续垂直移动的期望列。
 - `PointerEventRouter`：pointer dispatch、drag session 和浏览器 capture 的 browser adapter。
-- `EditorPointerSelectionHandler`：当前把 mouse/pointer hit target 转换为 selection intent；拖选滚动仍由仅本地 `BidirectionalDragScrolling` 承担。目标 owner 是 `DragScrolling` 及其上下、左右两个 operation，必须随 `ViewContext`、`MouseTargetFactory`、render/hit-test 和 `dispatchMouse` 同批迁移，之后删除本地文件。多光标移动命令的目标 owner 是 `common/cursor/cursorMoveCommands.ts`。
+- `EditorPointerSelectionHandler`：当前把 mouse/pointer hit target 转换为 selection intent，并在 `ViewController` 内拥有指针选区合并策略；拖选滚动仍由仅本地 `BidirectionalDragScrolling` 承担。目标 owner 是 `DragScrolling` 及其上下、左右两个 operation，必须随 `ViewContext`、`MouseTargetFactory`、render/hit-test 和 `dispatchMouse` 同批迁移，之后删除旧文件。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。

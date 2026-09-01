@@ -50,7 +50,7 @@ registerTextEditorCapabilityContribution({
 		context.register(new InPlaceReplaceController(
 			context.view.element,
 			context.viewport,
-			context.viewModel,
+			context.selectionController,
 			context.editorWorker,
 			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
 			context.onLanguageError,

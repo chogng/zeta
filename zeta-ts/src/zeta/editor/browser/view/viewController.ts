@@ -7,8 +7,7 @@ import { isLinux, operatingSystem, OperatingSystem } from '../../../base/common/
 import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
 import { EditorLineWrapping, EditorOption } from '../../common/config/editorOptions.js';
 import { ColumnSelection } from '../../common/cursor/cursorColumnSelection.js';
-import { CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
-import { MoveOperations } from '../../common/cursor/cursorMoveOperations.js';
+import { CursorMove, CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
 import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
 import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
 import { type CursorsController } from '../../common/cursor/cursor.js';
@@ -306,7 +305,7 @@ export class ViewController extends Disposable {
 			kind,
 			anchorRange,
 			baseSelections,
-			toggleCandidateIndex: baseSelections ? CursorMoveCommands.findPointerToggleCandidate(baseSelections, initialSelection) : undefined,
+			toggleCandidateIndex: baseSelections ? findPointerToggleCandidate(baseSelections, initialSelection) : undefined,
 		};
 		this.applyMouseSelection(this.mouseSelection, position, data.revealType);
 	}
@@ -319,7 +318,7 @@ export class ViewController extends Disposable {
 		}
 		const selection = selectionForMouseTarget(state.kind, this.viewport.textModel, state.anchorRange, position, this.currentWordPattern);
 		this.selectionController.setSelections(state.baseSelections
-			? CursorMoveCommands.combinePointerSelection(state.baseSelections, selection, state.toggleCandidateIndex)
+			? combinePointerSelection(state.baseSelections, selection, state.toggleCandidateIndex)
 			: [selection]);
 		this.revealMousePosition(position, revealType);
 	}
@@ -512,6 +511,42 @@ export class ViewController extends Disposable {
 		this.userInputEvents.emitMouseWheel(event);
 	}
 
+}
+
+function findPointerToggleCandidate(selections: readonly Selection[], selection: Selection): number | undefined {
+	const index = selections.findIndex(candidate => selectionsHaveSameRange(candidate, selection));
+	return index < 0 ? undefined : index;
+}
+
+function combinePointerSelection(selections: readonly Selection[], active: Selection, toggleIndex: number | undefined): readonly Selection[] {
+	if (toggleIndex !== undefined && (!Number.isSafeInteger(toggleIndex) || toggleIndex < 0 || toggleIndex >= selections.length)) {
+		throw new RangeError('Pointer toggle candidate is outside the selection set');
+	}
+	if (toggleIndex !== undefined && selectionsHaveSameRange(selections[toggleIndex]!, active)) {
+		return selections.length === 1 ? selections : Object.freeze(selections.filter((_, index) => index !== toggleIndex));
+	}
+	const retained = toggleIndex === undefined ? [...selections] : selections.filter((_, index) => index !== toggleIndex);
+	const duplicateIndex = retained.findIndex(selection => selectionsHaveSameRange(selection, active));
+	if (duplicateIndex >= 0) {
+		return Object.freeze([retained[duplicateIndex]!, ...retained.slice(0, duplicateIndex), ...retained.slice(duplicateIndex + 1)]);
+	}
+	return Object.freeze([active, ...retained.filter(selection => !selectionRangesOverlap(selection, active))]);
+}
+
+function selectionsHaveSameRange(left: Selection, right: Selection): boolean {
+	return left.getStartPosition().equals(right.getStartPosition()) && left.getEndPosition().equals(right.getEndPosition());
+}
+
+function selectionRangesOverlap(left: Selection, right: Selection): boolean {
+	if (left.isEmpty()) return pointOverlapsSelection(left.getPosition(), right);
+	if (right.isEmpty()) return pointOverlapsSelection(right.getPosition(), left);
+	return left.getStartPosition().isBefore(right.getEndPosition()) && right.getStartPosition().isBefore(left.getEndPosition());
+}
+
+function pointOverlapsSelection(point: Position, selection: Selection): boolean {
+	return selection.isEmpty()
+		? point.equals(selection.getPosition())
+		: !point.isBefore(selection.getStartPosition()) && point.isBefore(selection.getEndPosition());
 }
 
 function selectionForMouseTarget(kind: MouseSelectionKind, model: TextModel, anchorRange: Range, position: Position, wordPattern: RegExp | undefined): Selection {
@@ -744,64 +779,62 @@ export class KeyboardNavigationController extends Disposable {
 				},
 			)
 			: undefined;
-		const currentStates = this.viewModel.getCursorStates().map(state => state.modelState);
-		const sourceStates = this.modelNavigationStates?.length === currentStates.length && this.modelNavigationStates.every((state, index) => state.selection.equalsSelection(currentStates[index]!.selection))
-			? this.modelNavigationStates
+		const currentStates = this.viewModel.getCursorStates();
+		const sourceStates = this.modelNavigationStates?.length === currentStates.length
+			&& this.modelNavigationStates.every((state, index) => state.selection.equalsSelection(currentStates[index]!.modelState.selection))
+			? currentStates.map((state, index) => new CursorState(this.modelNavigationStates![index]!, state.viewState))
 			: currentStates;
-		const movedStates = visualResult ? undefined : sourceStates.map(state => moveModelCursor(
-			this.viewModel.cursorConfig,
-			this.viewport.textModel,
-			state,
-			navigation,
-			pageLineCount,
-			this.wordPattern?.(),
-		));
+		const movedStates = visualResult ? undefined : moveCursorStates(
+			this.viewModel, sourceStates, navigation, pageLineCount, this.wordPattern?.(),
+		);
 		const modelStates = visualResult
 			? visualResult.selections.map(selection => CursorState.fromModelSelection(selection))
-			: movedStates!.map(CursorState.fromModelState);
+			: movedStates!;
 		this.applyingNavigation = true;
 		try {
 			this.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, modelStates);
 		} finally {
 			this.applyingNavigation = false;
 		}
-		this.modelNavigationStates = movedStates;
+		this.modelNavigationStates = movedStates?.every(state => state.modelState !== null)
+			? movedStates.map(state => state.modelState!)
+			: undefined;
 		this.preferredVisualHorizontalOffsets = visualResult?.preferredHorizontalOffsets;
 		this.viewport.revealPosition(this.viewModel.getCursorStates()[0]!.modelState.position);
 	}
 }
 
-function moveModelCursor(config: IViewModel['cursorConfig'], model: TextModel, cursor: SingleCursorState, navigation: KeyboardNavigationCommand, pageLineCount: number, wordPattern: RegExp | undefined): SingleCursorState {
+function moveCursorStates(viewModel: IViewModel, cursors: CursorState[], navigation: KeyboardNavigationCommand, pageLineCount: number, wordPattern: RegExp | undefined) {
 	const inSelectionMode = navigation.mode === EditorCursorNavigationMode.Extend;
 	switch (navigation.command) {
 		case EditorCursorNavigationCommand.CharacterLeft:
-			return MoveOperations.moveLeft(config, model, cursor, inSelectionMode, 1);
+			return CursorMoveCommands.simpleMove(viewModel, cursors, CursorMove.Direction.Left, inSelectionMode, 1, CursorMove.Unit.Character)!;
 		case EditorCursorNavigationCommand.CharacterRight:
-			return MoveOperations.moveRight(config, model, cursor, inSelectionMode, 1);
+			return CursorMoveCommands.simpleMove(viewModel, cursors, CursorMove.Direction.Right, inSelectionMode, 1, CursorMove.Unit.Character)!;
 		case EditorCursorNavigationCommand.LineUp:
-			return MoveOperations.moveUp(config, model, cursor, inSelectionMode, 1);
+			return CursorMoveCommands.simpleMove(viewModel, cursors, CursorMove.Direction.Up, inSelectionMode, 1, CursorMove.Unit.Line)!;
 		case EditorCursorNavigationCommand.LineDown:
-			return MoveOperations.moveDown(config, model, cursor, inSelectionMode, 1);
+			return CursorMoveCommands.simpleMove(viewModel, cursors, CursorMove.Direction.Down, inSelectionMode, 1, CursorMove.Unit.Line)!;
 		case EditorCursorNavigationCommand.PageUp:
-			return MoveOperations.moveUp(config, model, cursor, inSelectionMode, pageLineCount);
+			return CursorMoveCommands.simpleMove(viewModel, cursors, CursorMove.Direction.Up, inSelectionMode, pageLineCount, CursorMove.Unit.Line)!;
 		case EditorCursorNavigationCommand.PageDown:
-			return MoveOperations.moveDown(config, model, cursor, inSelectionMode, pageLineCount);
+			return CursorMoveCommands.simpleMove(viewModel, cursors, CursorMove.Direction.Down, inSelectionMode, pageLineCount, CursorMove.Unit.Line)!;
 		case EditorCursorNavigationCommand.LineStart:
-			return MoveOperations.moveToBeginningOfLine(config, model, cursor, inSelectionMode);
+			return CursorMoveCommands.moveToBeginningOfLine(viewModel, cursors, inSelectionMode);
 		case EditorCursorNavigationCommand.LineEnd:
-			return MoveOperations.moveToEndOfLine(config, model, cursor, inSelectionMode, false);
+			return CursorMoveCommands.moveToEndOfLine(viewModel, cursors, inSelectionMode, false);
 		case EditorCursorNavigationCommand.DocumentStart:
-			return MoveOperations.moveToBeginningOfBuffer(config, model, cursor, inSelectionMode);
+			return CursorMoveCommands.moveToBeginningOfBuffer(viewModel, cursors, inSelectionMode);
 		case EditorCursorNavigationCommand.DocumentEnd:
-			return MoveOperations.moveToEndOfBuffer(config, model, cursor, inSelectionMode);
+			return CursorMoveCommands.moveToEndOfBuffer(viewModel, cursors, inSelectionMode);
 		case EditorCursorNavigationCommand.WordLeft:
-			return moveModelCursorByWord(model, cursor, inSelectionMode, 'left', wordPattern);
+			return cursors.map(cursor => CursorState.fromModelState(moveModelCursorByWord(viewModel.model, cursor.modelState, inSelectionMode, 'left', wordPattern)));
 		case EditorCursorNavigationCommand.WordRight:
-			return moveModelCursorByWord(model, cursor, inSelectionMode, 'right', wordPattern);
+			return cursors.map(cursor => CursorState.fromModelState(moveModelCursorByWord(viewModel.model, cursor.modelState, inSelectionMode, 'right', wordPattern)));
 	}
 }
 
-function moveModelCursorByWord(model: TextModel, cursor: SingleCursorState, inSelectionMode: boolean, direction: 'left' | 'right', wordPattern: RegExp | undefined): SingleCursorState {
+function moveModelCursorByWord(model: IViewModel['model'], cursor: SingleCursorState, inSelectionMode: boolean, direction: 'left' | 'right', wordPattern: RegExp | undefined): SingleCursorState {
 	if (cursor.hasSelection() && !inSelectionMode) {
 		const edge = direction === 'left' ? cursor.selection.getStartPosition() : cursor.selection.getEndPosition();
 		return cursor.move(false, edge.lineNumber, edge.column, 0);
@@ -810,7 +843,7 @@ function moveModelCursorByWord(model: TextModel, cursor: SingleCursorState, inSe
 	return cursor.move(inSelectionMode, target.lineNumber, target.column, 0);
 }
 
-function wordNavigationPosition(model: TextModel, position: Position, direction: 'left' | 'right', wordPattern: RegExp | undefined): Position {
+function wordNavigationPosition(model: IViewModel['model'], position: Position, direction: 'left' | 'right', wordPattern: RegExp | undefined): Position {
 	if (direction === 'left') {
 		for (let lineNumber = position.lineNumber; lineNumber >= 1; lineNumber -= 1) {
 			const limit = lineNumber === position.lineNumber ? position.column - 1 : Number.POSITIVE_INFINITY;

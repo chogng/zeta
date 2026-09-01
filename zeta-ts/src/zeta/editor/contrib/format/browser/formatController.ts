@@ -44,7 +44,7 @@ export class FormatController extends Disposable {
 registerTextEditorCapabilityContribution({ id: "editor.contrib.format", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new FormatService(context.model, context.languageFeaturesService.formattingProvider, context.options.input.resource));
-	const controller = context.register(new FormatController(context.view.element, context.viewport, context.viewModel, service, context.editorWorker, context.languageId, {
+	const controller = context.register(new FormatController(context.view.element, context.viewport, context.selectionController, service, context.editorWorker, context.languageId, {
 		formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
 		onError: context.onLanguageError,
 	}));

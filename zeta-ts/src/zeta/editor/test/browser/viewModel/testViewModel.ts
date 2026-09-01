@@ -21,6 +21,8 @@ export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'the
 /** Builds the same configuration-model-view chain used by an editor widget. */
 export class TestView extends View {
 	private readonly setupStore: DisposableStore;
+	readonly testViewModel: ViewModel;
+	readonly testSelectionController: CursorsController;
 
 	constructor(options: TestViewOptions) {
 		const setup = createViewModel(options);
@@ -33,6 +35,8 @@ export class TestView extends View {
 			selectionController: setup.selectionController,
 		});
 		this.setupStore = setup.store;
+		this.testViewModel = setup.viewModel;
+		this.testSelectionController = setup.selectionController;
 	}
 
 	protected override disposeCore(): void {

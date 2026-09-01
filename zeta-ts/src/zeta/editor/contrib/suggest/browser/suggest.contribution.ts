@@ -22,7 +22,7 @@ registerTextEditorCapabilityContribution({
 			resource: context.options.input.resource,
 			...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
 		}));
-		const session = context.register(new LanguageCompletionSessionController(completions.results, context.viewModel, {
+		const session = context.register(new LanguageCompletionSessionController(completions.results, context.selectionController, {
 			resolver: completions,
 			onResolveError: context.onLanguageError,
 			onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),
@@ -36,7 +36,7 @@ registerTextEditorCapabilityContribution({
 		if (!state) return;
 		context.register(new SuggestController(
 			context.view,
-			context.viewModel,
+			context.selectionController,
 			state.service,
 			state.session,
 			context.languageId,

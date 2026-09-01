@@ -19,22 +19,22 @@ export class CursorUndoRedoController extends Disposable implements IEditorContr
 		super();
 		this._register(addDisposableListener(context.view.element, 'keydown', event => {
 			if (!isCursorUndoKey(event)) return;
-			if (!this.context.viewModel.undoCursorOperation()) return;
+			if (!this.context.selectionController.undoCursorOperation()) return;
 			stopEvent(event);
 			this.reveal();
 		}));
 	}
 
 	cursorUndo(): void {
-		if (this.context.viewModel.undoCursorOperation()) this.reveal();
+		if (this.context.selectionController.undoCursorOperation()) this.reveal();
 	}
 
 	cursorRedo(): void {
-		if (this.context.viewModel.redoCursorOperation()) this.reveal();
+		if (this.context.selectionController.redoCursorOperation()) this.reveal();
 	}
 
 	private reveal(): void {
-		this.context.viewport.revealPosition(this.context.viewModel.selections[0]!.getPosition());
+		this.context.viewport.revealPosition(this.context.selectionController.selections[0]!.getPosition());
 	}
 }
 

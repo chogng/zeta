@@ -8,5 +8,5 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.gotoSymbol", inst
 	if (context.kind !== "text") return;
 	const symbols = new DocumentSymbolService(context.model, context.languageFeaturesService.documentSymbolProvider, { resource: context.options.input.resource });
 	const service = context.register(new GotoSymbolService(symbols));
-	context.register(new GotoSymbolController(context.view.element, context.viewport, context.viewModel, service, context.languageId, context.onLanguageError));
+	context.register(new GotoSymbolController(context.view.element, context.viewport, context.selectionController, service, context.languageId, context.onLanguageError));
 } });

@@ -36,12 +36,13 @@ test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
-	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	const selections = viewport.testSelectionController;
+	selections.setSelections([Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
-	using controller = new MultiCursorController(input, viewport, selections, { operatingSystem: OperatingSystem.Windows });
+	using controller = new MultiCursorController(input, viewport, viewport.testViewModel, selections, { operatingSystem: OperatingSystem.Windows });
 
 	const addBelow = keydown(dom.window, "ArrowDown", { ctrlKey: true, altKey: true });
 	input.dispatchEvent(addBelow);
@@ -58,15 +59,16 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo\nthree");
-	using selections = new CursorsController(model, primaryFirst([
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	const selections = viewport.testSelectionController;
+	selections.setSelections(primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((2) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((2) + 1, (0) + 1), new Position((3) + 1, (2) + 1)),
 	], 1));
-	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 80 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
-	using controller = new MultiCursorController(input, viewport, selections);
+	using controller = new MultiCursorController(input, viewport, viewport.testViewModel, selections);
 
 	const addEnds = keydown(dom.window, "i", { shiftKey: true, altKey: true });
 	input.dispatchEvent(addEnds);
@@ -116,8 +118,8 @@ test("Multi-cursor controller rejects cross-model wiring", () => {
 	using otherSelections = new CursorsController(other, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
-	assert.throws(() => new MultiCursorController(input, viewport, otherSelections), /must share one text model/);
-	assert.throws(() => new MultiCursorController(input, viewport, selections, {
+	assert.throws(() => new MultiCursorController(input, viewport, viewport.testViewModel, otherSelections), /must share one text model/);
+	assert.throws(() => new MultiCursorController(input, viewport, viewport.testViewModel, selections, {
 		operatingSystem: "solar" as OperatingSystem,
 	}), /operating system/);
 

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
-import { CursorsController } from "../../common/cursor/cursor.js";
 import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -32,17 +31,17 @@ test("core commands select all", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
 	});
+	const selections = viewport.testSelectionController;
+	selections.setSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	viewport.layout({ width: 400, height: 100 });
 	const input = viewport.controller;
-	using commands = installCoreTextEditorCommands(input.element, viewport, selections);
+	using commands = installCoreTextEditorCommands(input.element, viewport, viewport.testViewModel);
 
 	const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });
 	input.element.dispatchEvent(selectAll);
@@ -74,17 +73,15 @@ test("core commands reject dependencies from different text models", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	using model = new TextModel("one");
 	using otherModel = new TextModel("two");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
-	using otherSelections = new CursorsController(otherModel, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({
 		container: dom.window.document.querySelector<HTMLElement>("main")!,
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
 	});
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
-	assert.throws(() => installCoreTextEditorCommands(input, viewport, otherSelections), /must share one text model/);
+	using otherViewport = new View({ container: dom.window.document.createElement('div'), model: otherModel, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	assert.throws(() => installCoreTextEditorCommands(input, viewport, otherViewport.testViewModel), /must share one text model/);
 	dom.window.close();
 });
 

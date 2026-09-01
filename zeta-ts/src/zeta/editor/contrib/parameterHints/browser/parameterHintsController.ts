@@ -102,5 +102,5 @@ export class ParameterHintsController extends Disposable {
 registerTextEditorCapabilityContribution({ id: "editor.contrib.parameterHints", install: context => {
 	if (context.kind !== "text" || !EditorOptions.parameterHints.validate(context.options.parameterHints).enabled) return;
 	const service = context.register(new ParameterHintsService(context.model, context.languageFeaturesService.parameterHintsProvider, context.options.input.resource));
-	context.register(new ParameterHintsController(context.view.element, context.viewport, context.viewModel, service, context.languageId, context.onLanguageError));
+	context.register(new ParameterHintsController(context.view.element, context.viewport, context.selectionController, service, context.languageId, context.onLanguageError));
 } });

@@ -5,9 +5,24 @@ import { Position } from "../core/position.js";
 import { Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
 import { getTextWordSegments } from "../core/textSegmentation.js";
+import { type CursorConfiguration, type ICursorSimpleModel, SelectionStartKind, SingleCursorState } from '../cursorCommon.js';
 
 /** Deletes each selection or the preceding editor word segment. */
 export class WordOperations {
+	/** Starts or extends the word selection that pointer movement owns. */
+	public static word(config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean, position: Position): SingleCursorState {
+		const target = wordSelectionAt(model, position, config.wordSeparators);
+		if (!inSelectionMode) {
+			return new SingleCursorState(target.range, SelectionStartKind.Word, 0, target.range.getEndPosition(), 0);
+		}
+		const anchor = cursor.selectionStart;
+		if (anchor.containsPosition(position)) return cursor.move(true, anchor.endLineNumber, anchor.endColumn, 0);
+		const targetRange = target.wordLike ? target.range : Range.fromPositions(position);
+		let active = position.isBeforeOrEqual(anchor.getStartPosition()) ? targetRange.getStartPosition() : targetRange.getEndPosition();
+		if (anchor.containsPosition(active)) active = position.isBeforeOrEqual(anchor.getStartPosition()) ? anchor.getEndPosition() : anchor.getStartPosition();
+		return new SingleCursorState(anchor, cursor.selectionStartKind, cursor.selectionStartLeftoverVisibleColumns, active, 0);
+	}
+
 	public static deleteWordLeft(model: TextModel, selections: readonly Selection[], wordPattern?: RegExp): EditorEditCommand {
 		return createDeleteWordCommand(model, selections, 'left', EditorCommandHistoryMode.CoalesceBackspace, wordPattern);
 	}
@@ -33,6 +48,30 @@ export class WordOperations {
 		if (wordPattern) return Object.freeze(wordPatternRanges(text, wordPattern));
 		return Object.freeze(getTextWordSegments(text).flatMap(segment => segment.wordLike ? [{ start: segment.start, end: segment.end }] : []));
 	}
+}
+
+function wordSelectionAt(model: ICursorSimpleModel, position: Position, wordSeparators: string): { readonly range: Range; readonly wordLike: boolean } {
+	const line = model.getLineContent(position.lineNumber);
+	if (line.length === 0) return { range: Range.fromPositions(position), wordLike: false };
+	const probe = Math.min(line.length - 1, Math.max(0, position.column - 1));
+	const segments = getTextWordSegments(line);
+	const previousWord = segments.find(candidate => candidate.wordLike && candidate.end === position.column - 1);
+	const segment = previousWord ?? segments.find(candidate => probe >= candidate.start && probe < candidate.end);
+	if (!segment) return { range: Range.fromPositions(position), wordLike: false };
+	let start = segment.start;
+	let end = segment.end;
+	let wordLike = segment.wordLike;
+	if (wordLike && wordSeparators.includes(line[probe]!)) {
+		wordLike = false;
+		start = probe;
+		end = probe + 1;
+	} else if (wordLike) {
+		start = probe;
+		end = probe + 1;
+		while (start > segment.start && !wordSeparators.includes(line[start - 1]!)) start -= 1;
+		while (end < segment.end && !wordSeparators.includes(line[end]!)) end += 1;
+	}
+	return { range: new Range(position.lineNumber, start + 1, position.lineNumber, end + 1), wordLike };
 }
 
 function createDeleteWordCommand(model: TextModel, selections: readonly Selection[], direction: 'left' | 'right', historyMode: EditorCommandHistoryMode, wordPattern: RegExp | undefined): EditorEditCommand {

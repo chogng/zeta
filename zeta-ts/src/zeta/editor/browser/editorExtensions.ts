@@ -42,6 +42,7 @@ import { type LanguageLexicalContextSource } from '../common/languages/languageL
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
 import { type IVersionedEditorWorkerClient } from './services/editorWorkerService.js';
 import { type CursorsController } from '../common/cursor/cursor.js';
+import { type IViewModel } from '../common/viewModel.js';
 
 export type ServicesAccessor = InstantiationServicesAccessor;
 export type EditorContributionCtor = new (editor: ICodeEditor, ...services: any[]) => IEditorContribution;
@@ -535,7 +536,8 @@ interface SharedTextContext {
 }
 
 export interface TextEditorContributionConfigurationContext extends SharedTextContext {
-	readonly viewModel: CursorsController;
+	readonly viewModel: IViewModel;
+	readonly selectionController: CursorsController;
 	readonly resolvedSemanticTokensService: IResolvedSemanticTokensService;
 	readonly provideCapability: <T>(capability: EditorCapability<T>, value: T) => void;
 	readonly addDecorationSource: (source: DecorationSource) => void;
@@ -550,7 +552,8 @@ export interface TextEditorContributionContext extends SharedTextContext {
 	readonly instantiationService: IInstantiationService;
 	readonly view: ViewController;
 	readonly viewport: View;
-	readonly viewModel: CursorsController;
+	readonly viewModel: IViewModel;
+	readonly selectionController: CursorsController;
 	readonly onDidExecuteCommand: Event<EditorCommandEvent>;
 	readonly executeCommand: EditorCommandExecutor;
 	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;

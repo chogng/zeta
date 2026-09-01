@@ -1,8 +1,9 @@
 import { addDisposableListener, stopEvent } from "../../base/browser/dom.js";
 import { type IDisposable } from "../../base/common/lifecycle.js";
-import { Selection } from "../common/core/selection.js";
 import { type TextModel } from "../common/model/textModel.js";
-import { type CursorsController } from '../common/cursor/cursor.js';
+import { CursorMoveCommands } from '../common/cursor/cursorMoveCommands.js';
+import { CursorChangeReason } from '../common/cursorEvents.js';
+import { type IViewModel } from '../common/viewModel.js';
 import { registerTextEditorCapabilityContribution } from "./editorExtensions.js";
 import { type View } from "./view.js";
 
@@ -19,26 +20,27 @@ export const enum NavigationCommandRevealType {
 export interface CoreTextEditorCommandContext {
 	readonly model: TextModel;
 	readonly viewport: View;
-	readonly viewModel: CursorsController;
+	readonly viewModel: IViewModel;
 }
 
 /** Executes the built-in text-editor Select All command. */
 export function selectAll(context: CoreTextEditorCommandContext): void {
-	if (context.model !== context.viewport.textModel || context.model !== context.viewModel.textModel) {
+	if (context.model !== context.viewport.textModel || context.model !== context.viewModel.model) {
 		throw new TypeError("Editor core command dependencies must share one text model");
 	}
-	const end = context.model.positionAt(context.model.createVersionedSnapshot().length);
-	context.viewModel.setSelections([Selection.fromPositions(context.model.positionAt(0), end)]);
-	context.viewport.revealPosition(end);
+	context.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, [
+		CursorMoveCommands.selectAll(context.viewModel, context.viewModel.getPrimaryCursorState()),
+	]);
+	context.viewport.revealPosition(context.viewModel.getPrimaryCursorState().modelState.position);
 }
 
 /** Installs text-editor core keybindings for one editor lifetime. */
 export function installCoreTextEditorCommands(
 	input: HTMLElement,
 	viewport: View,
-	viewModel: CursorsController,
+	viewModel: IViewModel,
 ): IDisposable {
-	if (viewport.textModel !== viewModel.textModel) {
+	if (viewport.textModel !== viewModel.model) {
 		throw new TypeError("Editor core command dependencies must share one text model");
 	}
 	return addDisposableListener(input, "keydown", event => {

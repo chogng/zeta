@@ -413,12 +413,7 @@ other 分类，避免三份 fallback 漂移。
 选区折叠与扩展也由同一状态转换处理。词移动由 `WordOperations` 的词段能力决定，
 不再通过 `MoveOperations.navigate` 混入一个额外总入口。
 
-`KeyboardNavigationController` 只负责 browser routing，并把每个规范化命令
-直接分派到上述标准移动 API。Windows/Linux
-使用 Ctrl+Arrow 词跳转和 Ctrl+Home/End 文档跳转；macOS 使用
-Option+Arrow 词跳转、Command+Left/Right 行边界和
-Command+Up/Down 文档边界。Shift 统一选择 `Extend`。未知 chord、
-AltGraph、composition keydown 和已被上层处理的事件不会被消费。
+`KeyboardNavigationController` 只负责浏览器按键路由，并把字符、行、页、行边界和文档边界命令通过 `CursorMoveCommands` 分派到模型或折行视图状态；词跳转继续使用 `WordOperations`。Windows/Linux 使用 Ctrl+Arrow 词跳转和 Ctrl+Home/End 文档跳转；macOS 使用 Option+Arrow 词跳转、Command+Left/Right 行边界和 Command+Up/Down 文档边界。Shift 统一选择 `Extend`。未知按键组合、AltGraph、组合输入按键和已被上层处理的事件不会被消费。
 
 Page 命令的行数来自当前固定行高 viewport。成功导航后
 `EditorViewport.revealPosition` 同步调整横纵 scroll，使 primary active

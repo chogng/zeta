@@ -91,7 +91,7 @@ export class MessageController extends Disposable implements IEditorContribution
 	}
 
 	private listenForDismissal(position: IPosition, widget: MessageWidget): void {
-		this.listeners.add(this.context.viewModel.onDidChange(() => this.closeMessage()));
+		this.listeners.add(this.context.selectionController.onDidChange(() => this.closeMessage()));
 		this.listeners.add(this.context.model.onDidChangeContent(() => this.closeMessage()));
 		this.listeners.add(addDisposableListener(widget.getDomNode(), 'mouseenter', () => { this.mouseOver = true; }));
 		this.listeners.add(addDisposableListener(widget.getDomNode(), 'mouseleave', () => { this.mouseOver = false; }));

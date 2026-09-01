@@ -13,6 +13,6 @@ registerTextEditorCapabilityContribution({
 	},
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new FindController(context.view.element, context.viewport, context.viewModel, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
+		context.register(new FindController(context.view.element, context.viewport, context.selectionController, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
 	},
 });

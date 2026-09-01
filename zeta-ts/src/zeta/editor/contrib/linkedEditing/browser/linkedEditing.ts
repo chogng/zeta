@@ -181,7 +181,7 @@ registerTextEditorCapabilityContribution({
 			context.view,
 			context.view.element,
 			context.viewport,
-			context.viewModel,
+			context.selectionController,
 			context.languageFeaturesService.linkedEditingRangeProvider,
 			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
 			context.onLanguageError,
