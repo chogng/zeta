@@ -2,6 +2,18 @@
 
 Use this reference only for UX data interpreted by the TypeScript UI under `zeta-ts`.
 
+## Boundary with VS Code API alignment
+
+This reference classifies Zeta-specific UX data and decides its semantic owner, artifact kind, and legitimate scopes. It does not independently design the TypeScript configuration infrastructure.
+
+For TypeScript configuration files and APIs that correspond to VS Code, full API alignment owns their paths, public contracts, registration, target resolution, precedence, syntax-aware editing, lifecycle, migration plumbing, and observable behavior. Once that alignment is complete, those mechanics must follow from the aligned configuration system rather than from parallel UX-specific persistence code.
+
+Until full alignment is complete, treat the TypeScript rules below as the target contract, not as evidence that the current implementation already satisfies it. Do not preserve a legacy wrapper, add a fallback path, or introduce a second configuration owner to compensate for an incomplete alignment.
+
+When a setting has a VS Code counterpart, use the counterpart's registered contract, including its scope. For a Zeta-specific setting, this skill still decides whether it is configuration at all and which scopes its meaning permits; express that decision through the aligned configuration registry.
+
+Delete this temporary section after a completed alignment audit verifies the configuration paths, public APIs, owners, lifecycle, call paths, and observable behavior. At that point, also remove any rules below that merely restate the aligned TypeScript configuration mechanics; retain only Zeta-specific data classification, ownership, artifact-selection, and scope decisions.
+
 ## Artifact routing
 
 | Data | Canonical target |
