@@ -5,6 +5,7 @@ import { type Range } from '../../../common/core/range.js';
 import { USUAL_WORD_SEPARATORS } from '../../../common/core/wordHelper.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
+import { type TextModel } from '../../../common/model/textModel.js';
 
 import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
@@ -28,6 +29,7 @@ export class SelectionHighlighter extends Disposable {
 	private readonly occurrenceHighlights: boolean;
 	private readonly languageId: string;
 	private readonly languageFeaturesService: ILanguageFeaturesService;
+	private readonly model: TextModel;
 	private lastKey = '';
 
 	constructor(
@@ -44,15 +46,16 @@ export class SelectionHighlighter extends Disposable {
 		this.occurrenceHighlights = options.occurrenceHighlights ?? true;
 		this.languageId = options.languageId;
 		this.languageFeaturesService = options.languageFeaturesService;
+		this.model = view.viewport.textModel;
 		this._register(selections.onDidChange(() => this.update()));
-		this._register(selections.textModel.onDidChangeContent(() => this.update()));
+		this._register(this.model.onDidChangeContent(() => this.update()));
 		this.update();
 	}
 
 	private update(): void {
 		const ranges = this.findRanges();
-		const hasSemanticHighlights = this.occurrenceHighlights && this.languageFeaturesService.documentHighlightProvider.has(this.selections.textModel);
-		const key = `${hasSemanticHighlights}:${ranges.map(range => `${this.selections.textModel.offsetAt(range.getStartPosition())}-${this.selections.textModel.offsetAt(range.getEndPosition())}`).join(',')}`;
+		const hasSemanticHighlights = this.occurrenceHighlights && this.languageFeaturesService.documentHighlightProvider.has(this.model);
+		const key = `${hasSemanticHighlights}:${ranges.map(range => `${this.model.offsetAt(range.getStartPosition())}-${this.model.offsetAt(range.getEndPosition())}`).join(',')}`;
 		if (key === this.lastKey) return;
 		this.lastKey = key;
 		this.decorations.replaceAll(ranges.map(range => ({
@@ -64,25 +67,25 @@ export class SelectionHighlighter extends Disposable {
 
 	private findRanges(): readonly Range[] {
 		if (!this.enabled) return Object.freeze([]);
-		const selected = this.selections.selections;
+		const selected = this.selections.getSelections();
 		if (selected.some(selection => selection.isEmpty())) return Object.freeze([]);
 		const source = selected[0]!;
 		if (!this.multiline && source.getStartPosition().lineNumber !== source.getEndPosition().lineNumber) return Object.freeze([]);
-		const text = this.selections.textModel.getTextInRange(source);
+		const text = this.model.getTextInRange(source);
 		if (!text || /^\s+$/u.test(text) || (this.maxLength > 0 && text.length > this.maxLength)) return Object.freeze([]);
-		if (!selectionsContainSameText(this.selections, selected, text)) return Object.freeze([]);
-		const word = this.selections.textModel.getWordAtPosition(source.getStartPosition());
+		if (!selectionsContainSameText(this.model, selected, text)) return Object.freeze([]);
+		const word = this.model.getWordAtPosition(source.getStartPosition());
 		const wholeWord = word !== null && source.startLineNumber === source.endLineNumber && source.startColumn === word.startColumn && source.endColumn === word.endColumn;
-		const matches = this.selections.textModel.findMatches(text, true, false, true, wholeWord ? USUAL_WORD_SEPARATORS : null, false, MAX_SELECTION_HIGHLIGHTS);
+		const matches = this.selections.context.model.findMatches(text, true, false, true, wholeWord ? USUAL_WORD_SEPARATORS : null, false, MAX_SELECTION_HIGHLIGHTS);
 		return Object.freeze(matches.flatMap(match => {
-			if (selected.some(selection => rangesIntersect(this.selections, match.range, selection))) return [];
+			if (selected.some(selection => rangesIntersect(this.model, match.range, selection))) return [];
 			return [match.range];
 		}));
 	}
 }
 
 function validateSelectionHighlighter(view: ViewController, selections: CursorsController, decorations: TextDecorationCollection<boolean>, options: SelectionHighlighterOptions): void {
-	if (view.viewport.textModel !== selections.textModel || selections.textModel !== decorations.textModel) throw new TypeError('Selection highlighter dependencies must share one text model');
+	if (view.viewport.textModel !== selections.context.model || selections.context.model !== decorations.textModel) throw new TypeError('Selection highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.languageId || !options.languageFeaturesService) throw new TypeError('Selection highlighter requires language services');
 	if (options.enabled !== undefined && typeof options.enabled !== 'boolean') throw new TypeError('Selection highlighter enabled option must be boolean');
 	if (options.multiline !== undefined && typeof options.multiline !== 'boolean') throw new TypeError('Selection highlighter multiline option must be boolean');
@@ -90,14 +93,14 @@ function validateSelectionHighlighter(view: ViewController, selections: CursorsC
 	if (options.maxLength !== undefined && (!Number.isSafeInteger(options.maxLength) || options.maxLength < 0)) throw new RangeError('Selection highlighter maximum length must be a non-negative integer');
 }
 
-function selectionsContainSameText(controller: CursorsController, selections: readonly Selection[], text: string): boolean {
-	return selections.every(selection => controller.textModel.getTextInRange(selection) === text);
+function selectionsContainSameText(model: TextModel, selections: readonly Selection[], text: string): boolean {
+	return selections.every(selection => model.getTextInRange(selection) === text);
 }
 
-function rangesIntersect(controller: CursorsController, left: Range, right: Range): boolean {
-	const leftStart = controller.textModel.offsetAt(left.getStartPosition());
-	const leftEnd = controller.textModel.offsetAt(left.getEndPosition());
-	const rightStart = controller.textModel.offsetAt(right.getStartPosition());
-	const rightEnd = controller.textModel.offsetAt(right.getEndPosition());
+function rangesIntersect(model: TextModel, left: Range, right: Range): boolean {
+	const leftStart = model.offsetAt(left.getStartPosition());
+	const leftEnd = model.offsetAt(left.getEndPosition());
+	const rightStart = model.offsetAt(right.getStartPosition());
+	const rightEnd = model.offsetAt(right.getEndPosition());
 	return leftStart < rightEnd && rightStart < leftEnd;
 }

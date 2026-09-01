@@ -98,7 +98,7 @@ function createViewModel(options: TestViewOptions): {
 			viewModel.setCursorStates(
 				'test',
 				CursorChangeReason.Explicit,
-				CursorState.fromModelSelections(options.selectionController!.selections),
+				CursorState.fromModelSelections(options.selectionController!.getSelections()),
 			);
 		};
 		synchronizeSelections();

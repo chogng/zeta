@@ -21,7 +21,7 @@ export class RenameController extends Disposable {
 
 	constructor(private readonly editorInput: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error), private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation()) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza rename dependencies must share one text model");
+		if (viewport.textModel !== selections.context.model) throw new TypeError("Stanza rename dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "stanza-editor-rename";
@@ -48,7 +48,7 @@ export class RenameController extends Disposable {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
 		try {
-			const active = this.selections.selections[0]!.getPosition();
+			const active = this.selections.getSelections()[0]!.getPosition();
 			const preparation = await this.service.prepareRename(this.languageId, active, request.signal);
 			if (request.signal.aborted) return;
 			if (!preparation) {
@@ -88,7 +88,7 @@ export class RenameController extends Disposable {
 		}
 		const request = this.request = new AbortController();
 		try {
-			const active = this.selections.selections[0]!.getPosition();
+			const active = this.selections.getSelections()[0]!.getPosition();
 			const edit = await this.service.provideRenameEdits(this.languageId, active, newName, request.signal);
 			if (request.signal.aborted) return;
 			await this.executeCommand(RenameCommandId, async () => {
@@ -98,7 +98,7 @@ export class RenameController extends Disposable {
 				}
 				const documentEdit = edit.entries.find(candidate => candidate.kind === "textDocument" && candidate.resource.toString() === this.resource.toString());
 				if (edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource rename");
-				const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, documentEdit.edits);
+				const command = createEditorEditCommand(this.viewport.textModel, this.selections.getSelections(), documentEdit.edits);
 				if (command) this.selections.execute(command);
 			});
 			this.close();

@@ -114,9 +114,9 @@ test('Word highlighter obeys the off mode and navigates existing highlights', as
 	enabled.controller.restoreViewState(true);
 	await settleHighlights();
 	enabled.controller.moveNext();
-	assert.deepEqual(enabled.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (5) + 1)));
+	assert.deepEqual(enabled.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (5) + 1)));
 	enabled.controller.moveBack();
-	assert.deepEqual(enabled.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
+	assert.deepEqual(enabled.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
 });
 
 function createHarness(text: string, languages: TestLanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile'): EditorHarness {

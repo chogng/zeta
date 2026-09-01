@@ -51,7 +51,7 @@ export class ParameterHintsController extends Disposable {
 		this.request?.abort();
 		const request = this.request = new AbortController();
 		try {
-			const position = this.selections.selections[0]!.getPosition();
+			const position = this.selections.getSelections()[0]!.getPosition();
 			const hints = await this.service.provideParameterHints(this.languageId, position, context, request.signal);
 			if (request.signal.aborted) return;
 			if (!hints) { this.hide(); return; }
@@ -84,7 +84,7 @@ export class ParameterHintsController extends Disposable {
 
 	private position(): void {
 		if (this.element.hidden) return;
-		const position = this.selections.selections[0]!.getPosition();
+		const position = this.selections.getSelections()[0]!.getPosition();
 		const coordinates = this.viewport.getPositionContentCoordinates(position);
 		const scroll = this.viewport.viewportLayout.scrollPosition;
 		this.element.style.left = `${Math.max(8, coordinates.left - scroll.left)}px`;

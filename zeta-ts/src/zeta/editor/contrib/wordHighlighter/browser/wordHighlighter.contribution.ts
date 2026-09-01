@@ -78,7 +78,7 @@ class WordHighlighter extends Disposable {
 			this.coordinator.remove(this);
 		}));
 		this._register(selections.onDidChange(change => this.handleSelectionChange(change)));
-		this._register(selections.textModel.onDidChangeContent(() => this.handleModelChange()));
+		this._register(selections.context.model.onDidChangeContent(() => this.handleModelChange()));
 		this._register(view.editContext.onDidFocus(() => this.handleFocus(true)));
 		this._register(view.editContext.onDidBlur(() => this.handleFocus(false)));
 		this._register(view.onWillKeydown(event => this.handleKeydown(event)));
@@ -97,7 +97,7 @@ class WordHighlighter extends Disposable {
 	}
 
 	get textModel(): TextModel {
-		return this.selections.textModel;
+		return this.view.viewport.textModel;
 	}
 
 	get isFocused(): boolean {
@@ -204,8 +204,8 @@ class WordHighlighter extends Disposable {
 	}
 
 	private highlightPosition(): Position | undefined {
-		if (this.selections.selections.length !== 1) return undefined;
-		const selection = this.selections.selections[0]!;
+		if (this.selections.getSelections().length !== 1) return undefined;
+		const selection = this.selections.getSelections()[0]!;
 		if (!selectionFitsModel(this.textModel, selection) || selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber) return undefined;
 		const word = this.textModel.getWordAtPosition(selection.getStartPosition());
 		if (!word) return undefined;
@@ -229,7 +229,7 @@ class WordHighlighter extends Disposable {
 	private move(direction: 1 | -1): boolean {
 		const ranges = [...this.decorations.decorations].map(decoration => decoration.range).sort((left, right) => Position.compare(left.getStartPosition(), right.getStartPosition()));
 		if (ranges.length === 0) return false;
-		const activeOffset = this.textModel.offsetAt(this.selections.selections[0]!.getPosition());
+		const activeOffset = this.textModel.offsetAt(this.selections.getSelections()[0]!.getPosition());
 		const currentIndex = ranges.findIndex(range => this.textModel.offsetAt(range.getStartPosition()) <= activeOffset && this.textModel.offsetAt(range.getEndPosition()) >= activeOffset);
 		const nextIndex = direction === 1 ? (currentIndex + 1) % ranges.length : (currentIndex - 1 + ranges.length) % ranges.length;
 		const destination = ranges[nextIndex]!;
@@ -366,7 +366,7 @@ function acquireCoordinator(service: ILanguageFeaturesService, controller: WordH
 }
 
 function validateControllerDependencies(view: ViewController, selections: CursorsController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions): void {
-	if (view.viewport.textModel !== selections.textModel || selections.textModel !== decorations.textModel) throw new TypeError('Word highlighter dependencies must share one text model');
+	if (view.viewport.textModel !== selections.context.model || selections.context.model !== decorations.textModel) throw new TypeError('Word highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.resource || !options.languageId || !options.languageFeaturesService) throw new TypeError('Word highlighter requires resource and language services');
 	if (options.mode !== undefined && options.mode !== 'off' && options.mode !== 'singleFile' && options.mode !== 'multiFile') throw new TypeError('Word highlighter mode is invalid');
 	if (options.delay !== undefined && (!Number.isSafeInteger(options.delay) || options.delay < 0 || options.delay > 2_000)) throw new RangeError('Word highlighter delay must be an integer between 0 and 2000');

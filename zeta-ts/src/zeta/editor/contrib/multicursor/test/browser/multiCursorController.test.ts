@@ -47,7 +47,7 @@ test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common 
 	const addBelow = keydown(dom.window, "ArrowDown", { ctrlKey: true, altKey: true });
 	input.dispatchEvent(addBelow);
 	assert.equal(addBelow.defaultPrevented, true);
-	assert.deepEqual(selections.selections, [
+	assert.deepEqual(selections.getSelections(), [
 		Selection.fromPositions(new Position((1) + 1, (1) + 1)),
 		Selection.fromPositions(new Position((2) + 1, (1) + 1)),
 	]);
@@ -73,7 +73,7 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	const addEnds = keydown(dom.window, "i", { shiftKey: true, altKey: true });
 	input.dispatchEvent(addEnds);
 	assert.equal(addEnds.defaultPrevented, true);
-	assert.deepEqual(selections.selections, [
+	assert.deepEqual(selections.getSelections(), [
 		Selection.fromPositions(new Position((2) + 1, (3) + 1)),
 		Selection.fromPositions(new Position((3) + 1, (2) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
@@ -85,7 +85,7 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	const ignoredAddEnds = keydown(dom.window, "i", { shiftKey: true, altKey: true });
 	input.dispatchEvent(ignoredAddEnds);
 	assert.equal(ignoredAddEnds.defaultPrevented, false);
-	assert.equal(selections.selections, collapsed);
+	assert.deepEqual(selections.getSelections(), collapsed);
 
 	dom.window.close();
 });

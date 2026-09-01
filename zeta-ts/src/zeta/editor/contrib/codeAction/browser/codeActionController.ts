@@ -22,7 +22,7 @@ export class CodeActionController extends Disposable {
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor code action failed", error)) {
 		super();
-		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Stanza code action dependencies must share one text model");
+		if (viewport.textModel !== selections.context.model || diagnostics.textModel !== selections.context.model) throw new TypeError("Stanza code action dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "stanza-editor-code-action";
@@ -47,7 +47,7 @@ export class CodeActionController extends Disposable {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
 		try {
-			const range = this.selections.selections[0]!;
+			const range = this.selections.getSelections()[0]!;
 			const diagnostics = this.diagnostics.decorations.filter(decoration => Range.areIntersectingOrTouching(decoration.range, range)).map(decoration => decoration.metadata);
 			const actions = await this.service.provideCodeActions(this.languageId, range.isEmpty() ? Range.fromPositions(range.getStartPosition()) : range, diagnostics, undefined, request.signal);
 			if (request.signal.aborted || actions.length === 0) {
@@ -74,7 +74,7 @@ export class CodeActionController extends Disposable {
 			this.actionListeners.add(addDisposableListener(button, "click", () => void this.apply(index)));
 			return button;
 		}));
-		const coordinates = this.viewport.getPositionContentCoordinates(this.selections.selections[0]!.getStartPosition());
+		const coordinates = this.viewport.getPositionContentCoordinates(this.selections.getSelections()[0]!.getStartPosition());
 		this.element.style.left = `${Math.max(8, coordinates.left - this.viewport.viewportLayout.scrollPosition.left)}px`;
 		this.element.style.top = `${Math.max(8, coordinates.top - this.viewport.viewportLayout.scrollPosition.top + coordinates.height + 4)}px`;
 		this.element.hidden = false;
@@ -97,7 +97,7 @@ export class CodeActionController extends Disposable {
 			} else {
 				const documentEdit = resolved.edit.entries.find(edit => edit.kind === "textDocument" && edit.resource.toString() === this.resource.toString());
 				if (resolved.edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource code action");
-				const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, documentEdit.edits);
+				const command = createEditorEditCommand(this.viewport.textModel, this.selections.getSelections(), documentEdit.edits);
 				if (command) this.selections.execute(command);
 			}
 			this.close();

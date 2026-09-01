@@ -46,7 +46,7 @@ test("core commands select all", () => {
 	const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });
 	input.element.dispatchEvent(selectAll);
 	assert.equal(selectAll.defaultPrevented, true);
-	assert.deepEqual(selections.selections[0]!.getEndPosition(), new Position((2) + 1, (5) + 1));
+	assert.deepEqual(selections.getSelections()[0]!.getEndPosition(), new Position((2) + 1, (5) + 1));
 
 	dom.window.close();
 });
@@ -62,9 +62,9 @@ test("line selection remains an independent editor extension", () => {
 	const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
 	editor.view.element.dispatchEvent(first);
 	assert.equal(first.defaultPrevented, true);
-	assert.deepEqual(editor.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
+	assert.deepEqual(editor.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
 	editor.view.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
-	assert.deepEqual(editor.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
+	assert.deepEqual(editor.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
 
 	dom.window.close();
 });

@@ -11,15 +11,15 @@ test("Block comments wrap and unwrap directional selections in isolated undo ste
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (10) + 1), new Position((0) + 1, (6) + 1))]);
 	const options = { open: "/*", close: "*/" };
 
-	selections.execute(createToggleBlockCommentCommand(model, selections.selections, options));
+	selections.execute(createToggleBlockCommentCommand(model, selections.getSelections(), options));
 	assert.equal(model.getText(), "alpha /* beta */");
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(
 		new Position((0) + 1, (13) + 1),
 		new Position((0) + 1, (9) + 1),
 	));
-	selections.execute(createToggleBlockCommentCommand(model, selections.selections, options));
+	selections.execute(createToggleBlockCommentCommand(model, selections.getSelections(), options));
 	assert.equal(model.getText(), "alpha beta");
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(
 		new Position((0) + 1, (10) + 1),
 		new Position((0) + 1, (6) + 1),
 	));
@@ -33,12 +33,12 @@ test("Block comments place collapsed carets inside the generated pair and suppor
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
 	], 1));
-	selections.execute(createToggleBlockCommentCommand(model, selections.selections, {
+	selections.execute(createToggleBlockCommentCommand(model, selections.getSelections(), {
 		open: "/*",
 		close: "*/",
 	}));
 	assert.equal(model.getText(), "/* */one /* */two");
-	assert.deepEqual(selections.selections, primaryFirst([
+	assert.deepEqual(selections.getSelections(), primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (3) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (12) + 1)),
 	], 1));

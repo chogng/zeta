@@ -209,7 +209,7 @@ export class FoldingController extends Disposable {
 		this.mouseTargets = new MouseTargetFactory(this.viewport);
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
-			if (this.viewport.textModel !== this.selections.textModel || this.viewport.textModel !== this.folding.model) {
+			if (this.viewport.textModel !== this.selections.context.model || this.viewport.textModel !== this.folding.model) {
 				throw new TypeError("Stanza folding dependencies must share one text model");
 			}
 			if (context.model.largeFile.tooLargeForTokenization) return;
@@ -264,10 +264,10 @@ export class FoldingController extends Disposable {
 	}
 
 	private setContainingFoldCollapsed(collapsed: boolean): void {
-		const region = this.folding.setContainingLineCollapsed(this.selections.selections[0]!.getPosition().lineNumber - 1, collapsed);
+		const region = this.folding.setContainingLineCollapsed(this.selections.getSelections()[0]!.getPosition().lineNumber - 1, collapsed);
 		if (!region) return;
 		if (region.collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
 	private setAllCollapsed(collapsed: boolean): void {
@@ -275,42 +275,42 @@ export class FoldingController extends Disposable {
 		if (collapsed) {
 			for (const region of this.folding.regions) if (region.collapsed) this.relocateHiddenSelections(region);
 		}
-		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
 	private setContainingFoldRecursively(collapsed: boolean): void {
-		const lineIndex = this.selections.selections[0]!.getPosition().lineNumber - 1;
+		const lineIndex = this.selections.getSelections()[0]!.getPosition().lineNumber - 1;
 		const region = collapsed
 			? this.folding.collapseContainingRegionRecursively(lineIndex)
 			: this.folding.expandContainingRegionRecursively(lineIndex);
 		if (!region) return;
 		if (collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
 	private createManualRange(): void {
-		const selection = this.selections.selections[0]!;
+		const selection = this.selections.getSelections()[0]!;
 		const endLineIndex = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
 			? selection.endLineNumber - 2
 			: selection.endLineNumber - 1;
 		const region = this.folding.addManualRange(selection.startLineNumber - 1, endLineIndex);
-		if (region) this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		if (region) this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
 	private removeManualRange(): void {
-		const region = this.folding.removeContainingManualRange(this.selections.selections[0]!.getPosition().lineNumber - 1);
-		if (region) this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		const region = this.folding.removeContainingManualRange(this.selections.getSelections()[0]!.getPosition().lineNumber - 1);
+		if (region) this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
 	private setCollapsedToLevel(level: number): void {
 		if (!this.folding.collapseToLevel(level)) return;
 		for (const region of this.folding.regions) if (region.collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
 	private relocateHiddenSelections(region: EditorFoldingRegion): void {
 		const header = new Position((region.startLineIndex) + 1, (this.viewport.textModel.getLineContent((region.startLineIndex) + 1).length) + 1);
-		const selections = this.selections.selections.map(selection => {
+		const selections = this.selections.getSelections().map(selection => {
 			const activeLineIndex = selection.getPosition().lineNumber - 1;
 			return activeLineIndex > region.startLineIndex && activeLineIndex <= region.endLineIndex
 				? Selection.fromPositions(header)

@@ -8,6 +8,7 @@ import { type IViewModel } from '../../../common/viewModel.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { Position } from '../../../common/core/position.js';
 import { Selection } from '../../../common/core/selection.js';
+import { type TextModel } from '../../../common/model/textModel.js';
 
 export interface MultiCursorControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
@@ -27,7 +28,7 @@ export class MultiCursorController extends Disposable {
 		super();
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
-			if (viewport.textModel !== viewModel.model || viewport.textModel !== selections.textModel) {
+			if (viewport.textModel !== viewModel.model || viewport.textModel !== selections.context.model) {
 				throw new TypeError("Stanza multi-cursor dependencies must share one text model");
 			}
 			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -40,8 +41,9 @@ export class MultiCursorController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if (event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "i") {
-			const next = addCursorsToSelectedLineEnds(this.viewport.textModel, this.selections.selections);
-			if (next === this.selections.selections) return;
+			const current = this.selections.getSelections();
+			const next = addCursorsToSelectedLineEnds(this.viewport.textModel, current);
+			if (next === current) return;
 			stopEvent(event);
 			this.selections.setCursorSelections(next);
 			this.viewport.revealPosition(next[0]!.getPosition());
@@ -59,7 +61,7 @@ export class MultiCursorController extends Disposable {
 }
 
 /** Replaces non-empty selections with one caret at each selected physical line end. */
-function addCursorsToSelectedLineEnds(model: CursorsController['textModel'], selections: readonly Selection[]): readonly Selection[] {
+function addCursorsToSelectedLineEnds(model: TextModel, selections: readonly Selection[]): readonly Selection[] {
 	const next: Selection[] = [];
 	for (const selection of selections) {
 		if (selection.isEmpty()) continue;

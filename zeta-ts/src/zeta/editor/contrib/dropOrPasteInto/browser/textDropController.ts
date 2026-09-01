@@ -20,7 +20,7 @@ export class TextDropController extends Disposable {
 		private readonly progress: Pick<InlineProgressManager, 'showWhile'>,
 	) {
 		super();
-		if (viewport.textModel !== selections.textModel) {
+		if (viewport.textModel !== selections.context.model) {
 			this.dispose();
 			throw new TypeError('Text drop dependencies must share one text model');
 		}
@@ -50,7 +50,7 @@ export class TextDropController extends Disposable {
 		stopEvent(event);
 		this.viewport.element.focus({ preventScroll: true });
 		this.selections.execute(TypeOperations.paste(this.viewport.textModel, [Selection.fromPositions(target.position)], text));
-		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
 	private dropTextFile(event: DragEvent, position: Position): void {
@@ -69,7 +69,7 @@ export class TextDropController extends Disposable {
 		void text.then(text => {
 			if (this.isDisposed || request !== this.asynchronousDropRequest || text.length > TEXT_FILE_TRANSFER_MAX_BYTES || model.version !== expectedVersion) return;
 			this.selections.execute(TypeOperations.paste(model, [Selection.fromPositions(position)], text));
-			this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+			this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 		}).catch(() => {
 			// The supplied file could not be decoded as text.
 		});

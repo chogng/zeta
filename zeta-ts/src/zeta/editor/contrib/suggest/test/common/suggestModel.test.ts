@@ -80,13 +80,13 @@ test("Accepting a completion is one isolated selection-aware undo step", () => {
 
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "console tail");
-	assert.equal(Position.compare(selections.selections[0]!.getPosition(), new Position((0) + 1, (7) + 1)), 0);
+	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (7) + 1)), 0);
 	assert.equal(session.state, undefined);
 	assert.equal(reasons.at(-1), LanguageCompletionSessionChangeReason.Accepted);
 
 	selections.undo();
 	assert.equal(model.getText(), "con tail");
-	assert.equal(Position.compare(selections.selections[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
+	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });
 
 test("A declared commit character accepts completion and text as one isolated undo step", () => {
@@ -101,10 +101,10 @@ test("A declared commit character accepts completion and text as one isolated un
 
 	assert.equal(session.acceptSelectedWithCommitCharacter("."), true);
 	assert.equal(model.getText(), "console. tail");
-	assert.equal(Position.compare(selections.selections[0]!.getPosition(), new Position((0) + 1, (8) + 1)), 0);
+	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (8) + 1)), 0);
 	selections.undo();
 	assert.equal(model.getText(), "con tail");
-	assert.equal(Position.compare(selections.selections[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
+	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });
 
 test("Completion commands run after insertion against the updated model", async () => {
@@ -146,10 +146,10 @@ test("Completion acceptance applies additional edits and maps the caret through 
 
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "import xconsole");
-	assert.equal(Position.compare(selections.selections[0]!.getPosition(), new Position((0) + 1, (15) + 1)), 0);
+	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (15) + 1)), 0);
 	selections.undo();
 	assert.equal(model.getText(), "xcon");
-	assert.equal(Position.compare(selections.selections[0]!.getPosition(), new Position((0) + 1, (4) + 1)), 0);
+	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (4) + 1)), 0);
 });
 
 test("Completion snippets select grouped tabstops and leave them without changing text", () => {
@@ -174,13 +174,13 @@ test("Completion snippets select grouped tabstops and leave them without changin
 
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "function name(value) {  }");
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
 	assert.equal(session.selectNextSnippetPlaceholder(), true);
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
 	assert.equal(session.selectNextSnippetPlaceholder(), true);
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (23) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (23) + 1)));
 	assert.equal(session.selectPreviousSnippetPlaceholder(), true);
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
 	assert.equal(session.cancelSnippetPlaceholderNavigation(), true);
 	assert.equal(session.selectNextSnippetPlaceholder(), false);
 	assert.equal(model.getText(), "function name(value) {  }");
@@ -210,7 +210,7 @@ test("Completion snippets cycle choice tabstops and replace every mirror atomica
 	assert.equal(model.getText(), "a-a");
 	assert.equal(session.selectNextSnippetChoice(), true);
 	assert.equal(model.getText(), "long-long");
-	assert.deepEqual(selections.selections, primaryFirst([
+	assert.deepEqual(selections.getSelections(), primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (9) + 1)),
 	], 0));
@@ -283,7 +283,7 @@ test("Completion snippets resolve caller-provided editor variables on acceptance
 
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "main.test");
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
 });
 
 test("Completion commit characters reject undeclared or multi-grapheme input without changing state", () => {

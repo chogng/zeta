@@ -42,9 +42,9 @@ test("CursorsController restores command selections", () => {
 		selectionsAfter: [{ anchorOffset: 2, activeOffset: 2 }],
 		primarySelectionIndex: 0,
 	});
-	const afterCommand = controller.selections;
+	const afterCommand = controller.getSelections();
 	const undoChange = controller.undo();
-	const afterUndo = controller.selections;
+	const afterUndo = controller.getSelections();
 	const redoChange = controller.redo();
 
 	assert.deepEqual({
@@ -56,7 +56,7 @@ test("CursorsController restores command selections", () => {
 		],
 		afterCommand,
 		afterUndo,
-		afterRedo: controller.selections,
+		afterRedo: controller.getSelections(),
 		reasons,
 	}, {
 		text: "hio",
@@ -77,12 +77,12 @@ test('CursorsController executes canonical ICommand edits with undoable selectio
 	using controller = createTestCursorsController(model, single(1, 4));
 
 	controller.executeCommand(new ReplaceCommand(range(1, 4), 'i'));
-	assert.deepEqual({ text: model.getText(), selections: controller.selections }, {
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
 		text: 'hio',
 		selections: single(2, 2),
 	});
 	controller.undo();
-	assert.deepEqual({ text: model.getText(), selections: controller.selections }, {
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
 		text: 'hello',
 		selections: single(1, 4),
 	});
@@ -117,7 +117,7 @@ test('CommandExecutor keeps the first edit and merges converged cursors when com
 	]);
 
 	assert.equal(model.getText(), 'aXd');
-	assert.deepEqual(controller.selections, [Selection.fromPositions(position(0, 2))]);
+	assert.deepEqual(controller.getSelections(), [Selection.fromPositions(position(0, 2))]);
 });
 
 test('CommandExecutor resolves tracked selections after model edits', () => {
@@ -128,7 +128,7 @@ test('CommandExecutor resolves tracked selections after model edits', () => {
 	controller.executeCommand(new ReplaceCommandThatPreservesSelection(range(0, 0), 'X', selection));
 
 	assert.equal(model.getText(), 'Xabcd');
-	assert.deepEqual(controller.selections, [Selection.fromPositions(position(0, 3), position(0, 5))]);
+	assert.deepEqual(controller.getSelections(), [Selection.fromPositions(position(0, 3), position(0, 5))]);
 });
 
 test("Read-only editor instances preserve selection while rejecting document commands", () => {
@@ -143,9 +143,9 @@ test("Read-only editor instances preserve selection while rejecting document com
 	assert.equal(controller.readOnly, true);
 	assert.equal(controller.execute(command), undefined);
 	assert.equal(model.getText(), "abc");
-	assert.deepEqual(controller.selections, single(0, 0));
+	assert.deepEqual(controller.getSelections(), single(0, 0));
 	controller.setSelections(single(2, 2));
-	assert.deepEqual(controller.selections, single(2, 2));
+	assert.deepEqual(controller.getSelections(), single(2, 2));
 	assert.equal(controller.undo(), undefined);
 	assert.equal(controller.redo(), undefined);
 	assert.throws(() => controller.beginComposition(), /read-only/);
@@ -169,9 +169,9 @@ test("Cursor-only selection history restores multi-cursor operations without cha
 	controller.setCursorSelections(first);
 	controller.setCursorSelections(second);
 	assert.equal(controller.undoCursorOperation(), true);
-	assert.deepEqual(controller.selections, first);
+	assert.deepEqual(controller.getSelections(), first);
 	assert.equal(controller.redoCursorOperation(), true);
-	assert.deepEqual(controller.selections, second);
+	assert.deepEqual(controller.getSelections(), second);
 	assert.equal(controller.redoCursorOperation(), false);
 	assert.equal(controller.undoCursorOperation(), true);
 	controller.setCursorSelections(second);
@@ -202,7 +202,7 @@ test("CursorsController maps external model edits", () => {
 
 	assert.deepEqual({
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 		events,
 	}, {
 		text: "Xabc",
@@ -226,7 +226,7 @@ test("CursorsController projects tracked selections before downstream command li
 	);
 	const observed: Selection[] = [];
 	using listener = model.onDidChangeContent(() => {
-		const selection = controller.selections[0]!;
+		const selection = controller.getSelections()[0]!;
 		assert.doesNotThrow(() => {
 			model.offsetAt(selection.getSelectionStart());
 			model.offsetAt(selection.getPosition());
@@ -241,7 +241,7 @@ test("CursorsController projects tracked selections before downstream command li
 	});
 
 	assert.deepEqual(observed, [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1))]);
-	assert.deepEqual(controller.selections, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
+	assert.deepEqual(controller.getSelections(), [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 });
 
 test("CursorsController releases tracked ranges without taking their model ownership", () => {
@@ -268,8 +268,8 @@ test("Shared editors retain independent selection ownership", () => {
 		primarySelectionIndex: 0,
 	});
 	assert.deepEqual({
-		first: first.selections,
-		second: second.selections,
+		first: first.getSelections(),
+		second: second.getSelections(),
 	}, {
 		first: single(2, 2),
 		second: single(4, 4),
@@ -278,8 +278,8 @@ test("Shared editors retain independent selection ownership", () => {
 	second.undo();
 	assert.deepEqual({
 		text: model.getText(),
-		first: first.selections,
-		second: second.selections,
+		first: first.getSelections(),
+		second: second.getSelections(),
 	}, {
 		text: "abc",
 		first: single(1, 1),
@@ -289,8 +289,8 @@ test("Shared editors retain independent selection ownership", () => {
 	first.redo();
 	assert.deepEqual({
 		text: model.getText(),
-		first: first.selections,
-		second: second.selections,
+		first: first.getSelections(),
+		second: second.getSelections(),
 	}, {
 		text: "aXbc",
 		first: single(2, 2),
@@ -316,7 +316,7 @@ test("CursorsController validates commands before mutation", () => {
 	assert.deepEqual({
 		text: model.getText(),
 		version: model.version,
-		selections: controller.selections,
+		selections: controller.getSelections(),
 	}, {
 		text: "abc",
 		version: 1,
@@ -333,7 +333,7 @@ test("CursorsController disposal does not own the model", () => {
 	controller.dispose();
 
 	assert.throws(
-		() => controller.selections,
+		() => controller.getSelections(),
 		/already disposed/,
 	);
 	model.applyEdits([{ range: range(0, 1), text: "A" }]);
@@ -368,7 +368,7 @@ test("CursorsController rejects stale post-command selections", () => {
 	assert.deepEqual({
 		text: model.getText(),
 		version: model.version,
-		selections: controller.selections,
+		selections: controller.getSelections(),
 		reasons,
 	}, {
 		text: "XabcY",

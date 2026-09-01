@@ -25,14 +25,14 @@ export class LanguageCompletionSnippetSession extends Disposable {
 	private currentGroupIndex = 0;
 
 	constructor(
-		model: TextModel,
+		private readonly model: TextModel,
 		private readonly selections: CursorsController,
 		insertionStartOffset: number,
 		snippet: LanguageCompletionSnippet,
 		finalOffsetWithinInsertion = snippet.text.length,
 	) {
 		super();
-		if (model !== selections.textModel) {
+		if (model !== selections.context.model) {
 			this.dispose();
 			throw new TypeError("Language completion snippet session must share its editor text model");
 		}
@@ -162,7 +162,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 	}
 
 	private replaceChoice(group: SnippetTrackedGroup, text: string): boolean {
-		const model = this.selections.textModel;
+		const model = this.model;
 		const ranges = group.ranges.map(range => ({
 			range,
 			startOffset: model.offsetAt(range.range.getStartPosition()),
@@ -202,7 +202,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 		if (transforms.length === 0) return;
 		const sourceRange = group.ranges[0];
 		if (!sourceRange) return;
-		const model = this.selections.textModel;
+		const model = this.model;
 		const sourceText = model.getTextInRange(sourceRange.range);
 		const edits = transforms.flatMap(transform => {
 			const text = applyLanguageCompletionSnippetTransform(sourceText, transform.transform);

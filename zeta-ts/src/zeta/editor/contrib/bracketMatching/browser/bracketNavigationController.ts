@@ -15,7 +15,7 @@ export class BracketNavigationController extends Disposable {
 	) {
 		super();
 		try {
-			if (viewport.textModel !== selections.textModel || viewport.textModel !== bracketPairs.textModel) {
+			if (viewport.textModel !== selections.context.model || viewport.textModel !== bracketPairs.textModel) {
 				throw new TypeError("Stanza bracket navigation dependencies must share one text model");
 			}
 			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -29,7 +29,7 @@ export class BracketNavigationController extends Disposable {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if ((!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.altKey || event.key !== "\\") return;
 		stopEvent(event);
-		const next = jumpToMatchingBrackets(this.bracketPairs, this.selections.selections);
+		const next = jumpToMatchingBrackets(this.bracketPairs, this.selections.getSelections());
 		this.selections.setSelections(next);
 		this.viewport.revealPosition(next[0]!.getPosition());
 	}

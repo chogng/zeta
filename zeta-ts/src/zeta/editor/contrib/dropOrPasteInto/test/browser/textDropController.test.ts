@@ -90,7 +90,7 @@ test("Plain-text drops insert at the viewport hit target", () => {
 	viewport.element.dispatchEvent(drop);
 	assert.equal(drop.defaultPrevented, true);
 	assert.equal(model.getText(), "abX\nY\ncd");
-	assert.deepEqual(selections.selections, [Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
+	assert.deepEqual(selections.getSelections(), [Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
 	dom.window.close();
 });
 

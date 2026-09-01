@@ -60,7 +60,7 @@ export class FindController extends Disposable {
 		this.autoFindInSelection = options.autoFindInSelection ?? 'never';
 		this.loop = options.loop ?? true;
 		this.wordSeparators = options.wordSeparators ?? EditorOptions.wordSeparators.defaultValue;
-		if (viewport.textModel !== selections.textModel || viewport.textModel !== decorations.textModel) {
+		if (viewport.textModel !== selections.context.model || viewport.textModel !== decorations.textModel) {
 			this.dispose();
 			throw new TypeError("Stanza find dependencies must share one text model");
 		}
@@ -165,7 +165,7 @@ export class FindController extends Disposable {
 		if (options.showReplace) this.setReplaceVisible(true);
 		if (!wasVisible) {
 			this.captureSelectionScope();
-			const selection = this.selections.selections[0]!;
+			const selection = this.selections.getSelections()[0]!;
 			if (this.autoFindInSelection === 'always' || this.autoFindInSelection === 'multiline' && selection.startLineNumber !== selection.endLineNumber) {
 				this.setFindInSelection(true);
 			}
@@ -274,7 +274,7 @@ export class FindController extends Disposable {
 
 	private findCurrentMatchIndex(): number {
 		if (this.matches.length === 0) return -1;
-		const primaryRange = this.selections.selections[0]!;
+		const primaryRange = this.selections.getSelections()[0]!;
 		const selectionStart = this.model.offsetAt(primaryRange.getStartPosition());
 		const selectionEnd = this.model.offsetAt(primaryRange.getEndPosition());
 		const exact = this.matches.findIndex(match =>
@@ -282,7 +282,7 @@ export class FindController extends Disposable {
 			this.model.offsetAt(match.range.getEndPosition()) === selectionEnd
 		);
 		if (exact >= 0) return exact;
-		const activeOffset = this.model.offsetAt(this.selections.selections[0]!.getPosition());
+		const activeOffset = this.model.offsetAt(this.selections.getSelections()[0]!.getPosition());
 		const following = this.matches.findIndex(match => this.model.offsetAt(match.range.getStartPosition()) >= activeOffset);
 		return following >= 0 ? following : 0;
 	}
@@ -358,7 +358,7 @@ export class FindController extends Disposable {
 	}
 
 	private captureSelectionScope(): void {
-		const range = this.selections.selections[0]!;
+		const range = this.selections.getSelections()[0]!;
 		this.selectionScope.value = range.isEmpty() ? undefined : this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		this.projectFindInSelectionAvailability();
 	}
@@ -396,7 +396,7 @@ export class FindController extends Disposable {
 	}
 
 	private readSelectedSearchText(): string | undefined {
-		const selection = this.selections.selections[0]!;
+		const selection = this.selections.getSelections()[0]!;
 		if (selection.isEmpty()) return undefined;
 		const text = this.model.getTextInRange(selection);
 		return text.length <= 4_096 && !text.includes("\n") ? text : undefined;

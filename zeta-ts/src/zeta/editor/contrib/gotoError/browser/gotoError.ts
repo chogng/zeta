@@ -12,7 +12,7 @@ import { type View } from "../../../browser/view.js";
 export class DiagnosticNavigationController extends Disposable {
 	constructor(input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
 		super();
-		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) {
+		if (viewport.textModel !== selections.context.model || diagnostics.textModel !== selections.context.model) {
 			this.dispose();
 			throw new TypeError("Stanza diagnostic navigation dependencies must share one text model");
 		}
@@ -24,7 +24,7 @@ export class DiagnosticNavigationController extends Disposable {
 		const diagnostics = this.diagnostics.decorations;
 		if (diagnostics.length === 0) return;
 		stopEvent(event);
-		const active = this.selections.selections[0]!.getPosition();
+		const active = this.selections.getSelections()[0]!.getPosition();
 		const direction = event.shiftKey ? -1 : 1;
 		const index = direction > 0
 			? diagnostics.findIndex(diagnostic => Position.compare(diagnostic.range.getStartPosition(), active) > 0)

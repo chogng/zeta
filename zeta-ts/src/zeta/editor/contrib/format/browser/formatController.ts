@@ -18,7 +18,7 @@ export class FormatController extends Disposable {
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: FormatService, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly languageId: string, options: FormatControllerOptions = {}) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza format dependencies must share one text model");
+		if (viewport.textModel !== selections.context.model) throw new TypeError("Stanza format dependencies must share one text model");
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
 		this.onError = options.onError ?? (error => console.error("Stanza formatting failed", error));
 		this._register(addDisposableListener(input, "keydown", event => {
@@ -33,7 +33,7 @@ export class FormatController extends Disposable {
 			const edits = await this.service.provideDocumentFormattingEdits(this.languageId, this.options);
 			const minimalEdits = await this.editorWorker.computeMoreMinimalEdits(edits);
 			if (!minimalEdits) return;
-			const command = createFormattingCommand(this.viewport.textModel, this.selections.selections, minimalEdits);
+			const command = createFormattingCommand(this.viewport.textModel, this.selections.getSelections(), minimalEdits);
 			if (command) this.selections.execute(command);
 		} catch (error) {
 			onError(error);

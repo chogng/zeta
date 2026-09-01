@@ -28,7 +28,7 @@ export class LineCommentController extends Disposable {
 		super();
 		try {
 			validateOptions(options);
-			if (viewport.textModel !== selections.textModel) {
+			if (viewport.textModel !== selections.context.model) {
 				throw new TypeError("Stanza line comment dependencies must share one text model");
 			}
 			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -41,20 +41,20 @@ export class LineCommentController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key !== "/") return;
-		const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.selections[0]!.getPosition()) ?? this.options.languageId;
+		const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.getSelections()[0]!.getPosition()) ?? this.options.languageId;
 		const lineComment = this.options.configurations.getLanguageConfiguration(languageId).comments?.lineCommentToken;
 		if (!lineComment) return;
 		stopEvent(event);
 		const command = createToggleLineCommentCommand(
 			this.viewport.textModel,
-			this.selections.selections,
+			this.selections.getSelections(),
 			{
 				lineComment,
 				insertSpace: this.options.insertSpace,
 			},
 		);
 		this.executeCommand(ToggleLineCommentCommandId, () => this.selections.execute(command));
-		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 }
 

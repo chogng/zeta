@@ -21,11 +21,11 @@ test("Auto-closing trust follows external edits and rejects a changed closer", (
 	executeAndRecord(model, selections, typeCommand(model, selections, "(", configuration)!);
 
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "pre" }]);
-	assert.deepEqual(selections.selections[0]!, caret(5));
+	assert.deepEqual(selections.getSelections()[0]!, caret(5));
 	assert.equal(canOvertype(model, selections, new Position((0) + 1, (5) + 1), ")"), true);
 
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (6) + 1)), text: "]" }]);
-	assert.equal(canOvertype(model, selections, selections.selections[0]!.getPosition(), ")"), false);
+	assert.equal(canOvertype(model, selections, selections.getSelections()[0]!.getPosition(), ")"), false);
 });
 
 test("Leaving an auto-closed pair invalidates its trust permanently", () => {
@@ -103,7 +103,7 @@ test("Stale recording is ignored and cursor disposal leaves the model alive", ()
 	assert.ok(change);
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "x" }]);
 	recordAutoClosed(model, selections, command, change.version);
-	assert.equal(canOvertype(model, selections, selections.selections[0]!.getPosition(), ")"), false);
+	assert.equal(canOvertype(model, selections, selections.getSelections()[0]!.getPosition(), ")"), false);
 
 	selections.dispose();
 	assert.throws(() => selections.getAutoClosedCharacters(), ReferenceError);
@@ -111,7 +111,7 @@ test("Stale recording is ignored and cursor disposal leaves the model alive", ()
 });
 
 function typeCommand(model: TextModel, selections: CursorsController, text: string, configuration: Parameters<typeof TypeOperations.typeWithInterceptors>[3]) {
-	return TypeOperations.typeWithInterceptors(model, selections.selections, text, configuration, selections.getAutoClosedCharacters());
+	return TypeOperations.typeWithInterceptors(model, selections.getSelections(), text, configuration, selections.getAutoClosedCharacters());
 }
 
 function executeAndRecord(model: TextModel, selections: CursorsController, command: NonNullable<ReturnType<typeof TypeOperations.typeWithInterceptors>>): void {
@@ -125,7 +125,7 @@ function executeBackspace(model: TextModel, selections: CursorsController, confi
 		selections.getPrevEditOperationType(),
 		createTestCursorConfiguration(model, configurations),
 		model,
-		[...selections.selections],
+		[...selections.getSelections()],
 		[...selections.getAutoClosedCharacters()],
 	);
 	if (operation[0]) selections.pushUndoStop();

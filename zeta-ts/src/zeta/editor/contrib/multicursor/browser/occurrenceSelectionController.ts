@@ -13,7 +13,7 @@ export class OccurrenceSelectionController extends Disposable {
 	) {
 		super();
 		try {
-			if (viewport.textModel !== selections.textModel) {
+			if (viewport.textModel !== selections.context.model) {
 				throw new TypeError("Stanza occurrence selection dependencies must share one text model");
 			}
 			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -30,14 +30,14 @@ export class OccurrenceSelectionController extends Disposable {
 			stopEvent(event);
 			this.setSelections(addOccurrenceSelection(
 				this.viewport.textModel,
-				this.selections.selections,
+				this.selections.getSelections(),
 				EditorOccurrenceDirection.Next,
 			));
 			return;
 		}
 		if (event.shiftKey && event.key.toLowerCase() === "l") {
 			stopEvent(event);
-			this.setSelections(selectAllOccurrences(this.viewport.textModel, this.selections.selections));
+			this.setSelections(selectAllOccurrences(this.viewport.textModel, this.selections.getSelections()));
 		}
 	}
 

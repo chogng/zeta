@@ -52,20 +52,20 @@ class TransposeLettersContribution extends Disposable {
 	}
 
 	public transpose(): void {
-		const command = createTransposeLettersCommand(this.context.model, this.context.selectionController.selections);
+		const command = createTransposeLettersCommand(this.context.model, this.context.selectionController.getSelections());
 		if (!command) return;
 		this.context.executeCommand('editor.action.transposeLetters', () => this.context.selectionController.execute(command));
-		this.context.viewport.revealPosition(this.context.selectionController.selections[0]!.getPosition());
+		this.context.viewport.revealPosition(this.context.selectionController.getSelections()[0]!.getPosition());
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
 		if (!event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.key.toLowerCase() !== 't') return;
-		const command = createTransposeLettersCommand(this.context.model, this.context.selectionController.selections);
+		const command = createTransposeLettersCommand(this.context.model, this.context.selectionController.getSelections());
 		if (!command) return;
 		stopEvent(event);
 		this.context.executeCommand('editor.action.transposeLetters', () => this.context.selectionController.execute(command));
-		this.context.viewport.revealPosition(this.context.selectionController.selections[0]!.getPosition());
+		this.context.viewport.revealPosition(this.context.selectionController.getSelections()[0]!.getPosition());
 	}
 }
 

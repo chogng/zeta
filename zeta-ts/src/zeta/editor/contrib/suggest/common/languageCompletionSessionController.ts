@@ -79,7 +79,7 @@ export class LanguageCompletionSessionController extends Disposable {
 	) {
 		super();
 		try {
-			if (store.textModel !== selectionController.textModel) {
+			if (store.textModel !== selectionController.context.model) {
 				throw new TypeError("Language completion store and selection controller must share one text model");
 			}
 			if (options.resolver !== undefined && typeof options.resolver.resolveCompletionItem !== "function") {
@@ -289,7 +289,7 @@ export class LanguageCompletionSessionController extends Disposable {
 	}
 
 	private selectionMatches(position: Position): boolean {
-		const selections = this.selectionController.selections;
+		const selections = this.selectionController.getSelections();
 		return selections.length === 1 &&
 			selections[0]!.isEmpty() &&
 			Position.compare(selections[0]!.getPosition(), position) === 0;
@@ -349,10 +349,10 @@ export class LanguageCompletionSessionController extends Disposable {
 }
 
 export function createLanguageCompletionAcceptCommand(model: TextModel, selectionController: CursorsController, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: LanguageCompletionSnippetVariableResolver): EditorEditCommand {
-	if (model !== selectionController.textModel) {
+	if (model !== selectionController.context.model) {
 		throw new TypeError("Language completion command and selection controller must share one text model");
 	}
-	const selections = selectionController.selections;
+	const selections = selectionController.getSelections();
 	if (selections.length !== 1 || !selections[0]!.isEmpty()) {
 		throw new Error("Language completion acceptance requires one collapsed selection");
 	}

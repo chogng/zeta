@@ -46,8 +46,8 @@ test("find opens from the editor shortcut, highlights matches, navigates, and re
 	assert.equal(fixture.dom.window.document.activeElement, fixture.find.searchInput);
 
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
-	assert.deepEqual(fixture.selections.selections[0]!.getStartPosition(), new Position((0) + 1, (11) + 1));
-	assert.deepEqual(fixture.selections.selections[0]!.getEndPosition(), new Position((0) + 1, (16) + 1));
+	assert.deepEqual(fixture.selections.getSelections()[0]!.getStartPosition(), new Position((0) + 1, (11) + 1));
+	assert.deepEqual(fixture.selections.getSelections()[0]!.getEndPosition(), new Position((0) + 1, (16) + 1));
 	assert.equal(fixture.find.element.querySelector(".stanza-editor-find-result")?.textContent, "2 of 2");
 
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Escape"));
@@ -94,8 +94,8 @@ test("find in selection keeps the opening scope through match navigation and sup
 	assert.equal(findInSelection.classList.contains("checked"), true);
 	assert.equal(findInSelection.getAttribute("aria-pressed"), "true");
 	assert.equal(fixture.decorations.size, 1);
-	assert.deepEqual(fixture.selections.selections[0]!.getStartPosition(), new Position((0) + 1, (11) + 1));
-	assert.deepEqual(fixture.selections.selections[0]!.getEndPosition(), new Position((0) + 1, (16) + 1));
+	assert.deepEqual(fixture.selections.getSelections()[0]!.getStartPosition(), new Position((0) + 1, (11) + 1));
+	assert.deepEqual(fixture.selections.getSelections()[0]!.getEndPosition(), new Position((0) + 1, (16) + 1));
 
 	const toggle = keyboardEvent(fixture.dom.window, "l", { altKey: true });
 	fixture.find.searchInput.dispatchEvent(toggle);
@@ -136,8 +136,8 @@ test("configured find defaults seed toggles, selection scope, and non-looping na
 	setInputValue(fixture.find.searchInput, "Alpha");
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
-	assert.deepEqual(fixture.selections.selections[0]!.getStartPosition(), new Position((0) + 1, (0) + 1));
-	assert.deepEqual(fixture.selections.selections[0]!.getEndPosition(), new Position((0) + 1, (5) + 1));
+	assert.deepEqual(fixture.selections.getSelections()[0]!.getStartPosition(), new Position((0) + 1, (0) + 1));
+	assert.deepEqual(fixture.selections.getSelections()[0]!.getEndPosition(), new Position((0) + 1, (5) + 1));
 });
 
 test("replace current and replace all use isolated undo transactions", () => {

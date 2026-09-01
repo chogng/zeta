@@ -55,7 +55,7 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 		const position = target?.kind === 'text'
 			? target.position
 			: this.context.model.getPositionAt(this.context.model.getValueLength());
-		if (!this.context.selectionController.selections.some(selection => selection.containsPosition(position))) {
+		if (!this.context.selectionController.getSelections().some(selection => selection.containsPosition(position))) {
 			this.context.selectionController.setCursorSelections([Selection.fromPositions(position)]);
 		}
 		this.context.view.focus();
@@ -63,7 +63,7 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 	}
 
 	private keyboardRequest(): ContextMenuRequest {
-		const position = this.context.selectionController.selections[0]!.getPosition();
+		const position = this.context.selectionController.getSelections()[0]!.getPosition();
 		this.context.viewport.revealPosition(position);
 		const content = this.context.viewport.getPositionContentCoordinates(position);
 		const bounds = this.context.viewport.element.getBoundingClientRect();

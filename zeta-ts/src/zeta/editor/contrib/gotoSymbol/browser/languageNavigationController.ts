@@ -18,7 +18,7 @@ export class LanguageNavigationController extends Disposable {
 
 	constructor(private readonly input: HTMLElement, private readonly editor: ICodeEditor, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError("Language navigation dependencies must share one text model");
+		if (viewport.textModel !== selections.context.model) throw new TypeError("Language navigation dependencies must share one text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		this._register(viewport.textModel.onDidChangeContent(() => this.closePeek()));
 		this._register(toDisposable(() => this.cancelRequest()));
@@ -45,7 +45,7 @@ export class LanguageNavigationController extends Disposable {
 	private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
-		const position = this.selections.selections[0]!.getPosition();
+		const position = this.selections.getSelections()[0]!.getPosition();
 		try {
 			const locations = await this.provide(kind, position, options.includeDeclaration ?? true, request.signal);
 			if (request.signal.aborted) return;

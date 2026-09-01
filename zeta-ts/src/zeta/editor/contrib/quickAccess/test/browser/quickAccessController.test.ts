@@ -42,17 +42,17 @@ test("Go to Line previews locally, accepts a line and column, and cancels withou
 	assert.equal(controller.visible, true);
 	controller.input.value = "3:2";
 	controller.input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
 	controller.input.dispatchEvent(keydown(dom.window, "Enter"));
 	assert.equal(controller.visible, false);
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
 
 	editorInput.dispatchEvent(keydown(dom.window, "g", { ctrlKey: true }));
 	controller.input.value = "not a line";
 	controller.input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 	assert.equal(controller.input.classList.contains("invalid"), true);
 	controller.input.dispatchEvent(keydown(dom.window, "Escape"));
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
 	dom.window.close();
 });
 

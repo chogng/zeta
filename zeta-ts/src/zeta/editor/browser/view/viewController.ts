@@ -155,7 +155,7 @@ export class ViewController extends Disposable {
 		super();
 		try {
 			validateAccessibilityPageSize(options.accessibilityPageSize);
-			if (viewport.textModel !== selectionController.textModel) {
+			if (viewport.textModel !== selectionController.context.model) {
 				throw new TypeError('Stanza view and selection controllers must share one text model');
 			}
 			if (options.languageEditing && options.languageEditing.textModel !== viewport.textModel) {
@@ -215,7 +215,7 @@ export class ViewController extends Disposable {
 	}
 
 	get hasExpandedSelections(): boolean {
-		return this.selectionController.selections.some(selection => !selection.isEmpty());
+		return this.selectionController.getSelections().some(selection => !selection.isEmpty());
 	}
 
 	public setSelection(modelSelection: Selection): void {
@@ -281,7 +281,7 @@ export class ViewController extends Disposable {
 	}
 
 	private beginMouseSelection(kind: MouseSelectionKind, position: Position, data: IMouseDispatchData, addSelection: boolean): void {
-		const primary = this.selectionController.selections[0]!;
+		const primary = this.selectionController.getSelections()[0]!;
 		const extend = data.shiftKey || data.inSelectionMode;
 		let anchorRange: Range;
 		switch (kind) {
@@ -301,7 +301,7 @@ export class ViewController extends Disposable {
 				break;
 		}
 		const initialSelection = selectionForMouseTarget(kind, this.viewport.textModel, anchorRange, position, this.currentWordPattern);
-		const baseSelections = addSelection ? Object.freeze([...this.selectionController.selections]) : undefined;
+		const baseSelections = addSelection ? Object.freeze([...this.selectionController.getSelections()]) : undefined;
 		this.mouseSelection = {
 			kind,
 			anchorRange,
@@ -356,39 +356,39 @@ export class ViewController extends Disposable {
 	}
 
 	public type(text: string, inputType = 'insertText'): TextModelChange | undefined {
-		return this.executeType(this.selectionController.selections, text, inputType);
+		return this.executeType(this.selectionController.getSelections(), text, inputType);
 	}
 
 	public enter(inputType = 'insertLineBreak'): TextModelChange | undefined {
-		return this.executeEnter(this.selectionController.selections, inputType);
+		return this.executeEnter(this.selectionController.getSelections(), inputType);
 	}
 
 	public deleteBackward(inputType = 'deleteContentBackward'): TextModelChange | undefined {
-		return this.executeDelete('left', this.selectionController.selections, inputType);
+		return this.executeDelete('left', this.selectionController.getSelections(), inputType);
 	}
 
 	public deleteForward(inputType = 'deleteContentForward'): TextModelChange | undefined {
-		return this.executeDelete('right', this.selectionController.selections, inputType);
+		return this.executeDelete('right', this.selectionController.getSelections(), inputType);
 	}
 
 	public deleteWordBackward(inputType = 'deleteWordBackward'): TextModelChange | undefined {
-		return this.execute(WordOperations.deleteWordLeft(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
+		return this.execute(WordOperations.deleteWordLeft(this.viewport.textModel, this.selectionController.getSelections(), this.currentWordPattern), inputType);
 	}
 
 	public deleteWordForward(inputType = 'deleteWordForward'): TextModelChange | undefined {
-		return this.execute(WordOperations.deleteWordRight(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
+		return this.execute(WordOperations.deleteWordRight(this.viewport.textModel, this.selectionController.getSelections(), this.currentWordPattern), inputType);
 	}
 
 	public deleteSoftLineBackward(inputType = 'deleteSoftLineBackward'): TextModelChange | undefined {
-		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.selectionController.selections, 'start'), inputType, EditOperationType.Other, true, true);
+		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.selectionController.getSelections(), 'start'), inputType, EditOperationType.Other, true, true);
 	}
 
 	public deleteSoftLineForward(inputType = 'deleteSoftLineForward'): TextModelChange | undefined {
-		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.selectionController.selections, 'end'), inputType, EditOperationType.Other, true, true);
+		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.selectionController.getSelections(), 'end'), inputType, EditOperationType.Other, true, true);
 	}
 
 	public insertTab(): TextModelChange | undefined {
-		return this.execute(TypeOperations.typeWithoutInterceptors(this.viewport.textModel, this.selectionController.selections, '\t'), 'insertText', '\t', undefined, false);
+		return this.execute(TypeOperations.typeWithoutInterceptors(this.viewport.textModel, this.selectionController.getSelections(), '\t'), 'insertText', '\t', undefined, false);
 	}
 
 	public applyTextUpdate(update: EditContextTextUpdate): TextModelChange | undefined {
@@ -461,7 +461,7 @@ export class ViewController extends Disposable {
 	}
 
 	private selectionsForTextUpdate(update: EditContextTextUpdate): readonly Selection[] {
-		const current = this.selectionController.selections;
+		const current = this.selectionController.getSelections();
 		const primary = current[0]!;
 		const primaryStart = this.viewport.textModel.offsetAt(primary.getStartPosition());
 		const primaryEnd = this.viewport.textModel.offsetAt(primary.getEndPosition());
@@ -484,7 +484,7 @@ export class ViewController extends Disposable {
 	}
 
 	private revealPrimary(): void {
-		this.viewport.revealPosition(this.selectionController.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
 	}
 
 	private get currentWordPattern(): RegExp | undefined {

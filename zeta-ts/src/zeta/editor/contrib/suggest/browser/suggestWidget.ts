@@ -24,7 +24,7 @@ export class CompletionWidget extends Disposable {
 		super();
 		try {
 			if (
-				viewport.textModel !== selectionController.textModel ||
+				viewport.textModel !== selectionController.context.model ||
 				viewport.textModel !== session.textModel
 			) {
 				throw new TypeError("Stanza completion widget dependencies must share one text model");
@@ -103,7 +103,7 @@ export class CompletionWidget extends Disposable {
 
 	private accept(): void {
 		if (!this.session.acceptSelected()) return;
-		this.viewport.revealPosition(this.selectionController.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
 		this.view.focus();
 	}
 

@@ -192,7 +192,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 
 	selections.undo();
 	assert.equal(model.getText(), "con");
-	assert.equal(Position.compare(selections.selections[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
+	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });
 
 test("Completion service disposal owns neither registry nor model", () => {

@@ -90,7 +90,7 @@ export class ClipboardController extends Disposable {
 	) {
 		super();
 		this.element = target.domNode.domNode;
-		if (viewport.textModel !== selectionController.textModel) {
+		if (viewport.textModel !== selectionController.context.model) {
 			this.dispose();
 			throw new TypeError(
 				"Stanza clipboard and selection controllers must share one text model",
@@ -158,13 +158,13 @@ export class ClipboardController extends Disposable {
 		const text = readEditorClipboardText(nativeClipboard, this.element.ownerDocument);
 		const clipboardData = readEditorClipboardPasteData(
 			nativeClipboard,
-			this.selectionController.selections.length,
+			this.selectionController.getSelections().length,
 		);
 		if (text.length === 0 && !clipboardData?.texts.some(value => value.length > 0)) {
 			const uriList = readUriList(nativeClipboard.getData('text/uri-list'));
 			if (uriList) {
 				event.setHandled();
-				this.selectionController.execute(TypeOperations.paste(this.viewport.textModel, this.selectionController.selections, uriList));
+				this.selectionController.execute(TypeOperations.paste(this.viewport.textModel, this.selectionController.getSelections(), uriList));
 				this.afterEdit();
 				return;
 			}
@@ -175,12 +175,12 @@ export class ClipboardController extends Disposable {
 		const command = clipboardData
 			? createMetadataPasteCommand(
 				this.viewport.textModel,
-				this.selectionController.selections,
+				this.selectionController.getSelections(),
 				clipboardData,
 			)
 			: TypeOperations.paste(
 				this.viewport.textModel,
-				this.selectionController.selections,
+				this.selectionController.getSelections(),
 				text,
 			);
 		event.setHandled();
@@ -191,7 +191,7 @@ export class ClipboardController extends Disposable {
 	private pasteSystemText(event: IClipboardPasteEvent): void {
 		const model = this.viewport.textModel;
 		const expectedVersion = model.version;
-		const expectedSelections = this.selectionController.selections;
+		const expectedSelections = this.selectionController.getSelections();
 		const request = ++this.asynchronousPasteRequest;
 		event.setHandled();
 		void this.clipboardService.readText().then(text => {
@@ -201,7 +201,7 @@ export class ClipboardController extends Disposable {
 				request !== this.asynchronousPasteRequest ||
 				!this.isEditingAllowed() ||
 				model.version !== expectedVersion ||
-				!selectionSetsEqual(this.selectionController.selections, expectedSelections)
+				!selectionSetsEqual(this.selectionController.getSelections(), expectedSelections)
 			) {
 				return;
 			}
@@ -216,13 +216,13 @@ export class ClipboardController extends Disposable {
 		if (!entries.some(entry => entry.text.length > 0)) return false;
 		const model = this.viewport.textModel;
 		const expectedVersion = model.version;
-		const expectedSelections = this.selectionController.selections;
+		const expectedSelections = this.selectionController.getSelections();
 		const request = ++this.asynchronousPasteRequest;
 		const payload = this.createClipboardPayload(entries);
 		storeEditorClipboardMetadata(payload.plainText, payload.editorMetadata);
 		event.setHandled();
 		void this.clipboardService.writeText(payload.plainText).then(() => {
-			if (!cut || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
+			if (!cut || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.getSelections(), expectedSelections)) return;
 			this.executeCut();
 		}).catch(() => {
 			// Permission failures must never mutate the model, especially for cut.
@@ -231,7 +231,7 @@ export class ClipboardController extends Disposable {
 	}
 
 	private executeCut(): void {
-		const selections = [...this.selectionController.selections];
+		const selections = [...this.selectionController.getSelections()];
 		const cutSelections = selections.map(selection => {
 			if (!selection.isEmpty() || this.emptySelectionPolicy === EditorEmptySelectionClipboardPolicy.Ignore) return selection;
 			const range = createClipboardEntry(this.viewport.textModel, selection, this.emptySelectionPolicy).sourceRange;
@@ -289,9 +289,9 @@ export class ClipboardController extends Disposable {
 
 	private getCopyEntries(data: ClipboardDataToCopy): readonly EditorClipboardEntry[] {
 		if (!this.useEventCopyData) {
-			return getEditorClipboardEntries(this.viewport.textModel, this.selectionController.selections, this.emptySelectionPolicy);
+			return getEditorClipboardEntries(this.viewport.textModel, this.selectionController.getSelections(), this.emptySelectionPolicy);
 		}
-		const selections = [...this.selectionController.selections].sort(Range.compareRangesUsingStarts);
+		const selections = [...this.selectionController.getSelections()].sort(Range.compareRangesUsingStarts);
 		const includedSelections = selections.filter(selection => !selection.isEmpty() || this.emptySelectionPolicy === EditorEmptySelectionClipboardPolicy.Line);
 		const texts = data.multicursorText ?? (data.sourceRanges.length === 0 ? [] : [data.text]);
 		if (data.sourceRanges.length !== texts.length || includedSelections.length !== texts.length) {
@@ -309,11 +309,11 @@ export class ClipboardController extends Disposable {
 		if (!file) return false;
 		const model = this.viewport.textModel;
 		const expectedVersion = model.version;
-		const expectedSelections = this.selectionController.selections;
+		const expectedSelections = this.selectionController.getSelections();
 		const request = ++this.asynchronousPasteRequest;
 		event.setHandled();
 		void file.text().then(text => {
-			if (text.length > TEXT_FILE_TRANSFER_MAX_BYTES || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
+			if (text.length > TEXT_FILE_TRANSFER_MAX_BYTES || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.getSelections(), expectedSelections)) return;
 			this.selectionController.execute(TypeOperations.paste(model, expectedSelections, text));
 			this.afterEdit();
 		}).catch(() => {
@@ -327,7 +327,7 @@ export class ClipboardController extends Disposable {
 			(this.element as HTMLTextAreaElement).value = "";
 		}
 		this.viewport.revealPosition(
-			this.selectionController.selections[0]!.getPosition(),
+			this.selectionController.getSelections()[0]!.getPosition(),
 		);
 	}
 }

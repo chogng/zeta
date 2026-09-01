@@ -19,7 +19,7 @@ export class SmartSelectController extends Disposable {
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly onError: (error: unknown) => void) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza smart select dependencies must share a text model");
+		if (viewport.textModel !== selections.context.model) throw new TypeError("Stanza smart select dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
 		this._register(selections.onDidChange(change => {
 			if (change.reason !== CursorChangeReason.Explicit) this.history.length = 0;
@@ -31,7 +31,7 @@ export class SmartSelectController extends Disposable {
 		if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey) return;
 		if (event.key === "ArrowRight") {
 			stopEvent(event, { immediate: true });
-			const before = this.selections.selections;
+			const before = this.selections.getSelections();
 			this.request?.abort();
 			this.request = undefined;
 			if (before.every(selection => selection.isEmpty())) {
@@ -47,7 +47,7 @@ export class SmartSelectController extends Disposable {
 			this.request = undefined;
 			const previous = this.history.pop();
 			if (previous) this.selections.setSelections(previous);
-			this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+			this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 		}
 	}
 
@@ -67,10 +67,10 @@ export class SmartSelectController extends Disposable {
 	}
 
 	private commitExpansion(before: readonly Selection[], snapshot: TextSnapshot, syntaxRanges: readonly Range[]): void {
-		if (this.viewport.textModel.version !== snapshot.version || !Selection.selectionsArrEqual([...this.selections.selections], [...before])) return;
+		if (this.viewport.textModel.version !== snapshot.version || !Selection.selectionsArrEqual([...this.selections.getSelections()], [...before])) return;
 		this.history.push(before);
 		this.selections.setSelections(before.map(selection => expandSmartSelection(this.viewport.textModel, selection, syntaxRanges)));
-		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 }
 

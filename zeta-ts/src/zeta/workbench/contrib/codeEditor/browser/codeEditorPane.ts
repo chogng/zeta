@@ -237,7 +237,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			});
 			if (this.options.trimTrailingWhitespace) {
 				beforeSaveHooks.unshift(() => {
-					const selections = [...(part?.selections?.selections ?? [])];
+					const selections = [...(part?.selections?.getSelections() ?? [])];
 					const operations = trimTrailingWhitespace(modelReference.model, [], this.options.trimTrailingWhitespaceInRegexAndStrings ?? true);
 					if (operations.length > 0) modelReference.model.pushEditOperations(selections, operations, () => selections);
 				});
@@ -247,7 +247,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 					const model = modelReference.model;
 					const lineCount = model.getLineCount();
 					if (!lineCount || strings.lastNonWhitespaceIndex(model.getLineContent(lineCount)) === -1) return;
-					const selections = [...(part?.selections?.selections ?? [])];
+					const selections = [...(part?.selections?.getSelections() ?? [])];
 					const operations = [EditOperation.insert(new Position(lineCount, model.getLineMaxColumn(lineCount)), model.getEOL())];
 					model.pushEditOperations(selections, operations, () => selections);
 				});
@@ -355,7 +355,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	}
 
 	getStatus(): EditorPaneStatus {
-		const selections = this.part.value?.selections?.selections;
+		const selections = this.part.value?.selections?.getSelections();
 		const active = selections?.[0]?.getPosition();
 		return Object.freeze({
 			...(active ? { lineNumber: active.lineNumber, columnNumber: active.column } : {}),

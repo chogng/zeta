@@ -24,7 +24,7 @@ test("Language pair typing auto-closes and overtypes one existing closer", () =>
 	assert.equal(opening.insertedText, true);
 	executeAndRecord(model, selections, opening);
 	assert.equal(model.getText(), "call()");
-	assert.deepEqual(selections.selections[0]!, caret(5));
+	assert.deepEqual(selections.getSelections()[0]!, caret(5));
 	const version = model.version;
 
 	const closing = typeCommand(model, selections, ")", configuration)!;
@@ -32,11 +32,11 @@ test("Language pair typing auto-closes and overtypes one existing closer", () =>
 	selections.execute(closing.command);
 	assert.equal(model.getText(), "call()");
 	assert.equal(model.version, version);
-	assert.deepEqual(selections.selections[0]!, caret(6));
+	assert.deepEqual(selections.getSelections()[0]!, caret(6));
 
 	selections.undo();
 	assert.equal(model.getText(), "call");
-	assert.deepEqual(selections.selections[0]!, caret(4));
+	assert.deepEqual(selections.getSelections()[0]!, caret(4));
 });
 
 test("Language pair backspace removes both empty sides and remains one undo step", () => {
@@ -50,11 +50,11 @@ test("Language pair backspace removes both empty sides and remains one undo step
 
 	executeBackspace(model, selections, configurations);
 	assert.equal(model.getText(), "");
-	assert.deepEqual(selections.selections[0]!, caret(0));
+	assert.deepEqual(selections.getSelections()[0]!, caret(0));
 
 	selections.undo();
 	assert.equal(model.getText(), "[]");
-	assert.deepEqual(selections.selections[0]!, caret(1));
+	assert.deepEqual(selections.getSelections()[0]!, caret(1));
 });
 
 test("Language pair typing surrounds directional selections and auto-closes collapsed cursors", () => {
@@ -68,14 +68,14 @@ test("Language pair typing surrounds directional selections and auto-closes coll
 	assert.ok(result);
 	selections.execute(result.command);
 	assert.equal(model.getText(), "\"alpha\" beta\"\"");
-	assert.deepEqual(selections.selections, primaryFirst([
+	assert.deepEqual(selections.getSelections(), primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (6) + 1), new Position((0) + 1, (1) + 1)),
 		caret(13),
 	], 1));
 
 	selections.undo();
 	assert.equal(model.getText(), "alpha beta");
-	assert.deepEqual(selections.selections, primaryFirst([backward, caret(10)], 1));
+	assert.deepEqual(selections.getSelections(), primaryFirst([backward, caret(10)], 1));
 });
 
 test("Auto-closing respects following text and supports multi-token pairs", () => {
@@ -92,13 +92,13 @@ test("Auto-closing respects following text and supports multi-token pairs", () =
 	const beforeText = typeCommand(model, selections, "<%", configuration)!;
 	selections.execute(beforeText.command);
 	assert.equal(model.getText(), "<%name");
-	assert.deepEqual(selections.selections[0]!, caret(2));
+	assert.deepEqual(selections.getSelections()[0]!, caret(2));
 
 	selections.setSelections([caret(6)]);
 	const atEnd = typeCommand(model, selections, "<%", configuration)!;
 	executeAndRecord(model, selections, atEnd);
 	assert.equal(model.getText(), "<%name<%%>");
-	assert.deepEqual(selections.selections[0]!, caret(8));
+	assert.deepEqual(selections.getSelections()[0]!, caret(8));
 	executeBackspace(model, selections, configurations);
 	assert.equal(model.getText(), "<%name");
 });
@@ -139,7 +139,7 @@ function typeCommand(
 	configuration: Parameters<typeof TypeOperations.typeWithInterceptors>[3],
 	lexicalContext?: Parameters<typeof TypeOperations.typeWithInterceptors>[5],
 ) {
-	return TypeOperations.typeWithInterceptors(model, selections.selections, text, configuration, selections.getAutoClosedCharacters(), lexicalContext);
+	return TypeOperations.typeWithInterceptors(model, selections.getSelections(), text, configuration, selections.getAutoClosedCharacters(), lexicalContext);
 }
 
 function executeAndRecord(
@@ -161,7 +161,7 @@ function executeBackspace(model: TextModel, selections: CursorsController, confi
 		selections.getPrevEditOperationType(),
 		createTestCursorConfiguration(model, configurations),
 		model,
-		[...selections.selections],
+		[...selections.getSelections()],
 		[...selections.getAutoClosedCharacters()],
 	);
 	if (operation[0]) selections.pushUndoStop();

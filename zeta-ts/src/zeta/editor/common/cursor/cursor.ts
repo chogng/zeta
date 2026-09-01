@@ -4,6 +4,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { CursorCollection } from './cursorCollection.js';
 import { CursorContext } from './cursorContext.js';
 import { Selection, SelectionDirection } from '../core/selection.js';
+import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
 import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation, type ITextModel, type IValidEditOperation } from '../model.js';
 import { type TrackedRange } from '../model/trackedRange.js';
@@ -15,7 +16,7 @@ import { CursorChangeReason } from '../cursorEvents.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import { type ICommand, type IEditOperationBuilder } from '../editorCommon.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
-import { CursorConfiguration, EditOperationType, type ICursorSimpleModel } from '../cursorCommon.js';
+import { CursorConfiguration, CursorState, EditOperationType, type ICursorSimpleModel } from '../cursorCommon.js';
 import { type ICoordinatesConverter } from '../coordinatesConverter.js';
 import { type TextEdit } from '../languages.js';
 
@@ -304,14 +305,44 @@ export class CursorsController extends Disposable {
 		}
 	}
 
-	get selections(): readonly Selection[] {
+	public getPrimaryCursorState(): CursorState {
 		this.assertNotDisposed();
-		return this.currentSelections;
+		return this.cursors.getPrimaryCursor();
 	}
 
-	get textModel(): TextModel {
+	public getLastAddedCursorIndex(): number {
 		this.assertNotDisposed();
-		return this.model;
+		return this.cursors.getLastAddedCursorIndex();
+	}
+
+	public getCursorStates(): CursorState[] {
+		this.assertNotDisposed();
+		return this.cursors.getAll();
+	}
+
+	public getSelection(): Selection {
+		this.assertNotDisposed();
+		return this.cursors.getPrimaryCursor().modelState.selection;
+	}
+
+	public getTopMostViewPosition(): Position {
+		this.assertNotDisposed();
+		return this.cursors.getTopMostViewPosition();
+	}
+
+	public getBottomMostViewPosition(): Position {
+		this.assertNotDisposed();
+		return this.cursors.getBottomMostViewPosition();
+	}
+
+	public getSelections(): Selection[] {
+		this.assertNotDisposed();
+		return this.cursors.getSelections();
+	}
+
+	public getPosition(): Position {
+		this.assertNotDisposed();
+		return this.cursors.getPrimaryCursor().modelState.position;
 	}
 
 	getPrevEditOperationType(): EditOperationType {

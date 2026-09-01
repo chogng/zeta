@@ -204,7 +204,7 @@ export abstract class AbstractEditContext extends ViewPart {
 
 	protected readPosition(): EditContextPosition {
 		const viewport = this.requireViewport();
-		const position = this.requireSelectionController().selections[0]!.getPosition();
+		const position = this.requireSelectionController().getSelections()[0]!.getPosition();
 		return viewport.getPositionContentCoordinates(position);
 	}
 
@@ -332,7 +332,7 @@ export abstract class AbstractEditContext extends ViewPart {
 
 	protected synchronizeState(): void {
 		const viewport = this.requireViewport();
-		const selection = this.requireSelectionController().selections[0]!;
+		const selection = this.requireSelectionController().getSelections()[0]!;
 		this.syncState({
 			text: viewport.textModel.getText(),
 			selectionStart: viewport.textModel.offsetAt(selection.getStartPosition()),
@@ -404,7 +404,7 @@ export class CompositionController extends Disposable {
 		private readonly selectionController: CursorsController,
 	) {
 		super();
-		if (viewport.textModel !== selectionController.textModel) {
+		if (viewport.textModel !== selectionController.context.model) {
 			this.dispose();
 			throw new TypeError(
 				"Stanza composition and selection controllers must share one text model",
@@ -451,13 +451,13 @@ export class CompositionController extends Disposable {
 		if (
 			!IME.enabled ||
 			this.selectionController.readOnly ||
-			this.selectionController.selections.length !== 1
+			this.selectionController.getSelections().length !== 1
 		) {
 			event.browserEvent.preventDefault();
 			return;
 		}
 		this.input.prepareComposition();
-		const startPosition = this.selectionController.selections[0]!.getStartPosition();
+		const startPosition = this.selectionController.getSelections()[0]!.getStartPosition();
 		const session = this.selectionController.beginComposition();
 		this.activeComposition = {
 			session,
@@ -535,7 +535,7 @@ export class CompositionController extends Disposable {
 		active.updated = true;
 		this.viewport.setCompositionRange(active.session.currentRange);
 		this.viewport.revealPosition(
-			this.selectionController.selections[0]!.getPosition(),
+			this.selectionController.getSelections()[0]!.getPosition(),
 		);
 		this.positionInputAtPrimary();
 	}
@@ -556,7 +556,7 @@ export class CompositionController extends Disposable {
 	}
 
 	private positionInputAtPrimary(): void {
-		this.positionInput(this.selectionController.selections[0]!.getPosition());
+		this.positionInput(this.selectionController.getSelections()[0]!.getPosition());
 	}
 
 	private positionInput(position: Position): void {

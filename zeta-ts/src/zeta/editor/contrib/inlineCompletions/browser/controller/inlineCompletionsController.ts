@@ -58,7 +58,7 @@ export class InlineCompletionsController extends Disposable {
 			this.clear();
 			return;
 		}
-		const selection = this.selections.selections[0]!;
+		const selection = this.selections.getSelections()[0]!;
 		if (!selection.isEmpty()) return;
 		this.request?.abort();
 		const request = this.request = new AbortController();
@@ -79,7 +79,7 @@ export class InlineCompletionsController extends Disposable {
 			this.element.hidden = true;
 			return;
 		}
-		const selection = this.selections.selections[0]!;
+		const selection = this.selections.getSelections()[0]!;
 		const range = item.range ?? Range.fromPositions(selection.getPosition());
 		const coordinates = this.viewport.getPositionContentCoordinates(range.getStartPosition());
 		const scroll = this.viewport.viewportLayout.scrollPosition;
@@ -92,9 +92,9 @@ export class InlineCompletionsController extends Disposable {
 	private accept(): void {
 		const item = this.item;
 		if (!item) return;
-		const selection = this.selections.selections[0]!;
+		const selection = this.selections.getSelections()[0]!;
 		const edits = [...(item.additionalTextEdits ?? []), { range: item.range ?? Range.fromPositions(selection.getPosition()), text: item.insertText }].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()));
-		const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, edits);
+		const command = createEditorEditCommand(this.viewport.textModel, this.selections.getSelections(), edits);
 		if (command) this.selections.execute(command);
 		this.clear();
 	}

@@ -189,7 +189,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 	assert.equal(paste.defaultPrevented, true);
 	assert.deepEqual({
 		text: model.getText(),
-		selections: selections.selections,
+		selections: selections.getSelections(),
 	}, {
 		text: "one one\nthree three",
 		selections: primaryFirst([
@@ -201,7 +201,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 	selections.undo();
 	assert.deepEqual({
 		text: model.getText(),
-		selections: selections.selections,
+		selections: selections.getSelections(),
 	}, {
 		text: "one two\nthree four",
 		selections: pasteTargets,
@@ -252,7 +252,7 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
 	assert.equal(paste.defaultPrevented, true);
 	assert.deepEqual({
 		text: model.getText(),
-		selections: selections.selections,
+		selections: selections.getSelections(),
 	}, {
 		text: "X\nYa X\nYb",
 		selections: primaryFirst([
@@ -325,7 +325,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 	input.element.dispatchEvent(clipboardEvent(dom.window, "paste", lineData));
 	assert.deepEqual({
 		text: model.getText(),
-		selections: selections.selections,
+		selections: selections.getSelections(),
 	}, {
 		text: "one\none\nthree\ntwo\nthree",
 		selections: primaryFirst([
@@ -337,7 +337,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 	selections.undo();
 	assert.deepEqual({
 		text: model.getText(),
-		selections: selections.selections,
+		selections: selections.getSelections(),
 	}, {
 		text: "one\ntwo\nthree",
 		selections: targets,
@@ -349,7 +349,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 	assert.deepEqual({
 		clipboard: cutData.getData("text/plain"),
 		text: model.getText(),
-		selection: selections.selections[0]!,
+		selection: selections.getSelections()[0]!,
 	}, {
 		clipboard: "two\n",
 		text: "one\nthree",
@@ -399,7 +399,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
 	input.element.dispatchEvent(clipboardEvent(dom.window, "paste", data));
 	assert.deepEqual({
 		text: model.getText(),
-		selections: selections.selections,
+		selections: selections.getSelections(),
 	}, {
 		text: "a\na\nbb",
 		selections: primaryFirst([

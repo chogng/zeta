@@ -13,18 +13,18 @@ test('delete-left removes one complete grapheme', () => {
 	using model = new TextModel('a😀b');
 	using languages = new TestLanguageConfigurationService();
 	using controller = createTestCursorsController(model, [Selection.fromPositions(new Position(1, 4))]);
-	const operation = DeleteOperations.deleteLeft(EditOperationType.Other, createTestCursorConfiguration(model, languages), model, [...controller.selections], []);
+	const operation = DeleteOperations.deleteLeft(EditOperationType.Other, createTestCursorConfiguration(model, languages), model, [...controller.getSelections()], []);
 	controller.executeCommands(operation[1]);
 	assert.equal(model.getText(), 'ab');
-	assert.deepEqual(controller.selections, [Selection.fromPositions(new Position(1, 2))]);
+	assert.deepEqual(controller.getSelections(), [Selection.fromPositions(new Position(1, 2))]);
 });
 
 test('delete-right joins adjacent physical lines', () => {
 	using model = new TextModel('a\nb');
 	using languages = new TestLanguageConfigurationService();
 	using controller = createTestCursorsController(model, [Selection.fromPositions(new Position(1, 2))]);
-	const operation = DeleteOperations.deleteRight(EditOperationType.Other, createTestCursorConfiguration(model, languages), model, [...controller.selections]);
+	const operation = DeleteOperations.deleteRight(EditOperationType.Other, createTestCursorConfiguration(model, languages), model, [...controller.getSelections()]);
 	controller.executeCommands(operation[1]);
 	assert.equal(model.getText(), 'ab');
-	assert.deepEqual(controller.selections, [Selection.fromPositions(new Position(1, 2))]);
+	assert.deepEqual(controller.getSelections(), [Selection.fromPositions(new Position(1, 2))]);
 });

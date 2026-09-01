@@ -11,13 +11,13 @@ test("Toggle line comment inserts after indentation and restores one isolated un
 	using model = new TextModel("  alpha\n\tbeta\n\n gamma");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((3) + 1, (1) + 1))]);
 
-	selections.execute(createToggleLineCommentCommand(model, selections.selections, {
+	selections.execute(createToggleLineCommentCommand(model, selections.getSelections(), {
 		lineComment: "//",
 	}));
 
 	assert.equal(model.getText(), "  // alpha\n\t// beta\n//\n // gamma");
 	assert.deepEqual(
-		selections.selections[0]!,
+		selections.getSelections()[0]!,
 		Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((3) + 1, (4) + 1)),
 	);
 	selections.undo();
@@ -30,7 +30,7 @@ test("Toggle line comment removes only when all selected content lines are comme
 	using model = new TextModel("// alpha\n  // beta\n\n// gamma");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((3) + 1, (8) + 1))]);
 
-	selections.execute(createToggleLineCommentCommand(model, selections.selections, {
+	selections.execute(createToggleLineCommentCommand(model, selections.getSelections(), {
 		lineComment: "//",
 	}));
 	assert.equal(model.getText(), "alpha\n  beta\n\ngamma");
@@ -40,7 +40,7 @@ test("Toggle line comment removes only when all selected content lines are comme
 		text: "x",
 	}]);
 	selections.setSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (7) + 1))]);
-	selections.execute(createToggleLineCommentCommand(model, selections.selections, {
+	selections.execute(createToggleLineCommentCommand(model, selections.getSelections(), {
 		lineComment: "//",
 		insertSpace: false,
 	}));

@@ -34,7 +34,7 @@ export class CursorUndoRedoController extends Disposable implements IEditorContr
 	}
 
 	private reveal(): void {
-		this.context.viewport.revealPosition(this.context.selectionController.selections[0]!.getPosition());
+		this.context.viewport.revealPosition(this.context.selectionController.getSelections()[0]!.getPosition());
 	}
 }
 

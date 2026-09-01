@@ -16,23 +16,23 @@ test('Canonical line commands execute through ICommand without the legacy contro
 	using model = new TextModel('zero\none\ntwo');
 	using selections = createTestCursorsController(model, [caret(1, 1)]);
 
-	selections.executeCommand(new CopyLinesCommand(selections.selections[0]!, true));
-	assert.deepEqual({ text: model.getText(), selection: selections.selections[0] }, {
+	selections.executeCommand(new CopyLinesCommand(selections.getSelections()[0]!, true));
+	assert.deepEqual({ text: model.getText(), selection: selections.getSelections()[0] }, {
 		text: 'zero\none\none\ntwo',
 		selection: caret(2, 1),
 	});
 	selections.executeCommand(new MoveLinesCommand(
-		selections.selections[0]!,
+		selections.getSelections()[0]!,
 		true,
 		EditorAutoIndentStrategy.None,
 		configurations,
 	));
-	assert.deepEqual({ text: model.getText(), selection: selections.selections[0] }, {
+	assert.deepEqual({ text: model.getText(), selection: selections.getSelections()[0] }, {
 		text: 'zero\none\ntwo\none',
 		selection: caret(3, 1),
 	});
 	selections.setSelections([Selection.fromPositions(new Position(1, 1), new Position(4, 4))]);
-	selections.executeCommand(new SortLinesCommand(selections.selections[0]!, false));
+	selections.executeCommand(new SortLinesCommand(selections.getSelections()[0]!, false));
 	assert.equal(model.getText(), 'one\none\ntwo\nzero');
 	selections.undo();
 	assert.equal(model.getText(), 'zero\none\ntwo\none');
@@ -52,21 +52,21 @@ test("Delete lines removes selected physical line groups and keeps a valid final
 		Selection.fromPositions(new Position((3) + 1, (0) + 1), new Position((4) + 1, (0) + 1)),
 	], 1));
 
-	selections.execute(createDeleteLinesCommand(model, selections.selections));
+	selections.execute(createDeleteLinesCommand(model, selections.getSelections()));
 	assert.equal(model.getText(), "zero\ntwo\nfour");
 	selections.undo();
 	assert.equal(model.getText(), "zero\none\ntwo\nthree\nfour");
 
 	selections.setSelections([caret(0, 0)]);
-	selections.execute(createDeleteLinesCommand(model, selections.selections));
+	selections.execute(createDeleteLinesCommand(model, selections.getSelections()));
 	assert.equal(model.getText(), "one\ntwo\nthree\nfour");
 	selections.setSelections([caret(3, 0)]);
-	selections.execute(createDeleteLinesCommand(model, selections.selections));
+	selections.execute(createDeleteLinesCommand(model, selections.getSelections()));
 	assert.equal(model.getText(), "one\ntwo\nthree");
 	selections.setSelections([caret(0, 0)]);
-	selections.execute(createDeleteLinesCommand(model, selections.selections));
-	selections.execute(createDeleteLinesCommand(model, selections.selections));
-	selections.execute(createDeleteLinesCommand(model, selections.selections));
+	selections.execute(createDeleteLinesCommand(model, selections.getSelections()));
+	selections.execute(createDeleteLinesCommand(model, selections.getSelections()));
+	selections.execute(createDeleteLinesCommand(model, selections.getSelections()));
 	assert.equal(model.getText(), "");
 });
 
@@ -76,7 +76,7 @@ test("Duplicate lines supports multi-line groups, document edges, and isolated u
 
 	selections.execute(createDuplicateLinesCommand(
 		model,
-		selections.selections,
+		selections.getSelections(),
 		EditorLineDuplicateDirection.Down,
 	));
 	assert.equal(model.getText(), "zero\none\ntwo\none\ntwo\nthree");
@@ -86,14 +86,14 @@ test("Duplicate lines supports multi-line groups, document edges, and isolated u
 	selections.setSelections([caret(0, 1)]);
 	selections.execute(createDuplicateLinesCommand(
 		model,
-		selections.selections,
+		selections.getSelections(),
 		EditorLineDuplicateDirection.Up,
 	));
 	assert.equal(model.getText(), "zero\nzero\none\ntwo\nthree");
 	selections.setSelections([caret(4, 2)]);
 	selections.execute(createDuplicateLinesCommand(
 		model,
-		selections.selections,
+		selections.getSelections(),
 		EditorLineDuplicateDirection.Down,
 	));
 	assert.equal(model.getText(), "zero\nzero\none\ntwo\nthree\nthree");
@@ -114,21 +114,21 @@ test("Move lines swaps selected groups with their neighboring rows and keeps dir
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((2) + 1, (3) + 1), new Position((1) + 1, (1) + 1))]);
 
-	selections.execute(createMoveLinesCommand(model, selections.selections, EditorLineMoveDirection.Down));
+	selections.execute(createMoveLinesCommand(model, selections.getSelections(), EditorLineMoveDirection.Down));
 	assert.equal(model.getText(), "zero\nthree\none\ntwo\nfour");
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(
 		new Position((3) + 1, (3) + 1),
 		new Position((2) + 1, (1) + 1),
 	));
-	selections.execute(createMoveLinesCommand(model, selections.selections, EditorLineMoveDirection.Up));
+	selections.execute(createMoveLinesCommand(model, selections.getSelections(), EditorLineMoveDirection.Up));
 	assert.equal(model.getText(), "zero\none\ntwo\nthree\nfour");
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(
 		new Position((2) + 1, (3) + 1),
 		new Position((1) + 1, (1) + 1),
 	));
 
 	selections.setSelections([caret(0, 0)]);
-	selections.execute(createMoveLinesCommand(model, selections.selections, EditorLineMoveDirection.Up));
+	selections.execute(createMoveLinesCommand(model, selections.getSelections(), EditorLineMoveDirection.Up));
 	assert.equal(model.getText(), "zero\none\ntwo\nthree\nfour");
 });
 
@@ -139,9 +139,9 @@ test("Move lines preserves disjoint selected groups and rejects invalid directio
 		caret(3, 2),
 	], 1));
 
-	selections.execute(createMoveLinesCommand(model, selections.selections, EditorLineMoveDirection.Down));
+	selections.execute(createMoveLinesCommand(model, selections.getSelections(), EditorLineMoveDirection.Down));
 	assert.equal(model.getText(), "zero\ntwo\none\nfour\nthree");
-	assert.deepEqual(selections.selections, primaryFirst([
+	assert.deepEqual(selections.getSelections(), primaryFirst([
 		caret(2, 1),
 		caret(4, 2),
 	], 1));
@@ -150,7 +150,7 @@ test("Move lines preserves disjoint selected groups and rejects invalid directio
 
 	assert.throws(() => createMoveLinesCommand(
 		model,
-		selections.selections,
+		selections.getSelections(),
 		"sideways" as EditorLineMoveDirection,
 	), /Unknown editor line move direction/);
 });
@@ -162,9 +162,9 @@ test("Insert lines deduplicates selected groups, places carets on blank rows, an
 		Selection.fromPositions(new Position((2) + 1, (0) + 1), new Position((3) + 1, (0) + 1)),
 	], 1));
 
-	selections.execute(createInsertLineCommand(model, selections.selections, EditorLineInsertDirection.After));
+	selections.execute(createInsertLineCommand(model, selections.getSelections(), EditorLineInsertDirection.After));
 	assert.equal(model.getText(), "zero\n\none\ntwo\n\nthree");
-	assert.deepEqual(selections.selections, primaryFirst([
+	assert.deepEqual(selections.getSelections(), primaryFirst([
 		caret(1, 0),
 		caret(4, 0),
 	], 1));
@@ -172,12 +172,12 @@ test("Insert lines deduplicates selected groups, places carets on blank rows, an
 	assert.equal(model.getText(), "zero\none\ntwo\nthree");
 
 	selections.setSelections([caret(0, 0)]);
-	selections.execute(createInsertLineCommand(model, selections.selections, EditorLineInsertDirection.Before));
+	selections.execute(createInsertLineCommand(model, selections.getSelections(), EditorLineInsertDirection.Before));
 	assert.equal(model.getText(), "\nzero\none\ntwo\nthree");
-	assert.deepEqual(selections.selections[0]!, caret(0, 0));
+	assert.deepEqual(selections.getSelections()[0]!, caret(0, 0));
 	assert.throws(() => createInsertLineCommand(
 		model,
-		selections.selections,
+		selections.getSelections(),
 		"nearby" as EditorLineInsertDirection,
 	), /Unknown editor line insertion direction/);
 });

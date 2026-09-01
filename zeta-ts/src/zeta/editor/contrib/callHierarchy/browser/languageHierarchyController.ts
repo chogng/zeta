@@ -45,7 +45,7 @@ export class LanguageHierarchyController extends Disposable {
 	private async prepare(kind: HierarchyKind): Promise<void> {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
-		const anchor = this.selections.selections[0]!.getPosition();
+		const anchor = this.selections.getSelections()[0]!.getPosition();
 		try {
 			const sessions = kind === "call"
 				? (await this.service.prepareCallHierarchy(this.languageId, anchor, request.signal)).map(callSession)

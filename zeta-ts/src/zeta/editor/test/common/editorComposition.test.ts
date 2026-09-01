@@ -47,13 +47,13 @@ test("Composition revisions commit as one selection-aware undo step", () => {
 	composition.commit();
 	const afterCommit = {
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 		active: composition.active,
 	};
 	controller.undo();
 	const afterUndo = {
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 	};
 	controller.redo();
 
@@ -67,7 +67,7 @@ test("Composition revisions commit as one selection-aware undo step", () => {
 		afterUndo,
 		afterRedo: {
 			text: model.getText(),
-			selections: controller.selections,
+			selections: controller.getSelections(),
 		},
 	}, {
 		transactionIds: [1, 1, 1],
@@ -138,7 +138,7 @@ test("Composition cancellation restores text without redo history", () => {
 
 	assert.deepEqual({
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 		reason: cancellation?.reason,
 		active: composition.active,
 		canUndo: model.canUndo(),
@@ -220,7 +220,7 @@ test("No-op composition updates may move the caret without history", () => {
 	assert.deepEqual({
 		change,
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 		canUndo: model.canUndo(),
 	}, {
 		change: undefined,

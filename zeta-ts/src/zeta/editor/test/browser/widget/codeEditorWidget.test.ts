@@ -74,7 +74,8 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(TextAreaEditContextRegistry.get(ownerId), undefined);
 	assert.equal(editor.element.isConnected, false);
 	assert.equal(model.getText(), "alpha");
-	assert.throws(() => editor.selections.textModel, /already disposed/);
+	assert.equal(editor.selections.context.model, model);
+	assert.throws(() => editor.selections.getSelections(), /already disposed/);
 	dom.window.close();
 });
 
@@ -574,7 +575,7 @@ test("CodeEditorWidget creates one selection controller for its model", () => {
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
-	assert.equal(editor.selections.textModel, model);
+	assert.equal(editor.selections.context.model, model);
 	dom.window.close();
 });
 

@@ -16,7 +16,7 @@ export class BracketMatchController extends Disposable {
 	) {
 		super();
 		try {
-			if (selections.textModel !== bracketPairs.textModel || selections.textModel !== decorations.textModel) {
+			if (selections.context.model !== bracketPairs.textModel || selections.context.model !== decorations.textModel) {
 				throw new TypeError("Stanza bracket matching dependencies must share one text model");
 			}
 			this._register(selections.onDidChange(() => this.update()));
@@ -34,7 +34,7 @@ export class BracketMatchController extends Disposable {
 			return;
 		}
 		const ranges = new Map<string, Range>();
-		for (const selection of this.selections.selections) {
+		for (const selection of this.selections.getSelections()) {
 			if (!selection.isEmpty()) continue;
 			const match = this.bracketPairs.matchBracket(selection.getPosition())
 				?? (this.mode === "always" ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);

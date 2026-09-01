@@ -23,8 +23,8 @@ test('canonical indentation commands convert the document and preserve the selec
 
 	cursors.executeCommand(new IndentationToSpacesCommand(initial, 4));
 	assert.equal(model.getText(), '    alpha\n    beta');
-	assert.deepEqual(cursors.selections, [Selection.fromPositions(new Position(1, 5), new Position(2, 5))]);
-	cursors.executeCommand(new IndentationToTabsCommand(cursors.selections[0]!, 4));
+	assert.deepEqual(cursors.getSelections(), [Selection.fromPositions(new Position(1, 5), new Position(2, 5))]);
+	cursors.executeCommand(new IndentationToTabsCommand(cursors.getSelections()[0]!, 4));
 	assert.equal(model.getText(), '\talpha\n\tbeta');
 });
 

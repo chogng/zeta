@@ -44,7 +44,7 @@ test("Go-to-bracket shortcut uses the shared structural bracket index", () => {
 	const jump = keydown(dom.window, "\\", { ctrlKey: true, shiftKey: true });
 	input.dispatchEvent(jump);
 	assert.equal(jump.defaultPrevented, true);
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (6) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (6) + 1)));
 
 	dom.window.close();
 });

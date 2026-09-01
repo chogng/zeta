@@ -185,7 +185,7 @@ export class ScreenReaderSupport extends Disposable {
 		}
 		this.content.sync(createScreenReaderContentState(
 			this.options.model,
-			this.options.selectionController.selections[0]!,
+			this.options.selectionController.getSelections()[0]!,
 			{ pageSize: this.options.accessibilityPageSize ?? DEFAULT_SCREEN_READER_PAGE_SIZE },
 		));
 	}
@@ -204,7 +204,7 @@ export class ScreenReaderSupport extends Disposable {
 		}
 
 		const viewportLayout = this.options.viewport.currentLayout;
-		const selection = this.options.selectionController.selections[0]!;
+		const selection = this.options.selectionController.getSelections()[0]!;
 		const position = this.options.viewport.getPositionContentCoordinates(selection.getPosition());
 		const scrollPosition = viewportLayout.scrollPosition;
 		const viewportWidth = viewportLayout.viewportSize.width;
@@ -252,7 +252,7 @@ export class ScreenReaderSupport extends Disposable {
 		const model = this.options.model;
 		const anchor = model.positionAt(domSelection.anchorOffset);
 		const active = model.positionAt(domSelection.activeOffset);
-		const current = this.options.selectionController.selections[0]!;
+		const current = this.options.selectionController.getSelections()[0]!;
 		if (current.getSelectionStart().equals(anchor) && current.getPosition().equals(active)) return;
 		this.options.selectionController.setSelections([Selection.fromPositions(anchor, active)]);
 		this.options.viewport.revealPosition(active);

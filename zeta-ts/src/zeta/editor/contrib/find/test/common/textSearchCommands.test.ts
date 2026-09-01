@@ -24,7 +24,7 @@ test("replace match is isolated, positions the caret, and rejects stale results"
 
 	selections.execute(createReplaceTextMatchCommand(model, match, "first"));
 	assert.equal(model.getText(), "first two");
-	assert.deepEqual(selections.selections[0]!.getPosition(), new Position((0) + 1, (5) + 1));
+	assert.deepEqual(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (5) + 1));
 	assert.throws(() => createReplaceTextMatchCommand(model, match, "stale"), /stale model version/);
 
 	selections.undo();
@@ -38,7 +38,7 @@ test("replace all maps the result caret and undoes as one transaction", () => {
 
 	selections.execute(createReplaceAllTextMatchesCommand(model, matches, ["long", "", "x"]));
 	assert.equal(model.getText(), "long  x");
-	assert.deepEqual(selections.selections[0]!.getPosition(), new Position((0) + 1, (7) + 1));
+	assert.deepEqual(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (7) + 1));
 
 	selections.undo();
 	assert.equal(model.getText(), "a a a");

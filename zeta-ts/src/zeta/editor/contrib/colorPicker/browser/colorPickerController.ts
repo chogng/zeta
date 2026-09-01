@@ -47,7 +47,7 @@ export class ColorPickerController extends Disposable {
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError('Stanza color picker dependencies must share a text model');
+		if (viewport.textModel !== selections.context.model) throw new TypeError('Stanza color picker dependencies must share a text model');
 		this.widget = this._register(new EditorColorPickerDialog(
 			viewport.element,
 			color => this.refreshPresentations(color),
@@ -107,7 +107,7 @@ export class ColorPickerController extends Disposable {
 		}
 		if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'c') return;
 		stopEvent(event);
-		void this.showAtPosition(this.selections.selections[0]!.getPosition());
+		void this.showAtPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
 	private handlePointerDown(event: PointerEvent): void {
@@ -186,7 +186,7 @@ export class ColorPickerController extends Disposable {
 			...(presentation.additionalTextEdits ?? []),
 		].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()) || Position.compare(Range.lift(left.range).getEndPosition(), Range.lift(right.range).getEndPosition()));
 		try {
-			const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, edits);
+			const command = createEditorEditCommand(this.viewport.textModel, this.selections.getSelections(), edits);
 			if (command) this.selections.execute(command);
 			this.close(true);
 		} catch (error) {

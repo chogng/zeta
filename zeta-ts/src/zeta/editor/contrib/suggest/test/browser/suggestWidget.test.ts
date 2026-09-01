@@ -102,7 +102,7 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
 	fixture.input.element.dispatchEvent(enter);
 	assert.equal(enter.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console");
-	assert.equal(Position.compare(fixture.selections.selections[0]!.getPosition(), new Position((0) + 1, (7) + 1)), 0);
+	assert.equal(Position.compare(fixture.selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (7) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "both");
 	assert.equal(fixture.dom.window.document.activeElement, fixture.input.element);
@@ -124,7 +124,7 @@ test("Typing a declared completion commit character accepts it atomically before
 
 	assert.equal(commit.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console.");
-	assert.equal(Position.compare(fixture.selections.selections[0]!.getPosition(), new Position((0) + 1, (8) + 1)), 0);
+	assert.equal(Position.compare(fixture.selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (8) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
 	fixture.selections.undo();
 	assert.equal(fixture.model.getText(), "con");
@@ -155,11 +155,11 @@ test("Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeh
 	const next = keyboardEvent(fixture.dom.window, "Tab");
 	fixture.input.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
+	assert.deepEqual(fixture.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
 	const previous = keyboardEvent(fixture.dom.window, "Tab", true);
 	fixture.input.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
+	assert.deepEqual(fixture.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
 	const escape = keyboardEvent(fixture.dom.window, "Escape");
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);

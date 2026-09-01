@@ -14,5 +14,5 @@ test('cursor edit updates the shared model and resulting selection together', ()
 		primarySelectionIndex: 0,
 	});
 	assert.equal(model.getValue(), 'abc');
-	assert.equal(cursors.selections[0]!.positionColumn, 2);
+	assert.equal(cursors.getSelections()[0]!.positionColumn, 2);
 });

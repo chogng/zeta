@@ -18,7 +18,7 @@ class InPlaceReplaceController extends Disposable {
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError('In-place replace dependencies must share a text model');
+		if (viewport.textModel !== selections.context.model) throw new TypeError('In-place replace dependencies must share a text model');
 		this._register(addDisposableListener(input, 'keydown', event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey) return;
 			const direction = event.key === ',' ? -1 : event.key === '.' ? 1 : undefined;
@@ -30,11 +30,11 @@ class InPlaceReplaceController extends Disposable {
 
 	private async replace(direction: -1 | 1): Promise<boolean> {
 		const model = this.viewport.textModel;
-		const selectionState = this.selections.selections;
+		const selectionState = this.selections.getSelections();
 		const selection = selectionState[0]!;
 		if (selection.startLineNumber !== selection.endLineNumber) return false;
 		const result = await this.editorWorker.navigateValueSet(selection, direction > 0, this.wordDefinition());
-		if (!result || !Selection.selectionsArrEqual([...this.selections.selections], [...selectionState])) return false;
+		if (!result || !Selection.selectionsArrEqual([...this.selections.getSelections()], [...selectionState])) return false;
 		const command = createEditorEditCommand(model, selectionState, [{ range: result.range, text: result.value }]);
 		if (!command) return false;
 		this.selections.execute(command);

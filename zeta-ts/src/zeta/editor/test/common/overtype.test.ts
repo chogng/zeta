@@ -9,9 +9,9 @@ import { createTestCursorsController } from './testCursorConfiguration.js';
 test("Overtype replaces complete following graphemes and stops at physical line ends", () => {
 	using model = new TextModel("a😊b\ncd");
 	using selections = createTestCursorsController(model, primaryFirst([caret(0, 1), caret(1, 1)], 0));
-	selections.execute(AutoClosingOvertypeOperation.getEdits(model, selections.selections, "XY"));
+	selections.execute(AutoClosingOvertypeOperation.getEdits(model, selections.getSelections(), "XY"));
 	assert.equal(model.getText(), "aXY\ncXY");
-	assert.deepEqual(selections.selections, primaryFirst([caret(0, 3), caret(1, 3)], 0));
+	assert.deepEqual(selections.getSelections(), primaryFirst([caret(0, 3), caret(1, 3)], 0));
 	selections.undo();
 	assert.equal(model.getText(), "a😊b\ncd");
 });

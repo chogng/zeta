@@ -28,7 +28,7 @@ export class GotoLineController extends Disposable {
 	) {
 		super();
 		this.targetOperatingSystem = options.operatingSystem ?? operatingSystem;
-		if (viewport.textModel !== selections.textModel) {
+		if (viewport.textModel !== selections.context.model) {
 			this.dispose();
 			throw new TypeError("Stanza Go to Line dependencies must share one text model");
 		}
@@ -70,7 +70,7 @@ export class GotoLineController extends Disposable {
 		if (!this.visible) this.initialScrollPosition = this.viewport.viewportLayout.scrollPosition;
 		this.element.hidden = false;
 		this.element.classList.add("visible");
-		const current = this.selections.selections[0]!.getPosition();
+		const current = this.selections.getSelections()[0]!.getPosition();
 		this.input.value = `${current.lineNumber}:${current.column}`;
 		this.position();
 		this.preview();

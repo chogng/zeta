@@ -10,16 +10,16 @@ test("Join lines removes indentation, retains one separator, and restores undo",
 	using model = new TextModel("hello\n  world\nhello \n\tworld\n\nlast");
 	using selections = createTestCursorsController(model, [caret(0, 2)]);
 
-	selections.execute(createJoinLinesCommand(model, selections.selections));
+	selections.execute(createJoinLinesCommand(model, selections.getSelections()));
 	assert.equal(model.getText(), "hello world\nhello \n\tworld\n\nlast");
-	assert.deepEqual(selections.selections[0]!, caret(0, 5));
+	assert.deepEqual(selections.getSelections()[0]!, caret(0, 5));
 	selections.undo();
 	assert.equal(model.getText(), "hello\n  world\nhello \n\tworld\n\nlast");
 
 	selections.setSelections([caret(2, 1)]);
-	selections.execute(createJoinLinesCommand(model, selections.selections));
+	selections.execute(createJoinLinesCommand(model, selections.getSelections()));
 	assert.equal(model.getText(), "hello\n  world\nhello world\n\nlast");
-	assert.deepEqual(selections.selections[0]!, caret(2, 6));
+	assert.deepEqual(selections.getSelections()[0]!, caret(2, 6));
 });
 
 test("Join lines joins ranges, reduces overlapping cursors, and preserves the primary group", () => {
@@ -30,9 +30,9 @@ test("Join lines joins ranges, reduces overlapping cursors, and preserves the pr
 		Selection.fromPositions(new Position((3) + 1, (1) + 1), new Position((4) + 1, (2) + 1)),
 	], 2));
 
-	selections.execute(createJoinLinesCommand(model, selections.selections));
+	selections.execute(createJoinLinesCommand(model, selections.getSelections()));
 	assert.equal(model.getText(), "zero one\ntwo\nthree four\nfive");
-	assert.deepEqual(selections.selections, primaryFirst([
+	assert.deepEqual(selections.getSelections(), primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (7) + 1)),
 		Selection.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (8) + 1)),
 	], 1));
@@ -44,9 +44,9 @@ test("Join lines at the final line leaves collapsed and range selections unchang
 		new Position((1) + 1, (1) + 1),
 		new Position((1) + 1, (3) + 1),
 	)]);
-	selections.execute(createJoinLinesCommand(model, selections.selections));
+	selections.execute(createJoinLinesCommand(model, selections.getSelections()));
 	assert.equal(model.getText(), "first\nlast");
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(
 		new Position((1) + 1, (1) + 1),
 		new Position((1) + 1, (3) + 1),
 	));

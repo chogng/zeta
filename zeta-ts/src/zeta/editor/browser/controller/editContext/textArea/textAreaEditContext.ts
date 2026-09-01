@@ -294,7 +294,7 @@ class TextAreaAccessibilityController extends Disposable {
 		const input = this.input.getTextAreaDomNode();
 		if (this.isDisposed || this.compositionController.composing || input.ownerDocument.activeElement !== input) return;
 		const model = this.viewport.textModel;
-		const selection = this.selectionController.selections[0]!;
+		const selection = this.selectionController.getSelections()[0]!;
 		this.updateAccessibleSelectionDescription();
 		if (model.length > MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) {
 			const selectionStartOffset = model.offsetAt(selection.getStartPosition());
@@ -336,7 +336,7 @@ class TextAreaAccessibilityController extends Disposable {
 	}
 
 	private updateAccessibleSelectionDescription(): void {
-		const selections = this.selectionController.selections;
+		const selections = this.selectionController.getSelections();
 		if (selections.length === 1) {
 			this.input.domNode.removeAttribute('aria-description');
 			return;
@@ -388,13 +388,13 @@ class TextAreaAccessibilityController extends Disposable {
 	private applyAccessibleSelection(model: TextModel, anchorOffset: number, activeOffset: number): void {
 		const safeAnchorOffset = clampOffset(anchorOffset, model.length);
 		const safeActiveOffset = clampOffset(activeOffset, model.length);
-		const current = this.selectionController.selections[0]!;
+		const current = this.selectionController.getSelections()[0]!;
 		if (model.offsetAt(current.getSelectionStart()) === safeAnchorOffset && model.offsetAt(current.getPosition()) === safeActiveOffset) return;
 		this.selectionController.setSelections([Selection.fromPositions(
 			model.positionAt(safeAnchorOffset),
 			model.positionAt(safeActiveOffset),
 		)]);
-		this.viewport.revealPosition(this.selectionController.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
 	}
 }
 

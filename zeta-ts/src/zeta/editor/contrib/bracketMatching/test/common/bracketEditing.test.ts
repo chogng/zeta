@@ -18,11 +18,11 @@ test("Remove matching brackets deletes distinct lexical pairs atomically and res
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (1) + 1)),
 	], 1));
-	const command = createRemoveMatchingBracketsCommand(bracketPairs, selections.selections);
+	const command = createRemoveMatchingBracketsCommand(bracketPairs, selections.getSelections());
 	assert.ok(command);
 	selections.execute(command);
 	assert.equal(model.getText(), "value");
-	assert.deepEqual(selections.selections, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	assert.deepEqual(selections.getSelections(), [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	selections.undo();
 	assert.equal(model.getText(), "{(value)}");
 });

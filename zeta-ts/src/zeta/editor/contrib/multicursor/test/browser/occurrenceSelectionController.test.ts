@@ -45,11 +45,11 @@ test("Occurrence shortcuts select a word, add its next match, and select every m
 	const selectWord = keydown(dom.window, "d", { ctrlKey: true });
 	input.dispatchEvent(selectWord);
 	assert.equal(selectWord.defaultPrevented, true);
-	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
 	input.dispatchEvent(keydown(dom.window, "d", { ctrlKey: true }));
-	assert.equal(selections.selections.length, 2);
+	assert.equal(selections.getSelections().length, 2);
 	input.dispatchEvent(keydown(dom.window, "l", { ctrlKey: true, shiftKey: true }));
-	assert.equal(selections.selections.length, 3);
+	assert.equal(selections.getSelections().length, 3);
 
 	dom.window.close();
 });

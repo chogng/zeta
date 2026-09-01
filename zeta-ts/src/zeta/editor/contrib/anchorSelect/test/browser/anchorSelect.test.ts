@@ -39,11 +39,11 @@ test('Selection anchor follows edits and supports set, go to, select, and cancel
 	fixture.model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'x' }]);
 	fixture.selections.setSelections(singleCaret(0, 0));
 	fixture.controller.goToSelectionAnchor();
-	assert.deepEqual(fixture.selections.selections, singleCaret(0, 3));
+	assert.deepEqual(fixture.selections.getSelections(), singleCaret(0, 3));
 
 	fixture.selections.setSelections(singleCaret(0, 5));
 	fixture.controller.selectFromAnchorToCursor();
-	assert.deepEqual(fixture.selections.selections, [Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (5) + 1))]);
+	assert.deepEqual(fixture.selections.getSelections(), [Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (5) + 1))]);
 	assert.equal(fixture.controller.selectionAnchorSet, false);
 	assert.deepEqual(fixture.decorations.decorations, []);
 
@@ -71,7 +71,7 @@ test('Selection anchor keybindings use the two-key commands and leave navigation
 	const select = keydown(fixture.dom.window, 'k', { ctrlKey: true });
 	fixture.input.dispatchEvent(select);
 	assert.equal(select.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (4) + 1)));
+	assert.deepEqual(fixture.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (4) + 1)));
 	assert.equal(fixture.controller.selectionAnchorSet, false);
 
 	fixture.controller.setSelectionAnchor();

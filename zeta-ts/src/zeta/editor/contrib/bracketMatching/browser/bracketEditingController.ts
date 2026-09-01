@@ -19,7 +19,7 @@ export class BracketEditingController extends Disposable {
 	) {
 		super();
 		try {
-			if (viewport.textModel !== selections.textModel || viewport.textModel !== bracketPairs.textModel) {
+			if (viewport.textModel !== selections.context.model || viewport.textModel !== bracketPairs.textModel) {
 				throw new TypeError("Stanza bracket editing dependencies must share one text model");
 			}
 			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -32,10 +32,10 @@ export class BracketEditingController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if ((!event.ctrlKey && !event.metaKey) || !event.altKey || event.shiftKey || event.key !== "Backspace") return;
-		const command = createRemoveMatchingBracketsCommand(this.bracketPairs, this.selections.selections);
+		const command = createRemoveMatchingBracketsCommand(this.bracketPairs, this.selections.getSelections());
 		if (!command) return;
 		stopEvent(event);
 		this.executeCommand(RemoveBracketsCommandId, () => this.selections.execute(command));
-		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
+		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 }

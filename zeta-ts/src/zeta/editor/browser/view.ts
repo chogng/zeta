@@ -336,7 +336,7 @@ export class View extends ViewEventHandler {
 		this.viewport = viewport;
 		this.onDidChangeLayout = viewport.onDidChange;
 		this.viewContext = new ViewContext(this.editorConfiguration, options.theme, this.viewModel);
-		if (options.selectionController.textModel !== this.model) throw new TypeError('Editor view and selection controller must share one text model');
+		if (options.selectionController.context.model !== this.model) throw new TypeError('Editor view and selection controller must share one text model');
 		this.controller = this._register(new ViewController(this, options.selectionController, options.controller ?? {}, controller => {
 			const input = createEditContext(this.viewContext, this.element, {
 				...options.controller,

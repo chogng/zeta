@@ -12,11 +12,11 @@ test("Transpose swaps complete graphemes for multiple carets and undoes atomical
 		caret(0, 1),
 		caret(1, 2),
 	], 1));
-	const command = createTransposeCommand(model, selections.selections);
+	const command = createTransposeCommand(model, selections.getSelections());
 	assert.ok(command);
 	selections.execute(command);
 	assert.equal(model.getText(), "😊ab\nxé");
-	assert.deepEqual(selections.selections, primaryFirst([
+	assert.deepEqual(selections.getSelections(), primaryFirst([
 		caret(0, 3),
 		caret(1, 3),
 	], 1));
@@ -27,11 +27,11 @@ test("Transpose swaps complete graphemes for multiple carets and undoes atomical
 test('Transpose swaps the preceding grapheme with the following line break at a line end', () => {
 	using model = new TextModel("ab\ncd");
 	using selections = createTestCursorsController(model, [caret(0, 2)]);
-	const command = createTransposeCommand(model, selections.selections);
+	const command = createTransposeCommand(model, selections.getSelections());
 	assert.ok(command);
 	selections.execute(command);
 	assert.equal(model.getText(), "a\nbcd");
-	assert.deepEqual(selections.selections[0]!, caret(1, 1));
+	assert.deepEqual(selections.getSelections()[0]!, caret(1, 1));
 });
 
 test("Transpose ignores ranges and resolves overlapping cursor edits in favor of the primary cursor", () => {
@@ -41,14 +41,14 @@ test("Transpose ignores ranges and resolves overlapping cursor edits in favor of
 		caret(0, 2),
 		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
 	], 1));
-	const command = createTransposeCommand(model, selections.selections);
+	const command = createTransposeCommand(model, selections.getSelections());
 	assert.ok(command);
 	selections.execute(command);
 	assert.equal(model.getText(), "acb");
-	assert.deepEqual(selections.selections[0]!, caret(0, 3));
+	assert.deepEqual(selections.getSelections()[0]!, caret(0, 3));
 
 	selections.setSelections([caret(0, 3)]);
-	assert.equal(createTransposeCommand(model, selections.selections), undefined);
+	assert.equal(createTransposeCommand(model, selections.getSelections()), undefined);
 });
 
 function caret(lineIndex: number, columnIndex: number): Selection {

@@ -89,7 +89,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		this.cursorConfig = new CursorConfiguration(model.getLanguageId(), model.getOptions(), configuration, languageConfigurationService);
 		this.cursor = this._register(new CursorsController(model, this, this.coordinatesConverter, this.cursorConfig));
 		cursorOwners.set(this, this.cursor);
-		this.previousSelections = [...this.cursor.selections];
+		this.previousSelections = [...this.cursor.getSelections()];
 		this.viewLayout = this._register(new ViewLayout(configuration, this.lines.getViewLineCount(), [], scheduleAtNextAnimationFrame));
 		this.decorations = this._register(new ViewModelDecorations(editorId, model, configuration, this.lines, this.coordinatesConverter));
 		this.connectLayout();
@@ -423,15 +423,15 @@ export class ViewModel extends Disposable implements IViewModel {
 	}
 
 	getPrimaryCursorState(): CursorState {
-		return this.toCursorState(this.cursor.selections[0]!);
+		return this.cursor.getPrimaryCursorState();
 	}
 
 	getLastAddedCursorIndex(): number {
-		return this.cursor.selections.length - 1;
+		return this.cursor.getLastAddedCursorIndex();
 	}
 
 	getCursorStates(): CursorState[] {
-		return this.cursor.selections.map(selection => this.toCursorState(selection));
+		return this.cursor.getCursorStates();
 	}
 
 	setCursorStates(_source: string | null | undefined, _reason: CursorChangeReason, states: PartialCursorState[] | null): boolean {
@@ -461,15 +461,15 @@ export class ViewModel extends Disposable implements IViewModel {
 	}
 
 	getSelection(): Selection {
-		return this.cursor.selections[0]!;
+		return this.cursor.getSelection();
 	}
 
 	getSelections(): Selection[] {
-		return [...this.cursor.selections];
+		return this.cursor.getSelections();
 	}
 
 	getPosition(): Position {
-		return this.getSelection().getPosition();
+		return this.cursor.getPosition();
 	}
 
 	setSelections(_source: string | null | undefined, selections: readonly ISelection[], reason = CursorChangeReason.NotSet): void {
@@ -477,7 +477,7 @@ export class ViewModel extends Disposable implements IViewModel {
 	}
 
 	saveCursorState(): ICursorState[] {
-		return this.cursor.selections.map(selection => ({
+		return this.cursor.getSelections().map(selection => ({
 			inSelectionMode: !selection.isEmpty(),
 			selectionStart: selection.getSelectionStart(),
 			position: selection.getPosition(),
@@ -504,7 +504,7 @@ export class ViewModel extends Disposable implements IViewModel {
 			source,
 			minimalReveal,
 			null,
-			this.cursor.selections.map(selection => this.toViewSelection(selection)),
+			this.cursor.getSelections().map(selection => this.toViewSelection(selection)),
 			viewEvents.VerticalRevealType.Simple,
 			revealHorizontal,
 			ScrollType.Smooth,
@@ -512,18 +512,16 @@ export class ViewModel extends Disposable implements IViewModel {
 	}
 
 	revealPrimaryCursor(source: string | null | undefined, revealHorizontal: boolean, minimalReveal = false): void {
-		const selection = this.toViewSelection(this.cursor.selections[0]!);
+		const selection = this.toViewSelection(this.cursor.getSelections()[0]!);
 		this.events.emitSingleViewEvent(new viewEvents.ViewRevealRangeRequestEvent(source, minimalReveal, selection, null, viewEvents.VerticalRevealType.Simple, revealHorizontal, ScrollType.Smooth));
 	}
 
 	revealTopMostCursor(source: string | null | undefined): void {
-		const selection = this.cursor.selections.reduce((top, current) => current.getPosition().isBefore(top.getPosition()) ? current : top);
-		this.revealSelection(source, selection);
+		this.revealRange(source, true, Range.fromPositions(this.cursor.getTopMostViewPosition()), viewEvents.VerticalRevealType.Simple, ScrollType.Smooth);
 	}
 
 	revealBottomMostCursor(source: string | null | undefined): void {
-		const selection = this.cursor.selections.reduce((bottom, current) => bottom.getPosition().isBefore(current.getPosition()) ? current : bottom);
-		this.revealSelection(source, selection);
+		this.revealRange(source, true, Range.fromPositions(this.cursor.getBottomMostViewPosition()), viewEvents.VerticalRevealType.Simple, ScrollType.Smooth);
 	}
 
 	revealRange(source: string | null | undefined, revealHorizontal: boolean, viewRange: Range, verticalType: viewEvents.VerticalRevealType, scrollType: ScrollType): void {

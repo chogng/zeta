@@ -144,9 +144,9 @@ test("CursorsController coalesces multi-cursor typing", () => {
 		historyMode: EditorCommandHistoryMode.CoalesceTyping,
 	});
 
-	const afterTyping = controller.selections;
+	const afterTyping = controller.getSelections();
 	controller.undo();
-	const afterUndo = controller.selections;
+	const afterUndo = controller.getSelections();
 	controller.redo();
 
 	assert.deepEqual({
@@ -157,7 +157,7 @@ test("CursorsController coalesces multi-cursor typing", () => {
 		text: model.getText(),
 		afterTyping,
 		afterUndo,
-		afterRedo: controller.selections,
+		afterRedo: controller.getSelections(),
 	}, {
 		transactionIds: [1, 1],
 		text: "XYabXY",
@@ -257,7 +257,7 @@ test("Typing coalesces an initial replacement and following overwrite", () => {
 	controller.undo();
 	const afterUndo = {
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 	};
 	controller.redo();
 
@@ -271,7 +271,7 @@ test("Typing coalesces an initial replacement and following overwrite", () => {
 		afterUndo,
 		afterRedo: {
 			text: model.getText(),
-			selections: controller.selections,
+			selections: controller.getSelections(),
 		},
 	}, {
 		transactionIds: [1, 1, 1],
@@ -321,7 +321,7 @@ test("Typing coalesces replacements independently at multiple selections", () =>
 	controller.undo();
 	assert.deepEqual({
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 	}, {
 		text: "ab__CD",
 		selections: selections([[0, 2], [4, 6]], 1),
@@ -329,7 +329,7 @@ test("Typing coalesces replacements independently at multiple selections", () =>
 	controller.redo();
 	assert.deepEqual({
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 	}, {
 		text: "XY__XY",
 		selections: cursors([2, 6], 1),
@@ -404,7 +404,7 @@ test("CursorsController coalesces Backspace commands", () => {
 	});
 
 	controller.undo();
-	const afterUndo = controller.selections;
+	const afterUndo = controller.getSelections();
 	controller.redo();
 
 	assert.deepEqual({
@@ -414,7 +414,7 @@ test("CursorsController coalesces Backspace commands", () => {
 		],
 		text: model.getText(),
 		afterUndo,
-		afterRedo: controller.selections,
+		afterRedo: controller.getSelections(),
 	}, {
 		transactionIds: [1, 1],
 		text: "ab",
@@ -495,7 +495,7 @@ test("Backspace coalescing adjusts separated multi-cursor offsets", () => {
 
 	assert.deepEqual({
 		text: model.getText(),
-		selections: controller.selections,
+		selections: controller.getSelections(),
 	}, {
 		text: "ab__CD",
 		selections: cursors([2, 6]),

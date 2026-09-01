@@ -29,7 +29,7 @@ export class SelectionAnchorController extends Disposable {
 	) {
 		super();
 		try {
-			if (viewport.textModel !== selections.textModel || viewport.textModel !== decorations.textModel) {
+			if (viewport.textModel !== selections.context.model || viewport.textModel !== decorations.textModel) {
 				throw new TypeError('Selection anchor dependencies must share one text model');
 			}
 			this._register(addDisposableListener(input, 'keydown', event => this.handleKeydown(event), true));
@@ -45,7 +45,7 @@ export class SelectionAnchorController extends Disposable {
 	}
 
 	setSelectionAnchor(): void {
-		const position = this.selections.selections[0]!.getPosition();
+		const position = this.selections.getSelections()[0]!.getPosition();
 		const [decorationId] = this.decorations.replaceAll([{
 			range: Range.fromPositions(position),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
@@ -65,7 +65,7 @@ export class SelectionAnchorController extends Disposable {
 	selectFromAnchorToCursor(): void {
 		const anchor = this.selectionAnchorPosition;
 		if (!anchor) return;
-		const cursor = this.selections.selections[0]!.getPosition();
+		const cursor = this.selections.getSelections()[0]!.getPosition();
 		this.selections.setSelections([Selection.fromPositions(anchor, cursor)]);
 		this.cancelSelectionAnchor();
 		this.viewport.revealPosition(cursor);
