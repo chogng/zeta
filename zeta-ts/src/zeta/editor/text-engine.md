@@ -78,7 +78,7 @@ flowchart LR
 
 一个 `TextModel` 可以由多个编辑器共享，但 selection、cursor 和 composition 状态属于各自的 `ViewModelImpl`。目标生产链固定为 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor`；模型只保存文本、装饰和 undo/redo 数据，不保存某个编辑器的 cursor 状态。
 
-当前实现尚未达到这条链。`CodeEditorWidget` 仍直接创建 `CursorsController`，生产调用仍依赖 `SelectionSet + SelectionSetTracker + EditorEditCommand`；同路径的 `CursorCollection`、`CursorContext` 和 `Cursor` 尚未完整接入生产。`cursorNavigation.ts`、`selectionSetDeleteOperations.ts`、`selectionSetWordOperations.ts`、`languageEnter.ts`、`languagePairEditing.ts` 与 `languageAutoClosingTracker.ts` 又分别占用了 `CursorMoveCommands`、`DeleteOperations`、`WordOperations`、`TypeOperations` 和 `CursorsController` 的职责。它们都是待迁移并删除的重复 owner，不是长期扩展点。
+当前生产构造已经是 `ViewModelImpl → CursorsController`，`CodeEditorWidget` 只通过内部入口取得同一个 controller，不再创建第二份 selection owner。键盘移动已删除统一 `navigate` 入口，浏览器控制器按命令直接调用 `MoveOperations` 的标准状态 API；删除、输入、转置和行操作也使用同一位置 API。剩余缺口是 selection 存储仍以简化 controller 为主，`CursorCollection`、`CursorContext`、`CursorMoveCommands` 和 `Cursor` 尚未完整进入 ViewModel 命令与折行坐标链。
 
 `common/cursor` 的目标文件集合与 VS Code 保持一致：12 个同路径文件，不保留额外的 SelectionSet、导航或语言输入 owner。当前 12 个同路径文件中有 8 个正文一致，但除 `ColumnSelection` 外，多数仍缺生产调用闭环；文件内容一致不代表完成。完成状态以 [`api-alignment-status.md`](./api-alignment-status.md) 的调用者与生命周期证据为准。
 

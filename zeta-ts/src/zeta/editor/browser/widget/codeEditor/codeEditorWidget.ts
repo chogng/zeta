@@ -30,8 +30,8 @@ import type { ILanguageFeaturesService } from '../../../common/services/language
 import { LanguageFeaturesService } from '../../../common/services/languageFeaturesService.js';
 import { ResolvedSemanticTokensService } from '../../../common/services/resolvedSemanticTokensService.js';
 import { LanguageEditingAdapter } from '../../view/viewController.js';
-import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
-import { EditorLineWrapping, EditorOption, EditorOptions, type EditorLayoutInfo, type FindComputedEditorOptionValueById, WrappingIndent } from '../../../common/config/editorOptions.js';
+import { type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
+import { EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type LanguageCompletionWorkerFactory } from '../../../common/languages/completion/languageCompletionService.js';
 import { type ILanguageDiagnosticsService } from '../../../common/services/languageDiagnosticsService.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/ownedCompletionsEnablement.js';
@@ -426,8 +426,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			})));
 			this._register(new KeyboardNavigationController(this.viewport, this.viewModel, this.userInputEvents, {
 				wordPattern: () => languageConfigurationService.getLanguageConfiguration(options.languageId).getWordDefinition(),
-				stickyTabStops: EditorOptions.stickyTabStops.validate(options.stickyTabStops) as boolean,
-				tabSize: resolveEditorIndentationOptions(options.indentation).tabSize,
 			}));
 			this._register(new MouseHandler(this.viewport, this.view));
 			if (options.codeEditorService) {

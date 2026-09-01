@@ -6,7 +6,7 @@
 
 - 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 729 个；381 个同路径，209 个仅本地，348 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：初始确认 118 组同名声明结构差异，已处理 39 组，剩余 79 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
+- 账目摘要：初始确认 118 组同名声明结构差异，已处理 40 组，剩余 78 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
 - 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题，也不新增 Editor 生产文件。
 - 用户已确认仅本地项的处理原则：架构文档明确归属的 Zeta 专属能力按既有职责保留；与 VS Code 重叠的职责迁回对应路径。文件删除仍需在每批执行前按准确路径、原因、剩余调用方和 Git 可恢复性单独确认。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
@@ -38,6 +38,7 @@
 | `contrib/zoneWidget/browser/zoneWidget.ts` | `ZoneWidget` | 恢复 `IOptions`、`IStyles`、`OverlayWidgetDelegate`、`ZoneWidget` 及其子类扩展点；独立实现通过 `ICodeEditor` 持有模型锚点、视图区、布局、滚动、选区与释放，Peek、Call/Type Hierarchy、跳转结果和 Quick Diff 均传递真实编辑器对象，定向测试覆盖换行锚点、布局、缩放、样式和选区保持 |
 | `contrib/wordHighlighter/browser/textualHighlightProvider.ts` | `TextualMultiDocumentHighlightFeature` | 由语言能力服务统一注册单文档与多文档文本高亮 provider；多编辑器共享同一服务时按引用计数持有注册，不再维护重复的模型 target 表，provider 直接使用 `ITextModel.uri` 返回跨文档结果，Word/Selection Highlighter 7 项测试覆盖 Unicode、语义优先、多文件、取消和导航 |
 | `common/cursor/cursorColumnSelection.ts` | `ColumnSelection` | 同路径实现与上游归一化文本一致；生产鼠标列选经过 `MouseHandler`、`CursorConfiguration`、视觉行模型和坐标转换，直接测试覆盖方向与短行行为 |
+| `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 公开成员差异归零；17 个标准移动入口直接使用 `CursorConfiguration`、`ICursorSimpleModel` 与 `SingleCursorState`，旧 `navigate` 总入口及全部调用已移除。键盘控制器按命令调用标准入口，删除、输入、转置与行操作使用标准位置 API；定向测试覆盖水平、垂直、可视列余量、原子缩进、空行、行/文档边界以及真实 Widget 连续键盘导航 |
 | `contrib/colorPicker/browser/colorPickerModel.ts` | `ColorPickerModel` | 公共成员、颜色与 presentation 事件、切换和释放生命周期与上游一致；生产由 Color Picker controller 创建并由 dialog 消费 |
 | `contrib/folding/browser/foldingDecorations.ts` | `FoldingDecorationProvider` | 公共配置与装饰事务由该 provider 持有；生产链从 Folding Model 经编辑器所有者写入 TextModel，再由 Folding decoration source 交给 View 渲染，释放时只清理对应编辑器的装饰；折叠背景、占位符和控制图标颜色由主题 token 持有，测试覆盖配置、所有权、折叠状态和 DOM 输出 |
 | `standalone/browser/standaloneEditor.ts` | `createModel`、`getModel`、`getModels`、`setModelLanguage` | 公共模型边界使用 `ITextModel`；`createModel` 委托 `standaloneCodeEditor.ts::createTextModel`，未显式给语言时按 URI 和首行推断，显式语言优先；模型注册、查询、语言事件和释放由 Standalone 测试覆盖 |
@@ -118,7 +119,6 @@
 | `common/viewLayout/viewLayout.ts` | `ViewLayout` | 已恢复标准构造入口、配置更新和 `Scrollable` 所有权；生产由唯一 `ViewModel` 持有，内容/滚动尺寸、当前视口、行坐标、可见行、空白区、特殊行高以及滚动/内容尺寸事件均由它发布；`View` 只读取布局结果，不再创建或更新第二份布局 |
 | `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 只拥有无拦截输入的编辑构造；结果选区去重由 `editorEditCommand.ts` 统一负责，不再伪装成类 API |
 | `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 拥有 `_runAutoClosingOvertype` 执行阶段，并保持多光标、完整字素和物理行边界行为 |
-| `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 文件正文与上游一致，但生产键盘导航仍走仅本地的 `cursorNavigation.ts`，尚未形成 `CursorMoveCommands → MoveOperations` 调用链 |
 | `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 本地职责已改名或移出上游 owner |
 | `contrib/message/browser/messageController.ts` | `MessageController` | 本地职责已改名或移出上游 owner |
 | `contrib/peekView/browser/peekView.ts` | `PeekViewWidget` | 本地职责已改名或移出上游 owner |
@@ -152,7 +152,7 @@
 
 ## 当前已验证能力
 
-- 当前 39 项严格完成项均已进入生产调用链并核对 owner 与生命周期，或属于已验证不会进入生产创建链的诊断工具；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
+- 当前 40 项严格完成项均已进入生产调用链并核对 owner 与生命周期，或属于已验证不会进入生产创建链的诊断工具；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
 - Standalone 模型创建现在由 `standaloneCodeEditor.ts::createTextModel` 统一决定语言：显式语言优先，否则读取 URI 与第一行；Model Service 仍是模型注册、查询、语言事件和释放 owner。
 - `IClipboardPasteEvent`、`ColumnSelection`、`ColorPickerModel` 已分别通过真实输入、鼠标列选和 Color Picker 生产调用链复核。
 - `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 118 项完成数。
@@ -172,9 +172,9 @@
 ## 验证状态
 
 - 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、348 个仅上游；Zeta 590 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
-- 118 项账本校验通过：39 项已处理、79 项待处理、总计 118 个唯一声明。
-- `tsconfig.stanza.json --noEmit` 与 `tsconfig.test.json` 编译通过；`DebugEditContext` 与 `MiddleScrollController` 的 4 个本批定向用例通过，后者覆盖标准注册链、首次交互、启停配置、横纵滚动和会话清理。
+- 118 项账本校验通过：40 项已处理、78 项待处理、总计 118 个唯一声明。
+- `tsconfig.test.json` 编译通过；`MoveOperations` 的 17 个标准入口通过 12 项定向行为测试，真实 `CodeEditorWidget` 连续向下移动测试证明短行后的可视列余量能够恢复。`tsconfig.json --noEmit` 仍只报既有 Electron、Embedded Editor、BrowserView、Workbench 与 TextMate 基线错误，本批文件无新增类型错误。
 - Editor 浏览器总入口仍被 4 个既有测试编译错误阻断：缺少 `styledGlyphRasterizer.js`、`selectionSet.js`，以及 bracket pair 配置和 TextModel 构造参数不匹配。真实 Chromium 集成测试 5 项通过 4 项，其中无障碍契约通过；失败项是既有的 `Control+Home` 光标行为。
 - Editor 完整单测运行到 882 项时为 845 项通过、11 项失败；`codeEditorPane.test.js` 挂起约 4 分钟后终止，后续 26 项被取消。失败覆盖 Cursor Undo/Redo、Folding、Join Lines、输入事件次数、占位符几何、字体配置和换行符等既有基线，本批 4 个定向用例均通过。
 - 当前行高亮的 Widget 行为测试和主题 token 测试通过；真实 Chromium 验证普通主题下聚焦/失焦背景分别读取对应 token，高对比度主题使用 `1px` 语义边框。Editor 根 DOM 和组件 CSS 已统一使用 `.stanza-editor`，不再依赖上游产品 class，并由架构测试守住该边界。完整设计 token 门禁仍被范围外 `multiDiffEditorPane.css` 使用未注册的 `--zeta-widget-background` 阻断，本批新增变量均已注册。
-- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 79 项中扣减。
+- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 78 项中扣减。

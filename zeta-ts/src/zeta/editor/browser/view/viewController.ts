@@ -8,12 +8,12 @@ import { type EditorEditCommand } from '../../common/commands/editorEditCommand.
 import { EditorLineWrapping, EditorOption } from '../../common/config/editorOptions.js';
 import { ColumnSelection } from '../../common/cursor/cursorColumnSelection.js';
 import { CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations } from '../../common/cursor/cursorMoveOperations.js';
+import { MoveOperations } from '../../common/cursor/cursorMoveOperations.js';
 import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
 import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
 import { type CursorsController } from '../../common/cursor/cursor.js';
 import { CursorChangeReason } from '../../common/cursorEvents.js';
-import { CursorState } from '../../common/cursorCommon.js';
+import { CursorState, type SingleCursorState } from '../../common/cursorCommon.js';
 import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../common/core/selection.js';
@@ -26,7 +26,7 @@ import { type ILanguageConfigurationService } from '../../common/languages/langu
 import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '../../common/languages/languageLexicalContext.js';
 import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';
-import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
 import { type IViewModel } from '../../common/viewModel.js';
 import { ViewEventHandler } from '../../common/viewEventHandler.js';
 import { type View } from '../view.js';
@@ -640,8 +640,6 @@ export interface KeyboardNavigationControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
 	/** Resolves the active language word matcher for word navigation. */
 	readonly wordPattern?: () => RegExp | undefined;
-	readonly stickyTabStops?: boolean;
-	readonly tabSize?: number;
 }
 
 export interface KeyboardNavigationCommand {
@@ -655,8 +653,7 @@ export interface KeyboardNavigationCommand {
 export class KeyboardNavigationController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
-	private readonly atomicTabSize: number | undefined;
-	private preferredColumns: readonly number[] | undefined;
+	private modelNavigationStates: readonly SingleCursorState[] | undefined;
 	private preferredVisualHorizontalOffsets: readonly number[] | undefined;
 	private applyingNavigation = false;
 
@@ -674,14 +671,7 @@ export class KeyboardNavigationController extends Disposable {
 			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
 				throw new TypeError("Stanza keyboard word pattern resolver must be a function");
 			}
-			if (options.stickyTabStops !== undefined && typeof options.stickyTabStops !== 'boolean') {
-				throw new TypeError('Stanza sticky tab stops must be boolean');
-			}
-			if (options.tabSize !== undefined && (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1)) {
-				throw new RangeError('Stanza keyboard tab size must be a positive safe integer');
-			}
 			this.wordPattern = options.wordPattern;
-			this.atomicTabSize = options.stickyTabStops ? options.tabSize ?? 4 : undefined;
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -713,7 +703,7 @@ export class KeyboardNavigationController extends Disposable {
 			}
 		}(() => {
 			if (this.applyingNavigation) return;
-			this.preferredColumns = undefined;
+			this.modelNavigationStates = undefined;
 			this.preferredVisualHorizontalOffsets = undefined;
 		}));
 		viewModel.addViewEventHandler(cursorListener);
@@ -735,7 +725,7 @@ export class KeyboardNavigationController extends Disposable {
 		const visualCommand = isVisualVerticalCommand(navigation.command)
 			? navigation.command
 			: undefined;
-		const result = this.viewport.lineWrapping === EditorLineWrapping.On &&
+		const visualResult = this.viewport.lineWrapping === EditorLineWrapping.On &&
 			visualCommand !== undefined
 			? navigateStanzaVisualCursors(
 				this.viewport.textModel,
@@ -753,32 +743,92 @@ export class KeyboardNavigationController extends Disposable {
 					getNearestPosition: (visualLineIndex, horizontalOffset) => this.viewport.getNearestPositionAtVisualHorizontalOffset(visualLineIndex, horizontalOffset),
 				},
 			)
-			: MoveOperations.navigate(
-				this.viewport.textModel,
-				this.viewModel.getCursorStates().map(state => state.modelState.selection),
-				{
-					...navigation,
-					pageLineCount,
-					...(this.wordPattern ? { wordPattern: this.wordPattern() } : {}),
-					...(this.atomicTabSize === undefined ? {} : { atomicTabSize: this.atomicTabSize }),
-					preferredColumns: this.preferredColumns,
-				},
-			);
+			: undefined;
+		const currentStates = this.viewModel.getCursorStates().map(state => state.modelState);
+		const sourceStates = this.modelNavigationStates?.length === currentStates.length && this.modelNavigationStates.every((state, index) => state.selection.equalsSelection(currentStates[index]!.selection))
+			? this.modelNavigationStates
+			: currentStates;
+		const movedStates = visualResult ? undefined : sourceStates.map(state => moveModelCursor(
+			this.viewModel.cursorConfig,
+			this.viewport.textModel,
+			state,
+			navigation,
+			pageLineCount,
+			this.wordPattern?.(),
+		));
+		const modelStates = visualResult
+			? visualResult.selections.map(selection => CursorState.fromModelSelection(selection))
+			: movedStates!.map(CursorState.fromModelState);
 		this.applyingNavigation = true;
 		try {
-			this.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, result.selections.map(CursorState.fromModelSelection));
+			this.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, modelStates);
 		} finally {
 			this.applyingNavigation = false;
 		}
-		if ("preferredHorizontalOffsets" in result) {
-			this.preferredColumns = undefined;
-			this.preferredVisualHorizontalOffsets = result.preferredHorizontalOffsets;
-		} else {
-			this.preferredColumns = result.preferredColumns;
-			this.preferredVisualHorizontalOffsets = undefined;
-		}
-		this.viewport.revealPosition(result.selections[0]!.getPosition());
+		this.modelNavigationStates = movedStates;
+		this.preferredVisualHorizontalOffsets = visualResult?.preferredHorizontalOffsets;
+		this.viewport.revealPosition(this.viewModel.getCursorStates()[0]!.modelState.position);
 	}
+}
+
+function moveModelCursor(config: IViewModel['cursorConfig'], model: TextModel, cursor: SingleCursorState, navigation: KeyboardNavigationCommand, pageLineCount: number, wordPattern: RegExp | undefined): SingleCursorState {
+	const inSelectionMode = navigation.mode === EditorCursorNavigationMode.Extend;
+	switch (navigation.command) {
+		case EditorCursorNavigationCommand.CharacterLeft:
+			return MoveOperations.moveLeft(config, model, cursor, inSelectionMode, 1);
+		case EditorCursorNavigationCommand.CharacterRight:
+			return MoveOperations.moveRight(config, model, cursor, inSelectionMode, 1);
+		case EditorCursorNavigationCommand.LineUp:
+			return MoveOperations.moveUp(config, model, cursor, inSelectionMode, 1);
+		case EditorCursorNavigationCommand.LineDown:
+			return MoveOperations.moveDown(config, model, cursor, inSelectionMode, 1);
+		case EditorCursorNavigationCommand.PageUp:
+			return MoveOperations.moveUp(config, model, cursor, inSelectionMode, pageLineCount);
+		case EditorCursorNavigationCommand.PageDown:
+			return MoveOperations.moveDown(config, model, cursor, inSelectionMode, pageLineCount);
+		case EditorCursorNavigationCommand.LineStart:
+			return MoveOperations.moveToBeginningOfLine(config, model, cursor, inSelectionMode);
+		case EditorCursorNavigationCommand.LineEnd:
+			return MoveOperations.moveToEndOfLine(config, model, cursor, inSelectionMode, false);
+		case EditorCursorNavigationCommand.DocumentStart:
+			return MoveOperations.moveToBeginningOfBuffer(config, model, cursor, inSelectionMode);
+		case EditorCursorNavigationCommand.DocumentEnd:
+			return MoveOperations.moveToEndOfBuffer(config, model, cursor, inSelectionMode);
+		case EditorCursorNavigationCommand.WordLeft:
+			return moveModelCursorByWord(model, cursor, inSelectionMode, 'left', wordPattern);
+		case EditorCursorNavigationCommand.WordRight:
+			return moveModelCursorByWord(model, cursor, inSelectionMode, 'right', wordPattern);
+	}
+}
+
+function moveModelCursorByWord(model: TextModel, cursor: SingleCursorState, inSelectionMode: boolean, direction: 'left' | 'right', wordPattern: RegExp | undefined): SingleCursorState {
+	if (cursor.hasSelection() && !inSelectionMode) {
+		const edge = direction === 'left' ? cursor.selection.getStartPosition() : cursor.selection.getEndPosition();
+		return cursor.move(false, edge.lineNumber, edge.column, 0);
+	}
+	const target = wordNavigationPosition(model, cursor.position, direction, wordPattern);
+	return cursor.move(inSelectionMode, target.lineNumber, target.column, 0);
+}
+
+function wordNavigationPosition(model: TextModel, position: Position, direction: 'left' | 'right', wordPattern: RegExp | undefined): Position {
+	if (direction === 'left') {
+		for (let lineNumber = position.lineNumber; lineNumber >= 1; lineNumber -= 1) {
+			const limit = lineNumber === position.lineNumber ? position.column - 1 : Number.POSITIVE_INFINITY;
+			const ranges = WordOperations.getTextWordRanges(model.getLineContent(lineNumber), wordPattern);
+			for (let index = ranges.length - 1; index >= 0; index -= 1) {
+				if (ranges[index]!.start < limit) return new Position(lineNumber, ranges[index]!.start + 1);
+			}
+		}
+		return new Position(1, model.getLineMinColumn(1));
+	}
+	for (let lineNumber = position.lineNumber; lineNumber <= model.getLineCount(); lineNumber += 1) {
+		const limit = lineNumber === position.lineNumber ? position.column - 1 : -1;
+		for (const range of WordOperations.getTextWordRanges(model.getLineContent(lineNumber), wordPattern)) {
+			if (range.start > limit) return new Position(lineNumber, range.start + 1);
+		}
+	}
+	const lineNumber = model.getLineCount();
+	return new Position(lineNumber, model.getLineMaxColumn(lineNumber));
 }
 
 function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown {

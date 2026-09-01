@@ -74,7 +74,7 @@ function createTransposeLettersCommand(model: TextModel, selections: readonly Se
 		if (!selection.isEmpty()) return [];
 		const cursor = selection.getPosition();
 		const lineEndColumn = model.getLineContent(cursor.lineNumber).length + 1;
-		const end = cursor.column === lineEndColumn ? cursor : MoveOperations.rightPosition(model, cursor);
+		const end = cursor.column === lineEndColumn ? cursor : MoveOperations.rightPosition(model, cursor.lineNumber, cursor.column);
 		const middle = MoveOperations.leftPosition(model, end);
 		const begin = MoveOperations.leftPosition(model, middle);
 		if (Position.compare(begin, middle) === 0 || Position.compare(middle, end) === 0) return [];

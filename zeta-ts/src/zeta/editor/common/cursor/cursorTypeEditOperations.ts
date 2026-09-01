@@ -112,7 +112,7 @@ function validateNonOverlapping(replacements: readonly SelectionReplacement[]): 
 function advancePositionInLine(model: TextModel, position: Position, count: number): Position {
 	let current = position;
 	for (let index = 0; index < count; index += 1) {
-		const next = MoveOperations.rightPosition(model, current);
+		const next = MoveOperations.rightPosition(model, current.lineNumber, current.column);
 		if (next.lineNumber !== position.lineNumber) break;
 		current = next;
 	}

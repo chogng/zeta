@@ -1,4 +1,3 @@
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations } from './cursorMoveOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { type Selection } from "../core/selection.js";
@@ -10,12 +9,12 @@ import { getTextWordSegments } from "../core/textSegmentation.js";
 /** Deletes each selection or the preceding editor word segment. */
 export class WordOperations {
 	public static deleteWordLeft(model: TextModel, selections: readonly Selection[], wordPattern?: RegExp): EditorEditCommand {
-		return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordLeft, EditorCommandHistoryMode.CoalesceBackspace, wordPattern);
+		return createDeleteWordCommand(model, selections, 'left', EditorCommandHistoryMode.CoalesceBackspace, wordPattern);
 	}
 
 /** Deletes each selection or the following editor word segment. */
 	public static deleteWordRight(model: TextModel, selections: readonly Selection[], wordPattern?: RegExp): EditorEditCommand {
-		return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordRight, EditorCommandHistoryMode.CoalesceDelete, wordPattern);
+		return createDeleteWordCommand(model, selections, 'right', EditorCommandHistoryMode.CoalesceDelete, wordPattern);
 	}
 
 	public static getWordSelectionRange(model: TextModel, position: Position, wordPattern?: RegExp): Range {
@@ -36,22 +35,39 @@ export class WordOperations {
 	}
 }
 
-function createDeleteWordCommand(model: TextModel, selections: readonly Selection[], navigation: EditorCursorNavigationCommand, historyMode: EditorCommandHistoryMode, wordPattern: RegExp | undefined): EditorEditCommand {
+function createDeleteWordCommand(model: TextModel, selections: readonly Selection[], direction: 'left' | 'right', historyMode: EditorCommandHistoryMode, wordPattern: RegExp | undefined): EditorEditCommand {
 	return TypeWithoutInterceptorsOperation.getEdits(
 		model,
 		selections,
 		selections.map(selection => {
 			const range = selection.isEmpty()
-				? MoveOperations.navigate(model, [selection], {
-					command: navigation,
-					mode: EditorCursorNavigationMode.Extend,
-					...(wordPattern ? { wordPattern } : {}),
-				}).selections[0]!
+				? Range.fromPositions(selection.getPosition(), wordPosition(model, selection.getPosition(), direction, wordPattern))
 				: selection;
 			return emptySelectionEdit(range);
 		}),
 		historyMode,
 	);
+}
+
+function wordPosition(model: TextModel, position: Position, direction: 'left' | 'right', wordPattern: RegExp | undefined): Position {
+	if (direction === 'left') {
+		for (let lineNumber = position.lineNumber; lineNumber >= 1; lineNumber -= 1) {
+			const limit = lineNumber === position.lineNumber ? position.column - 1 : Number.POSITIVE_INFINITY;
+			const ranges = WordOperations.getTextWordRanges(model.getLineContent(lineNumber), wordPattern);
+			for (let index = ranges.length - 1; index >= 0; index -= 1) {
+				if (ranges[index]!.start < limit) return new Position(lineNumber, ranges[index]!.start + 1);
+			}
+		}
+		return new Position(1, 1);
+	}
+	for (let lineNumber = position.lineNumber; lineNumber <= model.getLineCount(); lineNumber += 1) {
+		const limit = lineNumber === position.lineNumber ? position.column - 1 : -1;
+		for (const range of WordOperations.getTextWordRanges(model.getLineContent(lineNumber), wordPattern)) {
+			if (range.start > limit) return new Position(lineNumber, range.start + 1);
+		}
+	}
+	const lineNumber = model.getLineCount();
+	return new Position(lineNumber, model.getLineMaxColumn(lineNumber));
 }
 
 function emptySelectionEdit(range: Range): SelectionEdit {

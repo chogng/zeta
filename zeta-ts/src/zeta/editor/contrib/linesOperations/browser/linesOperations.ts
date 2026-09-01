@@ -273,7 +273,7 @@ export function createTransposeCommand(model: TextModel, selections: readonly Se
 		const isLineEnd = cursor.column === model.getLineContent(cursor.lineNumber).length + 1;
 		if (isLineEnd && cursor.lineNumber === model.lineCount) return [];
 		const begin = cursor.column === 1 ? cursor : MoveOperations.leftPosition(model, cursor);
-		const end = MoveOperations.rightPosition(model, cursor);
+		const end = MoveOperations.rightPosition(model, cursor.lineNumber, cursor.column);
 		if (Position.compare(cursor, end) === 0) return [];
 		const range = Range.fromPositions(begin, end);
 		const left = model.getTextInRange(Range.fromPositions(begin, cursor));

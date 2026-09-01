@@ -1,10 +1,29 @@
 import { clamp } from "../../../base/common/numbers.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorMoveOperations.js";
 import { Selection } from "../core/selection.js";
 import { Position } from "../core/position.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
+
+export enum EditorCursorNavigationCommand {
+	CharacterLeft = 'characterLeft',
+	CharacterRight = 'characterRight',
+	WordLeft = 'wordLeft',
+	WordRight = 'wordRight',
+	LineUp = 'lineUp',
+	LineDown = 'lineDown',
+	LineStart = 'lineStart',
+	LineEnd = 'lineEnd',
+	DocumentStart = 'documentStart',
+	DocumentEnd = 'documentEnd',
+	PageUp = 'pageUp',
+	PageDown = 'pageDown',
+}
+
+export enum EditorCursorNavigationMode {
+	Move = 'move',
+	Extend = 'extend',
+}
 
 export interface VisualCursorNavigationRequest {
 	readonly command: EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown;

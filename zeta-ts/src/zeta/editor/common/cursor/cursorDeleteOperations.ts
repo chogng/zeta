@@ -111,7 +111,7 @@ function emptySelectionEdit(range: Range): SelectionEdit {
 }
 
 function nextDeleteRange(model: TextModel, position: Position): Range {
-	return Range.fromPositions(position, MoveOperations.rightPosition(model, position));
+	return Range.fromPositions(position, MoveOperations.rightPosition(model, position.lineNumber, position.column));
 }
 
 interface OffsetDeletionRange {

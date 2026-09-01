@@ -578,6 +578,23 @@ test("CodeEditorWidget creates one selection controller for its model", () => {
 	dom.window.close();
 });
 
+test('CodeEditorWidget keyboard navigation uses standard cursor movement state', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('12345\n1\n12345');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	editor.setSelection(Selection.fromPositions(new Position(1, 5)));
+	const input = editor.view.editContext.domNode.domNode;
+
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+	assert.deepEqual(editor.getPosition(), new Position(2, 2));
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+	assert.deepEqual(editor.getPosition(), new Position(3, 5));
+
+	dom.window.close();
+});
+
 test("CodeEditorWidget leaves text drops available to its host", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

@@ -407,15 +407,14 @@ pointer hit-test、double-click word selection 和键盘导航共享这一个 se
 `Intl.Segmenter` 不可用时退化到 Unicode code point 与显式 word/whitespace/
 other 分类，避免三份 fallback 漂移。
 
-`navigateEditorCursors` 对每个 selection 执行 `CharacterLeft/Right`、
-`WordLeft/Right`、`LineUp/Down`、`LineStart/End`、
-`DocumentStart/End` 或 `PageUp/Down`。`Move` 与 `Extend` 是显式 mode；
-后者保留 anchor。字符移动不拆 grapheme，词移动只跳 word-like segment 并可
-跨行，纵向移动保留每个 selection 的 preferred UTF-16 column，在短行后可
-恢复；目标列会夹到 grapheme boundary。完全相同的结果会合并并重新映射
-primary，multi-selection 顺序保持稳定。
+`MoveOperations` 公开标准的水平、垂直、空行、行边界和文档边界状态 API，
+输入统一使用 `CursorConfiguration`、`ICursorSimpleModel` 与 `SingleCursorState`。
+垂直移动通过 `leftoverVisibleColumns` 保留可视列，在短行后可以恢复；原子缩进、
+选区折叠与扩展也由同一状态转换处理。词移动由 `WordOperations` 的词段能力决定，
+不再通过 `MoveOperations.navigate` 混入一个额外总入口。
 
-`StanzaKeyboardNavigationController` 只负责 browser routing。Windows/Linux
+`KeyboardNavigationController` 只负责 browser routing，并把每个规范化命令
+直接分派到上述标准移动 API。Windows/Linux
 使用 Ctrl+Arrow 词跳转和 Ctrl+Home/End 文档跳转；macOS 使用
 Option+Arrow 词跳转、Command+Left/Right 行边界和
 Command+Up/Down 文档边界。Shift 统一选择 `Extend`。未知 chord、
