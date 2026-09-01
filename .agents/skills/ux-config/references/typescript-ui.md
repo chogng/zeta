@@ -15,19 +15,6 @@ Use this reference only for UX data interpreted by the TypeScript UI under `zeta
 
 Like VS Code, use the `settings.json` filename with JSONC parsing for contributed keys, layered overrides, comments, and syntax-aware edits. Keep the document as a plain settings object rather than adding a schema-version envelope. A dedicated resource is appropriate when order, full-document validation, independent revisions, or a specialized editor are part of the contract. The filename alone does not decide whether comments are accepted; the parser and serializer must define and preserve the supported syntax.
 
-## Coordinate with VS Code API alignment
-
-After this skill determines that data belongs to the TypeScript UI and defines its artifact, locality, scopes, and migration, use `$vscode-api-alignment` when implementing or reviewing corresponding configuration files, APIs, ownership, lifecycle, or call paths under `zeta-ts`. Inspect the checked-out VS Code source and the alignment reference for every affected TypeScript layer before changing those surfaces.
-
-| Decision | Owner |
-| --- | --- |
-| Whether the value is UX configuration, state, a resource, a secret, permission, or backend intent | `$ux-config` |
-| Which UI owns the value, which scopes are legitimate, where it persists, and how legacy data migrates | `$ux-config` |
-| Corresponding TypeScript file paths, public names, registry/service responsibilities, lifecycle, callers, and debuggable execution path | `$vscode-api-alignment` |
-| Zeta-specific setting keys, consumers, product directory names, and behavior without a same-responsibility VS Code counterpart | The Zeta product owner; keep these outside the alignment slice |
-
-Prefer the VS Code model for corresponding configuration infrastructure such as registered setting schemas, per-key scope metadata, configuration targets, inspection and update APIs, JSONC editing, migration registration, and standalone user resources. Align the complete responsibility and call path rather than copying only a filename or type name. Do not create a VS Code-shaped API when Zeta has no corresponding consumer, and do not use API alignment for Rust `[gui]` or `[tui]`.
-
 ## Eligible setting families
 
 Appearance selection, accessibility preferences, editor presentation and behavior, keyboard interpretation, workbench layout policy, localization, search presentation, and source-control presentation may use registered settings when the TypeScript UI owns and consumes the behavior. This is an eligibility list, not an implementation claim; require a concrete consumer and registered contract for every setting.
