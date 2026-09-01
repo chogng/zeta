@@ -2,52 +2,91 @@
 
 本文件用于新增、修改或 review 一项完整 API。`<domain>` 和 `<action>` 必须替换成真实领域词；只创建具有独立职责和真实调用方的文件。
 
-## 1. 固定前端领域契约
+## 0. 执行冲突门禁
 
-先在以下一个 owner 定义 renderer 真正需要的接口：
+修改前批量核对前端参考路径、后端协议与 transport、目标仓库 owner、全部生产调用方和用户已有 diff。发现主 skill 定义的任一冲突后立即停止写入，只继续只读收集完整清单，然后向用户报告准确路径、符号、两种行为、影响范围和需要决定的边界。
+
+重点先检查：
+
+- backend 是否有跨 macOS、Linux、Windows 的正式多 connection 本地 transport；
+- Project、Environment 或所需字段是否仍为实验 API；
+- 生成器是否提供 method map 与运行时 decoder；
+- 当前领域 identity、process owner 或用户改动是否与最终 owner 冲突。
+
+用户未决定前禁止创建桥接文件、保留双入口、手写缺失协议、移动/删除文件，或继续实施依赖该决定的步骤。
+
+## 1. 固定领域身份
+
+先列出本次 API 的前端对象、后端对象与稳定 identity。文件、账户、配置、模型、skills、Project、Thread、process 等对象分别由自己的领域 service 表达，不能为了接入 app-server 改叫 Session。
+
+每个对象至少确定：
+
+| 项目 | 必须确定 |
+| --- | --- |
+| 前端对象 | 哪个现有 service 或 contribution 是调用方 |
+| 后端对象 | 哪个 Rust 领域能力决定并保存状态 |
+| 稳定 identity | ID、URI、path、resource ID 或复合 key |
+| 生命周期 | 创建、更新、销毁、connection close 与 process exit |
+| 事件 | 初始 snapshot、增量 notification 与无缺口规则 |
+
+只有 backend Thread 要进入 Agents Window 时，才额外固定 Provider、Workspace、Session 与 Chat 的映射：Session 使用 `providerId + resource`，committed resource 承载 Thread identity，draft 通过 replacement lifecycle 切换为 committed facade。若设计要求另存随机 frontend Session ID → backend Thread ID 映射，先证明 resource 不能承载 Thread identity；否则拒绝该映射。
+
+## 2. 固定前端领域契约
+
+先找到现有调用方所属领域，把 contract 留在该领域；没有现成 owner 时才按依赖方向创建最小 service：
 
 ```text
-src/platform/<domain>/common/<domain>.ts
-src/workbench/services/<domain>/common/<domain>.ts
+src/platform/<domain>/common/
+src/workbench/services/<domain>/common/
 ```
 
-契约必须明确：
+app-server adapter 与具体运行环境放在同一领域的 browser 或 electron-browser 层：
 
-- input、result 和前端领域错误；
-- event payload、初始状态和事件缺口处理；
-- 哪个方法创建长期资源，谁拥有 dispose；
-- 用户“停止”是中断后端工作，还是只停止本地等待；
-- renderer、session 和 connection 关闭后调用方看到什么。
+```text
+src/platform/<domain>/browser/<domain>AppServerAdapter.ts
+src/workbench/services/<domain>/electron-browser/<domain>AppServerAdapter.ts
+```
 
-领域名和方法名按前端行为命名，不复用线上 method。若当前接口暴露线上 DTO、transport state、request ID 或错误 envelope，先收敛最终接口并迁移调用方，不为错误接口设计 adapter。
+只有 Thread 要进入 Agents Window 时，才使用：
 
-## 2. 固定 session 和 renderer 归属
+```text
+src/sessions/services/sessions/common/
+src/sessions/contrib/providers/appServer/browser/
+```
 
-在写线上调用前先回答：
+契约必须明确 input、result、领域错误、observable/event、初始 snapshot、capability、取消和 dispose；涉及 draft Session 时再增加 replacement。前端领域名按用户行为命名，不复用线上 method。领域 interface 不导入生成 DTO、transport state、request ID 或 error envelope。
 
-- session key 由工作区执行环境、远端目标、账户和权限边界中的哪些字段组成；
-- 多个 renderer 是否共享同一 session；
-- 哪个 renderer 拥有新建的 thread、turn、resource 或交互请求；
-- renderer 断开时释放哪些 attachment 资源，何时停止后端 session；
-- server request 如何从线上标识找到唯一 renderer。
+## 3. 固定 process 与 connection
 
-这些状态由 `src/platform/appServer/electron-main/appServerProcessService.ts` 拥有。领域 channel 必须使用 IPC `context` 访问 attachment，不能忽略 context 或以全局 active window 代替。
+默认拓扑必须写成：
 
-## 3. 选择消息、标识和顺序
+```text
+一个 app-server process
+  → 多个 renderer
+  → 每个 renderer 一条独立 backend connection
+  → 每个 renderer 一个 protocol client
+```
+
+实现前回答：
+
+- Main 在何时启动和停止共享 process；
+- 每个 renderer 如何以 nonce 取得自己的 MessagePort；
+- Main relay 如何为 MessagePort 打开独立 backend connection；
+- renderer 关闭时哪些资源只随该 connection 释放；
+- process 退出如何关闭全部 connection；
+- backend transport 如何保证跨平台、多 connection、背压和身份校验。
+
+Main 不能持有 protocol pending、执行 initialize 或替领域调用方选择对象。若只能通过单路 stdio、实验 transport、Main protocol multiplex 或每窗口进程实现，停止并询问用户。
+
+## 4. 选择消息、标识和顺序
 
 按 [协议语义](protocol-semantics.md) 选择 request、notification、显式资源或 server request。
 
-持续资源先设计：
+持续资源先设计 client-generated resource ID、start response、notification、terminal、stop response、renderer connection cleanup 和 process cleanup。可取消操作先设计 operation ID 与 typed cancel request。同步写出 serialization scope；没有领域理由时不同 key 并行。
 
-- client-generated resource ID；
-- start request/response；
-- 带 ID 的 notification 和终止事件；
-- stop request/response；
-- renderer disconnect 和 connection close 的清理。
+领域 catalog 先定义 snapshot 与 notification 无缺口语义。只有 Thread 进入 Agents Window 时，Session draft commit 才定义 replacement lifecycle；只有后端完整支持 Chat catalog 才启用 multi-chat capability。
 
-可取消操作先设计 operation ID 和 typed cancel request。同步写出 serialization scope；没有领域理由时不同 key 并行，不能为实现方便全局串行。
-
-## 4. 定义并生成 Rust 协议
+## 5. 定义并生成 Rust 协议
 
 领域 DTO 放在：
 
@@ -65,7 +104,7 @@ src/workbench/services/<domain>/common/<domain>.ts
 }
 ```
 
-事件加入 typed server notification registry；Rust 等待宿主回复时加入 typed server request registry。需要前端分类的错误使用稳定 numeric code 和结构化 data。
+事件加入 typed server notification registry；Rust 等待宿主回复时加入 typed server request registry。需要前端分类的错误使用稳定 numeric code 与结构化 data。
 
 生成输出由以下目录拥有：
 
@@ -78,12 +117,13 @@ src/workbench/services/<domain>/common/<domain>.ts
 - request method → params → response map；
 - notification method → params map；
 - server request method → params → response map；
-- envelope、request ID、错误和初始化 DTO；
-- JSON Schema。
+- envelope、request ID、错误、初始化和 capability DTO；
+- 从 `unknown` 解码 envelope、params、result、notification 与 server request 的运行时 decoder；
+- JSON Schema 与有效/无效 fixture。
 
-若生成结果只有 union 和分散 response 类型，停止前端实现，先修改 `../app-server-protocol/src/export.rs` 或实际生成 owner。不能在前端手写 method、response map 或重复 DTO。
+若生成结果只有 union 和分散 response type，或没有运行时 decoder，停止前端实现并询问用户是否先修改 `../app-server-protocol/src/export.rs` 或实际生成 owner。不能在前端手写 map、type guard、重复 DTO 或用类型断言绕过。
 
-## 5. 接入 Rust processor
+## 6. 接入 Rust processor 与多 connection transport
 
 领域 processor 放在：
 
@@ -91,36 +131,30 @@ src/workbench/services/<domain>/common/<domain>.ts
 ../app-server/src/request_processors/<domain>_processor.rs
 ```
 
-processor 只负责：
+processor 只接收生成类型、机械转换领域值、调用 Rust 领域能力，并把结果或稳定错误转成 response。业务校验、持久化、系统访问和长期状态属于真实领域能力。确有跨请求资源时才增加 `../app-server/src/<domain>_resource.rs`，资源 key 至少包含 `(connection_id, resource_id)`。
 
-- 接收生成协议类型；
-- 机械转换为 Rust 领域值；
-- 调用领域能力；
-- 把结果或稳定错误转成 response。
-
-业务校验、持久化、系统访问和长期状态属于实际领域能力。确有跨请求资源时才增加：
+正式本地多 connection transport 由以下目录拥有：
 
 ```text
-../app-server/src/<domain>_resource.rs
+../app-server-transport/src/transport/
+../app-server/src/transport.rs
 ```
 
-资源 key 至少包含 `(connection_id, resource_id)`。在 `../app-server/src/message_processor.rs` 的唯一分派中接入 processor；不建立第二个 dispatcher，也不把领域实现堆进统一分派文件。
+transport 只产生 opened/closed/message，使用有界队列并保持每条 connection 独立。它不实现 initialize、Project、Thread 或 renderer routing。缺少 Windows 或其他正式平台实现时不能把单平台 endpoint 宣称为完成。
 
-## 6. 实现共享 connection
+## 7. 实现 renderer protocol client
 
-环境无关的 connection 放在：
+文件位置：
 
 ```text
-src/platform/appServer/common/appServerConnection.ts
+src/platform/appServer/common/appServerProtocol.ts
+src/platform/appServer/browser/appServerProtocolClient.ts
 ```
 
-它依赖一个消息 transport 接口并消费生成 map：
+client 消费生成 map，并拥有该 renderer connection 的 request ID、client pending、server pending、initialize、generated decoder、notification listener、server request handler、connection generation 和 close。
 
 ```ts
-interface IAppServerConnection {
-	readonly state: AppServerConnectionState;
-	readonly onDidChangeState: Event<AppServerConnectionState>;
-
+interface IAppServerProtocolClient {
 	request<M extends keyof AppServerRequestMap>(
 		method: M,
 		params: AppServerRequestMap[M]['params'],
@@ -138,152 +172,125 @@ interface IAppServerConnection {
 }
 ```
 
-connection 拥有唯一 request ID allocator、client pending、server pending、初始化状态、typed message classification 和 close。它不枚举领域 method，不暴露 raw message 或 `unknown` 调用，`request` 也不接收 `CancellationToken`。
+transport frame 以 `unknown` 进入 decoder；client 不暴露 raw message、`invoke` 或任意 response 泛型，也不接收通用 `CancellationToken`。
 
-## 7. 实现 stdio transport 与进程服务
-
-文件位置：
-
-```text
-src/platform/appServer/node/appServerStdioTransport.ts
-src/platform/appServer/electron-main/appServerProcessService.ts
-```
-
-stdio transport 只处理 JSONL framing、stdin/stdout、stderr、drain、队列上限和 close。stdout 只允许线上消息；解析错误携带有限诊断并使 connection 进入明确失败状态。
-
-进程服务负责 executable resolution、spawn、session key、transport/connection 创建、renderer attachment 和应用关闭。它把 exit、signal、stdin error、stdout EOF 收敛成一次 close，不建立并行重连循环或隐藏备用 transport。
-
-## 8. 编写 Main 领域 channel
+## 8. 实现 Main starter 与透明 relay
 
 文件位置：
 
 ```text
-src/platform/<domain>/electron-main/<domain>AppServerChannel.ts
+src/platform/appServer/electron-main/appServerStarter.ts
+src/platform/appServer/electron-main/appServerConnectionRelay.ts
+src/platform/appServer/electron-browser/appServerMessagePortTransport.ts
+src/platform/appServer/electron-browser/localAppServerService.ts
 ```
 
-只属于 workbench 的领域改放 `src/workbench/services/<domain>/electron-main/`。领域 channel 实现 `IServerChannel<RendererContext>`，使用 context 取得正确 connection：
+starter 负责 executable resolution、process spawn、restart、shutdown 和致命退出。renderer 使用 nonce 请求 connection；relay 打开独立 backend connection，把专属 MessagePort 交给 renderer，并在任一侧关闭时释放这一对资源。
 
-```ts
-export class DomainAppServerChannel implements IServerChannel<RendererContext> {
-	public constructor(private readonly processService: IAppServerProcessService) {}
+relay 只转发 frame、执行背压和有限诊断。以下代码出现即表示 owner 漂移：
 
-	public call<T>(context: RendererContext, command: string, arg: unknown, token: CancellationToken): Promise<T> {
-		const connection = this.processService.getConnection(context);
-		switch (command) {
-			case DomainIpcCommand.Action:
-				return this.action(connection, arg, token) as Promise<T>;
-			default:
-				throw new Error(`Unknown domain command: ${command}`);
-		}
-	}
-}
-```
+- 在 Main 解析 JSON 或生成 method；
+- 在 Main 分配、重写或复用 protocol request ID；
+- 在 Main 执行 initialize、缓存 notification 或处理 server request union；
+- 在 Main 根据领域对象、Workspace 或 active window 选 connection；
+- 为不同 renderer 复用同一 backend connection。
 
-私有 action 使用生成 method/DTO，返回前端领域类型。允许转换 URI/path、时间、枚举、错误和资源 ID；禁止权限决定、持久化、业务缓存和静默重试。
+`localAppServerService` 在 renderer 取得 transport、创建一个 protocol client，并向上提供小而明确的 host service。它不拥有 UI 领域状态或 Project 持久化。
 
-如果领域操作有后端 cancel，action 监听 token 并发送 typed cancel request，完成路径释放 listener。没有后端 cancel 的领域方法不应在公开契约中承诺取消；即使 IPC call 被 renderer 放弃，Main 仍保留线上 pending 直到 response 或 close。
+## 9. 实现领域 adapter
 
-## 9. 编写 renderer channel client
-
-IPC command/event 和 client 放在领域目录：
+文件位置：
 
 ```text
-src/platform/<domain>/common/<domain>Ipc.ts
+src/platform/<domain>/browser/<domain>AppServerAdapter.ts
+src/workbench/services/<domain>/electron-browser/<domain>AppServerAdapter.ts
 ```
 
-```ts
-export class DomainChannelClient implements IDomainService {
-	public constructor(private readonly channel: IChannel) {}
+只选择与现有领域 owner 一致的一条路径，不同时创建两层同义 adapter。领域 adapter：
 
-	public action(input: DomainInput): Promise<DomainResult> {
-		return this.channel.call(DomainIpcCommand.Action, input);
-	}
-}
-```
+- 只依赖小而明确的 host service，不接触 MessagePort、raw envelope 或 Main channel；
+- 把前端领域 input 机械转换为生成 params，把生成 response 转为领域 result；
+- 把稳定 code/data 转为领域错误；
+- 从 snapshot 与 notification 更新 renderer 内的 observable facade；
+- 为持续资源创建明确 handle，并把 stop/dispose 路由到后端 owner；
+- 不复制后端持久化状态，不把生成 DTO 暴露给普通调用方。
 
-需要恢复 URI、Error 或前端对象时在 client 中完成。该文件只依赖 `IChannel` 和前端领域类型，不导入 `../app-server-protocol/schema/typescript/`。
-
-## 10. 事件和资源
-
-connection 级 notification 只解析一次。领域 channel 订阅 typed notification，再转换成前端 `Event`。
-
-资源 adapter 按顺序执行：
-
-1. 首个 renderer listener 创建 resource ID 并在 start 前注册路由；
-2. start 期间缓存提前到达的 notification；
-3. start response 与 revision/snapshot 合并后开放事件；
-4. notification 按 resource ID 进入正确 emitter；
-5. 最后一个 listener dispose、renderer disconnect、终止事件或 connection close 触发清理；
-6. 需要停止后端时发送 stop，并等待“response 后无新事件”的协议保证。
-
-不能在 renderer 直接订阅 connection notification，也不能让多个领域 adapter 各自解析同一线上事件流。
-
-## 11. 实现 server request handler
-
-Main 可直接完成的 handler 放在：
+只有 backend Thread 要进入 Agents Window 时，才增加：
 
 ```text
-src/platform/<domain>/electron-main/<domain>HostRequestHandler.ts
+src/sessions/contrib/providers/appServer/browser/appServerSessionsProvider.ts
+src/sessions/contrib/providers/appServer/browser/appServerSessionAdapter.ts
 ```
 
-需要 renderer 交互时，在对应 workbench service 中定义 host channel，并由 Main 根据 attachment 路由到唯一 renderer。线上 `ServerRequest` union 不进入 renderer。
+此时 Provider 注册稳定 provider ID、label、icon、session types 与 capabilities，从 Thread catalog 建立 Session facade，用 `providerId + resource` 生成 canonical Session ID，把 cwd 与 roots 表达为 Workspace，并在 `thread/start` 后触发 draft replacement。Session adapter 只保存 observable facade 与 backend resource，不复制 transcript 或持久化 Thread。只有后端完整支持时才声明 multi-chat、Project 或 Environment capability。
 
-handler 必须：
+## 10. Project 与 Environment adapter
 
-- 使用生成 params/response；
-- 通过 thread、turn、resource 或 session 找 owner；
-- 对未知、无 owner、超时、窗口关闭、dispose 和 connection close 返回稳定错误；
-- 每个 request 恰好回复一次；
-- 把权限与业务决定交给真正 owner。
+Project catalog 先使用已有 Project 领域 service；没有 owner 时才创建 Project-neutral service，并由 app-server adapter 实现。Agents Window 需要 Project 时消费该 service 或其最小 typed contract，Sessions Provider 不是 Project 的通用 owner。不要把生成 Project DTO 变成公共 Workbench contract。
 
-## 12. 产品装配
+Environment selection 属于开始 Thread、Turn 或相关配置操作。Project roots 不决定 Environment，Environment 状态也不改变 Project identity。实验 API 必须由 initialize capability 显式开启，并在用户已确认的版本边界内使用；否则停止实现。
 
-在 `src/code/electron-main/app.ts` 创建一次进程服务并注册领域 channel：
+## 11. 事件、资源与 server request
 
-```ts
-server.registerChannel(
-	DOMAIN_CHANNEL_NAME,
-	new DomainAppServerChannel(processService),
-);
-```
+每个 protocol client 只解析自己 connection 的 notification。对应领域 adapter 把 event 转成 observable 更新；持续资源使用 Promise 创建的 handle，表达 start failure、terminal state 和 stop completion。
 
-renderer 在对应 `electron-browser` 文件把 `DomainChannelClient` 注册为领域 service。产品装配文件不包含 DTO 转换、领域 method switch、session 业务状态或 protocol parser。
+renderer 可完成的 server request 由明确的领域 service 或 adapter 注册 typed handler；Thread UI 的交互 request 才由 Sessions Provider 处理。Main 才能完成的能力通过单独 named host channel 调用 Main，channel contract 使用前端领域类型，不能转发 raw `ServerRequest` union。
 
-## 13. 让错误 owner 退场
+handler 必须处理未知 method、未注册 owner、窗口关闭、用户取消、超时和 connection close，并对每个 request 恰好回复一次。
 
-同批迁移所有调用方并删除以下重复所有权；文件删除仍遵守仓库的单独确认规则：
+## 12. 文件与编辑状态
 
-- renderer 中的 process spawn、stdout reader、request ID 和 pending map；
-- 领域目录中的通用 JSON-RPC parser 或 initialize 状态；
-- 手写线上 DTO、method 常量和 response map；
-- 绕过领域接口的 `invoke`、`sendRequest` 或 raw notification 入口；
-- 按领域启动的重复 app-server 进程；
-- 依赖 active window 的 server request 广播；
-- 旧后端、备用 transport、双写和断线重放路径。
+后端工作区写入不能取代前端 file service、text model 或 working copy。接入前验证文件监听能观察后端落盘修改，并让 dirty model 进入明确的外部变更或保存冲突状态。
 
-## 14. 测试
+如果当前 owner 会静默覆盖 dirty buffer、需要前后端双写，或后端要求直接修改前端内存 model，立即停止并询问用户。不能在 app-server adapter 或 protocol client 中增加文件状态副本。
+
+## 13. 产品装配
+
+`src/code/electron-main/app.ts` 只创建 starter/relay、绑定应用生命周期并注册 connection acquisition。renderer main entry 注册 `localAppServerService`，各领域装配点注册真实 adapter；只有 Thread UI 接入时，Sessions entry 才注册 Provider。装配文件不解析 JSON、不转换 DTO、不实现领域 switch，也不保存领域状态。
+
+## 14. 让错误 owner 退场
+
+用户已解决冲突门禁后，同批迁移调用方并移除：
+
+- Main 中的 protocol connection、request pending、initialize 和 method routing；
+- 每窗口、每 Project、每 Workspace 或每领域 process；
+- 多余的 frontend ID → backend ID persistence；Thread UI 中尤其禁止随机 Session ID 映射；
+- 手写线上 DTO、method constant、response map 与 decoder；
+- 绕过领域 service/adapter 的 `invoke`、raw notification 或 universal IPC；
+- active window server request routing；
+- 旧后端、实验 transport 自动切换、双写与断线重放路径。
+
+## 15. 测试
 
 | 层 | 必测行为 |
 | --- | --- |
-| protocol generator | method/params/response maps、notification/server request maps、生成物无 diff |
+| protocol generator | method maps、runtime decoders、有效/无效 fixture、生成物无 diff |
 | Rust processor | DTO 转换、领域调用、结构化错误、serialization scope |
-| resource manager | connection 隔离、重复 ID、stop 后无事件、connection cleanup |
-| TypeScript connection | initialize gate、双向 ID 分离、request pairing、未知/重复 response、notification、server request、close |
-| stdio transport | 分行/粘连输入、无效 JSON、stderr 隔离、drain、队列上限、EOF |
-| process service | session 复用与隔离、renderer attach/detach、进程退出只关闭一次 |
-| Main 领域 channel | context 选 session、前端↔线上转换、领域取消、错误、事件和 dispose |
-| renderer client | 原领域接口、对象恢复和 listener 生命周期 |
-| 双端 | initialize/initialized、真实 request、持续事件、cancel/stop、server request response、renderer 断开和进程退出 |
+| backend transport | 多 connection 隔离、跨平台 endpoint、背压、单 connection close、process close |
+| Main starter/relay | 一进程、多 renderer 独立 connection、透明 frame、窗口 detach、process exit |
+| renderer protocol client | initialize、unknown decode、双向 ID、request pairing、notification、server request、close |
+| 领域 adapter | input/result 转换、snapshot/event、领域错误、资源 lifecycle、不泄露生成 DTO |
+| Sessions Provider（涉及 Agents Window 时） | canonical Session ID、draft replacement、catalog、capabilities、fork/rollback semantics |
+| Project/Environment | backend ownership、assignment notification、实验 capability gate；Thread UI 时验证 Workspace 投影 |
+| resource | connection 隔离、重复 ID、start failure、stop 后无事件、connection cleanup |
+| 文件集成 | clean model reload、dirty model 冲突和保存保护 |
+| 双端 | 多窗口同时 initialize、真实 request、catalog notification、cancel/stop、server request、单窗口断开与进程退出 |
 
 ## Review 检查
 
-使用 `rg` 和定向测试确认：
+使用 `rg` 与定向测试确认：
 
-- 生成 DTO 只出现在 `platform/appServer/{common,node}` 和领域 `electron-main` adapter/handler；
-- 线上 method string 只来自生成物；
-- 前端只有一个 request ID allocator、client pending、server pending、message classifier 和 transport reader；
-- 每个领域 channel 使用 renderer context，不读取全局 active window；
-- 每个长期资源都有 start、终止、stop、renderer cleanup 和 connection cleanup；
-- 只有协议支持取消的操作才把 token 映射到后端；迟到 response 仍被消费；
-- `app.ts` 只装配，`message_processor.rs` 只统一分派；
-- 没有通用业务 API、`unknown` DTO、错误消息匹配、旧后端、备用路径或静默重放。
+- Main 没有 protocol parser、request ID、pending、initialize、method switch 或领域状态；
+- 每个 renderer 只有一个 host protocol client 和独立 backend connection；
+- 一个 host 默认只有一个 process，Project/Workspace 不启动 process；
+- 普通调用方只经过所属领域 service 与 adapter，不经过通用 Sessions Provider；
+- 涉及 Agents Window 时，Session ID 统一来自 provider ID 与 provider-owned resource，且没有 frontend Thread mapping store；
+- 涉及 Agents Window 时，Provider、Project、Workspace、Environment、Session、Chat 和 Thread identity 未合并；
+- multi-chat capability 仅在 Agents Window 接入且后端有完整 Chat contract 时启用；
+- raw JSON 只以 `unknown` 进入 generated decoder；线上 method 只来自生成物；
+- Project 与 Environment 实验 API 已有用户决定和 capability gate；
+- server request 不广播、不依赖 active window，Main host call 不接收线上 union；
+- 只有协议支持取消的操作才承诺结束后端工作；
+- dirty file 冲突经过现有 file/working-copy owner；
+- 没有实验 transport、单路 stdio、每窗口 process、旧 owner 或静默重放作为备用路径；
+- 没有未经用户决定仍继续实施的源码、owner、协议或用户改动冲突。

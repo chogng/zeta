@@ -1,4 +1,4 @@
 interface:
   display_name: "App Server API Integration"
-  short_description: "Design the TypeScript desktop frontend to Rust app-server boundary"
-  default_prompt: "Use $app-server-api-integration to design or implement the final TypeScript desktop frontend to Rust app-server boundary, including session ownership, bidirectional protocol semantics, lifecycle, and exact file placement."
+  short_description: "Connect desktop domains to a Rust app-server"
+  default_prompt: "Use $app-server-api-integration to replace the TypeScript backend runtime with a Rust app-server while preserving frontend domain services, per-renderer connections, exact file ownership, and conflict gating."
