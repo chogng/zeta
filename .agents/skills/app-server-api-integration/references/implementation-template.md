@@ -13,7 +13,7 @@
 - 生成器是否提供 method map 与运行时 decoder；
 - 当前领域 identity、process owner 或用户改动是否与最终 owner 冲突。
 
-用户未决定前禁止创建桥接文件、保留双入口、手写缺失协议、移动/删除文件，或继续实施依赖该决定的步骤。
+缺口已有 [前置能力补全](prerequisite-completion.md) 定义且用户已授权修改对应后端范围时，先完成该前置能力再继续前端；后端不在授权范围、目标源码否定计划前提或需要改变公开兼容边界时，必须等待用户决定。禁止创建桥接文件、保留双入口、手写缺失协议，或继续实施依赖未决定冲突的步骤。
 
 ## 1. 固定领域身份
 
@@ -121,7 +121,7 @@ Main 不能持有 protocol pending、执行 initialize 或替领域调用方选�
 - 从 `unknown` 解码 envelope、params、result、notification 与 server request 的运行时 decoder；
 - JSON Schema 与有效/无效 fixture。
 
-若生成结果只有 union 和分散 response type，或没有运行时 decoder，停止前端实现并询问用户是否先修改 `../app-server-protocol/src/export.rs` 或实际生成 owner。不能在前端手写 map、type guard、重复 DTO 或用类型断言绕过。
+若生成结果只有 union 和分散 response type，或没有运行时 decoder，停止前端实现并按 [前置能力补全](prerequisite-completion.md) 修改 `../app-server-protocol/src/export.rs` 与实际生成 owner。用户未授权后端修改或生成 owner 与 reference 冲突时再执行冲突门禁。不能在前端手写 map、type guard、重复 DTO 或用类型断言绕过。
 
 ## 6. 接入 Rust processor 与多 connection transport
 
@@ -140,7 +140,7 @@ processor 只接收生成类型、机械转换领域值、调用 Rust 领域能�
 ../app-server/src/transport.rs
 ```
 
-transport 只产生 opened/closed/message，使用有界队列并保持每条 connection 独立。它不实现 initialize、Project、Thread 或 renderer routing。缺少 Windows 或其他正式平台实现时不能把单平台 endpoint 宣称为完成。
+transport 只产生 opened/closed/message，使用有界队列并保持每条 connection 独立。它不实现 initialize、Project、Thread 或 renderer routing。缺少 Windows 或其他正式平台实现时，先按 [前置能力补全](prerequisite-completion.md) 完成 loopback WebSocket、token auth 和机器可读启动记录；不能把单平台 endpoint 宣称为完成。
 
 ## 7. 实现 renderer protocol client
 
@@ -228,7 +228,7 @@ src/sessions/contrib/providers/appServer/browser/appServerSessionAdapter.ts
 
 Project catalog 先使用已有 Project 领域 service；没有 owner 时才创建 Project-neutral service，并由 app-server adapter 实现。Agents Window 需要 Project 时消费该 service 或其最小 typed contract，Sessions Provider 不是 Project 的通用 owner。不要把生成 Project DTO 变成公共 Workbench contract。
 
-Environment selection 属于开始 Thread、Turn 或相关配置操作。Project roots 不决定 Environment，Environment 状态也不改变 Project identity。实验 API 必须由 initialize capability 显式开启，并在用户已确认的版本边界内使用；否则停止实现。
+Environment selection 属于开始 Thread、Turn 或相关配置操作。Project roots 不决定 Environment，Environment 状态也不改变 Project identity。生产接入不使用 initialize 的实验 capability 取得必需 API；按 [前置能力补全](prerequisite-completion.md) 只稳定真实调用方需要的闭包依赖。用户明确要求实验接入或稳定范围存在产品语义冲突时停止实现并询问用户。
 
 ## 11. 事件、资源与 server request
 
@@ -264,14 +264,15 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 
 | 层 | 必测行为 |
 | --- | --- |
-| protocol generator | method maps、runtime decoders、有效/无效 fixture、生成物无 diff |
+| protocol generator | method maps、runtime decoders、启动记录、有效/无效 fixture、frontend 镜像与 schema hash、生成物无 diff |
 | Rust processor | DTO 转换、领域调用、结构化错误、serialization scope |
-| backend transport | 多 connection 隔离、跨平台 endpoint、背压、单 connection close、process close |
-| Main starter/relay | 一进程、多 renderer 独立 connection、透明 frame、窗口 detach、process exit |
-| renderer protocol client | initialize、unknown decode、双向 ID、request pairing、notification、server request、close |
+| backend transport | token auth、机器可读启动记录、多 connection 隔离、跨平台 endpoint、背压、单 connection close、process close |
+| Main starter/relay | 一进程、多 renderer 独立 connection、启动失败清理、透明 frame、窗口 detach、process exit |
+| renderer protocol client | revision/hash initialize、unknown decode、双向 ID、request pairing、notification、server request、close |
+| server request routing | 唯一 connection owner、connection-scoped callback、错误 connection 回复、owner close、不广播 |
 | 领域 adapter | input/result 转换、snapshot/event、领域错误、资源 lifecycle、不泄露生成 DTO |
 | Sessions Provider（涉及 Agents Window 时） | canonical Session ID、draft replacement、catalog、capabilities、fork/rollback semantics |
-| Project/Environment | backend ownership、assignment notification、实验 capability gate；Thread UI 时验证 Workspace 投影 |
+| Project/Environment | backend ownership、assignment notification、稳定 schema；Thread UI 时验证 Workspace 投影 |
 | resource | connection 隔离、重复 ID、start failure、stop 后无事件、connection cleanup |
 | 文件集成 | clean model reload、dirty model 冲突和保存保护 |
 | 双端 | 多窗口同时 initialize、真实 request、catalog notification、cancel/stop、server request、单窗口断开与进程退出 |
@@ -283,12 +284,14 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 - Main 没有 protocol parser、request ID、pending、initialize、method switch 或领域状态；
 - 每个 renderer 只有一个 host protocol client 和独立 backend connection；
 - 一个 host 默认只有一个 process，Project/Workspace 不启动 process；
+- Main 只解码生成的启动记录，不解析 stderr banner；endpoint/token 不进入 renderer；
 - 普通调用方只经过所属领域 service 与 adapter，不经过通用 Sessions Provider；
 - 涉及 Agents Window 时，Session ID 统一来自 provider ID 与 provider-owned resource，且没有 frontend Thread mapping store；
 - 涉及 Agents Window 时，Provider、Project、Workspace、Environment、Session、Chat 和 Thread identity 未合并；
 - multi-chat capability 仅在 Agents Window 接入且后端有完整 Chat contract 时启用；
 - raw JSON 只以 `unknown` 进入 generated decoder；线上 method 只来自生成物；
-- Project 与 Environment 实验 API 已有用户决定和 capability gate；
+- frontend 协议镜像与 backend schema hash 一致，initialize revision/hash 不匹配时不进入 Ready；
+- 产品必需的 Project 与 Environment API 已进入稳定 schema；未使用的实验 API 没有被前端静默开启；
 - server request 不广播、不依赖 active window，Main host call 不接收线上 union；
 - 只有协议支持取消的操作才承诺结束后端工作；
 - dirty file 冲突经过现有 file/working-copy owner；

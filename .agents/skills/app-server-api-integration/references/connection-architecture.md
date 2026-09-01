@@ -50,7 +50,8 @@ src/
 ├── platform/appServer/
 │   ├── common/
 │   │   ├── appServerService.ts
-│   │   └── appServerProtocol.ts
+│   │   ├── appServerProtocol.ts
+│   │   └── protocol/generated/
 │   ├── browser/
 │   │   └── appServerProtocolClient.ts
 │   ├── electron-browser/
@@ -69,20 +70,24 @@ src/
 │   ├── appServerSessionsProvider.ts
 │   └── appServerSessionAdapter.ts
 └── code/electron-main/app.ts
+
+build/lib/appServerProtocol.ts
 ```
 
-领域属于 platform 还是 workbench 由前端调用方和依赖方向决定。只属于 Agents Window 的 Thread facade 才放进 Sessions Provider。只创建有真实调用方的文件；小型 adapter 可以与领域 service implementation 同文件，没有 relay 逻辑时可与 starter 合并，不能为了目录对称创建占位文件。
+`protocol/generated/` 是 `../app-server-protocol/schema/typescript/` 的机械镜像，由 `build/lib/appServerProtocol.ts` 复制并校验 schema hash，禁止手改。领域属于 platform 还是 workbench 由前端调用方和依赖方向决定。只属于 Agents Window 的 Thread facade 才放进 Sessions Provider。只创建有真实调用方的文件；小型 adapter 可以与领域 service implementation 同文件，没有 relay 逻辑时可与 starter 合并，不能为了目录对称创建占位文件。
 
 后端参考源码使用并列 crate 路径：
 
 ```text
 ../app-server-protocol/
+├── src/listen_info.rs
 ├── src/protocol/common.rs
 ├── src/protocol/v2/<domain>.rs
 ├── src/export.rs
 └── schema/typescript/
 
 ../app-server/
+├── src/main.rs
 ├── src/message_processor.rs
 ├── src/request_serialization.rs
 ├── src/outgoing_message.rs
@@ -90,7 +95,10 @@ src/
 └── src/<domain>_resource.rs
 
 ../app-server-transport/
+├── src/lib.rs
 └── src/transport/
+    ├── auth.rs
+    └── websocket.rs
 ```
 
 `<domain>_resource.rs` 只用于跨 request 存活的 watch、process、stream 等资源。普通 request 不创建 resource manager。
@@ -122,7 +130,7 @@ Main starter 在首次请求时启动一个进程。每个 renderer 通过带 no
 - Main relay 能为每个 renderer 打开独立 connection，且不理解线上 method；
 - transport 有有界队列、背压、身份校验和确定关闭语义。
 
-单路 stdio 不能满足该拓扑。实验 WebSocket、只覆盖部分平台的 socket、Main protocol multiplex、每窗口一进程或自动 transport 切换都不能成为正式路径。当前后端不满足这些条件时停止前端实现，先让用户决定是否扩展 `../app-server-transport/` 与 `../app-server/`。
+单路 stdio 不能满足该拓扑。Main protocol multiplex、每窗口一进程或自动 transport 切换都不能成为正式路径。当前后端不满足这些条件时停止前端实现，先按 [前置能力补全](prerequisite-completion.md) 将 token-authenticated loopback WebSocket、机器可读启动记录和三平台测试补进 `../app-server-transport/` 与 `../app-server/`；后端不在授权范围或源码前提冲突时再询问用户。
 
 ## renderer protocol client
 
@@ -156,7 +164,7 @@ Project 是后端持久 catalog object；Workspace 是前端工作目录概念�
 
 Project adapter 处理 Project catalog 与 assignment；Workspace/file service 处理目录和文件状态；Environment adapter 处理执行目标；Thread adapter 处理 conversation。一个 adapter 可以在机械转换时读取关联对象，但不能夺取另一领域的 owner。
 
-Project 或 Environment API 仍为实验协议时，任何依赖它们的产品实现都先触发冲突门禁。用户选择依赖实验 API 后，完成标准必须明确记录 capability、版本绑定和失效行为；用户选择稳定协议后，先修改协议 owner。
+Project 或 Environment API 仍为实验协议时，生产 adapter 不开启实验 capability。先按 [前置能力补全](prerequisite-completion.md) 稳定真实产品调用方需要的 method、field 和 notification 闭包；稳定范围包含尚未决定的产品行为时执行冲突门禁。
 
 ## Thread 进入 Agents Window 时
 

@@ -30,7 +30,7 @@ renderer contribution 或调用方
 - 前端领域接口、状态和可见错误继续由对应 `src/platform/<domain>/`、`src/workbench/services/<domain>/` 或 `src/sessions/` owner 持有；`src/platform/appServer/` 只拥有共享 host/connection 机制。
 - Main 独占进程启动、停止、可执行文件解析、renderer connection acquisition 和透明 relay；Main 不拥有线上 request ID、pending map、initialize、notification 分类或领域状态。
 - 一个 host 默认启动一个进程；每个 renderer 获取一条独立 backend connection，并在 renderer 内创建唯一 protocol client。窗口、Project、Workspace 或领域不能成为新进程 key。
-- 正式实现必须有受支持的多 connection 本地 transport。只有单路 stdio、实验 transport 或平台不完整的 endpoint 时立即执行冲突门禁，不能改成 Main 共享线上 connection、每窗口一进程或万能 IPC 协议代理。
+- 正式实现必须有受支持的多 connection 本地 transport。只有单路 stdio、实验 transport 或平台不完整的 endpoint 时停止依赖它的前端实现；已授权后端前置工作时按 [前置能力补全](references/prerequisite-completion.md) 完成正式路径，否则执行冲突门禁。不能改成 Main 共享线上 connection、每窗口一进程或万能 IPC 协议代理。
 - Rust 协议注册与生成器是 method、params、response、notification 和 server request 的唯一来源，并同时生成编译期 method map 与运行时 decoder。
 - 每个领域 adapter 只做机械转换与生命周期衔接，不做业务决定、持久化、权限判断、静默重试或协议兼容猜测。
 - 后端拥有 durable Project、Thread、Turn、Item、process/resource 和执行状态；前端只保存其领域 facade 与 UI 状态，不复制后端持久化 owner。
@@ -42,12 +42,12 @@ renderer contribution 或调用方
 
 ## 冲突门禁
 
-实现、迁移或 review 前检查两侧源码、目标 owner、现有公开 API、用户已有改动和所需协议语义。出现以下任一情况时立即停止修改，只继续只读调查并一次性报告完整冲突清单：
+实现、迁移或 review 前检查两侧源码、目标 owner、现有公开 API、用户已有改动和所需协议语义。[源码证据](references/source-evidence.md) 已记录且 [前置能力补全](references/prerequisite-completion.md) 已定义的缺口，在用户授权对应后端范围时按计划先补后端；除此以外出现以下任一情况时立即停止修改，只继续只读调查并一次性报告完整冲突清单：
 
 - 两个权威源码对同一行为、路径、生命周期或 owner 给出不兼容答案；
-- 正式多 connection transport 不存在，或只能使用实验、单平台、单 connection 方案；
+- 正式多 connection transport 不存在，且用户未授权补全后端，或目标 backend 不接受计划中的 loopback WebSocket 正式化；
 - 所需 API 或字段仍是实验协议，而用户未确认是否依赖或先稳定它；
-- 所需行为缺少 method、稳定 ID、运行时 decoder、结构化错误、取消、资源终止或版本兼容语义；
+- 所需行为缺少 method、稳定 ID、运行时 decoder、结构化错误、取消、资源终止或版本兼容语义，且用户未授权修改对应协议 owner，或现有源码无法按前置能力计划唯一补全；
 - 领域状态、Project、Thread、resource、renderer 或 connection 无法唯一归属；
 - Sessions 对接需要的 Session/Chat/Thread 映射没有唯一身份或完整生命周期；
 - 当前公开 API、文件位置或用户改动与目标修改重叠，继续需要猜测保留、迁移、改名或删除选择。
@@ -60,7 +60,7 @@ renderer contribution 或调用方
 2. 找到 renderer 调用方真正依赖的前端领域 service，固定其接口、状态、错误、事件、取消和释放语义。
 3. 固定一个进程、多 renderer 独立 connection 的拓扑，以及 renderer/process 关闭语义。
 4. 为每项领域行为选择 request、notification、显式资源或 server request，并固定身份与顺序。
-5. 检查 Rust 注册点能否生成 method map 和运行时 decoder；生成物不完整时先报告协议阻塞。
+5. 检查正式 transport、Rust 注册点、method map、运行时 decoder、初始化兼容、稳定 API、结构化错误和 server request owner；缺失时先按 [前置能力补全](references/prerequisite-completion.md) 完成后端契约。
 6. 在 renderer protocol client 处理线上协议，在领域 adapter 中转换前后端契约；产品入口只装配 starter、host service、领域 adapter 和真实 contribution。
 7. 仅当 Thread 进入 Agents Window 时实现 Sessions Provider、Session replacement 和 Chat capability。
 8. 验证初始化、运行时解码、请求配对、领域事件、取消、多窗口、dirty file 冲突、连接关闭、背压和生成物同步。
@@ -72,9 +72,10 @@ renderer contribution 或调用方
 | 领域 owner、进程、多窗口、connection、Thread/Sessions 条件映射或文件位置 | [连接与所有权](references/connection-architecture.md) |
 | request、notification、资源、取消、错误、顺序或 server request | [协议语义](references/protocol-semantics.md) |
 | 新增或修改 API、实现代码或 review | [实现流程](references/implementation-template.md) |
+| transport、生成器、兼容、实验 API、结构化错误或 server request owner 尚未完成 | [前置能力补全](references/prerequisite-completion.md) |
 | 修改本 skill、核对依据，或 reference 无法回答关键边界 | [源码证据](references/source-evidence.md) |
 
-完整实现一项 API 时读取前三份。只有 [源码证据](references/source-evidence.md) 列出的重新核对条件成立时才回到参考源码。
+完整实现一项 API 时读取前三份；命中任何后端前置缺口时再读取 [前置能力补全](references/prerequisite-completion.md)。只有 [源码证据](references/source-evidence.md) 列出的重新核对条件成立时才回到参考源码。
 
 ## 立即拒绝的设计
 

@@ -33,8 +33,11 @@ Sessions 是 Thread UI 的 adapter，不是 app-server 所有 API 的统一入�
 | 路径 | 已验证结论 |
 | --- | --- |
 | `../app-server/README.md` | 默认 stdio 是单路 JSONL；WebSocket 标记为 experimental/unsupported；Unix socket 使用 WebSocket upgrade。每条 connection 必须独立完成 `initialize` → `initialized`。 |
+| `../app-server/src/main.rs` 与 `../app-server-transport/src/transport/websocket.rs` | CLI 支持 `ws://IP:PORT` 与端口 `0`，listener 绑定后只打印面向人的 stderr banner；当前没有供 Main 严格解码的启动记录。 |
 | `../app-server-transport/src/transport/stdio.rs` | stdio 直接读取进程 stdin 并写 stdout，只形成一条进程级 stream。 |
-| `../app-server-transport/src/transport/mod.rs` | transport 使用有界队列，产生 opened/closed/message，并保持 connection identity。 |
+| `../app-server-transport/src/transport/` | transport 共享层使用有界队列，产生 opened/closed/message，并保持 connection identity。 |
+| `../app-server-transport/src/transport/websocket.rs` | listener 为每个 upgrade 分配独立 connection ID、reader、writer、disconnect token 和有界 outbound queue；慢 connection 可以单独关闭，具备正式化为桌面多 connection transport 的实现基础。 |
+| `../app-server-transport/src/transport/auth.rs` | WebSocket upgrade 已支持 capability token hash 校验；非 loopback listener 没有 auth 时被拒绝。 |
 | `../app-server-protocol/src/protocol/common.rs` | 一个注册点绑定 typed client request、response、server notification、server request 和 serialization scope；Project 与 Environment method 当前标记为 experimental。 |
 | `../app-server-protocol/src/protocol/v2/project.rs` | Project 是后端对象，拥有 ID、name、roots、metadata、position 与时间；协议提供 list/read/create/import/update/move/delete 和 changed notification。 |
 | `../app-server-protocol/src/protocol/v2/thread.rs` | `thread/start` 可携带 `projectId` 与 `environments`；Project assignment 和 Environment selection 是独立字段。 |
@@ -44,7 +47,7 @@ Sessions 是 Thread UI 的 adapter，不是 app-server 所有 API 的统一入�
 | `../app-server/src/request_processors/thread_processor.rs` | Thread start/update 校验 Project 是否存在，并把 assignment 写入 Thread store；fork/restore 使用后端 Thread identity。 |
 | `../app-server/src/message_processor.rs` | initialize 是 per-connection 门禁；其他 request 在初始化前被拒绝；统一 processor 做 typed dispatch。 |
 | `../app-server/src/request_serialization.rs` | serialization key 由协议 scope 产生；connection-scoped resource key 包含 connection ID，不同 key 并行。 |
-| `../app-server/src/outgoing_message.rs` | outgoing owner 统一发送 response/error/notification，维护 server request callback，并按 connection 路由。 |
+| `../app-server/src/outgoing_message.rs` | outgoing owner 统一发送 response/error/notification 并维护 server request callback；当前 callback 只按 request ID 保存，同时存在 `ToConnection` 与 `Broadcast`，通用 server request 可广播，Thread-scoped request 也可面向多个 connection，尚未满足 connection-scoped 唯一交互 owner。 |
 | `../app-server/src/fs_watch.rs` | 资源以 `(connection_id, watch_id)` 隔离；重复 ID 被拒绝；unwatch 等待任务结束；connection close 清理资源。 |
 
 Project 不是 Session Host，也不只是 Workspace。Project 是后端 catalog object；Workspace 只在 Thread UI 场景表达目录范围；Environment 是 Thread/Turn 执行目标。Provider 仅封装 Agents Window 的执行边界。
@@ -60,18 +63,19 @@ Project 不是 Session Host，也不只是 Workspace。Project 是后端 catalog
 | `../app-server-protocol/schema/typescript/` | 当前没有完整运行时 decoder 或等价生成校验器。 |
 | `../app-server-protocol/src/rpc.rs` | 错误 envelope 包含 numeric code、message 和可选结构化 data；稳定领域分类不能只依赖 message。 |
 
-## 当前阻塞
+## 当前限制
 
-- **正式多 connection 本地 transport**：前端参考拓扑要求一个 process 为多个 renderer 提供独立 connection。默认 stdio 只有一条 stream；WebSocket 未正式支持；Unix socket 不能单独证明完整跨平台桌面契约。实现前必须先取得用户对 backend transport 工作的决定。
+- **正式多 connection 本地 transport**：前端参考拓扑要求一个 process 为多个 renderer 提供独立 connection。默认 stdio 只有一条 stream；WebSocket 未正式支持；Unix socket 不能单独证明完整跨平台桌面契约。计划完成路径见 [前置能力补全](prerequisite-completion.md)。
+- **机器可读启动握手**：随机端口只出现在 stderr banner，Main 不能把日志解析当作稳定 endpoint discovery。
 - **生成 method map**：TypeScript 生成物没有完整 method → params → response map，无法实现不手写映射的 typed protocol client。
 - **运行时 decoder**：生成物不能把 `unknown` frame 验证为 envelope/params/result；类型断言不能补这个边界。
-- **Project 与 Environment 稳定性**：相关 method 与 Thread 字段当前是 experimental。产品依赖它们前必须由用户决定是否接受版本绑定，或先稳定协议。
+- **Project 与 Environment 稳定性**：相关 method 与 Thread 字段当前是 experimental。生产 adapter 依赖它们前必须先稳定真实调用方需要的闭包依赖；若稳定行为本身未决定，再执行冲突门禁。
 - **通用 request cancellation**：后端没有任意 client request 的通用 cancel；已有取消通过 interrupt、terminate、unwatch 和领域 cancel method 表达。
 - **结构化领域错误**：部分失败仍只有通用 code/message；前端需要稳定分类时必须先补 data 或专用 code。
 - **协议兼容字段**：initialize user agent 可诊断版本，但不是独立 compatibility negotiation；独立升级后端前必须先补稳定兼容契约。
-- **server request connection owner**：交互 request 必须回到发起当前工作的 renderer connection；任何跨 connection 投递行为都要先有明确协议 identity 与路由保证。
+- **server request connection owner**：交互 request 必须回到发起当前工作的唯一 renderer connection；当前通用 broadcast 和多 connection Thread-scoped request 尚未提供该保证。
 
-这些阻塞不能由 Main 共享 protocol connection、每窗口 process、实验 transport 自动切换、手写 decoder、英文消息匹配或前端持久映射掩盖。
+这些限制的计划 owner、文件位置、顺序和验收条件统一由 [前置能力补全](prerequisite-completion.md) 定义。不能用 Main 共享 protocol connection、每窗口 process、实验 transport 自动切换、手写 decoder、英文消息匹配或前端持久映射掩盖。
 
 ## 对 skill 的直接影响
 

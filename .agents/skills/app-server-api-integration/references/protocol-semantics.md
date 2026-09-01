@@ -44,7 +44,7 @@ transport 收到的 frame 先保持 `unknown`，再经过生成 decoder：
 3. 按生成 method registry 解码 params、result 或 error；
 4. 只把已解码值交给 pending、listener 或 handler。
 
-decoder 或等价校验器必须与 method map 一起由 `../app-server-protocol/` 生成。手写 type guard、`as GeneratedType`、只检查 method string 或仅依靠 TypeScript union 都会产生第二个协议 owner。生成器缺少 decoder 时执行冲突门禁。
+decoder 或等价校验器必须与 method map 一起由 `../app-server-protocol/` 生成。手写 type guard、`as GeneratedType`、只检查 method string 或仅依靠 TypeScript union 都会产生第二个协议 owner。生成器缺少 decoder 时先按 [前置能力补全](prerequisite-completion.md) 完成生成器；后端不在授权范围或生成 owner 冲突时执行冲突门禁。
 
 Main relay 只转发 frame 和 close，不执行 `JSON.parse`。领域 service、UI 与普通 contribution 不接收 raw envelope。
 
@@ -89,7 +89,7 @@ Project catalog 与 Thread catalog 都由后端拥有。对应领域 adapter 初
 
 多 renderer 各自维护同一后端 catalog 的本地 facade。notification 可以到达所有已初始化 connection；这不构成多持久化 owner，因为后端仍是唯一 durable source。前端不得把一个窗口的缓存通过 Main 广播给其他窗口。
 
-Project 或 Environment method 仍为实验协议时，adapter 不静默启用。初始化 capability 与用户决定不满足时执行冲突门禁。
+Project 或 Environment method 仍为实验协议时，生产 adapter 不静默启用。先按 [前置能力补全](prerequisite-completion.md) 稳定真实调用方需要的 method、field 和 notification 闭包；稳定范围涉及未决定的产品行为时执行冲突门禁。
 
 ## Thread 进入 Agents Window 时的 Session replacement
 
@@ -145,7 +145,7 @@ Rust 需要 approval、用户输入、权限确认或宿主能力时发送 typed
 
 传给 Main 的 host call 使用前端定义的最小领域契约，不转发线上 `ServerRequest` union。Main 不返回 raw envelope，也不决定 approval 业务结果。
 
-未知 method、handler 未注册、窗口关闭、用户取消、超时和 connection close 返回稳定错误。后端若可能把交互 request 发到未发起当前 Turn 的 connection，或缺少完成路由所需 identity，这是协议冲突；不能依赖 active window 或广播。
+未知 method、handler 未注册、窗口关闭、用户取消、超时和 connection close 返回稳定错误。交互 request 必须按 [前置能力补全](prerequisite-completion.md) 绑定启动当前 Turn 或触发宿主调用的唯一 connection；Thread subscription 只授予 notification。后端若缺少该 identity，这是协议冲突；不能依赖 active window 或广播。
 
 ## 顺序与并发
 
@@ -180,7 +180,7 @@ Rust 需要 approval、用户输入、权限确认或宿主能力时发送 typed
 4. 发送 `initialized` notification；
 5. 进入 `Ready` 并开放领域 request。
 
-初始化期间到达的已知 notification/server request 继续读取并按协议暂存；未知 server request 立即拒绝，不能阻塞 reader。生成物与打包后端必须来自同一版本；若允许独立升级，协议先提供明确兼容字段，不能从 user agent string 推断。
+初始化期间到达的已知 notification/server request 继续读取并按协议暂存；未知 server request 立即拒绝，不能阻塞 reader。生成物与打包后端按 [前置能力补全](prerequisite-completion.md) 比较 protocol revision 与 schema hash；若允许独立升级，协议先提供版本区间协商，不能从 user agent string 推断。
 
 renderer connection 关闭时停止接受新 request、关闭 transport、拒绝该 client pending、结束其 server request、资源和 listener。process 退出对所有 protocol client 产生同一 host failure，但每个 client 独立完成本地 close。新 connection 使用新代次，旧 ID 和消息不进入新 connection。
 
