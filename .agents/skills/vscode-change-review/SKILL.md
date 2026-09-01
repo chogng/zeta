@@ -1,9 +1,11 @@
 ---
 name: vscode-change-review
-description: Review new commits in the checked-out VS Code repository since the recorded checkpoint, decide which changes affect Zeta, and record review and alignment progress without modifying product source. Use for daily or periodic VS Code upstream audits; do not use to implement the resulting Zeta changes.
+description: Review new commits in the checked-out VS Code repository since the recorded checkpoint, decide which changes affect Zeta, and record review and alignment progress without modifying product source. Use only when the user explicitly invokes $vscode-change-review in the current request; never activate it from task similarity, schedules, prior context, or agent delegation.
 ---
 
 # VS Code 提交增量审查
+
+仅当用户在当前请求中明确调用 `$vscode-change-review` 时使用本 skill。根 agent 和子 agent 不得根据任务语义、定期检查、历史上下文或主动委托触发它。
 
 比较 `../vscode` 两个提交之间的真实改动，找出可能需要应用到 Zeta 的变化。该 skill 只读取 VS Code 和 Zeta 源码，只允许更新自身的 [checkpoint.json](checkpoint.json)；不得修改、生成、删除或格式化任何产品源码。
 
