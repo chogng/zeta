@@ -1,4 +1,4 @@
 interface:
   display_name: "App Server API Integration"
-  short_description: "Replace VS Code TS backends with a Rust app-server"
-  default_prompt: "Use $app-server-api-integration to replace a VS Code TypeScript or Node backend capability with a Codex-style Rust app-server while preserving the VS Code frontend contract."
+  short_description: "Design Zeta's TypeScript-to-Rust app-server boundary"
+  default_prompt: "Use $app-server-api-integration to design or implement Zeta's final TypeScript-to-Rust app-server boundary, including ownership, protocol semantics, lifecycle, and exact file placement."

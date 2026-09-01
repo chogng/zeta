@@ -1,68 +1,65 @@
 ---
 name: app-server-api-integration
-description: Replace VS Code TypeScript or Node backend capabilities with a Codex-style Rust app-server while preserving the VS Code TypeScript frontend contracts. Use when designing, implementing, or reviewing the replacement API, its requests, notifications, streams, cancellation, server-initiated requests, or TypeScript adapter placement; do not use for same-process TypeScript services or Rust-only domain logic.
+description: Design, implement, or review Zeta's TypeScript-to-Rust app-server boundary. Use for process ownership, typed requests, notifications, subscriptions, cancellation, server-initiated requests, generated protocol types, adapters, lifecycle, and exact file placement; do not use for UI design, frontend domain behavior, or Rust domain internals.
 ---
 
-# VS Code 前端改接 Rust App-server
+# App-server API 对接
 
-始终从同一个终局模型出发：保留完整的 VS Code TypeScript 前端及其 browser、editor、workbench 领域契约，把原来由 TypeScript 或 Node 执行的后端能力替换为 Rust app-server。Codex 只作为 Rust 协议、传输、请求处理、双向消息和类型生成的架构参考，不提供前端领域模型。
+本 skill 设计 Zeta 的最终前后端边界，不以当前目录、现有调用链或兼容旧实现为起点。先确定领域契约、进程所有权和线上协议，再决定代码落位；当前实现与最终结构冲突时，指出冲突并按最终结构设计，不增加兜底路径、双写或旧后端回退。
 
-VS Code 前端需要什么能力，由真实调用链和已有契约决定。Codex 当前协议缺少文件、终端、搜索或其他能力时，扩展 Rust 协议；不要改变 VS Code 前端去迁就 Codex 已有 API。
+## 最终边界
 
-## 开始前
+```text
+renderer 领域服务
+  → 命名 channel 的 client
+  → 进程 IPC
+  → Electron Main 领域 channel
+  → 共享 app-server connection
+  → 有类型的线上协议
+  → 统一消息分派
+  → Rust 领域 processor
+  → Rust 领域能力
+```
 
-- 完整读取仓库说明、匹配目标文件的 scoped instructions，以及目标子树最近的 `AGENTS.md`。
-- 修改、增加、移动或评审 VS Code 对应的 TypeScript 文件时，同时使用 `vscode-api-alignment`，并读取它为目标层指定的 reference。
-- 将 `../vscode` 和 `../codex` 作为只读证据。先追踪当前 checkout 的符号、注册点、调用方和测试，再决定接口和位置。
-- 保存 `git status --short` 和目标 diff，保护用户已有改动。
+- renderer 只依赖前端领域接口，不导入线上 DTO、不持有连接、不生成请求编号。
+- Electron Main 独占后端进程、transport、初始化、请求配对、通知分派和服务端主动请求。
+- Rust 协议注册是方法名、参数、响应、通知、服务端主动请求和串行范围的唯一来源；TypeScript 只消费生成物。
+- 领域 Electron Main adapter（channel 或 server request handler）是两段协议的唯一转换点，只转换类型、错误、事件、资源标识和生命周期，不决定业务。
+- 每个后端 session 使用一条共享 connection；领域不能各自启动进程、读取 transport 或维护 pending map。
 
-## 按任务读取 references
+完整所有权、连接状态和目标目录见 [连接与所有权](references/connection-architecture.md)。
 
-不要一次读取全部 reference。先判断当前任务涉及哪些决策，再完整读取对应文件。
+## 工作方式
 
-| 当前任务 | 必须读取 |
+1. 写出最终领域契约：方法、事件、状态、错误、取消和释放行为。不要默认沿用当前接口。
+2. 选择 request、notification、显式资源订阅或 server request，并确定稳定资源 ID 和并发范围。
+3. 在 Rust 协议注册处定义线上契约并生成 TypeScript 类型；生成器缺少方法到响应的映射时，修改生成器，不手写第二份映射。
+4. 在 Rust 统一分派中接入领域 processor；业务规则留在领域能力中。
+5. 在 Electron Main 的领域 channel 中连接共享 connection，并把线上 DTO 转为前端领域类型。
+6. 在 renderer 注册领域 channel client，使调用方继续只看到领域服务。
+7. 验证初始化、请求配对、事件路由、取消、释放、服务端主动请求、连接关闭和生成物同步。
+
+## 按任务读取 reference
+
+| 任务 | 必须读取 |
 | --- | --- |
-| 替换或评审任一 TypeScript / Node 后端能力 | [上游调用链调查](references/upstream-audit.md) |
-| 设计进程、连接、IPC、握手、重连，或决定连接文件放置 | [连接与文件放置](references/connection-and-placement.md) |
-| 决定文件、终端、搜索等领域契约和适配器放在哪里 | [领域适配](references/domain-adapters.md) |
-| 设计请求、通知、订阅、流、取消、服务端请求、错误或并发 | [协议语义](references/protocol-semantics.md) |
+| 设计连接、进程、生命周期、所有权或文件位置 | [连接与所有权](references/connection-architecture.md) |
+| 设计 request、notification、订阅、取消、错误、顺序或 server request | [协议语义](references/protocol-semantics.md) |
+| 新增或修改一条 API、写代码或做 review | [实现流程](references/implementation-template.md) |
+| 修改本 skill、核对设计依据或遇到 reference 未覆盖的行为 | [源码证据](references/source-evidence.md) |
 
-实现完整领域接入时通常需要读取四份；只做局部评审时读取与评审范围直接相关的文件。
+完整新增一个领域 API 时读取前三份。只在维护 skill 或设计依据出现歧义时读取源码证据并回到对应源码；不要在普通对接任务中重复研究全部源码。
 
-## 始终成立的约束
+## 不接受的设计
 
-- **VS Code 前端契约是接口基准**：保留调用方可见的接口、事件、取消、流、生命周期和错误语义。不得从 Codex DTO 反推前端服务。
-- **两段连接不能混成一层**：renderer 与 Electron Main 使用 VS Code 领域 IPC；Electron Main 独占与 Rust app-server 的线上连接。renderer 不获得通用 JSON-RPC 连接。
-- **一条 Rust 连接承载多个领域**：同一前端 host 到同一后端目标的一次会话共享连接、握手、请求关联和连接状态；文件、终端、搜索等仍暴露各自的领域 channel 与服务。
-- **Rust 协议是线上类型的唯一来源**：请求、响应、通知、错误和服务端发起的请求先在 `zeta-rs/app-server-protocol` 定义，再生成 `zeta-ts/generated/app-server/types.ts`。禁止手写第二套等价 DTO 或方法名。
-- **生成类型只停留在边界**：只有连接实现和领域适配器使用生成 DTO；browser、editor、workbench 产品代码依赖 VS Code 领域契约。
-- **每项职责只有一个 owner**：一个领域可以按职责跨越 `platform`、`workbench/services` 和 `workbench/contrib`，但同一状态、策略或后端能力不得存在两个实现。
-- **TypeScript 适配器保持机械**：只做 DTO 转换、关联标识、错误映射和生命周期衔接。策略、权限、持久化、排序、业务校验和后端状态属于 Rust 领域能力。
-- **替换必须收敛**：迁入 Rust 的业务逻辑不保留 TypeScript / Node 并行实现、失败切回旧后端的路径或临时桥。
+- renderer 直接调用 JSON-RPC、导入生成 DTO 或处理后端方法名。
+- 通用 `IAppServerApi`、`invoke(method, unknown)` 或集中暴露全部业务的 service。
+- 在 TypeScript 手写方法字符串、请求参数、响应类型、通知表或 server request 表。
+- 每个领域各自持有 transport、初始化状态、请求编号、pending map 或重连循环。
+- 把通知当响应、把无限事件当永不结束的 Promise、把丢弃 Promise 当取消。
+- 用英文错误消息判断错误类别，或让 JSON-RPC envelope 进入 editor、workbench 和 UI。
+- 断线后静默重放修改请求、假装旧资源仍存活，或切回另一条实现路径。
 
-## 工作流程
+## 完成标准
 
-1. 按 [上游调用链调查](references/upstream-audit.md) 追踪一条完整链路，明确标记保留的 VS Code 前端和由 Rust 替换的 TypeScript / Node 后端。
-2. 写出调用方契约、Rust 能力缺口、消息形态、生命周期、取消、错误和并发要求；按任务路由读取其余 references。
-3. 先在 Rust 定义完整协议和领域处理入口，再生成 TypeScript 类型。不得先在 TypeScript 发明线上接口。
-4. 在 VS Code 对应 owner 中实现薄适配器；Electron Main 负责 Rust 连接和领域 channel 注册，总装配文件只组合依赖。
-5. 同批迁移生产调用方并让旧后端入口退出。删除文件前仍需用户确认准确路径。
-6. 添加协议、适配器和真实行为的最小测试，执行定向检查，并确认生成 DTO、方法名和后端状态没有越过边界。
-
-## 必须停止并报告的情况
-
-- VS Code 前端要求的流、watch、终端持续输出、取消或其他语义无法由当前 Rust 协议完整表达。
-- 真实调用链仍无法判断同一职责的唯一 owner。
-- 需要新增 VS Code 中没有对应职责的 Zeta TypeScript 公开路径，用户尚未确认该职责。
-- 设计要求 UI 或产品代码直接使用生成 DTO。
-- 旧 Node 实现仍有必要调用方，而当前任务没有授权改变其行为。
-
-不要用兼容外壳、空实现、运行时方法字符串、`unknown` DTO 或失败后切回旧后端解除阻断。
-
-## 验证底线
-
-- Rust：运行目标协议、schema 和领域能力的最小测试，遵守仓库 `just check`、`just test` 规则。
-- TypeScript：运行目标适配器和调用方的最小 typecheck 与行为测试。
-- 边界：用 `rg` 检查生成类型没有扩散到适配器之外，线上方法名和 DTO 没有在 TypeScript 中重复定义。
-- 收敛：用 `rg` 确认旧入口、旧 Node 业务实现和并行状态 owner 已无生产调用方。
-- 最后检查 `git diff` 与 `git status`，分别报告本次改动、用户已有改动、实际测试和未解决限制。
+最终答复必须说明：领域契约、线上消息形态、连接与资源 owner、准确文件位置、取消和关闭语义、生成物更新方式、实际测试，以及仍阻止正确实现的协议缺口。若当前结构与目标结构冲突，直接列出需要退场的所有权，不为旧结构设计兼容层。
