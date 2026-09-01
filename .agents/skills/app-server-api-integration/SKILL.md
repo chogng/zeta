@@ -1,65 +1,72 @@
 ---
 name: app-server-api-integration
-description: Design, implement, or review Zeta's TypeScript-to-Rust app-server boundary. Use for process ownership, typed requests, notifications, subscriptions, cancellation, server-initiated requests, generated protocol types, adapters, lifecycle, and exact file placement; do not use for UI design, frontend domain behavior, or Rust domain internals.
+description: Design, implement, or review a TypeScript desktop frontend connected to a Rust app-server. Use for process and session ownership, typed bidirectional messages, generated protocol types, domain channels, cancellation, subscriptions, host requests, lifecycle, and exact file placement; do not use for UI design, frontend domain behavior, or Rust domain internals.
 ---
 
 # App-server API 对接
 
-本 skill 设计 Zeta 的最终前后端边界，不以当前目录、现有调用链或兼容旧实现为起点。先确定领域契约、进程所有权和线上协议，再决定代码落位；当前实现与最终结构冲突时，指出冲突并按最终结构设计，不增加兜底路径、双写或旧后端回退。
+按最终架构设计桌面前端与 app-server 的边界，不沿用现有目录、调用链或错误所有权。先确定领域契约、进程边界、线上协议和资源生命周期，再落文件；现有实现冲突时让错误 owner 退场，不增加转发层、双写或备用后端。
 
-## 最终边界
+## 架构基线
 
 ```text
 renderer 领域服务
-  → 命名 channel 的 client
-  → 进程 IPC
-  → Electron Main 领域 channel
-  → 共享 app-server connection
-  → 有类型的线上协议
+  → 命名 channel client
+  → renderer ↔ Main IPC
+  → Main 领域 channel
+  → session 对应的共享 connection
+  → stdio JSONL transport
+  → 双向线上协议
   → 统一消息分派
-  → Rust 领域 processor
+  → 领域 processor
   → Rust 领域能力
 ```
 
-- renderer 只依赖前端领域接口，不导入线上 DTO、不持有连接、不生成请求编号。
-- Electron Main 独占后端进程、transport、初始化、请求配对、通知分派和服务端主动请求。
-- Rust 协议注册是方法名、参数、响应、通知、服务端主动请求和串行范围的唯一来源；TypeScript 只消费生成物。
-- 领域 Electron Main adapter（channel 或 server request handler）是两段协议的唯一转换点，只转换类型、错误、事件、资源标识和生命周期，不决定业务。
-- 每个后端 session 使用一条共享 connection；领域不能各自启动进程、读取 transport 或维护 pending map。
+这条链包含两份契约：renderer 使用前端领域契约，Main 与 app-server 使用生成的线上契约。Main 领域 channel 是唯一同时理解两者的适配点；不能把线上 method、DTO、错误 envelope 或 request ID 暴露给 renderer。
 
-完整所有权、连接状态和目标目录见 [连接与所有权](references/connection-architecture.md)。
+## 不变量
 
-## 工作方式
+- renderer 不持有后端进程、transport、connection、request ID 或 pending map。
+- renderer ↔ Main IPC 与 Main ↔ app-server 协议相互独立，不能共用 method 常量或通用调用入口。
+- Electron Main 独占进程、session、connection 选择、初始化、请求配对、通知分派和服务端主动请求路由。
+- 一个后端 session 只有一个 connection owner；领域不能分别启动进程或解析 stdout。
+- Rust 协议注册与生成器是线上 method、params、response、notification 和 server request 的唯一来源。
+- 前端领域接口由其领域目录拥有；使用 app-server 不会把领域职责转移到 `platform/appServer`。
+- adapter 只做机械转换与生命周期衔接，不做业务决定、持久化、权限判断或静默重试。
+- 通用 connection request 不接收 `CancellationToken`；取消必须映射为协议已有的领域 interrupt、stop、unwatch、terminate 或 cancel request。
+- 断线使当前 connection 的 pending、资源和路由全部失效。新 connection 使用新代次，旧请求和修改操作不自动重放。
 
-1. 写出最终领域契约：方法、事件、状态、错误、取消和释放行为。不要默认沿用当前接口。
-2. 选择 request、notification、显式资源订阅或 server request，并确定稳定资源 ID 和并发范围。
-3. 在 Rust 协议注册处定义线上契约并生成 TypeScript 类型；生成器缺少方法到响应的映射时，修改生成器，不手写第二份映射。
-4. 在 Rust 统一分派中接入领域 processor；业务规则留在领域能力中。
-5. 在 Electron Main 的领域 channel 中连接共享 connection，并把线上 DTO 转为前端领域类型。
-6. 在 renderer 注册领域 channel client，使调用方继续只看到领域服务。
-7. 验证初始化、请求配对、事件路由、取消、释放、服务端主动请求、连接关闭和生成物同步。
+## 工作流程
 
-## 按任务读取 reference
+1. 写出 renderer 真正需要的领域接口、事件、错误、取消和释放行为，不从当前实现或线上 DTO 反推接口。
+2. 确定 session 隔离键、renderer 归属和 Main 中唯一的 connection owner。
+3. 为每项行为选择 request、notification、显式资源或 server request，并定义稳定 ID、顺序、错误和关闭结果。
+4. 检查 Rust 注册点能否生成方法到参数和返回值的完整映射；生成物不完整时先改生成器并停止前端手写映射。
+5. 在 Main 领域 channel 中转换两份契约，在 renderer 注册领域 channel client；产品入口只创建服务和注册 channel。
+6. 验证初始化、请求配对、事件缺口、领域取消、renderer 断开、多窗口路由、connection 关闭、背压和生成物同步。
 
-| 任务 | 必须读取 |
+## Reference 路由
+
+| 当前任务 | 必须读取 |
 | --- | --- |
-| 设计连接、进程、生命周期、所有权或文件位置 | [连接与所有权](references/connection-architecture.md) |
-| 设计 request、notification、订阅、取消、错误、顺序或 server request | [协议语义](references/protocol-semantics.md) |
-| 新增或修改一条 API、写代码或做 review | [实现流程](references/implementation-template.md) |
-| 修改本 skill、核对设计依据或遇到 reference 未覆盖的行为 | [源码证据](references/source-evidence.md) |
+| 连接、进程、session、多窗口、所有权或文件位置 | [连接与所有权](references/connection-architecture.md) |
+| request、notification、资源、取消、错误、顺序或 server request | [协议语义](references/protocol-semantics.md) |
+| 新增或修改 API、实现代码或 review | [实现流程](references/implementation-template.md) |
+| 修改本 skill、核对依据，或 reference 无法回答关键边界 | [源码证据](references/source-evidence.md) |
 
-完整新增一个领域 API 时读取前三份。只在维护 skill 或设计依据出现歧义时读取源码证据并回到对应源码；不要在普通对接任务中重复研究全部源码。
+完整实现一项领域 API 时读取前三份。普通对接任务不重复研究全部参考源码；只有 [源码证据](references/source-evidence.md) 列出的重新核对条件成立时才回到源码。
 
-## 不接受的设计
+## 立即拒绝的设计
 
-- renderer 直接调用 JSON-RPC、导入生成 DTO 或处理后端方法名。
-- 通用 `IAppServerApi`、`invoke(method, unknown)` 或集中暴露全部业务的 service。
-- 在 TypeScript 手写方法字符串、请求参数、响应类型、通知表或 server request 表。
-- 每个领域各自持有 transport、初始化状态、请求编号、pending map 或重连循环。
-- 把通知当响应、把无限事件当永不结束的 Promise、把丢弃 Promise 当取消。
-- 用英文错误消息判断错误类别，或让 JSON-RPC envelope 进入 editor、workbench 和 UI。
-- 断线后静默重放修改请求、假装旧资源仍存活，或切回另一条实现路径。
+- renderer 直接读写 JSONL、调用线上 method、导入生成 DTO 或处理 server request union。
+- `invoke(method, unknown)`、通用业务 API、手写响应泛型或手写 method → response 表。
+- 把后端 JSON-RPC 直接注册成一个万能 `IChannel`，或让一个领域 channel 暴露全部后端方法。
+- 每个领域维护自己的 transport、初始化状态、request ID、pending map、reader 或重连循环。
+- 忽略 renderer context，广播审批/输入请求，或让任意 workbench contribution 注册线上 handler。
+- 把 IPC 的 Promise cancel 当作后端工作已经取消，或把丢弃 Promise、忽略迟到 response 当作取消。
+- 用英文错误消息分类、把 notification 当 response、把无限事件表示成永不结束的 Promise。
+- 关闭后保留旧资源、静默重放修改请求、自动切换实现路径或维持新旧 owner 并存。
 
 ## 完成标准
 
-最终答复必须说明：领域契约、线上消息形态、连接与资源 owner、准确文件位置、取消和关闭语义、生成物更新方式、实际测试，以及仍阻止正确实现的协议缺口。若当前结构与目标结构冲突，直接列出需要退场的所有权，不为旧结构设计兼容层。
+最终答复必须给出：前端领域契约、线上消息形态、session 和 connection owner、renderer 归属、准确文件位置、生成物更新、取消与关闭语义、实际运行的测试，以及仍阻止正确实现的协议缺口。发现当前结构冲突时，列出需要退场的 owner 和调用入口，不为它们设计兼容层。

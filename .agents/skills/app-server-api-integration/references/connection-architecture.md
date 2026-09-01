@@ -1,44 +1,46 @@
 # 连接与所有权
 
-本文件规定最终进程边界、连接所有权和目标目录。路径是目标职责，不是对当前 Zeta 目录的认可；已有代码放错位置时，应把 owner 移到这里，而不是在旧位置增加转发层。
+本文件规定最终进程边界、session、connection、多窗口路由和目标目录。路径表达最终职责，不认可任何现有目录；代码位于错误 owner 时迁回目标位置并迁移调用方，不在旧位置保留转发层。
 
-## 一条完整调用链
+## 端到端调用
 
 ```mermaid
 flowchart LR
-    UI[renderer 调用方] --> Contract[前端领域接口]
+    Caller[renderer 调用方] --> Contract[前端领域接口]
     Contract --> Client[领域 channel client]
-    Client --> IPC[命名 channel IPC]
-    IPC --> Adapter[Electron Main 领域 channel]
-    Adapter --> Connection[共享 app-server connection]
-    Connection --> Transport[transport]
+    Client --> IPC[renderer 与 Main IPC]
+    IPC --> Channel[Main 领域 channel]
+    Channel --> Sessions[session owner]
+    Sessions --> Connection[共享 connection]
+    Connection --> Transport[stdio JSONL transport]
     Transport --> Dispatch[统一消息分派]
     Dispatch --> Processor[领域 processor]
     Processor --> Domain[Rust 领域能力]
 ```
 
-前端领域接口和 Rust 线上协议是两份不同契约：前者服务 renderer，后者跨进程。Electron Main 领域 adapter 是唯一允许同时理解两者的位置。
+前端领域契约和线上协议服务不同调用者。领域 channel 使用 renderer context 选择 session，把前端输入转为生成参数，再把生成响应、通知和错误转回领域对象；其他层不能同时理解两份契约。
 
-## 所有权
+## 所有权表
 
-| 对象 | 唯一 owner | 不能负责 |
+| 对象 | 唯一 owner | 禁止承担 |
 | --- | --- | --- |
 | 前端领域接口、事件和可见错误 | `src/platform/<domain>/common/` 或 `src/workbench/services/<domain>/common/` | transport、JSON-RPC、Rust DTO |
-| renderer channel client | 领域的 `common/` 或 `electron-browser/` | 后端进程、请求编号、重连 |
-| renderer ↔ Main IPC | `src/base/parts/ipc/` 与 `src/platform/ipc/` | app-server 方法和业务状态 |
-| 后端进程与 connection | `src/platform/appServer/electron-main/` | 领域业务和 UI 状态 |
-| transport 与请求配对 | `src/platform/appServer/node/` | 领域方法、缓存和权限判断 |
+| renderer channel client | 领域的 `common/` 或 `electron-browser/` | 进程、session、request ID、重连 |
+| renderer ↔ Main IPC | `src/base/parts/ipc/` 与 `src/platform/ipc/` | app-server method、后端状态、业务决定 |
+| connection 状态机与消息分类 | `src/platform/appServer/common/` | Node/Electron API、领域缓存、UI 状态 |
+| stdio framing 与有界写队列 | `src/platform/appServer/node/` | initialize、session、领域 method |
+| 进程、session 和 renderer attachment | `src/platform/appServer/electron-main/` | 领域 DTO 转换、UI 决定 |
 | 领域线上转换 | `src/platform/<domain>/electron-main/` 或对应 workbench service | Rust 业务规则、前端状态副本 |
-| 线上协议与生成物 | `../app-server-protocol/` | runtime、系统访问、UI 类型 |
-| 统一分派与连接 session | `../app-server/` | transport framing、前端领域状态 |
-| transport 接受、读取和写出 | `../app-server-transport/` | initialize 语义、领域分派、业务错误 |
+| 线上协议、注册和生成物 | `../app-server-protocol/` | runtime、系统访问、前端领域类型 |
+| 统一分派与 connection session | `../app-server/` | stdio framing、renderer 状态 |
+| transport 接受、读写和背压 | `../app-server-transport/` | initialize 语义、领域分派 |
 | Rust 领域行为 | 对应领域 crate | IPC channel、renderer 类型、JSON-RPC envelope |
 
-`base → platform → workbench` 是前端依赖方向。连接机制属于 `platform`；领域仍由自己的 `platform/<domain>` 或 `workbench/services/<domain>` 拥有，不能因为使用 app-server 就搬进 `platform/appServer`。
+前端依赖方向是 `base → platform → editor → workbench → code`。`sessions` 可以依赖 `workbench` 及更低层，反向依赖不成立。连接机制属于 `platform`；领域仍由自己的 platform 或 workbench service 目录拥有。
 
 ## 目标目录
 
-前端源码根目录以下记为 `src/`：
+前端参考源码根以下统一写作 `src/`：
 
 ```text
 src/
@@ -51,9 +53,10 @@ src/
 │   │   ├── common/
 │   │   └── electron-browser/
 │   ├── appServer/
-│   │   ├── node/
-│   │   │   ├── appServerTransport.ts
+│   │   ├── common/
 │   │   │   └── appServerConnection.ts
+│   │   ├── node/
+│   │   │   └── appServerStdioTransport.ts
 │   │   └── electron-main/
 │   │       └── appServerProcessService.ts
 │   └── <domain>/
@@ -61,7 +64,8 @@ src/
 │       │   ├── <domain>.ts
 │       │   └── <domain>Ipc.ts
 │       └── electron-main/
-│           └── <domain>AppServerChannel.ts
+│           ├── <domain>AppServerChannel.ts
+│           └── <domain>HostRequestHandler.ts
 ├── workbench/services/<domain>/
 │   ├── common/
 │   ├── electron-browser/
@@ -69,14 +73,15 @@ src/
 └── code/electron-main/app.ts
 ```
 
-只创建有真实调用方的文件。`appServerTransport.ts` 拥有字节或消息收发和关闭；`appServerConnection.ts` 拥有初始化、请求配对与线上消息分类；`appServerProcessService.ts` 拥有 Electron 生命周期下的进程启动、停止和 connection 选择。三项职责不能合并进领域 channel，也不需要继续拆成空接口和单实现文件。
+只创建具有独立职责和真实调用方的文件。连接类型很小时可与连接实现同文件；没有 server request 的领域不创建 handler；领域只属于 workbench 时使用 `src/workbench/services/<domain>/`，不重复创建 platform 版本。
 
-后端按并列 crate 表示：
+后端参考源码使用并列 crate 路径：
 
 ```text
 ../app-server-protocol/
 ├── src/protocol/common.rs
 ├── src/protocol/v2/<domain>.rs
+├── src/export.rs
 └── schema/typescript/
 
 ../app-server/
@@ -90,71 +95,109 @@ src/
 └── src/transport/
 ```
 
-`<domain>_resource.rs` 只在该领域确实拥有跨请求资源时存在，例如 watch、process 或 stream。普通 request 不为匹配目录树创建资源 manager。
+`<domain>_resource.rs` 只用于跨请求存活的 watch、process、stream 等资源。普通 request 不创建资源 manager。
+
+## 三层连接职责
+
+### `common/appServerConnection.ts`
+
+该文件只依赖环境无关的消息 transport 接口和生成协议，负责：
+
+- connection 状态与代次；
+- request ID 和唯一 pending map；
+- `initialize` response、`initialized` notification 与 ready gate；
+- response、error、notification、server request 分类；
+- typed notification listener 与 server request handler registry；
+- 关闭时拒绝 pending、终止路由并忽略旧代次结果。
+
+它不启动进程、不选择 session、不知道 renderer，也不包含领域 method switch。
+
+### `node/appServerStdioTransport.ts`
+
+该文件只负责逐行 JSON framing、stdin 写入、stdout 读取、stderr 诊断、写入背压和关闭事件。线上消息省略标准 JSON-RPC 版本字段，因此 parser 按生成 envelope 解码，不能依赖完整标准 header。
+
+transport 不执行 initialize，不分派领域消息，不拥有 pending request。默认桌面链路使用 stdio；实验 transport 不能成为正式路径或备用路径。
+
+### `electron-main/appServerProcessService.ts`
+
+该文件负责解析可执行文件、启动和停止子进程、计算 session key、创建 transport/connection、管理 renderer attachment，并把进程退出收敛为一次 connection close。它可以拥有多个 session，但同一 session 只有一条 connection。
+
+该文件不转换领域 DTO，不保存 UI 状态，不根据英文错误消息决定行为。
+
+## Session 与 renderer attachment
+
+session key 来自真实隔离边界，例如工作区执行环境、远端目标、账户或权限边界。领域名、窗口 ID 和随机 connection ID 不能单独作为 session key。
+
+Main 为每个 renderer attachment 记录：
+
+- renderer context 与所属 session；
+- 该 renderer 创建的本地订阅和 host request handler；
+- thread、turn、resource 等需要反向路由的归属；
+- 断开时必须释放的 attachment 资源。
+
+领域 channel 的 `context` 不能忽略。每次调用先由 `context` 取得 attachment 和 session，再取得该 session 的 connection。renderer 断开时只释放它拥有的订阅、handler 和归属记录；是否关闭后端 session 由明确的 session 生命周期决定，不能因为任一窗口关闭就无条件杀死共享进程。
+
+## 反向请求路由
+
+app-server 发起审批、输入或宿主能力请求时，connection 先按生成 method 找到 Main handler，再由 handler 按 thread、turn、resource 或 session 归属选择唯一 renderer channel。不能广播，也不能把线上 server request union 交给普通 contribution。
+
+路由必须处理：
+
+- 找不到 owner；
+- owner 窗口已关闭；
+- handler dispose；
+- 用户交互超时或取消；
+- connection 在回复前关闭。
+
+每种结果恰好回复一次成功或稳定错误，并从 pending server request 表移除。
 
 ## 生成物边界
 
-Rust 协议注册同时生成以下 TypeScript 契约，输出由 `../app-server-protocol/schema/typescript/` 拥有：
+`../app-server-protocol/schema/typescript/` 必须由一个注册点生成：
 
-- client request 的方法、params 和 response 映射；
-- server notification 的方法和 params 映射；
-- server request 的方法、params 和 response 映射；
-- request ID、错误和初始化 DTO。
+- client request method → params → response map；
+- server notification method → params map；
+- server request method → params → response map；
+- request ID、错误、初始化和 envelope 类型。
 
-前端通过一个构建别名直接消费该生成目录，不把生成文件复制到另一个手写目录。只有 `src/platform/appServer/node/` 和领域 `electron-main/` adapter/handler 可以导入生成物；renderer、领域 `common/`、editor、workbench contribution 和 UI 不得导入。
+前端通过构建别名直接消费生成目录，不复制到另一个手写目录。只有 `src/platform/appServer/common/`、`src/platform/appServer/node/` 和领域 `electron-main/` adapter/handler 可以导入生成物；renderer、领域 `common/`、editor、workbench contribution 与 UI 不得导入。
 
-若生成器当前只有 request union 和零散 response 类型，却没有“方法 → response”的映射，应扩展生成器。不能在 `appServerConnection.ts` 或领域 channel 中手写响应表，因为那会产生第二个协议 owner。
+如果生成器只有 request union 和分散的 response 类型，缺少方法到返回值映射，这是协议缺口，会阻止通用 typed connection。先修改 `../app-server-protocol/src/export.rs` 或其生成 owner；禁止在前端补第二份映射。
 
-## Connection owner
-
-一个 Electron Main host 可以拥有多个后端 session，但同一个 session 只能有一个 connection owner。session key 必须由真实隔离边界组成，例如远端目标、工作区执行环境或权限边界；不能以领域名作为 key。
-
-connection owner 独占：
-
-- transport reader、writer 和有界队列；
-- client request ID 分配和唯一 pending map；
-- `initialize` 请求、能力协商和 ready gate；
-- typed notification 分派；
-- typed server request handler registry；
-- 关闭原因、pending rejection 和资源失效通知；
-- 新 connection 代次，防止旧异步结果进入新 session。
-
-领域 channel 只获得一个已经选定 session 的 connection 接口。它不能访问 child process、socket、stdout、request ID 或 pending map。
-
-## 连接状态
+## Connection 状态
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
     Idle --> Starting
     Starting --> Initializing
-    Initializing --> Ready: initialize 成功且能力匹配
+    Initializing --> Ready: initialize 成功并已发送 initialized
     Starting --> Failed: 启动或 transport 失败
-    Initializing --> Failed: initialize 失败
-    Ready --> Closing: host 关闭或 connection 丢失
+    Initializing --> Failed: 握手或能力校验失败
+    Ready --> Closing: host 关闭或 transport 丢失
     Closing --> Closed
     Failed --> Closed
     Closed --> Starting: 明确创建新 connection
 ```
 
-- `Ready` 前的领域调用等待同一个 ready promise；初始化失败后全部收到同一个明确错误。
-- initialize 期间到达的通知和 server request 必须被解析并暂存，不能因为尚未 ready 而丢失或阻塞 reader。
-- connection 关闭先停止接收新请求，再拒绝全部 pending、终止资源事件、清理 handler 和 transport。
-- 重启产生新代次。旧请求不重放，旧资源 ID 不复用，修改请求不自动重试；领域通过重新读取和重新订阅恢复。
+- `Ready` 前的领域调用等待同一个 ready promise；初始化失败后全部得到同一明确错误。
+- 初始化期间收到的已知 notification 和 server request 继续解析并按协议顺序暂存，未知 server request 立即拒绝；reader 不能被 ready gate 阻塞。
+- close 先拒绝新请求，再停止 transport，拒绝全部 pending，结束资源事件并清空 handler。
+- restart 创建新代次。旧 pending、resource ID、response 和 notification 不能进入新 connection；修改请求不自动重放。
 
-## 两段 IPC 不能混成一段
+## 两段协议的生命周期映射
 
-renderer ↔ Electron Main 的 channel command/event 名称属于前端领域契约；Electron Main ↔ Rust 的 method 属于线上协议。两者可以表达相同动作，但不能共用同一常量或让线上 method 穿过 renderer IPC。
+renderer IPC 的 call cancellation 和 event dispose 只到达 Main。领域 channel 必须决定它们是否对应线上 interrupt、stop、unwatch、terminate 或 cancel；没有协议取消的普通 request 不能假装已经停止后端工作。
 
-前端 IPC 自动提供的 call cancellation 和 listener dispose 只到达 Electron Main。它们不会自动取消 Rust 工作或释放 Rust 资源；领域 channel 必须按 [协议语义](protocol-semantics.md) 显式映射。
+renderer IPC connection 关闭只说明该窗口离开。app-server connection 关闭则使整个 session 的 pending 和资源失效。两者必须分别处理，不能用同一个 `dispose()` 含糊覆盖。
 
-## 装配
+## 产品装配
 
-`src/code/electron-main/app.ts` 只做以下工作：
+`src/code/electron-main/app.ts` 只完成：
 
-1. 创建进程 owner 和共享 connection；
-2. 创建领域 channel，注入 connection；
-3. 按稳定 channel name 注册；
-4. 把所有资源注册到 host 生命周期。
+1. 创建进程服务并绑定应用生命周期；
+2. 创建领域 channel/handler 并注入进程服务或 connection accessor；
+3. 注册稳定 channel name；
+4. 注册所有 disposable。
 
-该文件不实现 transport、不解析消息、不转换 DTO，也不包含领域 switch。renderer 在对应 `electron-browser` 注册远程领域 service，调用方通过依赖注入取得领域接口。
+该文件不解析 JSON、不转换 DTO、不实现领域 switch，也不保存 session 业务状态。renderer 在对应 `electron-browser` 文件注册远程领域 service，调用方通过依赖注入取得领域接口。

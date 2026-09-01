@@ -1,38 +1,53 @@
 # 协议语义
 
-本文件规定如何把前端领域行为映射成 Rust app-server 消息。先定义调用方能观察到的行为，再选择线上消息；不要从当前 method 或 DTO 反推领域接口。
+本文件规定如何把前端领域行为映射成 app-server 消息。先写调用方能观察到的行为，再选择线上消息；不能从已有 method、DTO 或 handler 反推领域接口。
 
 ## 行为表
 
-每条对接先写清楚：
+每项对接先回答：
 
-| 项目 | 必须回答 |
+| 项目 | 必须明确 |
 | --- | --- |
 | 领域行为 | 调用方要完成什么，返回值和可观察副作用是什么 |
-| owner | 哪个 Rust 领域能力校验输入、决定行为并保存状态 |
-| 消息形态 | request、notification、资源订阅、stream 或 server request |
-| 标识 | request ID 之外是否需要 operation、resource、revision 或 command ID |
-| 生命周期 | 谁创建、谁释放，window、session 或 connection 关闭时如何结束 |
-| 取消 | 取消哪项后端工作，取消与正常完成竞争时哪个结果生效 |
-| 顺序 | 哪些动作必须按稳定 key 串行，哪些必须并行 |
-| 错误 | 稳定错误 code/data 如何转换成前端领域错误 |
-| 恢复 | 断线后失败、重读、重订阅还是由协议提供恢复 |
+| 决策 owner | 哪个 Rust 领域能力校验输入、决定行为并保存状态 |
+| 消息形态 | request、notification、显式资源或 server request |
+| 标识 | request ID 之外是否需要 operation、resource、thread、turn、revision 或 command ID |
+| renderer 归属 | 哪个 attachment 发起，反向请求和事件如何回到正确窗口 |
+| 生命周期 | 谁创建、谁释放，renderer、session 或 connection 关闭时如何结束 |
+| 取消 | 停止哪项后端工作，取消和正常完成竞争时哪个终态生效 |
+| 顺序 | 哪些动作按稳定 key 串行，哪些必须并行 |
+| 错误 | 稳定 code/data 如何转换成前端领域错误 |
+| 恢复 | 断线后失败、重读、重订阅，还是由协议明确恢复 |
+
+## 线上 envelope 与分类
+
+stdio 每行承载一条 JSON 消息，线上省略标准 JSON-RPC 版本字段。connection 根据方向和字段分类：
+
+| 方向和字段 | 类型 | connection 行为 |
+| --- | --- | --- |
+| client → server，`id + method + params` | client request | 写入后登记 client pending |
+| server → client，`id + result` 或 `id + error` | client response | 只完成匹配的 client pending |
+| server → client，`method + params` 且无 `id` | server notification | 分派给 typed listener |
+| server → client，`id + method + params` | server request | 调用 typed handler 并回复一次 |
+| client → server，`method + params` 且无 `id` | client notification | 只用于协议明确允许的通知，例如 `initialized` |
+
+client request ID 与 server request ID 分属两个方向，可以出现相同值；实现必须使用两张 pending 表，不能用一张 map 混合。未知 response ID、重复 response、无效 envelope 或生成类型解码失败属于协议错误，不转成领域失败。
 
 ## 消息选择
 
 | 前端语义 | 线上消息 | 必须具备 |
 | --- | --- | --- |
-| 一次性查询或修改 | typed request/response | params、response、稳定错误、必要的串行范围 |
-| connection 期间的全局变化 | typed server notification | 明确触发条件；初始化后的可用范围 |
-| watch、process、terminal、search 等持续资源 | start request + 带 resource ID 的 notification + stop request | 稳定 ID、终止信号、connection cleanup |
-| Rust 需要前端返回值 | typed server request/response | request ID、typed response、错误和关闭语义 |
-| 取消既有工作 | 领域明确的 interrupt、stop、unwatch、terminate 或 cancel request | 指向稳定 operation/resource ID |
+| 一次性查询或修改 | typed request/response | params、response、稳定错误、必要串行范围 |
+| connection 期间的全局变化 | typed server notification | 明确触发条件和初始化后的可用范围 |
+| watch、process、terminal、search 等持续资源 | start request + resource notification + stop request | client-generated ID、终止信号、connection cleanup |
+| Rust 需要宿主返回值 | typed server request/response | request ID、唯一 renderer owner、typed response、错误和关闭语义 |
+| 取消既有工作 | typed interrupt、stop、unwatch、terminate 或 cancel request | 指向稳定 operation/resource ID |
 
-notification 不用于需要确认成功的命令；request response 不用于持续流；server request 不用“通知 + 另一个 client request”模拟。
+notification 不用于需要确认成功的命令；request response 不承载无限流；server request 不用“通知 + 另一个 client request”模拟。
 
 ## 一次性 request
 
-协议注册点一次性绑定 method、params、response 和 serialization scope。TypeScript connection 的请求接口必须由生成映射约束：
+协议注册点一次绑定 method、params、response 和 serialization scope。TypeScript connection 只能通过生成映射调用：
 
 ```ts
 interface IAppServerConnection {
@@ -43,102 +58,122 @@ interface IAppServerConnection {
 }
 ```
 
-`AppServerRequestMap` 是生成物。connection 实现可以组装 JSON-RPC envelope，但调用方不能传 `unknown` params 或自行指定 response 泛型。
+`AppServerRequestMap` 必须是生成物。调用方不能传 `unknown` params、自行指定 response 泛型或手写 method 字符串。
 
-request ID 只负责当前 connection 内的响应配对。需要幂等或未知结果恢复的修改必须另有领域 `commandId`、revision 或稳定对象 ID；不能把 request ID 当业务身份。
+request ID 只负责当前 connection 的响应配对。需要幂等、去重或未知结果恢复的修改必须另有 `commandId`、revision 或稳定对象 ID；不能把 request ID 当作业务身份。
 
-## Notification
+## Notification 与快照
 
-connection reader 必须先完成线上消息分类，再把 typed notification 分派给同步、轻量的本地 listener。UI listener 不能阻塞 reader；需要异步工作的 adapter 自己排队并拥有队列上限。
+connection reader 先完成消息分类和类型校验，再把 notification 分派给同步、轻量的本地 listener。UI listener 不能阻塞 reader；需要异步处理的 adapter 自己排队并设置上限。
 
-全局 notification 只表示“某件事发生了”，不自动构成完整状态。需要可靠当前值时，领域契约应提供 snapshot request，或由订阅 start response 返回 snapshot/revision。不能依赖“先请求快照还是先注册 listener”的时间巧合避免事件缺口。
+notification 只说明变化发生，不自动构成完整当前状态。可靠状态必须使用以下一种协议：
 
-## 显式资源订阅
+- start response 返回 snapshot/revision，并规定从哪个 sequence 继续；
+- snapshot request 与带 sequence 的 notification 组合；
+- 协议保证注册路由早于 start，并允许 start 期间缓存事件。
 
-持续资源使用由 client 生成的稳定 resource ID，使 start 发送前即可建立路由和取消目标：
+不能依赖“先请求快照还是先监听”的时序巧合消除事件缺口。
+
+## 显式资源
+
+持续资源使用 client-generated resource ID，使 start 发出前就能建立路由和停止目标：
 
 ```text
 创建 resource ID
-  → 注册本地 notification 路由
+  → 注册 notification 路由
   → start(resource ID, params)
   → 接收 notification(resource ID, ...)
   → completed/exited 或 stop(resource ID)
   → 删除路由
 ```
 
-- 后端资源 key 至少包含 connection ID 和 resource ID，避免不同 client 相互停止资源。
-- 重复 resource ID 在同一 connection 内必须报错，不能覆盖旧资源。
-- stop response 返回前要保证之后不会再发该 resource 的 notification。
-- connection 关闭必须释放该 connection 创建的全部资源。
-- renderer 的最后一个 listener dispose 时，Electron Main adapter 才发送 stop；多个本地 listener 共享同一个后端资源。
-- start 失败、stop 失败和 connection 关闭都必须终止前端 `Event` 并清理本地路由。
-
-需要补发或检测缺口时，notification 带单调 sequence，snapshot 带 revision，并明确从哪个 sequence 继续。没有恢复需求的同 connection 实时事件不机械增加持久序号。
+- 后端 key 至少包含 connection ID 和 resource ID，不同 connection 不能相互停止资源。
+- 同一 connection 的重复 resource ID 返回稳定错误，不能覆盖旧资源。
+- stop response 返回前必须保证之后不再发送该资源的 notification。
+- connection 关闭释放该 connection 创建的全部资源。
+- Main 按 renderer attachment 记录资源；renderer 断开只停止它拥有的资源。
+- 多个本地 listener 共享同一后端资源时，最后一个 listener dispose 后才发送 stop。
+- start 失败、stop 失败、终止 notification 和 connection close 都必须结束前端事件并删除路由。
 
 ## 取消
 
-renderer IPC 的 `CancellationToken` 只会取消 renderer ↔ Main 的 call。当前 app-server 消息没有通用 `$/cancelRequest` 语义，因此 connection 的通用 `request` API 不接收 `CancellationToken`，避免让调用方误以为任意 Rust request 可取消。
+renderer IPC 的 `CancellationToken` 只取消 renderer ↔ Main 的 call。后端没有通用 client request cancellation，因此 connection 的 `request` 不接收 token。
 
-需要取消的领域操作必须满足：
+领域 adapter 按实际协议处理：
 
-1. client 在开始前生成 operation/resource ID；
-2. start request 携带该 ID；
-3. Electron Main 监听 `CancellationToken`，发送对应的 typed cancel request；
-4. Rust processor 把 cancel 交给实际工作 owner；
-5. 协议定义取消与正常完成竞争时的唯一终态；
-6. adapter 在完成、取消或关闭后释放 token listener。
+| 操作 | 正确取消 |
+| --- | --- |
+| 正在运行的 turn | 已取得 `threadId`/`turnId` 后发送 `turn/interrupt` |
+| 已启动的 command | 使用稳定 process/command ID 发送 terminate |
+| 文件或其他 watch | 使用 resource ID 发送 unwatch/stop |
+| 正在进行的 login | 使用对应 login ID 发送 login cancel |
+| 没有 cancel method 的普通 request | 不承诺取消后端工作；最多让 renderer 停止等待，并继续在 Main 配对迟到 response |
 
-若后端只支持“停止等待”而工作继续运行，前端领域契约必须明确表达这一点；不能把它命名为取消。丢弃 Promise、忽略迟到 response 或发送未知 method 都不构成取消。
+需要新增取消语义时，协议必须先具备稳定 operation ID 和 typed cancel request。adapter 监听 token，发送 cancel，并在完成、取消或 close 后释放 token listener。协议还要定义 cancel 与正常完成竞争时的唯一终态。
+
+丢弃 Promise、从 pending map 提前删除、忽略迟到 response 或发送未知 method 都不构成取消。即使 renderer 已停止等待，connection 仍必须消费该 response，避免 pending 泄漏或把迟到 response 误判成新 connection 消息。
 
 ## Server request
 
-Rust 需要宿主批准、输入或执行宿主能力时发送 typed server request。connection owner 按生成 method 注册 handler，并保证每个 request 恰好回复一次成功或错误。
+Rust 需要审批、用户输入、权限确认或宿主能力时发送 typed server request。connection 按生成 method 注册 handler，并保证每个 request 恰好回复一次成功或错误。
 
-| handler 所需能力 | 放置位置 |
+| handler 所需能力 | owner |
 | --- | --- |
-| Electron Main 已拥有的系统或进程能力 | 对应 `src/platform/<domain>/electron-main/` handler |
-| renderer 才能完成的交互 | 独立 host channel 转发到明确的 workbench service |
+| Main 已拥有的系统或进程能力 | `src/platform/<domain>/electron-main/` handler |
+| renderer 才能完成的交互 | 独立 host channel → 明确的 `src/workbench/services/<domain>/` service |
 | Rust 自己可以完成的领域行为 | 不发送 server request，直接调用 Rust 领域能力 |
 
-未知 method 立即返回 method-not-found。handler 超时、window 关闭和 connection 关闭返回稳定错误；不能让 server request 永久占用 pending map。普通 workbench contribution 不能注册任意线上 handler。
+handler 先按 thread、turn、resource 或 session 查找 renderer owner。未知 method 返回 method-not-found；无 owner、窗口关闭、handler dispose、超时和 connection close 返回稳定错误。不能广播请求，也不能让 server request 永久占用 pending 表。
 
 ## 顺序与并发
 
-顺序由 Rust 协议的 serialization scope 决定，常见 key 包括 thread、path、process、watch 和 session。需要跨 connection 共享的资源使用全局 key；只属于 connection 的 process/watch key 同时包含 connection ID。
+顺序由 Rust 协议的 serialization scope 决定，常见 key 包括 thread、path、process、watch 和 session。只属于 connection 的资源 key 同时包含 connection ID；需要跨 connection 共享的资源使用真实全局 key。
 
 - 同 key 的修改按协议定义串行。
-- 明确标为共享读的 request 可以并行，但不能越过已经排队的写。
-- 不同 key 默认并行；共用一条 connection 不代表全局串行。
-- 前端不得再添加另一套领域锁来修补后端顺序。
+- 明确允许共享读的 request 可以并行，但不能越过已排队的写。
+- 不同 key 默认并行；共享 connection 不等于全局串行。
+- 前端不得增加第二套领域锁修补后端顺序。
 
-如果顺序影响业务正确性，serialization scope、revision 或领域锁必须位于 Rust owner；前端调用先后不构成协议保证。
+业务正确性依赖顺序时，serialization scope、revision 或领域锁必须位于 Rust owner；前端调用先后不构成线上保证。
 
-## 错误分层
+## 错误与重试
 
-| 层 | 例子 | 处理位置 |
+| 层 | 例子 | owner 行为 |
 | --- | --- | --- |
-| transport | EOF、进程退出、写失败、队列满 | connection owner 关闭并拒绝 pending |
-| protocol | method 不存在、params 无效、未 initialize | connection 解码为有类型的 protocol error |
-| domain | 文件不存在、状态冲突、权限拒绝 | Electron Main 领域 channel 转为前端领域错误 |
-| decode | response 与生成类型不匹配 | 视为前后端版本或实现错误，不伪装成领域失败 |
+| transport | EOF、进程退出、写失败、队列满 | close connection 并拒绝 pending |
+| protocol | method 不存在、params 无效、未 initialize | connection 解码为 protocol error |
+| domain | 文件不存在、状态冲突、权限拒绝 | Main 领域 channel 转为领域错误 |
+| decode | response 与生成类型不匹配 | 关闭或标记 connection 失效，报告版本/实现错误 |
 
-错误分类依赖稳定 code 和结构化 data，不匹配英文 message。JSON-RPC envelope 和 Rust 内部错误不能进入 renderer。
+错误分类依赖稳定 numeric code 和结构化 data，不匹配英文 message。若调用方必须区分的领域错误没有结构化 data，应先补协议；不能在 adapter 猜测。JSON-RPC envelope、stdout 内容和 Rust 内部错误不能进入 renderer。
+
+输入队列饱和产生的 overload error 可以按协议标为可重试，但只读 request 才能由调用层使用指数退避和抖动重试。已写入 transport 的修改在断线后属于未知结果，除非协议提供幂等 ID 和查询确认，否则不自动重试。
 
 ## 初始化和关闭
 
-connection 建立后先发送 typed `initialize`，校验版本、client identity 和 capabilities，等待成功后再开放领域 request。协议要求 `initialized` notification 时，在 initialize response 后发送；initialize 期间收到的 notification 和 server request 先入队，ready 后按原顺序交付。
+每条 connection 只执行一次：
 
-关闭时：
+1. 打开 transport；
+2. 发送 typed `initialize` request；
+3. 校验响应并记录运行环境信息；
+4. 发送 `initialized` notification；
+5. 进入 `Ready` 并开放领域 request。
 
-1. connection 停止接受新领域 request；
-2. reader/writer 停止并记录单一关闭原因；
-3. 所有 pending client request 以 transport error 结束；
-4. 所有 pending server request 以关闭错误结束；
-5. 所有资源路由和 notification listener 失效；
-6. Electron Main 领域 adapter 发出领域允许的终止事件或状态变化。
+其他 request 在握手前会被拒绝。初始化期间到达的已知 notification/server request 继续读取并按原顺序暂存，未知 server request 立即拒绝，不能阻塞 stdout reader。
 
-新 connection 重新 initialize。旧 operation/resource ID、pending response 和 notification 不进入新代次；没有协议恢复能力的资源由领域明确重建。
+协议生成物与打包的后端可执行文件必须来自同一版本。`initialize` 返回的 user agent 只用于诊断，不是协议版本协商；若允许连接独立升级的后端，必须先在协议中增加明确的兼容性字段，不能从字符串推断兼容性。
 
-## 背压
+关闭时按固定顺序：
 
-transport 的输入和输出队列有明确上限。队列满时，request 获得 overload error，或慢 connection 被关闭；不能无限增长内存。大 payload 在协议中定义分块上限，持续输出使用 resource notification，写出必须尊重 transport drain。
+1. 停止接受新领域 request；
+2. 记录单一关闭原因并停止 reader/writer；
+3. 拒绝所有 client pending；
+4. 结束所有 server request handler 并回复可发送的关闭错误；
+5. 终止资源路由和 notification listener；
+6. 通知领域 adapter 产生契约允许的终止事件或状态变化。
+
+新 connection 重新握手并使用新代次。旧 ID、pending、response 和 notification 不进入新代次；资源是否重建由领域明确决定。
+
+## 背压与输出纪律
+
+transport 的输入和输出队列必须有界。写入尊重 stream drain；大 payload 使用协议定义的分块或资源 notification。stdout 只写线上 JSONL，日志和诊断写 stderr。不能以无限队列、无限 listener 缓冲或阻塞 reader 吸收压力。

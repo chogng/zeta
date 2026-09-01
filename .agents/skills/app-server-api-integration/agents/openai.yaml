@@ -1,4 +1,4 @@
 interface:
   display_name: "App Server API Integration"
-  short_description: "Design Zeta's TypeScript-to-Rust app-server boundary"
-  default_prompt: "Use $app-server-api-integration to design or implement Zeta's final TypeScript-to-Rust app-server boundary, including ownership, protocol semantics, lifecycle, and exact file placement."
+  short_description: "Design the TypeScript desktop frontend to Rust app-server boundary"
+  default_prompt: "Use $app-server-api-integration to design or implement the final TypeScript desktop frontend to Rust app-server boundary, including session ownership, bidirectional protocol semantics, lifecycle, and exact file placement."
