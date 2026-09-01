@@ -78,14 +78,14 @@
 | `browser/gpu/renderStrategy/fullFileRenderStrategy.ts` | `FullFileRenderStrategy` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/renderStrategy/viewportRenderStrategy.ts` | `ViewportRenderStrategy` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/viewGpuContext.ts` | `ViewGpuContext` | 本地职责已改名或移出上游 owner |
-| `browser/viewParts/overlayWidgets/overlayWidgets.ts` | `ViewOverlayWidgets` | 已恢复公开名、`ViewPart` 生命周期、DOM owner、布局缓存和 widget 生命周期；剩余成员差异继续按真实调用方收敛 |
-| `browser/view/viewOverlays.ts` | `ViewOverlays` | 已恢复 `ViewPart` owner、`addDynamicOverlay`、统一可见行 DOM 和 `ContentViewOverlays` / `MarginViewOverlays`；逐行覆盖层不再各建一套行容器 |
+| `browser/viewParts/overlayWidgets/overlayWidgets.ts` | `ViewOverlayWidgets` | 拥有小组件 DOM、配置驱动的溢出与布局策略、最小内容宽度和生命周期；仅保留本地渲染调度依赖 |
+| `browser/view/viewOverlays.ts` | `ViewOverlays` | 拥有覆盖层集合、统一可见行 DOM、字体、焦点、正文及边栏几何和子层生命周期；`ContentViewOverlays` / `MarginViewOverlays` 分别投影两类根层 |
 | `browser/view/viewController.ts` | `ViewController` | 已只负责命令、组合输入协调、焦点调用和 `dispatchMouse` 选区策略；输入 Part 的创建、渲染与释放已迁入 `View`，剪贴板委托和剩余公开成员仍待收敛 |
 | `browser/viewParts/gpuMark/gpuMark.ts` | `GpuMarkOverlay` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 已作为独立 `ViewPart` 持有块级 DOM，不再混入逐行覆盖层 |
 | `browser/viewParts/contentWidgets/contentWidgets.ts` | `ViewContentWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
+| `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 正文与边栏覆盖层分别拥有逐行高亮；配置、焦点、选区、换行片段和生命周期沿统一覆盖层链路更新 |
 | `browser/viewParts/decorations/decorations.ts` | `DecorationsOverlay` | 已恢复逐行片段职责、装饰快照和失效事件 owner，并由 `ContentViewOverlays` 持有 |
 | `browser/viewParts/editorScrollbar/editorScrollbar.ts` | `EditorScrollbar` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
 | `browser/viewParts/glyphMargin/glyphMargin.ts` | `GlyphMarginWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
@@ -114,8 +114,8 @@
 | `common/services/languageFeatures.ts` | `ILanguageFeaturesService` | 本地 provider 集合契约改为 `IEditorLanguageFeaturesService` |
 | `common/services/languageFeaturesService.ts` | `LanguageFeaturesService` | 本地 provider registry 改为 `EditorLanguageFeaturesService` |
 | `common/viewLayout/viewLayout.ts` | `ViewLayout` | 已恢复标准构造入口、配置更新和 `Scrollable` 所有权；生产由唯一 `ViewModel` 持有，内容/滚动尺寸、当前视口、行坐标、可见行、空白区、特殊行高以及滚动/内容尺寸事件均由它发布；`View` 只读取布局结果，不再创建或更新第二份布局 |
-| `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 已恢复上游公开名与成员边界；selection offset 归并留在文件私有 helper，不再伪装成 class API |
-| `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 已恢复上游公开名与 `_runAutoClosingOvertype` 内部阶段，现有多光标 overtype 行为保持不变 |
+| `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 只拥有无拦截输入的编辑构造；结果选区去重由 `editorEditCommand.ts` 统一负责，不再伪装成类 API |
+| `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 拥有 `_runAutoClosingOvertype` 执行阶段，并保持多光标、完整字素和物理行边界行为 |
 | `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 文件正文与上游一致，但生产键盘导航仍走仅本地的 `cursorNavigation.ts`，尚未形成 `CursorMoveCommands → MoveOperations` 调用链 |
 | `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 本地职责已改名或移出上游 owner |
 | `contrib/message/browser/messageController.ts` | `MessageController` | 本地职责已改名或移出上游 owner |

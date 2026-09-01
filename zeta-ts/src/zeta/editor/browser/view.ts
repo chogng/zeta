@@ -36,7 +36,7 @@ import { RulersGpu } from './viewParts/rulersGpu/rulersGpu.js';
 import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
 import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
 import { BlockDecorations } from './viewParts/blockDecorations/blockDecorations.js';
-import { CurrentLineHighlightOverlay } from './viewParts/currentLineHighlight/currentLineHighlight.js';
+import { CurrentLineHighlightOverlay, CurrentLineMarginHighlightOverlay } from './viewParts/currentLineHighlight/currentLineHighlight.js';
 import { IndentGuidesOverlay } from './viewParts/indentGuides/indentGuides.js';
 import { LinesDecorationsOverlay } from './viewParts/linesDecorations/linesDecorations.js';
 import { MarginViewLineDecorationsOverlay } from './viewParts/marginDecorations/marginDecorations.js';
@@ -199,8 +199,6 @@ export class View extends ViewEventHandler {
 	readonly cursorConfig: IViewModel['cursorConfig'];
 	private readonly presentation: EditorViewportPresentation;
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
-	private readonly renderLineHighlight: NonNullable<IEditorOptions['renderLineHighlight']>;
-	private readonly renderLineHighlightOnlyWhenFocus: boolean;
 	private readonly cursorStyle: TextEditorCursorStyle;
 	private readonly overtypeCursorStyle: TextEditorCursorStyle;
 	private readonly configuredCursorWidth: number;
@@ -215,7 +213,6 @@ export class View extends ViewEventHandler {
 	private readonly editorConfiguration: EditorConfiguration;
 	private readonly pixelRatio: IPixelRatioMonitor;
 	private changingLayout = false;
-	private overlayWidgetsMinimumContentWidth = 0;
 	private viewZonesMinimumContentWidth = 0;
 	private softWrapping: boolean;
 	private projectionRevision = 0;
@@ -264,8 +261,6 @@ export class View extends ViewEventHandler {
 		this.accessibilityStatusElement = h(ownerDocument, "div");
 		this.presentation = options.presentation ?? "document";
 		this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
-		this.renderLineHighlight = options.renderLineHighlight ?? (this.presentation === 'embedded' ? 'none' : 'line');
-		this.renderLineHighlightOnlyWhenFocus = options.renderLineHighlightOnlyWhenFocus ?? false;
 		const mouseStyle = EditorOptions.mouseStyle.validate(options.mouseStyle);
 		this.cursorStyle = EditorOptions.cursorStyle.validate(options.cursorStyle);
 		this.overtypeCursorStyle = EditorOptions.overtypeCursorStyle.validate(options.overtypeCursorStyle);
@@ -386,12 +381,6 @@ export class View extends ViewEventHandler {
 		}));
 		this.overlayWidgets = this.registerViewPart(new ViewOverlayWidgets(this.viewContext, {
 			viewDomNode: this.element,
-			allowOverflow: options.allowOverflow ?? true,
-			fixedOverflowWidgets: options.fixedOverflowWidgets ?? false,
-			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
-			horizontalScrollbarHeight: DEFAULT_EDITOR_SCROLLBAR.horizontalScrollbarSize,
-			readMinimapWidth: () => this.computeMinimapLayout(this.viewport.layout.viewportSize.width, this.viewport.layout.viewportSize.height).minimapWidth,
-			setMinimumContentWidth: width => this.setOverlayWidgetsMinimumContentWidth(width),
 			requestRender: () => {
 				if (!this.isDisposed) this.project(this.viewport.layout);
 			},
@@ -432,7 +421,7 @@ export class View extends ViewEventHandler {
 		const glyphMarginLanes = resolveGlyphMarginLanes(glyphMarginSources, this.showGlyphMargin);
 		this.contentViewOverlays = this.registerViewPart(new ContentViewOverlays(this.viewContext, this.contentElement));
 		this.decorations = new DecorationsOverlay(this.viewContext, this.model, decorationSources, this.element.ownerDocument, () => this.visualProjection, () => this.textLeft, this.textMeasurer);
-		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext, this.viewModel, this.element.ownerDocument, () => this.visualProjection, this.renderLineHighlight, this.renderLineHighlightOnlyWhenFocus));
+		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext));
 		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.element.ownerDocument, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
 		this.contentViewOverlays.addDynamicOverlay(new IndentGuidesOverlay(this.viewContext, {
 			guides: this.guides,
@@ -482,6 +471,7 @@ export class View extends ViewEventHandler {
 			lineDecorationsWidth: linesDecorationsWidth(decorationSources),
 		}));
 		this.marginViewOverlays = this.registerViewPart(new MarginViewOverlays(this.viewContext, this.contentElement));
+		this.marginViewOverlays.addDynamicOverlay(new CurrentLineMarginHighlightOverlay(this.viewContext));
 		this.marginViewOverlays.addDynamicOverlay(new MarginViewLineDecorationsOverlay(this.viewContext, this.decorations, this.element.ownerDocument, () => this.visualProjection));
 		this.marginViewOverlays.addDynamicOverlay(new LinesDecorationsOverlay(this.viewContext, this.decorations, decorationSources, this.element.ownerDocument, () => this.visualProjection));
 		this.marginViewOverlays.addDynamicOverlay(new LineNumbersOverlay(this.viewContext, {
@@ -958,13 +948,7 @@ export class View extends ViewEventHandler {
 			this.lineWidths.maximumLineWidth +
 			this.textMeasurer.horizontalPadding,
 		);
-		return Math.max(textContentWidth, this.overlayWidgetsMinimumContentWidth, this.viewZonesMinimumContentWidth);
-	}
-
-	private setOverlayWidgetsMinimumContentWidth(width: number): void {
-		if (width === this.overlayWidgetsMinimumContentWidth) return;
-		this.overlayWidgetsMinimumContentWidth = width;
-		this.viewport.setMaxLineWidth(this.measuredContentWidth);
+		return Math.max(textContentWidth, this.viewZonesMinimumContentWidth);
 	}
 
 	private setViewZonesMinimumContentWidth(width: number): void {
@@ -1125,6 +1109,10 @@ export class View extends ViewEventHandler {
 
 	public override onCursorStateChanged(): boolean {
 		this.updateAccessibilityStatus();
+		return true;
+	}
+
+	public override onFocusChanged(): boolean {
 		return true;
 	}
 

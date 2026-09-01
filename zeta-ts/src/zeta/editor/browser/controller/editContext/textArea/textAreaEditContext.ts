@@ -69,6 +69,8 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		this.textArea.setAttribute("aria-roledescription", "code editor");
 		this.textArea.setAttribute("aria-readonly", String(this.textArea.domNode.readOnly));
 		this.textAreaInput = this._register(new TextAreaInput(this.textArea.domNode));
+		this._register(this.textAreaInput.onDidFocus(() => this._context.viewModel.setHasFocus(true)));
+		this._register(this.textAreaInput.onDidBlur(() => this._context.viewModel.setHasFocus(false)));
 		this._register(TextAreaEditContextRegistry.register(options.ownerId, this));
 		const compositionController = this.initializeController(options);
 		this.accessibilityController = this._register(new TextAreaAccessibilityController(this, options.viewport, options.selectionController, compositionController));
@@ -253,6 +255,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	public override dispose(): void {
+		this._context.viewModel.setHasFocus(false);
 		this.textArea.domNode.remove();
 		super.dispose();
 	}

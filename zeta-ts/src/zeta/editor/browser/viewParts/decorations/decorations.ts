@@ -16,6 +16,7 @@ import { type RenderingContext } from "../../view/renderingContext.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import * as viewEvents from '../../../common/viewEvents.js';
 import { renderViewPartRows } from '../../view/viewLayer.js';
 
 export type DecorationsOverlayMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
@@ -542,9 +543,9 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-	constructor(private readonly context: ViewContext, model: TextModel, decorationSources: readonly DecorationSource[], ownerDocument: Document, readVisualProjection: () => EditorVisualLineProjection, readTextLeft: () => number, textMeasurer: TextMeasurer) {
+	constructor(private readonly _context: ViewContext, model: TextModel, decorationSources: readonly DecorationSource[], ownerDocument: Document, readVisualProjection: () => EditorVisualLineProjection, readTextLeft: () => number, textMeasurer: TextMeasurer) {
 		super();
-		this.context.addEventHandler(this);
+		this._context.addEventHandler(this);
 		this.model = model;
 		this.decorationSources = Object.freeze([...decorationSources]);
 		this.ownerDocument = ownerDocument;
@@ -556,6 +557,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 			this._register(source.onDidChange(() => {
 				this.decorationSnapshots.set(source, source.decorations);
 				this.rebuildDecorationLineIndex();
+				this.forceShouldRender();
 				this.changeEmitter.fire();
 			}));
 		}
@@ -563,9 +565,18 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 	}
 
 	public override dispose(): void {
-		this.context.removeEventHandler(this);
+		this._context.removeEventHandler(this);
 		super.dispose();
 	}
+
+	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean { return true; }
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
+	public override onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): boolean { return true; }
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public get markersRevision(): number {
 		return this.markerRevision;

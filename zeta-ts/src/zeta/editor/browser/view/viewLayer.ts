@@ -106,31 +106,36 @@ function lineRangesEqual(left: EditorLineRange, right: EditorLineRange): boolean
 	return left.startLineIndex === right.startLineIndex && left.endLineIndexExclusive === right.endLineIndexExclusive;
 }
 export class ViewPartRows extends Disposable {
-	public readonly domNode: HTMLDivElement;
-	private readonly root: FastDomNode<HTMLDivElement>;
+	public readonly domNode: FastDomNode<HTMLDivElement>;
 	private rows = new Map<number, FastDomNode<HTMLDivElement>>();
 
 	constructor(host: HTMLElement, className: string, private readonly rowClassName: string) {
 		super();
-		const domNode = h(host.ownerDocument, 'div');
-		this.domNode = domNode;
-		this.root = new FastDomNode(domNode);
-		this.root.setClassName(`stanza-editor-row-layer ${className}`);
-		this.domNode.setAttribute('role', 'presentation');
-		this.domNode.setAttribute('aria-hidden', 'true');
-		this._register(toDisposable(() => this.domNode.remove()));
+		const element = h(host.ownerDocument, 'div');
+		this.domNode = new FastDomNode(element);
+		this.domNode.setClassName(`stanza-editor-row-layer ${className}`);
+		element.setAttribute('role', 'presentation');
+		element.setAttribute('aria-hidden', 'true');
+		this._register(toDisposable(() => element.remove()));
+	}
+
+	public hasViewport(startLineNumber: number, endLineNumber: number): boolean {
+		const count = endLineNumber - startLineNumber + 1;
+		if (this.rows.size !== count) return false;
+		if (count === 0) return true;
+		return this.rows.has(startLineNumber - 1) && this.rows.has(endLineNumber - 1);
 	}
 
 	public render(context: RestrictedRenderingContext): ReadonlyMap<number, HTMLElement> {
-		const fragment = createFragment(this.domNode.ownerDocument);
+		const fragment = createFragment(this.domNode.domNode.ownerDocument);
 		const next = new Map<number, FastDomNode<HTMLDivElement>>();
 		const projected = new Map<number, HTMLElement>();
-		this.root.setTop(context.bigNumbersDelta);
+		this.domNode.setTop(context.bigNumbersDelta);
 		for (let lineNumber = context.viewportData.startLineNumber; lineNumber <= context.viewportData.endLineNumber; lineNumber += 1) {
 			const lineIndex = lineNumber - 1;
 			let row = this.rows.get(lineIndex);
 			if (!row) {
-				const element = h(this.domNode.ownerDocument, 'div');
+				const element = h(this.domNode.domNode.ownerDocument, 'div');
 				element.className = this.rowClassName;
 				element.dataset.lineIndex = String(lineIndex);
 				row = new FastDomNode(element);
@@ -143,7 +148,7 @@ export class ViewPartRows extends Disposable {
 			projected.set(lineIndex, row.domNode);
 			fragment.append(row.domNode);
 		}
-		reset(this.domNode, fragment);
+		reset(this.domNode.domNode, fragment);
 		this.rows = next;
 		return projected;
 	}

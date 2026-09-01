@@ -202,6 +202,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.configuration = this._register(new EditorConfiguration({
 				...options,
 				readOnly: options.input.readOnly,
+				renderLineHighlight: options.renderLineHighlight ?? (options.presentation === 'embedded' ? 'none' : undefined),
 				wordWrap: options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off',
 				padding: options.padding === undefined ? undefined : {
 					top: options.padding.top ?? 0,

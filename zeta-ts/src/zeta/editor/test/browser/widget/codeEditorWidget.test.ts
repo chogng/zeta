@@ -76,6 +76,38 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	dom.window.close();
 });
 
+test('editor focus updates the view overlay presentation', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		renderLineHighlight: 'all',
+		renderLineHighlightOnlyWhenFocus: true,
+	});
+	editor.layout({ width: 320, height: 80 });
+	const overlays = requiredElement(editor.element, '.view-overlays');
+
+	assert.equal(overlays.classList.contains('focused'), false);
+	assert.equal(editor.element.querySelector('.view-overlays .current-line'), null);
+	assert.equal(editor.element.querySelector('.margin-view-overlays .current-line-margin'), null);
+	editor.focus();
+	assert.equal(overlays.classList.contains('focused'), true);
+	assert.ok(editor.element.querySelector('.view-overlays .current-line'));
+	assert.ok(editor.element.querySelector('.margin-view-overlays .current-line-margin'));
+	editor.view.editContext.domNode.domNode.blur();
+	assert.equal(overlays.classList.contains('focused'), false);
+	assert.equal(editor.element.querySelector('.view-overlays .current-line'), null);
+	assert.equal(editor.element.querySelector('.margin-view-overlays .current-line-margin'), null);
+
+	editor.dispose();
+	dom.window.close();
+});
+
 test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

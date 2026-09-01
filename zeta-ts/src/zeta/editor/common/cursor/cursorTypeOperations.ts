@@ -1,5 +1,5 @@
 import { getOrSet } from '../../../base/common/map.js';
-import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from '../commands/editorEditCommand.js';
+import { EditorCommandHistoryMode, normalizeEditorSelections, type EditorEditCommand, type TextSelectionOffsets } from '../commands/editorEditCommand.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
 import { normalizeTextLineEndings } from '../core/textChange.js';
@@ -168,7 +168,7 @@ export class TypeOperations {
 			}
 			cumulativeDelta += group.text.length;
 		}
-		const normalizedSelections = TypeWithoutInterceptorsOperation.normalizeSelectionOffsets(selectionsAfter, 0);
+		const normalizedSelections = normalizeEditorSelections(selectionsAfter, 0);
 		return {
 			edits: Object.freeze(edits),
 			selectionsAfter: normalizedSelections.selections,

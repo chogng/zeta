@@ -54,7 +54,7 @@ export class ViewCursors extends ViewPart {
 		this.domNode.setAttribute('aria-hidden', 'true');
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.compositionRows = this._register(new ViewPartRows(this.domNode, 'stanza-editor-composition-layer', 'stanza-editor-composition-row'));
-		this.domNode.append(this.compositionRows.domNode);
+		this.domNode.append(this.compositionRows.domNode.domNode);
 		this.model = model;
 		this.viewModel = viewModel;
 		this.semanticTokenSource = options.semanticTokenSource;

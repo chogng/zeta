@@ -6,15 +6,18 @@ import { type IOverlayWidget, type IOverlayWidgetPosition, type IOverlayWidgetPo
 import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
 import { PartFingerprint, PartFingerprints, ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import * as viewEvents from '../../../common/viewEvents.js';
 
 interface ViewOverlayWidgetsOptions {
 	readonly viewDomNode: HTMLElement;
-	readonly allowOverflow: boolean;
-	readonly fixedOverflowWidgets: boolean;
-	readonly verticalScrollbarWidth: number;
-	readonly horizontalScrollbarHeight: number;
-	readonly readMinimapWidth: () => number;
-	readonly setMinimumContentWidth: (width: number) => void;
+	readonly requestRender: () => void;
+}
+
+interface OverlayWidgetHost {
+	readonly viewDomNode: HTMLElement;
+	readonly canOverflow: (widget: IOverlayWidget) => boolean;
+	readonly usesFixedPosition: () => boolean;
 	readonly requestRender: () => void;
 }
 
@@ -33,17 +36,21 @@ export class ViewOverlayWidgets extends ViewPart {
 	public readonly overflowingOverlayWidgetsDomNode: FastDomNode<HTMLDivElement>;
 	private readonly _widgets = this._register(new DisposableMap<string, OverlayWidget>());
 	private _viewDomNodeRect: IDomNodePagePosition | null = null;
-	private readonly _verticalScrollbarWidth: number;
+	private _verticalScrollbarWidth: number;
 	private _minimapWidth = 0;
-	private readonly _horizontalScrollbarHeight: number;
+	private _horizontalScrollbarHeight: number;
 	private _editorHeight = 0;
 	private _editorWidth = 0;
 
 	constructor(context: ViewContext, private readonly options: ViewOverlayWidgetsOptions) {
 		super(context);
 		this._viewDomNode = options.viewDomNode;
-		this._verticalScrollbarWidth = options.verticalScrollbarWidth;
-		this._horizontalScrollbarHeight = options.horizontalScrollbarHeight;
+		const layout = readOverlayLayout(context);
+		this._verticalScrollbarWidth = layout.verticalScrollbarWidth;
+		this._minimapWidth = layout.minimapWidth;
+		this._horizontalScrollbarHeight = layout.horizontalScrollbarHeight;
+		this._editorHeight = layout.editorHeight;
+		this._editorWidth = layout.editorWidth;
 		this._domNode = createFastDomNode(options.viewDomNode.ownerDocument.createElement('div'));
 		PartFingerprints.write(this._domNode, PartFingerprint.OverlayWidgets);
 		this._domNode.setClassName('stanza-editor-overlay-widgets');
@@ -68,14 +75,34 @@ export class ViewOverlayWidgets extends ViewPart {
 		return this._domNode;
 	}
 
+	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		const layout = readOverlayLayout(this._context);
+		this._verticalScrollbarWidth = layout.verticalScrollbarWidth;
+		this._minimapWidth = layout.minimapWidth;
+		this._horizontalScrollbarHeight = layout.horizontalScrollbarHeight;
+		this._editorHeight = layout.editorHeight;
+		this._editorWidth = layout.editorWidth;
+		for (const [, widget] of this._widgets) {
+			const container = this._widgetCanOverflow(widget.actual) ? this.overflowingOverlayWidgetsDomNode : this._domNode;
+			if (widget.domNode.domNode.parentElement !== container.domNode) container.domNode.append(widget.domNode.domNode);
+			widget.updatePositionMode();
+		}
+		return true;
+	}
+
 	private _widgetCanOverflow(widget: IOverlayWidget): boolean {
-		return Boolean(widget.allowEditorOverflow) && this.options.allowOverflow;
+		return Boolean(widget.allowEditorOverflow) && this._context.configuration.options.get(EditorOption.allowOverflow);
 	}
 
 	public addWidget(widget: IOverlayWidget): void {
 		const id = widget.getId();
 		if (!id || this._widgets.has(id)) throw new RangeError(`Overlay widget '${id}' is already registered`);
-		const overlayWidget = this._widgets.set(id, new OverlayWidget(this.options, widget));
+		const overlayWidget = this._widgets.set(id, new OverlayWidget({
+			viewDomNode: this._viewDomNode,
+			canOverflow: candidate => this._widgetCanOverflow(candidate),
+			usesFixedPosition: () => this._context.configuration.options.get(EditorOption.fixedOverflowWidgets),
+			requestRender: this.options.requestRender,
+		}, widget));
 		const container = this._widgetCanOverflow(widget) ? this.overflowingOverlayWidgetsDomNode : this._domNode;
 		container.domNode.append(overlayWidget.domNode.domNode);
 		this._updateMaxMinWidth();
@@ -104,7 +131,6 @@ export class ViewOverlayWidgets extends ViewPart {
 	public render(context: RestrictedRenderingContext): void {
 		this._editorWidth = context.viewportWidth;
 		this._editorHeight = context.viewportHeight;
-		this._minimapWidth = this.options.readMinimapWidth();
 		this._domNode.setWidth(this._editorWidth);
 		const stacks = new Map<OverlayWidgetPositionPreference, number>();
 		for (const preference of [OverlayWidgetPositionPreference.TOP_RIGHT_CORNER, OverlayWidgetPositionPreference.BOTTOM_RIGHT_CORNER, OverlayWidgetPositionPreference.TOP_CENTER]) {
@@ -133,7 +159,7 @@ export class ViewOverlayWidgets extends ViewPart {
 	private _updateMaxMinWidth(): void {
 		let minimumContentWidth = 0;
 		for (const [, widget] of this._widgets) minimumContentWidth = Math.max(minimumContentWidth, widget.minimumContentWidth);
-		this.options.setMinimumContentWidth(minimumContentWidth);
+		this._context.viewLayout.setOverlayWidgetsMinWidth(minimumContentWidth);
 	}
 }
 
@@ -151,15 +177,15 @@ class OverlayWidget extends Disposable {
 	public position: IOverlayWidgetPosition | null;
 	public height = 0;
 
-	constructor(private readonly options: ViewOverlayWidgetsOptions, actual: IOverlayWidget) {
+	constructor(private readonly host: OverlayWidgetHost, actual: IOverlayWidget) {
 		super();
 		this.actual = actual;
 		this.position = actual.getPosition();
-		this.allowEditorOverflow = Boolean(actual.allowEditorOverflow) && options.allowOverflow;
+		this.allowEditorOverflow = Boolean(actual.allowEditorOverflow);
 		this.domNode = createFastDomNode(actual.getDomNode());
-		this.domNode.setPosition(this.allowEditorOverflow && options.fixedOverflowWidgets ? 'fixed' : 'absolute');
+		this.updatePositionMode();
 		this.domNode.setAttribute('widgetId', actual.getId());
-		if (actual.onDidLayout) this._register(actual.onDidLayout(() => options.requestRender()));
+		if (actual.onDidLayout) this._register(actual.onDidLayout(() => host.requestRender()));
 		this._register(toDisposable(() => {
 			this.domNode.domNode.remove();
 			this.domNode.removeAttribute('widgetId');
@@ -177,6 +203,10 @@ class OverlayWidget extends Disposable {
 		return true;
 	}
 
+	public updatePositionMode(): void {
+		this.domNode.setPosition(this.host.canOverflow(this.actual) && this.host.usesFixedPosition() ? 'fixed' : 'absolute');
+	}
+
 	public render(context: RestrictedRenderingContext, viewPagePosition: IDomNodePagePosition | null, stackOffset: number, layout: OverlayWidgetLayout): void {
 		const preference = this.position?.preference;
 		this.domNode.setDisplay(preference === null || preference === undefined ? 'none' : 'block');
@@ -192,9 +222,9 @@ class OverlayWidget extends Disposable {
 	}
 
 	private coordinatePosition(position: IOverlayWidgetPositionCoordinates, context: RestrictedRenderingContext, viewPagePosition: IDomNodePagePosition | null): IOverlayWidgetPositionCoordinates {
-		if (!this.allowEditorOverflow || !viewPagePosition) return position;
-		const targetWindow = this.options.viewDomNode.ownerDocument.defaultView;
-		const fixed = this.options.fixedOverflowWidgets;
+		if (!this.host.canOverflow(this.actual) || !viewPagePosition) return position;
+		const targetWindow = this.host.viewDomNode.ownerDocument.defaultView;
+		const fixed = this.host.usesFixedPosition();
 		return {
 			left: viewPagePosition.left + position.left - (fixed ? targetWindow?.scrollX ?? 0 : 0),
 			top: viewPagePosition.top + position.top - (fixed ? targetWindow?.scrollY ?? 0 : 0),
@@ -217,6 +247,24 @@ class OverlayWidget extends Disposable {
 		}
 		return this.coordinatePosition({ left, top }, context, viewPagePosition);
 	}
+}
+
+function readOverlayLayout(context: ViewContext): {
+	readonly verticalScrollbarWidth: number;
+	readonly minimapWidth: number;
+	readonly horizontalScrollbarHeight: number;
+	readonly editorHeight: number;
+	readonly editorWidth: number;
+} {
+	const options = context.configuration.options;
+	const layout = options.get(EditorOption.layoutInfo);
+	return {
+		verticalScrollbarWidth: layout.verticalScrollbarWidth,
+		minimapWidth: layout.minimap.minimapWidth,
+		horizontalScrollbarHeight: layout.horizontalScrollbarHeight,
+		editorHeight: layout.height,
+		editorWidth: layout.width,
+	};
 }
 
 function isCoordinates(value: OverlayWidgetPositionPreference | IOverlayWidgetPositionCoordinates): value is IOverlayWidgetPositionCoordinates {

@@ -1,4 +1,4 @@
-import { EditorCommandHistoryMode, type EditorEditCommand } from '../commands/editorEditCommand.js';
+import { EditorCommandHistoryMode, normalizeEditorSelections, type EditorEditCommand } from '../commands/editorEditCommand.js';
 import { type Selection } from '../core/selection.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
@@ -11,7 +11,7 @@ export class DeleteOperations {
 	public static cut(model: TextModel, selections: readonly Selection[], cutRanges: readonly Range[]): EditorEditCommand {
 		if (cutRanges.length !== selections.length) throw new TypeError('Cut ranges must match the editor selections');
 		const sourceRanges = mergeDeletionRanges(model, cutRanges);
-		const selectionsAfter = TypeWithoutInterceptorsOperation.normalizeSelectionOffsets(cutRanges.map(range => {
+		const selectionsAfter = normalizeEditorSelections(cutRanges.map(range => {
 			const targetOffset = mapOffsetThroughDeletions(model.offsetAt(range.getStartPosition()), sourceRanges);
 			return { anchorOffset: targetOffset, activeOffset: targetOffset };
 		}), 0);

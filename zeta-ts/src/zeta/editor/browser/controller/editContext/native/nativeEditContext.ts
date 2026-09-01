@@ -199,6 +199,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	public override dispose(): void {
+		this.handleElementBlur();
 		(this.domNode.domNode as NativeEditContextElement).editContext = undefined;
 		this.domNode.domNode.blur();
 		this.domNode.domNode.remove();
@@ -459,12 +460,14 @@ export class NativeEditContext extends AbstractEditContext {
 		}
 		if (this.focused) return;
 		this.focused = true;
+		this._context.viewModel.setHasFocus(true);
 		this.focusEmitter.fire(undefined);
 	}
 
 	private handleElementBlur(): void {
 		if (!this.focused) return;
 		this.focused = false;
+		this._context.viewModel.setHasFocus(false);
 		this.blurEmitter.fire(undefined);
 	}
 
@@ -483,6 +486,7 @@ export class NativeEditContext extends AbstractEditContext {
 			this.imeFallbackFocused = true;
 			if (!this.focused) {
 				this.focused = true;
+				this._context.viewModel.setHasFocus(true);
 				this.focusEmitter.fire(undefined);
 			}
 		}

@@ -1,4 +1,4 @@
-import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from '../commands/editorEditCommand.js';
+import { EditorCommandHistoryMode, normalizeEditorSelections, type EditorEditCommand, type TextSelectionOffsets } from '../commands/editorEditCommand.js';
 import { type Selection } from '../core/selection.js';
 import { type Position } from '../core/position.js';
 import { Range } from '../core/range.js';
@@ -55,34 +55,22 @@ export class TypeWithoutInterceptorsOperation {
 		);
 	}
 
-	public static normalizeSelectionOffsets(selections: readonly TextSelectionOffsets[], primaryIndex: number): { readonly selections: readonly TextSelectionOffsets[]; readonly primaryIndex: number } {
-		const normalized: TextSelectionOffsets[] = [];
-		const sourceToNormalized: number[] = [];
-		for (const selection of selections) {
-			let targetIndex = normalized.findIndex(candidate => candidate.anchorOffset === selection.anchorOffset && candidate.activeOffset === selection.activeOffset);
-			if (targetIndex < 0) {
-				targetIndex = normalized.length;
-				normalized.push(selection);
-			}
-			sourceToNormalized.push(targetIndex);
-		}
-		return {
-			selections: Object.freeze(normalized),
-			primaryIndex: sourceToNormalized[primaryIndex]!,
-		};
-	}
 }
 
 export class AutoClosingOvertypeOperation {
 	public static getEdits(model: TextModel, selections: readonly Selection[], text: string): EditorEditCommand {
 		if (typeof text !== 'string') throw new TypeError('Overtype text must be a string');
 		const normalized = normalizeTextLineEndings(text);
-		const graphemeCount = normalized.includes('\n') ? 0 : getTextGraphemeBoundaries(normalized).length - 1;
+		return this._runAutoClosingOvertype(model, selections, normalized);
+	}
+
+	private static _runAutoClosingOvertype(model: TextModel, selections: readonly Selection[], text: string): EditorEditCommand {
+		const graphemeCount = text.includes('\n') ? 0 : getTextGraphemeBoundaries(text).length - 1;
 		return TypeWithoutInterceptorsOperation.getEdits(model, selections, selections.map(selection => {
 			const range = selection.isEmpty() && graphemeCount > 0
 				? Range.fromPositions(selection.getPosition(), advancePositionInLine(model, selection.getPosition(), graphemeCount))
 				: selection;
-			return { range, text: normalized, anchorOffsetInText: normalized.length, activeOffsetInText: normalized.length };
+			return { range, text, anchorOffsetInText: text.length, activeOffsetInText: text.length };
 		}), EditorCommandHistoryMode.CoalesceTyping);
 	}
 }
@@ -101,7 +89,7 @@ function buildSelectionEditCommand(model: TextModel, selections: readonly Select
 		if (item.startOffset !== item.endOffset || item.text.length > 0) edits.push({ range: item.range, text: item.text });
 		cumulativeDelta += item.text.length - (item.endOffset - item.startOffset);
 	}
-	const normalizedSelections = TypeWithoutInterceptorsOperation.normalizeSelectionOffsets(selectionsAfter, 0);
+	const normalizedSelections = normalizeEditorSelections(selectionsAfter, 0);
 	return {
 		edits: Object.freeze(edits),
 		selectionsAfter: normalizedSelections.selections,
