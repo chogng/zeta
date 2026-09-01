@@ -1,4 +1,4 @@
 interface:
   display_name: "VS Code API Alignment"
-  short_description: "Align Zeta editor file sets and APIs with VS Code"
-  default_prompt: "Use $vscode-api-alignment to align the named Zeta editor file set, API contracts, responsibilities, callers, and tests with VS Code."
+  short_description: "Align Zeta TypeScript APIs and ownership with VS Code"
+  default_prompt: "Use $vscode-api-alignment to align the named Zeta TypeScript file set, API contracts, ownership, callers, and tests with VS Code."
