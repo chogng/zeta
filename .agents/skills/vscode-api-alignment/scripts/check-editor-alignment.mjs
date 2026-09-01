@@ -13,7 +13,7 @@ const knownTestModes = new Set(['unit', 'browser', 'all']);
 
 if (process.argv.includes('--help')) {
 	process.stdout.write(`Usage: node .agents/skills/vscode-api-alignment/scripts/check-editor-alignment.mjs [--full] [--structure-only]\n\n`);
-	process.stdout.write(`  --full            Print complete file-set and member reports.\n`);
+	process.stdout.write(`  --full            Print complete file-set, CSS ownership, and member reports.\n`);
 	process.stdout.write(`  --structure-only  Skip repository typecheck and behavior tests.\n`);
 	process.stdout.write(`  --test=unit       Run Editor unit tests.\n`);
 	process.stdout.write(`  --test=browser    Run Editor browser behavior tests.\n`);
@@ -36,6 +36,7 @@ let failed = false;
 
 failed = !runLedgerCheck() || failed;
 failed = !runFileSetAudit() || failed;
+failed = !runCssOwnershipAudit() || failed;
 failed = !runMemberAudit() || failed;
 failed = !runDiffCheck() || failed;
 if (!structureOnly) {
@@ -76,6 +77,12 @@ function runFileSetAudit() {
 		process.stdout.write(`${summary.join('\n')}\n`);
 	}
 	if (result.stderr) process.stderr.write(result.stderr);
+	return result.status === 0;
+}
+
+function runCssOwnershipAudit() {
+	const result = runNodeScript('audit-editor-css-ownership.mjs', full ? ['--full'] : []);
+	printResult('CSS ownership', result);
 	return result.status === 0;
 }
 
@@ -146,8 +153,8 @@ function runBehaviorTests() {
 	return result.status === 0;
 }
 
-function runNodeScript(name) {
-	return run(process.execPath, [resolve(import.meta.dirname, name)]);
+function runNodeScript(name, args = []) {
+	return run(process.execPath, [resolve(import.meta.dirname, name), ...args]);
 }
 
 function run(command, args) {

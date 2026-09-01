@@ -1,0 +1,91 @@
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import {
+	auditEditorCssOwnership,
+	classifyCssPair,
+	findAddedUpstreamBrandLines,
+	findChangedPaths,
+	findUpstreamBrandLines,
+	normalizeCssBranding,
+} from './audit-editor-css-ownership.mjs';
+
+test('normalizes the standard license header and Zeta CSS branding for upstream-equivalence reporting', () => {
+	assert.equal(
+		normalizeCssBranding('.stanza-editor { color: var(--zeta-editor-foreground); }'),
+		'.monaco-editor { color: var(--vscode-editor-foreground); }',
+	);
+	assert.equal(
+		classifyCssPair('.stanza-editor { color: red; }', '.monaco-editor { color: red; }'),
+		'upstream-equivalent after branding',
+	);
+	assert.equal(
+		classifyCssPair(
+			'.stanza-editor { color: red; }',
+			'/*---------------------------------------------------------------------------------------------\n *  Copyright (c) Microsoft Corporation. All rights reserved.\n *  Licensed under the MIT License. See License.txt in the project root for license information.\n *--------------------------------------------------------------------------------------------*/\n\n.monaco-editor { color: red; }',
+		),
+		'upstream-equivalent after branding',
+	);
+	assert.equal(classifyCssPair('.local { color: red; }', '.upstream { color: red; }'), 'independent');
+});
+
+test('finds upstream product class and theme variable references with locations', () => {
+	assert.deepEqual(findUpstreamBrandLines([
+		'.monaco-editor .line {',
+		'  color: var(--vscode-editor-foreground);',
+		'}',
+	].join('\n'), 'browser/editor.css'), [
+		{ path: 'browser/editor.css', line: 1, value: 'monaco-editor' },
+		{ path: 'browser/editor.css', line: 2, value: '--vscode-editor-foreground' },
+	]);
+});
+
+test('checks added diff lines without treating removed upstream branding as new debt', () => {
+	const diff = [
+		'diff --git a/zeta-ts/src/zeta/editor/editor.css b/zeta-ts/src/zeta/editor/editor.css',
+		'--- a/zeta-ts/src/zeta/editor/editor.css',
+		'+++ b/zeta-ts/src/zeta/editor/editor.css',
+		'@@ -4,2 +4,2 @@',
+		'-.monaco-editor { color: var(--vscode-editor-foreground); }',
+		'+.stanza-editor { color: var(--zeta-editor-foreground); }',
+		'@@ -10,0 +11 @@',
+		'+.monaco-cursor { color: var(--vscode-editorCursor-foreground); }',
+	].join('\n');
+	assert.deepEqual(findAddedUpstreamBrandLines(diff), [
+		{ path: 'zeta-ts/src/zeta/editor/editor.css', line: 11, value: 'monaco-cursor' },
+		{ path: 'zeta-ts/src/zeta/editor/editor.css', line: 11, value: '--vscode-editorCursor-foreground' },
+	]);
+	assert.deepEqual(findChangedPaths(diff), ['zeta-ts/src/zeta/editor/editor.css']);
+});
+
+test('blocks a changed CSS file whose only substantive difference is Zeta branding', () => {
+	const fixtureRoot = mkdtempSync(join(tmpdir(), 'zeta-css-ownership-'));
+	try {
+		const localRoot = join(fixtureRoot, 'zeta-ts/src/zeta/editor');
+		const upstreamRoot = join(fixtureRoot, 'upstream-editor');
+		mkdirSync(join(localRoot, 'browser'), { recursive: true });
+		mkdirSync(join(upstreamRoot, 'browser'), { recursive: true });
+		writeFileSync(join(localRoot, 'browser/editor.css'), '.stanza-editor { color: var(--zeta-editor-foreground); }\n');
+		writeFileSync(join(upstreamRoot, 'browser/editor.css'), '.monaco-editor { color: var(--vscode-editor-foreground); }\n');
+		const result = auditEditorCssOwnership({
+			repositoryRoot: fixtureRoot,
+			localRoot,
+			upstreamRoot,
+			diff: [
+				'diff --git a/zeta-ts/src/zeta/editor/browser/editor.css b/zeta-ts/src/zeta/editor/browser/editor.css',
+				'--- a/zeta-ts/src/zeta/editor/browser/editor.css',
+				'+++ b/zeta-ts/src/zeta/editor/browser/editor.css',
+				'@@ -1 +1 @@',
+				'-.monaco-editor { color: var(--vscode-editor-foreground); }',
+				'+.stanza-editor { color: var(--zeta-editor-foreground); }',
+			].join('\n'),
+			untrackedFiles: [],
+		});
+		assert.deepEqual(result.brandingEquivalent, ['browser/editor.css']);
+		assert.deepEqual(result.changedBrandingEquivalent, ['browser/editor.css']);
+	} finally {
+		rmSync(fixtureRoot, { recursive: true, force: true });
+	}
+});

@@ -1,9 +1,9 @@
 ---
 name: vscode-api-alignment
-description: Align Zeta TypeScript source files, APIs, ownership, lifecycle, and debuggable call paths with the checked-out VS Code source. Use when adding, renaming, refactoring, or reviewing Zeta TypeScript modules against VS Code; do not use for Rust or generic TypeScript naming.
+description: Align Zeta TypeScript source files, browser CSS responsibilities, APIs, ownership, lifecycle, and debuggable call paths with the checked-out VS Code source. Use when adding, renaming, refactoring, or reviewing Zeta TypeScript modules or their owned CSS against VS Code; do not use for Rust or generic TypeScript and CSS naming.
 ---
 
-# VS Code TypeScript API 对齐
+# VS Code TypeScript API 与浏览器样式职责对齐
 
 以 `../vscode/src/vs` 为只读参照，让 Zeta TypeScript 中明确对应 VS Code 的文件、公开契约、职责和真实调用链可以逐项定位。上游只用于确认结构和可观察行为；实现与测试必须由 Zeta 独立编写，禁止复制、批量同步、逐行翻译或轻微改写上游代码。
 
@@ -38,6 +38,13 @@ Rust 文件不使用本 skill，也不以 VS Code 为参照。普通 TypeScript 
 
 文件是否存在于 VS Code 只决定是否需要用户确认，不决定 Zeta 的最终职责归属。VS Code 对应职责必须回到对应路径；Zeta 专属职责应回到用户已确认且符合仓库依赖方向的 Zeta 专属归属，即使 VS Code 不存在该文件。目标归属尚不存在时，必须先提交拟新增路径和职责供用户决定，确认后才能创建。一个文件混合两类职责时，只迁移对应职责，不为文件数量机械搬运全部实现。
 
+## CSS 与 DOM 边界
+
+- CSS 纳入生产文件集合审计，但同路径只说明样式职责位于对应组件，不代表选择器、声明或主题变量可以复制。VS Code 有而 Zeta 缺失的 CSS 只形成行为待补项；先确认本地 DOM owner、状态 class、主题 token 和布局契约，再独立实现。
+- 对齐可观察行为包括焦点、选区、禁用态、高对比度、换行、滚动和几何结果；不对齐上游产品品牌。Zeta 创建并拥有的 DOM、CSS root、内部 class、动画名和主题变量必须使用 Zeta 词汇，禁止新增 `monaco-*` 或 `--vscode-*`。
+- 发现本地 CSS 与上游完全一致或只做品牌替换时，将其记为上游实质代码并停止扩散。保留已有许可证；不得继续复制、逐行翻译或通过替换前缀伪装成本地实现。任务需要修改时，只独立实现本批行为并用真实 DOM 与计算样式验证。
+- CSS 完成不能只靠文件存在、构建或截图。必须同时核对组件 owner、选择器命中的本地 DOM、状态投影、主题 token、高对比度和至少一条真实浏览器行为链。
+
 ## 对齐不变量
 
 - 对应实现使用准确的相对路径、文件名、大小写、公开名称、签名和 owner 模块。文件拆分、状态 owner、生命周期、调用顺序、副作用和错误语义都属于契约；只对齐导出或成员名属于假对齐。
@@ -54,6 +61,7 @@ Rust 文件不使用本 skill，也不以 VS Code 为参照。普通 TypeScript 
 
 - 本地与上游的生产文件集合、同路径、仅本地、仅上游和大小写差异；
 - 对应文件的 imports、exports、公开声明和直接生产调用方；
+- 浏览器目标涉及 CSS 时，本地 DOM 创建点、root 与状态 class、主题变量、同路径 CSS 的上游实质代码相似性；
 - 上游直接调用方、相关测试以及本地现有行为测试。
 
 优先使用一次目录审计、带多个模式的 `rg`、循环读取或等价批量工具。输出过大时按“文件集合”“符号与调用方”“测试”拆批，不能默认退化为逐文件查询。批量调查不扩大修改或删除权限。
@@ -62,11 +70,11 @@ Rust 文件不使用本 skill，也不以 VS Code 为参照。普通 TypeScript 
 
 1. 修改前保存 `git status --short`、tracked diff 和未跟踪文件清单，区分任务创建、用户已有和来源不明的改动；来源不明默认保护。
 2. 读取涉及层的 reference，确定本地根目录、VS Code 根目录、目标目录、必要调用方和层级验证入口。
-3. 建立对应表，记录文件与公开 API 是“双方都有”“仅 VS Code”还是“仅 Zeta”，以及符号路径、owner、职责、调用链、生命周期和行为差异。
+3. 建立对应表，记录文件与公开 API 是“双方都有”“仅 VS Code”还是“仅 Zeta”，以及符号路径、owner、职责、调用链、生命周期和行为差异；浏览器目标另记 DOM owner、CSS root、状态 class 和主题 token。
 4. 把上游 imports 当作依赖能力清单，沿缺失或错误 owner 深度优先追踪；一条依赖分支未闭合前，不铺开不相关分支，也不添加临时桥接文件。
 5. 从真实用户行为、上游测试或缺陷路径核对触发点、状态变化、坐标语义、副作用、错误与释放顺序。
 6. 先把现有实现和状态收敛到唯一 owner，再统一路径、名称、参数、返回值、枚举、配置键和回调契约。
-7. 同批更新必要调用方、测试和当前架构文档；用定向行为测试证明本地实现，不把类型检查当作完成证据。
+7. 同批更新必要调用方、测试和当前架构文档；用定向行为测试证明本地实现。CSS 变化还要用真实浏览器检查 DOM class 与计算样式，不把文件存在、类型检查或截图当作完成证据。
 
 当本地一个文件承担上游多个文件的职责时，把 VS Code 对应职责迁回准确 owner；Zeta 专属职责迁回已确认的 Zeta 专属 owner。发现尚未记录决定的仅 Zeta 文件或公开 API 时，完成本批只读清单后暂停并请求用户决定，不能自行保留、改名、迁移或删除；已有决定的项目按记录继续处理。
 
@@ -79,6 +87,7 @@ Rust 文件不使用本 skill，也不以 VS Code 为参照。普通 TypeScript 
 ## 验证
 
 - 修改前后重新比较完整目标目录；仅 VS Code 的文件和公开 API 应减少，新出现且尚无决定的仅 Zeta 文件或公开 API 必须暂停并请求用户决定，已有决定的 Zeta 专属归属必须符合其确认职责。
+- 浏览器目标运行 CSS ownership audit；完全相同的上游 CSS、重新出现的上游产品 root、新增的 `monaco-*` 或 `--vscode-*` 都必须阻断完成。品牌替换后仍与上游一致的 CSS 必须列入待清理报告，不能作为已对齐证据。
 - 逐项复核 imports 的符号和 owner 路径，并用 `rg` 检查旧名称、错误大小写、别名、重复入口、并行实现和聚合导入。
 - 确认旧公开入口和旧状态 owner 已无生产调用方，新的公开契约实际走向唯一现有实现，而不是新增一份实现。
 - 至少验证一条受影响的真实行为链，覆盖触发、owner、状态变化、副作用和释放。
