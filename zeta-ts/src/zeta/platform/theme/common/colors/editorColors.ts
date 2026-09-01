@@ -55,6 +55,21 @@ export const multiCursorPrimaryForeground = alias("editorMultiCursor.primary.for
 export const multiCursorPrimaryBackground = alias("editorMultiCursor.primary.background", cursorBackground, "Foreground for a character covered by the primary cursor when multiple cursors are active.");
 export const multiCursorSecondaryForeground = alias("editorMultiCursor.secondary.foreground", cursorForeground, "Foreground for secondary cursors when multiple cursors are active.");
 export const multiCursorSecondaryBackground = alias("editorMultiCursor.secondary.background", cursorBackground, "Foreground for a character covered by a secondary cursor when multiple cursors are active.");
+export const lineHighlightBackground = registerColor(
+	"editor.lineHighlightBackground",
+	{ dark: "#00000000", light: "#00000000", highContrastDark: "#00000000", highContrastLight: "#00000000" },
+	{ description: "Background for the line at the primary cursor position.", owner },
+);
+export const inactiveLineHighlightBackground = registerColor(
+	"editor.inactiveLineHighlightBackground",
+	{ dark: lineHighlightBackground, light: lineHighlightBackground, highContrastDark: lineHighlightBackground, highContrastLight: lineHighlightBackground },
+	{ description: "Background for the line at the primary cursor position when the editor is not focused.", owner },
+);
+export const lineHighlightBorder = registerColor(
+	"editor.lineHighlightBorder",
+	{ dark: "#282828", light: "#eeeeee", highContrastDark: "#f38518", highContrastLight: "#0f4a85" },
+	{ description: "Border around the line at the primary cursor position.", owner },
+);
 
 export const diffRemovedLineBackground = color("diffEditor.removedLineBackground", "#4b1818", "#ffebe9", "Background for removed diff lines.");
 export const diffInsertedLineBackground = color("diffEditor.insertedLineBackground", "#173d24", "#dafbe1", "Background for inserted diff lines.");

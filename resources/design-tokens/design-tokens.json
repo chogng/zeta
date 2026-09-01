@@ -2618,6 +2618,66 @@
       }
     },
     {
+      "id": "editor.lineHighlightBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-line-highlight-background",
+      "owner": "editor.presentation",
+      "description": "Background for the line at the primary cursor position.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#00000000",
+        "light": "#00000000",
+        "high-contrast-dark": "#00000000",
+        "high-contrast-light": "#00000000"
+      },
+      "values": {
+        "dark": "rgba(0, 0, 0, 0)",
+        "light": "rgba(0, 0, 0, 0)",
+        "high-contrast-dark": "rgba(0, 0, 0, 0)",
+        "high-contrast-light": "rgba(0, 0, 0, 0)"
+      }
+    },
+    {
+      "id": "editor.inactiveLineHighlightBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-inactive-line-highlight-background",
+      "owner": "editor.presentation",
+      "description": "Background for the line at the primary cursor position when the editor is not focused.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.lineHighlightBackground",
+        "light": "editor.lineHighlightBackground",
+        "high-contrast-dark": "editor.lineHighlightBackground",
+        "high-contrast-light": "editor.lineHighlightBackground"
+      },
+      "values": {
+        "dark": "rgba(0, 0, 0, 0)",
+        "light": "rgba(0, 0, 0, 0)",
+        "high-contrast-dark": "rgba(0, 0, 0, 0)",
+        "high-contrast-light": "rgba(0, 0, 0, 0)"
+      }
+    },
+    {
+      "id": "editor.lineHighlightBorder",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-line-highlight-border",
+      "owner": "editor.presentation",
+      "description": "Border around the line at the primary cursor position.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#282828",
+        "light": "#eeeeee",
+        "high-contrast-dark": "#f38518",
+        "high-contrast-light": "#0f4a85"
+      },
+      "values": {
+        "dark": "#282828",
+        "light": "#eeeeee",
+        "high-contrast-dark": "#f38518",
+        "high-contrast-light": "#0f4a85"
+      }
+    },
+    {
       "id": "diffEditor.removedLineBackground",
       "kind": "color",
       "cssVariable": "--zeta-diff-editor-removed-line-background",
@@ -3667,6 +3727,14 @@
       "owner": "platform.ui",
       "description": "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.",
       "value": "600"
+    },
+    {
+      "id": "strokeThickness",
+      "kind": "size",
+      "cssVariable": "--zeta-stroke-thickness",
+      "owner": "platform.ui",
+      "description": "Standard UI border thickness.",
+      "value": "1px"
     },
     {
       "id": "animation.durationFast",

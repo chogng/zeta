@@ -133,7 +133,7 @@ class MessageWidget extends Disposable implements IContentWidget {
 		viewport.revealPosition(Position.lift(position));
 		const document = editor.getContainerDomNode().ownerDocument;
 		this.domNode = document.createElement('div');
-		this.domNode.className = 'monaco-editor-overlaymessage fadeIn';
+		this.domNode.className = 'stanza-editor-overlay-message fadeIn';
 		const message = document.createElement('div');
 		message.className = 'message';
 		if (typeof content === 'string') message.textContent = content;

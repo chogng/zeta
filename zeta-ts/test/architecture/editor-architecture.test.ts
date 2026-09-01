@@ -527,10 +527,16 @@ test("ViewLine owns text rows while overlays own their row DOM", () => {
 		assert.doesNotMatch(viewLine, new RegExp(`stanza-editor-${foreignRow}`, "u"), foreignRow);
 	}
 	assert.match(viewLine, /stanza-editor-line-text/u);
-	for (const part of ["currentLineHighlight/currentLineHighlight", "decorations/decorations", "indentGuides/indentGuides", "linesDecorations/linesDecorations", "marginDecorations/marginDecorations", "selections/selections", "viewCursors/viewCursors", "lineNumbers/lineNumbers"]) {
+	const viewOverlays = readFileSync(join(editorRoot, "browser/view/viewOverlays.ts"), "utf8");
+	assert.match(viewOverlays, /new ViewPartRows/u);
+	const currentLineHighlight = readFileSync(join(editorRoot, "browser/viewParts/currentLineHighlight/currentLineHighlight.ts"), "utf8");
+	assert.doesNotMatch(currentLineHighlight, /new ViewPartRows/u);
+	for (const part of ["decorations/decorations", "indentGuides/indentGuides", "linesDecorations/linesDecorations", "marginDecorations/marginDecorations", "selections/selections", "lineNumbers/lineNumbers"]) {
 		const source = readFileSync(join(editorRoot, `browser/viewParts/${part}.ts`), "utf8");
-		assert.match(source, /new ViewPartRows/u, part);
+		assert.match(source, /renderViewPartRows/u, part);
 	}
+	const viewCursors = readFileSync(join(editorRoot, "browser/viewParts/viewCursors/viewCursors.ts"), "utf8");
+	assert.match(viewCursors, /new ViewPartRows/u);
 	const symbolIcons = readFileSync(join(editorRoot, "contrib/symbolIcons/browser/symbolIcons.ts"), "utf8");
 	assert.match(symbolIcons, /DecorationPresentation\.LineDecoration/u);
 	assert.doesNotMatch(symbolIcons, /querySelector|\bh\(/u);
@@ -558,6 +564,14 @@ test("Stanza owns its public protocol and DOM vocabulary without renaming the ed
 	assert.match(structuredSurface, /stanza-structured-/u);
 	assert.doesNotMatch(structuredSurface, /zeta-(?:document|structured)-/u);
 	assert.equal(existsSync(resolve(editorRoot, "../stanza")), false, "parallel stanza directory");
+});
+
+test("Stanza owns editor DOM and CSS brand classes", () => {
+	for (const file of collectFiles(editorRoot)) {
+		if (!file.endsWith(".ts") && !file.endsWith(".css")) continue;
+		const source = readFileSync(file, "utf8");
+		assert.doesNotMatch(source, /\bmonaco-editor\b/u, relative(editorRoot, file));
+	}
 });
 
 test("Text engine PieceTree tests follow VS Code's common model layout", () => {

@@ -12,6 +12,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
 import { TextModel } from "../../../common/model/textModel.js";
+import { EditorLineWrapping } from '../../../common/config/editorOptions.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 class TestResizeObserver {
@@ -80,17 +81,18 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 test('editor focus updates the view overlay presentation', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using model = new TextModel('alpha');
+	using model = new TextModel('alpha '.repeat(20));
 	using editor = new CodeEditorWidget({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
+		lineWrapping: EditorLineWrapping.On,
 		renderLineHighlight: 'all',
 		renderLineHighlightOnlyWhenFocus: true,
 	});
-	editor.layout({ width: 320, height: 80 });
+	editor.layout({ width: 120, height: 100 });
 	const overlays = requiredElement(editor.element, '.view-overlays');
 
 	assert.equal(overlays.classList.contains('focused'), false);
@@ -98,8 +100,20 @@ test('editor focus updates the view overlay presentation', () => {
 	assert.equal(editor.element.querySelector('.margin-view-overlays .current-line-margin'), null);
 	editor.focus();
 	assert.equal(overlays.classList.contains('focused'), true);
-	assert.ok(editor.element.querySelector('.view-overlays .current-line'));
+	assert.deepEqual(
+		[...requiredElement(editor.element, '.view-overlays .current-line').classList],
+		['current-line', 'stanza-editor-current-line-highlight', 'current-line-both', 'current-line-exact'],
+	);
+	assert.deepEqual(
+		[...requiredElement(editor.element, '.margin-view-overlays .current-line-margin').classList],
+		['current-line', 'stanza-editor-current-line-margin-highlight', 'current-line-margin', 'current-line-margin-both', 'current-line-exact-margin'],
+	);
+	assert.ok(editor.element.querySelectorAll('.view-overlays .current-line').length > 1);
+	assert.equal(editor.element.querySelectorAll('.view-overlays .current-line-exact').length, 1);
+	editor.setSelection(new Selection(1, 1, 1, 2));
+	assert.equal(editor.element.querySelector('.view-overlays .current-line'), null);
 	assert.ok(editor.element.querySelector('.margin-view-overlays .current-line-margin'));
+	editor.setSelection(Selection.fromPositions(new Position(1, 1)));
 	editor.view.editContext.domNode.domNode.blur();
 	assert.equal(overlays.classList.contains('focused'), false);
 	assert.equal(editor.element.querySelector('.view-overlays .current-line'), null);

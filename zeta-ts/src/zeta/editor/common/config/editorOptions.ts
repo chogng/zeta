@@ -1986,7 +1986,7 @@ function optionId(name: string): EditorOption | undefined {
 }
 
 function computeEditorClassName(environment: IEnvironmentalOptions, options: IComputedEditorOptions, _value: string): string {
-	const classNames = ['monaco-editor'];
+	const classNames = ['stanza-editor'];
 	const configuredClassName = options.get(EditorOption.extraEditorClassName);
 	if (configuredClassName) classNames.push(configuredClassName);
 	if (environment.extraEditorClassName) classNames.push(environment.extraEditorClassName);

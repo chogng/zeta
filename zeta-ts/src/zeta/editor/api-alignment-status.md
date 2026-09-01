@@ -6,7 +6,7 @@
 
 - 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 727 个；381 个同路径，209 个仅本地，346 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：初始确认 118 组同名声明结构差异，已处理 33 组，剩余 85 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
+- 账目摘要：初始确认 118 组同名声明结构差异，已处理 34 组，剩余 84 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
 - 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题，也不新增 Editor 生产文件。
 - 用户已确认仅本地项的处理原则：架构文档明确归属的 Zeta 专属能力按既有职责保留；与 VS Code 重叠的职责迁回对应路径。文件删除仍需在每批执行前按准确路径、原因、剩余调用方和 Git 可恢复性单独确认。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
@@ -52,6 +52,7 @@
 | `standalone/browser/standaloneEditor.ts` | `getEditors` | 直接读取代码编辑器服务持有的当前实例；与 `create`、`onDidCreateEditor` 共享对象身份和释放时机，Standalone 测试覆盖双编辑器登记、共享模型和独立释放 |
 | `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 公开成员差异归零；从计算后的编辑器配置和主题类型生成不可变行渲染快照，由 `ViewLines` 持有并在配置变化时比较后通知已渲染行；段落方向、制表宽度和 GPU 输入不再错误归入该类型，定向测试覆盖全部快照字段、相等比较与调用链 |
 | `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 类成员差异归零，只保留准备与逐行输出抽象契约；可见行临时 DOM 由 `viewLayer.ts` 的通用行投影负责，各具体 overlay 自己持有输出并实现 `render`，不再由基类藏一份共享状态 |
+| `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 公开构造和成员契约归零；正文与边栏覆盖层共享 `ViewContext` 的配置、焦点、选区、换行坐标和释放链，主题系统提供聚焦、失焦及高对比度颜色，组件 CSS 负责状态投影。定向测试覆盖焦点、选区与正文/边栏 class，真实 Chromium 验证自定义主题切换和高对比度边框 |
 
 ## 尚未补齐的同名契约
 
@@ -86,7 +87,6 @@
 | `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 已作为独立 `ViewPart` 持有块级 DOM，不再混入逐行覆盖层 |
 | `browser/viewParts/contentWidgets/contentWidgets.ts` | `ViewContentWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 正文与边栏覆盖层分别拥有逐行高亮；配置、焦点、选区、换行片段和生命周期沿统一覆盖层链路更新 |
 | `browser/viewParts/decorations/decorations.ts` | `DecorationsOverlay` | 已恢复逐行片段职责、装饰快照和失效事件 owner，并由 `ContentViewOverlays` 持有 |
 | `browser/viewParts/editorScrollbar/editorScrollbar.ts` | `EditorScrollbar` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
 | `browser/viewParts/glyphMargin/glyphMargin.ts` | `GlyphMarginWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
@@ -152,7 +152,7 @@
 
 ## 当前已验证能力
 
-- 当前 33 项严格完成项均已进入生产调用链并核对 owner 与生命周期；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
+- 当前 34 项严格完成项均已进入生产调用链并核对 owner 与生命周期；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
 - Standalone 模型创建现在由 `standaloneCodeEditor.ts::createTextModel` 统一决定语言：显式语言优先，否则读取 URI 与第一行；Model Service 仍是模型注册、查询、语言事件和释放 owner。
 - `IClipboardPasteEvent`、`ColumnSelection`、`ColorPickerModel` 已分别通过真实输入、鼠标列选和 Color Picker 生产调用链复核。
 - `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 118 项完成数。
@@ -172,8 +172,9 @@
 ## 验证状态
 
 - 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、346 个仅上游；Zeta 590 个生产文件，VS Code 727 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
-- 118 项账本校验通过：33 项已处理、85 项待处理、总计 118 个唯一声明。
+- 118 项账本校验通过：34 项已处理、84 项待处理、总计 118 个唯一声明。
 - `tsconfig.stanza.json --noEmit` 与 `tsconfig.test.json` 编译通过；`FocusTracker`、原生 EditContext 和 Standalone 日志注册的 4 个定向用例通过。
 - Editor 浏览器总入口仍被 4 个既有测试编译错误阻断：缺少 `styledGlyphRasterizer.js`、`selectionSet.js`，以及 bracket pair 配置和 TextModel 构造参数不匹配。真实 Chromium 集成测试 5 项通过 4 项，其中无障碍契约通过；失败项是既有的 `Control+Home` 光标行为。
 - Editor 完整单测运行到 882 项时为 845 项通过、11 项失败；`codeEditorPane.test.js` 挂起约 4 分钟后终止，后续 26 项被取消。失败覆盖 Cursor Undo/Redo、Folding、Join Lines、输入事件次数、占位符几何、字体配置和换行符等既有基线，本批 4 个定向用例均通过。
-- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 85 项中扣减。
+- 当前行高亮的 Widget 行为测试和主题 token 测试通过；真实 Chromium 验证普通主题下聚焦/失焦背景分别读取对应 token，高对比度主题使用 `1px` 语义边框。Editor 根 DOM 和组件 CSS 已统一使用 `.stanza-editor`，不再依赖上游产品 class，并由架构测试守住该边界。完整设计 token 门禁仍被范围外 `multiDiffEditorPane.css` 使用未注册的 `--zeta-widget-background` 阻断，本批新增变量均已注册。
+- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 84 项中扣减。

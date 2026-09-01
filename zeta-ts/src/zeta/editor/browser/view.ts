@@ -284,7 +284,7 @@ export class View extends ViewEventHandler {
 		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
 		this.indentation = resolveEditorIndentationOptions(options.indentation);
 		this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
-		this.element.className = "monaco-editor stanza-editor";
+		this.element.className = "stanza-editor";
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
 		this.element.classList.add(`stanza-editor-direction-${this.textDirection}`);

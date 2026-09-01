@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-.monaco-editor .scroll-decoration {
+.stanza-editor .scroll-decoration {
 	position: absolute;
 	top: 0;
 	left: 0;

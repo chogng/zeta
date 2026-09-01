@@ -33,3 +33,7 @@ Follow [`docs/ui-styling-ownership.md`](../../docs/ui-styling-ownership.md) for 
 
 - Preserve native semantics, ARIA, keyboard navigation, labels, disabled state, focus visibility, tab relationships, and high-contrast presentation.
 - Do not suppress focus outlines without an equivalent visible treatment.
+
+## Learnings
+
+* 对齐上游 UI 时只对齐职责、行为和可观察契约；Zeta 创建并拥有的 DOM 与 CSS 必须使用 Zeta 自己的稳定品牌 class，禁止复制或延续上游产品 root class。

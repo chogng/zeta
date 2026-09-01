@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-.monaco-editor .inputarea {
+.stanza-editor .inputarea {
 	min-width: 0;
 	min-height: 0;
 	margin: 0;
@@ -17,7 +17,7 @@
 	background-color: transparent;
 	z-index: -10;
 }
-/*.monaco-editor .inputarea {
+/*.stanza-editor .inputarea {
 	position: fixed !important;
 	width: 800px !important;
 	height: 500px !important;
@@ -31,7 +31,7 @@
 	font-size: 14px !important;
 	z-index: 10 !important;
 }*/
-.monaco-editor .inputarea.ime-input {
+.stanza-editor .inputarea.ime-input {
 	z-index: 10;
 	caret-color: var(--vscode-editorCursor-foreground);
 	color: var(--vscode-editor-foreground);

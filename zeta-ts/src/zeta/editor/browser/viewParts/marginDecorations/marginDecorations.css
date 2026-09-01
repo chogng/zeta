@@ -7,7 +7,7 @@
 	Keeping name short for faster parsing.
 	cmdr = core margin decorations rendering (div)
 */
-.monaco-editor .margin-view-overlays .cmdr {
+.stanza-editor .margin-view-overlays .cmdr {
 	position: absolute;
 	left: 0;
 	width: 100%;

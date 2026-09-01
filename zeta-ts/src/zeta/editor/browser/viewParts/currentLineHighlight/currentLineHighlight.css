@@ -3,7 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-.monaco-editor .view-overlays .current-line {
+.stanza-editor .view-overlays .current-line {
+	display: block;
+	position: absolute;
+	left: 0;
+	top: 0;
+	box-sizing: border-box;
+	height: 100%;
+	background-color: var(--zeta-editor-inactive-line-highlight-background);
+}
+
+.stanza-editor .view-overlays.focused .current-line {
+	background-color: var(--zeta-editor-line-highlight-background);
+}
+
+.stanza-editor .margin-view-overlays .current-line {
 	display: block;
 	position: absolute;
 	left: 0;
@@ -12,16 +26,27 @@
 	height: 100%;
 }
 
-.monaco-editor .margin-view-overlays .current-line {
-	display: block;
-	position: absolute;
-	left: 0;
-	top: 0;
-	box-sizing: border-box;
-	height: 100%;
+.stanza-editor .margin-view-overlays .current-line-margin {
+	background-color: var(--zeta-editor-inactive-line-highlight-background);
 }
 
-.monaco-editor
+.stanza-editor .margin-view-overlays.focused .current-line-margin {
+	background-color: var(--zeta-editor-line-highlight-background);
+}
+
+.stanza-editor .view-overlays .current-line-exact,
+.stanza-editor .margin-view-overlays .current-line-exact-margin {
+	border: 2px solid var(--zeta-editor-line-highlight-border);
+}
+
+[data-color-scheme="high-contrast-dark"] .stanza-editor .view-overlays .current-line-exact,
+[data-color-scheme="high-contrast-dark"] .stanza-editor .margin-view-overlays .current-line-exact-margin,
+[data-color-scheme="high-contrast-light"] .stanza-editor .view-overlays .current-line-exact,
+[data-color-scheme="high-contrast-light"] .stanza-editor .margin-view-overlays .current-line-exact-margin {
+	border-width: var(--zeta-stroke-thickness);
+}
+
+.stanza-editor
 	.margin-view-overlays
 	.current-line.current-line-margin.current-line-margin-both {
 	border-right: 0;

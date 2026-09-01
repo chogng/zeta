@@ -16,6 +16,7 @@ export const fontSizeLabel3 = dimension("fontSize.label3", 10, "Badge label font
 export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font weight for un-emphasized text.");
 export const fontWeightMedium = scalar("fontWeight.medium", 500, "Medium font weight for controls, navigation, and other compact emphasized text.");
 export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.");
+export const strokeThickness = dimension("strokeThickness", 1, "Standard UI border thickness.");
 
 export const animationDurationFast = duration("animation.durationFast", 120, "Short UI state transition duration.");
 export const animationDurationNormal = duration("animation.durationNormal", 200, "Standard UI animation duration.");
