@@ -324,9 +324,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					fontLigatures: options.fontLigatures === true,
 					lineNumbers: options.lineNumbers,
 					glyphMargin: options.glyphMargin,
-					rulers: options.rulers?.map(ruler => typeof ruler === 'number'
-						? { column: ruler }
-						: { column: ruler.column, ...(ruler.color ? { color: ruler.color } : {}) }),
 					guides: options.guides,
 					minimap: options.minimap,
 					renderLineHighlight: options.renderLineHighlight,

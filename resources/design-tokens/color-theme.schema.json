@@ -173,6 +173,7 @@
           "editor.lineHighlightBackground",
           "editor.inactiveLineHighlightBackground",
           "editor.lineHighlightBorder",
+          "editorRuler.foreground",
           "diffEditor.removedLineBackground",
           "diffEditor.insertedLineBackground",
           "diffEditor.removedTextBackground",

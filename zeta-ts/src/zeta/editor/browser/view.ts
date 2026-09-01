@@ -31,7 +31,7 @@ import { type BracketColorizationSource, type SemanticTokenSource } from './view
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
 import { Margin } from './viewParts/margin/margin.js';
 import { GlyphMarginWidgets, resolveGlyphMarginLanes } from './viewParts/glyphMargin/glyphMargin.js';
-import { Rulers, type EditorRuler } from './viewParts/rulers/rulers.js';
+import { Rulers } from './viewParts/rulers/rulers.js';
 import { RulersGpu } from './viewParts/rulersGpu/rulersGpu.js';
 import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
 import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
@@ -102,8 +102,6 @@ export interface EditorViewportPadding {
 	readonly left: number;
 }
 
-export type { EditorRuler } from "./viewParts/rulers/rulers.js";
-
 export interface EditorViewportOptions {
 	readonly container: HTMLElement;
 	readonly viewModel: IViewModel;
@@ -132,7 +130,6 @@ export interface EditorViewportOptions {
 	readonly fontLigatures?: boolean;
 	readonly lineNumbers?: IEditorOptions['lineNumbers'];
 	readonly glyphMargin?: boolean;
-	readonly rulers?: readonly EditorRuler[];
 	readonly guides?: IEditorOptions['guides'];
 	readonly minimap?: IEditorMinimapOptions;
 	readonly indentation?: EditorIndentationOptions;
@@ -494,16 +491,13 @@ export class View extends ViewEventHandler {
 			this.registerViewPart(new RulersGpu(
 				this.viewContext,
 				this.viewLinesGpu.gpuContext,
-				Object.freeze([...(options.rulers ?? [])]),
-				column => this.textLeft + this.textMeasurer.measureLineWidth('0'.repeat(column)),
+				() => this.textLeft,
 			));
 		} else {
 			rulersDomNode = this.registerViewPart(new Rulers(this.viewContext, {
-				host: this.contentElement,
-				textMeasurer: this.textMeasurer,
+				ownerDocument: this.element.ownerDocument,
 				readTextLeft: () => this.textLeft,
-				rulers: options.rulers,
-			})).domNode;
+			})).domNode.domNode;
 		}
 		this.registerViewPart(new EditorScrollbar(this.viewContext, {
 			container: this.element,
@@ -1105,6 +1099,11 @@ export class View extends ViewEventHandler {
 	public override onConfigurationChanged(): boolean {
 		this.projectionRevision += 1;
 		return true;
+	}
+
+	public override onThemeChanged(event: viewEvents.ViewThemeChangedEvent): boolean {
+		this.viewContext.theme.update(event.theme);
+		return false;
 	}
 
 	public override onCursorStateChanged(): boolean {

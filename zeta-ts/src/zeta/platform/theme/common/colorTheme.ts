@@ -121,6 +121,7 @@ export const ColorId = Object.freeze({
 	editorLineHighlightBackground: editorColors.lineHighlightBackground,
 	editorInactiveLineHighlightBackground: editorColors.inactiveLineHighlightBackground,
 	editorLineHighlightBorder: editorColors.lineHighlightBorder,
+	editorRulerForeground: editorColors.editorRulerForeground,
 	editorFoldBackground: editorColors.foldBackground,
 	editorFoldPlaceholderForeground: editorColors.foldPlaceholderForeground,
 	editorGutterFoldingControlForeground: editorColors.foldingControlForeground,

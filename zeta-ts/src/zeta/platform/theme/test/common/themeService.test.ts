@@ -54,6 +54,7 @@ test("color identifiers map to stable CSS custom properties", () => {
 	assert.equal(colorCssVariable(ColorId.editorLineHighlightBackground), '--zeta-editor-line-highlight-background');
 	assert.equal(colorCssVariable(ColorId.editorInactiveLineHighlightBackground), '--zeta-editor-inactive-line-highlight-background');
 	assert.equal(colorCssVariable(ColorId.editorLineHighlightBorder), '--zeta-editor-line-highlight-border');
+	assert.equal(colorCssVariable(ColorId.editorRulerForeground), '--zeta-editor-ruler-foreground');
 	assert.equal(sizeCssVariable('strokeThickness'), '--zeta-stroke-thickness');
 });
 
@@ -70,5 +71,19 @@ test('current-line colors preserve transparent fills and high-contrast borders',
 		highContrastDarkBorder: '#f38518',
 		highContrastLightBorder: '#0f4a85',
 		strokeThickness: { value: 1, unit: 'px' },
+	});
+});
+
+test('editor ruler colors preserve the editor theme contract', () => {
+	assert.deepEqual({
+		dark: darkColorTheme.colors[ColorId.editorRulerForeground],
+		light: lightColorTheme.colors[ColorId.editorRulerForeground],
+		highContrastDark: highContrastDarkColorTheme.colors[ColorId.editorRulerForeground],
+		highContrastLight: highContrastLightColorTheme.colors[ColorId.editorRulerForeground],
+	}, {
+		dark: '#5a5a5a',
+		light: '#d3d3d3',
+		highContrastDark: '#ffffff',
+		highContrastLight: '#292929',
 	});
 });

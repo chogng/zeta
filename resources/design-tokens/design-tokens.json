@@ -2678,6 +2678,26 @@
       }
     },
     {
+      "id": "editorRuler.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-ruler-foreground",
+      "owner": "editor.presentation",
+      "description": "Color of editor rulers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#5a5a5a",
+        "light": "#d3d3d3",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#292929"
+      },
+      "values": {
+        "dark": "#5a5a5a",
+        "light": "#d3d3d3",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#292929"
+      }
+    },
+    {
       "id": "diffEditor.removedLineBackground",
       "kind": "color",
       "cssVariable": "--zeta-diff-editor-removed-line-background",

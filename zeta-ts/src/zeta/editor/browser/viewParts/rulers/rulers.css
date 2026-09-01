@@ -1,6 +1,11 @@
-.stanza-editor .view-ruler {
+.stanza-editor .stanza-editor-rulers,
+.stanza-editor .stanza-editor-ruler {
 	position: absolute;
 	top: 0;
-	box-shadow: 1px 0 0 0 var(--vscode-editorRuler-foreground) inset;
 	pointer-events: none;
+}
+
+.stanza-editor .stanza-editor-ruler {
+	width: var(--zeta-stroke-thickness);
+	background-color: var(--stanza-editor-ruler-color, var(--zeta-editor-ruler-foreground));
 }

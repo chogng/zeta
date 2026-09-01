@@ -70,6 +70,11 @@ export const lineHighlightBorder = registerColor(
 	{ dark: "#282828", light: "#eeeeee", highContrastDark: "#f38518", highContrastLight: "#0f4a85" },
 	{ description: "Border around the line at the primary cursor position.", owner },
 );
+export const editorRulerForeground = registerColor(
+	'editorRuler.foreground',
+	{ dark: '#5a5a5a', light: '#d3d3d3', highContrastDark: '#ffffff', highContrastLight: '#292929' },
+	{ description: 'Color of editor rulers.', owner },
+);
 
 export const diffRemovedLineBackground = color("diffEditor.removedLineBackground", "#4b1818", "#ffebe9", "Background for removed diff lines.");
 export const diffInsertedLineBackground = color("diffEditor.insertedLineBackground", "#173d24", "#dafbe1", "Background for inserted diff lines.");
