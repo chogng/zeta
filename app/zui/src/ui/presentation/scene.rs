@@ -7,7 +7,6 @@ use super::InspectionNodeId;
 use super::PaintIcon;
 use super::PaintImage;
 use super::PaintRect;
-use super::inspection::node_for_element;
 use crate::ui::foundation::Color;
 use crate::ui::foundation::Point;
 use crate::ui::foundation::Rect;
@@ -16,6 +15,8 @@ use crate::ui::text::TextSpan;
 use crate::ui::text::TextStyle;
 #[path = "scene/batching.rs"]
 mod batching;
+#[path = "scene/elements.rs"]
+mod elements;
 #[path = "scene/fragments.rs"]
 mod fragments;
 
@@ -343,16 +344,6 @@ impl UiScene {
             return self.with_overlay(|scene| scene.with_current_layer_element(element, draw));
         }
         self.with_current_layer_element(element, draw)
-    }
-
-    fn with_current_layer_element<R>(
-        &mut self,
-        element: ComponentElement,
-        draw: impl FnOnce(&mut Self, &ComputedElement) -> R,
-    ) -> R {
-        let computed = element.compute();
-        let node = node_for_element(&computed);
-        self.with_inspection_node(node, |scene| draw(scene, &computed))
     }
 
     #[track_caller]

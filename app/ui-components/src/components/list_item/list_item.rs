@@ -1,6 +1,5 @@
 use crate::{
-    Border, Color, Component, ComponentElement, ComputedElement, CornerRadii, Element, PaintRect,
-    Rect, UiScene,
+    Border, Color, Component, ComponentElement, ComputedElement, CornerRadii, Rect, UiScene,
 };
 
 /// Pointer and focus state projected onto one list item by its host.
@@ -140,32 +139,28 @@ impl ListItem {
     pub const fn bounds(&self) -> Rect {
         self.bounds
     }
-
-    fn paint_surface(&self, scene: &mut UiScene) {
-        scene.draw_rect(
-            PaintRect::new(
-                self.bounds,
-                self.style
-                    .backgrounds_for(self.selection)
-                    .for_state(self.state),
-            )
-            .with_border(self.style.border)
-            .with_corner_radii(self.style.corner_radii),
-        );
-    }
 }
 
 impl Component for ListItem {
     fn element(&self) -> ComponentElement {
-        Element::leaf("ListItem").in_bounds(self.bounds)
+        zui::ui! {
+            leaf("ListItem") {
+                style {
+                    background: self.style
+                        .backgrounds_for(self.selection)
+                        .for_state(self.state);
+                    border: self.style.border;
+                    radii: self.style.corner_radii;
+                }
+            }
+        }
+        .in_bounds(self.bounds)
     }
 
-    fn paint_element(&self, scene: &mut UiScene, _element: &ComputedElement) {
-        self.paint_surface(scene);
-    }
+    fn paint_element(&self, _scene: &mut UiScene, _element: &ComputedElement) {}
 
     fn paint(&self, scene: &mut UiScene) {
-        self.paint_surface(scene);
+        scene.with_element(self.element(), |_scene, _element| {});
     }
 }
 

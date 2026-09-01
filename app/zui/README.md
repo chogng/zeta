@@ -2,13 +2,13 @@
 
 `zui` 是 Rust 桌面应用唯一需要依赖的原生 UI framework crate。它拥有 UI 内核、Application 与多窗口生命周期、任务和定时器、窗口及应用级平台事件归一化、系统服务、托盘和全局快捷键、协议 URL、资源与隔离进程、OS accessibility、应用分发工具、渲染器契约、默认 wgpu 后端与确定性 testing；这些职责在同一 crate 内按能力目录隔离，不通过 sibling crate 暴露替代入口。
 
-产品通过 `zui::app` 启动应用，通过 `zui::window` 和 `zui::input` 接收 ZUI 自有事件，通过 `zui::ui` 构造 scene。UI 的编写、布局、样式和主题投影边界见 [`native-ui-authoring.md`](../docs/native-ui-authoring.md)。`zeta-ui-components` 在它之上提供可复用组件，`zeta-workbench` 负责 Workbench 界面；产品状态、Session、PTY、App Server 与业务 reducer 不得进入 `zui`。
+产品通过 `zui::app` 启动应用，通过 `zui::window` 和 `zui::input` 接收 ZUI 自有事件，通过 `zui::ui` 构造 scene。节点树、`style!` / `ui!`、校验和自动方框绘制见 [`zui-declarative-styles.md`](../docs/zui-declarative-styles.md)，更广的 UI 编写和主题投影边界见 [`native-ui-authoring.md`](../docs/native-ui-authoring.md)。`zeta-ui-components` 在它之上提供可复用组件，`zeta-workbench` 负责 Workbench 界面；产品状态、Session、PTY、App Server 与业务 reducer 不得进入 `zui`。
 
 ## 1. Crate 边界
 
 | 能力 | 规范公共入口 | 内部 owner |
 | --- | --- | --- |
-| Geometry、Element、layout、text、scene、inspection、view state 与 component lifecycle | `zui::ui` | `ui/foundation` / `ui/layout` / `ui/text` / `ui/presentation` |
+| Geometry、声明式 Element/style、layout、text、scene、inspection、view state 与 component lifecycle | `zui::ui`、`zui::style!`、`zui::ui!` | `ui/foundation` / `ui/layout` / `ui/text` / `ui/presentation` |
 | Interaction、animation、deadline、retained lifecycle | `zui::runtime`，并由 `zui::ui` 聚合常用类型 | `runtime` |
 | Application、多窗口 lifecycle、退出策略与跨线程投递 | `zui::app` | `app` |
 | Application relaunch 调度 | `AppProxy` / `ApplicationHandle` / application 与 window context | `app/relaunch.rs` |

@@ -7,8 +7,8 @@ use crate::ui::text::FontWeight;
 use crate::ui::text::TextSpan;
 use crate::ui::text::TextStyle;
 use crate::{
-    Color, CornerRadii, Element, ElementId, ImageData, ImageId, PaintIcon, PaintImage, PaintRect,
-    Point, Rect, Size,
+    Border, Color, CornerRadii, Element, ElementId, ElementOverflow, ImageData, ImageId, PaintIcon,
+    PaintImage, PaintRect, Point, Rect, Size,
 };
 
 const TEST_ICON: Icon = Icon::new(
@@ -186,6 +186,53 @@ fn scene_records_nested_rounded_clips_and_their_content_depth() {
                 depth: 1,
             },
         ]
+    );
+}
+
+#[test]
+fn styled_element_tree_drives_box_paint_clipping_and_inspection_hierarchy() {
+    let root_bounds = Rect::from_xywh(10.0, 20.0, 100.0, 60.0);
+    let root = Element::column("Panel")
+        .background(Color::rgb(20, 30, 40))
+        .border(Border::uniform(1.0, Color::WHITE))
+        .corner_radii(CornerRadii::uniform(8.0))
+        .overflow(ElementOverflow::Clip)
+        .child(
+            Element::leaf("Row")
+                .height(crate::ElementLength::px(24.0))
+                .background(Color::rgb(50, 60, 70)),
+        )
+        .in_bounds(root_bounds);
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.with_element(root, |scene, _computed| {
+        scene.draw_rect(PaintRect::new(
+            Rect::from_xywh(0.0, 0.0, 200.0, 200.0),
+            Color::rgb(80, 90, 100),
+        ));
+    });
+
+    assert_eq!(scene.rects().len(), 3);
+    assert_eq!(scene.rects()[0].bounds(), root_bounds);
+    assert_eq!(scene.rects()[0].clip_bounds(), None);
+    assert_eq!(
+        scene.rects()[1].bounds(),
+        Rect::from_xywh(10.0, 20.0, 100.0, 24.0)
+    );
+    assert_eq!(scene.rects()[1].clip_bounds(), None);
+    assert_eq!(scene.rects()[2].clip_bounds(), None);
+    assert_eq!(scene.clips()[0].bounds(), root_bounds);
+    assert_eq!(scene.inspection().nodes().len(), 2);
+    let child = &scene.inspection().nodes()[1];
+    assert_eq!(child.name(), "Row");
+    assert_eq!(
+        scene
+            .inspection()
+            .ancestry(child.id())
+            .iter()
+            .map(|node| node.name())
+            .collect::<Vec<_>>(),
+        ["Panel", "Row"]
     );
 }
 

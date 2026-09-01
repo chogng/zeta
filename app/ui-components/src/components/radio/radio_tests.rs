@@ -73,7 +73,7 @@ fn radio_group_arranges_one_selected_button_surface() {
             .iter()
             .map(|node| node.name())
             .collect::<Vec<_>>(),
-        ["RadioGroup", "Button", "Button"]
+        ["RadioGroup", "Radio", "Radio", "Button", "Button"]
     );
 }
 
