@@ -1,0 +1,4 @@
+interface:
+  display_name: "UX Config"
+  short_description: "Route UX settings and resources by UI host"
+  default_prompt: "Use $ux-config to choose this UX setting or resource's UI host, artifact, scope, validation, and migration path."

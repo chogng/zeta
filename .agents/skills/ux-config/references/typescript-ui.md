@@ -1,0 +1,57 @@
+# TypeScript UI UX Persistence
+
+Use this reference only for UX data interpreted by the TypeScript UI under `zeta-ts`.
+
+## Artifact routing
+
+| Data | Canonical target |
+| --- | --- |
+| Registered scalar or structured settings | Profile or workspace `settings.json`, parsed as JSONC, with only the scopes registered for that key |
+| User keybindings | The profile's dedicated ordered `keybindings.json` resource; do not nest it under ordinary settings |
+| User keyboard layout definition | The profile's dedicated schema-validated `keyboard-layout.json` resource |
+| User theme selection | A registered setting in `settings.json` |
+| User theme contents | A strict schema-validated JSON file in the profile theme resource directory |
+| Reconstructable window or workbench state | The TypeScript UI state resource, not settings |
+
+Like VS Code, use the `settings.json` filename with JSONC parsing for contributed keys, layered overrides, comments, and syntax-aware edits. Keep the document as a plain settings object rather than adding a schema-version envelope. A dedicated resource is appropriate when order, full-document validation, independent revisions, or a specialized editor are part of the contract. The filename alone does not decide whether comments are accepted; the parser and serializer must define and preserve the supported syntax.
+
+## Coordinate with VS Code API alignment
+
+After this skill determines that data belongs to the TypeScript UI and defines its artifact, locality, scopes, and migration, use `$vscode-api-alignment` when implementing or reviewing corresponding configuration files, APIs, ownership, lifecycle, or call paths under `zeta-ts`. Inspect the checked-out VS Code source and the alignment reference for every affected TypeScript layer before changing those surfaces.
+
+| Decision | Owner |
+| --- | --- |
+| Whether the value is UX configuration, state, a resource, a secret, permission, or backend intent | `$ux-config` |
+| Which UI owns the value, which scopes are legitimate, where it persists, and how legacy data migrates | `$ux-config` |
+| Corresponding TypeScript file paths, public names, registry/service responsibilities, lifecycle, callers, and debuggable execution path | `$vscode-api-alignment` |
+| Zeta-specific setting keys, consumers, product directory names, and behavior without a same-responsibility VS Code counterpart | The Zeta product owner; keep these outside the alignment slice |
+
+Prefer the VS Code model for corresponding configuration infrastructure such as registered setting schemas, per-key scope metadata, configuration targets, inspection and update APIs, JSONC editing, migration registration, and standalone user resources. Align the complete responsibility and call path rather than copying only a filename or type name. Do not create a VS Code-shaped API when Zeta has no corresponding consumer, and do not use API alignment for Rust `[gui]` or `[tui]`.
+
+## Eligible setting families
+
+Appearance selection, accessibility preferences, editor presentation and behavior, keyboard interpretation, workbench layout policy, localization, search presentation, and source-control presentation may use registered settings when the TypeScript UI owns and consumes the behavior. This is an eligibility list, not an implementation claim; require a concrete consumer and registered contract for every setting.
+
+Current tab, pane, selection, scroll, window geometry, recent-item, and cache values remain state. Extension enablement, tasks, launch behavior, permissions, providers, and backend execution settings retain their own domain owners even when surfaced in the TypeScript settings UI.
+
+## Settings contract
+
+Register each key once with its type, default, allowed scopes, schema, parser, and serializer. The registry's allowed scope is authoritative: profile, remote profile, workspace, workspace folder, and language override files may expose only keys valid at that target. Preserve comments, trailing commas, unrelated keys, and override blocks with syntax-aware edits. Reject a value written at an unsupported scope.
+
+Supported scope candidates are profile, remote profile, workspace, workspace folder, and language override. A key receives only the scopes its semantics require.
+
+The local profile follows the TypeScript UI process. A remote profile is a separate declared scope for keys that genuinely describe the remote environment; connecting to a backend does not move ordinary workbench preferences into that backend's profile.
+
+## Ordered resources
+
+Keybindings remain a top-level ordered array with their own command catalog, context expressions, platform overrides, blockers, revision, validation, and change event. Validate the entire candidate before replacing active rules. Preserve the last valid runtime snapshot when an external edit is invalid, while reporting the invalid resource explicitly.
+
+Do not generalize the keybinding file into a container for unrelated UX data. Create another dedicated resource only when it has its own editor, lifecycle, and complete-document contract.
+
+## Migration
+
+- Migrate legacy `configuration.json` values to registered keys in `settings.json`; do not place new settings in the legacy wrapper.
+- Keep migration code and any migration receipt outside the plain settings object. Run key migrations at every supported target and make them idempotent; do not add a document-wide version envelope to `settings.json`.
+- Keep `keybindings.json` independent while migrating its supported older schema or identifiers in place through a versioned resource migration.
+- Migrate older theme schemas and paths through the theme resource owner, separately from theme selection.
+- Never move TypeScript presentation settings into Rust `[gui]` merely because both interfaces are graphical.

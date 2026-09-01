@@ -1,4 +1,0 @@
-interface:
-  display_name: "Theme Config Alignment"
-  short_description: "Route UI appearance values to theme or config"
-  default_prompt: "Use $theme-config-alignment to decide where this UI appearance setting belongs and implement the complete ownership path."
