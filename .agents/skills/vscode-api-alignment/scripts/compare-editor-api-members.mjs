@@ -68,14 +68,18 @@ function readMembers(node) {
 	if (ts.isFunctionDeclaration(node)) return [`(${node.parameters.length})`];
 	if (ts.isVariableDeclaration(node)) return readObjectMembers(node.initializer);
 	if (!('members' in node) || !node.members) return [];
-	return node.members.flatMap(member => {
+	return node.members.filter(member => !hasModifier(member, ts.SyntaxKind.PrivateKeyword)).flatMap(member => {
 		const name = memberName(member);
 		if (!ts.isConstructorDeclaration(member)) return name ? [name] : [];
 		const properties = member.parameters
-			.filter(parameter => ts.isParameterPropertyDeclaration(parameter, member))
+			.filter(parameter => ts.isParameterPropertyDeclaration(parameter, member) && !hasModifier(parameter, ts.SyntaxKind.PrivateKeyword))
 			.map(parameter => parameter.name.getText());
 		return [name, ...properties];
 	}).filter(Boolean).sort();
+}
+
+function hasModifier(node, kind) {
+	return node.modifiers?.some(modifier => modifier.kind === kind) ?? false;
 }
 
 function readObjectMembers(initializer) {

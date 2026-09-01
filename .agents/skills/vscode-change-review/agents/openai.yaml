@@ -1,0 +1,4 @@
+interface:
+  display_name: "VS Code Change Review"
+  short_description: "Review new VS Code commits against Zeta checkpoints"
+  default_prompt: "Use $vscode-change-review to inspect VS Code commits since the recorded checkpoint and report which changes may need Zeta work without modifying product source."

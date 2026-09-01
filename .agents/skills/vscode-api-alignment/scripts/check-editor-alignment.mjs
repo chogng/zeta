@@ -5,18 +5,29 @@ import { spawnSync } from 'node:child_process';
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
 const full = process.argv.includes('--full');
 const structureOnly = process.argv.includes('--structure-only');
+const testArgument = process.argv.slice(2).find(argument => argument.startsWith('--test='));
+const testMode = testArgument?.slice('--test='.length);
 const knownArguments = new Set(['--full', '--structure-only', '--help']);
-const unknownArguments = process.argv.slice(2).filter(argument => !knownArguments.has(argument));
+const unknownArguments = process.argv.slice(2).filter(argument => !knownArguments.has(argument) && !argument.startsWith('--test='));
+const knownTestModes = new Set(['unit', 'browser', 'all']);
 
 if (process.argv.includes('--help')) {
 	process.stdout.write(`Usage: node .agents/skills/vscode-api-alignment/scripts/check-editor-alignment.mjs [--full] [--structure-only]\n\n`);
 	process.stdout.write(`  --full            Print complete file-set and member reports.\n`);
-	process.stdout.write(`  --structure-only  Skip the repository typecheck script.\n`);
+	process.stdout.write(`  --structure-only  Skip repository typecheck and behavior tests.\n`);
+	process.stdout.write(`  --test=unit       Run Editor unit tests.\n`);
+	process.stdout.write(`  --test=browser    Run Editor browser behavior tests.\n`);
+	process.stdout.write(`  --test=all        Run both Editor test groups.\n`);
 	process.exit(0);
 }
 
 if (unknownArguments.length > 0) {
 	process.stderr.write(`Unknown arguments: ${unknownArguments.join(', ')}\n`);
+	process.exit(2);
+}
+
+if (testMode && !knownTestModes.has(testMode)) {
+	process.stderr.write(`Unknown test mode: ${testMode}\n`);
 	process.exit(2);
 }
 
@@ -27,7 +38,14 @@ failed = !runLedgerCheck() || failed;
 failed = !runFileSetAudit() || failed;
 failed = !runMemberAudit() || failed;
 failed = !runDiffCheck() || failed;
-if (!structureOnly) failed = !runTypecheck() || failed;
+if (!structureOnly) {
+	failed = !runTypecheck() || failed;
+	if (testMode) {
+		failed = !runBehaviorTests() || failed;
+	} else {
+		process.stdout.write(`\n[behavior tests] not selected; this is not final behavior verification\n`);
+	}
+}
 
 const finalJavaScript = readUntrackedJavaScript();
 const generatedJavaScript = [...finalJavaScript].filter(path => !initialJavaScript.has(path));
@@ -109,6 +127,22 @@ function runTypecheck() {
 	if (result.stdout) process.stdout.write(result.stdout);
 	if (result.stderr) process.stderr.write(result.stderr);
 	if (result.status !== 0) process.stderr.write(`[typecheck:stanza] FAILED with exit code ${result.status}\n`);
+	return result.status === 0;
+}
+
+function runBehaviorTests() {
+	const script = {
+		unit: 'test:editor:unit',
+		browser: 'test:editor:browser',
+		all: 'test:editor',
+	}[testMode];
+	process.stdout.write(`\n[behavior tests: ${testMode}]\n`);
+	const result = process.platform === 'win32'
+		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `corepack pnpm --dir zeta-ts run ${script}`])
+		: run('corepack', ['pnpm', '--dir', 'zeta-ts', 'run', script]);
+	if (result.stdout) process.stdout.write(result.stdout);
+	if (result.stderr) process.stderr.write(result.stderr);
+	if (result.status !== 0) process.stderr.write(`[behavior tests: ${testMode}] FAILED with exit code ${result.status}\n`);
 	return result.status === 0;
 }
 
