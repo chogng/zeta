@@ -6,7 +6,7 @@
 
 - 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 727 个；381 个同路径，209 个仅本地，346 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：初始确认 118 组同名声明结构差异，已处理 34 组，剩余 84 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
+- 账目摘要：初始确认 118 组同名声明结构差异，已处理 37 组，剩余 81 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
 - 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题，也不新增 Editor 生产文件。
 - 用户已确认仅本地项的处理原则：架构文档明确归属的 Zeta 专属能力按既有职责保留；与 VS Code 重叠的职责迁回对应路径。文件删除仍需在每批执行前按准确路径、原因、剩余调用方和 Git 可恢复性单独确认。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
@@ -53,6 +53,9 @@
 | `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 公开成员差异归零；从计算后的编辑器配置和主题类型生成不可变行渲染快照，由 `ViewLines` 持有并在配置变化时比较后通知已渲染行；段落方向、制表宽度和 GPU 输入不再错误归入该类型，定向测试覆盖全部快照字段、相等比较与调用链 |
 | `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 类成员差异归零，只保留准备与逐行输出抽象契约；可见行临时 DOM 由 `viewLayer.ts` 的通用行投影负责，各具体 overlay 自己持有输出并实现 `render`，不再由基类藏一份共享状态 |
 | `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 公开构造和成员契约归零；正文与边栏覆盖层共享 `ViewContext` 的配置、焦点、选区、换行坐标和释放链，主题系统提供聚焦、失焦及高对比度颜色，组件 CSS 负责状态投影。定向测试覆盖焦点、选区与正文/边栏 class，真实 Chromium 验证自定义主题切换和高对比度边框 |
+| `browser/viewParts/rulers/rulers.ts` | `Rulers` | 公开成员差异归零；配置与字体变化从 `ViewContext` 读取，滚动尺寸变化触发重绘，DOM 标尺节点按数量稳定复用并随 Part 释放；CSS 使用 Zeta 类名与主题 token，定向测试覆盖配置、几何、颜色、节点复用和释放 |
+| `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 公开成员差异归零；CPU 与 GPU 路径共享同一标尺配置和主题颜色，GPU 矩形按设备像素比与文字起点更新、按数量复用并随 Part 释放，定向测试覆盖配置、主题切换、缓存和释放 |
+| `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 公开成员差异归零；独立 Part 读取可见装饰并持有稳定块级 DOM，配置、滚动、装饰和 View Zone 事件进入统一渲染链，组件 CSS 使用实际 Zeta 类名且不拦截输入；测试覆盖块级几何、节点复用、可访问性属性和布局变化 |
 
 ## 尚未补齐的同名契约
 
@@ -84,8 +87,6 @@
 | `browser/view/viewOverlays.ts` | `ViewOverlays` | 拥有覆盖层集合、统一可见行 DOM、字体、焦点、正文及边栏几何和子层生命周期；`ContentViewOverlays` / `MarginViewOverlays` 分别投影两类根层 |
 | `browser/view/viewController.ts` | `ViewController` | 已只负责命令、组合输入协调、焦点调用和 `dispatchMouse` 选区策略；输入 Part 的创建、渲染与释放已迁入 `View`，剪贴板委托和剩余公开成员仍待收敛 |
 | `browser/viewParts/gpuMark/gpuMark.ts` | `GpuMarkOverlay` | 本地职责已改名或移出上游 owner |
-| `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 本地职责已改名或移出上游 owner |
-| `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 已作为独立 `ViewPart` 持有块级 DOM，不再混入逐行覆盖层 |
 | `browser/viewParts/contentWidgets/contentWidgets.ts` | `ViewContentWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
 | `browser/viewParts/decorations/decorations.ts` | `DecorationsOverlay` | 已恢复逐行片段职责、装饰快照和失效事件 owner，并由 `ContentViewOverlays` 持有 |
 | `browser/viewParts/editorScrollbar/editorScrollbar.ts` | `EditorScrollbar` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
@@ -98,8 +99,7 @@
 | `browser/viewParts/minimap/minimap.ts` | `Minimap` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
 | `browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` | `DecorationsOverviewRuler` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
 | `browser/viewParts/overviewRuler/overviewRuler.ts` | `OverviewRuler` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/rulers/rulers.ts` | `Rulers` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/scrollDecoration/scrollDecoration.ts` | `ScrollDecorationViewPart` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
+| `browser/viewParts/scrollDecoration/scrollDecoration.ts` | `ScrollDecorationViewPart` | 配置、滚动、渲染、主题色、CSS 和释放链已补齐；本地公开 `domNode` 与上游 `getDomNode()` 仍是一增一缺，需用户决定后再移除旧接口，不能并存两个入口 |
 | `browser/viewParts/selections/selections.ts` | `SelectionsOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
 | `browser/viewParts/viewCursors/viewCursor.ts` | `ViewCursor` | 已恢复公开名并由 `ViewCursors` 独立持有 |
 | `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 已从逐行覆盖层移回独立 `ViewPart`，持有光标 DOM、组合输入显示和移动动画 |

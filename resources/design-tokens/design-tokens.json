@@ -1082,6 +1082,26 @@
       }
     },
     {
+      "id": "scrollbar.shadow",
+      "kind": "color",
+      "cssVariable": "--zeta-scrollbar-shadow",
+      "owner": "platform.theme.components",
+      "description": "Scrollbar shadow indicating that the editor is scrolled.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#000000",
+        "light": "#dddddd",
+        "high-contrast-dark": "#000000",
+        "high-contrast-light": "#dddddd"
+      },
+      "values": {
+        "dark": "#000000",
+        "light": "#dddddd",
+        "high-contrast-dark": "#000000",
+        "high-contrast-light": "#dddddd"
+      }
+    },
+    {
       "id": "scrollbar.sliderBackground",
       "kind": "color",
       "cssVariable": "--zeta-scrollbar-slider-background",

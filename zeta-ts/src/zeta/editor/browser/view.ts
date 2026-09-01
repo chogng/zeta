@@ -542,7 +542,7 @@ export class View extends ViewEventHandler {
 			this.viewCursors.domNode,
 			this.contentWidgets.domNode.domNode,
 			this.margin.domNode,
-			blockDecorations.domNode,
+			blockDecorations.domNode.domNode,
 			...(rulersDomNode ? [rulersDomNode] : []),
 		);
 		this.element.append(

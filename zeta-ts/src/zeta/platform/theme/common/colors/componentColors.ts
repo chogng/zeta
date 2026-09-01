@@ -42,6 +42,7 @@ export const keybindingLabelForeground = color("keybindingLabel.foreground", "#c
 export const keybindingLabelBackground = color("keybindingLabel.background", "#8080802b", "#dddddd66", "Keybinding label background.");
 export const keybindingLabelBorder = color("keybindingLabel.border", "#80808033", "#cccccc66", "Keybinding label border.");
 export const keybindingLabelBottomBorder = color("keybindingLabel.bottomBorder", "#6b6b6b", "#b0b0b0", "Keybinding label bottom border.");
+export const scrollbarShadow = color("scrollbar.shadow", "#000000", "#dddddd", "Scrollbar shadow indicating that the editor is scrolled.");
 export const scrollbarSliderBackground = color("scrollbar.sliderBackground", "#79797966", "#64646433", "Scrollbar slider background.");
 export const scrollbarSliderHoverBackground = color("scrollbar.sliderHoverBackground", "#646464b3", "#64646459", "Hovered scrollbar slider background.");
 export const scrollbarSliderActiveBackground = color("scrollbar.sliderActiveBackground", "#bfbfbf66", "#00000033", "Active scrollbar slider background.");

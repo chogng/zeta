@@ -94,6 +94,7 @@
           "keybindingLabel.background",
           "keybindingLabel.border",
           "keybindingLabel.bottomBorder",
+          "scrollbar.shadow",
           "scrollbar.sliderBackground",
           "scrollbar.sliderHoverBackground",
           "scrollbar.sliderActiveBackground",

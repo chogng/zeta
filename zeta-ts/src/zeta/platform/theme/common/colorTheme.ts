@@ -63,6 +63,7 @@ export const ColorId = Object.freeze({
 	keybindingLabelBackground: componentColors.keybindingLabelBackground,
 	keybindingLabelBorder: componentColors.keybindingLabelBorder,
 	keybindingLabelBottomBorder: componentColors.keybindingLabelBottomBorder,
+	scrollbarShadow: componentColors.scrollbarShadow,
 	scrollbarSliderBackground: componentColors.scrollbarSliderBackground,
 	scrollbarSliderHoverBackground: componentColors.scrollbarSliderHoverBackground,
 	scrollbarSliderActiveBackground: componentColors.scrollbarSliderActiveBackground,

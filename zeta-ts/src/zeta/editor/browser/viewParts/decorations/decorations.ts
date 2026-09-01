@@ -12,7 +12,7 @@ import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
 import { type EditorLineRange } from '../../../common/viewModel/editorViewportContracts.js';
 import { type DiagnosticOverviewMarker, type DiffOverviewMarker } from "../overviewRuler/overviewRuler.js";
-import { type RenderingContext } from "../../view/renderingContext.js";
+import { type RenderingContext, type RestrictedRenderingContext } from "../../view/renderingContext.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
@@ -600,7 +600,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		return this._renderResult[lineNumber - startLineNumber] ?? '';
 	}
 
-	public visibleDecorations(context: RenderingContext): readonly ResolvedDecoration[] {
+	public visibleDecorations(context: RestrictedRenderingContext): readonly ResolvedDecoration[] {
 		return this.resolveVisibleDecorations(context);
 	}
 
@@ -623,7 +623,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		this.markerRevision += 1;
 	}
 
-	private resolveVisibleDecorations(context: RenderingContext): readonly ResolvedDecoration[] {
+	private resolveVisibleDecorations(context: RestrictedRenderingContext): readonly ResolvedDecoration[] {
 		const projection = this.readVisualProjection();
 		const renderLines = { startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber };
 		let minimumLogicalLineIndex = Number.POSITIVE_INFINITY;

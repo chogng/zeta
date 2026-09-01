@@ -228,11 +228,19 @@ test("Line and block decoration parts project source presentation details", () =
 	assert.equal(thirdLine.querySelector(".stanza-editor-line-decoration"), null);
 
 	const block = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-block-decoration");
+	const blockContainer = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-block-decorations");
+	assert.equal(blockContainer.getAttribute("role"), "presentation");
+	assert.equal(blockContainer.getAttribute("aria-hidden"), "true");
 	assert.equal(block.classList.contains("stanza-test-block"), true);
 	assert.equal(block.style.left, "38px");
 	assert.equal(block.style.width, "164px");
 	assert.equal(block.style.top, "-1px");
 	assert.equal(block.style.height, "64px");
+
+	viewport.layout({ width: 240, height: 60 });
+	const resizedBlock = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-block-decoration");
+	assert.strictEqual(resizedBlock, block);
+	assert.equal(resizedBlock.style.width, "204px");
 	dom.window.close();
 });
 

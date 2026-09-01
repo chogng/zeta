@@ -2,16 +2,17 @@ import './blockDecorations.css';
 import { h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import * as viewEvents from '../../../common/viewEvents.js';
 import { DecorationsOverlay } from '../decorations/decorations.js';
 import { type ResolvedDecoration } from '../decorations/decorations.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type RenderingContext } from '../../view/renderingContext.js';
+import { type RenderingContext, type RestrictedRenderingContext } from '../../view/renderingContext.js';
 import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 export class BlockDecorations extends ViewPart {
-	public readonly domNode: HTMLDivElement;
+	public readonly domNode: FastDomNode<HTMLElement>;
 
-	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly decorations: DecorationsOverlay;
 	private readonly blocks: FastDomNode<HTMLDivElement>[] = [];
 
@@ -21,16 +22,34 @@ export class BlockDecorations extends ViewPart {
 		this.decorations = decorations;
 		const domNode = h(host.ownerDocument, 'div');
 		this._register(toDisposable(() => domNode.remove()));
-		this.domNode = domNode;
-		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName('stanza-editor-block-decorations');
+		this.domNode = new FastDomNode(domNode);
+		this.domNode.setClassName('stanza-editor-block-decorations');
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
 	}
 
-	public render(context: RenderingContext): void {
-		this.root.setWidth(context.scrollWidth);
-		this.root.setHeight(context.scrollHeight);
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		return event.hasChanged(EditorOption.layoutInfo);
+	}
+
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		return event.scrollTopChanged || event.scrollHeightChanged || event.scrollWidthChanged;
+	}
+
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
+
+	public override prepareRender(_context: RenderingContext): void {
+	}
+
+	public render(context: RestrictedRenderingContext): void {
+		this.domNode.setWidth(context.scrollWidth);
+		this.domNode.setHeight(context.scrollHeight);
 
 		let count = 0;
 		const decorations = this.decorations.visibleDecorations(context);
@@ -47,8 +66,8 @@ export class BlockDecorations extends ViewPart {
 
 			let block = this.blocks[count];
 			if (!block) {
-				block = new FastDomNode(h(this.domNode.ownerDocument, 'div'));
-				this.domNode.append(block.domNode);
+				block = new FastDomNode(h(this.domNode.domNode.ownerDocument, 'div'));
+				this.domNode.appendChild(block);
 				this.blocks.push(block);
 			}
 
@@ -79,7 +98,7 @@ interface BlockDecorationGeometry {
 }
 
 function resolveStanzaBlockDecorationGeometry(
-	context: RenderingContext,
+	context: RestrictedRenderingContext,
 	projection: EditorVisualLineProjection,
 	textLeft: number,
 	decoration: ResolvedDecoration,

@@ -1,7 +1,39 @@
-.stanza-editor .scroll-decoration {
+.stanza-editor .stanza-editor-scroll-decoration {
 	position: absolute;
 	top: 0;
 	left: 0;
+	pointer-events: none;
+}
+
+.stanza-editor .stanza-editor-scroll-decoration-shadow {
+	position: absolute;
+	left: 0;
+	width: 100%;
 	height: 6px;
-	box-shadow: var(--vscode-scrollbar-shadow) 0 6px 6px -6px inset;
+	opacity: 0;
+}
+
+.stanza-editor .stanza-editor-scroll-decoration-shadow.visible {
+	opacity: 1;
+}
+
+.stanza-editor .stanza-editor-scroll-decoration-shadow.top {
+	top: 0;
+	box-shadow: 0 6px 6px -6px var(--zeta-scrollbar-shadow) inset;
+}
+
+.stanza-editor .stanza-editor-scroll-decoration-shadow.bottom {
+	bottom: 0;
+	box-shadow: 0 -6px 6px -6px var(--zeta-scrollbar-shadow) inset;
+}
+
+[data-color-scheme="high-contrast-dark"] .stanza-editor .stanza-editor-scroll-decoration-shadow,
+[data-color-scheme="high-contrast-light"] .stanza-editor .stanza-editor-scroll-decoration-shadow {
+	box-shadow: none;
+}
+
+@media (forced-colors: active) {
+	.stanza-editor .stanza-editor-scroll-decoration-shadow {
+		box-shadow: none;
+	}
 }

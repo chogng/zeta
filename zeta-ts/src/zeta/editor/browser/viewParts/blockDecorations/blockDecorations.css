@@ -1,10 +1,12 @@
-.stanza-editor .blockDecorations-container {
+.stanza-editor .stanza-editor-block-decorations {
 	position: absolute;
 	top: 0;
+	left: 0;
 	pointer-events: none;
 }
 
-.stanza-editor .blockDecorations-block {
+.stanza-editor .stanza-editor-block-decoration {
 	position: absolute;
 	box-sizing: border-box;
+	pointer-events: none;
 }
