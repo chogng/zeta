@@ -1,119 +1,27 @@
 use std::panic::Location;
 
-use crate::ui::foundation::CornerRadii;
+use super::paint::{Border, BoxShadow};
 use crate::ui::foundation::Edges;
 use crate::ui::foundation::ElementId;
 use crate::ui::foundation::Rect;
 use crate::ui::foundation::Size;
+use crate::ui::foundation::{Color, CornerRadii};
 
 mod layout;
+mod style;
+mod validation;
 
 use layout::compute_element;
-
-/// Axis along which an [`Element`] arranges its direct children.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum ElementDirection {
-    #[default]
-    Horizontal,
-    Vertical,
-}
-
-/// Declarative length resolved by the element layout engine.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum ElementLength {
-    /// Consume the remaining length on the relevant axis.
-    #[default]
-    Fill,
-    /// Request an exact logical-pixel length, subject to clipping by the parent.
-    Pixels(f32),
-    /// Use the element's declared content size, or a container's children-derived natural size.
-    Content,
-}
-
-impl ElementLength {
-    pub const fn px(value: f32) -> Self {
-        Self::Pixels(value)
-    }
-}
-
-/// Distribution of direct children along an element's flow axis.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum JustifyContent {
-    #[default]
-    Start,
-    Center,
-    End,
-    SpaceBetween,
-}
-
-/// Placement of direct children across an element's flow axis.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum AlignItems {
-    #[default]
-    Start,
-    Center,
-    End,
-}
-
-/// Authored box and child-flow properties for one declarative [`Element`].
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ElementStyle {
-    direction: ElementDirection,
-    width: ElementLength,
-    height: ElementLength,
-    justify_content: JustifyContent,
-    align_items: AlignItems,
-    padding: Option<Edges>,
-    gap: Option<f32>,
-    corner_radii: Option<CornerRadii>,
-}
-
-impl ElementStyle {
-    const fn new(direction: ElementDirection) -> Self {
-        Self {
-            direction,
-            width: ElementLength::Fill,
-            height: ElementLength::Fill,
-            justify_content: JustifyContent::Start,
-            align_items: AlignItems::Start,
-            padding: None,
-            gap: None,
-            corner_radii: None,
-        }
-    }
-
-    pub const fn direction(self) -> ElementDirection {
-        self.direction
-    }
-
-    pub const fn width(self) -> ElementLength {
-        self.width
-    }
-
-    pub const fn height(self) -> ElementLength {
-        self.height
-    }
-
-    pub const fn justify_content(self) -> JustifyContent {
-        self.justify_content
-    }
-
-    pub const fn align_items(self) -> AlignItems {
-        self.align_items
-    }
-
-    pub const fn padding(self) -> Option<Edges> {
-        self.padding
-    }
-
-    pub const fn gap(self) -> Option<f32> {
-        self.gap
-    }
-
-    pub const fn corner_radii(self) -> Option<CornerRadii> {
-        self.corner_radii
-    }
-}
+pub use style::AlignItems;
+pub use style::ElementDirection;
+pub use style::ElementLength;
+pub use style::ElementOverflow;
+pub use style::ElementStyle;
+pub use style::JustifyContent;
+pub use validation::ElementStyleError;
+pub use validation::ElementStyleErrorKind;
+pub use validation::ElementStyleProperty;
+use validation::validate_element;
 
 /// Declarative UI node consumed by zui layout before paint and inspection.
 ///
@@ -133,25 +41,55 @@ pub struct Element {
 impl Element {
     #[track_caller]
     pub fn leaf(name: &'static str) -> Self {
-        Self::new(name, ElementDirection::Horizontal)
+        Self::styled(name, ElementStyle::leaf())
     }
 
     #[track_caller]
     pub fn row(name: &'static str) -> Self {
-        Self::new(name, ElementDirection::Horizontal)
+        Self::styled(name, ElementStyle::row())
     }
 
     #[track_caller]
     pub fn column(name: &'static str) -> Self {
-        Self::new(name, ElementDirection::Vertical)
+        Self::styled(name, ElementStyle::column())
     }
 
     #[track_caller]
-    fn new(name: &'static str, direction: ElementDirection) -> Self {
+    pub fn leaf_with_style(name: &'static str, style: ElementStyle) -> Self {
+        Self::styled_with_direction(name, ElementDirection::Horizontal, style)
+    }
+
+    #[track_caller]
+    pub fn row_with_style(name: &'static str, style: ElementStyle) -> Self {
+        Self::styled_with_direction(name, ElementDirection::Horizontal, style)
+    }
+
+    #[track_caller]
+    pub fn column_with_style(name: &'static str, style: ElementStyle) -> Self {
+        Self::styled_with_direction(name, ElementDirection::Vertical, style)
+    }
+
+    #[track_caller]
+    fn styled_with_direction(
+        name: &'static str,
+        expected: ElementDirection,
+        style: ElementStyle,
+    ) -> Self {
+        assert_eq!(
+            style.direction(),
+            expected,
+            "{name} style direction must match its declared element direction"
+        );
+        Self::styled(name, style)
+    }
+
+    /// Creates a node from a reusable typed style declared by the caller.
+    #[track_caller]
+    pub fn styled(name: &'static str, style: ElementStyle) -> Self {
         let location = Location::caller();
         Self {
             name,
-            style: ElementStyle::new(direction),
+            style,
             children: Vec::new(),
             content_size: None,
             source_file: location.file(),
@@ -160,50 +98,63 @@ impl Element {
     }
 
     pub const fn width(mut self, width: ElementLength) -> Self {
-        self.style.width = width;
+        self.style = self.style.with_width(width);
         self
     }
 
     pub const fn height(mut self, height: ElementLength) -> Self {
-        self.style.height = height;
+        self.style = self.style.with_height(height);
         self
     }
 
     pub const fn justify_content(mut self, justify_content: JustifyContent) -> Self {
-        self.style.justify_content = justify_content;
+        self.style = self.style.with_justify_content(justify_content);
         self
     }
 
     pub const fn align_items(mut self, align_items: AlignItems) -> Self {
-        self.style.align_items = align_items;
+        self.style = self.style.with_align_items(align_items);
         self
     }
 
     /// Declares the natural size of content that is not represented by child elements.
     pub fn content_size(mut self, size: Size) -> Self {
-        assert!(
-            size.width.is_finite()
-                && size.width >= 0.0
-                && size.height.is_finite()
-                && size.height >= 0.0,
-            "Element content size must be finite and non-negative"
-        );
         self.content_size = Some(size);
         self
     }
 
     pub const fn padding(mut self, padding: Edges) -> Self {
-        self.style.padding = Some(padding);
+        self.style = self.style.with_padding(padding);
         self
     }
 
     pub const fn gap(mut self, gap: f32) -> Self {
-        self.style.gap = Some(gap);
+        self.style = self.style.with_gap(gap);
         self
     }
 
     pub const fn corner_radii(mut self, corner_radii: CornerRadii) -> Self {
-        self.style.corner_radii = Some(corner_radii);
+        self.style = self.style.with_corner_radii(corner_radii);
+        self
+    }
+
+    pub const fn background(mut self, background: Color) -> Self {
+        self.style = self.style.with_background(background);
+        self
+    }
+
+    pub const fn border(mut self, border: Border) -> Self {
+        self.style = self.style.with_border(border);
+        self
+    }
+
+    pub const fn shadow(mut self, shadow: BoxShadow) -> Self {
+        self.style = self.style.with_shadow(shadow);
+        self
+    }
+
+    pub const fn overflow(mut self, overflow: ElementOverflow) -> Self {
+        self.style = self.style.with_overflow(overflow);
         self
     }
 
@@ -263,10 +214,17 @@ impl ComponentElement {
     }
 
     pub fn compute(&self) -> ComputedElement {
+        self.try_compute()
+            .unwrap_or_else(|error| panic!("invalid element style: {error}"))
+    }
+
+    /// Validates the full authored tree before resolving any layout geometry.
+    pub fn try_compute(&self) -> Result<ComputedElement, ElementStyleError> {
+        validate_element(&self.root, self.bounds)?;
         let mut computed = compute_element(&self.root, self.bounds);
         computed.identity = self.identity;
         computed.inspection_label = self.inspection_label.clone();
-        computed
+        Ok(computed)
     }
 
     pub(crate) const fn is_overlay(&self) -> bool {

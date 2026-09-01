@@ -1,6 +1,8 @@
 use super::AlignItems;
 use super::Element;
 use super::ElementLength;
+use super::ElementStyleErrorKind;
+use super::ElementStyleProperty;
 use super::JustifyContent;
 use crate::CornerRadii;
 use crate::Edges;
@@ -159,4 +161,30 @@ fn space_between_distributes_free_space_and_cross_axis_end_alignment() {
         layout.gap_regions(),
         &[Rect::from_xywh(10.0, 0.0, 80.0, 30.0)]
     );
+}
+
+#[test]
+fn validation_reports_nested_path_property_and_source_before_layout() {
+    let element = Element::column("Settings")
+        .child(Element::row("Search").gap(-1.0))
+        .in_bounds(Rect::from_xywh(0.0, 0.0, 100.0, 80.0));
+
+    let error = element.try_compute().unwrap_err();
+
+    assert_eq!(error.path(), &["Settings", "Search"]);
+    assert_eq!(error.property(), ElementStyleProperty::Gap);
+    assert_eq!(error.kind(), ElementStyleErrorKind::Negative);
+    assert!(error.source_file().ends_with("element_tests.rs"));
+    assert!(error.to_string().contains("Settings/Search.gap"));
+}
+
+#[test]
+fn validation_rejects_non_finite_root_bounds() {
+    let element = Element::leaf("Panel").in_bounds(Rect::from_xywh(f32::NAN, 0.0, 100.0, 80.0));
+
+    let error = element.try_compute().unwrap_err();
+
+    assert_eq!(error.path(), &["Panel"]);
+    assert_eq!(error.property(), ElementStyleProperty::Bounds);
+    assert_eq!(error.kind(), ElementStyleErrorKind::NonFinite);
 }

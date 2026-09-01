@@ -1,6 +1,6 @@
 # Native UI：编写与样式契约
 
-> 状态：Current contract。本文是 `zui`、`zeta-ui-components`、`zeta-workbench` 与 `app` product host 之间的 UI 编写和样式边界；具体 crate API 由 [`zui` README](../zui/README.md)、[`zeta-ui-components` README](../ui-components/README.md) 和 [`zeta-workbench` README](../workbench/README.md) 维护。
+> 状态：Current contract。本文是 `zui`、`zeta-ui-components`、`zeta-workbench` 与 `app` product host 之间的 UI 编写和样式边界；ZUI 节点样式语法和错误边界见 [`ZUI 声明式节点与样式`](zui-declarative-styles.md)，具体 crate API 由 [`zui` README](../zui/README.md)、[`zeta-ui-components` README](../ui-components/README.md) 和 [`zeta-workbench` README](../workbench/README.md) 维护。
 
 app 的具体圆角、间距和浮层视觉规格由 [`UI 样式设计规范`](ui-design-guidelines.md) 维护；本文只负责样式进入组件的技术边界。
 
@@ -10,7 +10,7 @@ Native UI 使用 Rust 声明组件结构和布局，使用 typed style struct �
 
 | 想表达什么 | 当前写法 | 谁拥有含义 | 是否允许调用方穿透覆盖 |
 | --- | --- | --- | --- |
-| 组件树与基础布局 | `Element::leaf`、`Element::row`、`Element::column` 及其 builder | `zui::ui::presentation` | 否；通过公开的 Element API 表达 |
+| 组件树、基础布局和方框外观 | `style!` / `ui!`，或对应的 `ElementStyle` / `Element` builder | `zui::ui::presentation` | 否；通过公开的类型化 API 表达 |
 | Button、RadioGroup、InputBox 等组件外观 | `ButtonStyle`、`RadioGroupStyle`、`InputBoxStyle` 等 typed style | `zeta-ui-components` 组件 | 否；通过 style、state 或 named variant 传入 |
 | 主题颜色和标准尺寸 | `ThemeSnapshot` 到 product palette，再到组件 style | `zeta-theme` 与各宿主投影 | 否；不在组件中复制主题值 |
 | hover、focus、selected、disabled | host 投影的 typed state | 交互/产品 host 判定，组件解释视觉 | 否；组件不自行猜测业务状态 |
@@ -68,9 +68,9 @@ Native UI 当前明确不提供以下能力：
 新增一个有 box geometry 的组件时，按以下顺序实现：
 
 1. 让 host 决定产品状态、稳定 `ElementId`、外部 bounds 和需要传入的 presentation state。
-2. 在 `Component::element` 中返回一个 `ComponentElement`，用 `Element` 描述根节点和组件拥有的子节点 flow。
+2. 在 `Component::element` 中返回一个 `ComponentElement`，用 `ui!` 或 `Element` 描述根节点和组件拥有的子节点 flow。
 3. 让组件 style struct 表达外观参数，例如背景状态、文字、边框、圆角、padding、icon size 和 content gap。
-4. 在 `Component::paint_element` 或 `Component::compose` 中消费同一次计算得到的 `ComputedElement`，不要重新计算根 bounds。
+4. 背景、边框、圆角和阴影写入节点样式，由 ZUI 自动绘制；复杂内容在 `Component::paint_element` 或 `Component::compose` 中消费同一次计算得到的 `ComputedElement`，不要重新计算根 bounds。
 5. 用 `UiScene::draw_component` 或 `ComponentContext::draw_component` 组合子组件，使 paint、inspection、interaction 和 accessibility 共享同一棵组合树。
 6. 需要跨帧 presentation state 时，让 host 持有 `ComponentRuntime`，通过 `UiFrame::with_component_runtime` 组合；组件根必须有稳定 identity，并使用有名称的 `ComponentSlot` 保存 local state、订阅外部 `ViewState` 或保留 RAII resource。
 7. 为新增的布局、状态和视觉语义补充 component test，至少验证 computed geometry、状态绘制、hit-test、invalidation 和 unmount cleanup 使用相同边界。
@@ -107,7 +107,7 @@ let button_style = ButtonStyle::new(
 
 ### 4.1 `Element` 负责基础流程
 
-当前 `ElementStyle` 只表达以下属性：
+当前 `ElementStyle` 表达以下属性：
 
 | 属性 | 当前语义 | 当前 API |
 | --- | --- | --- |
@@ -118,6 +118,8 @@ let button_style = ButtonStyle::new(
 | 内边距 | 内容区域的 top/right/bottom/left inset | `.padding(Edges)` |
 | 子节点间距 | 相邻直接子节点之间的 gap | `.gap(f32)` |
 | 圆角 | 当前节点的 rounded-rect presentation metadata | `.corner_radii(CornerRadii)` |
+| 方框外观 | 背景、边框和阴影随 computed bounds 自动绘制 | `.background(...)` / `.border(...)` / `.shadow(...)` |
+| 溢出 | 可见或按节点圆角裁剪子树与 custom content | `.overflow(ElementOverflow)` |
 | 子树 | 直接子节点顺序 | `.child(...)` / `.children(...)` |
 
 布局使用 logical UI pixels；DPI 转换只属于 renderer。`ComponentElement::compute` 产生的 `ComputedElement` 是 paint、hit-test 和 inspection 的共同几何来源。`ElementStyle` 的实现和当前字段以 [`element.rs`](../zui/src/ui/presentation/element.rs) 为准。

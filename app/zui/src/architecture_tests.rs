@@ -154,9 +154,15 @@ fn backend_neutral_layers_only_depend_in_the_declared_direction() {
             }
             let source = fs::read_to_string(&path).expect("zui source should be readable");
             for (index, line) in source.lines().enumerate() {
-                let Some(crate_path) = line.find("crate::").map(|offset| &line[offset..]) else {
+                let Some(offset) = line.find("crate::") else {
                     continue;
                 };
+                // Exported macros must use `$crate` so they still resolve after downstream
+                // renaming. That hygiene path is not a source-layer dependency.
+                if offset > 0 && line.as_bytes()[offset - 1] == b'$' {
+                    continue;
+                }
+                let crate_path = &line[offset..];
                 if line.trim_start().starts_with("//")
                     || rule
                         .allowed_crate_paths

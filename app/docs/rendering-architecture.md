@@ -45,8 +45,9 @@ flowchart LR
 | Product | Session、PTY、App Server、command 与 authoritative state transition | 直接依赖内部 platform/GPU 实现 |
 
 布局检查器消费 `UiScene` 同步生成的 `InspectionFrame`。所有 `Component` 和产品 composition
-surface 都先声明 `Element`；computed layout 自动生成尺寸、padding、gap、radius、实际 gap region、
-authored style 与声明位置。采集发生在 renderer 之前，因此切换 GPU API 不会改变检查结果。
+surface 都先声明 `Element`；进入 scene 前递归校验整棵树，computed layout 自动生成尺寸、padding、
+gap、radius、实际 gap region、authored style 与声明位置，节点背景、边框、圆角和阴影随后自动进入
+scene。采集和基础方框绘制都发生在 renderer 之前，因此切换 GPU API 不会改变检查结果。
 
 `ShellPresentation` 以 `zui::ui::UiFrame<InteractionFrame>` 作为单一 frame owner，再保存
 accessibility projection；只有 `UiScene` 交给 `Renderer`。命中、焦点、cursor、command dispatch
@@ -54,8 +55,8 @@ accessibility projection；只有 `UiScene` 交给 `Renderer`。命中、焦点�
 
 ## 当前执行流程
 
-1. Component 通过 `UiScene::draw_component` 组合子组件；`Component::element` 只解析一次
-   `ComputedElement`，同源驱动 inspection 与 paint。
+1. Component 通过 `UiScene::draw_component` 组合子组件；`Component::element` 先完成整树校验，再只解析一次
+   `ComputedElement`，同源驱动基础方框、clip、inspection 与 custom paint。
 2. `UiScene` 按 composition layer 与 primitive 插入顺序产生连续 `SceneBatch`，跨 primitive
    类型的覆盖顺序不得被 renderer 重排。
 3. Product 保存同一 frame 派生的 scene、inspection、interaction 与 accessibility snapshot，不获得
