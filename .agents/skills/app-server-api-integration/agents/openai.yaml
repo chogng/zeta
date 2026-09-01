@@ -1,4 +1,4 @@
 interface:
   display_name: "App Server API Integration"
-  short_description: "Connect desktop domains to a Rust app-server"
-  default_prompt: "Use $app-server-api-integration to replace the TypeScript backend runtime with a Rust app-server while preserving frontend domain services, per-renderer connections, exact file ownership, and conflict gating."
+  short_description: "Make app-server the product business backend"
+  default_prompt: "Use $app-server-api-integration to expand a Rust app-server into the product business backend while preserving the TypeScript editor platform, with domain-owned crates, renderer-owned protocol clients, a transparent Main relay, exact ownership, and conflict gating."

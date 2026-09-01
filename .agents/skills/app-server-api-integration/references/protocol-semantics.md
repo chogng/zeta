@@ -139,7 +139,7 @@ Rust 需要 approval、用户输入、权限确认或宿主能力时发送 typed
 
 | handler 所需能力 | owner |
 | --- | --- |
-| renderer 已有的交互与领域 service | 对应领域 adapter；Thread UI 才使用 `src/sessions/contrib/providers/appServer/browser/` |
+| renderer 已有的交互与领域 service | 对应领域 adapter；Thread UI 才使用 `src/sessions/contrib/providers/agentHost/browser/` 下的 app-server adapter |
 | Main 才拥有的系统、进程或凭据能力 | renderer typed host adapter → 独立 Main named channel |
 | Rust 自己可以完成的领域行为 | 不发送 server request，直接调用 Rust 领域能力 |
 
@@ -180,7 +180,7 @@ Rust 需要 approval、用户输入、权限确认或宿主能力时发送 typed
 4. 发送 `initialized` notification；
 5. 进入 `Ready` 并开放领域 request。
 
-初始化期间到达的已知 notification/server request 继续读取并按协议暂存；未知 server request 立即拒绝，不能阻塞 reader。生成物与打包后端按 [前置能力补全](prerequisite-completion.md) 比较 protocol revision 与 schema hash；若允许独立升级，协议先提供版本区间协商，不能从 user agent string 推断。
+初始化期间到达的已知 notification/server request 继续读取并按协议暂存；未知 server request 立即拒绝，不能阻塞 reader。本地 frontend、生成物和打包 backend 使用同一固定 binary 版本，并校验 initialize response 与所需 capabilities；若允许远程或用户自备 backend 独立升级，先按 [前置能力补全](prerequisite-completion.md) 取得版本固定或兼容协商决定，不能从 user agent 或字段存在性猜测。
 
 renderer connection 关闭时停止接受新 request、关闭 transport、拒绝该 client pending、结束其 server request、资源和 listener。process 退出对所有 protocol client 产生同一 host failure，但每个 client 独立完成本地 close。新 connection 使用新代次，旧 ID 和消息不进入新 connection。
 

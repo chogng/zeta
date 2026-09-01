@@ -11,13 +11,16 @@
 - backend 是否有跨 macOS、Linux、Windows 的正式多 connection 本地 transport；
 - Project、Environment 或所需字段是否仍为实验 API；
 - 生成器是否提供 method map 与运行时 decoder；
+- 旧 Host protocol、TypeScript Host runtime 和 Main protocol routing 是否仍在生产调用链；
 - 当前领域 identity、process owner 或用户改动是否与最终 owner 冲突。
 
 缺口已有 [前置能力补全](prerequisite-completion.md) 定义且用户已授权修改对应后端范围时，先完成该前置能力再继续前端；后端不在授权范围、目标源码否定计划前提或需要改变公开兼容边界时，必须等待用户决定。禁止创建桥接文件、保留双入口、手写缺失协议，或继续实施依赖未决定冲突的步骤。
 
-## 1. 固定领域身份
+## 1. 固定迁移边界与领域身份
 
-先列出本次 API 的前端对象、后端对象与稳定 identity。文件、账户、配置、模型、skills、Project、Thread、process 等对象分别由自己的领域 service 表达，不能为了接入 app-server 改叫 Session。
+先用 [连接与所有权](connection-architecture.md) 的迁移判定确认本次能力属于 Rust 产品业务后端、TypeScript 编辑器平台或条件迁移。只有需要跨 renderer 或长期存活、能形成稳定可序列化 contract、且不依赖 editor/Electron 对象身份的能力才默认迁入 Rust。语言偏好、局部性能猜测或目录对称不能决定 owner。
+
+然后列出本次 API 的前端对象、后端对象与稳定 identity。文件、账户、配置、模型、skills、Project、Thread、process 等对象分别由自己的领域 service 表达，不能为了接入 app-server 改叫 Session。
 
 每个对象至少确定：
 
@@ -25,6 +28,8 @@
 | --- | --- |
 | 前端对象 | 哪个现有 service 或 contribution 是调用方 |
 | 后端对象 | 哪个 Rust 领域能力决定并保存状态 |
+| 迁移收益 | 持久化、并发、IO、安全、恢复或多产品复用中的哪一项真实成立 |
+| 前端保留状态 | 哪些 editor、extension、Workbench 或 Electron 状态不能跨协议复制 |
 | 稳定 identity | ID、URI、path、resource ID 或复合 key |
 | 生命周期 | 创建、更新、销毁、connection close 与 process exit |
 | 事件 | 初始 snapshot、增量 notification 与无缺口规则 |
@@ -51,7 +56,7 @@ src/workbench/services/<domain>/electron-browser/<domain>AppServerAdapter.ts
 
 ```text
 src/sessions/services/sessions/common/
-src/sessions/contrib/providers/appServer/browser/
+src/sessions/contrib/providers/agentHost/browser/
 ```
 
 契约必须明确 input、result、领域错误、observable/event、初始 snapshot、capability、取消和 dispose；涉及 draft Session 时再增加 replacement。前端领域名按用户行为命名，不复用线上 method。领域 interface 不导入生成 DTO、transport state、request ID 或 error envelope。
@@ -123,6 +128,16 @@ Main 不能持有 protocol pending、执行 initialize 或替领域调用方选�
 
 若生成结果只有 union 和分散 response type，或没有运行时 decoder，停止前端实现并按 [前置能力补全](prerequisite-completion.md) 修改 `../app-server-protocol/src/export.rs` 与实际生成 owner。用户未授权后端修改或生成 owner 与 reference 冲突时再执行冲突门禁。不能在前端手写 map、type guard、重复 DTO 或用类型断言绕过。
 
+前端通过固定后端版本运行生成命令，直接写入 renderer 可导入的最终目录：
+
+```text
+build/app-server/generate-protocol.mjs
+build/app-server/check-protocol-sync.ts
+src/platform/agentHost/common/appServerProtocol/generated/
+```
+
+同步检查必须在临时目录重新生成并逐字节比较，不从并列 checkout 复制一个可能与打包 binary 不同的 schema。生成路径从旧 TypeScript Host 的 `node/` 子树迁出后，只保留这一份 committed 生成物。
+
 ## 6. 接入 Rust processor 与多 connection transport
 
 领域 processor 放在：
@@ -147,8 +162,9 @@ transport 只产生 opened/closed/message，使用有界队列并保持每条 co
 文件位置：
 
 ```text
-src/platform/appServer/common/appServerProtocol.ts
-src/platform/appServer/browser/appServerProtocolClient.ts
+src/platform/agentHost/common/appServerProtocol/appServerProtocol.ts
+src/platform/agentHost/common/appServerProtocol/generated/
+src/platform/agentHost/browser/appServerProtocolClient.ts
 ```
 
 client 消费生成 map，并拥有该 renderer connection 的 request ID、client pending、server pending、initialize、generated decoder、notification listener、server request handler、connection generation 和 close。
@@ -179,10 +195,10 @@ transport frame 以 `unknown` 进入 decoder；client 不暴露 raw message、`i
 文件位置：
 
 ```text
-src/platform/appServer/electron-main/appServerStarter.ts
-src/platform/appServer/electron-main/appServerConnectionRelay.ts
-src/platform/appServer/electron-browser/appServerMessagePortTransport.ts
-src/platform/appServer/electron-browser/localAppServerService.ts
+src/platform/agentHost/electron-main/electronAgentHostStarter.ts
+src/platform/agentHost/electron-main/appServerConnectionRelay.ts
+src/platform/agentHost/electron-browser/appServerMessagePortTransport.ts
+src/platform/agentHost/electron-browser/localAgentHostService.ts
 ```
 
 starter 负责 executable resolution、process spawn、restart、shutdown 和致命退出。renderer 使用 nonce 请求 connection；relay 打开独立 backend connection，把专属 MessagePort 交给 renderer，并在任一侧关闭时释放这一对资源。
@@ -195,7 +211,7 @@ relay 只转发 frame、执行背压和有限诊断。以下代码出现即表�
 - 在 Main 根据领域对象、Workspace 或 active window 选 connection；
 - 为不同 renderer 复用同一 backend connection。
 
-`localAppServerService` 在 renderer 取得 transport、创建一个 protocol client，并向上提供小而明确的 host service。它不拥有 UI 领域状态或 Project 持久化。
+`localAgentHostService` 在 renderer 取得 transport、创建唯一 protocol client，并把它注入真实领域 adapter。它保留前端 Host service 的公开契约，但不实现旧 Host 线上协议，不拥有 UI 领域状态或 Project 持久化。
 
 ## 9. 实现领域 adapter
 
@@ -208,7 +224,7 @@ src/workbench/services/<domain>/electron-browser/<domain>AppServerAdapter.ts
 
 只选择与现有领域 owner 一致的一条路径，不同时创建两层同义 adapter。领域 adapter：
 
-- 只依赖小而明确的 host service，不接触 MessagePort、raw envelope 或 Main channel；
+- 只依赖 protocol client 的 typed contract，不接触 MessagePort、raw envelope 或 Main channel；
 - 把前端领域 input 机械转换为生成 params，把生成 response 转为领域 result；
 - 把稳定 code/data 转为领域错误；
 - 从 snapshot 与 notification 更新 renderer 内的 observable facade；
@@ -218,8 +234,8 @@ src/workbench/services/<domain>/electron-browser/<domain>AppServerAdapter.ts
 只有 backend Thread 要进入 Agents Window 时，才增加：
 
 ```text
-src/sessions/contrib/providers/appServer/browser/appServerSessionsProvider.ts
-src/sessions/contrib/providers/appServer/browser/appServerSessionAdapter.ts
+src/sessions/contrib/providers/agentHost/browser/appServerSessionsProvider.ts
+src/sessions/contrib/providers/agentHost/browser/appServerSessionAdapter.ts
 ```
 
 此时 Provider 注册稳定 provider ID、label、icon、session types 与 capabilities，从 Thread catalog 建立 Session facade，用 `providerId + resource` 生成 canonical Session ID，把 cwd 与 roots 表达为 Workspace，并在 `thread/start` 后触发 draft replacement。Session adapter 只保存 observable facade 与 backend resource，不复制 transcript 或持久化 Thread。只有后端完整支持时才声明 multi-chat、Project 或 Environment capability。
@@ -246,13 +262,14 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 
 ## 13. 产品装配
 
-`src/code/electron-main/app.ts` 只创建 starter/relay、绑定应用生命周期并注册 connection acquisition。renderer main entry 注册 `localAppServerService`，各领域装配点注册真实 adapter；只有 Thread UI 接入时，Sessions entry 才注册 Provider。装配文件不解析 JSON、不转换 DTO、不实现领域 switch，也不保存领域状态。
+`src/code/electron-main/app.ts` 只创建 starter/relay、绑定应用生命周期并注册 connection acquisition。renderer main entry 注册 `localAgentHostService`、唯一 protocol client 和各领域 adapter；只有 Thread UI 接入时，Sessions entry 才注册 Provider。装配文件不解析 JSON、不转换 DTO、不实现领域 switch，也不保存领域状态。
 
 ## 14. 让错误 owner 退场
 
 用户已解决冲突门禁后，同批迁移调用方并移除：
 
 - Main 中的 protocol connection、request pending、initialize 和 method routing；
+- 旧 Host protocol client、action/state envelope、TypeScript Host runtime 启动和生产注册；
 - 每窗口、每 Project、每 Workspace 或每领域 process；
 - 多余的 frontend ID → backend ID persistence；Thread UI 中尤其禁止随机 Session ID 映射；
 - 手写线上 DTO、method constant、response map 与 decoder；
@@ -264,11 +281,11 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 
 | 层 | 必测行为 |
 | --- | --- |
-| protocol generator | method maps、runtime decoders、启动记录、有效/无效 fixture、frontend 镜像与 schema hash、生成物无 diff |
+| protocol generator | method maps、runtime decoders、启动记录、有效/无效 fixture、固定版本逐字节同步、生成物无 diff |
 | Rust processor | DTO 转换、领域调用、结构化错误、serialization scope |
 | backend transport | token auth、机器可读启动记录、多 connection 隔离、跨平台 endpoint、背压、单 connection close、process close |
 | Main starter/relay | 一进程、多 renderer 独立 connection、启动失败清理、透明 frame、窗口 detach、process exit |
-| renderer protocol client | revision/hash initialize、unknown decode、双向 ID、request pairing、notification、server request、close |
+| renderer protocol client | fixed backend initialize、capability 校验、unknown decode、双向 ID、request pairing、notification、server request、close |
 | server request routing | 唯一 connection owner、connection-scoped callback、错误 connection 回复、owner close、不广播 |
 | 领域 adapter | input/result 转换、snapshot/event、领域错误、资源 lifecycle、不泄露生成 DTO |
 | Sessions Provider（涉及 Agents Window 时） | canonical Session ID、draft replacement、catalog、capabilities、fork/rollback semantics |
@@ -282,7 +299,7 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 使用 `rg` 与定向测试确认：
 
 - Main 没有 protocol parser、request ID、pending、initialize、method switch 或领域状态；
-- 每个 renderer 只有一个 host protocol client 和独立 backend connection；
+- 每个 renderer 只有一个 app-server protocol client 和独立 backend connection；
 - 一个 host 默认只有一个 process，Project/Workspace 不启动 process；
 - Main 只解码生成的启动记录，不解析 stderr banner；endpoint/token 不进入 renderer；
 - 普通调用方只经过所属领域 service 与 adapter，不经过通用 Sessions Provider；
@@ -290,7 +307,7 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 - 涉及 Agents Window 时，Provider、Project、Workspace、Environment、Session、Chat 和 Thread identity 未合并；
 - multi-chat capability 仅在 Agents Window 接入且后端有完整 Chat contract 时启用；
 - raw JSON 只以 `unknown` 进入 generated decoder；线上 method 只来自生成物；
-- frontend 协议镜像与 backend schema hash 一致，initialize revision/hash 不匹配时不进入 Ready；
+- frontend 生成物与打包 backend 使用同一固定 binary 版本，initialize response 或 capability 不满足时不进入 Ready；
 - 产品必需的 Project 与 Environment API 已进入稳定 schema；未使用的实验 API 没有被前端静默开启；
 - server request 不广播、不依赖 active window，Main host call 不接收线上 union；
 - 只有协议支持取消的操作才承诺结束后端工作；

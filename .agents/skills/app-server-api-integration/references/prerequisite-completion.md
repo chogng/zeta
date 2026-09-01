@@ -12,7 +12,7 @@
 | Main 无法可靠取得随机端口 | transport 启动信息与 Main starter | app-server 在专用 bootstrap 输出一条生成类型的启动记录；Main 不解析 stderr 文本 |
 | TypeScript 只有 request union | `../app-server-protocol/src/export.rs` | 生成 request、notification、server request map，并包含每个 request 的 response type |
 | `unknown` frame 没有运行时验证 | 同一协议生成器 | 生成 envelope、params、result、error、notification 和 server request decoder |
-| 客户端与后端版本只能靠 user agent 猜测 | initialize 协议与 processor | 初始化阶段明确比较协议 revision 与 schema hash，失败后不进入 Ready |
+| frontend 与 backend 版本关系未固定 | 打包、生成与 initialize owner | 本地 binary 与生成物使用同一固定版本；独立升级场景先定义兼容协商 |
 | 产品依赖实验 Project/Environment | 对应协议注册、DTO、processor 与 fixture | 只稳定真实调用方需要的方法和字段；稳定生成物不要求 `experimentalApi` |
 | 领域失败只能匹配 message | 协议错误 data 与 processor | 稳定 numeric code 加 tagged data，adapter 不解析英文 message |
 | server request 可能广播或落到错误窗口 | app-server outgoing owner | 每个 server request 只路由到一个明确 connection，并由同 connection 回复 |
@@ -22,7 +22,7 @@
 
 1. 完成正式本地多 connection transport、鉴权与机器可读启动握手。
 2. 完成协议 method map、运行时 decoder、生成 fixture 和生成物一致性检查。
-3. 完成 initialize 的协议兼容校验。
+3. 固定本地打包版本与远程独立升级的兼容契约。
 4. 稳定本次产品实际使用的实验 method、字段、notification 和错误语义。
 5. 固定 server request connection owner 与领域取消语义。
 6. 最后实现 renderer protocol client、领域 adapter 和可选 Sessions Provider。
@@ -69,10 +69,10 @@ app-server 绑定成功后在 stdout 输出且只输出一条 UTF-8 JSONL 启动
 前端文件位置：
 
 ```text
-src/platform/appServer/electron-main/appServerStarter.ts
-src/platform/appServer/electron-main/appServerConnectionRelay.ts
-src/platform/appServer/electron-browser/appServerMessagePortTransport.ts
-src/platform/appServer/electron-browser/localAppServerService.ts
+src/platform/agentHost/electron-main/electronAgentHostStarter.ts
+src/platform/agentHost/electron-main/appServerConnectionRelay.ts
+src/platform/agentHost/electron-browser/appServerMessagePortTransport.ts
+src/platform/agentHost/electron-browser/localAgentHostService.ts
 ```
 
 starter 读取并运行时验证启动记录，保存 endpoint 与进程代次。每个 renderer 使用一次性 nonce 请求 connection；relay 为该请求新建一条 WebSocket connection，通过 Authorization header 完成鉴权，再把 WebSocket frame 与 MessagePort frame 一一转发。relay 不解析线上 JSON-RPC，不复用 WebSocket，不缓存领域状态。
@@ -127,7 +127,7 @@ export interface AppServerServerRequestMap {
 
 运行时 decoder 必须验证 required 字段、tagged union、数组、对象、可空与可选字段、request ID、method membership 以及未知字段策略。它可以由生成器编译 JSON Schema 为 TypeScript 校验代码，但具体字段、tag 和 method 不能手写进 frontend。当前 generator 无法覆盖协议使用的 schema 子集时先扩展 generator；若扩展需要新增依赖或改变公开 schema 行为且没有用户决定，再执行冲突门禁。不能只验证 envelope 后对 params/result 使用 `as`。
 
-frontend 不从 sibling checkout 运行时导入生成物。`build/lib/appServerProtocol.ts` 把稳定输出机械复制到 `src/platform/appServer/common/protocol/generated/`，校验文件集合与 `schemaHash`，并提供只检查不写入的 CI 模式。镜像文件可以提交，但只能由同步任务更新；手改、遗漏文件或 backend 与 frontend hash 不同都使构建失败。
+frontend 不从 sibling checkout 运行时导入生成物。`build/app-server/generate-protocol.mjs` 运行固定版本的打包 backend generator，直接写入 `src/platform/agentHost/common/appServerProtocol/generated/`；`build/app-server/check-protocol-sync.ts` 在临时目录用同一固定版本重新生成并逐字节比较。生成物可以提交，但只能由生成任务更新；手改、遗漏文件、版本不匹配或重新生成有 diff 都使构建失败。
 
 生成 owner 与测试位置：
 
@@ -140,8 +140,9 @@ frontend 不从 sibling checkout 运行时导入生成物。`build/lib/appServer
 ../app-server-protocol/src/schema_fixtures_tests.rs
 ../app-server-protocol/schema/typescript/
 ../app-server-protocol/schema/json/
-build/lib/appServerProtocol.ts
-src/platform/appServer/common/protocol/generated/
+build/app-server/generate-protocol.mjs
+build/app-server/check-protocol-sync.ts
+src/platform/agentHost/common/appServerProtocol/generated/
 ```
 
 生成测试必须覆盖：
@@ -153,24 +154,15 @@ src/platform/appServer/common/protocol/generated/
 - 启动记录 decoder 拒绝未知 kind、未知 version、非 loopback endpoint、缺字段和多余安全敏感字段。
 - 预计算生成物与当前 registry 完全一致，生成后工作树无 diff。
 - `index.ts` 只导出生成文件，不引入 frontend adapter。
-- frontend 机械镜像与 backend 稳定输出文件集合、内容和 schema hash 完全一致。
+- frontend 生成物与固定版本 backend 重新生成的文件集合和内容完全一致。
 
-## 初始化兼容契约
+## 版本与初始化兼容契约
 
-打包的 frontend 与 app-server 默认采用锁步兼容：`protocolRevision` 是协议 owner 显式维护的递增整数，兼容性破坏时必须递增；生成器为稳定 method registry、DTO schema 和错误 data schema 计算确定性的 `schemaHash`。renderer 在 `initialize` 中发送二者，app-server 在处理任何领域 request 前精确比较，并在 response 中回显实际值。
+打包的本地 frontend 与 app-server 采用锁步版本：生成脚本、依赖清单和打包任务固定同一个 backend binary 版本，Main 只启动这份受控 executable。协议同步检查用这份 binary 重新生成并逐字节比较，因此本地运行时不再发明第二套协议版本字段。
 
-协议位置：
+每条 connection 仍必须执行现有 `initialize` → `initialized`，校验 response shape、预期 server identity 和本 renderer 真正实现的 capabilities。缺少必需 capability 时不进入 Ready；user agent 只用于诊断。
 
-```text
-../app-server-protocol/src/protocol/v1.rs
-../app-server-protocol/src/protocol/common.rs
-../app-server/src/request_processors/initialize_processor.rs
-../app-server/src/message_processor.rs
-```
-
-匹配成功后才发送 `initialized` 并进入 Ready。revision 或 hash 不匹配返回稳定 compatibility error，关闭该 connection，错误中包含服务端 revision/hash 但不包含本地路径。user agent 只用于诊断，不参与兼容判断。
-
-若产品明确允许 frontend 与 app-server 独立升级，必须先把精确匹配改为生成的版本区间协商，并定义向后兼容规则、移除窗口与矩阵测试；不能在 adapter 中忽略 hash 或按字段存在性猜版本。是否允许独立升级不明确时执行冲突门禁。
+如果产品需要连接能够独立升级的远程或用户自备 backend，现有锁步假设不成立。此时立即停下来询问用户选择：固定远端 binary 版本，还是授权修改 `../app-server-protocol/src/protocol/v1.rs`、`../app-server/src/request_processors/initialize_processor.rs` 和生成器，增加明确的兼容范围协商及矩阵测试。没有决定前不能按字段存在性猜版本，也不能静默忽略未知 method。
 
 ## 稳定产品依赖的实验 API
 
@@ -218,8 +210,7 @@ type AppServerDomainErrorData =
 	| { kind: 'notFound'; resource: string; id: string }
 	| { kind: 'conflict'; resource: string; expectedRevision?: string; actualRevision?: string }
 	| { kind: 'permissionDenied'; operation: string }
-	| { kind: 'invalidState'; resource: string; state: string; operation: string }
-	| { kind: 'compatibilityMismatch'; protocolRevision: number; schemaHash: string };
+	| { kind: 'invalidState'; resource: string; state: string; operation: string };
 ```
 
 这是 shape 示例；只生成真实 processor 会返回、前端调用方会区分的 variant。新增 variant 先进入 Rust 协议类型，再由 generator 输出；adapter 用 numeric code 与 `data.kind` 映射领域错误。
@@ -271,7 +262,7 @@ Thread catalog subscription 只授予 notification，不授予交互 request own
 | --- | --- |
 | transport | 三平台测试、机器可读启动记录、token auth、多 connection 隔离、bounded queue |
 | generator | 三张 method map、运行时 decoder、有效/无效 fixture、生成物无 diff |
-| initialize | revision/hash 匹配与不匹配测试，失败 connection 不进入 Ready |
+| initialize | 本地 fixed binary 与生成物一致、capability 校验；独立升级时有已决定的协商与矩阵测试 |
 | stable API | 产品所需 method/field/notification 已进入稳定 schema，未依赖 `experimentalApi` |
 | errors | 调用方区分的失败都有稳定 code/tagged data |
 | server request | 每个 request 有唯一 connection owner，同 connection 回复，close cleanup |

@@ -1,6 +1,35 @@
 # 连接与所有权
 
-本文件规定前端领域 service、adapter、renderer/Main、process、connection 和后端对象的最终边界。Sessions 只在 Thread 进入 Agents Window 时适用。路径表达最终职责，不认可目标仓库的现有错误目录；迁移选择不明确时执行主 skill 的冲突门禁。
+本文件规定 TypeScript 编辑器平台与 Rust 产品业务后端的最终边界，以及领域 service、adapter、renderer/Main、process、connection 和后端对象的所有权。这里描述目标设计，不表示当前源码已经实现全部能力。Sessions 只在 Thread 进入 Agents Window 时适用。路径表达最终职责，不认可目标仓库的现有错误目录；迁移选择不明确时执行主 skill 的冲突门禁。
+
+## 快速理解
+
+产品保留成熟的 TypeScript 编辑器前端和桌面平台，把 Rust app-server 扩展成业务、执行与后台状态的统一后端。判断一个能力是否迁入 Rust，不看它今天用什么语言实现，而看它是否需要跨 renderer 存活、稳定持久状态、并发或安全边界，并且能否通过稳定协议与编辑器对象解耦。
+
+| 能力 | 最终 owner | 决策 |
+| --- | --- | --- |
+| Agent、Thread、Turn、Item、审批、权限和工具执行 | 对应 Rust 领域 crate | 迁入 Rust |
+| Project、Environment、账户会话、模型 catalog 与调用状态 | 对应 Rust 领域 crate | 迁入 Rust |
+| command/process/resource、Agent 发起的 Git/repository/worktree 操作 | 对应 Rust 领域 crate | 迁入 Rust |
+| 跨窗口搜索、索引、监听、远程连接和恢复 | 对应 Rust 领域 crate | 迁入 Rust |
+| text model、working copy、dirty buffer、undo、diff | 前端 editor/file owner | 保留前端 |
+| Workbench UI、contribution、设置、主题、布局、快捷键和可访问性 | 前端 Workbench owner | 保留前端 |
+| 扩展运行时及其对象身份和兼容 contract | 前端 extension owner | 保留前端 |
+| Electron 与操作系统窗口能力 | Main | 保留并压薄 |
+| 通用文件服务、交互式 Terminal 执行层、SCM 执行层、语言服务 | 由完整 contract 与真实收益决定 | 条件迁移，不能默认并入 app-server |
+
+Rust 后端可以成为产品业务后端，但不能成为编辑器对象的远程镜像。`../app-server/` 提供连接、typed dispatch 与跨领域 orchestration；领域行为、存储和资源由对应 crate 隔离。前端领域 service 保持调用方 contract，adapter 只做机械转换。
+
+### 迁移判定
+
+能力同时满足以下条件时默认迁入 Rust：
+
+- 状态需要跨 renderer、窗口关闭或后台任务长期存活；
+- contract 可以由稳定 ID、request、notification、server request 或显式 resource 完整表达；
+- 实现不依赖 text model、dirty buffer、DOM、Electron 对象或扩展进程中的对象身份；
+- Rust 能带来明确的持久化、并发、IO、安全、恢复或多产品复用收益。
+
+能力依赖高频同步 UI 状态、编辑器事务、扩展贡献或系统窗口对象时保留前端。一个能力同时命中两边且不能通过机械 adapter 分开时属于所有权冲突，立即停下来询问用户，不能建立双写状态或通用远程对象层。
 
 ## 端到端结构
 
@@ -8,8 +37,7 @@
 flowchart LR
     Caller[renderer 调用方] --> Service[前端领域 service]
     Service --> Adapter[领域 app-server adapter]
-    Adapter --> Host[renderer host service]
-    Host --> Client[renderer protocol client]
+    Adapter --> Client[renderer protocol client]
     Client --> Port[per-renderer transport]
     Port --> Relay[Main transparent relay]
     Relay --> Process[shared app-server process]
@@ -17,7 +45,7 @@ flowchart LR
     Dispatch --> Domain[Rust domain]
 ```
 
-账户调用方依赖账户 service，文件调用方依赖文件 service，配置调用方依赖配置 service；它们不依赖 Sessions。每个领域 adapter 消费同一个 renderer host service，但只暴露该领域的前端契约。
+账户调用方依赖账户 service，文件调用方依赖文件 service，配置调用方依赖配置 service；它们不依赖 Sessions。每个领域 adapter 消费同一个 renderer protocol client，但只暴露该领域的前端契约。
 
 每个 renderer 独立完成 connection initialize、request pairing、notification 订阅和 server request 回复。Main 只启动共享进程、为窗口取得独立 backend connection 并透明转发 frame；Main 不解析 method、不改 request ID，也不保存领域状态。
 
@@ -27,19 +55,19 @@ flowchart LR
 | --- | --- | --- |
 | 前端领域接口、状态、事件和可见错误 | `src/platform/<domain>/common/` 或 `src/workbench/services/<domain>/common/` | transport、JSON-RPC、Rust DTO |
 | 领域 app-server adapter | 对应领域的 `browser/` 或 `electron-browser/` | process、通用 pending、其他领域状态 |
-| renderer host service contract | `src/platform/appServer/common/` | 具体领域 API、UI 状态 |
-| protocol client 与 connection 状态机 | `src/platform/appServer/browser/` | 领域 facade、业务决定 |
-| renderer transport acquisition | `src/platform/appServer/electron-browser/` | process spawn、领域状态 |
-| 进程与 renderer connection relay | `src/platform/appServer/electron-main/` | initialize、request pairing、method routing |
+| 生成协议、protocol client contract | `src/platform/agentHost/common/appServerProtocol/` | 具体领域 API、UI 状态 |
+| protocol client 与 connection 状态机 | `src/platform/agentHost/browser/` | 领域 facade、业务决定 |
+| renderer transport acquisition | `src/platform/agentHost/electron-browser/` | process spawn、领域状态 |
+| 进程与 renderer connection relay | `src/platform/agentHost/electron-main/` | initialize、request pairing、method routing |
 | Agents Window 的 Session/Chat contract | `src/sessions/services/sessions/common/`，仅 Thread UI 使用 | 通用 app-server API |
-| Thread 的 Sessions Provider adapter | `src/sessions/contrib/providers/appServer/browser/`，仅 Thread UI 使用 | 文件、账户、配置等领域入口 |
+| Thread 的 Sessions Provider adapter | `src/sessions/contrib/providers/agentHost/browser/`，仅 Thread UI 使用 | 文件、账户、配置等领域入口 |
 | 产品装配 | `src/code/electron-main/app.ts` 与对应 renderer main entry | protocol parser、DTO 转换、领域状态 |
 | 线上协议与生成物 | `../app-server-protocol/` | runtime、renderer 类型 |
 | backend connection 与 typed dispatch | `../app-server/` | renderer/window 状态 |
 | 多 connection transport | `../app-server-transport/` | 领域业务规则 |
 | Rust 领域行为 | 对应领域 crate | IPC、前端类型、JSON-RPC envelope |
 
-前端依赖方向是 `base → platform → editor → workbench`。`src/platform/appServer/` 不得依赖具体领域或 `src/sessions/`；领域 adapter 依赖 app-server host service。Sessions 位于 Workbench 之上，只能作为其中一个领域消费者。
+前端依赖方向是 `base → platform → editor → workbench`。`src/platform/agentHost/` 的 protocol client、transport 和 starter 不得依赖具体领域或 `src/sessions/`；领域 adapter 依赖 protocol client contract。Sessions 位于 Workbench 之上，只能作为其中一个领域消费者。
 
 ## 目标目录
 
@@ -47,18 +75,18 @@ flowchart LR
 
 ```text
 src/
-├── platform/appServer/
+├── platform/agentHost/
 │   ├── common/
-│   │   ├── appServerService.ts
-│   │   ├── appServerProtocol.ts
-│   │   └── protocol/generated/
+│   │   └── appServerProtocol/
+│   │       ├── appServerProtocol.ts
+│   │       └── generated/
 │   ├── browser/
 │   │   └── appServerProtocolClient.ts
 │   ├── electron-browser/
 │   │   ├── appServerMessagePortTransport.ts
-│   │   └── localAppServerService.ts
+│   │   └── localAgentHostService.ts
 │   └── electron-main/
-│       ├── appServerStarter.ts
+│       ├── electronAgentHostStarter.ts
 │       └── appServerConnectionRelay.ts
 ├── platform/<domain>/
 │   ├── common/<domain>.ts
@@ -66,15 +94,16 @@ src/
 ├── workbench/services/<domain>/
 │   ├── common/<domain>.ts
 │   └── electron-browser/<domain>AppServerAdapter.ts
-├── sessions/contrib/providers/appServer/browser/
+├── sessions/contrib/providers/agentHost/browser/
 │   ├── appServerSessionsProvider.ts
 │   └── appServerSessionAdapter.ts
 └── code/electron-main/app.ts
 
-build/lib/appServerProtocol.ts
+build/app-server/generate-protocol.mjs
+build/app-server/check-protocol-sync.ts
 ```
 
-`protocol/generated/` 是 `../app-server-protocol/schema/typescript/` 的机械镜像，由 `build/lib/appServerProtocol.ts` 复制并校验 schema hash，禁止手改。领域属于 platform 还是 workbench 由前端调用方和依赖方向决定。只属于 Agents Window 的 Thread facade 才放进 Sessions Provider。只创建有真实调用方的文件；小型 adapter 可以与领域 service implementation 同文件，没有 relay 逻辑时可与 starter 合并，不能为了目录对称创建占位文件。
+`appServerProtocol/generated/` 由固定版本的后端生成器直接写入，并由 `check-protocol-sync.ts` 在临时目录重新生成后逐字节比较，禁止手改。生成物供 renderer 使用，因此最终 owner 必须位于 `common/`，不能留在旧 TypeScript Host 的 `node/` 子树。领域属于 platform 还是 workbench 由前端调用方和依赖方向决定。只属于 Agents Window 的 Thread facade 才放进 Sessions Provider。只创建有真实调用方的文件；小型 adapter 可以与领域 service implementation 同文件，没有独立 relay 逻辑时可与 starter 合并，不能为了目录对称创建占位文件。
 
 后端参考源码使用并列 crate 路径：
 
@@ -102,6 +131,20 @@ build/lib/appServerProtocol.ts
 ```
 
 `<domain>_resource.rs` 只用于跨 request 存活的 watch、process、stream 等资源。普通 request 不创建 resource manager。
+
+新增产品能力时优先在对应 Rust 领域 crate 建立业务 contract，再由 `../app-server-protocol/` 暴露协议，由 `../app-server/` 的 processor 机械调用。不能因为所有前端调用最终经过一个 app-server process，就把账户、Project、文件、执行、SCM、Terminal 或搜索实现堆进 app-server crate。
+
+## 旧 Host 退出边界
+
+最终架构保留前端 Host service 的名称和调用者契约，但替换它下面的线上协议与运行时。迁移完成后生产调用链必须满足：
+
+- `localAgentHostService.ts` 创建或取得 renderer 的 app-server protocol client，不再创建旧 Host protocol client；
+- 旧 Host 的 action/state/command 线上 envelope、pending、reconnect 和 protocol negotiation 不再参与 renderer 与 Rust 之间的通信；
+- `node/agentHostMain` 及 TypeScript Host runtime 不再由 desktop starter 启动；仍有真实前端调用方需要的纯前端 contract 必须迁回其领域 owner，不能为了保留文件而继续运行旧 Host；
+- Main starter 直接启动 app-server executable，或启动只负责建立正式 backend connection 的最小进程；不能启动一个继续承担领域行为的 TypeScript 中间层；
+- 每个旧 Host API 必须选择“由现有前端领域 service 通过 app-server adapter 实现”或“从产品能力中移除”。协议缺失或行为冲突时停下来问用户，不能加入 AHP-to-app-server compatibility adapter。
+
+只有所有生产调用方、注册点、启动入口和测试 fixture 都已转移后才能删除旧文件。迁移期间也不能让两个实现同时注册同一 service。
 
 ## Process 与 connection 拓扑
 
@@ -134,7 +177,7 @@ Main starter 在首次请求时启动一个进程。每个 renderer 通过带 no
 
 ## renderer protocol client
 
-`src/platform/appServer/browser/appServerProtocolClient.ts` 每个 renderer 创建一个实例，负责：
+`src/platform/agentHost/browser/appServerProtocolClient.ts` 每个 renderer 创建一个实例，负责：
 
 - connection 状态与代次；
 - request ID、client pending 与 server request pending；
@@ -144,7 +187,7 @@ Main starter 在首次请求时启动一个进程。每个 renderer 通过带 no
 
 client 不启动进程、不读取 active editor/Session、不保存领域 catalog，也不包含按领域扩张的 method switch。每项线上 method 只能通过生成 method map 调用。
 
-`src/platform/appServer/electron-browser/appServerMessagePortTransport.ts` 只把 MessagePort frame 变成 client message transport，拥有有界发送队列、drain/close 和有限诊断。它不执行 initialize、不拥有 pending，也不恢复领域对象。
+`src/platform/agentHost/electron-browser/appServerMessagePortTransport.ts` 只把 MessagePort frame 变成 client message transport，拥有有界发送队列、drain/close 和有限诊断。它不执行 initialize、不拥有 pending，也不恢复领域对象。
 
 ## 领域 adapter
 
@@ -168,7 +211,7 @@ Project 或 Environment API 仍为实验协议时，生产 adapter 不开启实�
 
 ## Thread 进入 Agents Window 时
 
-仅此场景实现 `src/sessions/contrib/providers/appServer/browser/`。
+仅此场景实现 `src/sessions/contrib/providers/agentHost/browser/` 下的 app-server adapter。
 
 Provider instance 使用稳定 `providerId` 和 resource scheme。committed Thread `threadId` 被编码进 provider-owned resource，canonical Session ID 统一由：
 
@@ -223,4 +266,4 @@ app-server 不取代前端 file service、text model 或 working copy。后端�
 
 ## 产品装配
 
-`src/code/electron-main/app.ts` 只创建 starter/relay、绑定应用生命周期并注册 connection acquisition channel。renderer main entry 注册 `localAppServerService` 和各真实领域 adapter；Thread 进入 Agents Window 时再由 Sessions entry 注册 Provider。装配文件不解析 JSON、不转换 DTO、不实现领域 switch，也不保存领域状态。
+`src/code/electron-main/app.ts` 只创建 starter/relay、绑定应用生命周期并注册 connection acquisition channel。renderer main entry 注册 `localAgentHostService`、唯一 protocol client 和各真实领域 adapter；Thread 进入 Agents Window 时再由 Sessions entry 注册 Provider。装配文件不解析 JSON、不转换 DTO、不实现领域 switch，也不保存领域状态。
