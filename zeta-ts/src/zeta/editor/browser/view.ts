@@ -61,7 +61,7 @@ import { RenderingContext } from './view/renderingContext.js';
 import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
 import { ViewController, type ViewControllerOptions } from './view/viewController.js';
 import { type AbstractEditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
-import { NativeEditContext, type NativeEditContextWindow } from './controller/editContext/native/nativeEditContext.js';
+import { NativeEditContext, type NativeEditContextOptions, type NativeEditContextWindow } from './controller/editContext/native/nativeEditContext.js';
 import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
 import './widget/codeEditor/editor.css';
 
@@ -1170,11 +1170,14 @@ function createVisualProjection(model: TextModel, viewModel: IViewModel, spaceWi
 	return EditorVisualLineProjection.fromVisibleLines(model.version, model.lineCount, lines, anchors);
 }
 
-function createEditContext(context: ViewContext, container: HTMLElement, options: EditContextOptions): AbstractEditContext {
+type EditorEditContextOptions = EditContextOptions & Partial<Pick<NativeEditContextOptions, 'logService'>>;
+
+function createEditContext(context: ViewContext, container: HTMLElement, options: EditorEditContextOptions): AbstractEditContext {
 	const ownerWindow = container.ownerDocument.defaultView as NativeEditContextWindow | null;
-	return typeof ownerWindow?.EditContext === 'function'
-		? new NativeEditContext(context, container, options)
-		: new TextAreaEditContext(context, container, options);
+	if (typeof ownerWindow?.EditContext !== 'function') return new TextAreaEditContext(context, container, options);
+	const logService = options.logService;
+	if (!logService) throw new ReferenceError('Native EditContext requires the editor log service');
+	return new NativeEditContext(context, container, { ...options, logService });
 }
 
 function rawWrappingIndent(value: WrappingIndent): 'none' | 'same' | 'indent' | 'deepIndent' {

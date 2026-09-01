@@ -54,6 +54,7 @@ import { getViewModelCursorController, ViewModel } from '../../../common/viewMod
 import { OutgoingViewModelEventKind } from '../../../common/viewModelEventDispatcher.js';
 import { IThemeService, ThemeService } from '../../../../platform/theme/common/themeService.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
 
 export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, 'container' | 'viewModel' | 'configuration' | 'lineHeight' | 'ariaLabel'>;
 
@@ -185,6 +186,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			migrateOptions(options);
 			const services = this._register(options.instantiationService?.createChild() ?? new ServiceContainer());
 			this.instantiationService = services;
+			const logService = services.getOptional(ILogService);
 			const inheritedThemeService = services.getOptional(IThemeService);
 			const themeService = inheritedThemeService ?? this._register(new ThemeService(darkColorTheme));
 			if (!inheritedThemeService) services.registerInstance(IThemeService, themeService);
@@ -351,6 +353,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					indentation: options.indentation,
 					controller: {
 						ownerId: options.ownerId,
+						...(logService ? { logService } : {}),
 						ariaLabel: options.ariaLabel ?? editorLabel(options.input),
 						accessibilityService: options.accessibilityService,
 						renderRichScreenReaderContent: options.renderRichScreenReaderContent,

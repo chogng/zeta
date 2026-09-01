@@ -37,6 +37,7 @@ import { ViewUserInputEvents } from './viewUserInputEvents.js';
 import { type IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { type IEditorAriaOptions, type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editorBrowser.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
+import { type ILogService } from '../../../platform/log/common/log.js';
 
 export interface EditorCommandContext {
 	readonly inputType: string;
@@ -74,6 +75,7 @@ export interface EditorViewDidEditEvent {
 
 export interface ViewControllerOptions {
 	readonly ownerId?: string;
+	readonly logService?: ILogService;
 	readonly ariaLabel?: string;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly renderRichScreenReaderContent?: boolean;

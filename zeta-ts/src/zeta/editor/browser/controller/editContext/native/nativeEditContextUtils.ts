@@ -1,6 +1,7 @@
 import { addDisposableListener, getShadowRoot } from "../../../../../base/browser/dom.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
+import { type ILogService } from '../../../../../platform/log/common/log.js';
 
 interface EditContextEventHandlersEventMap {
 	readonly textupdate: Event;
@@ -31,14 +32,17 @@ export class FocusTracker extends Disposable {
 	private paused = false;
 
 	constructor(
+		logService: ILogService,
 		private readonly domNode: HTMLElement,
 		private readonly onFocusChange: (focused: boolean) => void,
 	) {
 		super();
 		this._register(addDisposableListener(this.domNode, "focus", () => {
+			logService.trace('NativeEditContext.focus');
 			if (!this.paused) this.refreshFocusState();
 		}));
 		this._register(addDisposableListener(this.domNode, "blur", () => {
+			logService.trace('NativeEditContext.blur');
 			if (!this.paused) this.setFocused(false);
 		}));
 	}

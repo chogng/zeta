@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
+import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 import { LanguageHoverService } from '../../contrib/hover/common/hover.js';
@@ -58,6 +59,7 @@ test("standalone service collection honors explicit first-scope overrides", () =
 	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
 	assert.equal(services.themeService.getColorTheme(), lightColorTheme);
+	assert.ok(services.instantiationService.get(ILogService) instanceof NullLoggerService);
 	services.dispose();
 	assert.equal(languages.isDisposed, false);
 	languages.dispose();

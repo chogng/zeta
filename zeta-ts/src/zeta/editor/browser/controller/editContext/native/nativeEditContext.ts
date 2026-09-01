@@ -17,6 +17,7 @@ import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type ViewportData } from '../../../../common/viewLayout/viewLinesViewportData.js';
 import * as viewEvents from '../../../../common/viewEvents.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
+import { type ILogService } from '../../../../../platform/log/common/log.js';
 
 /** Minimal local declaration because TypeScript's DOM library does not yet expose EditContext. */
 export interface NativeEditContextObject extends EventTarget {
@@ -63,6 +64,10 @@ export interface NativeTextFormat {
 
 export interface NativeTextFormatUpdateEvent extends globalThis.Event {
 	getTextFormats?(): readonly NativeTextFormat[];
+}
+
+export interface NativeEditContextOptions extends EditContextOptions {
+	readonly logService: ILogService;
 }
 
 /** Native EditContext adapter used when the browser exposes the API. */
@@ -124,7 +129,7 @@ export class NativeEditContext extends AbstractEditContext {
 	constructor(
 		context: ViewContext,
 		private readonly container: HTMLElement,
-		options: EditContextOptions,
+		options: NativeEditContextOptions,
 	) {
 		super(context);
 		const ownerDocument = container.ownerDocument;
@@ -174,7 +179,7 @@ export class NativeEditContext extends AbstractEditContext {
 		this.setEditContextOnDomNode();
 		this._register(NativeEditContextRegistry.register(options.ownerId, this));
 		container.append(imeTextArea);
-		this.focusTracker = this._register(new FocusTracker(element, focused => this.handleElementFocusChange(focused)));
+		this.focusTracker = this._register(new FocusTracker(options.logService, element, focused => this.handleElementFocusChange(focused)));
 		const compositionController = this.initializeController(options);
 		this.screenReaderSupport = this._register(new ScreenReaderSupport({
 			element,

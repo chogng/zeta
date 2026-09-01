@@ -24,6 +24,7 @@ import { type INamedEditorThemeService } from "../common/namedEditorTheme.js";
 import { NamedEditorThemeService } from "./namedEditorThemeService.js";
 import { type Event } from '../../../base/common/event.js';
 import { type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
+import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 
 export interface StandaloneServiceOverrides {
 	readonly languageService?: IZetaLanguageService;
@@ -50,6 +51,7 @@ export class StandaloneServiceCollection extends Disposable {
 	constructor(overrides: StandaloneServiceOverrides) {
 		super();
 		const instantiationService = this.instantiationService = this._register(new ServiceContainer());
+		instantiationService.registerInstance(ILogService, new NullLoggerService());
 		const browserServices = createEditorBrowserServices();
 		this._register(browserServices.codeEditorService);
 		this.codeEditorService = browserServices.codeEditorService;

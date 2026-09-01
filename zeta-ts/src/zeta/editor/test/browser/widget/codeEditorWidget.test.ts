@@ -40,6 +40,7 @@ const { TextAreaEditContextRegistry } = await import('../../../browser/controlle
 const { ViewPart } = await import('../../../browser/view/viewPart.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
 const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
+const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 const { createEditorBrowserServices } = await import('../../../browser/services/contribution.js');
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
@@ -133,12 +134,15 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	}
 	Object.defineProperty(dom.window, 'EditContext', { configurable: true, value: TestEditContext });
 	using model = new TextModel('alpha');
+	using services = new ServiceContainer();
+	services.registerInstance(ILogService, new NullLoggerService());
 	using editor = new CodeEditorWidget({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
+		instantiationService: services,
 	});
 	const ownerId = editor.ownerId;
 	assert.ok(editor.view.editContext instanceof NativeEditContext);

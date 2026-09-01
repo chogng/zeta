@@ -4,10 +4,11 @@
 
 ## 当前结论
 
-- 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 729 个；381 个同路径，209 个仅本地，348 个仅上游。
+- 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 727 个；381 个同路径，209 个仅本地，346 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：初始确认 118 组同名声明结构差异，已处理 32 组，剩余 86 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
+- 账目摘要：初始确认 118 组同名声明结构差异，已处理 33 组，剩余 85 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理。
 - 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题，也不新增 Editor 生产文件。
+- 用户已确认仅本地项的处理原则：架构文档明确归属的 Zeta 专属能力按既有职责保留；与 VS Code 重叠的职责迁回对应路径。文件删除仍需在每批执行前按准确路径、原因、剩余调用方和 Git 可恢复性单独确认。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
 - 输入、参数和返回类型一致不代表行为已经一致。剩余项仍需继续核对状态 owner、事件顺序、失效条件、调度阶段、坐标转换、可见副作用、失败语义和释放时机。
 
@@ -25,6 +26,7 @@
 | `browser/controller/editContext/clipboardUtils.ts` | `IClipboardPasteEvent` | 字段、构造行为和外部数据转换与上游一致；生产调用经过输入上下文、Clipboard contribution 和 Observable Editor，浏览器测试覆盖 metadata 与外部数据转换 |
 | `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 公开成员与上游归零；事件在输入上下文中生成选区文本、来源范围、富文本和内存元数据，Clipboard contribution 直接消费该事件，浏览器测试覆盖复制、剪切、多选区、整行和系统剪贴板回退 |
 | `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 五参数入口与上游一致；由 `ViewContext` 读取配置和选区并负责标准剪贴板数据及元数据写入，旧的无模型事件入口已删除，生产调用只经过两个输入实现 |
+| `browser/controller/editContext/native/nativeEditContextUtils.ts` | `FocusTracker` | 构造契约恢复日志服务、目标元素和焦点回调三个参数；生产日志依赖从编辑器服务容器经 `CodeEditorWidget` 和 `View` 进入原生输入，Standalone 明确注册空日志实现。测试覆盖焦点、失焦、暂停恢复、Shadow DOM、日志与监听释放 |
 | `browser/services/codeEditorService.ts` | `ICodeEditorOpenHandler` | 由 `AbstractCodeEditorService` 按新注册优先顺序调用，首个返回编辑器的处理器终止链路；单项释放只移除对应处理器，测试覆盖继续查找、短路和释放 |
 | `browser/services/codeEditorService.ts` | `ICodeEditorService` | 公共成员差异归零；代码与差异编辑器的创建、加入和移除由各 Widget 的真实生命周期触发，打开处理器、资源模型属性、临时模型属性、装饰类型和当前编辑器均由同一浏览器服务提供，Workbench 差异窗格与快速差异视图使用同一服务实例 |
 | `browser/services/abstractCodeEditorService.ts` | `AbstractCodeEditorService` | 抽象层只持有跨宿主共享的编辑器注册表、处理器链、资源属性、临时属性和装饰类型；当前编辑器由具体浏览器宿主持有；临时属性按 URI 与模型销毁释放，装饰样式按引用计数和服务生命周期释放，测试覆盖事件顺序、资源身份、父子装饰与释放 |
@@ -60,7 +62,6 @@
 | `browser/controller/dragScrolling.ts` | `DragScrolling` | 当前只有仅本地 `bidirectionalDragScrolling.ts`，其双轴像素滚动职责不同于上游抽象 owner；需随 `ViewContext`、outside-editor target、`MouseTargetFactory`、render/hit-test、RTL 与 `dispatchMouse` 整链迁移后删除旧文件 |
 | `browser/controller/mouseHandler.ts` | `MouseHandler` | 已只保留浏览器指针捕获、拖动、自动滚动、目标解析和输入事件发布；选区策略已迁入 `ViewController.dispatchMouse`，构造参数仍待随 `ViewContext` 和 pointer helper 收敛 |
 | `browser/controller/editContext/native/debugEditContext.ts` | `DebugEditContext` | 本地职责已改名或移出上游 owner |
-| `browser/controller/editContext/native/nativeEditContextUtils.ts` | `FocusTracker` | 已恢复公开名并由浏览器输入实现实际持有；构造契约和日志依赖仍待收敛 |
 | `browser/controller/editContext/editContext.ts` | `AbstractEditContext` | 已进入 `ViewPart` 生命周期并统一剪贴板事件、输入路由和组合输入状态；抽象层仍保留 Zeta 的公共输入契约，需继续缩小与上游声明成员的差异 |
 | `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 已由 `View` 持有，接入 `ViewContext`、视图事件、预渲染几何读取、渲染写入、按编辑器 ID 注册及跨 document 重新挂接；浏览器缓冲区和辅助阅读器的成员契约仍待收敛 |
 | `browser/controller/editContext/native/screenReaderContentRich.ts` | `RichScreenReaderContent` | 已恢复公开名并由 `ScreenReaderSupport` 实际选择；配置事件和视图渲染阶段仍待收敛 |
@@ -151,7 +152,7 @@
 
 ## 当前已验证能力
 
-- 118 项严格完成项为上表 18 行、22 个声明；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
+- 当前 33 项严格完成项均已进入生产调用链并核对 owner 与生命周期；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
 - Standalone 模型创建现在由 `standaloneCodeEditor.ts::createTextModel` 统一决定语言：显式语言优先，否则读取 URI 与第一行；Model Service 仍是模型注册、查询、语言事件和释放 owner。
 - `IClipboardPasteEvent`、`ColumnSelection`、`ColorPickerModel` 已分别通过真实输入、鼠标列选和 Color Picker 生产调用链复核。
 - `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 118 项完成数。
@@ -170,8 +171,9 @@
 
 ## 验证状态
 
-- 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、348 个仅上游；Zeta 590 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
-- 118 项账本校验通过：31 项已处理、87 项待处理、总计 118 个唯一声明。
-- `tsconfig.stanza.json --noEmit` 与 `tsconfig.extensions-test.json --noEmit` 通过；渲染/GPU、指针命中和 Widget 的 26 个相关用例通过。整个 `editor` 批跑没有行为断言失败，但一个单独运行可通过的指针命中用例被测试运行器报告事件循环提前结束，仍需继续定位该批跑残留句柄。完整测试类型检查仍只有 Sessions 与 Workbench Chat 的 9 个既有错误；生产 Widget 已接入唯一 ViewModel，但输入与 contribution 尚未移除内部光标入口，因此当前不从 118 项账目中扣减。
-- `tsconfig.test.json` 仍报告 9 个已有错误，集中在 Sessions 与 Workbench Chat；本轮 Editor 文件没有新增类型错误。行渲染、GPU、指针命中、语义 token 与装饰链的 23 项定向测试全部通过；`View` 的参数校验已前移，不再在构造失败时调用测试子类尚未完成初始化的释放逻辑。
-- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 87 项中扣减。
+- 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、346 个仅上游；Zeta 590 个生产文件，VS Code 727 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
+- 118 项账本校验通过：33 项已处理、85 项待处理、总计 118 个唯一声明。
+- `tsconfig.stanza.json --noEmit` 与 `tsconfig.test.json` 编译通过；`FocusTracker`、原生 EditContext 和 Standalone 日志注册的 4 个定向用例通过。
+- Editor 浏览器总入口仍被 4 个既有测试编译错误阻断：缺少 `styledGlyphRasterizer.js`、`selectionSet.js`，以及 bracket pair 配置和 TextModel 构造参数不匹配。真实 Chromium 集成测试 5 项通过 4 项，其中无障碍契约通过；失败项是既有的 `Control+Home` 光标行为。
+- Editor 完整单测运行到 882 项时为 845 项通过、11 项失败；`codeEditorPane.test.js` 挂起约 4 分钟后终止，后续 26 项被取消。失败覆盖 Cursor Undo/Redo、Folding、Join Lines、输入事件次数、占位符几何、字体配置和换行符等既有基线，本批 4 个定向用例均通过。
+- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 85 项中扣减。

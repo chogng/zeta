@@ -3,6 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { EditContext } from '../../../browser/controller/editContext/native/editContextFactory.js';
 import { clampOffset, createNativeTextWindow, FocusTracker, isNativeTextUpdateEvent, NATIVE_TEXT_WINDOW_LENGTH } from '../../../browser/controller/editContext/native/nativeEditContextUtils.js';
+import { NullLoggerService } from '../../../../platform/log/common/log.js';
 
 test('native edit-context offsets are clamped and validated', () => {
 	assert.equal(clampOffset(-4, 10), 0);
@@ -38,7 +39,11 @@ test('focus tracker validates the active element and keeps pause transitions sil
 	const input = dom.window.document.querySelector<HTMLElement>('#input')!;
 	const before = dom.window.document.querySelector<HTMLElement>('#before')!;
 	const changes: boolean[] = [];
-	using tracker = new FocusTracker(input, focused => changes.push(focused));
+	const traces: string[] = [];
+	class RecordingLogService extends NullLoggerService {
+		override trace(message: string): void { traces.push(message); }
+	}
+	using tracker = new FocusTracker(new RecordingLogService(), input, focused => changes.push(focused));
 
 	tracker.focus();
 	assert.equal(tracker.isFocused, true);
@@ -49,5 +54,26 @@ test('focus tracker validates the active element and keeps pause transitions sil
 	tracker.resume();
 	assert.equal(tracker.isFocused, false);
 	assert.deepEqual(changes, [true, false]);
+	assert.deepEqual(traces, ['NativeEditContext.focus', 'NativeEditContext.blur']);
+	tracker.dispose();
+	input.focus();
+	assert.deepEqual(traces, ['NativeEditContext.focus', 'NativeEditContext.blur']);
+	dom.window.close();
+});
+
+test('focus tracker resolves the active element inside a shadow root', () => {
+	const dom = new JSDOM('<main></main>');
+	const host = dom.window.document.querySelector<HTMLElement>('main')!;
+	const shadowRoot = host.attachShadow({ mode: 'open' });
+	const input = dom.window.document.createElement('div');
+	input.tabIndex = 0;
+	shadowRoot.append(input);
+	const changes: boolean[] = [];
+	using tracker = new FocusTracker(new NullLoggerService(), input, focused => changes.push(focused));
+
+	tracker.focus();
+	assert.strictEqual(shadowRoot.activeElement, input);
+	assert.equal(tracker.isFocused, true);
+	assert.deepEqual(changes, [true]);
 	dom.window.close();
 });
