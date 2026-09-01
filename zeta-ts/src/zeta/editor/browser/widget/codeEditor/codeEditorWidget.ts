@@ -11,17 +11,17 @@ import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration } from '../../../common/model.js';
 import { type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
-import { type ICommand, type ICodeEditorViewState, type IEditorDecorationsCollection, type ScrollType } from '../../../common/editorCommon.js';
+import { type ICommand, type ICodeEditorViewState, type IEditorDecorationsCollection, type INewScrollPosition, type ScrollType } from '../../../common/editorCommon.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IOverlayWidget, IPartialEditorMouseEvent, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { View, type EditorViewportOptions } from "../../view.js";
 import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
 import { MouseHandler } from "../../controller/mouseHandler.js";
-import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor, ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions, type CodeEditorContribution, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
 import { observableCodeEditor } from '../../observableCodeEditor.js';
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
-import { getTextEditorCapabilityContributions, type EditorCapability, type EditorCommandEvent, type TextEditorContributionContext } from '../../editorExtensions.js';
+import { EditorExtensionsRegistry, getTextEditorCapabilityContributions, type EditorCapability, type EditorCommandEvent, type TextEditorContributionContext } from '../../editorExtensions.js';
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
 import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
 import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
@@ -419,6 +419,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				view: this.view,
 				placeholder: options.placeholder,
 			}, this.instantiationService, options.contributions, options.onContributionError);
+			this.contributions.add(this, EditorExtensionsRegistry.getEditorContributions().map(contribution => ({
+				id: contribution.id,
+				descriptor: new ServiceConstructionDescriptor(contribution.ctor),
+				instantiation: contribution.instantiation,
+			})));
 			this._register(new KeyboardNavigationController(this.viewport, this.viewModel, this.userInputEvents, {
 				wordPattern: () => languageConfigurationService.getLanguageConfiguration(options.languageId).getWordDefinition(),
 				stickyTabStops: EditorOptions.stickyTabStops.validate(options.stickyTabStops) as boolean,
@@ -631,6 +636,19 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	setScrollTop(newScrollTop: number, _scrollType?: ScrollType): void {
 		const layout = this.viewport.currentLayout;
 		this.viewport.scrollTo({ left: layout.scrollPosition.left, top: newScrollTop });
+	}
+
+	setScrollLeft(newScrollLeft: number, _scrollType?: ScrollType): void {
+		const layout = this.viewport.currentLayout;
+		this.viewport.scrollTo({ left: newScrollLeft, top: layout.scrollPosition.top });
+	}
+
+	setScrollPosition(position: INewScrollPosition, _scrollType?: ScrollType): void {
+		const layout = this.viewport.currentLayout;
+		this.viewport.scrollTo({
+			left: position.scrollLeft ?? layout.scrollPosition.left,
+			top: position.scrollTop ?? layout.scrollPosition.top,
+		});
 	}
 
 	getSelection(): Selection | null {

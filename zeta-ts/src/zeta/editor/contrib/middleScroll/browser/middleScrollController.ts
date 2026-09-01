@@ -1,8 +1,8 @@
 import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import { scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import type { TextEditorContributionContext } from '../../../browser/editorExtensions.js';
+import type { ICodeEditor, IEditorMouseEvent } from '../../../browser/editorBrowser.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import type { IEditorContribution } from '../../../common/editorCommon.js';
 import './middleScroll.css';
 
@@ -26,42 +26,46 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 	}
 
 	private readonly frame = this._register(new MutableDisposable<IDisposable>());
+	private readonly domNode: HTMLElement | null;
 	private session: MiddleScrollSession | undefined;
 
-	constructor(private readonly context: TextEditorContributionContext) {
+	constructor(private readonly editor: ICodeEditor) {
 		super();
-		if (!context.options.scrollOnMiddleClick) return;
-		const targetWindow = getWindow(context.viewport.element);
-		this._register(addDisposableListener<PointerEvent>(context.viewport.element, 'pointerdown', event => this.handlePointerDown(event)));
+		this.domNode = editor.getDomNode();
+		if (!this.domNode) return;
+		const targetWindow = getWindow(this.domNode);
+		this._register(editor.onMouseDown(event => this.handleMouseDown(event)));
 		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointermove', event => this.handlePointerMove(event)));
 		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointerup', event => this.handlePointerUp(event)));
 		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', event => this.handlePointerCancel(event)));
-		this._register(addDisposableListener(context.view.element, 'keydown', () => this.stop()));
+		this._register(editor.onKeyDown(() => this.stop()));
 		this._register(toDisposable(() => this.stop()));
 	}
 
-	private handlePointerDown(event: PointerEvent): void {
-		if (event.button !== 1) return;
-		event.preventDefault();
-		event.stopPropagation();
+	private handleMouseDown(event: IEditorMouseEvent): void {
+		if (!event.event.middleButton || !this.editor.getOption(EditorOption.scrollOnMiddleClick) || !this.domNode) return;
+		event.event.preventDefault();
+		event.event.stopPropagation();
 		if (this.session) {
 			this.stop();
 			return;
 		}
-		const bounds = this.context.viewport.element.getBoundingClientRect();
-		const dotDomNode = this.context.viewport.element.ownerDocument.createElement('div');
+		const bounds = this.domNode.getBoundingClientRect();
+		const dotDomNode = this.domNode.ownerDocument.createElement('div');
 		dotDomNode.className = 'scroll-editor-on-middle-click-dot';
-		dotDomNode.style.left = `${event.clientX - bounds.left}px`;
-		dotDomNode.style.top = `${event.clientY - bounds.top}px`;
-		this.context.viewport.element.append(dotDomNode);
-		this.context.viewport.element.classList.add('scroll-editor-on-middle-click-editor');
+		dotDomNode.setAttribute('aria-hidden', 'true');
+		dotDomNode.style.left = `${event.event.clientX - bounds.left}px`;
+		dotDomNode.style.top = `${event.event.clientY - bounds.top}px`;
+		this.domNode.append(dotDomNode);
+		this.domNode.classList.add('scroll-editor-on-middle-click-editor');
+		const browserEvent = event.event.browserEvent as PointerEvent;
 		this.session = {
-			pointerId: event.pointerId,
-			startX: event.clientX,
-			startY: event.clientY,
-			x: event.clientX,
-			y: event.clientY,
-			lastFrame: performance.now(),
+			pointerId: typeof browserEvent.pointerId === 'number' ? browserEvent.pointerId : 0,
+			startX: event.event.clientX,
+			startY: event.event.clientY,
+			x: event.event.clientX,
+			y: event.event.clientY,
+			lastFrame: getWindow(this.domNode).performance.now(),
 			didScroll: false,
 			dotDomNode,
 		};
@@ -72,7 +76,7 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 		if (!this.session || event.pointerId !== this.session.pointerId) return;
 		this.session.x = event.clientX;
 		this.session.y = event.clientY;
-		this.context.viewport.element.dataset.scrollDirection = direction(this.session.x - this.session.startX, this.session.y - this.session.startY);
+		if (this.domNode) this.domNode.dataset.scrollDirection = direction(this.session.x - this.session.startX, this.session.y - this.session.startY);
 	}
 
 	private handlePointerUp(event: PointerEvent): void {
@@ -84,20 +88,25 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 	}
 
 	private scheduleFrame(): void {
-		const targetWindow = getWindow(this.context.viewport.element);
+		if (!this.domNode) return;
+		const targetWindow = getWindow(this.domNode);
 		this.frame.value = scheduleAtNextAnimationFrame(targetWindow, () => {
 			this.frame.clear();
 			const session = this.session;
 			if (!session) return;
-			const now = performance.now();
+			if (!this.editor.getOption(EditorOption.scrollOnMiddleClick)) {
+				this.stop();
+				return;
+			}
+			const now = targetWindow.performance.now();
 			const factor = Math.min(2, Math.max(0, now - session.lastFrame) / 32);
 			session.lastFrame = now;
 			const x = afterThreshold(session.x - session.startX);
 			const y = afterThreshold(session.y - session.startY);
 			if (x !== 0 || y !== 0) {
-				const before = this.context.viewport.currentLayout.scrollPosition;
-				const after = this.context.viewport.scrollTo({ left: before.left + x * factor, top: before.top + y * factor }).scrollPosition;
-				session.didScroll ||= before.left !== after.left || before.top !== after.top;
+				const before = { left: this.editor.getScrollLeft(), top: this.editor.getScrollTop() };
+				this.editor.setScrollPosition({ scrollLeft: before.left + x * factor, scrollTop: before.top + y * factor });
+				session.didScroll ||= before.left !== this.editor.getScrollLeft() || before.top !== this.editor.getScrollTop();
 			}
 			this.scheduleFrame();
 		});
@@ -107,8 +116,8 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 		this.frame.clear();
 		this.session?.dotDomNode.remove();
 		this.session = undefined;
-		this.context.viewport.element.classList.remove('scroll-editor-on-middle-click-editor');
-		delete this.context.viewport.element.dataset.scrollDirection;
+		this.domNode?.classList.remove('scroll-editor-on-middle-click-editor');
+		if (this.domNode) delete this.domNode.dataset.scrollDirection;
 	}
 }
 

@@ -9,7 +9,7 @@ import { type GlyphMarginLane, type IModelDecorationsChangeAccessor, type Positi
 import { type IModelDeltaDecoration } from '../common/model.js';
 import { type InjectedText } from '../common/modelLineProjectionData.js';
 import { type EditorLayoutInfo, type EditorOption, type FindComputedEditorOptionValueById } from '../common/config/editorOptions.js';
-import { type ICommand, type IEditorContribution, type IEditorDecorationsCollection, type ScrollType } from '../common/editorCommon.js';
+import { type ICommand, type IEditorContribution, type IEditorDecorationsCollection, type INewScrollPosition, type ScrollType } from '../common/editorCommon.js';
 import { type ITextModel } from '../common/model.js';
 import { type ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
@@ -184,6 +184,8 @@ export interface ICodeEditor {
 	getTopForLineNumber(lineNumber: number): number;
 	getBottomForLineNumber(lineNumber: number): number;
 	setScrollTop(newScrollTop: number, scrollType?: ScrollType): void;
+	setScrollLeft(newScrollLeft: number, scrollType?: ScrollType): void;
+	setScrollPosition(position: INewScrollPosition, scrollType?: ScrollType): void;
 	getSelection(): Selection | null;
 	getSelections(): Selection[] | null;
 	setSelection(selection: ISelection, source?: string): void;

@@ -1,10 +1,56 @@
 import { EditContext } from './editContextFactory.js';
 
 type DebugMarker = { readonly dispose: () => void };
+type EventHandler = (this: unknown, event: Event) => unknown;
+
+interface EditContextInit {
+	readonly text?: string;
+	readonly selectionStart?: number;
+	readonly selectionEnd?: number;
+}
+
+interface EditContextEventHandlersEventMap {
+	readonly textupdate: TextUpdateEvent;
+	readonly textformatupdate: TextFormatUpdateEvent;
+	readonly characterboundsupdate: CharacterBoundsUpdateEvent;
+	readonly compositionstart: CompositionEvent;
+	readonly compositionend: CompositionEvent;
+}
+
+interface TextUpdateEvent extends Event {
+	readonly text: string;
+	readonly updateRangeStart: number;
+	readonly updateRangeEnd: number;
+	readonly selectionStart: number;
+	readonly selectionEnd: number;
+}
+
+interface TextFormatUpdateEvent extends Event {
+	getTextFormats(): readonly unknown[];
+}
+
+interface CharacterBoundsUpdateEvent extends Event {
+	readonly rangeStart: number;
+	readonly rangeEnd: number;
+}
+
+interface BrowserEditContext extends EventTarget {
+	readonly text: string;
+	readonly selectionStart: number;
+	readonly selectionEnd: number;
+	readonly characterBoundsRangeStart: number;
+	updateText(start: number, end: number, text: string): void;
+	updateSelection(start: number, end: number): void;
+	updateControlBounds(bounds: DOMRect): void;
+	updateSelectionBounds(bounds: DOMRect): void;
+	updateCharacterBounds(rangeStart: number, bounds: readonly DOMRect[]): void;
+	attachedElements(): HTMLElement[];
+	characterBounds(): DOMRect[];
+}
 
 /** Adds optional visual diagnostics around one browser EditContext without owning editor state. */
 export class DebugEditContext {
-	private readonly editContext: EditContext;
+	private readonly editContext: BrowserEditContext;
 	private readonly document: Document;
 	private readonly listeners = new Map<EventListenerOrEventListenerObject, EventListenerOrEventListenerObject>();
 	private readonly textUpdate = new HandlerSlot('textupdate', this);
@@ -20,10 +66,21 @@ export class DebugEditContext {
 
 	constructor(window: Window, options?: EditContextInit) {
 		this.document = window.document;
-		this.editContext = EditContext.create(window, options);
+		const editContext = EditContext.create(window, options);
+		if (
+			typeof (editContext as Partial<BrowserEditContext>).characterBoundsRangeStart !== 'number'
+			|| typeof editContext.updateControlBounds !== 'function'
+			|| typeof editContext.updateSelectionBounds !== 'function'
+			|| typeof editContext.updateCharacterBounds !== 'function'
+			|| typeof (editContext as Partial<BrowserEditContext>).attachedElements !== 'function'
+			|| typeof (editContext as Partial<BrowserEditContext>).characterBounds !== 'function'
+		) {
+			throw new TypeError('Debug EditContext requires the complete browser API');
+		}
+		this.editContext = editContext as BrowserEditContext;
 	}
 
-	get text(): DOMString { return this.editContext.text; }
+	get text(): string { return this.editContext.text; }
 	get selectionStart(): number { return this.editContext.selectionStart; }
 	get selectionEnd(): number { return this.editContext.selectionEnd; }
 	get characterBoundsRangeStart(): number { return this.editContext.characterBoundsRangeStart; }
@@ -148,6 +205,7 @@ export class DebugEditContext {
 	private createMarker(): HTMLDivElement {
 		const element = this.document.createElement('div');
 		element.className = 'debug-rect-marker';
+		element.setAttribute('aria-hidden', 'true');
 		element.style.position = 'absolute';
 		element.style.zIndex = '2147483647';
 		element.style.pointerEvents = 'none';
@@ -158,7 +216,7 @@ export class DebugEditContext {
 class HandlerSlot {
 	private handler: EventHandler | null = null;
 
-	constructor(private readonly type: string, private readonly target: EventTarget) {}
+	constructor(private readonly type: keyof EditContextEventHandlersEventMap, private readonly target: DebugEditContext) {}
 
 	get value(): EventHandler | null { return this.handler; }
 	set value(handler: EventHandler | null) {
