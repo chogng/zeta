@@ -5,7 +5,7 @@ import { type IVersionedEditorWorkerClient } from '../../../browser/services/edi
 import { type View } from '../../../browser/view.js';
 import { createEditorEditCommand } from '../../../common/commands/editorCommand.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
-import { CursorCollection } from '../../../common/cursor/cursorCollection.js';
+import { Selection } from '../../../common/core/selection.js';
 import { Range } from '../../../common/core/range.js';
 
 class InPlaceReplaceController extends Disposable {
@@ -34,7 +34,7 @@ class InPlaceReplaceController extends Disposable {
 		const selection = selectionState[0]!;
 		if (selection.startLineNumber !== selection.endLineNumber) return false;
 		const result = await this.editorWorker.navigateValueSet(selection, direction > 0, this.wordDefinition());
-		if (!result || !CursorCollection.selectionsEqual(this.selections.selections, selectionState)) return false;
+		if (!result || !Selection.selectionsArrEqual([...this.selections.selections], [...selectionState])) return false;
 		const command = createEditorEditCommand(model, selectionState, [{ range: result.range, text: result.value }]);
 		if (!command) return false;
 		this.selections.execute(command);

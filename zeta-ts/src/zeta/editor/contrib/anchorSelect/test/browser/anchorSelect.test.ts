@@ -10,6 +10,7 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -94,7 +95,7 @@ function createFixture(text: string): {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
-	const selections = new CursorsController(model, singleCaret(0, 0));
+	const selections = createTestCursorsController(model, singleCaret(0, 0));
 	const decorations = new TextDecorationCollection<void>(model);
 	const viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, 'textarea') as unknown as HTMLTextAreaElement;

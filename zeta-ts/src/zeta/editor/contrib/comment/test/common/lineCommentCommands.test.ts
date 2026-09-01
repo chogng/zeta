@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createToggleLineCommentCommand } from "../../common/lineCommentCommands.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test("Toggle line comment inserts after indentation and restores one isolated undo step", () => {
 	using model = new TextModel("  alpha\n\tbeta\n\n gamma");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((3) + 1, (1) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((3) + 1, (1) + 1))]);
 
 	selections.execute(createToggleLineCommentCommand(model, selections.selections, {
 		lineComment: "//",
@@ -28,7 +28,7 @@ test("Toggle line comment inserts after indentation and restores one isolated un
 
 test("Toggle line comment removes only when all selected content lines are commented", () => {
 	using model = new TextModel("// alpha\n  // beta\n\n// gamma");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((3) + 1, (8) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((3) + 1, (8) + 1))]);
 
 	selections.execute(createToggleLineCommentCommand(model, selections.selections, {
 		lineComment: "//",

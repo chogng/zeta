@@ -12,6 +12,7 @@ import { type LinkedEditingRangeProvider } from '../../../../common/languages.js
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -89,7 +90,7 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 	const registry = new LanguageFeatureRegistry<LinkedEditingRangeProvider>();
 	const registration = registry.register('html', provider);
 	const model = new TextModel('tag tag', { languageId: 'html' });
-	const selections = new CursorsController(model, [Selection.fromPositions(new Position(1, 2))]);
+	const selections = createTestCursorsController(model, [Selection.fromPositions(new Position(1, 2))]);
 	const configurations = new TestLanguageConfigurationService();
 	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
 	const languageEditing = new LanguageEditingAdapter(model, selections, 'html', configurations);

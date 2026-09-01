@@ -10,6 +10,7 @@ import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { createTestCursorConfiguration } from './testCursorConfiguration.js';
+import { createTestCursorsController } from './testCursorConfiguration.js';
 
 test("Typing replaces multiple selections and coalesces with following text", () => {
 	using model = new TextModel("abcd efgh");
@@ -17,7 +18,7 @@ test("Typing replaces multiple selections and coalesces with following text", ()
 		Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (1) + 1)),
 		caret(0, 8),
 	], 1);
-	using controller = new CursorsController(model, initial);
+	using controller = createTestCursorsController(model, initial);
 
 	controller.execute(TypeOperations.typeWithoutInterceptors(
 		model,
@@ -55,7 +56,7 @@ test("Backspace deletes graphemes and joins lines", () => {
 	using model = new TextModel("a😀b\ncd");
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		[caret(0, 3)],
 	);
@@ -84,7 +85,7 @@ test("Forward Delete removes graphemes and line breaks", () => {
 	using model = new TextModel("a😀b\ncd");
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		[caret(0, 1)],
 	);
@@ -111,7 +112,7 @@ test("Forward Delete removes graphemes and line breaks", () => {
 
 test("Word deletion uses shared editor word boundaries and coalesces by direction", () => {
 	using model = new TextModel("alpha beta gamma");
-	using controller = new CursorsController(model, [caret(0, 10)]);
+	using controller = createTestCursorsController(model, [caret(0, 10)]);
 
 	controller.execute(WordOperations.deleteWordLeft(model, controller.selections));
 	controller.execute(WordOperations.deleteWordLeft(model, controller.selections));
@@ -129,7 +130,7 @@ test("Selection deletion is multi-cursor aware and preserves selected ranges", (
 	using model = new TextModel("alpha\nbeta");
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
-	using controller = new CursorsController(model, primaryFirst([
+	using controller = createTestCursorsController(model, primaryFirst([
 		Selection.fromPositions(new Position(1, 1), new Position(1, 4)),
 		Selection.fromPositions(new Position(2, 1), new Position(2, 2)),
 	], 1));
@@ -152,7 +153,7 @@ test("Selection deletion is multi-cursor aware and preserves selected ranges", (
 
 test("Typing normalizes line endings before calculating carets", () => {
 	using model = new TextModel("ab");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		[caret(0, 1)],
 	);
@@ -175,7 +176,7 @@ test("Delete boundaries are no-ops and overlapping selections fail early", () =>
 	using model = new TextModel("abc");
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		[caret(0, 0)],
 	);
@@ -206,7 +207,7 @@ test("Adjacent deletions merge converged carets while history restores sources",
 		caret(0, 1),
 		caret(0, 2),
 	], 1);
-	using controller = new CursorsController(model, initial);
+	using controller = createTestCursorsController(model, initial);
 
 	executeDelete(controller, DeleteOperations.deleteLeft(EditOperationType.Other, config, model, [...controller.selections], []), EditOperationType.DeletingLeft);
 	assert.deepEqual({
@@ -231,7 +232,7 @@ test("Adjacent deletions merge converged carets while history restores sources",
 
 test("Paste commands support shared and distributed isolated text", () => {
 	using model = new TextModel("ab cd");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		primaryFirst([
 			Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
@@ -276,7 +277,7 @@ test("Cut preserves collapsed cursors and restores history", () => {
 		Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((0) + 1, (0) + 1)),
 		caret(0, 7),
 	], 0);
-	using controller = new CursorsController(model, initial);
+	using controller = createTestCursorsController(model, initial);
 
 	executeEditOperation(controller, DeleteOperations.cut(config, model, [...controller.selections]));
 	assert.deepEqual({

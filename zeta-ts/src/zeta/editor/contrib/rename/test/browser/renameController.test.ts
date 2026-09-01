@@ -6,12 +6,12 @@ import { URI } from '../../../../../base/common/uri.js';
 import { type EditorCommandExecutor } from '../../../../browser/editorExtensions.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageRenameProvider, RenameService } from '../../common/languageRename.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -36,7 +36,7 @@ test('Rename reports its command after applying the provider edit', async () => 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resource = URI.file('C:\\project\\rename.ts');
 	using model = new TextModel('abc', { languageId: 'typescript' });
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const editorInput = h(dom.window.document, 'textarea');

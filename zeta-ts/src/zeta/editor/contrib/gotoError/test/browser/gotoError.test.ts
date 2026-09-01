@@ -3,7 +3,6 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../common/languages/languageResults.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -12,6 +11,7 @@ import { TextModel } from "../../../../common/model/textModel.js";
 
 import { h } from "../../../../../base/browser/dom.js";
 import { TrackedRangeStickiness } from '../../../../common/model.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const environment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({ window: environment.window, document: environment.window.document, Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement, Event: environment.window.Event, KeyboardEvent: environment.window.KeyboardEvent })) Object.defineProperty(globalThis, name, { configurable: true, value });
@@ -22,7 +22,7 @@ test("F8 navigates current diagnostics in both directions", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
 	diagnostics.add({ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: diagnostic("first") });
 	diagnostics.add({ range: Range.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (3) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: diagnostic("last") });

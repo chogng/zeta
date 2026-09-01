@@ -3,9 +3,8 @@ import { isCancellationError } from "../../../../base/common/errors.js";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { CursorCollection } from "../../../common/cursor/cursorCollection.js";
 import { CursorChangeReason } from "../../../common/cursorEvents.js";
-import { type Selection } from "../../../common/core/selection.js";
+import { Selection } from "../../../common/core/selection.js";
 import { type Range } from "../../../common/core/range.js";
 import { type TextSnapshot } from "../../../common/core/textChange.js";
 import { type View } from "../../../browser/view.js";
@@ -68,7 +67,7 @@ export class SmartSelectController extends Disposable {
 	}
 
 	private commitExpansion(before: readonly Selection[], snapshot: TextSnapshot, syntaxRanges: readonly Range[]): void {
-		if (this.viewport.textModel.version !== snapshot.version || !CursorCollection.selectionsEqual(this.selections.selections, before)) return;
+		if (this.viewport.textModel.version !== snapshot.version || !Selection.selectionsArrEqual([...this.selections.selections], [...before])) return;
 		this.history.push(before);
 		this.selections.setSelections(before.map(selection => expandSmartSelection(this.viewport.textModel, selection, syntaxRanges)));
 		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());

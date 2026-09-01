@@ -87,7 +87,7 @@ export class ViewModel extends Disposable implements IViewModel {
 			}));
 		this.coordinatesConverter = this.lines.createCoordinatesConverter();
 		this.cursorConfig = new CursorConfiguration(model.getLanguageId(), model.getOptions(), configuration, languageConfigurationService);
-		this.cursor = this._register(new CursorsController(model, [new Selection(1, 1, 1, 1)], { readOnly: options.get(EditorOption.readOnly) }));
+		this.cursor = this._register(new CursorsController(model, this, this.coordinatesConverter, this.cursorConfig));
 		cursorOwners.set(this, this.cursor);
 		this.previousSelections = [...this.cursor.selections];
 		this.viewLayout = this._register(new ViewLayout(configuration, this.lines.getViewLineCount(), [], scheduleAtNextAnimationFrame));

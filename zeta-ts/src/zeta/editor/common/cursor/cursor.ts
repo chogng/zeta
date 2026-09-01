@@ -2,6 +2,7 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { IME } from "../../../base/common/ime.js";
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { CursorCollection } from './cursorCollection.js';
+import { CursorContext } from './cursorContext.js';
 import { Selection, SelectionDirection } from '../core/selection.js';
 import { Range } from '../core/range.js';
 import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation, type ITextModel, type IValidEditOperation } from '../model.js';
@@ -14,7 +15,9 @@ import { CursorChangeReason } from '../cursorEvents.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import { type ICommand, type IEditOperationBuilder } from '../editorCommon.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
-import { EditOperationType } from '../cursorCommon.js';
+import { CursorConfiguration, EditOperationType, type ICursorSimpleModel } from '../cursorCommon.js';
+import { type ICoordinatesConverter } from '../coordinatesConverter.js';
+import { type TextEdit } from '../languages.js';
 
 export interface CursorSelectionChange {
 	readonly selections: readonly Selection[];
@@ -30,19 +33,15 @@ export interface CompositionUpdate {
 interface CursorsControllerOptions {
 	readonly selectionHistoryLimit?: number;
 	readonly cursorHistoryLimit?: number;
-	readonly readOnly?: boolean;
 }
 
-class CursorControllerContext {
+class CursorControllerSettings {
 	readonly selectionHistoryLimit: number;
 	readonly cursorHistoryLimit: number;
-	readonly readOnly: boolean;
 
-	constructor(readonly model: TextModel, options: CursorsControllerOptions) {
+	constructor(options: CursorsControllerOptions) {
 		this.selectionHistoryLimit = readLimit(options.selectionHistoryLimit, 1_000, 'selectionHistoryLimit');
 		this.cursorHistoryLimit = readLimit(options.cursorHistoryLimit, 100, 'cursorHistoryLimit');
-		if (options.readOnly !== undefined && typeof options.readOnly !== 'boolean') throw new TypeError('Editor read-only mode must be boolean');
-		this.readOnly = options.readOnly ?? false;
 	}
 }
 
@@ -249,7 +248,8 @@ interface AutoClosedAction {
  * tracked selections and command-level selection history.
  */
 export class CursorsController extends Disposable {
-	private readonly context: CursorControllerContext;
+	public context: CursorContext;
+	private readonly settings: CursorControllerSettings;
 	private readonly changeEmitter =
 		this._register(new Emitter<CursorSelectionChange>());
 	private readonly readOnlyEditEmitter = this._register(new Emitter<void>());
@@ -273,15 +273,18 @@ export class CursorsController extends Disposable {
 
 	constructor(
 		private readonly model: TextModel,
-		initialSelections: readonly Selection[],
+		viewModel: ICursorSimpleModel,
+		coordinatesConverter: ICoordinatesConverter,
+		cursorConfig: CursorConfiguration,
 		options: CursorsControllerOptions = {},
 	) {
 		super();
-		this.context = new CursorControllerContext(model, options);
-		this.currentSelections = initialSelections;
-		this.cursors = this._register(new CursorCollection(model, initialSelections));
+		this.context = new CursorContext(model, viewModel, coordinatesConverter, cursorConfig);
+		this.settings = new CursorControllerSettings(options);
+		this.cursors = new CursorCollection(this.context);
+		this.currentSelections = this.cursors.getSelections();
 		try {
-			this.installSelections(initialSelections);
+			this._register(toDisposable(() => this.cursors.dispose()));
 			this._register(model.onDidChangeContent(change => this.acceptModelChange(change)));
 			this._register(toDisposable(() => {
 				this.selectionHistory.clear();
@@ -354,7 +357,7 @@ export class CursorsController extends Disposable {
 	/** Whether this editor instance may submit document-changing commands. */
 	get readOnly(): boolean {
 		this.assertNotDisposed();
-		return this.context.readOnly;
+		return this.context.cursorConfig.readOnly;
 	}
 
 	setSelections(selections: readonly Selection[], reason = CursorChangeReason.NotSet): void {
@@ -371,7 +374,7 @@ export class CursorsController extends Disposable {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("set cursor selections");
 		this.breakHistoryGroup();
-		if (CursorCollection.selectionsEqual(this.currentSelections, selections)) return;
+		if (selectionsEqual(this.currentSelections, selections)) return;
 		this.rememberCursorSelections(this.currentSelections);
 		this.cursorRedoHistory.length = 0;
 		this.installSelections(selections, CursorChangeReason.Explicit);
@@ -412,7 +415,7 @@ export class CursorsController extends Disposable {
 	execute(command: EditorEditCommand): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("execute a command");
-		if (this.context.readOnly) {
+		if (this.context.cursorConfig.readOnly) {
 			this.readOnlyEditEmitter.fire();
 			return undefined;
 		}
@@ -434,7 +437,7 @@ export class CursorsController extends Disposable {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition('execute commands');
 		if (commands.length === 0) return;
-		if (this.context.readOnly) {
+		if (this.context.cursorConfig.readOnly) {
 			this.readOnlyEditEmitter.fire();
 			return;
 		}
@@ -462,7 +465,7 @@ export class CursorsController extends Disposable {
 	beginComposition(): CompositionSession {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("begin another composition");
-		if (this.context.readOnly) {
+		if (this.context.cursorConfig.readOnly) {
 			this.readOnlyEditEmitter.fire();
 			throw new Error("Cannot begin composition in a read-only editor");
 		}
@@ -542,8 +545,8 @@ export class CursorsController extends Disposable {
 		historyGroup: UndoRedoGroup | undefined,
 		historyMergeMode: TextEditHistoryMergeMode,
 	): TextModelChange | undefined {
-		const resultLength = CursorCollection.calculateResultLength(this.model, command.edits);
-		CursorCollection.validateSelectionOffsets(
+		const resultLength = calculateResultLength(this.model, command.edits);
+		validateSelectionOffsets(
 			command.selectionsAfter,
 			command.primarySelectionIndex,
 			resultLength,
@@ -591,7 +594,7 @@ export class CursorsController extends Disposable {
 			this.breakHistoryGroup();
 		}
 
-		const after = CursorCollection.selectionsFromOffsets(
+		const after = selectionsFromOffsets(
 			this.model,
 			command.selectionsAfter,
 			command.primarySelectionIndex,
@@ -612,7 +615,7 @@ export class CursorsController extends Disposable {
 	undo(): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("undo");
-		if (this.context.readOnly) {
+		if (this.context.cursorConfig.readOnly) {
 			this.readOnlyEditEmitter.fire();
 			return undefined;
 		}
@@ -625,7 +628,7 @@ export class CursorsController extends Disposable {
 	redo(): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("redo");
-		if (this.context.readOnly) {
+		if (this.context.cursorConfig.readOnly) {
 			this.readOnlyEditEmitter.fire();
 			return undefined;
 		}
@@ -689,13 +692,13 @@ export class CursorsController extends Disposable {
 		reason?: CursorChangeReason,
 		normalize = false,
 	): void {
-		CursorCollection.validateSelections(this.model, selections);
+		validateSelections(this.model, selections);
 		const previous = this.currentSelections;
-		this.cursors.setSelections(selections);
+		this.cursors.setSelections([...selections]);
 		if (normalize) this.cursors.normalize();
 		this.currentSelections = this.cursors.getSelections();
 		this.pruneAutoClosedActions();
-		if (reason !== undefined && !CursorCollection.selectionsEqual(previous, this.currentSelections)) {
+		if (reason !== undefined && !selectionsEqual(previous, this.currentSelections)) {
 			this.changeEmitter.fire(Object.freeze({
 				selections: this.currentSelections,
 				reason,
@@ -709,11 +712,12 @@ export class CursorsController extends Disposable {
 		notify = true,
 		forceNotify = false,
 	): void {
-		const selections = this.cursors.getSelections();
+		const selections = this.cursors.readSelectionFromMarkers();
 		const previous = this.currentSelections;
+		this.cursors.setSelections(selections);
 		this.currentSelections = selections;
 		this.pruneAutoClosedActions();
-		if (notify && (forceNotify || !CursorCollection.selectionsEqual(previous, selections))) {
+		if (notify && (forceNotify || !selectionsEqual(previous, selections))) {
 			this.changeEmitter.fire(Object.freeze({
 				selections,
 				reason,
@@ -738,7 +742,7 @@ export class CursorsController extends Disposable {
 		this.selectionHistoryOrder.push(transactionId);
 		while (
 			this.selectionHistoryOrder.length >
-			this.context.selectionHistoryLimit
+			this.settings.selectionHistoryLimit
 		) {
 			const oldest = this.selectionHistoryOrder.shift();
 			if (oldest !== undefined) this.selectionHistory.delete(oldest);
@@ -746,15 +750,15 @@ export class CursorsController extends Disposable {
 	}
 
 	private rememberCursorSelections(selections: readonly Selection[]): void {
-		if (this.context.cursorHistoryLimit === 0) return;
+		if (this.settings.cursorHistoryLimit === 0) return;
 		this.cursorHistory.push(selections);
-		while (this.cursorHistory.length > this.context.cursorHistoryLimit) this.cursorHistory.shift();
+		while (this.cursorHistory.length > this.settings.cursorHistoryLimit) this.cursorHistory.shift();
 	}
 
 	private rememberCursorRedoSelections(selections: readonly Selection[]): void {
-		if (this.context.cursorHistoryLimit === 0) return;
+		if (this.settings.cursorHistoryLimit === 0) return;
 		this.cursorRedoHistory.push(selections);
-		while (this.cursorRedoHistory.length > this.context.cursorHistoryLimit) this.cursorRedoHistory.shift();
+		while (this.cursorRedoHistory.length > this.settings.cursorHistoryLimit) this.cursorRedoHistory.shift();
 	}
 
 	private forgetSelectionHistory(transactionId: number): void {
@@ -940,5 +944,53 @@ function validateRelativeSelection(selection: TextSelectionOffsets, textLength: 
 function assertRelativeOffset(offset: number, textLength: number, name: string): void {
 	if (!Number.isSafeInteger(offset) || offset < 0 || offset > textLength) {
 		throw new RangeError(`${name} must be between 0 and ${textLength}`);
+	}
+}
+
+function calculateResultLength(model: TextModel, edits: readonly TextEdit[]): number {
+	let length = model.length;
+	for (const edit of edits) {
+		const range = Range.lift(edit.range);
+		length += normalizeTextLineEndings(edit.text).length
+			- (model.offsetAt(range.getEndPosition()) - model.offsetAt(range.getStartPosition()));
+	}
+	return length;
+}
+
+function selectionsFromOffsets(model: TextModel, selections: readonly TextSelectionOffsets[], primarySelectionIndex: number): readonly Selection[] {
+	const result = selections.map(selection => Selection.fromPositions(
+		model.positionAt(selection.anchorOffset),
+		model.positionAt(selection.activeOffset),
+	));
+	if (primarySelectionIndex === 0) return Object.freeze(result);
+	return Object.freeze([result[primarySelectionIndex]!, ...result.slice(0, primarySelectionIndex), ...result.slice(primarySelectionIndex + 1)]);
+}
+
+function validateSelectionOffsets(selections: readonly TextSelectionOffsets[], primarySelectionIndex: number, documentLength: number): void {
+	if (selections.length === 0) throw new RangeError('selectionsAfter must not be empty');
+	if (!Number.isSafeInteger(primarySelectionIndex) || primarySelectionIndex < 0 || primarySelectionIndex >= selections.length) {
+		throw new RangeError('primarySelectionIndex must identify selectionsAfter');
+	}
+	for (const selection of selections) {
+		assertOffset(selection.anchorOffset, documentLength, 'anchorOffset');
+		assertOffset(selection.activeOffset, documentLength, 'activeOffset');
+	}
+}
+
+function validateSelections(model: TextModel, selections: readonly Selection[]): void {
+	if (selections.length === 0) throw new RangeError('Selections must not be empty');
+	for (const selection of selections) {
+		model.offsetAt(selection.getSelectionStart());
+		model.offsetAt(selection.getPosition());
+	}
+}
+
+function selectionsEqual(left: readonly Selection[], right: readonly Selection[]): boolean {
+	return left.length === right.length && left.every((selection, index) => selection.equalsSelection(right[index]!));
+}
+
+function assertOffset(offset: number, documentLength: number, name: string): void {
+	if (!Number.isSafeInteger(offset) || offset < 0 || offset > documentLength) {
+		throw new RangeError(`${name} must be between 0 and ${documentLength}`);
 	}
 }

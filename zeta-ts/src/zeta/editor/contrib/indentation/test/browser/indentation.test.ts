@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { createBuiltinLanguageConfigurationService } from '../../../../common/languages/languageBuiltinConfigurations.js';
@@ -8,6 +7,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { IndentationToSpacesCommand, IndentationToTabsCommand } from '../../browser/indentation.js';
 import { getReindentEditOperations } from '../../common/indentation.js';
 import { generateIndent, getSpaceCnt } from '../../common/indentUtils.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test('indent utilities validate widths and generate compact indentation', () => {
 	assert.equal(getSpaceCnt('\t  ', 4), 6);
@@ -19,7 +19,7 @@ test('indent utilities validate widths and generate compact indentation', () => 
 test('canonical indentation commands convert the document and preserve the selection', () => {
 	using model = new TextModel('\talpha\n    beta', { tabSize: 4 });
 	const initial = Selection.fromPositions(new Position(1, 2), new Position(2, 5));
-	using cursors = new CursorsController(model, [initial]);
+	using cursors = createTestCursorsController(model, [initial]);
 
 	cursors.executeCommand(new IndentationToSpacesCommand(initial, 4));
 	assert.equal(model.getText(), '    alpha\n    beta');

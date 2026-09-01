@@ -4,8 +4,52 @@ import { type IEditorConfiguration } from '../../common/config/editorConfigurati
 import { EditorOption, editorOptionsRegistry, type ConfigurationChangedEvent, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions } from '../../common/config/editorOptions.js';
 import { FontInfo } from '../../common/config/fontInfo.js';
 import { CursorConfiguration } from '../../common/cursorCommon.js';
+import { CursorsController } from '../../common/cursor/cursor.js';
+import { IdentityCoordinatesConverter } from '../../common/coordinatesConverter.js';
+import { type Selection } from '../../common/core/selection.js';
+import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
 import { type ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { type TextModel } from '../../common/model/textModel.js';
+
+export interface TestCursorsControllerOptions extends IEditorOptions {
+	readonly selectionHistoryLimit?: number;
+	readonly cursorHistoryLimit?: number;
+}
+
+export function createTestCursorsController(
+	model: TextModel,
+	selections: readonly Selection[],
+	options: TestCursorsControllerOptions = {},
+): CursorsController {
+	const languageConfigurationService = createBuiltinLanguageConfigurationService();
+	const cursorConfig = createTestCursorConfiguration(model, languageConfigurationService, options);
+	const controller = new TestCursorsController(
+		model,
+		new IdentityCoordinatesConverter(model),
+		cursorConfig,
+		languageConfigurationService,
+		options,
+	);
+	controller.setSelections(selections);
+	return controller;
+}
+
+class TestCursorsController extends CursorsController {
+	constructor(
+		model: TextModel,
+		coordinatesConverter: IdentityCoordinatesConverter,
+		cursorConfig: CursorConfiguration,
+		private readonly languageConfigurationService: ReturnType<typeof createBuiltinLanguageConfigurationService>,
+		options: TestCursorsControllerOptions,
+	) {
+		super(model, model, coordinatesConverter, cursorConfig, options);
+	}
+
+	public override dispose(): void {
+		super.dispose();
+		this.languageConfigurationService.dispose();
+	}
+}
 
 export function createTestCursorConfiguration(model: TextModel, languageConfigurationService: ILanguageConfigurationService, rawOptions: IEditorOptions = {}): CursorConfiguration {
 	const fontInfo = new FontInfo({

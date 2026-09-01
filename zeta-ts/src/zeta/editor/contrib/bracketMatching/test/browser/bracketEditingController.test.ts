@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
@@ -10,6 +9,7 @@ import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -31,7 +31,7 @@ test("Remove-brackets shortcut mutates through an isolated Stanza transaction", 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("(value)");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
@@ -56,7 +56,7 @@ test("Bracket editing controller rejects cross-model wiring and preserves unsupp
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("()");
 	using other = new TextModel("()");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using otherLexical = new LanguageLexicalContextIndex(other, "typescript", configurations);

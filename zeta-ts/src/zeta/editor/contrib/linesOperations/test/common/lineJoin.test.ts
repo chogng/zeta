@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { createJoinLinesCommand } from '../../browser/linesOperations.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test("Join lines removes indentation, retains one separator, and restores undo", () => {
 	using model = new TextModel("hello\n  world\nhello \n\tworld\n\nlast");
-	using selections = new CursorsController(model, [caret(0, 2)]);
+	using selections = createTestCursorsController(model, [caret(0, 2)]);
 
 	selections.execute(createJoinLinesCommand(model, selections.selections));
 	assert.equal(model.getText(), "hello world\nhello \n\tworld\n\nlast");
@@ -24,7 +24,7 @@ test("Join lines removes indentation, retains one separator, and restores undo",
 
 test("Join lines joins ranges, reduces overlapping cursors, and preserves the primary group", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour\nfive");
-	using selections = new CursorsController(model, primaryFirst([
+	using selections = createTestCursorsController(model, primaryFirst([
 		caret(0, 1),
 		caret(1, 2),
 		Selection.fromPositions(new Position((3) + 1, (1) + 1), new Position((4) + 1, (2) + 1)),
@@ -40,7 +40,7 @@ test("Join lines joins ranges, reduces overlapping cursors, and preserves the pr
 
 test("Join lines at the final line leaves collapsed and range selections unchanged", () => {
 	using model = new TextModel("first\nlast");
-	using selections = new CursorsController(model, [Selection.fromPositions(
+	using selections = createTestCursorsController(model, [Selection.fromPositions(
 		new Position((1) + 1, (1) + 1),
 		new Position((1) + 1, (3) + 1),
 	)]);

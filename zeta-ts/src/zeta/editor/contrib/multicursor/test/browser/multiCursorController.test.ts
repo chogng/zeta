@@ -3,11 +3,11 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 class TestResizeObserver {
@@ -114,8 +114,8 @@ test("Multi-cursor controller rejects cross-model wiring", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one");
 	using other = new TextModel("two");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
-	using otherSelections = new CursorsController(other, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using otherSelections = createTestCursorsController(other, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	assert.throws(() => new MultiCursorController(input, viewport, viewport.testViewModel, otherSelections), /must share one text model/);

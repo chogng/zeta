@@ -7,10 +7,10 @@ import { LanguageBracketPairs } from "../../../../common/languages/languageBrack
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -35,7 +35,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
 	using registration = configurations.register("typescript", {
 		brackets: [["(", ")"], ["{", "}"]],
 	});
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (17) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (17) + 1))]);
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using decorations = new TextDecorationCollection<void>(model);
@@ -79,7 +79,7 @@ test("Bracket match controller distinguishes near, always, and never modes", () 
 	using registration = configurations.register("typescript", { brackets: [["{", "}"]] });
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
 
 	using nearDecorations = new TextDecorationCollection<void>(model);
 	using near = new BracketMatchController(selections, bracketPairs, nearDecorations, "near");

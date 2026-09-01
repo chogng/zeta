@@ -8,6 +8,7 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { ReplaceCommand, ReplaceCommandThatPreservesSelection } from '../../common/commands/replaceCommand.js';
+import { createTestCursorsController } from './testCursorConfiguration.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
@@ -27,7 +28,7 @@ const single = (
 
 test("CursorsController restores command selections", () => {
 	using model = new TextModel("hello");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		single(4, 1),
 	);
@@ -73,7 +74,7 @@ test("CursorsController restores command selections", () => {
 
 test('CursorsController executes canonical ICommand edits with undoable selections', () => {
 	using model = new TextModel('hello');
-	using controller = new CursorsController(model, single(1, 4));
+	using controller = createTestCursorsController(model, single(1, 4));
 
 	controller.executeCommand(new ReplaceCommand(range(1, 4), 'i'));
 	assert.deepEqual({ text: model.getText(), selections: controller.selections }, {
@@ -89,7 +90,7 @@ test('CursorsController executes canonical ICommand edits with undoable selectio
 
 test('Canonical commands share history until pushUndoStop creates a boundary', () => {
 	using coalescedModel = new TextModel('');
-	using coalesced = new CursorsController(coalescedModel, single(0, 0));
+	using coalesced = createTestCursorsController(coalescedModel, single(0, 0));
 	coalesced.executeCommand(new ReplaceCommand(range(0, 0), 'a'));
 	coalesced.executeCommand(new ReplaceCommand(range(1, 1), 'b'));
 	assert.equal(coalescedModel.getText(), 'ab');
@@ -97,7 +98,7 @@ test('Canonical commands share history until pushUndoStop creates a boundary', (
 	assert.equal(coalescedModel.getText(), '');
 
 	using isolatedModel = new TextModel('');
-	using isolated = new CursorsController(isolatedModel, single(0, 0));
+	using isolated = createTestCursorsController(isolatedModel, single(0, 0));
 	isolated.executeCommand(new ReplaceCommand(range(0, 0), 'a'));
 	isolated.pushUndoStop();
 	isolated.executeCommand(new ReplaceCommand(range(1, 1), 'b'));
@@ -108,7 +109,7 @@ test('Canonical commands share history until pushUndoStop creates a boundary', (
 test('CommandExecutor keeps the first edit and merges converged cursors when commands overlap', () => {
 	using model = new TextModel('abcd');
 	const before = [Selection.fromPositions(position(0, 1)), Selection.fromPositions(position(0, 2))];
-	using controller = new CursorsController(model, before);
+	using controller = createTestCursorsController(model, before);
 
 	controller.executeCommands([
 		new ReplaceCommand(range(1, 3), 'X'),
@@ -122,7 +123,7 @@ test('CommandExecutor keeps the first edit and merges converged cursors when com
 test('CommandExecutor resolves tracked selections after model edits', () => {
 	using model = new TextModel('abcd');
 	const selection = Selection.fromPositions(position(0, 2), position(0, 4));
-	using controller = new CursorsController(model, [selection]);
+	using controller = createTestCursorsController(model, [selection]);
 
 	controller.executeCommand(new ReplaceCommandThatPreservesSelection(range(0, 0), 'X', selection));
 
@@ -132,7 +133,7 @@ test('CommandExecutor resolves tracked selections after model edits', () => {
 
 test("Read-only editor instances preserve selection while rejecting document commands", () => {
 	using model = new TextModel("abc");
-	using controller = new CursorsController(model, single(0, 0), { readOnly: true });
+	using controller = createTestCursorsController(model, single(0, 0), { readOnly: true });
 
 	const command = {
 		edits: [{ range: range(0, 0), text: "X" }],
@@ -152,7 +153,7 @@ test("Read-only editor instances preserve selection while rejecting document com
 
 test("Cursor-only selection history restores multi-cursor operations without changing document undo", () => {
 	using model = new TextModel("abc");
-	using controller = new CursorsController(model, single(0, 0), { cursorHistoryLimit: 1 });
+	using controller = createTestCursorsController(model, single(0, 0), { cursorHistoryLimit: 1 });
 	const reasons: CursorChangeReason[] = [];
 	using listener = controller.onDidChange(event => reasons.push(event.reason));
 	const first = primaryFirst([
@@ -190,7 +191,7 @@ test("Cursor-only selection history restores multi-cursor operations without cha
 
 test("CursorsController maps external model edits", () => {
 	using model = new TextModel("abc");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		single(2, 1),
 	);
@@ -216,7 +217,7 @@ test("CursorsController maps external model edits", () => {
 
 test("CursorsController projects tracked selections before downstream command listeners", () => {
 	using model = new TextModel("const value = 1;\n");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		[Selection.fromPositions(
 			new Position((0) + 1, (0) + 1),
@@ -248,7 +249,7 @@ test("CursorsController releases tracked ranges without taking their model owner
 	{
 		using installation = installDisposableTracker(tracker);
 		using model = new TextModel("abc");
-		using controller = new CursorsController(model, single(0, 0));
+		using controller = createTestCursorsController(model, single(0, 0));
 
 		controller.setSelections(single(2, 2));
 	}
@@ -258,8 +259,8 @@ test("CursorsController releases tracked ranges without taking their model owner
 
 test("Shared editors retain independent selection ownership", () => {
 	using model = new TextModel("abc");
-	using first = new CursorsController(model, single(1, 1));
-	using second = new CursorsController(model, single(3, 3));
+	using first = createTestCursorsController(model, single(1, 1));
+	using second = createTestCursorsController(model, single(3, 3));
 
 	first.execute({
 		edits: [{ range: range(1, 1), text: "X" }],
@@ -299,7 +300,7 @@ test("Shared editors retain independent selection ownership", () => {
 
 test("CursorsController validates commands before mutation", () => {
 	using model = new TextModel("abc");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		single(0, 0),
 	);
@@ -325,7 +326,7 @@ test("CursorsController validates commands before mutation", () => {
 
 test("CursorsController disposal does not own the model", () => {
 	using model = new TextModel("abc");
-	const controller = new CursorsController(
+	const controller = createTestCursorsController(
 		model,
 		single(0, 0),
 	);
@@ -341,7 +342,7 @@ test("CursorsController disposal does not own the model", () => {
 
 test("CursorsController rejects stale post-command selections", () => {
 	using model = new TextModel("abc");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		single(0, 0),
 	);

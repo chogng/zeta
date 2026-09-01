@@ -2,17 +2,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ShiftCommand } from '../../../../common/commands/shiftCommand.js';
 import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
-import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { createBuiltinLanguageConfigurationService } from '../../../../common/languages/languageBuiltinConfigurations.js';
 import { TextModel } from '../../../../common/model/textModel.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test('ShiftCommand owns selected-line indentation after the legacy helper retires', () => {
 	using configurations = createBuiltinLanguageConfigurationService();
 	using model = new TextModel('one\n  two\nthree', { tabSize: 2, indentSize: 2, insertSpaces: true });
 	const initial = Selection.fromPositions(new Position(1, 1), new Position(2, 6));
-	using cursors = new CursorsController(model, [initial]);
+	using cursors = createTestCursorsController(model, [initial]);
 	const options = {
 		isUnshift: false,
 		tabSize: 2,

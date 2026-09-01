@@ -15,6 +15,7 @@ import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
 import { LanguageEditingAdapter } from "../../../../browser/view/viewController.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -253,7 +254,7 @@ function completionResult(request: LanguageCompletionProviderRequest, label: str
 }
 
 function controllerAt(model: TextModel, position: Position): CursorsController {
-	return new CursorsController(
+	return createTestCursorsController(
 		model,
 		[Selection.fromPositions(position)],
 	);

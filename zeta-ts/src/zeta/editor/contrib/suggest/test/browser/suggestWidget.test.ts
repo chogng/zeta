@@ -13,6 +13,7 @@ import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -383,7 +384,7 @@ function completion(id: string, label: string, kind: LanguageCompletionItemKind,
 }
 
 function controllerAt(model: TextModel, position: Position): CursorsController {
-	return new CursorsController(
+	return createTestCursorsController(
 		model,
 		[Selection.fromPositions(position)],
 	);

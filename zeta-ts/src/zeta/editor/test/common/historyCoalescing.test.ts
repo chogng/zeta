@@ -9,6 +9,7 @@ import { Range } from "../../common/core/range.js";
 import type { TextModelChange } from '../../common/core/textChange.js';
 import type { IIdentifiedSingleEditOperation } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
+import { createTestCursorsController } from './testCursorConfiguration.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
@@ -113,7 +114,7 @@ test("TextModel starts a new step for non-adjacent group edits", () => {
 
 test("CursorsController coalesces multi-cursor typing", () => {
 	using model = new TextModel("ab");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		cursors([0, 2]),
 	);
@@ -168,7 +169,7 @@ test("CursorsController coalesces multi-cursor typing", () => {
 
 test("Explicit selection changes break typing coalescing", () => {
 	using model = new TextModel("");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		cursors([0]),
 	);
@@ -201,7 +202,7 @@ test("Explicit selection changes break typing coalescing", () => {
 
 test("Explicit undo stops break coalescing without adding a step", () => {
 	using model = new TextModel("");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		cursors([0]),
 	);
@@ -229,7 +230,7 @@ test("Explicit undo stops break coalescing without adding a step", () => {
 
 test("Typing coalesces an initial replacement and following overwrite", () => {
 	using model = new TextModel("hello");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selections([[1, 4]]),
 	);
@@ -288,7 +289,7 @@ test("Typing coalesces an initial replacement and following overwrite", () => {
 
 test("Typing coalesces replacements independently at multiple selections", () => {
 	using model = new TextModel("ab__CD");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selections([[0, 2], [4, 6]], 1),
 	);
@@ -355,7 +356,7 @@ test("Coalesced history obeys the text-unit budget", () => {
 			textUnits: 1,
 		},
 	});
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		cursors([2]),
 	);
@@ -385,7 +386,7 @@ test("Coalesced history obeys the text-unit budget", () => {
 
 test("CursorsController coalesces Backspace commands", () => {
 	using model = new TextModel("abcd");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		cursors([4]),
 	);
@@ -424,7 +425,7 @@ test("CursorsController coalesces Backspace commands", () => {
 
 test("CursorsController coalesces forward Delete commands", () => {
 	using model = new TextModel("abcd");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		cursors([1]),
 	);
@@ -461,7 +462,7 @@ test("CursorsController coalesces forward Delete commands", () => {
 
 test("Backspace coalescing adjusts separated multi-cursor offsets", () => {
 	using model = new TextModel("ab__CD");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		cursors([2, 6]),
 	);

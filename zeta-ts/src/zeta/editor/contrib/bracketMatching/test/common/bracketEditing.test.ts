@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRemoveMatchingBracketsCommand } from "../../common/bracketEditing.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test("Remove matching brackets deletes distinct lexical pairs atomically and restores undo", () => {
 	using model = new TextModel("{(value)}");
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	using selections = new CursorsController(model, primaryFirst([
+	using selections = createTestCursorsController(model, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (1) + 1)),
 	], 1));

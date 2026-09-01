@@ -11,10 +11,11 @@ import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { createTestCursorConfiguration } from '../testCursorConfiguration.js';
+import { createTestCursorsController } from '../testCursorConfiguration.js';
 
 test("Language pair typing auto-closes and overtypes one existing closer", () => {
 	using model = new TextModel("call");
-	using selections = new CursorsController(model, [caret(4)]);
+	using selections = createTestCursorsController(model, [caret(4)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -40,7 +41,7 @@ test("Language pair typing auto-closes and overtypes one existing closer", () =>
 
 test("Language pair backspace removes both empty sides and remains one undo step", () => {
 	using model = new TextModel("", { languageId: 'typescript' });
-	using selections = new CursorsController(model, [caret(0)]);
+	using selections = createTestCursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -59,7 +60,7 @@ test("Language pair backspace removes both empty sides and remains one undo step
 test("Language pair typing surrounds directional selections and auto-closes collapsed cursors", () => {
 	using model = new TextModel("alpha beta");
 	const backward = Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (0) + 1));
-	using selections = new CursorsController(model, primaryFirst([backward, caret(10)], 1));
+	using selections = createTestCursorsController(model, primaryFirst([backward, caret(10)], 1));
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const result = typeCommand(model, selections, "\"", configurations.getLanguageConfiguration("typescript"));
@@ -79,7 +80,7 @@ test("Language pair typing surrounds directional selections and auto-closes coll
 
 test("Auto-closing respects following text and supports multi-token pairs", () => {
 	using model = new TextModel("name", { languageId: 'template' });
-	using selections = new CursorsController(model, [caret(0)]);
+	using selections = createTestCursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using custom = configurations.register("template", {
 		autoClosingPairs: [{ open: "<%", close: "%>" }],
@@ -108,7 +109,7 @@ test("Auto-closing notIn keeps string and comment input single while code still 
 	const configuration = configurations.getLanguageConfiguration("typescript");
 
 	using stringModel = new TextModel("\"value \"");
-	using stringSelections = new CursorsController(stringModel, [caret(7)]);
+	using stringSelections = createTestCursorsController(stringModel, [caret(7)]);
 	using stringContext = new LanguageLexicalContextIndex(stringModel, "typescript", configurations);
 	const stringQuote = typeCommand(stringModel, stringSelections, "'", configuration, stringContext)!;
 	stringSelections.execute(stringQuote.command);
@@ -116,14 +117,14 @@ test("Auto-closing notIn keeps string and comment input single while code still 
 	assert.deepEqual(stringQuote.autoClosedCharacters, []);
 
 	using commentModel = new TextModel("// note ");
-	using commentSelections = new CursorsController(commentModel, [caret(8)]);
+	using commentSelections = createTestCursorsController(commentModel, [caret(8)]);
 	using commentContext = new LanguageLexicalContextIndex(commentModel, "typescript", configurations);
 	const commentQuote = typeCommand(commentModel, commentSelections, "'", configuration, commentContext)!;
 	commentSelections.execute(commentQuote.command);
 	assert.equal(commentModel.getText(), "// note '");
 
 	using codeModel = new TextModel("");
-	using codeSelections = new CursorsController(codeModel, [caret(0)]);
+	using codeSelections = createTestCursorsController(codeModel, [caret(0)]);
 	using codeContext = new LanguageLexicalContextIndex(codeModel, "typescript", configurations);
 	const codeQuote = typeCommand(codeModel, codeSelections, "'", configuration, codeContext)!;
 	codeSelections.execute(codeQuote.command);

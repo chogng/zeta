@@ -8,6 +8,7 @@ import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -176,7 +177,7 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	const model = new TextModel(text);
-	const selections = new CursorsController(model, [Selection.fromPositions(anchor, active)]);
+	const selections = createTestCursorsController(model, [Selection.fromPositions(anchor, active)]);
 	const decorations = new TextDecorationCollection<void>(model);
 	const viewport = new View({
 		container,

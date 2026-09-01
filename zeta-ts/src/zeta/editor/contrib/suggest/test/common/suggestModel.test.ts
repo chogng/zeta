@@ -9,6 +9,7 @@ import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test("Completion session opens at the matching cursor and navigates cyclically", () => {
 	using model = new TextModel("con");
@@ -415,7 +416,7 @@ function completion(id: string, label: string, preselect = false, range = Range.
 }
 
 function controllerAt(model: TextModel, position: Position): CursorsController {
-	return new CursorsController(
+	return createTestCursorsController(
 		model,
 		[Selection.fromPositions(position)],
 	);

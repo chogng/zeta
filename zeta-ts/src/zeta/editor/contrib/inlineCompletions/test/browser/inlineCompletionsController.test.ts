@@ -6,12 +6,12 @@ import { h } from '../../../../../base/browser/dom.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageInlineCompletionsProvider } from '../../common/inlineCompletions.js';
 import { InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 class TestResizeObserver {
 	observe(): void {}
@@ -42,7 +42,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('abc');
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const input = h(dom.window.document, 'textarea');

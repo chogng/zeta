@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { IME } from "../../../base/common/ime.js";
-import { CursorsController } from "../../common/cursor/cursor.js";
 import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModelChangeReason } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { createTestCursorsController } from './testCursorConfiguration.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
@@ -26,7 +26,7 @@ const selection = (
 
 test("Composition revisions commit as one selection-aware undo step", () => {
 	using model = new TextModel("hello");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selection(1, 4),
 	);
@@ -89,7 +89,7 @@ test("Composition revisions commit as one selection-aware undo step", () => {
 
 test("Composition exposes only its active provisional model range", () => {
 	using model = new TextModel("a\nbc");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		[Selection.fromPositions(
 			position(1, 1),
@@ -120,7 +120,7 @@ test("Composition exposes only its active provisional model range", () => {
 
 test("Composition cancellation restores text without redo history", () => {
 	using model = new TextModel("hello");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selection(1, 4),
 	);
@@ -159,7 +159,7 @@ test("Active composition survives zero history budgets until resolution", () => 
 	using cancelModel = new TextModel("hello", {
 		historyLimit: { transactions: 0, textUnits: 0 },
 	});
-	using cancelController = new CursorsController(
+	using cancelController = createTestCursorsController(
 		cancelModel,
 		selection(1, 4),
 	);
@@ -178,7 +178,7 @@ test("Active composition survives zero history budgets until resolution", () => 
 	using commitModel = new TextModel("hello", {
 		historyLimit: { transactions: 0, textUnits: 0 },
 	});
-	using commitController = new CursorsController(
+	using commitController = createTestCursorsController(
 		commitModel,
 		selection(1, 4),
 	);
@@ -205,7 +205,7 @@ test("Active composition survives zero history budgets until resolution", () => 
 
 test("No-op composition updates may move the caret without history", () => {
 	using model = new TextModel("a");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selection(0, 1),
 	);
@@ -232,7 +232,7 @@ test("No-op composition updates may move the caret without history", () => {
 
 test("Composition returning to its original text leaves no undo step", () => {
 	using model = new TextModel("a");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selection(0, 1),
 	);
@@ -273,7 +273,7 @@ test("Composition returning to its original text leaves no undo step", () => {
 
 test("External model edits invalidate an active composition", () => {
 	using model = new TextModel("ab");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selection(0, 1),
 	);
@@ -300,7 +300,7 @@ test("External model edits invalidate an active composition", () => {
 
 test("Reentrant model edits invalidate composition before update returns", () => {
 	using model = new TextModel("ab");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selection(0, 1),
 	);
@@ -334,7 +334,7 @@ test("Reentrant model edits invalidate composition before update returns", () =>
 
 test("Composition rejects ambiguous ownership and invalid relative offsets", () => {
 	using model = new TextModel("ab");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selection(0, 1),
 	);
@@ -358,7 +358,7 @@ test("Composition rejects ambiguous ownership and invalid relative offsets", () 
 	assert.equal(model.getText(), "ab");
 	composition.cancel();
 
-	using multiController = new CursorsController(
+	using multiController = createTestCursorsController(
 		model,
 		primaryFirst([
 			Selection.fromPositions(position(0, 0)),
@@ -373,7 +373,7 @@ test("Composition rejects ambiguous ownership and invalid relative offsets", () 
 
 test("Composition observes the shared base IME coordination state", () => {
 	using model = new TextModel("a");
-	using controller = new CursorsController(
+	using controller = createTestCursorsController(
 		model,
 		selection(0, 1),
 	);

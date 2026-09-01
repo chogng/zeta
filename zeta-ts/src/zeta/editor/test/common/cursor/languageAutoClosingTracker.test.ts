@@ -10,10 +10,11 @@ import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { createTestCursorConfiguration } from '../testCursorConfiguration.js';
+import { createTestCursorsController } from '../testCursorConfiguration.js';
 
 test("Auto-closing trust follows external edits and rejects a changed closer", () => {
 	using model = new TextModel("x");
-	using selections = new CursorsController(model, [caret(1)]);
+	using selections = createTestCursorsController(model, [caret(1)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -29,7 +30,7 @@ test("Auto-closing trust follows external edits and rejects a changed closer", (
 
 test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 	using model = new TextModel("");
-	using selections = new CursorsController(model, [caret(0)]);
+	using selections = createTestCursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -43,7 +44,7 @@ test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 
 test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 	using model = new TextModel("()", { languageId: 'typescript' });
-	using selections = new CursorsController(model, [caret(1)]);
+	using selections = createTestCursorsController(model, [caret(1)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -60,7 +61,7 @@ test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 
 test("Multi-selection auto-closing entries retain independent ownership", () => {
 	using model = new TextModel("a b");
-	using selections = new CursorsController(model, primaryFirst([caret(1), caret(3)], 0));
+	using selections = createTestCursorsController(model, primaryFirst([caret(1), caret(3)], 0));
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -76,7 +77,7 @@ test("Multi-selection auto-closing entries retain independent ownership", () => 
 
 test("Undo removes provenance and redo does not invent it again", () => {
 	using model = new TextModel("", { languageId: 'typescript' });
-	using selections = new CursorsController(model, [caret(0)]);
+	using selections = createTestCursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -93,7 +94,7 @@ test("Undo removes provenance and redo does not invent it again", () => {
 
 test("Stale recording is ignored and cursor disposal leaves the model alive", () => {
 	using model = new TextModel("");
-	using selections = new CursorsController(model, [caret(0)]);
+	using selections = createTestCursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");

@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 class TestResizeObserver {
@@ -35,7 +35,7 @@ test("Occurrence shortcuts select a word, add its next match, and select every m
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("echo echo\necho");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -59,8 +59,8 @@ test("Occurrence controller rejects cross-model wiring and leaves unrelated chor
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("echo");
 	using other = new TextModel("echo");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
-	using otherSelections = new CursorsController(other, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using otherSelections = createTestCursorsController(other, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

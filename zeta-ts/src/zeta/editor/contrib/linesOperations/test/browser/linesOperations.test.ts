@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { createDeleteLinesCommand, createDuplicateLinesCommand, createInsertLineCommand, createMoveLinesCommand, EditorLineDuplicateDirection, EditorLineInsertDirection, EditorLineMoveDirection } from "../../browser/linesOperations.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -10,11 +9,12 @@ import { MoveLinesCommand } from '../../browser/moveLinesCommand.js';
 import { SortLinesCommand } from '../../browser/sortLinesCommand.js';
 import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
 import { createBuiltinLanguageConfigurationService } from '../../../../common/languages/languageBuiltinConfigurations.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test('Canonical line commands execute through ICommand without the legacy controller', () => {
 	using configurations = createBuiltinLanguageConfigurationService();
 	using model = new TextModel('zero\none\ntwo');
-	using selections = new CursorsController(model, [caret(1, 1)]);
+	using selections = createTestCursorsController(model, [caret(1, 1)]);
 
 	selections.executeCommand(new CopyLinesCommand(selections.selections[0]!, true));
 	assert.deepEqual({ text: model.getText(), selection: selections.selections[0] }, {
@@ -47,7 +47,7 @@ test('SortLinesCommand rejects single-line and already-sorted work', () => {
 
 test("Delete lines removes selected physical line groups and keeps a valid final line", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
-	using selections = new CursorsController(model, primaryFirst([
+	using selections = createTestCursorsController(model, primaryFirst([
 		caret(1, 1),
 		Selection.fromPositions(new Position((3) + 1, (0) + 1), new Position((4) + 1, (0) + 1)),
 	], 1));
@@ -72,7 +72,7 @@ test("Delete lines removes selected physical line groups and keeps a valid final
 
 test("Duplicate lines supports multi-line groups, document edges, and isolated undo", () => {
 	using model = new TextModel("zero\none\ntwo\nthree");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((1) + 1, (0) + 1), new Position((3) + 1, (0) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((1) + 1, (0) + 1), new Position((3) + 1, (0) + 1))]);
 
 	selections.execute(createDuplicateLinesCommand(
 		model,
@@ -112,7 +112,7 @@ test("Duplicate line command validates its direction before mutation", () => {
 
 test("Move lines swaps selected groups with their neighboring rows and keeps directional selections", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((2) + 1, (3) + 1), new Position((1) + 1, (1) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((2) + 1, (3) + 1), new Position((1) + 1, (1) + 1))]);
 
 	selections.execute(createMoveLinesCommand(model, selections.selections, EditorLineMoveDirection.Down));
 	assert.equal(model.getText(), "zero\nthree\none\ntwo\nfour");
@@ -134,7 +134,7 @@ test("Move lines swaps selected groups with their neighboring rows and keeps dir
 
 test("Move lines preserves disjoint selected groups and rejects invalid directions", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
-	using selections = new CursorsController(model, primaryFirst([
+	using selections = createTestCursorsController(model, primaryFirst([
 		caret(1, 1),
 		caret(3, 2),
 	], 1));
@@ -157,7 +157,7 @@ test("Move lines preserves disjoint selected groups and rejects invalid directio
 
 test("Insert lines deduplicates selected groups, places carets on blank rows, and undoes atomically", () => {
 	using model = new TextModel("zero\none\ntwo\nthree");
-	using selections = new CursorsController(model, primaryFirst([
+	using selections = createTestCursorsController(model, primaryFirst([
 		caret(0, 1),
 		Selection.fromPositions(new Position((2) + 1, (0) + 1), new Position((3) + 1, (0) + 1)),
 	], 1));

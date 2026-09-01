@@ -12,6 +12,7 @@ import { DocumentHighlightKind } from '../../../../common/languages.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 class TestResizeObserver {
@@ -122,7 +123,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, res
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text, { languageId: 'typescript', resource });
-	const selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
+	const selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 	const textualProvider = new TextualMultiDocumentHighlightFeature(languages);
 	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
 	const viewport = new View({

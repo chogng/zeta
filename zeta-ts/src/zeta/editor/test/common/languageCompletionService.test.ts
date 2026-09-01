@@ -1,6 +1,5 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { CursorsController } from "../../common/cursor/cursor.js";
 import { LanguageCompletionSessionController } from "../../contrib/suggest/common/languageCompletionSessionController.js";
 import { LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../common/languages/completion/languageCompletionProviders.js";
@@ -10,6 +9,7 @@ import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { createTestCursorsController } from './testCursorConfiguration.js';
 
 test("Completion service runs providers concurrently and merges deterministically", async () => {
 	using registry = new LanguageCompletionProviderRegistry();
@@ -178,7 +178,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	}));
 	using model = new TextModel("con");
 	using service = new LanguageCompletionService(model, registry);
-	using selections = new CursorsController(
+	using selections = createTestCursorsController(
 		model,
 		[Selection.fromPositions(new Position((0) + 1, (3) + 1))],
 	);

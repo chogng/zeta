@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createToggleBlockCommentCommand } from "../../common/blockCommentCommands.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test("Block comments wrap and unwrap directional selections in isolated undo steps", () => {
 	using model = new TextModel("alpha beta");
-	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (10) + 1), new Position((0) + 1, (6) + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (10) + 1), new Position((0) + 1, (6) + 1))]);
 	const options = { open: "/*", close: "*/" };
 
 	selections.execute(createToggleBlockCommentCommand(model, selections.selections, options));
@@ -29,7 +29,7 @@ test("Block comments wrap and unwrap directional selections in isolated undo ste
 
 test("Block comments place collapsed carets inside the generated pair and support independent cursors", () => {
 	using model = new TextModel("one two");
-	using selections = new CursorsController(model, primaryFirst([
+	using selections = createTestCursorsController(model, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
 	], 1));

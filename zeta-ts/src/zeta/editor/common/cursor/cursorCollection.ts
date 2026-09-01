@@ -1,123 +1,142 @@
-import { Position } from "../core/position.js";
+import { CursorState, type PartialCursorState } from '../cursorCommon.js';
+import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
-import { type TextSelectionOffsets } from '../commands/editorEditCommand.js';
-import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
-import { Selection } from '../core/selection.js';
-import { normalizeTextLineEndings } from '../core/textChange.js';
-
-import { TextModel } from '../model/textModel.js';
+import { type ISelection, Selection } from '../core/selection.js';
+import { type CursorContext } from './cursorContext.js';
 import { Cursor } from './oneCursor.js';
-import { type TextEdit } from '../languages.js';
 
-export class CursorCollection extends Disposable {
-	private readonly resources = this._register(new DisposableStore());
-	private cursors: Cursor[] = [];
+export class CursorCollection {
+	private cursors: Cursor[];
+	private lastAddedCursorIndex = 0;
 
-	constructor(private readonly model: TextModel, selections: readonly Selection[]) {
-		super();
-		this.setSelections(selections);
+	constructor(private context: CursorContext) {
+		this.cursors = [new Cursor(context)];
 	}
 
-	public getSelections(): readonly Selection[] {
-		return Object.freeze(this.cursors.map(cursor => cursor.selection));
+	public dispose(): void {
+		for (const cursor of this.cursors) cursor.dispose(this.context);
 	}
 
-	public setSelections(selections: readonly Selection[]): void {
-		CursorCollection.validateSelections(this.model, selections);
-		this.resources.clear();
-		this.cursors = selections.map(selection => {
-			const cursor = new Cursor(this.model, selection);
-			this.resources.add(cursor);
-			return cursor;
-		});
+	public startTrackingSelections(): void {
+		for (const cursor of this.cursors) cursor.startTrackingSelection(this.context);
+	}
+
+	public stopTrackingSelections(): void {
+		for (const cursor of this.cursors) cursor.stopTrackingSelection(this.context);
+	}
+
+	public updateContext(context: CursorContext): void {
+		this.context = context;
+	}
+
+	public ensureValidState(): void {
+		for (const cursor of this.cursors) cursor.ensureValidState(this.context);
+	}
+
+	public readSelectionFromMarkers(): Selection[] {
+		return this.cursors.map(cursor => cursor.readSelectionFromMarkers(this.context));
+	}
+
+	public getAll(): CursorState[] {
+		return this.cursors.map(cursor => cursor.asCursorState());
+	}
+
+	public getViewPositions(): Position[] {
+		return this.cursors.map(cursor => cursor.viewState.position);
+	}
+
+	public getTopMostViewPosition(): Position {
+		return this.cursors.reduce((top, cursor) => Position.compare(cursor.viewState.position, top) < 0 ? cursor.viewState.position : top, this.cursors[0]!.viewState.position);
+	}
+
+	public getBottomMostViewPosition(): Position {
+		return this.cursors.reduce((bottom, cursor) => Position.compare(cursor.viewState.position, bottom) > 0 ? cursor.viewState.position : bottom, this.cursors[0]!.viewState.position);
+	}
+
+	public getSelections(): Selection[] {
+		return this.cursors.map(cursor => cursor.modelState.selection);
+	}
+
+	public getViewSelections(): Selection[] {
+		return this.cursors.map(cursor => cursor.viewState.selection);
+	}
+
+	public setSelections(selections: ISelection[]): void {
+		this.setStates(CursorState.fromModelSelections(selections));
+	}
+
+	public getPrimaryCursor(): CursorState {
+		return this.cursors[0]!.asCursorState();
+	}
+
+	public setStates(states: PartialCursorState[] | null): void {
+		if (states === null) return;
+		if (states.length === 0) throw new RangeError('Cursor states must not be empty');
+		this.cursors[0]!.setState(this.context, states[0]!.modelState, states[0]!.viewState);
+		this.setSecondaryStates(states.slice(1));
+	}
+
+	public killSecondaryCursors(): void {
+		this.setSecondaryStates([]);
+	}
+
+	public getLastAddedCursorIndex(): number {
+		return this.cursors.length === 1 || this.lastAddedCursorIndex === 0 ? 0 : this.lastAddedCursorIndex;
 	}
 
 	public normalize(): void {
-		if (this.cursors.length < 2) return;
-		const selections = [...this.getSelections()];
-		for (;;) {
-			const sorted = selections.map((selection, index) => ({ selection, index }))
-				.sort((left, right) => Range.compareRangesUsingStarts(left.selection, right.selection));
-			let merged = false;
-			for (let index = 0; index < sorted.length - 1; index += 1) {
-				const left = sorted[index]!;
-				const right = sorted[index + 1]!;
-				const overlaps = left.selection.isEmpty() || right.selection.isEmpty()
-					? right.selection.getStartPosition().isBeforeOrEqual(left.selection.getEndPosition())
-					: right.selection.getStartPosition().isBefore(left.selection.getEndPosition());
-				if (!overlaps) continue;
-				const winnerIndex = Math.min(left.index, right.index);
-				const loserIndex = Math.max(left.index, right.index);
-				const winner = selections[winnerIndex]!;
-				selections[winnerIndex] = Selection.fromRange(winner.plusRange(selections[loserIndex]!), winner.getDirection());
-				selections.splice(loserIndex, 1);
-				merged = true;
-				break;
+		if (this.cursors.length === 1 || !this.context.cursorConfig.multiCursorMergeOverlapping) return;
+		const cursors = [...this.cursors];
+		const sorted = cursors.map((cursor, index) => ({ index, selection: cursor.modelState.selection }))
+			.sort((left, right) => Range.compareRangesUsingStarts(left.selection, right.selection));
+
+		for (let sortedIndex = 0; sortedIndex < sorted.length - 1; sortedIndex += 1) {
+			const current = sorted[sortedIndex]!;
+			const next = sorted[sortedIndex + 1]!;
+			const overlaps = current.selection.isEmpty() || next.selection.isEmpty()
+				? next.selection.getStartPosition().isBeforeOrEqual(current.selection.getEndPosition())
+				: next.selection.getStartPosition().isBefore(current.selection.getEndPosition());
+			if (!overlaps) continue;
+
+			const winnerSortedIndex = current.index < next.index ? sortedIndex : sortedIndex + 1;
+			const loserSortedIndex = winnerSortedIndex === sortedIndex ? sortedIndex + 1 : sortedIndex;
+			const winner = sorted[winnerSortedIndex]!;
+			const loser = sorted[loserSortedIndex]!;
+			if (!winner.selection.equalsSelection(loser.selection)) {
+				const range = winner.selection.plusRange(loser.selection);
+				const direction = loser.index === this.lastAddedCursorIndex
+					? loser.selection.getDirection()
+					: winner.selection.getDirection();
+				winner.selection = Selection.fromRange(range, direction);
+				const state = CursorState.fromModelSelection(winner.selection);
+				cursors[winner.index]!.setState(this.context, state.modelState, state.viewState);
 			}
-			if (!merged) break;
-		}
-		this.setSelections(selections);
-	}
-
-	public static calculateResultLength(model: TextModel, edits: readonly TextEdit[]): number {
-		let length = model.length;
-		for (const edit of edits) {
-			const range = Range.lift(edit.range);
-			const startOffset = model.offsetAt(range.getStartPosition());
-			const endOffset = model.offsetAt(range.getEndPosition());
-			length += normalizeTextLineEndings(edit.text).length - (endOffset - startOffset);
-		}
-		return length;
-	}
-
-	public static selectionsFromOffsets(model: TextModel, selections: readonly TextSelectionOffsets[], primarySelectionIndex: number): readonly Selection[] {
-		return primaryFirst(
-			selections.map(selection => Selection.fromPositions(
-				model.positionAt(selection.anchorOffset),
-				model.positionAt(selection.activeOffset),
-			)),
-			primarySelectionIndex,
-		);
-	}
-
-	public static validateSelectionOffsets(selections: readonly TextSelectionOffsets[], primarySelectionIndex: number, documentLength: number): void {
-		if (selections.length === 0) throw new RangeError('selectionsAfter must not be empty');
-		if (!Number.isSafeInteger(primarySelectionIndex) || primarySelectionIndex < 0 || primarySelectionIndex >= selections.length) {
-			throw new RangeError('primarySelectionIndex must identify selectionsAfter');
-		}
-		for (const selection of selections) {
-			assertOffset(selection.anchorOffset, documentLength, 'anchorOffset');
-			assertOffset(selection.activeOffset, documentLength, 'activeOffset');
+			if (loser.index === this.lastAddedCursorIndex) this.lastAddedCursorIndex = winner.index;
+			for (const entry of sorted) if (entry.index > loser.index) entry.index -= 1;
+			cursors.splice(loser.index, 1);
+			sorted.splice(loserSortedIndex, 1);
+			this.removeSecondaryCursor(loser.index - 1);
+			sortedIndex -= 1;
 		}
 	}
 
-	public static validateSelections(model: TextModel, selections: readonly Selection[]): void {
-		if (selections.length === 0) throw new RangeError('Selections must not be empty');
-		for (const selection of selections) {
-			model.offsetAt(selection.getSelectionStart());
-			model.offsetAt(selection.getPosition());
+	private setSecondaryStates(states: PartialCursorState[]): void {
+		while (this.cursors.length - 1 < states.length) this.addSecondaryCursor();
+		while (this.cursors.length - 1 > states.length) this.removeSecondaryCursor(this.cursors.length - 2);
+		for (let index = 0; index < states.length; index += 1) {
+			const state = states[index]!;
+			this.cursors[index + 1]!.setState(this.context, state.modelState, state.viewState);
 		}
 	}
 
-	public static selectionsEqual(left: readonly Selection[], right: readonly Selection[]): boolean {
-		return left.length === right.length &&
-			left.every((selection, index) => {
-				const other = right[index]!;
-				return Position.compare(selection.getSelectionStart(), other.getSelectionStart()) === 0 && Position.compare(selection.getPosition(), other.getPosition()) === 0;
-			});
+	private addSecondaryCursor(): void {
+		this.cursors.push(new Cursor(this.context));
+		this.lastAddedCursorIndex = this.cursors.length - 1;
 	}
-}
 
-function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
-	if (!Number.isSafeInteger(primaryIndex) || primaryIndex < 0 || primaryIndex >= items.length) {
-		throw new RangeError('Primary selection index must identify a selection');
-	}
-	if (primaryIndex === 0) return Object.freeze([...items]);
-	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
-}
-
-function assertOffset(offset: number, documentLength: number, name: string): void {
-	if (!Number.isSafeInteger(offset) || offset < 0 || offset > documentLength) {
-		throw new RangeError(`${name} must be between 0 and ${documentLength}`);
+	private removeSecondaryCursor(index: number): void {
+		if (this.lastAddedCursorIndex >= index + 1) this.lastAddedCursorIndex -= 1;
+		this.cursors[index + 1]!.dispose(this.context);
+		this.cursors.splice(index + 1, 1);
 	}
 }
