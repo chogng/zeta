@@ -1,0 +1,36 @@
+---
+source: zeta-code/cli/tests/support/tui_process.rs
+expression: screen
+---
+›  触发 401 鉴权失败
+
+×  Model provider authentication failed
+
+›  鉴权失败后继续下一轮
+
+◆  401 之后的下一轮恢复成功。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  openai-compatible/zeta-real-scenario                                                    ← agents
+  ⏸ ask permissions on (shift+tab to cycle)

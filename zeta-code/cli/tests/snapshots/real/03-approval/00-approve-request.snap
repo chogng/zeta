@@ -1,0 +1,36 @@
+---
+source: zeta-code/cli/tests/support/tui_process.rs
+expression: screen
+---
+›  请创建 approved-by-tui.txt
+
+▸  Running write_file
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+┌Approval required─────────────────────────────────────────────────────────────────────────────────┐
+│the action requires user approval                                                                 │
+│File read  ·  <FIXTURE…>                                                                          │
+│File write  ·  <FIXTURE…>                                                                         │
+│❯ Approve once                                                                                    │
+│  Decline                                                                                         │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+  ↑↓ choose · enter confirm

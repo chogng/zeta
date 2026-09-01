@@ -68,6 +68,7 @@ impl SessionsState {
     }
 
     pub(crate) fn show_session(&mut self, session_id: SessionId, viewed_thread_id: ThreadId) {
+        self.manager.blur();
         self.last_viewed_thread
             .insert(session_id.clone(), viewed_thread_id);
         self.active_session_id = Some(session_id.clone());

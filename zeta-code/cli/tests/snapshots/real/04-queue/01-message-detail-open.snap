@@ -1,0 +1,36 @@
+---
+source: zeta-code/cli/tests/support/tui_process.rs
+expression: screen
+---
+›  首轮：保持运行以便操作队列
+
+◆  首轮仍在运行，队列可以编辑。
+
+›  /queue
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+QuQueued message──────────────────────────────────────────────────────────────────────────────────
+QuMessage: 第三条：稍后恢复到输入框
+─ Queue ────────────────────────────────────────────────────────────────────────────────────────────
+
+  第二条：应该保留并自动发送  ·  queued
+❯ Esc to close恢复到输入框  ·  queued
+  ↑/↓ select  ·  Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send  ·  Es

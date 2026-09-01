@@ -26,9 +26,12 @@ zeta-tui = { workspace = true }
 
 [dev-dependencies]
 flate2 = { workspace = true }
+insta = { workspace = true }
 portable-pty = { workspace = true }
 sha2 = { workspace = true }
 tar = { workspace = true }
+tempfile = { workspace = true }
+zeta-terminal = { workspace = true }
 
 [lints]
 workspace = true

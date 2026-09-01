@@ -1,6 +1,9 @@
 mod bootstrap;
 mod command;
 mod composer_mode;
+#[cfg(test)]
+#[path = "app/conversation_flow_tests.rs"]
+mod conversation_flow_tests;
 mod dispatch;
 mod escape;
 mod event;
@@ -12,6 +15,9 @@ mod recovery;
 mod redraw;
 mod request_completion;
 mod screen_layout;
+#[cfg(test)]
+#[path = "app/session_manager_tests.rs"]
+mod session_manager_tests;
 mod state;
 mod status_notice;
 mod transcript_batch;

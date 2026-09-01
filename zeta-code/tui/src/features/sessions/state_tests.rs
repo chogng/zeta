@@ -57,6 +57,22 @@ fn historical_sessions_are_not_horizontal_screens() {
 }
 
 #[test]
+fn showing_a_session_clears_manager_focus() {
+    let mut state = SessionsState::default();
+    state.install_catalog(vec![session("one")], session_id("one"), thread_id("one"));
+    state.show_manager();
+    state.manager_mut().focus();
+
+    state.show_session(session_id("one"), thread_id("one"));
+
+    assert_eq!(
+        state.screen(),
+        Some(&TerminalScreen::Session(session_id("one")))
+    );
+    assert!(!state.manager().focused());
+}
+
+#[test]
 fn each_session_remembers_its_last_viewed_thread() {
     let mut state = SessionsState::default();
     state.install_catalog(vec![session("one")], session_id("one"), thread_id("root"));

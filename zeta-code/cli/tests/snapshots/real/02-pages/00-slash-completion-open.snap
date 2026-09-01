@@ -1,0 +1,36 @@
+---
+source: zeta-code/cli/tests/support/tui_process.rs
+expression: screen
+---
+
+  ┌───────── Zeta Code v0.1.0 ───────────────────────────────────────────────────────────────────┐
+  │                                   │  Tips for getting started                                │
+  │            Welcome back!          │  Use @ to mention workspace files and / to discover      │
+  │                                   │  commands.                                               │
+  │               ╭─────╮             │  ──────────────────────────────────────────────────────  │
+  │               │  ζ  │             │  Try asking                                              │
+  │               ╰─┬─┬─╯             │  “Explain how this workspace is structured.”             │
+  │                                   │  “Implement the change and run the relevant tests.”      │
+  │         Ready when you are        │                                                          │
+  │<FIXTURE…>                                                                                    │
+  └──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+
+
+
+
+
+  /status                    show the active session, thread, and model
+  /statusline                choose the items shown in the status line
+  /skills                    browse configured skill sources
+  /mcp                       list configured MCP tools
+  /resume                    list or resume a saved session
+  /archive                   archive the current session and start a new chat
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ /
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  openai-compatible/zeta-real-scenario
+  ⏸ ask permissions on (shift+tab to cycle)

@@ -44,6 +44,7 @@ arboard = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 
 [dev-dependencies]
+insta = { workspace = true }
 tempfile = { workspace = true }
 zeta-client = { workspace = true }
 
