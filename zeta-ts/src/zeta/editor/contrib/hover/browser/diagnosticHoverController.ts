@@ -9,19 +9,19 @@ export class DiagnosticHoverController extends Disposable {
 
 	constructor(private readonly viewport: View) {
 		super();
-		const ownerDocument = viewport.element.ownerDocument;
+		const ownerDocument = viewport.domNode.domNode.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "stanza-editor-diagnostic-hover";
 		this.element.hidden = true;
 		this.element.setAttribute("role", "tooltip");
-		(ownerDocument.body ?? viewport.element).append(this.element);
+		(ownerDocument.body ?? viewport.domNode.domNode).append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
-		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointerover", event => this.showForTarget(event.target)));
-		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointerout", event => {
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointerover", event => this.showForTarget(event.target)));
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointerout", event => {
 			if (markerForTarget(event.relatedTarget) === this.activeMarker) return;
 			this.hide();
 		}));
-		this._register(addDisposableListener(viewport.element, "scroll", () => this.hide()));
+		this._register(addDisposableListener(viewport.domNode.domNode, "scroll", () => this.hide()));
 	}
 
 	private showForTarget(target: EventTarget | null): void {

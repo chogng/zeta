@@ -28,7 +28,7 @@ const { LineCommentController } = await import("../../browser/lineCommentControl
 test("Line comment shortcut toggles current language comments through one editor transaction", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	using model = new TextModel("  alpha\nbeta");
+	using model = new TextModel("  alpha\nbeta", { languageId: 'typescript' });
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (4) + 1))]);
 	using configurations = new TestLanguageConfigurationService();
 	using registration = configurations.register("typescript", {
@@ -52,7 +52,7 @@ test("Line comment shortcut toggles current language comments through one editor
 	const toggle = keydown(dom.window, "/", { ctrlKey: true });
 	input.dispatchEvent(toggle);
 	assert.equal(toggle.defaultPrevented, true);
-	assert.equal(model.getText(), "  // alpha\n// beta");
+	assert.equal(model.getText(), "//   alpha\n// beta");
 	input.dispatchEvent(keydown(dom.window, "/", { metaKey: true }));
 	assert.equal(model.getText(), "  alpha\nbeta");
 

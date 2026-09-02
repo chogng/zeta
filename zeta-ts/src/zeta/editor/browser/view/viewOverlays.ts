@@ -29,6 +29,11 @@ export class ViewOverlays extends ViewPart {
 		return this.domNode;
 	}
 
+	public override dispose(): void {
+		super.dispose();
+		this._dynamicOverlays.length = 0;
+	}
+
 	public addDynamicOverlay(overlay: DynamicViewOverlay): void {
 		this._dynamicOverlays.push(this._register(overlay));
 	}

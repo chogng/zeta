@@ -309,14 +309,14 @@ export namespace CursorMove {
 		return { direction, unit: unitByName.get(args.by ?? '') ?? Unit.None, select: args.select === true, value: args.value || 1, noHistory: args.noHistory === true };
 	}
 
-	export const enum Direction {
+	export enum Direction {
 		Left, Right, Up, Down, PrevBlankLine, NextBlankLine,
 		WrappedLineStart, WrappedLineFirstNonWhitespaceCharacter, WrappedLineColumnCenter, WrappedLineEnd, WrappedLineLastNonWhitespaceCharacter,
 		ViewPortTop, ViewPortCenter, ViewPortBottom, ViewPortIfOutside,
 	}
 	export type SimpleMoveDirection = Direction.Left | Direction.Right | Direction.Up | Direction.Down | Direction.PrevBlankLine | Direction.NextBlankLine | Direction.WrappedLineStart | Direction.WrappedLineFirstNonWhitespaceCharacter | Direction.WrappedLineColumnCenter | Direction.WrappedLineEnd | Direction.WrappedLineLastNonWhitespaceCharacter;
 	export type ViewportDirection = Direction.ViewPortTop | Direction.ViewPortCenter | Direction.ViewPortBottom | Direction.ViewPortIfOutside;
-	export const enum Unit { None, Line, WrappedLine, Character, HalfLine, FoldedLine }
+	export enum Unit { None, Line, WrappedLine, Character, HalfLine, FoldedLine }
 
 	const directionByName = new Map<string, Direction>([
 		[RawDirection.Left, Direction.Left], [RawDirection.Right, Direction.Right], [RawDirection.Up, Direction.Up], [RawDirection.Down, Direction.Down],

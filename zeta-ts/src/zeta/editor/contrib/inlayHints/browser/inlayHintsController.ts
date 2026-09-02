@@ -35,17 +35,17 @@ export class InlayHintsController extends Disposable {
 	}
 
 	private render(): void {
-		for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-inlay-hint")]) element.remove();
+		for (const element of [...this.viewport.domNode.domNode.querySelectorAll<HTMLElement>(".stanza-editor-inlay-hint")]) element.remove();
 		const scroll = this.viewport.viewportLayout.scrollPosition;
 		for (const hint of this.hints) {
-			const element = h(this.viewport.element.ownerDocument, "span");
+			const element = h(this.viewport.domNode.domNode.ownerDocument, "span");
 			element.className = "stanza-editor-inlay-hint";
 			element.textContent = typeof hint.label === "string" ? hint.label : hint.label.map(part => part.value).join("");
 			const coordinates = this.viewport.getPositionContentCoordinates(hint.position);
 			element.style.left = `${coordinates.left - scroll.left + 2}px`;
 			element.style.top = `${coordinates.top - scroll.top}px`;
 			if (hint.tooltip) element.title = hint.tooltip;
-			this.viewport.element.append(element);
+			this.viewport.domNode.domNode.append(element);
 		}
 	}
 

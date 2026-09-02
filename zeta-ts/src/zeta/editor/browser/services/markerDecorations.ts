@@ -1,9 +1,12 @@
-import { type TextEditorCapabilityContribution, type TextEditorContributionConfigurationContext } from '../editorExtensions.js';
-import { TextEditorCapability } from '../../contrib/textEditorCapabilities.js';
-import { createStanzaLanguageDiagnosticSource } from '../../contrib/gotoError/browser/languageDiagnosticPresentation.js';
+import { type IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
+import { type IEditorContribution } from '../../common/editorCommon.js';
+import { type ICodeEditor } from '../editorBrowser.js';
 
-/** Ensures diagnostic collections are projected as editor decorations. */
-export const MarkerDecorationsContribution: TextEditorCapabilityContribution = Object.freeze({
-	id: 'editor.contrib.markerDecorations',
-	configure: (context: TextEditorContributionConfigurationContext) => context.addDecorationSource(createStanzaLanguageDiagnosticSource(context.getCapability(TextEditorCapability.diagnosticDecorations))),
-});
+/** Requires marker decorations when an editor contribution is instantiated. */
+export class MarkerDecorationsContribution implements IEditorContribution {
+	public static readonly ID = 'editor.contrib.markerDecorations';
+
+	constructor(_editor: ICodeEditor, _markerDecorationsService: IMarkerDecorationsService) {}
+
+	dispose(): void {}
+}

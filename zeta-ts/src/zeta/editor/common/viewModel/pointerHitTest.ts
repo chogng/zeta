@@ -1,6 +1,7 @@
 import { Position } from "../core/position.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 import { type TextModel } from "../model/textModel.js";
+import { type InjectedText } from "../modelLineProjectionData.js";
 import { type EditorScrollPosition } from "./editorViewportContracts.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
 import { type TextMeasurer } from "./textMeasurer.js";
@@ -41,6 +42,8 @@ export enum EditorHitTargetKind {
 export interface EditorHitTarget {
 	readonly kind: EditorHitTargetKind;
 	readonly position: Position;
+	readonly viewPosition?: Position;
+	readonly injectedText?: InjectedText | null;
 }
 
 /** @internal */
@@ -130,21 +133,26 @@ export function hitTestStanzaVisualEditorPoint(model: TextModel, projection: Edi
 	if (point.left < metrics.gutterWidth) {
 		return target(EditorHitTargetKind.Gutter, visualLine.logicalLineIndex, 0);
 	}
-	const fullLine = model.getLineContent((visualLine.logicalLineIndex) + 1);
-	const text = fullLine.slice(visualLine.startColumn, visualLine.endColumn);
-	const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft - (visualLine.wrappedTextIndentWidth ?? 0);
+	const text = projection.getViewLineData(model, visualLineIndex + 1).content;
+	const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft - (visualLine.projectionData ? 0 : visualLine.wrappedTextIndentWidth ?? 0);
 	if (textOffset < 0 || text.length === 0) {
-		return target(EditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.startColumn);
+		return visualTarget(EditorHitTargetKind.EmptyContent, projection, visualLineIndex, 0);
 	}
 	const lineWidth = measurer.measureLineWidth(text);
 	if (textOffset >= lineWidth) {
-		return target(EditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.endColumn);
+		return visualTarget(EditorHitTargetKind.EmptyContent, projection, visualLineIndex, text.length);
 	}
-	return target(
-		EditorHitTargetKind.Text,
-		visualLine.logicalLineIndex,
-		visualLine.startColumn + nearestCursorColumn(text, textOffset, measurer),
-	);
+	return visualTarget(EditorHitTargetKind.Text, projection, visualLineIndex, nearestCursorColumn(text, textOffset, measurer));
+}
+
+function visualTarget(kind: EditorHitTargetKind, projection: EditorVisualLineProjection, visualLineIndex: number, columnIndex: number): EditorHitTarget {
+	const viewPosition = new Position(visualLineIndex + 1, columnIndex + 1);
+	return Object.freeze({
+		kind,
+		position: projection.convertViewPositionToModelPosition(viewPosition),
+		viewPosition,
+		injectedText: projection.getInjectedTextAt(viewPosition),
+	});
 }
 
 function nearestCursorColumn(

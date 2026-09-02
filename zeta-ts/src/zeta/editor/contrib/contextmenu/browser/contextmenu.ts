@@ -1,78 +1,94 @@
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { type ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
+import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import { type IMouseEvent } from '../../../../base/browser/mouseEvent.js';
+import { KeyCode } from '../../../../base/common/keyCodes.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import * as nls from '../../../../nls.js';
-import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
-import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorAction, EditorContributionInstantiation, registerEditorAction, registerTextEditorCapabilityContribution, type ServicesAccessor, type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
-import { Position } from '../../../common/core/position.js';
-import { Selection } from '../../../common/core/selection.js';
+import { IContextKeyService, type IContextKeyService as IContextKeyServiceContract } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextMenuService, type IContextMenuService as IContextMenuServiceContract } from '../../../../platform/contextview/browser/contextView.js';
+import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
+import { EditorAction, EditorContributionInstantiation, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorExtensions.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { Range } from '../../../common/core/range.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
-import { type EditorHitTarget } from '../../../common/viewModel/pointerHitTest.js';
 
-interface ContextMenuRequest {
-	readonly position: Position;
-	readonly target: EditorHitTarget | undefined;
-	readonly clientX: number;
-	readonly clientY: number;
-}
-
-/** Owns editor hit testing and delegates menu composition to the host. */
+/** Presents the editor menu through the shared platform context-menu service. */
 export class ContextMenuController extends Disposable implements IEditorContribution {
-	static readonly ID = 'editor.contrib.contextmenu';
+	public static readonly ID = 'editor.contrib.contextmenu';
 
-	static get(editor: ICodeEditor): ContextMenuController | null {
+	public static get(editor: ICodeEditor): ContextMenuController | null {
 		return editor.getContribution<ContextMenuController>(ContextMenuController.ID);
 	}
 
-	constructor(private readonly context: TextEditorContributionContext) {
+	private readonly contextMenuService: IContextMenuServiceContract | undefined;
+	private readonly contextKeyService: IContextKeyServiceContract | undefined;
+
+	constructor(private readonly editor: ICodeEditor) {
 		super();
-		if (!context.options.onShowContextMenu) return;
-		this._register(addDisposableListener<MouseEvent>(context.viewport.element, 'contextmenu', event => this.onContextMenu(event)));
-		this._register(addDisposableListener<KeyboardEvent>(context.view.element, 'keydown', event => {
-			if (event.defaultPrevented || event.key !== 'F10' || !event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
-			event.preventDefault();
-			event.stopPropagation();
-			this.showContextMenu();
-		}));
+		this.contextMenuService = editor.invokeWithinContext(accessor => accessor.getOptional(IContextMenuService));
+		this.contextKeyService = editor.invokeWithinContext(accessor => accessor.getOptional(IContextKeyService));
+		this._register(editor.onContextMenu(event => this.onContextMenu(event)));
+		this._register(editor.onKeyDown(event => this.onKeyDown(event)));
 	}
 
-	showContextMenu(request?: ContextMenuRequest): void {
-		const show = this.context.options.onShowContextMenu;
-		if (!show) return;
-		const resolved = request ?? this.keyboardRequest();
-		try {
-			const result = show(resolved);
-			if (result) void result.catch(this.context.onLanguageError);
-		} catch (error) {
-			this.context.onLanguageError(error);
+	public showContextMenu(anchor?: IMouseEvent | null): void {
+		if (!this.contextMenuService || !this.editor.hasModel() || !this.editor.getOption(EditorOption.contextmenu)) return;
+		const resolvedAnchor = anchor ? this.mouseAnchor(anchor) : this.keyboardAnchor();
+		if (!resolvedAnchor) return;
+		this.contextMenuService.showContextMenu({
+			menuId: this.editor.contextMenuId,
+			contextKeyService: this.contextKeyService,
+			menuActionOptions: { arg: this.editor.getModel()?.uri },
+			getAnchor: () => resolvedAnchor,
+			onHide: () => this.editor.focus(),
+		});
+	}
+
+	private onContextMenu(event: IEditorMouseEvent): void {
+		if (!this.editor.hasModel()) return;
+		if (!this.editor.getOption(EditorOption.contextmenu)) {
+			this.editor.focus();
+			if (event.target.position && !this.editor.getSelection()?.containsPosition(event.target.position)) this.editor.setPosition(event.target.position);
+			return;
 		}
+		if (event.target.type === MouseTargetType.OVERLAY_WIDGET || event.target.type === MouseTargetType.CONTENT_WIDGET) return;
+		if (event.target.type === MouseTargetType.CONTENT_TEXT && event.target.detail.injectedText) return;
+		event.event.preventDefault();
+		event.event.stopPropagation();
+		this.editor.focus();
+		const position = event.target.position;
+		if (position && !(this.editor.getSelections() ?? []).some(selection => selection.containsPosition(position))) this.editor.setPosition(position, 'contextmenu');
+		this.showContextMenu(event.event);
 	}
 
-	private onContextMenu(event: MouseEvent): void {
-		event.preventDefault();
-		event.stopPropagation();
-		const target = this.context.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
-		const position = target?.kind === 'text'
-			? target.position
-			: this.context.model.getPositionAt(this.context.model.getValueLength());
-		if (!this.context.selectionController.getSelections().some(selection => selection.containsPosition(position))) {
-			this.context.selectionController.setCursorSelections([Selection.fromPositions(position)]);
-		}
-		this.context.view.focus();
-		this.showContextMenu({ position, target, clientX: event.clientX, clientY: event.clientY });
+	private onKeyDown(event: IKeyboardEvent): void {
+		const isContextMenuKey = event.keyCode === KeyCode.ContextMenu
+			|| (event.keyCode === KeyCode.F10 && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey);
+		if (!isContextMenuKey || !this.editor.getOption(EditorOption.contextmenu)) return;
+		event.stop();
+		this.showContextMenu();
 	}
 
-	private keyboardRequest(): ContextMenuRequest {
-		const position = this.context.selectionController.getSelections()[0]!.getPosition();
-		this.context.viewport.revealPosition(position);
-		const content = this.context.viewport.getPositionContentCoordinates(position);
-		const bounds = this.context.viewport.element.getBoundingClientRect();
-		const scroll = this.context.viewport.currentLayout.scrollPosition;
+	private mouseAnchor(event: IMouseEvent): ContextMenuAnchor {
 		return {
-			position,
-			target: undefined,
-			clientX: bounds.left + content.left - scroll.left,
-			clientY: bounds.top + content.top - scroll.top + content.height,
+			x: event.clientX,
+			y: event.clientY,
+			targetWindow: this.editor.getDomNode()?.ownerDocument.defaultView ?? undefined,
+		};
+	}
+
+	private keyboardAnchor(): ContextMenuAnchor | undefined {
+		const position = this.editor.getPosition();
+		const domNode = this.editor.getDomNode();
+		if (!position || !domNode) return undefined;
+		this.editor.revealRange(Range.fromPositions(position));
+		const visible = this.editor.getScrolledVisiblePosition(position);
+		if (!visible) return domNode;
+		const bounds = domNode.getBoundingClientRect();
+		return {
+			x: bounds.left + visible.left,
+			y: bounds.top + visible.top + visible.height,
+			targetWindow: domNode.ownerDocument.defaultView ?? undefined,
 		};
 	}
 }
@@ -82,17 +98,10 @@ class ShowContextMenu extends EditorAction {
 		super({ id: 'editor.action.showContextMenu', label: nls.localize2('action.showContextMenu.label', 'Show Editor Context Menu'), precondition: undefined });
 	}
 
-	run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 		ContextMenuController.get(editor)?.showContextMenu();
 	}
 }
 
-registerTextEditorCapabilityContribution({
-	id: ContextMenuController.ID,
-	commands: [{ id: 'editor.action.showContextMenu' }],
-	runtime: {
-		descriptor: new ServiceConstructionDescriptor(ContextMenuController),
-		instantiation: EditorContributionInstantiation.BeforeFirstInteraction,
-	},
-});
+registerEditorContribution(ContextMenuController.ID, ContextMenuController, EditorContributionInstantiation.BeforeFirstInteraction);
 registerEditorAction(ShowContextMenu);

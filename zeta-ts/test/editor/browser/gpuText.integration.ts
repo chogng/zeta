@@ -1,7 +1,7 @@
 import { DisposableStore, toDisposable } from '../../../src/zeta/base/common/lifecycle.js';
 import * as stanzaApi from '../../../src/zeta/editor/editor.main.js';
-import { StyledGlyphRasterizer } from '../../../src/zeta/editor/browser/gpu/raster/styledGlyphRasterizer.js';
-import { type IStyledGlyphStyle } from '../../../src/zeta/editor/browser/gpu/raster/raster.js';
+import { GlyphRasterizer } from '../../../src/zeta/editor/browser/gpu/raster/glyphRasterizer.js';
+import { DecorationStyleCache } from '../../../src/zeta/editor/browser/gpu/css/decorationStyleCache.js';
 import '../../../src/zeta/editor/editor.code.all.js';
 
 const initialText = `interface GeometrySample {
@@ -62,7 +62,7 @@ const editor = disposables.add(stanzaApi.editor.create(container, {
 	lineWrapping: stanzaApi.EditorLineWrapping.On,
 	lineNumbers: 'on',
 	guides: { indentation: true },
-	bracketPairColorization: true,
+	bracketPairColorization: { enabled: true },
 	experimentalGpuAcceleration: 'on',
 }));
 const resizeObserver = new ResizeObserver(() => editor.layout({ width: container.clientWidth, height: container.clientHeight }));
@@ -84,17 +84,9 @@ function measureGpuAdvance(text: string): number {
 	const editorElement = container.querySelector<HTMLElement>('.stanza-editor');
 	if (!editorElement) throw new Error('GPU integration editor is missing');
 	const style = getComputedStyle(editorElement);
-	const rasterizer = new StyledGlyphRasterizer(editorElement, devicePixelRatio);
-	const glyphStyle: IStyledGlyphStyle = {
-		color: style.color,
-		fontFamily: style.fontFamily,
-		fontSize: Number.parseFloat(style.fontSize),
-		fontStyle: style.fontStyle || 'normal',
-		fontVariant: style.fontVariantCaps || 'normal',
-		fontWeight: style.fontWeight || '400',
-		letterSpacing: style.letterSpacing === 'normal' ? 0 : Number.parseFloat(style.letterSpacing) || 0,
-	};
-	return [...text].reduce((width, character) => width + rasterizer.rasterizeGlyph(character, glyphStyle, 0).advance, 0) / devicePixelRatio;
+	using rasterizer = new GlyphRasterizer(Number.parseFloat(style.fontSize), style.fontFamily, devicePixelRatio, new DecorationStyleCache());
+	const letterSpacing = style.letterSpacing === 'normal' ? 0 : Number.parseFloat(style.letterSpacing) || 0;
+	return [...text].reduce((width, character) => width + rasterizer.getTextMetrics(character).width / devicePixelRatio + letterSpacing, 0);
 }
 
 function installGpuFrameTrace(): GpuFrameTraceController {
@@ -131,7 +123,7 @@ function installGpuFrameTrace(): GpuFrameTraceController {
 				const originalBeginRenderPass = encoder.beginRenderPass;
 				encoder.beginRenderPass = descriptor => {
 					const label = descriptor.label ?? '';
-					if (label === 'Stanza styled rectangle pass' || label === 'Stanza StyledViewLinesGpu pass') {
+					if (label === 'Zeta rectangle pass' || label === 'Stanza ViewLinesGpu pass') {
 						const attachment = [...descriptor.colorAttachments][0];
 						if (attachment) {
 							let viewId = viewIds.get(attachment.view);

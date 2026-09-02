@@ -5,11 +5,12 @@ import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/comm
 import { EditorTheme } from '../../../common/editorTheme.js';
 import { EditorOption, type IRulerOption } from '../../../common/config/editorOptions.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-import { type ViewConfigurationChangedEvent, type ViewScrollChangedEvent } from '../../../common/viewEvents.js';
+import { type ViewConfigurationChangedEvent, type ViewScrollChangedEvent, type ViewThemeChangedEvent } from '../../../common/viewEvents.js';
 import { type IObjectCollectionBufferEntry } from '../../../browser/gpu/objectCollectionBuffer.js';
 import { type RectangleRendererEntrySpec } from '../../../browser/gpu/rectangleRenderer.js';
 import { type ViewGpuContext } from '../../../browser/gpu/viewGpuContext.js';
 import { type RestrictedRenderingContext } from '../../../browser/view/renderingContext.js';
+import { observableValue } from '../../../../base/common/observable.js';
 import { Rulers } from '../../../browser/viewParts/rulers/rulers.js';
 import { RulersGpu } from '../../../browser/viewParts/rulersGpu/rulersGpu.js';
 
@@ -69,8 +70,7 @@ test('RulersGpu updates and disposes stable rectangle entries', () => {
 	const context = testViewContext(state);
 	const entries: TestRectangleEntry[] = [];
 	const gpuContext = {
-		status: 'ready',
-		devicePixelRatio: 2,
+		devicePixelRatio: observableValue('devicePixelRatio', 2),
 		rectangleRenderer: {
 			register: (...data: number[]) => {
 				const entry = new TestRectangleEntry(data);
@@ -79,11 +79,11 @@ test('RulersGpu updates and disposes stable rectangle entries', () => {
 			},
 		},
 	} as unknown as ViewGpuContext;
-	const rulers = new RulersGpu(context, gpuContext, () => 10);
+	const rulers = new RulersGpu(context, gpuContext);
 
 	rulers.render(renderingContext(640, 1_200));
 	assert.equal(entries.length, 2);
-	assert.deepEqual(entries[0]!.data.slice(0, 4), [76, 0, 2, Number.MAX_SAFE_INTEGER]);
+	assert.deepEqual(entries[0]!.data.slice(0, 4), [56, 0, 2, Number.MAX_SAFE_INTEGER]);
 	assert.deepEqual(entries[0]!.data.slice(4), [90 / 255, 90 / 255, 90 / 255, 1]);
 	assert.deepEqual(entries[1]!.data.slice(4), [1, 0, 0, 0.502]);
 	rulers.render(renderingContext(640, 1_200));
@@ -94,11 +94,11 @@ test('RulersGpu updates and disposes stable rectangle entries', () => {
 	assert.equal(rulers.onConfigurationChanged(configurationChange(EditorOption.rulers, EditorOption.fontInfo)), true);
 	rulers.render(renderingContext(640, 1_200));
 	assert.equal(entries.length, 2);
-	assert.deepEqual(entries[0]!.data.slice(0, 4), [40, 0, 2, Number.MAX_SAFE_INTEGER]);
+	assert.deepEqual(entries[0]!.data.slice(0, 4), [20, 0, 2, Number.MAX_SAFE_INTEGER]);
 	assert.equal(entries[1]!.disposed, true);
 
 	context.theme.update(lightColorTheme);
-	rulers.render(renderingContext(640, 1_200));
+	rulers.onThemeChanged({ theme: lightColorTheme } as ViewThemeChangedEvent);
 	assert.deepEqual(entries[0]!.data.slice(4), [211 / 255, 211 / 255, 211 / 255, 1]);
 
 	rulers.dispose();

@@ -9,6 +9,7 @@ import { EditorPeekViewWidget } from '../../../../editor/contrib/peekView/browse
 import { type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type IQuickDiffEditorController, type IQuickDiffEditorControllerService, type IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
+import { QuickDiffDecorator } from './quickDiffDecorator.js';
 
 /** Per-editor Quick Diff controller created through constructor injection after first render. */
 export class QuickDiffEditorController extends Disposable implements TextEditorRuntimeContribution, IQuickDiffEditorController {
@@ -19,11 +20,12 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 	constructor(private readonly context: TextEditorContributionContext, private readonly configurationService: IConfigurationService, modelService: IQuickDiffModelService, controllerService: IQuickDiffEditorControllerService) {
 		super();
 		this.modelReference = this._register(modelService.createModelReference(context.options.input.resource, context.model));
+		this._register(new QuickDiffDecorator(context.model, this.modelReference, configurationService));
 		this._register(controllerService.register(this));
-		this._register(addDisposableListener<FocusEvent>(context.viewport.element, 'focusin', () => controllerService.activate(this)));
-		if (context.viewport.element.contains(context.viewport.element.ownerDocument.activeElement)) controllerService.activate(this);
-		this._register(addDisposableListener<PointerEvent>(context.viewport.element, 'pointerdown', event => this.handlePointerDown(event), { capture: true }));
-		this._register(addDisposableListener<KeyboardEvent>(context.viewport.element, 'keydown', event => this.handleKeyDown(event), { capture: true }));
+		this._register(addDisposableListener<FocusEvent>(context.viewport.domNode.domNode, 'focusin', () => controllerService.activate(this)));
+		if (context.viewport.domNode.domNode.contains(context.viewport.domNode.domNode.ownerDocument.activeElement)) controllerService.activate(this);
+		this._register(addDisposableListener<PointerEvent>(context.viewport.domNode.domNode, 'pointerdown', event => this.handlePointerDown(event), { capture: true }));
+		this._register(addDisposableListener<KeyboardEvent>(context.viewport.domNode.domNode, 'keydown', event => this.handleKeyDown(event), { capture: true }));
 		this._register(this.modelReference.object.onDidChange(() => this.handleModelChange()));
 	}
 
@@ -134,7 +136,7 @@ export class QuickDiffEditorControllerService extends Disposable implements IQui
 class QuickDiffPeekView extends Disposable {
 	constructor(context: TextEditorContributionContext, change: QuickDiffChange, index: number, count: number, showPrevious: () => void, showNext: () => void, close: () => void) {
 		super();
-		const document = context.viewport.element.ownerDocument;
+		const document = context.viewport.domNode.domNode.ownerDocument;
 		const kind = change.kind === LineDiffKind.Added ? 'Added' : change.kind === LineDiffKind.Removed ? 'Deleted' : 'Modified';
 		const peek = this._register(new EditorPeekViewWidget(context.editor, new Position((change.lineIndex) + 1, (0) + 1), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
 		peek.element.classList.add('zeta-quick-diff-peek');

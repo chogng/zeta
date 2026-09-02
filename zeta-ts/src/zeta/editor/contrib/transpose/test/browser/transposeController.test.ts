@@ -31,13 +31,13 @@ await import('../../../linesOperations/browser/linesOperations.js');
 
 test.after(() => browserEnvironment.window.close());
 
-test('Transpose Letters uses its canonical action and contribution owner', () => {
+test('Transpose Letters runs directly through its canonical action', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('a😊b');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
-	editor.selections.setSelections([Selection.fromPositions(new Position(1, 2))]);
+	editor.setSelection(Selection.fromPositions(new Position(1, 2)));
 	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transposeLetters');
 	assert.ok(action);
 
@@ -45,26 +45,26 @@ test('Transpose Letters uses its canonical action and contribution owner', () =>
 
 	assert.equal(model.getText(), '😊ab');
 	assert.deepEqual(editor.selections.getSelections(), [Selection.fromPositions(new Position(1, 4))]);
-	editor.selections.undo();
+	editor.selections.context.model.undo();
 	assert.equal(model.getText(), 'a😊b');
 	model.reset('ab\ncd');
-	editor.selections.setSelections([Selection.fromPositions(new Position(2, 1))]);
+	editor.setSelection(Selection.fromPositions(new Position(2, 1)));
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 	assert.equal(model.getText(), 'abc\nd');
 	assert.deepEqual(editor.selections.getSelections(), [Selection.fromPositions(new Position(2, 1))]);
-	editor.selections.setSelections([Selection.fromPositions(new Position(1, 1), new Position(1, 2))]);
+	editor.setSelection(Selection.fromPositions(new Position(1, 1), new Position(1, 2)));
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 	assert.equal(model.getText(), 'abc\nd');
 	dom.window.close();
 });
 
-test('Transpose Action uses the lines-operations owner at a line end', () => {
+test('Transpose Action runs directly at a line end', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('hello\nworld');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
-	editor.selections.setSelections([Selection.fromPositions(new Position(1, 6))]);
+	editor.setSelection(Selection.fromPositions(new Position(1, 6)));
 	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transpose');
 	assert.ok(action);
 

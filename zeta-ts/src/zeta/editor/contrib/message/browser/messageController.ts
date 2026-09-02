@@ -1,14 +1,16 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { MarkdownElement } from '../../../../base/browser/markdownRenderer.js';
+import { alert } from '../../../../base/browser/ui/aria/aria.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import type { IMarkdownString } from '../../../../base/common/htmlContent.js';
 import { isMarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IContextKeyService, RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IOpenerService } from '../../../../platform/opener/common/openerService.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
-import { EditorCommand, EditorContributionInstantiation, registerEditorCommand, registerTextEditorCapabilityContribution, type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
+import { EditorCommand, EditorContributionInstantiation, registerEditorCommand, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type IPosition, Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 import type { IEditorContribution } from '../../../common/editorCommon.js';
 import { PositionAffinity } from '../../../common/model.js';
 import './messageController.css';
@@ -25,20 +27,34 @@ export class MessageController extends Disposable implements IEditorContribution
 	private readonly visibleKey: IContextKey<boolean> | undefined;
 	private readonly widget = this._register(new MutableDisposable<MessageWidget>());
 	private readonly closeTimer = this._register(new MutableDisposable<IDisposable>());
+	private readonly blurTimer = this._register(new MutableDisposable<IDisposable>());
 	private readonly listeners = this._register(new DisposableStore());
 	private visible = false;
 	private mouseOver = false;
 
-	constructor(private readonly context: TextEditorContributionContext) {
+	constructor(private readonly editor: ICodeEditor) {
 		super();
-		this.visibleKey = context.instantiationService.getOptional(IContextKeyService)?.createKey(MessageController.MESSAGE_VISIBLE.key, false);
+		this.visibleKey = editor.invokeWithinContext(accessor => accessor.getOptional(IContextKeyService))?.createKey(MessageController.MESSAGE_VISIBLE.key, false);
 		if (this.visibleKey) this._register(toDisposable(() => this.visibleKey?.reset()));
-		this._register(addDisposableListener<KeyboardEvent>(context.view.element, 'keydown', event => {
+		const domNode = editor.getDomNode();
+		if (!domNode) throw new ReferenceError('MessageController requires an editor DOM node');
+		this._register(addDisposableListener<KeyboardEvent>(domNode, 'keydown', event => {
 			if (!this.visible || event.defaultPrevented || event.key !== 'Escape') return;
 			event.preventDefault();
 			event.stopPropagation();
 			this.closeMessage();
 		}));
+	}
+
+	public override dispose(): void {
+		if (this.isDisposed) return;
+		this.setVisible(false);
+		this.mouseOver = false;
+		this.listeners.clear();
+		this.closeTimer.clear();
+		this.blurTimer.clear();
+		this.widget.clear();
+		super.dispose();
 	}
 
 	public isVisible(): boolean {
@@ -48,8 +64,9 @@ export class MessageController extends Disposable implements IEditorContribution
 	public showMessage(message: IMarkdownString | string, position: IPosition): void {
 		const text = isMarkdownString(message) ? message.value : message;
 		if (typeof text !== 'string' || text.trim().length === 0) throw new TypeError('Editor message must not be empty');
-		this.context.viewport.announceAccessibilityStatus(text);
+		alert(text);
 		this.closeTimer.clear();
+		this.blurTimer.clear();
 		this.listeners.clear();
 		this.widget.clear();
 		this.mouseOver = false;
@@ -58,17 +75,18 @@ export class MessageController extends Disposable implements IEditorContribution
 		let contentOwner: IDisposable | undefined;
 		if (isMarkdownString(message)) {
 			const markdown = new MarkdownElement({
-				ownerDocument: this.context.viewport.element.ownerDocument,
+				ownerDocument: this.editor.getContainerDomNode().ownerDocument,
 				markdown: message.value,
 				linkHandler: target => {
 					this.closeMessage();
-					void this.context.options.onOpenLink?.(target);
+					const opener = this.editor.invokeWithinContext(accessor => accessor.getOptional(IOpenerService));
+					if (opener) void opener.openExternal(target);
 				},
 			});
 			content = markdown.element;
 			contentOwner = markdown;
 		}
-		const widget = new MessageWidget(this.context.editor, this.context.viewport, position, content, contentOwner);
+		const widget = new MessageWidget(this.editor, position, content, contentOwner);
 		this.widget.value = widget;
 		this.setVisible(true);
 		this.listenForDismissal(position, widget);
@@ -79,6 +97,7 @@ export class MessageController extends Disposable implements IEditorContribution
 		this.mouseOver = false;
 		this.listeners.clear();
 		this.closeTimer.clear();
+		this.blurTimer.clear();
 		const widget = this.widget.value;
 		if (!widget) return;
 		widget.getDomNode().classList.add('fadeOut');
@@ -91,21 +110,23 @@ export class MessageController extends Disposable implements IEditorContribution
 	}
 
 	private listenForDismissal(position: IPosition, widget: MessageWidget): void {
-		this.listeners.add(this.context.selectionController.onDidChange(() => this.closeMessage()));
-		this.listeners.add(this.context.model.onDidChangeContent(() => this.closeMessage()));
+		this.listeners.add(this.editor.onDidChangeCursorSelection(() => this.closeMessage()));
+		const model = this.editor.getModel();
+		if (model) this.listeners.add(model.onDidChangeContent(() => this.closeMessage()));
 		this.listeners.add(addDisposableListener(widget.getDomNode(), 'mouseenter', () => { this.mouseOver = true; }));
 		this.listeners.add(addDisposableListener(widget.getDomNode(), 'mouseleave', () => { this.mouseOver = false; }));
-		this.listeners.add(addDisposableListener<FocusEvent>(this.context.view.element, 'focusout', () => {
-			const targetWindow = this.context.view.element.ownerDocument.defaultView;
+		const editorDomNode = this.editor.getDomNode()!;
+		this.listeners.add(addDisposableListener<FocusEvent>(editorDomNode, 'focusout', () => {
+			const targetWindow = editorDomNode.ownerDocument.defaultView;
 			if (!targetWindow) return;
-			this.listeners.add(disposableWindowTimeout(targetWindow, () => {
-				const active = this.context.view.element.ownerDocument.activeElement;
+			this.blurTimer.value = disposableWindowTimeout(targetWindow, () => {
+				const active = editorDomNode.ownerDocument.activeElement;
 				if (!this.mouseOver && active !== null && !widget.getDomNode().contains(active)) this.closeMessage();
-			}, 0));
+			}, 0);
 		}));
-		this.listeners.add(addDisposableListener<PointerEvent>(this.context.viewport.element, 'pointermove', event => {
-			const target = this.context.viewport.getNearestTargetAtClientPoint(event);
-			if (target && Math.abs(target.position.lineNumber - position.lineNumber) > 3) this.closeMessage();
+		this.listeners.add(this.editor.onMouseMove(event => {
+			const target = event.target.position;
+			if (target && Math.abs(target.lineNumber - position.lineNumber) > 3) this.closeMessage();
 		}));
 	}
 
@@ -123,14 +144,13 @@ class MessageWidget extends Disposable implements IContentWidget {
 
 	constructor(
 		private readonly editor: ICodeEditor,
-		viewport: TextEditorContributionContext['viewport'],
 		private readonly position: IPosition,
 		content: HTMLElement | string,
 		contentOwner?: IDisposable,
 	) {
 		super();
 		if (contentOwner) this._register(contentOwner);
-		viewport.revealPosition(Position.lift(position));
+		editor.revealRange(Range.fromPositions(Position.lift(position)));
 		const document = editor.getContainerDomNode().ownerDocument;
 		this.domNode = document.createElement('div');
 		this.domNode.className = 'stanza-editor-overlay-message fadeIn';
@@ -172,10 +192,4 @@ registerEditorCommand(new MessageCommand({
 	handler: controller => controller.closeMessage(),
 }));
 
-registerTextEditorCapabilityContribution({
-	id: MessageController.ID,
-	runtime: {
-		descriptor: new ServiceConstructionDescriptor(MessageController),
-		instantiation: EditorContributionInstantiation.Lazy,
-	},
-});
+registerEditorContribution(MessageController.ID, MessageController, EditorContributionInstantiation.Lazy);

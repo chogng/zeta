@@ -6,6 +6,9 @@ import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { h } from "../../../base/browser/dom.js";
+import { CursorState } from '../../common/cursorCommon.js';
+import { CursorChangeReason } from '../../common/cursorEvents.js';
+import { OperatingSystem } from '../../../base/common/platform.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -22,6 +25,7 @@ for (const [name, value] of Object.entries({
 
 const { TestView: View } = await import("./viewModel/testViewModel.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
+const { KeyboardNavigationController } = await import('../../browser/view/viewController.js');
 await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 
@@ -38,7 +42,7 @@ test("core commands select all", () => {
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	const selections = viewport.testSelectionController;
-	selections.setSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1))]));
 	viewport.layout({ width: 400, height: 100 });
 	const input = viewport.controller;
 	using commands = installCoreTextEditorCommands(input.element, viewport, viewport.testViewModel);
@@ -57,7 +61,7 @@ test("line selection remains an independent editor extension", () => {
 	using model = new TextModel("one\ntwo\nthree");
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.viewport.layout({ width: 400, height: 100 });
-	editor.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
+	editor.setSelection(Selection.fromPositions(new Position((0) + 1, (1) + 1)));
 
 	const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
 	editor.view.element.dispatchEvent(first);
@@ -66,6 +70,30 @@ test("line selection remains an independent editor extension", () => {
 	editor.view.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
 	assert.deepEqual(editor.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
 
+	dom.window.close();
+});
+
+test('keyboard word navigation consumes standard WordOperations boundaries', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using model = new TextModel('alpha beta');
+	using viewport = new View({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+	});
+	viewport.layout({ width: 400, height: 100 });
+	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([
+		Selection.fromPositions(new Position(1, 11)),
+	]));
+	using navigation = new KeyboardNavigationController(viewport, viewport.testViewModel, viewport.controller.userInputEvents, {
+		operatingSystem: OperatingSystem.Macintosh,
+	});
+
+	viewport.controller.element.dispatchEvent(keyboardEvent(dom.window, 'ArrowLeft', { altKey: true }));
+	assert.deepEqual(viewport.testSelectionController.getSelections()[0]!.getPosition(), new Position(1, 7));
+	viewport.controller.element.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight', { altKey: true }));
+	assert.deepEqual(viewport.testSelectionController.getSelections()[0]!.getPosition(), new Position(1, 11));
 	dom.window.close();
 });
 

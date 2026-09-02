@@ -1,5 +1,5 @@
 import "./nativeEditContext.css";
-import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, getActiveElement, h } from "../../../../../base/browser/dom.js";
 import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { IME } from "../../../../../base/common/ime.js";
@@ -18,6 +18,7 @@ import { type ViewportData } from '../../../../common/viewLayout/viewLinesViewpo
 import * as viewEvents from '../../../../common/viewEvents.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { type ILogService } from '../../../../../platform/log/common/log.js';
+import { CopyOptions } from '../clipboardUtils.js';
 
 /** Minimal local declaration because TypeScript's DOM library does not yet expose EditContext. */
 export interface NativeEditContextObject extends EventTarget {
@@ -110,6 +111,7 @@ export class NativeEditContext extends AbstractEditContext {
 	private readonly characterBoundsProvider: (modelOffset: number) => EditContextCharacterBounds | undefined;
 	private readonly focusTracker: FocusTracker;
 	private readonly screenReaderSupport: ScreenReaderSupport;
+	private readonly logService: ILogService;
 	private focused = false;
 	private imeFallbackFocused = false;
 
@@ -158,6 +160,7 @@ export class NativeEditContext extends AbstractEditContext {
 			throw new TypeError("Native EditContext character bounds provider must be a function");
 		}
 		this.characterBoundsProvider = options.characterBoundsProvider;
+		this.logService = options.logService;
 		const imeTextArea = h(ownerDocument, "textarea");
 		this.imeTextArea = imeTextArea;
 		element.className = "stanza-editor-input stanza-native-edit-context";
@@ -180,20 +183,17 @@ export class NativeEditContext extends AbstractEditContext {
 		this._register(NativeEditContextRegistry.register(options.ownerId, this));
 		container.append(imeTextArea);
 		this.focusTracker = this._register(new FocusTracker(options.logService, element, focused => this.handleElementFocusChange(focused)));
-		const compositionController = this.initializeController(options);
+		this.initializeController(options);
 		this.screenReaderSupport = this._register(new ScreenReaderSupport({
-			element,
-			model: options.viewport.textModel,
+			domNode: this.domNode,
+			context,
 			viewport: options.viewport,
-			selectionController: options.selectionController,
+			viewController: options.viewController,
 			onDidFocus: this.onDidFocus,
 			onDidBlur: this.onDidBlur,
 			accessibilityService: options.accessibilityService,
-			renderRichContent: options.renderRichScreenReaderContent,
-			accessibilityPageSize: options.accessibilityPageSize,
 			semanticTokenSource: options.semanticTokenSource,
 			bracketColorizationSource: options.bracketColorizationSource,
-			isComposing: () => compositionController.composing,
 		}));
 		this.synchronizeState();
 		this.connect();
@@ -291,17 +291,51 @@ export class NativeEditContext extends AbstractEditContext {
 		this._register(addDisposableListener<ClipboardEvent>(
 			this.domNode.domNode,
 			"copy",
-			event => this.fireWillCopy(event, false),
+			event => {
+				CopyOptions.electronBugWorkaroundCopyEventHasFired = true;
+				const copyEvent = this.fireWillCopy(event, false);
+				if (!copyEvent.isHandled) copyEvent.ensureClipboardGetsEditorData();
+			},
 		));
 		this._register(addDisposableListener<ClipboardEvent>(
 			this.domNode.domNode,
 			"cut",
-			event => this.fireWillCopy(event, true),
+			event => {
+				const cutEvent = this.fireWillCopy(event, true);
+				if (cutEvent.isHandled) return;
+				if (this.compositionController.composing) {
+					cutEvent.setHandled();
+					return;
+				}
+				this.screenReaderSupport.onWillCut();
+				cutEvent.ensureClipboardGetsEditorData();
+				this.viewController.cut();
+			},
 		));
 		this._register(addDisposableListener<ClipboardEvent>(
 			this.domNode.domNode,
 			"paste",
-			event => this.fireWillPaste(event),
+			event => {
+				const pasteEvent = this.fireWillPaste(event);
+				if (pasteEvent.isHandled) {
+					event.preventDefault();
+					return;
+				}
+				if (this.compositionController.composing) {
+					pasteEvent.setHandled();
+					return;
+				}
+				event.preventDefault();
+				if (!pasteEvent.text) return;
+				this.screenReaderSupport.onWillPaste();
+				const metadata = pasteEvent.metadata;
+				this.viewController.paste(
+					pasteEvent.text,
+					this._context.configuration.options.get(EditorOption.emptySelectionClipboard) && !!metadata?.isFromEmptySelection,
+					metadata?.multicursorText ?? null,
+					metadata?.mode ?? null,
+				);
+			},
 		));
 		this._register(editContextAddDisposableListener(
 			this.nativeContext,
@@ -371,12 +405,22 @@ export class NativeEditContext extends AbstractEditContext {
 		this.screenReaderSupport.setAriaOptions(options);
 	}
 
+	public handleWillPaste(): void {
+		this.logService.trace('NativeEditContext#handleWillPaste');
+		this.screenReaderSupport.onWillPaste();
+	}
+
+	public handleWillCopy(): void {
+		this.logService.trace('NativeEditContext#handleWillCopy');
+		this.logService.trace('NativeEditContext#isFocused : ', this.domNode.domNode === getActiveElement(this.domNode.domNode.ownerDocument));
+	}
+
 	getLastRenderData(): Position | null {
 		return this.lastRenderPosition;
 	}
 
-	writeScreenReaderContent(reason: string): void {
-		this.screenReaderSupport.writeScreenReaderContent(reason);
+	writeScreenReaderContent(_reason: string): void {
+		this.screenReaderSupport.writeScreenReaderContent();
 	}
 
 	public override onBeforeRender(_viewportData: ViewportData): void {
@@ -402,14 +446,12 @@ export class NativeEditContext extends AbstractEditContext {
 		return true;
 	}
 
-	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
-		this.screenReaderSupport.onDecorationsChanged(event);
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
 		return true;
 	}
 
-	public override onFlushed(event: viewEvents.ViewFlushedEvent): boolean {
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
 		this.synchronizeState();
-		this.screenReaderSupport.onFlushed(event);
 		return true;
 	}
 
@@ -418,31 +460,26 @@ export class NativeEditContext extends AbstractEditContext {
 		return true;
 	}
 
-	public override onLinesChanged(event: viewEvents.ViewLinesChangedEvent): boolean {
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
 		this.synchronizeState();
-		this.screenReaderSupport.onLinesChanged(event);
 		return true;
 	}
 
-	public override onLinesDeleted(event: viewEvents.ViewLinesDeletedEvent): boolean {
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
 		this.synchronizeState();
-		this.screenReaderSupport.onLinesDeleted(event);
 		return true;
 	}
 
-	public override onLinesInserted(event: viewEvents.ViewLinesInsertedEvent): boolean {
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
 		this.synchronizeState();
-		this.screenReaderSupport.onLinesInserted(event);
 		return true;
 	}
 
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
-		this.screenReaderSupport.onScrollChanged(event);
+	public override onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): boolean {
 		return true;
 	}
 
-	public override onZonesChanged(event: viewEvents.ViewZonesChangedEvent): boolean {
-		this.screenReaderSupport.onZonesChanged(event);
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
 		return true;
 	}
 

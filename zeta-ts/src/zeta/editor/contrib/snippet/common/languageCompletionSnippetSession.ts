@@ -1,6 +1,6 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
-import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
+import { ReplaceCommandThatSelectsText } from "../../../common/commands/replaceCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageCompletionSnippet } from "./languageCompletionSnippetParser.js";
 import { applyLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "./snippetTransform.js";
@@ -84,6 +84,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 				for (const transform of this.transforms) transform.range.dispose();
 				this.finalRange.dispose();
 			}));
+			this.selectGroup(0);
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -173,28 +174,11 @@ export class LanguageCompletionSnippetSession extends Disposable {
 			const current = ranges[index]!;
 			if (current.startOffset < previous.endOffset) return false;
 		}
-		let cumulativeDelta = 0;
-		const selectionsAfter = new Map<TrackedRange, { readonly anchorOffset: number; readonly activeOffset: number }>();
-		for (const range of ranges) {
-			const startOffset = range.startOffset + cumulativeDelta;
-			const endOffset = startOffset + text.length;
-			selectionsAfter.set(range.range, { anchorOffset: startOffset, activeOffset: endOffset });
-			cumulativeDelta += text.length - (range.endOffset - range.startOffset);
-		}
-		const command: EditorEditCommand = Object.freeze({
-			edits: Object.freeze(ranges.map(range => Object.freeze({
-				range: range.range.range,
-				text,
-			}))),
-			selectionsAfter: Object.freeze(group.ranges.map(range => {
-				const selection = selectionsAfter.get(range);
-				if (!selection) throw new Error("Language completion choice selection is missing");
-				return Object.freeze(selection);
-			})),
-			primarySelectionIndex: 0,
-			historyMode: EditorCommandHistoryMode.Isolated,
-		});
-		return this.selections.execute(command) !== undefined;
+		const version = model.version;
+		this.selections.pushUndoStop();
+		this.selections.executeCommands(group.ranges.map(range => new ReplaceCommandThatSelectsText(range.range, text)), "snippet.choice");
+		this.selections.pushUndoStop();
+		return model.version !== version;
 	}
 
 	private synchronizeTransforms(group: SnippetTrackedGroup): void {

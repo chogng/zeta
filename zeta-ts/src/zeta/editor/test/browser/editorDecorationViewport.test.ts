@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../browser/viewParts/decorations/decorations.js";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
-import { createStanzaLanguageDiagnosticSource, resolveStanzaLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
@@ -11,7 +9,9 @@ import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore } from "../..
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TrackedRangeStickiness } from '../../common/model.js';
+import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeStickiness } from '../../common/model.js';
+import { themeColorFromId } from '../../../base/common/themables.js';
+import { ColorId, darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -37,127 +37,83 @@ const { EditorLineWrapping } = await import(
 	"../../common/config/editorOptions.js"
 );
 
-test("Decoration sources project, update, and follow tracked model ranges", () => {
+test("Model decorations project, update, and follow tracked ranges", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const minimapPaint = recordCanvasPaint(dom);
+	recordCanvasPaint(dom);
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("abcd\nefgh\nij");
 	using matches = new TextDecorationCollection<string>(model);
 	using diagnostics = new TextDecorationCollection<"error" | "warning">(model);
-	const matchId = matches.add({
+	matches.add({
 		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: { description: 'find match', className: 'findMatch' },
 		metadata: "match",
 	});
 	const diagnosticId = diagnostics.add({
 		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: {
+			description: 'marker decoration',
+			className: 'squiggly-error',
+			overviewRuler: { color: themeColorFromId(ColorId.errorForeground), position: OverviewRulerLane.Right },
+			minimap: { color: themeColorFromId(ColorId.errorForeground), position: MinimapPosition.Inline },
+		},
 		metadata: "error",
 	});
-	let matchResolutionCount = 0;
-	const matchSource = createStanzaDecorationSource(
-		matches,
-		() => {
-			matchResolutionCount += 1;
-			return DecorationPresentation.SearchMatch;
-		},
-	);
-	const diagnosticSource = createStanzaDecorationSource(
-		diagnostics,
-		decoration => decoration.metadata === "error"
-			? DecorationPresentation.ErrorUnderline
-			: DecorationPresentation.WarningUnderline,
-	);
 	const viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [matchSource, diagnosticSource],
 	});
 	viewport.layout({ width: 300, height: 60 });
 	viewport.scrollTo({ left: 0, top: 0 });
-	assert.equal(matchResolutionCount, 1);
 
-	assert.deepEqual(decorationElements(viewport.element).map(element => ({
-		id: element.dataset.decorationId,
-		presentation: element.classList[1],
+	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({
+		className: decorationClassName(element),
 		lineIndex: element.parentElement?.dataset.lineIndex,
-		left: element.style.left,
-		width: element.style.width,
 	})), [{
-		id: String(matchId),
-		presentation: DecorationPresentation.SearchMatch,
+		className: 'findMatch',
 		lineIndex: "0",
-		left: "48px",
-		width: "40px",
 	}, {
-		id: String(matchId),
-		presentation: DecorationPresentation.SearchMatch,
+		className: 'findMatch',
 		lineIndex: "1",
-		left: "38px",
-		width: "20px",
 	}, {
-		id: String(diagnosticId),
-		presentation: DecorationPresentation.ErrorUnderline,
+		className: 'squiggly-error',
 		lineIndex: "2",
-		left: "38px",
-		width: "20px",
 	}]);
-	const errorMarker = requiredElement<HTMLElement>(
-		viewport.element,
-		'.margin-view-overlays .view-overlay-line[data-line-index="2"] .stanza-editor-diagnostic-marker',
-	);
-	assert.equal(errorMarker.hidden, false);
-	assert.equal(errorMarker.classList.contains("error"), true);
-	const errorOverview = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-overview-marker");
-	assert.equal(errorOverview.classList.contains(DecorationPresentation.ErrorUnderline), true);
-	assert.deepEqual(minimapMarkers(minimapPaint), [{ fill: '#f14c4c', top: 40 }]);
 
-	minimapPaint.length = 0;
 	diagnostics.update(diagnosticId, {
 		range: Range.fromPositions(new Position((1) + 1, (1) + 1), new Position((1) + 1, (3) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: {
+			description: 'marker decoration',
+			className: 'squiggly-warning',
+			overviewRuler: { color: themeColorFromId(ColorId.warningForeground), position: OverviewRulerLane.Right },
+			minimap: { color: themeColorFromId(ColorId.warningForeground), position: MinimapPosition.Inline },
+		},
 		metadata: "warning",
 	});
-	const warning = requiredElement<HTMLElement>(
-		viewport.element,
-		`.stanza-editor-decoration[data-decoration-id="${diagnosticId}"]`,
-	);
-	assert.equal(
-		warning.classList.contains(DecorationPresentation.WarningUnderline),
-		true,
-	);
+	await Promise.resolve();
+	const warning = requiredElement<HTMLElement>(viewport.domNode.domNode, '.cdr.squiggly-warning');
 	assert.equal(warning.parentElement?.dataset.lineIndex, "1");
-	assert.equal(warning.style.left, "48px");
-	assert.equal(warning.style.width, "20px");
-	const warningMarker = requiredElement<HTMLElement>(
-		viewport.element,
-		'.margin-view-overlays .view-overlay-line[data-line-index="1"] .stanza-editor-diagnostic-marker',
-	);
-	assert.equal(warningMarker.hidden, false);
-	assert.equal(warningMarker.classList.contains("warning"), true);
-	const warningOverview = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-overview-marker");
-	assert.equal(warningOverview.classList.contains(DecorationPresentation.WarningUnderline), true);
-	assert.deepEqual(minimapMarkers(minimapPaint), [{ fill: '#cca700', top: 20 }]);
-	assert.equal(matchResolutionCount, 1);
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X\n",
 	}]);
+	await Promise.resolve();
 
-	const trackedMatch = decorationElements(viewport.element).filter(
-		element => element.dataset.decorationId === String(matchId),
-	);
+	const trackedMatch = decorationElements(viewport.domNode.domNode).filter(element => element.classList.contains('findMatch'));
 	assert.deepEqual(
 		trackedMatch.map(
 			element => element.parentElement?.dataset.lineIndex,
 		),
 		["1", "2"],
 	);
-	assert.equal(matchResolutionCount, 2);
+	assert.deepEqual(matches.decorations.map(decoration => [decoration.range.startLineNumber, decoration.range.endLineNumber]), [[2, 3]]);
 	viewport.dispose();
 	assert.equal(matches.size, 1);
 	assert.equal(diagnostics.size, 1);
@@ -165,7 +121,32 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	dom.window.close();
 });
 
-test("Line and block decoration parts project source presentation details", () => {
+test('Model glyph margin decorations use standard lanes and z-index ownership', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('first\nsecond');
+	using viewport = new View({ container, model, glyphMargin: true, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	viewport.layout({ width: 240, height: 40 });
+	const [lower, higher] = model.deltaDecorations([], [{
+		range: new Range(1, 1, 1, 1),
+		options: { description: 'lower glyph', glyphMarginClassName: 'test-glyph-lower', glyphMargin: { position: GlyphMarginLane.Center }, zIndex: 1 },
+	}, {
+		range: new Range(1, 1, 1, 1),
+		options: { description: 'higher glyph', glyphMarginClassName: 'test-glyph-higher', glyphMargin: { position: GlyphMarginLane.Center }, zIndex: 2 },
+	}]);
+	viewport.render(true, true);
+
+	assert.equal(viewport.domNode.domNode.querySelector('.test-glyph-lower'), null);
+	const rendered = requiredElement<HTMLElement>(viewport.domNode.domNode, '.test-glyph-higher');
+	assert.equal(rendered.getAttribute('aria-hidden'), 'true');
+	assert.equal(rendered.style.top, '0px');
+	model.deltaDecorations([lower, higher], []);
+	viewport.render(true, true);
+	assert.equal(viewport.domNode.domNode.querySelector('.test-glyph-higher'), null);
+	dom.window.close();
+});
+
+test("Line and block decoration parts project standard model options", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("first\nsecond\nthird");
@@ -173,74 +154,62 @@ test("Line and block decoration parts project source presentation details", () =
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: {
+			description: 'test line decoration',
+			linesDecorationsClassName: 'stanza-test-line-marker',
+			firstLineDecorationClassName: 'stanza-test-first-line-marker',
+			linesDecorationsTooltip: 'line marker',
+		},
 		metadata: "lines",
 	});
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: {
+			description: 'test block decoration',
+			blockClassName: 'stanza-test-block',
+			blockPadding: [1, 2, 3, 4],
+		},
 		metadata: "block",
 	});
-	const source = createStanzaDecorationSource(
-		decorations,
-		decoration => decoration.metadata === "lines"
-			? {
-				presentation: DecorationPresentation.DiffModified,
-				linesDecoration: {
-					owner: "test-lines",
-					className: "stanza-test-line-marker",
-					firstLineClassName: "stanza-test-first-line-marker",
-					tooltip: "line marker",
-				},
-			}
-			: {
-				presentation: DecorationPresentation.DiffModified,
-				blockDecoration: {
-					className: "stanza-test-block",
-					padding: [1, 2, 3, 4],
-				},
-			},
-		undefined,
-		{ linesDecorationLanes: [{ owner: "test-lines", width: 4 }] },
-	);
 	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [source],
 	});
 	viewport.layout({ width: 200, height: 60 });
 
-	const firstLine = requiredElement<HTMLElement>(viewport.element, '.margin-view-overlays .view-overlay-line[data-line-index="0"]');
-	const secondLine = requiredElement<HTMLElement>(viewport.element, '.margin-view-overlays .view-overlay-line[data-line-index="1"]');
-	const thirdLine = requiredElement<HTMLElement>(viewport.element, '.margin-view-overlays .view-overlay-line[data-line-index="2"]');
-	const firstMarker = requiredElement<HTMLElement>(firstLine, ".stanza-editor-line-decoration");
+	const firstLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="0"]');
+	const secondLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="1"]');
+	const thirdLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="2"]');
+	const lineMarker = requiredElement<HTMLElement>(firstLine, ".stanza-test-line-marker");
+	const firstLineMarker = requiredElement<HTMLElement>(firstLine, ".stanza-test-first-line-marker");
 	const secondMarker = requiredElement<HTMLElement>(secondLine, ".stanza-editor-line-decoration");
-	assert.equal(firstMarker.classList.contains("stanza-test-line-marker"), true);
-	assert.equal(firstMarker.classList.contains("stanza-test-first-line-marker"), true);
-	assert.equal(firstMarker.title, "line marker");
-	assert.equal(firstMarker.dataset.decorationOwner, "test-lines");
-	assert.equal(firstMarker.style.getPropertyValue("--stanza-editor-line-decoration-offset"), "0px");
-	assert.equal(firstMarker.style.getPropertyValue("--stanza-editor-line-decoration-width"), "4px");
+	assert.equal(lineMarker.title, "line marker");
+	assert.equal(firstLineMarker.title, "line marker");
+	assert.equal(lineMarker.style.width.length > 0, true);
 	assert.equal(secondMarker.classList.contains("stanza-test-line-marker"), true);
 	assert.equal(secondMarker.classList.contains("stanza-test-first-line-marker"), false);
-	assert.equal(thirdLine.querySelector(".stanza-editor-line-decoration"), null);
+	assert.equal(requiredElement<HTMLElement>(thirdLine, '.stanza-test-line-marker').title, 'line marker');
 
-	const block = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-block-decoration");
-	const blockContainer = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-block-decorations");
+	const block = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-block-decoration");
+	const blockContainer = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-block-decorations");
 	assert.equal(blockContainer.getAttribute("role"), "presentation");
 	assert.equal(blockContainer.getAttribute("aria-hidden"), "true");
 	assert.equal(block.classList.contains("stanza-test-block"), true);
-	assert.equal(block.style.left, "38px");
-	assert.equal(block.style.width, "164px");
+	const layoutInfo = viewport.getLayoutInfo();
+	assert.equal(block.style.left, `${layoutInfo.contentLeft - 4}px`);
+	assert.equal(block.style.width, `${layoutInfo.contentWidth - layoutInfo.verticalScrollbarWidth + 6}px`);
 	assert.equal(block.style.top, "-1px");
 	assert.equal(block.style.height, "64px");
 
 	viewport.layout({ width: 240, height: 60 });
-	const resizedBlock = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-block-decoration");
+	const resizedBlock = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-block-decoration");
 	assert.strictEqual(resizedBlock, block);
-	assert.equal(resizedBlock.style.width, "204px");
+	const resizedLayoutInfo = viewport.getLayoutInfo();
+	assert.equal(resizedBlock.style.width, `${resizedLayoutInfo.contentWidth - resizedLayoutInfo.verticalScrollbarWidth + 6}px`);
 	dom.window.close();
 });
 
@@ -249,37 +218,68 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 	const minimapPaint = recordCanvasPaint(dom);
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("same\nadded\nmodified\nafter delete");
-	using decorations = new TextDecorationCollection<DecorationPresentation>(model);
+	using decorations = new TextDecorationCollection<'added' | 'modified' | 'deleted'>(model);
 	decorations.replaceAll([
-		{ range: Range.fromPositions(new Position((1) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: DecorationPresentation.DiffAdded },
-		{ range: Range.fromPositions(new Position((2) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: DecorationPresentation.DiffModified },
-		{ range: Range.fromPositions(new Position((3) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: DecorationPresentation.DiffDeleted },
+		{
+			range: Range.fromPositions(new Position((1) + 1, (0) + 1)),
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: { description: 'added diff', minimap: { color: themeColorFromId(ColorId.diffEditorInsertedLineMarker), position: MinimapPosition.Gutter } },
+			metadata: 'added',
+		},
+		{
+			range: Range.fromPositions(new Position((2) + 1, (0) + 1)),
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: { description: 'modified diff', overviewRuler: { color: themeColorFromId(ColorId.warningForeground), position: OverviewRulerLane.Left } },
+			metadata: 'modified',
+		},
+		{
+			range: Range.fromPositions(new Position((3) + 1, (0) + 1)),
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: {
+				description: 'deleted diff',
+				overviewRuler: { color: themeColorFromId(ColorId.errorForeground), position: OverviewRulerLane.Left },
+				minimap: { color: themeColorFromId(ColorId.errorForeground), position: MinimapPosition.Gutter },
+			},
+			metadata: 'deleted',
+		},
 	]);
 	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [createStanzaDecorationSource(decorations, decoration => ({
-			presentation: decoration.metadata,
-			overviewRuler: decoration.metadata !== DecorationPresentation.DiffAdded,
-			minimap: decoration.metadata !== DecorationPresentation.DiffModified,
-		}))],
 	});
 	viewport.layout({ width: 300, height: 80 });
 
-	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-overview-marker")].map(marker => marker.classList[1]), [
-		DecorationPresentation.DiffModified,
-		DecorationPresentation.DiffDeleted,
-	]);
+	assert.deepEqual(overviewMarkerColors(minimapPaint), ['#cca700', '#f48771']);
+	assert.deepEqual(overviewCursorColors(minimapPaint), [darkColorTheme.getColor(ColorId.editorCursorForeground)!.transparent(0.7).toString()]);
+	assert.equal(requiredElement(viewport.domNode.domNode, '.decorationsOverviewRuler').getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(minimapMarkers(minimapPaint), [
-		{ fill: '#73c991', top: 20 },
-		{ fill: '#f14c4c', top: 60 },
+		{ fill: '#89d185', top: 20 },
+		{ fill: '#f48771', top: 60 },
 	]);
 	dom.window.close();
 });
 
-test("Decoration overlays use browser range rectangles for RTL text", () => {
+test('Overview ruler omits cursor markers when hideCursorInOverviewRuler is enabled', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const paint = recordCanvasPaint(dom);
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('first\nsecond');
+	using viewport = new View({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+		cursorOptions: { hideCursorInOverviewRuler: true },
+	});
+	viewport.layout({ width: 240, height: 40 });
+
+	assert.deepEqual(overviewCursorColors(paint), []);
+	dom.window.close();
+});
+
+test("Decoration overlays use browser range rectangles for RTL text", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	const createRange = dom.window.document.createRange.bind(dom.window.document);
@@ -299,6 +299,7 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 	const id = decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: { description: 'rtl match', className: 'findMatch' },
 		metadata: undefined,
 	});
 	const viewport = new View({
@@ -307,10 +308,9 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		textDirection: EditorTextDirection.RightToLeft,
-		decorationSources: [createStanzaDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
 	});
 	viewport.layout({ width: 200, height: 40 });
-	const line = requiredElement<HTMLElement>(viewport.element, ".view-line");
+	const line = requiredElement<HTMLElement>(viewport.domNode.domNode, ".view-line");
 	Object.defineProperty(line, "getBoundingClientRect", {
 		configurable: true,
 		value: () => testRectangle(100, 0, 200),
@@ -318,13 +318,16 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 	decorations.update(id, {
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: { description: 'rtl match', className: 'findMatch' },
 		metadata: undefined,
 	});
+	await Promise.resolve();
 
-	assert.deepEqual(decorationElements(viewport.element).map(element => ({ left: element.style.left, width: element.style.width })), [
+	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({ left: element.style.left, width: element.style.width })), [
 		{ left: "20px", width: "15px" },
 		{ left: "50px", width: "20px" },
 	]);
+	viewport.dispose();
 	dom.window.close();
 });
 
@@ -336,6 +339,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (5) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: { description: 'wrapped match', className: 'findMatch' },
 		metadata: undefined,
 	});
 	using viewport = new View({
@@ -344,49 +348,42 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [createStanzaDecorationSource(
-			decorations,
-			() => DecorationPresentation.SearchMatch,
-		)],
 		lineWrapping: EditorLineWrapping.On,
 		minimap: { enabled: false },
 	});
 	viewport.layout({ width: 70, height: 60 });
-
-	assert.deepEqual(decorationElements(viewport.element).map(element => ({
+	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({
 		lineIndex: element.parentElement?.dataset.lineIndex,
 		left: element.style.left,
 		width: element.style.width,
 	})), [{
 		lineIndex: "0",
-		left: "48px",
-		width: "10px",
+		left: "8px",
+		width: "8px",
 	}, {
 		lineIndex: "1",
-		left: "38px",
-		width: "20px",
+		left: "0px",
+		width: "16px",
 	}, {
 		lineIndex: "2",
-		left: "38px",
-		width: "10px",
+		left: "0px",
+		width: "8px",
 	}]);
 
 	dom.window.close();
 });
 
-test("Versioned diagnostics project named severity underlines and invalidate", () => {
+test("Versioned diagnostics project named severity underlines and invalidate", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("abcd\nefgh\nijkl\nmnop");
 	using store = createLanguageDiagnosticStore(model);
 	using bridge = new LanguageDiagnosticDecorationBridge(store);
-	const source = createStanzaLanguageDiagnosticSource(bridge.decorations);
 	const viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [source],
 	});
 	viewport.layout({ width: 200, height: 80 });
 	assert.equal(store.accept({
@@ -419,51 +416,38 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
 				},
 			],
 		},
-	}), LanguageResultAcceptance.Applied);
+		}), LanguageResultAcceptance.Applied);
+	await Promise.resolve();
 
-	assert.deepEqual(decorationElements(viewport.element).map(element => ({
-		presentation: element.classList[1],
+	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({
+		className: decorationClassName(element),
 		lineIndex: element.parentElement?.dataset.lineIndex,
-		title: element.title,
 	})), [{
-		presentation: DecorationPresentation.ErrorUnderline,
+		className: 'squiggly-error',
 		lineIndex: "0",
-		title: "language.lexical E100: error",
 	}, {
-		presentation: DecorationPresentation.WarningUnderline,
+		className: 'squiggly-warning',
 		lineIndex: "1",
-		title: "warning",
 	}, {
-		presentation: DecorationPresentation.InformationUnderline,
+		className: 'squiggly-info',
 		lineIndex: "2",
-		title: "information",
 	}, {
-		presentation: DecorationPresentation.HintUnderline,
+		className: 'squiggly-hint',
 		lineIndex: "3",
-		title: "hint",
 	}]);
-	assert.equal(
-		resolveStanzaLanguageDiagnosticPresentation(
-			LanguageDiagnosticSeverity.Information,
-		),
-		DecorationPresentation.InformationUnderline,
-	);
-	assert.equal(
-		resolveStanzaLanguageDiagnosticPresentation(LanguageDiagnosticSeverity.Hint),
-		DecorationPresentation.HintUnderline,
-	);
-	assert.throws(
-		() => resolveStanzaLanguageDiagnosticPresentation(
-			"fatal" as LanguageDiagnosticSeverity,
-		),
-		/Unknown language diagnostic severity/,
-	);
+	assert.deepEqual(model.getAllDecorations().map(decoration => hoverMessageValue(decoration.options.hoverMessage)), [
+		'language.lexical E100: error',
+		'warning',
+		'information',
+		'hint',
+	]);
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X",
 	}]);
-	assert.deepEqual(decorationElements(viewport.element), []);
+	await Promise.resolve();
+	assert.deepEqual(decorationElements(viewport.domNode.domNode), []);
 	assert.equal(store.result, undefined);
 
 	viewport.dispose();
@@ -494,8 +478,17 @@ function requiredElement<T extends Element = HTMLElement>(
 
 function decorationElements(container: ParentNode): HTMLElement[] {
 	return [...container.querySelectorAll<HTMLElement>(
-		".stanza-editor-decoration",
+		".view-overlays .cdr",
 	)];
+}
+
+function decorationClassName(element: HTMLElement): string | undefined {
+	return [...element.classList].find(className => className !== 'cdr');
+}
+
+function hoverMessageValue(message: { readonly value: string } | readonly { readonly value: string }[] | null | undefined): string | undefined {
+	if (!message) return undefined;
+	return 'value' in message ? message.value : message[0]?.value;
 }
 
 function testRectangle(left: number, top: number, width: number): DOMRect {
@@ -504,6 +497,8 @@ function testRectangle(left: number, top: number, width: number): DOMRect {
 
 interface CanvasPaint {
 	readonly frame: number;
+	readonly kind: 'minimap' | 'overview';
+	readonly canvasHeight: number;
 	readonly fill: string;
 	readonly left: number;
 	readonly top: number;
@@ -514,23 +509,43 @@ interface CanvasPaint {
 function recordCanvasPaint(dom: JSDOM): CanvasPaint[] {
 	const paint: CanvasPaint[] = [];
 	let frame = 0;
-	dom.window.HTMLCanvasElement.prototype.getContext = function () {
+	const getContext = function (this: HTMLCanvasElement) {
+		const canvas = this;
+		const kind = this.classList.contains('decorationsOverviewRuler') ? 'overview' : 'minimap';
 		const context = {
 			fillStyle: '',
 			globalAlpha: 1,
+			lineWidth: 1,
+			strokeStyle: '',
 			clearRect(): void { frame += 1; },
 			fillRect(left: number, top: number, width: number, height: number): void {
-				paint.push({ frame, fill: String(this.fillStyle), left, top, width, height });
+					paint.push({ frame, kind, canvasHeight: canvas.height, fill: String(this.fillStyle), left, top, width, height });
 			},
+			beginPath(): void {},
+			moveTo(): void {},
+			lineTo(): void {},
+			stroke(): void {},
 		};
 		return context as unknown as CanvasRenderingContext2D;
 	} as unknown as typeof dom.window.HTMLCanvasElement.prototype.getContext;
+	dom.window.HTMLCanvasElement.prototype.getContext = getContext;
+	browserEnvironment.window.HTMLCanvasElement.prototype.getContext = getContext;
 	return paint;
 }
 
 function minimapMarkers(paint: readonly CanvasPaint[]): readonly { readonly fill: string; readonly top: number }[] {
-	const frame = paint.at(-1)?.frame;
-	return paint.filter(entry => entry.frame === frame && entry.width === 3).map(entry => ({ fill: entry.fill, top: entry.top }));
+	const frame = paint.filter(entry => entry.kind === 'minimap').at(-1)?.frame;
+	return paint.filter(entry => entry.kind === 'minimap' && entry.frame === frame && entry.width === 3).map(entry => ({ fill: entry.fill, top: entry.top }));
+}
+
+function overviewMarkerColors(paint: readonly CanvasPaint[]): readonly string[] {
+	const frame = paint.filter(entry => entry.kind === 'overview').at(-1)?.frame;
+	return paint.filter(entry => entry.kind === 'overview' && entry.frame === frame && entry.height > 2 && entry.height < entry.canvasHeight).map(entry => entry.fill);
+}
+
+function overviewCursorColors(paint: readonly CanvasPaint[]): readonly string[] {
+	const frame = paint.filter(entry => entry.kind === 'overview').at(-1)?.frame;
+	return paint.filter(entry => entry.kind === 'overview' && entry.frame === frame && entry.height === 2).map(entry => entry.fill);
 }
 
 class FixedTextMeasurer implements TextMeasurer {

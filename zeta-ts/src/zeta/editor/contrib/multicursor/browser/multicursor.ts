@@ -23,6 +23,8 @@ interface SelectionHighlighterOptions {
 
 /** Owns textual matches for non-empty editor selections. */
 export class SelectionHighlighter extends Disposable {
+	public static readonly ID = 'editor.contrib.selectionHighlighter';
+
 	private readonly enabled: boolean;
 	private readonly multiline: boolean;
 	private readonly maxLength: number;
@@ -52,6 +54,13 @@ export class SelectionHighlighter extends Disposable {
 		this.update();
 	}
 
+	public override dispose(): void {
+		if (this.isDisposed) return;
+		this.decorations.clear();
+		this.lastKey = '';
+		super.dispose();
+	}
+
 	private update(): void {
 		const ranges = this.findRanges();
 		const hasSemanticHighlights = this.occurrenceHighlights && this.languageFeaturesService.documentHighlightProvider.has(this.model);
@@ -61,6 +70,10 @@ export class SelectionHighlighter extends Disposable {
 		this.decorations.replaceAll(ranges.map(range => ({
 			range,
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: {
+				description: hasSemanticHighlights ? 'selection-highlight' : 'selection-highlight-overview',
+				className: 'selection-highlight',
+			},
 			metadata: hasSemanticHighlights,
 		})));
 	}

@@ -1,105 +1,94 @@
 import './viewCursors.css';
-import { h, reset } from '../../../../base/browser/dom.js';
+import { h, WindowIntervalTimer } from '../../../../base/browser/dom.js';
 import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
+import { TimeoutTimer } from '../../../../base/common/async.js';
+import { EditorOption, TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
-import { type Range } from '../../../common/core/range.js';
+import { type Selection } from '../../../common/core/selection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-import { type TrackedRange } from '../../../common/model/trackedRange.js';
 import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
-import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
 import { type RenderingContext } from '../../view/renderingContext.js';
 import { ViewPart } from '../../view/viewPart.js';
-import { ViewPartRows } from '../../view/viewLayer.js';
 import { CursorPlurality, ViewCursor, type IViewCursorRenderData, type ViewCursorOptions } from './viewCursor.js';
-import { TrackedRangeStickiness } from '../../../common/model.js';
-import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
+import * as viewEvents from '../../../common/viewEvents.js';
 
 export interface ViewCursorsOptions extends ViewCursorOptions {
 	readonly host: HTMLElement;
-	readonly blinking: TextEditorCursorBlinkingStyle;
-	readonly smoothCaretAnimation: 'off' | 'explicit' | 'on';
 	readonly semanticTokenSource?: SemanticTokenSource;
 }
 
 /** Coordinates active cursors, movement animation, and input composition presentation. */
 export class ViewCursors extends ViewPart {
-	public readonly domNode: HTMLElement;
+	static readonly BLINK_INTERVAL = 500;
+
+	private readonly domNode: HTMLElement;
 	private readonly fastDomNode: FastDomNode<HTMLElement>;
 	private readonly model: TextModel;
 	private readonly viewModel: IViewModel;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
-	private readonly compositionRows: ViewPartRows;
-	private readonly smoothCaretAnimation: 'off' | 'explicit' | 'on';
-	private cursorOptions: ViewCursorOptions;
+	private readonly cursorOptions: ViewCursorOptions;
 	private readonly cursors: ViewCursor[] = [];
-	private compositionRange: TrackedRange | undefined;
-	private previousSelectionCount: number;
+	private readOnly: boolean;
+	private cursorBlinking: TextEditorCursorBlinkingStyle;
+	private cursorStyle: TextEditorCursorStyle;
+	private cursorSmoothCaretAnimation: 'off' | 'explicit' | 'on';
+	private editContextEnabled: boolean;
+	private selectionIsEmpty: boolean;
+	private isComposingInput = false;
+	private isVisible = false;
+	private blinkingEnabled = false;
+	private editorHasFocus = false;
+	private readonly startCursorBlinkAnimation: TimeoutTimer;
+	private readonly cursorFlatBlinkInterval: WindowIntervalTimer;
 	private pauseMovementAnimation = true;
 	private movementRenderGeneration = 0;
 	private renderData: IViewCursorRenderData[] = [];
 
 	constructor(context: ViewContext, options: ViewCursorsOptions, model: TextModel, viewModel: IViewModel) {
 		super(context);
+		const configuration = context.configuration.options;
+		this.readOnly = configuration.get(EditorOption.readOnly);
+		this.cursorBlinking = configuration.get(EditorOption.cursorBlinking);
+		this.cursorStyle = configuration.get(EditorOption.effectiveCursorStyle);
+		this.cursorSmoothCaretAnimation = configuration.get(EditorOption.cursorSmoothCaretAnimation);
+		this.editContextEnabled = configuration.get(EditorOption.effectiveEditContext);
+		const selections = viewModel.getCursorStates().map(state => state.viewState.selection);
+		this.selectionIsEmpty = selections[0]?.isEmpty() ?? true;
 		this.domNode = h(options.host.ownerDocument, 'div');
 		this.fastDomNode = createFastDomNode(this.domNode);
-		this.fastDomNode.setClassName('cursors-layer stanza-editor-cursors-layer');
-		this.domNode.classList.add(cursorBlinkingClass(options.blinking));
-		this.domNode.classList.toggle('cursor-smooth-caret-animation', options.smoothCaretAnimation !== 'off');
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
 		this._register(toDisposable(() => this.domNode.remove()));
-		this.compositionRows = this._register(new ViewPartRows(this.domNode, 'stanza-editor-composition-layer', 'stanza-editor-composition-row'));
-		this.domNode.append(this.compositionRows.domNode.domNode);
 		this.model = model;
 		this.viewModel = viewModel;
 		this.semanticTokenSource = options.semanticTokenSource;
-		this.smoothCaretAnimation = options.smoothCaretAnimation;
 		this.cursorOptions = options;
-		this.previousSelectionCount = viewModel.getCursorStates().length;
-		this.reconcileCursors(true);
+		this.startCursorBlinkAnimation = this._register(new TimeoutTimer());
+		this.cursorFlatBlinkInterval = this._register(new WindowIntervalTimer(this.domNode));
+		this.reconcileCursors(selections, true);
+		this.updateDomClassName();
+		this.updateBlinking();
 		this._register(toDisposable(() => {
-			for (const cursor of this.cursors.splice(0)) cursor.dispose();
+			this.cursors.splice(0);
 		}));
-		this._register(toDisposable(() => this.compositionRange?.dispose()));
 	}
 
-	public setCompositionRange(range: Range | undefined): void {
-		const next = range ? this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges) : undefined;
-		this.compositionRange?.dispose();
-		this.compositionRange = next;
+	public override dispose(): void {
+		super.dispose();
 	}
 
 	public getDomNode(): FastDomNode<HTMLElement> {
 		return this.fastDomNode;
 	}
 
-	public setStyle(style: TextEditorCursorStyle): void {
-		if (style === this.cursorOptions.style) return;
-		this.cursorOptions = Object.freeze({ ...this.cursorOptions, style });
-		for (const cursor of this.cursors) cursor.onConfigurationChanged(this.cursorOptions);
-	}
-
-	public setLineWidth(lineWidth: number): void {
-		if (lineWidth === this.cursorOptions.lineWidth) return;
-		this.cursorOptions = Object.freeze({ ...this.cursorOptions, lineWidth });
-		for (const cursor of this.cursors) cursor.onConfigurationChanged(this.cursorOptions);
-	}
-
 	public override prepareRender(context: RenderingContext): void {
-		if (this.cursors.length !== this.viewModel.getCursorStates().length) this.reconcileCursors(this.pauseMovementAnimation);
-		else this.updateCursorPositions(this.pauseMovementAnimation);
 		for (const cursor of this.cursors) cursor.prepareRender(context);
 	}
 
 	public render(context: RenderingContext): void {
-		const rows = this.compositionRows.render(context);
-		for (const row of rows.values()) reset(row);
-		projectStanzaCompositionOverlay(context, this.model, this.cursorOptions.readVisualProjection(), this.cursorOptions.readTextLeft(), this.cursorOptions.textMeasurer, this.compositionRange?.range, rows);
 		this.renderData = [];
 		for (const cursor of this.cursors) {
 			const renderData = cursor.render(context);
@@ -111,13 +100,7 @@ export class ViewCursors extends ViewPart {
 		return this.renderData;
 	}
 
-	public renderSelection(context: RenderingContext, reason: CursorChangeReason): void {
-		const selectionCount = this.viewModel.getCursorStates().length;
-		this.pauseMovementAnimation = !this.shouldAnimateMovement(reason, selectionCount);
-		this.previousSelectionCount = selectionCount;
-		this.reconcileCursors(this.pauseMovementAnimation);
-		this.prepareRender(context);
-		this.render(context);
+	private resetMovementAnimation(): void {
 		for (const animation of this.domNode.getAnimations?.() ?? []) animation.currentTime = 0;
 		const generation = ++this.movementRenderGeneration;
 		queueMicrotask(() => {
@@ -125,15 +108,7 @@ export class ViewCursors extends ViewPart {
 		});
 	}
 
-	public renderTokens(context: RenderingContext): void {
-		this.movementRenderGeneration += 1;
-		this.pauseMovementAnimation = true;
-		this.prepareRender(context);
-		this.render(context);
-	}
-
-	private reconcileCursors(pauseMovementAnimation: boolean): void {
-		const selections = this.viewModel.getCursorStates().map(state => state.modelState.selection);
+	private reconcileCursors(selections: readonly Selection[], pauseMovementAnimation: boolean): void {
 		const selectionCount = selections.length;
 		while (this.cursors.length < selectionCount) {
 			const selectionIndex = this.cursors.length;
@@ -147,12 +122,11 @@ export class ViewCursors extends ViewPart {
 				cursorPlurality(selectionIndex, selectionCount, 0),
 			));
 		}
-		while (this.cursors.length > selectionCount) this.cursors.pop()!.dispose();
-		this.updateCursorPositions(pauseMovementAnimation);
+		while (this.cursors.length > selectionCount) this.cursors.pop()!.getDomNode().domNode.remove();
+		this.updateCursorPositions(selections, pauseMovementAnimation);
 	}
 
-	private updateCursorPositions(pauseMovementAnimation: boolean): void {
-		const selections = this.viewModel.getCursorStates().map(state => state.modelState.selection);
+	private updateCursorPositions(selections: readonly Selection[], pauseMovementAnimation: boolean): void {
 		for (let selectionIndex = 0; selectionIndex < this.cursors.length; selectionIndex += 1) {
 			const plurality = cursorPlurality(selectionIndex, this.cursors.length, 0);
 			const cursor = this.cursors[selectionIndex]!;
@@ -162,9 +136,107 @@ export class ViewCursors extends ViewPart {
 	}
 
 	private shouldAnimateMovement(reason: CursorChangeReason, selectionCount: number): boolean {
-		if (this.smoothCaretAnimation === 'off' || selectionCount !== this.previousSelectionCount) return false;
-		if (this.smoothCaretAnimation === 'on') return true;
+		if (this.cursorSmoothCaretAnimation === 'off' || selectionCount !== this.cursors.length) return false;
+		if (this.cursorSmoothCaretAnimation === 'on') return true;
 		return reason === CursorChangeReason.Explicit;
+	}
+
+	public override onCompositionStart(_event: viewEvents.ViewCompositionStartEvent): boolean {
+		this.isComposingInput = true;
+		this.updateBlinking();
+		return true;
+	}
+
+	public override onCompositionEnd(_event: viewEvents.ViewCompositionEndEvent): boolean {
+		this.isComposingInput = false;
+		this.updateBlinking();
+		return true;
+	}
+
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		const options = this._context.configuration.options;
+		this.readOnly = options.get(EditorOption.readOnly);
+		this.cursorBlinking = options.get(EditorOption.cursorBlinking);
+		this.cursorStyle = options.get(EditorOption.effectiveCursorStyle);
+		this.cursorSmoothCaretAnimation = options.get(EditorOption.cursorSmoothCaretAnimation);
+		this.editContextEnabled = options.get(EditorOption.effectiveEditContext);
+		for (const cursor of this.cursors) cursor.onConfigurationChanged(event);
+		this.updateBlinking();
+		this.updateDomClassName();
+		return true;
+	}
+
+	public override onCursorStateChanged(event: viewEvents.ViewCursorStateChangedEvent): boolean {
+		this.pauseMovementAnimation = !this.shouldAnimateMovement(event.reason, event.selections.length);
+		this.reconcileCursors(event.selections, this.pauseMovementAnimation);
+		this.selectionIsEmpty = event.selections[0]?.isEmpty() ?? true;
+		this.updateBlinking();
+		this.updateDomClassName();
+		this.resetMovementAnimation();
+		return true;
+	}
+
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onFocusChanged(event: viewEvents.ViewFocusChangedEvent): boolean {
+		this.editorHasFocus = event.isFocused;
+		this.updateBlinking();
+		return false;
+	}
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
+	public override onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): boolean { return true; }
+	public override onTokensChanged(event: viewEvents.ViewTokensChangedEvent): boolean {
+		return this.cursors.some(cursor => event.ranges.some(range => range.fromLineNumber <= cursor.getPosition().lineNumber && cursor.getPosition().lineNumber <= range.toLineNumber));
+	}
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
+
+	private getCursorBlinking(): TextEditorCursorBlinkingStyle {
+		if (this.isComposingInput && !this.editContextEnabled) return TextEditorCursorBlinkingStyle.Hidden;
+		if (!this.editorHasFocus) return TextEditorCursorBlinkingStyle.Hidden;
+		if (this.readOnly) return TextEditorCursorBlinkingStyle.Solid;
+		return this.cursorBlinking;
+	}
+
+	private updateBlinking(): void {
+		this.startCursorBlinkAnimation.cancel();
+		this.cursorFlatBlinkInterval.cancel();
+		const blinking = this.getCursorBlinking();
+		const hidden = blinking === TextEditorCursorBlinkingStyle.Hidden;
+		const solid = blinking === TextEditorCursorBlinkingStyle.Solid;
+		if (hidden) this.hide();
+		else this.show();
+		this.blinkingEnabled = false;
+		this.updateDomClassName();
+		if (hidden || solid) return;
+		if (blinking === TextEditorCursorBlinkingStyle.Blink) {
+			this.cursorFlatBlinkInterval.cancelAndSet(() => this.isVisible ? this.hide() : this.show(), ViewCursors.BLINK_INTERVAL);
+			return;
+		}
+		this.startCursorBlinkAnimation.setIfNotSet(() => {
+			this.blinkingEnabled = true;
+			this.updateDomClassName();
+		}, ViewCursors.BLINK_INTERVAL);
+	}
+
+	private updateDomClassName(): void {
+		const classes = ['cursors-layer', 'stanza-editor-cursors-layer'];
+		if (!this.selectionIsEmpty) classes.push('has-selection');
+		classes.push(cursorStyleClass(this.cursorStyle));
+		classes.push(this.blinkingEnabled ? cursorBlinkingClass(this.getCursorBlinking()) : 'cursor-solid');
+		if (this.cursorSmoothCaretAnimation !== 'off') classes.push('cursor-smooth-caret-animation');
+		this.fastDomNode.setClassName(classes.join(' '));
+	}
+
+	private show(): void {
+		for (const cursor of this.cursors) cursor.show();
+		this.isVisible = true;
+	}
+
+	private hide(): void {
+		for (const cursor of this.cursors) cursor.hide();
+		this.isVisible = false;
 	}
 }
 
@@ -175,36 +247,21 @@ function cursorPlurality(selectionIndex: number, selectionCount: number, primary
 
 function cursorBlinkingClass(blinking: TextEditorCursorBlinkingStyle): string {
 	switch (blinking) {
-		case TextEditorCursorBlinkingStyle.Smooth: return 'cursor-blinking-smooth';
-		case TextEditorCursorBlinkingStyle.Phase: return 'cursor-blinking-phase';
-		case TextEditorCursorBlinkingStyle.Expand: return 'cursor-blinking-expand';
-		case TextEditorCursorBlinkingStyle.Solid: return 'cursor-blinking-solid';
-		case TextEditorCursorBlinkingStyle.Hidden: return 'cursor-blinking-hidden';
-		default: return 'cursor-blinking-blink';
+		case TextEditorCursorBlinkingStyle.Smooth: return 'cursor-smooth';
+		case TextEditorCursorBlinkingStyle.Phase: return 'cursor-phase';
+		case TextEditorCursorBlinkingStyle.Expand: return 'cursor-expand';
+		case TextEditorCursorBlinkingStyle.Blink: return 'cursor-blink';
+		default: return 'cursor-solid';
 	}
 }
 
-function projectStanzaCompositionOverlay(context: RenderingContext, model: TextModel, projection: EditorVisualLineProjection, textLeft: number, textMeasurer: TextMeasurer, range: Range | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
-	if (!range) return;
-	const visibleRanges = context.linesVisibleRangesForRange(range, false);
-	if (visibleRanges) {
-		for (const line of visibleRanges) {
-			for (const horizontalRange of line.ranges) appendCompositionRange(rows, line.lineNumber - 1, horizontalRange.left, horizontalRange.width);
-		}
-		return;
+function cursorStyleClass(style: TextEditorCursorStyle): string {
+	switch (style) {
+		case TextEditorCursorStyle.Block: return 'cursor-block-style';
+		case TextEditorCursorStyle.Underline: return 'cursor-underline-style';
+		case TextEditorCursorStyle.LineThin: return 'cursor-line-thin-style';
+		case TextEditorCursorStyle.BlockOutline: return 'cursor-block-outline-style';
+		case TextEditorCursorStyle.UnderlineThin: return 'cursor-underline-thin-style';
+		default: return 'cursor-line-style';
 	}
-	const renderLines = { startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber };
-	const rectangles = createStanzaVisualRangeRectangles(model, [{ range, value: undefined }], projection, renderLines, textLeft, textMeasurer);
-	for (const rectangle of rectangles) appendCompositionRange(rows, rectangle.visualLineIndex, rectangle.left, rectangle.width);
-}
-
-
-function appendCompositionRange(rows: ReadonlyMap<number, HTMLElement>, visualLineIndex: number, left: number, width: number): void {
-	const row = rows.get(visualLineIndex);
-	if (!row) return;
-	const element = h(row.ownerDocument, 'div');
-	element.className = 'stanza-editor-composition';
-	element.style.left = `${left}px`;
-	element.style.width = `${width}px`;
-	row.append(element);
 }

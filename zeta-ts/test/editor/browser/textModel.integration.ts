@@ -1,13 +1,18 @@
 import { URI } from "../../../src/zeta/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/zeta/base/common/lifecycle.js";
+import { Event } from "../../../src/zeta/base/common/event.js";
 import { createBrowserEditorPart } from "../../../src/zeta/workbench/contrib/codeEditor/browser/browserEditorPart.js";
 import { CodeEditorPane } from "../../../src/zeta/workbench/contrib/codeEditor/browser/codeEditorPane.js";
 import { LanguageConfigurationService } from "../../../src/zeta/editor/common/languages/languageConfigurationRegistry.js";
 import { LanguageFeaturesService } from "../../../src/zeta/editor/common/services/languageFeaturesService.js";
 import { LanguageService } from "../../../src/zeta/editor/common/services/languageService.js";
 import { Position } from "../../../src/zeta/editor/common/core/position.js";
+import { Range } from "../../../src/zeta/editor/common/core/range.js";
 import { Selection } from "../../../src/zeta/editor/common/core/selection.js";
-import { SelectionSet } from "../../../src/zeta/editor/common/cursor/selectionSet.js";
+import { GlyphMarginLane } from "../../../src/zeta/editor/common/model.js";
+import { ContentWidgetPositionPreference, type IContentWidget, type IGlyphMarginWidget } from "../../../src/zeta/editor/browser/editorBrowser.js";
+import { type IEditorDecorationsCollection } from "../../../src/zeta/editor/common/editorCommon.js";
+import { InMemoryConfigurationService } from "../../../src/zeta/platform/configuration/common/inMemoryConfigurationService.js";
 import { BrowserTextResourceStore } from "../../../src/zeta/workbench/contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerSyntaxProviders } from "../../../src/zeta/workbench/services/language/browser/appServerSyntaxProviders.js";
 import { WorkbenchLanguageFeatures } from "../../../src/zeta/workbench/services/language/browser/workbenchLanguageFeatures.js";
@@ -15,6 +20,7 @@ import { BrowserTextModelService } from "../../../src/zeta/workbench/services/te
 import { TextModel } from "../../../src/zeta/editor/editor.api.js";
 import "../../../src/zeta/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
+import { AccessibilitySupport, type IAccessibilityService } from '../../../src/zeta/platform/accessibility/common/accessibility.js';
 
 interface IntegrationHarness {
 	readonly apiText: string;
@@ -23,8 +29,18 @@ interface IntegrationHarness {
 	save(): Promise<void>;
 	getSavedText(): string;
 	getSyntaxAnalysisCount(): number;
+	getSelection(): { readonly startLineIndex: number; readonly startColumnIndex: number; readonly endLineIndex: number; readonly endColumnIndex: number };
 	setCursors(positions: readonly { readonly lineIndex: number; readonly columnIndex: number }[], primaryIndex?: number): void;
 	revealPosition(lineIndex: number, columnIndex: number): void;
+	setScrollLeft(scrollLeft: number): void;
+	setRenderRichScreenReaderContent(enabled: boolean): void;
+	showViewZone(): void;
+	removeViewZone(): void;
+	showWidgets(): void;
+	moveGlyphWidget(lineIndex: number): void;
+	removeWidgets(): void;
+	showModelDecorations(): void;
+	removeModelDecorations(): void;
 	dispose(): void;
 }
 
@@ -41,7 +57,22 @@ const files = new MemoryTextFiles(resource, "fn main() {\n  answer();\n}\n");
 disposables.add(toDisposable(() => files.dispose()));
 const resourceStore = new BrowserTextResourceStore(files);
 const languageService = disposables.add(new LanguageService());
-const languageConfigurationService = disposables.add(new LanguageConfigurationService());
+const configurationService = disposables.add(new InMemoryConfigurationService());
+const accessibilityService: IAccessibilityService = {
+	onDidChangeScreenReaderOptimized: Event.None,
+	onDidChangeReducedMotion: Event.None,
+	onDidChangeReducedTransparency: Event.None,
+	onDidChangeLinkUnderlines: Event.None,
+	alwaysUnderlineAccessKeys: async () => false,
+	isScreenReaderOptimized: () => true,
+	isMotionReduced: () => false,
+	isTransparencyReduced: () => false,
+	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
+	setAccessibilitySupport: () => {},
+	alert: () => {},
+	status: () => {},
+};
+const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
 const languageFeaturesService = disposables.add(new LanguageFeaturesService(languageConfigurationService));
 const models = disposables.add(new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService }));
 disposables.add(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
@@ -69,15 +100,21 @@ disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
 }));
 let editorPart: ReturnType<typeof createBrowserEditorPart> | undefined;
+let viewZoneId: string | undefined;
+let contentWidget: IContentWidget | undefined;
+let glyphWidget: IGlyphMarginWidget | undefined;
+let glyphWidgetLineNumber = 1;
+let glyphDecorations: IEditorDecorationsCollection | undefined;
+let modelDecorations: IEditorDecorationsCollection | undefined;
 const pane = disposables.add(new CodeEditorPane(resourceStore, {
 	modelService: models,
 	createPart: options => {
 		editorPart = createBrowserEditorPart(options);
 		return editorPart;
 	},
-	languageResolver: languageService,
 	languageConfigurationService,
 	languageFeaturesService,
+	accessibilityService,
 	cursorSmoothCaretAnimation: "explicit",
 }));
 const apiModel = disposables.add(new TextModel("editor-api"));
@@ -93,17 +130,132 @@ window.zetaTextModelIntegration = {
 	save: () => pane.save(),
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
-	setCursors: (positions, primaryIndex = 0) => requiredEditorPart().selections.setCursorSelections(SelectionSet.withPrimary(
+	getSelection: () => {
+		const selection = requiredEditorPart().getSelection();
+		if (!selection) throw new Error('Text model integration editor has no selection');
+		return {
+			startLineIndex: selection.startLineNumber - 1,
+			startColumnIndex: selection.startColumn - 1,
+			endLineIndex: selection.endLineNumber - 1,
+			endColumnIndex: selection.endColumn - 1,
+		};
+	},
+	setCursors: (positions, primaryIndex = 0) => requiredEditorPart().selections.setCursorSelections(primaryFirst(
 		positions.map(position => Selection.fromPositions(new Position(position.lineIndex + 1, position.columnIndex + 1))),
 		primaryIndex,
 	)),
 	revealPosition: (lineIndex, columnIndex) => requiredEditorPart().view.revealPosition(new Position(lineIndex + 1, columnIndex + 1)),
-	dispose: () => disposables.dispose(),
+	setScrollLeft: scrollLeft => requiredEditorPart().setScrollLeft(scrollLeft),
+	setRenderRichScreenReaderContent: enabled => requiredEditorPart().updateOptions({ renderRichScreenReaderContent: enabled }),
+	showViewZone: () => {
+		removeViewZone();
+		const domNode = document.createElement('div');
+		domNode.className = 'zeta-view-zone-probe';
+		domNode.textContent = 'View zone';
+		requiredEditorPart().changeViewZones(accessor => {
+			viewZoneId = accessor.addZone({ afterLineNumber: 1, heightInPx: 500, minWidthInPx: 1_200, suppressMouseDown: true, domNode });
+		});
+	},
+	removeViewZone,
+	showWidgets: () => {
+		removeWidgets();
+		const contentDomNode = document.createElement('button');
+		contentDomNode.className = 'zeta-content-widget-probe';
+		contentDomNode.textContent = 'Content widget';
+		contentWidget = {
+			suppressMouseDown: true,
+			getId: () => 'zeta.integration.contentWidget',
+			getDomNode: () => contentDomNode,
+			getPosition: () => ({ position: new Position(2, 3), preference: [ContentWidgetPositionPreference.EXACT] }),
+		};
+		const glyphDomNode = document.createElement('button');
+		glyphDomNode.className = 'zeta-glyph-widget-probe';
+		glyphDomNode.textContent = 'G';
+		glyphWidgetLineNumber = 1;
+		glyphWidget = {
+			getId: () => 'zeta.integration.glyphWidget',
+			getDomNode: () => glyphDomNode,
+			getPosition: () => ({ lane: GlyphMarginLane.Center, zIndex: 10, range: new Range(glyphWidgetLineNumber, 1, glyphWidgetLineNumber, 1) }),
+		};
+		const editor = requiredEditorPart();
+		editor.addContentWidget(contentWidget);
+		editor.addGlyphMarginWidget(glyphWidget);
+		glyphDecorations = editor.createDecorationsCollection([{
+			range: new Range(2, 1, 2, 1),
+			options: { description: 'lower integration glyph', glyphMarginClassName: 'zeta-model-glyph-lower', glyphMargin: { position: GlyphMarginLane.Center }, zIndex: 1 },
+		}, {
+			range: new Range(2, 1, 2, 1),
+			options: { description: 'higher integration glyph', glyphMarginClassName: 'zeta-model-glyph-higher', glyphMargin: { position: GlyphMarginLane.Center }, zIndex: 2 },
+		}]);
+	},
+	moveGlyphWidget: lineIndex => {
+		if (!glyphWidget) throw new Error('Glyph widget probe is not installed');
+		glyphWidgetLineNumber = lineIndex + 1;
+		requiredEditorPart().layoutGlyphMarginWidget(glyphWidget);
+	},
+	removeWidgets,
+	showModelDecorations: () => {
+		removeModelDecorations();
+		modelDecorations = requiredEditorPart().createDecorationsCollection([{
+			range: new Range(1, 1, 1, 3),
+			options: { description: 'integration inline decoration', className: 'zeta-model-decoration-inline' },
+		}, {
+			range: new Range(2, 1, 2, 1),
+			options: { description: 'integration whole-line decoration', className: 'zeta-model-decoration-whole', isWholeLine: true },
+		}, {
+			range: new Range(3, 1, 3, 1),
+			options: { description: 'integration collapsed decoration', className: 'zeta-model-decoration-collapsed', showIfCollapsed: true },
+		}, {
+			range: new Range(1, 1, 2, 1),
+			options: {
+				description: 'integration line decoration',
+				linesDecorationsClassName: 'zeta-model-line-decoration',
+				firstLineDecorationClassName: 'zeta-model-first-line-decoration',
+				linesDecorationsTooltip: 'Model line decoration',
+			},
+		}, {
+			range: new Range(2, 1, 3, 1),
+			options: { description: 'integration block decoration', blockClassName: 'zeta-model-block-decoration', blockPadding: [1, 2, 3, 4] },
+		}]);
+	},
+	removeModelDecorations,
+	dispose: () => {
+		removeViewZone();
+		removeWidgets();
+		removeModelDecorations();
+		disposables.dispose();
+	},
 };
 
 function requiredEditorPart(): ReturnType<typeof createBrowserEditorPart> {
 	if (!editorPart) throw new Error("Text model integration editor is missing");
 	return editorPart;
+}
+
+function removeViewZone(): void {
+	if (viewZoneId === undefined || !editorPart) return;
+	const id = viewZoneId;
+	viewZoneId = undefined;
+	editorPart.changeViewZones(accessor => accessor.removeZone(id));
+}
+
+function removeWidgets(): void {
+	if (editorPart && contentWidget) editorPart.removeContentWidget(contentWidget);
+	if (editorPart && glyphWidget) editorPart.removeGlyphMarginWidget(glyphWidget);
+	contentWidget = undefined;
+	glyphWidget = undefined;
+	glyphDecorations?.clear();
+	glyphDecorations = undefined;
+}
+
+function removeModelDecorations(): void {
+	modelDecorations?.clear();
+	modelDecorations = undefined;
+}
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }
 
 function requiredElement(selector: string): HTMLElement {

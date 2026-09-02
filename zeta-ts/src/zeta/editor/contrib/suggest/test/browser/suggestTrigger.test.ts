@@ -3,8 +3,6 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
-import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageCompletionSessionController } from "../../common/languageCompletionSessionController.js";
 import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../common/languages/completion/languageCompletionProviders.js";
@@ -14,7 +12,6 @@ import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
-import { LanguageEditingAdapter } from "../../../../browser/view/viewController.js";
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -196,23 +193,19 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	const registration = registry.register(provider);
 	const model = new TextModel(text);
 	const service = new LanguageCompletionService(model, registry);
-	const selections = controllerAt(model, new Position((0) + 1, (text.length) + 1));
-	const session = new LanguageCompletionSessionController(service.results, selections);
-	const configurations = new TestLanguageConfigurationService();
-	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
-	const languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
 	const viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
-		controller: { languageEditing },
 	});
+	const selections = viewport.testSelectionController;
+	selections.setSelections([Selection.fromPositions(new Position((0) + 1, (text.length) + 1))]);
+	const session = new LanguageCompletionSessionController(service.results, selections);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
 	const suggest = new SuggestController(input, selections, service, session, "typescript");
-	input.focus();
+	viewport.focus();
 	return {
 		dom,
 		model,
@@ -222,7 +215,6 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 		suggest,
 		[Symbol.dispose](): void {
 			suggest.dispose();
-			languageEditing.dispose();
 			viewport.dispose();
 			session.dispose();
 			selections.dispose();
@@ -230,8 +222,6 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 			model.dispose();
 			registration.dispose();
 			registry.dispose();
-			builtinConfigurations.dispose();
-			configurations.dispose();
 			dom.window.close();
 		},
 	};

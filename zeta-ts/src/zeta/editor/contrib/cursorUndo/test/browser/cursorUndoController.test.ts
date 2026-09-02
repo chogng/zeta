@@ -32,13 +32,13 @@ test('CursorUndoRedoController restores and reapplies cursor-only history', () =
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	const original = [Selection.fromPositions(new Position(1, 1))];
 	const multiple = [Selection.fromPositions(new Position(2, 1)), Selection.fromPositions(new Position(1, 1))];
-	editor.selections.setCursorSelections(multiple);
-
-	const undo = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'u', ctrlKey: true });
-	editor.view.element.dispatchEvent(undo);
-	assert.equal(undo.defaultPrevented, true);
-	assert.deepEqual(editor.getSelections(), original);
 	assert.ok(CursorUndoRedoController.get(editor));
+	editor.setSelections(multiple);
+
+	const undo = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === 'cursorUndo');
+	assert.ok(undo);
+	editor.invokeWithinContext(accessor => undo.run(accessor, editor, {}));
+	assert.deepEqual(editor.getSelections(), original);
 
 	const redo = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === 'cursorRedo');
 	assert.ok(redo);

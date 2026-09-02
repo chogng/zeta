@@ -13,10 +13,10 @@ export class StickyScrollController extends Disposable {
 	constructor(private readonly viewport: View, private readonly folding: EditorFoldingModel) {
 		super();
 		if (folding.model !== viewport.textModel) throw new TypeError("Stanza sticky scroll dependencies must share a text model");
-		this.element = h(viewport.element.ownerDocument, "div");
+		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
 		this.element.className = "stanza-editor-sticky-scroll";
 		this.element.setAttribute("aria-label", "Sticky section headers");
-		viewport.element.append(this.element);
+		viewport.domNode.domNode.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
 		this._register(folding.onDidChange(() => this.render()));

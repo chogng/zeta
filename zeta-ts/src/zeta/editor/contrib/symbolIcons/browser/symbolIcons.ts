@@ -4,28 +4,20 @@ import { Range } from "../../../common/core/range.js";
 import { TextDecorationCollection, type TextDecorationId } from "../../../common/model/decorationCollection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
 import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/languageDocumentSymbols.js";
 import { TrackedRangeStickiness } from '../../../common/model.js';
-
-const SYMBOL_ICON_DECORATION_OWNER = "symbol-icons";
 
 interface SymbolIconMetadata {
 	readonly kind: LanguageDocumentSymbol["kind"];
 	readonly name: string;
-	readonly detail: string | undefined;
+	readonly detail?: string;
 }
 
 /** Resolves document symbols into the shared line-decoration Part. */
-export class SymbolIconsController extends Disposable implements OwnedDecorationSource {
+export class SymbolIconsController extends Disposable {
 	private readonly collection: TextDecorationCollection<SymbolIconMetadata>;
-	private readonly source: DecorationSource;
 	private decorationIds: readonly TextDecorationId[] = Object.freeze([]);
 	private request: AbortController | undefined;
-
-	public readonly onDidChange;
-	public readonly glyphMarginLanes;
-	public readonly linesDecorationLanes;
 
 	constructor(
 		model: TextModel,
@@ -36,22 +28,9 @@ export class SymbolIconsController extends Disposable implements OwnedDecoration
 		super();
 		if (service.textModel !== model) throw new TypeError("Stanza symbol icon dependencies must share a text model");
 		this.collection = this._register(new TextDecorationCollection(model));
-		this.source = createStanzaDecorationSource(
-			this.collection,
-			decoration => symbolIconDecoration(decoration.metadata),
-			undefined,
-			{ linesDecorationLanes: [{ owner: SYMBOL_ICON_DECORATION_OWNER, width: 20 }] },
-		);
-		this.onDidChange = this.source.onDidChange;
-		this.glyphMarginLanes = this.source.glyphMarginLanes;
-		this.linesDecorationLanes = this.source.linesDecorationLanes;
 		this._register(model.onDidChangeContent(() => void this.refresh()));
 		this._register(toDisposable(() => this.request?.abort()));
 		void this.refresh();
-	}
-
-	public get decorations() {
-		return this.source.decorations;
 	}
 
 	private async refresh(): Promise<void> {
@@ -71,6 +50,7 @@ export class SymbolIconsController extends Disposable implements OwnedDecoration
 					return [{
 						range: Range.fromPositions({ lineNumber, column: 1 }),
 						stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+						options: symbolIconDecorationOptions(symbol),
 						metadata: Object.freeze({
 							kind: symbol.kind,
 							name: symbol.name,
@@ -85,16 +65,11 @@ export class SymbolIconsController extends Disposable implements OwnedDecoration
 	}
 }
 
-function symbolIconDecoration(metadata: SymbolIconMetadata): DecorationPresentationResolution {
+function symbolIconDecorationOptions(metadata: SymbolIconMetadata) {
 	return Object.freeze({
-		presentation: DecorationPresentation.LineDecoration,
-		linesDecoration: {
-			owner: SYMBOL_ICON_DECORATION_OWNER,
-			className: `stanza-editor-symbol-icon ${symbolKindClass(metadata.kind)}`,
-			tooltip: metadata.detail ? `${metadata.name}: ${metadata.detail}` : metadata.name,
-		},
-		overviewRuler: false,
-		minimap: false,
+		description: 'symbol-icon',
+		linesDecorationsClassName: `stanza-editor-symbol-icon ${symbolKindClass(metadata.kind)}`,
+		linesDecorationsTooltip: metadata.detail ? `${metadata.name}: ${metadata.detail}` : metadata.name,
 	});
 }
 

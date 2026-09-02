@@ -11,7 +11,7 @@
 	transition: opacity 120ms ease-out;
 }
 
-.stanza-editor .stanza-editor-lines-decorations-layer:hover .stanza-editor-line-decoration.zeta-icon,
+.stanza-editor .margin-view-overlays:hover .stanza-editor-line-decoration.zeta-icon,
 .stanza-editor .stanza-editor-line-decoration.zeta-icon-folding-collapsed,
 .stanza-editor .stanza-editor-line-decoration.zeta-icon-folding-manual-collapsed,
 .stanza-editor .stanza-editor-line-decoration.alwaysShowFoldIcons {

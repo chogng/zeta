@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -21,6 +22,7 @@ for (const [name, value] of Object.entries({
 	ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 environment.window.HTMLCanvasElement.prototype.getContext = () => null;
+setARIAContainer(environment.window.document.body);
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { MessageController } = await import('../../browser/messageController.js');
@@ -47,7 +49,14 @@ test('read-only edit attempts use MessageController and close after cursor movem
 
 	const messages = MessageController.get(editor);
 	assert.ok(messages?.isVisible());
-	assert.match(container.textContent ?? '', /Cannot edit in read-only editor/);
+	const messageWidget = environment.window.document.body.querySelector<HTMLElement>('.stanza-editor-overlay-message');
+	assert.ok(messageWidget);
+	assert.match(messageWidget.textContent ?? '', /Cannot edit in read-only editor/);
 	editor.setSelection(Selection.fromPositions(new Position(2, 1)));
 	assert.equal(messages?.isVisible(), false);
+	messages.showMessage('Closing message', new Position(1, 1));
+	assert.equal(messages.isVisible(), true);
+	messages.dispose();
+	assert.equal(messages.isVisible(), false);
+	assert.equal(environment.window.document.body.querySelector('.stanza-editor-overlay-message'), null);
 });

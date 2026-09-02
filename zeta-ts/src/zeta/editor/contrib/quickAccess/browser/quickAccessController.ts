@@ -32,7 +32,7 @@ export class GotoLineController extends Disposable {
 			this.dispose();
 			throw new TypeError("Stanza Go to Line dependencies must share one text model");
 		}
-		const ownerDocument = viewport.element.ownerDocument;
+		const ownerDocument = viewport.domNode.domNode.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "stanza-editor-goto-line-widget";
 		this.element.hidden = true;
@@ -49,7 +49,7 @@ export class GotoLineController extends Disposable {
 		this.status.className = "stanza-editor-goto-line-status";
 		this.status.setAttribute("aria-live", "polite");
 		this.element.append(this.input, this.status);
-		viewport.element.append(this.element);
+		viewport.domNode.domNode.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(addDisposableListener(editorInput, "keydown", event => this.handleEditorKeydown(event)));
 		this._register(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));

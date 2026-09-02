@@ -11,6 +11,7 @@ import { TabFocus } from '../../../browser/config/tabFocus.js';
 import { EditorOption, type IEditorOptions } from '../../../common/config/editorOptions.js';
 import { type BareFontInfo, FontInfo } from '../../../common/config/fontInfo.js';
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { createTestConfiguration, TEST_FONT_INFO } from './testConfiguration.js';
 
 test('ComputedEditorOptions stores canonical option IDs', () => {
@@ -90,6 +91,36 @@ test('EditorConfiguration validates updates and reports the changed option', () 
 	dom.window.close();
 });
 
+test('EditorConfiguration owns the rich screen-reader content option', () => {
+	const dom = new JSDOM('<div id="editor"></div>');
+	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
+	using configuration = createTestConfiguration(container);
+	assert.equal(configuration.options.get(EditorOption.renderRichScreenReaderContent), false);
+	let changed = false;
+	configuration.onDidChange(event => changed = event.hasChanged(EditorOption.renderRichScreenReaderContent));
+
+	configuration.updateOptions({ renderRichScreenReaderContent: true });
+
+	assert.equal(configuration.options.get(EditorOption.renderRichScreenReaderContent), true);
+	assert.equal(changed, true);
+	dom.window.close();
+});
+
+test('EditorConfiguration computes and updates the overview-ruler cursor visibility option', () => {
+	const dom = new JSDOM('<div id="editor"></div>');
+	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
+	using configuration = createTestConfiguration(container);
+	assert.equal(configuration.options.get(EditorOption.hideCursorInOverviewRuler), false);
+	let changed = false;
+	configuration.onDidChange(event => changed = event.hasChanged(EditorOption.hideCursorInOverviewRuler));
+
+	configuration.updateOptions({ hideCursorInOverviewRuler: true });
+
+	assert.equal(configuration.options.get(EditorOption.hideCursorInOverviewRuler), true);
+	assert.equal(changed, true);
+	dom.window.close();
+});
+
 test('EditorConfiguration recomputes measured font options when the cache changes', () => {
 	let width = 8;
 	class MeasuredConfiguration extends EditorConfiguration {
@@ -99,7 +130,7 @@ test('EditorConfiguration recomputes measured font options when the cache change
 	}
 	const dom = new JSDOM('<div id="editor"></div>');
 	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
-	using configuration = new MeasuredConfiguration({ fontSize: 14 }, container);
+	using configuration = new MeasuredConfiguration(false, MenuId.EditorContext, { fontSize: 14 }, container);
 	let changed = false;
 	configuration.onDidChange(event => changed ||= event.hasChanged(EditorOption.fontInfo));
 	width = 10;

@@ -1,121 +1,90 @@
 import "./margin.css";
-import { h } from "../../../../base/browser/dom.js";
-import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
-import { type RestrictedRenderingContext } from "../../view/renderingContext.js";
+import { createFastDomNode, FastDomNode } from "../../../../base/browser/fastDomNode.js";
+import { type RenderingContext, type RestrictedRenderingContext } from "../../view/renderingContext.js";
 import { ViewPart } from "../../view/viewPart.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import * as viewEvents from '../../../common/viewEvents.js';
 
-const GUTTER_HORIZONTAL_PADDING = 16;
-
-export type MarginPresentation = "document" | "embedded";
-
-export interface MarginOptions {
-	readonly host: HTMLElement;
-	readonly contentElement: HTMLElement;
-	readonly model: TextModel;
-	readonly textMeasurer: TextMeasurer;
-	readonly presentation: MarginPresentation;
-	readonly showLineNumbers: boolean;
-	readonly glyphMarginLaneCount: number;
-	readonly lineHeight: number;
-	readonly lineDecorationsWidth: number;
-}
-
-/** Owns editor margin geometry and its background. */
 export class Margin extends ViewPart {
 	public static readonly CLASS_NAME = 'glyph-margin';
-	readonly domNode: HTMLDivElement;
-	private readonly root: FastDomNode<HTMLDivElement>;
-	private readonly host: HTMLElement;
-	private readonly contentElement: HTMLElement;
-	private readonly model: TextModel;
-	private readonly textMeasurer: TextMeasurer;
-	private readonly presentation: MarginPresentation;
-	private readonly showLineNumbers: boolean;
-	private readonly glyphMarginLaneCount: number;
-	private readonly lineDecorationsWidth: number;
-	private lineHeight: number;
+	public static readonly OUTER_CLASS_NAME = 'margin';
+	private readonly _domNode: FastDomNode<HTMLElement>;
+	private readonly _glyphMarginBackgroundDomNode: FastDomNode<HTMLElement>;
+	private _canUseLayerHinting: boolean;
+	private _contentLeft: number;
+	private _glyphMarginLeft: number;
+	private _glyphMarginWidth: number;
+	private _lineNumbersLeft: number;
+	private _lineNumbersWidth: number;
+	private _decorationsLeft: number;
+	private _decorationsWidth: number;
 
-	constructor(context: ViewContext, options: MarginOptions) {
+	constructor(context: ViewContext) {
 		super(context);
-		this.host = options.host;
-		this.contentElement = options.contentElement;
-		this.model = options.model;
-		this.textMeasurer = options.textMeasurer;
-		this.presentation = options.presentation;
-		this.showLineNumbers = options.showLineNumbers;
-		this.glyphMarginLaneCount = options.glyphMarginLaneCount;
-		this.lineHeight = options.lineHeight;
-		this.lineDecorationsWidth = options.lineDecorationsWidth;
-		const domNode = h(options.host.ownerDocument, "div");
-		this._register(toDisposable(() => domNode.remove()));
-		this.domNode = domNode;
-		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName(Margin.CLASS_NAME);
-		this.domNode.setAttribute("role", "presentation");
-		this.domNode.setAttribute("aria-hidden", "true");
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+		this._canUseLayerHinting = !options.get(EditorOption.disableLayerHinting);
+		this._contentLeft = layoutInfo.contentLeft;
+		this._glyphMarginLeft = layoutInfo.glyphMarginLeft;
+		this._glyphMarginWidth = layoutInfo.glyphMarginWidth;
+		this._lineNumbersLeft = layoutInfo.lineNumbersLeft;
+		this._lineNumbersWidth = layoutInfo.lineNumbersWidth;
+		this._decorationsLeft = layoutInfo.decorationsLeft;
+		this._decorationsWidth = layoutInfo.decorationsWidth;
+		this._domNode = createFastDomNode(document.createElement('div'));
+		this._domNode.setClassName(Margin.OUTER_CLASS_NAME);
+		this._domNode.setPosition('absolute');
+		this._domNode.setAttribute('role', 'presentation');
+		this._domNode.setAttribute('aria-hidden', 'true');
+		this._glyphMarginBackgroundDomNode = createFastDomNode(document.createElement('div'));
+		this._glyphMarginBackgroundDomNode.setClassName(Margin.CLASS_NAME);
+		this._domNode.appendChild(this._glyphMarginBackgroundDomNode);
 	}
 
-	get gutterWidth(): number {
-		if (this.presentation === "embedded") return 0;
-		return this.glyphMarginWidth + this.lineNumbersWidth + this.lineDecorationsWidth;
+	public getDomNode(): FastDomNode<HTMLElement> {
+		return this._domNode;
 	}
 
-	get glyphMarginLaneWidth(): number {
-		return this.lineHeight;
+	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+		this._canUseLayerHinting = !options.get(EditorOption.disableLayerHinting);
+		this._contentLeft = layoutInfo.contentLeft;
+		this._glyphMarginLeft = layoutInfo.glyphMarginLeft;
+		this._glyphMarginWidth = layoutInfo.glyphMarginWidth;
+		this._lineNumbersLeft = layoutInfo.lineNumbersLeft;
+		this._lineNumbersWidth = layoutInfo.lineNumbersWidth;
+		this._decorationsLeft = layoutInfo.decorationsLeft;
+		this._decorationsWidth = layoutInfo.decorationsWidth;
+		return true;
 	}
 
-	private get glyphMarginWidth(): number {
-		return this.glyphMarginLaneCount * this.glyphMarginLaneWidth;
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		return super.onScrollChanged(event) || event.scrollTopChanged || event.scrollLeftChanged;
 	}
 
-	private get lineNumbersWidth(): number {
-		if (this.presentation === "embedded" || !this.showLineNumbers) return 0;
-		const digitCount = String(this.model.lineCount).length;
-		return Math.ceil(this.textMeasurer.measureLineWidth("9".repeat(digitCount)) + GUTTER_HORIZONTAL_PADDING);
-	}
+	public override prepareRender(_context: RenderingContext): void {}
 
-	get glyphMarginLeft(): number {
-		return 0;
-	}
-
-	private get lineNumbersLeft(): number {
-		return this.glyphMarginWidth;
-	}
-
-	private get lineDecorationsLeft(): number {
-		return this.glyphMarginWidth + this.lineNumbersWidth;
-	}
-
-	get textLeft(): number {
-		return this.gutterWidth + this.textMeasurer.contentLeftPadding;
-	}
-
-	setLineHeight(lineHeight: number): void {
-		this.lineHeight = lineHeight;
-	}
-
-	render(context: RestrictedRenderingContext): void {
-		const gutterWidth = this.gutterWidth;
-		const lineNumbersWidth = this.lineNumbersWidth;
-		this.root.setWidth(gutterWidth);
-		this.root.setHeight(context.scrollHeight);
-		const hidden = gutterWidth === 0;
-		if (this.domNode.hidden !== hidden) this.domNode.hidden = hidden;
-		this.host.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
-		this.host.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
-		this.host.style.setProperty("--stanza-editor-glyph-margin-width", `${this.glyphMarginWidth}px`);
-		this.host.style.setProperty("--stanza-editor-line-numbers-left", `${this.lineNumbersLeft}px`);
-		this.host.style.setProperty("--stanza-editor-line-decorations-left", `${this.lineDecorationsLeft}px`);
-		this.host.style.setProperty("--stanza-editor-line-decorations-width", `${this.lineDecorationsWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-glyph-margin-width", `${this.glyphMarginWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-line-numbers-left", `${this.lineNumbersLeft}px`);
-		this.contentElement.style.setProperty("--stanza-editor-line-decorations-left", `${this.lineDecorationsLeft}px`);
-		this.contentElement.style.setProperty("--stanza-editor-line-decorations-width", `${this.lineDecorationsWidth}px`);
+	public render(context: RestrictedRenderingContext): void {
+		this._domNode.setLayerHinting(this._canUseLayerHinting);
+		this._domNode.setContain('strict');
+		this._domNode.setLeft(context.scrollLeft);
+		this._domNode.setTop(-(context.scrollTop - context.bigNumbersDelta));
+		const height = Math.min(context.scrollHeight, 1_000_000);
+		this._domNode.setHeight(height);
+		this._domNode.setWidth(this._contentLeft);
+		this._glyphMarginBackgroundDomNode.setLeft(this._glyphMarginLeft);
+		this._glyphMarginBackgroundDomNode.setWidth(this._glyphMarginWidth);
+		this._glyphMarginBackgroundDomNode.setHeight(height);
+		for (const node of [this._domNode.domNode, this._domNode.domNode.parentElement]) {
+			if (!node) continue;
+			node.style.setProperty('--stanza-editor-gutter-width', `${this._contentLeft}px`);
+			node.style.setProperty('--stanza-editor-line-numbers-width', `${this._lineNumbersWidth}px`);
+			node.style.setProperty('--stanza-editor-glyph-margin-width', `${this._glyphMarginWidth}px`);
+			node.style.setProperty('--stanza-editor-line-numbers-left', `${this._lineNumbersLeft}px`);
+			node.style.setProperty('--stanza-editor-line-decorations-left', `${this._decorationsLeft}px`);
+			node.style.setProperty('--stanza-editor-line-decorations-width', `${this._decorationsWidth}px`);
+		}
 	}
 }

@@ -10,7 +10,6 @@ import { ViewPart } from '../../view/viewPart.js';
 
 /** Projects scroll shadows without owning the editor's scroll state. */
 export class ScrollDecorationViewPart extends ViewPart {
-	public readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly topShadow: FastDomNode<HTMLDivElement>;
 	private readonly bottomShadow: FastDomNode<HTMLDivElement>;
@@ -22,17 +21,20 @@ export class ScrollDecorationViewPart extends ViewPart {
 		const ownerDocument = host.ownerDocument;
 		const domNode = h(ownerDocument, 'div');
 		this._register(toDisposable(() => domNode.remove()));
-		this.domNode = domNode;
-		this.root = new FastDomNode(this.domNode);
+		this.root = new FastDomNode(domNode);
 		this.topShadow = new FastDomNode(h(ownerDocument, 'div'));
 		this.bottomShadow = new FastDomNode(h(ownerDocument, 'div'));
 		this.root.setClassName('stanza-editor-scroll-decoration');
-		this.domNode.setAttribute('role', 'presentation');
-		this.domNode.setAttribute('aria-hidden', 'true');
+		domNode.setAttribute('role', 'presentation');
+		domNode.setAttribute('aria-hidden', 'true');
 		this.topShadow.setClassName('stanza-editor-scroll-decoration-shadow top');
 		this.bottomShadow.setClassName('stanza-editor-scroll-decoration-shadow bottom');
-		this.domNode.append(this.topShadow.domNode, this.bottomShadow.domNode);
+		domNode.append(this.topShadow.domNode, this.bottomShadow.domNode);
 		this.updateConfiguration();
+	}
+
+	public getDomNode(): FastDomNode<HTMLElement> {
+		return this.root;
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {

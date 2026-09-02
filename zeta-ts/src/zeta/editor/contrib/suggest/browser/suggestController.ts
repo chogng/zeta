@@ -179,7 +179,7 @@ export class SuggestController extends Disposable {
 	private acceptSelected(): void {
 		if (!this.session.acceptSelected()) return;
 		this.view.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
-		this.view.focus();
+		this.view.viewport.focus();
 	}
 
 	private handleDidEdit(event: EditorViewDidEditEvent): void {

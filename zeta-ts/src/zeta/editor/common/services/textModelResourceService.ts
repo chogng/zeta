@@ -12,6 +12,8 @@ import { type ITextResourceStore } from "./textResourceStore.js";
 export interface TextModelInput {
 	readonly resource: URI;
 	readonly initialText?: string;
+	readonly languageId?: string;
+	readonly contentType?: string;
 }
 
 /** Schema and block configuration used when a document profile opens a TextModel. */

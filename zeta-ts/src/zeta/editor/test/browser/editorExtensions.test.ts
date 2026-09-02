@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerTextEditorCapabilityContribution } from "../../browser/editorExtensions.js";
+import { EditorExtensionsRegistry, registerTextEditorCapabilityContribution } from "../../browser/editorExtensions.js";
 import { getTextEditorCapabilityContributions } from "../../browser/editorExtensions.js";
 import { TriggerInlineEditCommandsRegistry } from '../../browser/triggerInlineEditCommandsRegistry.js';
 
@@ -13,16 +13,16 @@ test.after(() => browserEnvironment.window.close());
 
 test("editor contributions retain bundle registration order and stable identity", async () => {
 	const before = getTextEditorCapabilityContributions().map(contribution => contribution.id);
-	assert.equal(before.includes("editor.contrib.find"), false);
+	assert.equal(before.includes("editor.contrib.findController"), false);
 
-	await import("../../contrib/find/browser/find.contribution.js");
+	await import("../../contrib/find/browser/findController.js");
 	const after = getTextEditorCapabilityContributions().map(contribution => contribution.id);
-	assert.deepEqual(after, [...before, "editor.contrib.find"]);
-	const contribution = getTextEditorCapabilityContributions().find(candidate => candidate.id === "editor.contrib.find");
+	assert.deepEqual(after, [...before, "editor.contrib.findController"]);
+	const contribution = getTextEditorCapabilityContributions().find(candidate => candidate.id === "editor.contrib.findController");
 	assert.ok(contribution);
 	assert.doesNotThrow(() => contribution.install?.({ kind: "document" } as never));
 
-	assert.throws(() => registerTextEditorCapabilityContribution({ id: "editor.contrib.find", install() {} }), /Duplicate editor contribution/);
+	assert.throws(() => registerTextEditorCapabilityContribution({ id: "editor.contrib.findController", install() {} }), /Duplicate editor contribution/);
 	assert.deepEqual(getTextEditorCapabilityContributions().map(contribution => contribution.id), after);
 });
 
@@ -32,18 +32,30 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 	for (const id of [
 		"editor.contrib.bracketMatching",
 		"editor.contrib.codeAction",
-		"editor.contrib.comment",
-		"editor.contrib.dropOrPasteInto",
 		"editor.contrib.folding",
 		"editor.contrib.format",
 		"editor.contrib.gotoSymbol",
 		"editor.contrib.hover",
 		"editor.contrib.multicursor",
+		"editor.contrib.selectionHighlighter",
 		"editor.contrib.rename",
 		"editor.contrib.wordHighlighter",
 	]) {
 		assert.equal(ids.has(id), true, id);
 	}
+	const contributionIds = new Set(EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id));
+	for (const id of [
+		'editor.contrib.cursorUndoRedoController',
+		'editor.contrib.dropIntoEditorController',
+		'editor.contrib.messageController',
+		'editor.contrib.placeholderText',
+		'editor.contrib.readOnlyMessageController',
+	]) assert.equal(contributionIds.has(id), true, id);
+	assert.equal(contributionIds.has('editor.contrib.linesOperations'), false);
+	assert.equal(contributionIds.has('editor.contrib.transposeLetters'), false);
+	const actionIds = new Set([...EditorExtensionsRegistry.getEditorActions()].map(action => action.id));
+	assert.equal(actionIds.has('editor.action.commentLine'), true);
+	assert.equal(actionIds.has('editor.action.blockComment'), true);
 	assert.equal(ids.has("editor.contrib.documentFormatting"), false);
 	const triggerCommands = new Set(TriggerInlineEditCommandsRegistry.getRegisteredCommands());
 	for (const id of [

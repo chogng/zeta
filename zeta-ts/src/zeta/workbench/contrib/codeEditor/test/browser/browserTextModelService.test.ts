@@ -10,6 +10,7 @@ import { TextModelConflictError } from "../../../../../editor/common/services/te
 import { type IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileContentSource, TextFileSaveConflictError, type ITextFileService, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { BrowserTextResourceStore } from "../../browser/browserTextResourceStore.js";
+import { LanguageService } from "../../../../../editor/common/services/languageService.js";
 
 test("Stanza text model service shares one model and preserves edits across panes", async () => {
 	const textFiles = new TestTextFileService("from disk");
@@ -31,6 +32,25 @@ test("Stanza text model service shares one model and preserves edits across pane
 	assert.equal(second.model.getText(), "edited");
 	second.dispose();
 	assert.throws(() => second.model.getText(), /disposed/);
+});
+
+test("Stanza text model service creates the model with its resource and resolved language", async () => {
+	const textFiles = new TestTextFileService("#!/usr/bin/env demo\nprint('ok')");
+	using languageService = new LanguageService();
+	using demo = languageService.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" });
+	using rust = languageService.registerLanguage({ id: "rust", extensions: [".rs"] });
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles), { languageService });
+	const resource = URI.file("C:\\project\\script.cgi");
+	const inferred = await models.acquire({ resource }, new AbortController().signal);
+
+	assert.equal(inferred.model.uri.toString(), resource.toString());
+	assert.equal(inferred.model.getLanguageId(), "demo");
+	inferred.dispose();
+
+	const explicitResource = URI.file("C:\\project\\explicit.txt");
+	const explicit = await models.acquire({ resource: explicitResource, languageId: "rust" }, new AbortController().signal);
+	assert.equal(explicit.model.getLanguageId(), "rust");
+	explicit.dispose();
 });
 
 test("Stanza text model acquisition delegates absent bootstrap content and observes cancellation", async () => {

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { DecorationPresentation } from '../../../../../editor/browser/viewParts/decorations/decorations.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { type IDiffApi } from '../../../../../platform/diff/common/diffApi.js';
@@ -40,20 +39,15 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
 
-	using source = new QuickDiffDecorator(
-		URI.file('/workspace/src/file.ts'),
-		model,
-		modelService,
-		configuration,
-	);
-	await waitFor(() => source.decorations.length === 2);
+	using source = new QuickDiffDecorator(model, secondReference, configuration);
+	await waitFor(() => model.getAllDecorations().length === 2);
+	const decorations = model.getAllDecorations();
 
-	assert.deepEqual(source.decorations.map(decoration => [decoration.presentation, decoration.range.getStartPosition().lineNumber]), [
-		[DecorationPresentation.DiffModified, 2],
-		[DecorationPresentation.DiffDeleted, 3],
+	assert.deepEqual(decorations.map(decoration => [decoration.options.linesDecorationsClassName, decoration.range.getStartPosition().lineNumber]), [
+		['zeta-quick-diff-gutter zeta-quick-diff-modified', 2],
+		['zeta-quick-diff-gutter zeta-quick-diff-deleted', 3],
 	]);
-	assert.ok(source.decorations.every(decoration => decoration.linesDecoration?.className?.includes('zeta-quick-diff-gutter')));
-	assert.ok(source.decorations.every(decoration => decoration.overviewRuler === true && decoration.minimap === true));
+	assert.ok(decorations.every(decoration => decoration.options.overviewRuler && decoration.options.minimap));
 	assert.ok(secondReference.object.findChangeAtLine(2), 'the deletion gutter line resolves to its containing hunk');
 
 	secondReference.dispose();

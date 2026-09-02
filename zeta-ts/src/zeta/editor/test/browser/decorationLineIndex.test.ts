@@ -1,41 +1,33 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { DecorationLineIndex } from "../../browser/viewParts/decorations/decorations.js";
-import { DecorationPresentation, type ResolvedDecoration } from "../../browser/viewParts/decorations/decorations.js";
-import { type TextDecorationId } from "../../common/model/decorationCollection.js";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 
-test("Decoration line index resolves visible intervals and preserves source order", () => {
-	const index = new DecorationLineIndex([
-		decoration(1, 4, 0, 4, 1),
-		decoration(2, 1, 2, 3, 0),
-		decoration(3, 0, 0, 0, 1),
-		decoration(4, 7, 3, 7, 3),
-	]);
+test('TextModel resolves intersecting decorations in model range order', () => {
+	using model = new TextModel('one\ntwo\nthree\nfour\nfive');
+	const ids = model.deltaDecorations([], [{
+		range: new Range(4, 1, 4, 2),
+		options: { description: 'four', className: 'four' },
+	}, {
+		range: new Range(2, 2, 3, 2),
+		options: { description: 'two-three', className: 'two-three' },
+	}, {
+		range: new Range(1, 1, 1, 2),
+		options: { description: 'one', className: 'one' },
+	}]);
 
-	assert.deepEqual(ids(index.getIntersectingLines(0, 1)), [2, 3]);
-	assert.deepEqual(ids(index.getIntersectingLines(2, 2)), [2]);
-	assert.deepEqual(ids(index.getIntersectingLines(3, 3)), []);
-	assert.deepEqual(ids(index.getIntersectingLines(4, 4)), [1]);
-	assert.deepEqual(ids(index.getIntersectingLines(7, 7)), [4]);
+	assert.deepEqual(model.getDecorationsInRange(new Range(1, 1, 2, 1)).map(decoration => decoration.id), [ids[2]]);
+	assert.deepEqual(model.getDecorationsInRange(new Range(3, 2, 4, 1)).map(decoration => decoration.id), [ids[0], ids[1]]);
+	assert.deepEqual(model.getDecorationsInRange(new Range(5, 1, 5, 2)), []);
 });
 
-test("Decoration line index validates line queries", () => {
-	const index = new DecorationLineIndex([]);
-	assert.throws(() => index.getIntersectingLines(-1, 0), /non-negative ordered integer span/);
-	assert.throws(() => index.getIntersectingLines(2, 1), /non-negative ordered integer span/);
-	assert.throws(() => index.getIntersectingLines(0, 0.5), /non-negative ordered integer span/);
+test('TextModel decoration owner queries include shared owner zero only', () => {
+	using model = new TextModel('one\ntwo');
+	const [shared] = model.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'shared' } }], 0);
+	const [first] = model.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'first' } }], 1);
+	const [second] = model.deltaDecorations([], [{ range: new Range(2, 1, 2, 2), options: { description: 'second' } }], 2);
+
+	assert.deepEqual(model.getAllDecorations(1).map(decoration => decoration.id), [shared, first]);
+	assert.deepEqual(model.getAllDecorations(2).map(decoration => decoration.id), [shared, second]);
+	assert.deepEqual(model.getAllDecorations(0).map(decoration => decoration.id), [shared, first, second]);
 });
-
-function decoration(id: number, startLineIndex: number, startColumnIndex: number, endLineIndex: number, endColumnIndex: number): ResolvedDecoration {
-	return Object.freeze({
-		id: id as TextDecorationId,
-		range: Range.fromPositions(new Position((startLineIndex) + 1, (startColumnIndex) + 1), new Position((endLineIndex) + 1, (endColumnIndex) + 1)),
-		presentation: DecorationPresentation.ErrorUnderline,
-	});
-}
-
-function ids(decorations: readonly ResolvedDecoration[]): readonly number[] {
-	return decorations.map(decoration => decoration.id as number);
-}

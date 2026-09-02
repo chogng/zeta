@@ -10,30 +10,50 @@ import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { renderViewPartRows } from '../../view/viewLayer.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import * as viewEvents from '../../../common/viewEvents.js';
 
 export type WhitespaceRenderingMode = 'none' | 'boundary' | 'selection' | 'trailing' | 'all';
 
 /** Projects whitespace glyphs without changing the text rows used for selection geometry. */
 export class WhitespaceOverlay extends DynamicViewOverlay {
 	private _renderResult: string[] = [];
+	private mode: WhitespaceRenderingMode;
 	constructor(
 		private readonly context: ViewContext,
 		private readonly model: TextModel,
 		private readonly viewModel: IViewModel,
-		private readonly mode: WhitespaceRenderingMode,
 		private readonly ownerDocument: Document,
 		private readonly readVisualProjection: () => EditorVisualLineProjection,
 		private readonly readTextLeft: () => number,
 		private readonly textMeasurer: TextMeasurer,
 	) {
 		super();
+		this.mode = this.context.configuration.options.get(EditorOption.renderWhitespace);
 		this.context.addEventHandler(this);
 	}
 
 	public override dispose(): void {
 		this.context.removeEventHandler(this);
+		this._renderResult = [];
 		super.dispose();
 	}
+
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		const mode = this.context.configuration.options.get(EditorOption.renderWhitespace);
+		const changed = this.mode !== mode;
+		this.mode = mode;
+		return changed || event.hasChanged(EditorOption.layoutInfo) || event.hasChanged(EditorOption.fontInfo);
+	}
+
+	public override onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): boolean { return this.mode === 'selection'; }
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
 		const projection = this.readVisualProjection();

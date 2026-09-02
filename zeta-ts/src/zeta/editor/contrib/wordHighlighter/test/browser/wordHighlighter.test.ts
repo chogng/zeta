@@ -3,7 +3,6 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
-import { createStanzaDecorationSource } from '../../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -35,7 +34,6 @@ for (const [name, value] of Object.entries({
 
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-const { resolveDocumentHighlightPresentation } = await import('../../browser/highlightDecorations.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
 const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.contribution.js');
 
@@ -66,8 +64,7 @@ test('Word highlighter prefers semantic providers and renders read and write kin
 	await settleHighlights();
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.metadata), [DocumentHighlightKind.Read, DocumentHighlightKind.Write]);
-	assert.equal(harness.viewport.element.querySelectorAll('.word-highlight').length, 1);
-	assert.equal(harness.viewport.element.querySelectorAll('.word-highlight-strong').length, 1);
+	assert.deepEqual(harness.model.getAllDecorations().map(decoration => decoration.options.className), ['word-highlight', 'word-highlight-strong']);
 });
 
 test('Multi-file word highlighting updates every open editor sharing the language service', async () => {
@@ -132,7 +129,6 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, res
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		decorationSources: [createStanzaDecorationSource(decorations, decoration => resolveDocumentHighlightPresentation(decoration.metadata))],
 	});
 	const view = viewport.controller;
 	const controller = new WordHighlighterContribution(view, selections, decorations, {
@@ -142,7 +138,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, res
 		mode,
 		delay: 0,
 	});
-	view.layout({ width: 240, height: 60 });
+	viewport.layout({ width: 240, height: 60 });
 	return new EditorHarness(dom, model, selections, decorations, viewport, view, controller, textualProvider);
 }
 

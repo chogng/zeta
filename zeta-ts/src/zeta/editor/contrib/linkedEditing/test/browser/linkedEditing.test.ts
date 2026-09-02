@@ -3,6 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
+import { type ICursorPositionChangedEvent } from '../../../../common/cursorEvents.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -13,6 +14,8 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
+import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
+import { type ICommand } from '../../../../common/editorCommon.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -45,16 +48,19 @@ test('linked editing applies one input transaction to every provider range', asy
 			};
 		},
 	});
-	await waitFor(() => fixture.viewport.element.classList.contains('linked-editing-active'));
+	await waitFor(() => fixture.viewport.domNode.domNode.classList.contains('linked-editing-active'));
 
 	const event = beforeInputEvent(fixture.dom.window, 'x');
 	fixture.input.element.dispatchEvent(event);
 
 	assert.equal(event.defaultPrevented, true);
+	await waitFor(() => fixture.model.getText() === 'txag txag');
 	assert.equal(fixture.model.getText(), 'txag txag');
 	assert.strictEqual(calls[0]!.model, fixture.model);
 	assert.equal(Position.equals(calls[0]!.position, new Position(1, 2)), true);
 	assert.equal(calls[0]!.token.isCancellationRequested, false);
+	fixture.selections.context.model.undo();
+	assert.equal(fixture.model.getText(), 'tag tag');
 });
 
 test('linked editing cancels stale and disposed provider requests', async () => {
@@ -104,8 +110,8 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const contribution = new LinkedEditingContribution(input, input.element, viewport, selections, registry, () => /^[a-z]+$/);
-	input.focus();
+	const contribution = new LinkedEditingContribution(input, editorFor(model, selections), input.element, viewport, registry, () => /^[a-z]+$/);
+	viewport.focus();
 	return {
 		dom,
 		model,
@@ -124,6 +130,24 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 			dom.window.close();
 		},
 	};
+}
+
+function editorFor(model: TextModel, selections: CursorsController): ICodeEditor {
+	return {
+		getModel: () => model,
+		getSelection: () => selections.getSelection(),
+		getSelections: () => selections.getSelections(),
+		onDidChangeCursorPosition: (listener: (event: ICursorPositionChangedEvent) => void) => selections.onDidChange(change => {
+			const [primary, ...secondary] = change.selections;
+			listener({
+				position: primary!.getPosition(),
+				secondaryPositions: secondary.map(selection => selection.getPosition()),
+				reason: change.reason,
+				source: 'test',
+			});
+		}),
+		executeCommands: (source: string | null | undefined, commands: (ICommand | null)[]) => selections.executeCommands(commands, source),
+	} as unknown as ICodeEditor;
 }
 
 function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string): InputEvent {

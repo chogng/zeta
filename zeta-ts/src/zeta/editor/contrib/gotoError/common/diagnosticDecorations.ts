@@ -5,7 +5,10 @@ import { type LanguageDiagnostic, type LanguageDiagnosticResult } from "../../..
 
 import { type URI } from "../../../../base/common/uri.js";
 import { type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource } from "../../../common/services/languageDiagnosticsService.js";
-import { TrackedRangeStickiness } from '../../../common/model.js';
+import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../common/model.js';
+import { themeColorFromId } from '../../../../base/common/themables.js';
+import { ColorId } from '../../../../platform/theme/common/colorTheme.js';
+import { LanguageDiagnosticSeverity } from '../../../common/languages/languageResults.js';
 
 /**
  * Projects current-version diagnostics into generic text decorations.
@@ -40,9 +43,48 @@ export class LanguageDiagnosticDecorationBridge extends Disposable {
 		this.decorations.replaceAll(diagnostics.map(diagnostic => ({
 			range: diagnostic.range,
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: diagnosticDecorationOptions(diagnostic),
 			metadata: diagnostic,
 		})));
 	}
+}
+
+export function diagnosticDecorationOptions(diagnostic: LanguageDiagnostic): Omit<IModelDecorationOptions, 'stickiness'> {
+	const hoverMessage = { value: diagnosticHoverText(diagnostic) };
+	switch (diagnostic.severity) {
+		case LanguageDiagnosticSeverity.Error:
+			return markerOptions('squiggly-error', ColorId.errorForeground, 30, hoverMessage);
+		case LanguageDiagnosticSeverity.Warning:
+			return markerOptions('squiggly-warning', ColorId.warningForeground, 20, hoverMessage);
+		case LanguageDiagnosticSeverity.Information:
+			return markerOptions('squiggly-info', ColorId.accentForeground, 10, hoverMessage);
+		case LanguageDiagnosticSeverity.Hint:
+			return {
+				description: 'marker-decoration',
+				className: 'squiggly-hint',
+				showIfCollapsed: true,
+				hoverMessage,
+				zIndex: 0,
+			};
+	}
+}
+
+function markerOptions(className: string, colorId: string, zIndex: number, hoverMessage: { readonly value: string }): Omit<IModelDecorationOptions, 'stickiness'> {
+	const color = themeColorFromId(colorId);
+	return {
+		description: 'marker-decoration',
+		className,
+		showIfCollapsed: true,
+		hoverMessage,
+		overviewRuler: { color, position: OverviewRulerLane.Right },
+		minimap: { color, position: MinimapPosition.Inline },
+		zIndex,
+	};
+}
+
+function diagnosticHoverText(diagnostic: LanguageDiagnostic): string {
+	const prefix = [diagnostic.source, diagnostic.code].filter(value => value !== undefined).join(' ');
+	return prefix.length === 0 ? diagnostic.message : `${prefix}: ${diagnostic.message}`;
 }
 
 /** Publishes the local syntax worker's current revision into the shared diagnostic repository. */

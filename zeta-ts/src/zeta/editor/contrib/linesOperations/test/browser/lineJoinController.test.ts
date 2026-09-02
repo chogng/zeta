@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
+import { operatingSystem, OperatingSystem } from '../../../../../base/common/platform.js';
 
 installDom(new JSDOM('<!doctype html><body></body>'));
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
@@ -16,7 +17,12 @@ test('linesOperations owns the join-lines shortcut and transaction', () => {
 	using model = new TextModel('first\n  second');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 3)));
-	const event = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'j', ctrlKey: true });
+	const event = new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: 'j',
+		...(operatingSystem === OperatingSystem.Macintosh ? { metaKey: true } : { ctrlKey: true }),
+	});
 	editor.view.element.dispatchEvent(event);
 	assert.equal(event.defaultPrevented, true);
 	assert.equal(model.getText(), 'first second');

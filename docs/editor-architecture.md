@@ -364,21 +364,21 @@ pointer input stack。
 
 ### Current 13：Pointer drag autoscroll
 
-`EditorViewport.getNearestTargetAtClientPoint` 与严格的
-`getTargetAtClientPoint` 分离：前者只供已开始的 drag 把越界 client point
-夹到最近 viewport 边缘，后者仍对普通查询返回 `undefined`。因此越界拖动会
-先同步扩展到当前可见边缘，不必等待 animation frame。
+`MouseHandler` 只在已经捕获的选择手势中识别越界坐标。上下越界先按当前
+scrollTop 和距离解析目标视图行，左右越界按 content、minimap 与 scrollbar
+边界解析目标列，然后统一生成 `IMouseTargetOutsideEditor`；普通查询与未开始的
+手势不会启动滚动。
 
-`StanzaPointerAutoScroller` 保存最新 point，并通过
-`base/browser/AnimationFrameScheduler` 逐帧更新。横纵轴速度分别由越界距离
-计算，起速为 240 px/s、上限为 2400 px/s；frame duration 限制在 4–50ms，
-避免后台恢复或异常时间戳造成大跳。每次滚动后重新执行最近命中，所以字符、
-词、整行与 Shift 扩选继续使用 Current 12 的同一 selection policy。
+`TopBottomDragScrolling` 与 `LeftRightDragScrolling` 分别持有一个可替换的
+`DragScrollingOperation`。operation 保存最新 target 和 mouse event，按越界
+距离计算速度，把 frame duration 限制在 4–50ms，通过 `ViewLayout` 改动对应
+滚动轴并同步 render。纵向滚动后使用 `MouseTargetFactory` 重新命中视口边缘，
+横向滚动按 LTR/RTL 选择行首或行尾，再以 `NavigationCommandRevealType.None`
+进入同一个 `ViewController.dispatchMouse` 选择策略，避免 reveal 反向抵消滚动。
 
-pointer 回到 viewport、到达对应 scroll maximum、pointerup、cancel、blur、
-dispose 或新 drag 开始都会取消后续工作并释放 scheduler。该策略不修改
-common viewport 或文本模型，也不把 wheel、touch kinetic scrolling 或
-任意 selection reveal policy 推断为已经完成。
+pointer 返回编辑器、pointerup、cancel、blur、布局变化、新手势或 owner 释放
+都会停止两个轴的 operation；可替换资源同时取消待执行动画帧。该策略不修改
+文本模型，也不把 wheel、touch 惯性滚动或其他 reveal 策略算作已完成。
 
 ### Current 14：Pointer multi-cursor policy
 
@@ -402,10 +402,11 @@ touch 多点手势仍未实现。
 
 ### Current 15：Keyboard cursor navigation
 
-`common/textSegmentation` 统一拥有 grapheme boundary 与 word segment。
-pointer hit-test、double-click word selection 和键盘导航共享这一个 seam；
-`Intl.Segmenter` 不可用时退化到 Unicode code point 与显式 word/whitespace/
-other 分类，避免三份 fallback 漂移。
+`common/textSegmentation` 统一拥有 grapheme boundary；词移动与选择由标准
+`WordCharacterClassifier` 和 `WordOperations` 持有。pointer hit-test 使用 grapheme，
+double-click/drag word selection、键盘词移动、词段移动与按词删除共享 classifier；
+配置的 `wordSeparators` 与 `wordSegmenterLocales` 在 common 层只解析一次，不在
+browser 侧维护第二套 word range。
 
 `MoveOperations` 公开标准的水平、垂直、空行、行边界和文档边界状态 API，
 输入统一使用 `CursorConfiguration`、`ICursorSimpleModel` 与 `SingleCursorState`。
@@ -432,7 +433,7 @@ Tab、clipboard、composition DOM event 或平台辅助功能命令。
 前拒绝；相邻删除使 caret 汇聚时，完全相同的结果会合并并重映射 primary。
 undo 仍恢复命令前的原多 selection，redo 恢复合并后的结果。
 
-`EditorView` 选择并拥有一个 `EditContext` 实现；Viewport root 获得焦点时转移到该输入表面，focus 状态通过稳定的 `.input-focused` 类投影，视觉规则由 Stanza component CSS 持有。`ViewController` 将非 composition `beforeinput` 的 `insertText`、replacement text、Enter、Backspace、Delete、history undo/redo 以及普通 Tab keydown 映射到 common 命令，成功编辑后清空输入表面并 reveal primary active position；它与 viewport、selection controller 必须引用同一个 `TextModel`，销毁 view 只移除自己的 DOM 和 listener。
+`EditorView` 选择并拥有一个 `EditContext` 实现；Viewport root 获得焦点时转移到该输入表面，focus 状态通过稳定的 `.input-focused` 类投影，视觉规则由 Stanza component CSS 持有。`ViewController` 将非 composition `beforeinput` 的 `insertText`、replacement text、Enter、Backspace、Delete 以及普通 Tab keydown 映射到 common 命令；history undo/redo 直接进入同一个 `TextModel`，不经过 selection controller 的并行入口。成功编辑后清空输入表面并 reveal primary active position；它与 viewport、selection controller 必须引用同一个 `TextModel`，销毁 view 只移除自己的 DOM 和 listener。
 
 普通 `beforeinput` router 明确忽略 composition input，由组合持有的
 composition controller 按 Current 18 处理；clipboard 路径见 Current 17。
@@ -464,56 +465,56 @@ Windows 选择 CRLF，其余平台选择 LF；进入 model 时仍统一规范化
 
 `ClipboardController` 独立持有 copy/cut/paste 语义，包括整行策略、metadata、HTML 输出、文本文件 paste 与 `text/uri-list` paste；URI 注释行会被忽略，异步结果必须仍匹配原 model version 与 selection 才能提交。浏览器 event 没有文本或 metadata 时，它通过 platform `IClipboardService` 读写 plain text；平台层不持有编辑器 metadata 或 HTML。`TextDropController` 只处理文本与文本文件 drop。所有删除仍由 common command 执行，但剪切范围已由 clipboard owner 决定。
 
-### Current 18：Textarea composition adapter
+### Current 18：EditContext composition adapter
 
-`StanzaCompositionController` 把 textarea 的 `compositionstart/update/end`
-映射到一个 `EditorCompositionSession`。开始前要求共享 `IME.enabled` 且只有
-一个 selection；否则取消浏览器事件。每次 update 把完整 provisional string
-替换进同一个受保护 revision。textarea value 与 event data 一致时读取
-selectionStart/End 和方向，换算为规范化文本的相对 offset；无法可靠对应时
-保守地把 caret 放在 composition text 末尾。`compositionend` 更新最终文本
-并 commit，因此整个序列仍只有一个 selection-aware undo step。
+`CompositionController` 统一消费 textarea 与浏览器 EditContext 的
+`compositionstart/update/end` 事件。开始前要求共享 `IME.enabled`、可写模型和
+单 selection；随后只调用标准 `ViewController.compositionStart`、
+`compositionType` 与 `compositionEnd`，由 `ViewModel` 和 `CursorsController`
+持有受保护的 history revision。输入 adapter 只负责把 provisional string 和
+相对 selection offset 规范化，不建立第二套文本事务。
 
-Escape 后的 end、blur、adapter disposal 或运行期间 `IME.disable()` 会 cancel，
-无损恢复 composition 前文本与 selection。外部 model edit 即使没有移动
-selection，也会通过直接 model observation 发现内核 session 已失效，清除
-browser presentation 并忽略迟到的 update/end。重复 start 不会打开第二个
-revision。`onDidChange` 对上层发布 composition active 状态。
+编辑器实例的 selection 状态固定由
+`ViewModelImpl → CursorsController → CursorCollection → Cursor` 持有。
+`CursorCollection` 负责 primary-first 顺序、secondary cursor 生命周期、重叠
+归一化和 tracked marker；`Cursor` 只持有一个 model/view 双坐标状态。模型内容
+变化从 ViewModel collector 进入 controller，reset 时重建整组 marker，再发布
+一次 cursor 状态变化，不由浏览器输入层保存平行 selection。
 
-开始时 Viewport reveal composition 起点，并通过
-`getPositionContentCoordinates` 把隐藏 textarea 移到对应的测量 caret；
-后续 selection、line height 和 layout 变化会重算位置，为原生候选窗提供
-content-coordinate anchor。DOM 通过稳定的 `.composing` 和 `.ime-input`
-状态类投影，样式继续由 Stanza component 持有。
+`CodeEditorWidget` 把 collector 中同一条 cursor 状态变化投影为标准
+`onDidChangeCursorPosition` 与 `onDidChangeCursorSelection`，事件保留 primary、
+secondary、旧 selection、模型版本、source 和 reason。`CursorUndoRedoController`
+只消费这个公开事件并持有每个 editor 的有界 cursor-only 历史；文档变化会清空该
+历史，文档 undo/redo 仍只属于 `TextModel`。Linked Editing 等标准 contribution
+通过 `ICodeEditor` 读取 selection，不订阅内部 `CursorsController` 事件。
 
-当前实现面向提供完整 `CompositionEvent.data` 的桌面式事件流。Android
-通常需要从 textarea 前后状态推导 replacement，macOS 长按可能把前一个字符
-带入 composition；iOS 的额外空 end、dead key、IME clause segmentation、
-多 selection IME、候选窗越界回退和更复杂的 composition clipboard UX 仍需
-独立适配与真实平台验证。活跃 session 收到空 end 会提交空 provisional text，
-因此可表达删除原 selection；Escape/blur 才是明确 cancel。已经关闭 session
-后的额外 end 被忽略，iOS 若在仍活跃时发出伪空 end，平台 adapter 必须提供
-更强的识别信号。
+每次 update 用本次完整 provisional string 替换上一版本，并按 active offset
+更新 caret。composition end 完成同一 revision；Escape、blur、adapter disposal
+或运行期间 `IME.disable()` 会结束 revision，并对已经写入的 provisional edit
+执行 undo。重复 start 不会打开第二个 revision。`onDidChange` 对上层发布
+composition active 状态，cut 与 paste 在此期间被拒绝，copy 仍可用。
+
+开始时 View reveal composition 起点，并通过
+`getPositionContentCoordinates` 把输入表面移到对应的测量 caret；layout 变化会
+重算位置，为候选窗提供 content-coordinate anchor。DOM 通过稳定的
+`.composing` 和 `.ime-input` 状态类投影，样式继续由 Zeta component 持有。
+
+当前实现覆盖桌面式完整 provisional string；Android/iOS replacement 推导、
+dead key、IME clause segmentation、多 selection IME、候选窗越界回退和更复杂
+的 composition clipboard UX 仍需独立适配与真实平台验证。
 
 ### Current 19：Composition range projection
 
-`EditorCompositionSession.currentRange` 只在 session 活跃时返回当前 provisional
-text 占据的 model range；commit、cancel 或外部失效后读取会拒绝，避免把
-stale offset 暴露给 renderer。
+`CompositionController` 用一个 `TextDecorationCollection` 持有 active
+composition range。每次 update 通过标准 model decoration 替换范围，使用
+`NeverGrowsWhenTypingAtEdges` 和 `edit-context-composition-primary`；end、cancel
+与 disposal 清空 collection。
 
-`EditorViewport.setCompositionRange` 把该范围保存为 Viewport 自己拥有的
-临时 `TrackedRange`。因此 model event 先于 browser controller 清理到达时，
-投影仍能读取映射后的合法范围，而不会使用旧 `TextRange` 越界。替换或清除
-presentation 会释放旧 tracked handle，Viewport 销毁也只释放自己的临时
-所有权。
-
-composition rectangle 复用 `createStanzaRangeRectangles`，与 selection 和
-decoration 共享 tab prefix measurement、end-exclusive 多行语义、selected
-newline cell 和 overscan clipping。每个虚拟行拥有独立 composition layer；
-`.composing .stanza-editor-composition` 由组件 CSS 投影 underline。commit、
-cancel、blur、IME disable、外部失效和 disposal 都同步清空该 layer。当前空
-provisional range 不绘制标记，也尚未区分 IME clause 的 primary/secondary
-segment。
+该范围进入普通 `TextModel → RenderingContext → DecorationsOverlay` 链，复用
+现有 decoration 的 tab prefix measurement、end-exclusive 多行语义和 overscan
+clipping。`View` 与 `ViewCursors` 不再公开 composition-range setter，也不持有
+平行 `TrackedRange`、逐行 composition layer 或额外 DOM owner。当前尚未区分
+IME clause 的 primary、secondary 与 none segment。
 
 ### Current 20：Empty-selection whole-line clipboard
 
@@ -1075,8 +1076,10 @@ registry 独立生命周期、同版本跨语言隔离、JSON/JSONC 差异、配
 该 registry 是原生输入的 bracket/comment command、wordPattern 与 `workbench/services/textMate` adapter
 可共同消费的 Stanza common 基座。Current 38 落地时尚未加入 indentation、on-enter
 或 word-pattern 字段；Current 41 在 Enter command 成为真实消费者后加入前两者。
-word-pattern 现已驱动 browser pointer、键盘导航、按词删除与 occurrence；TextMate
-grammar runtime 与 scope tokenization 由 Current 43 在独立 adapter 中补齐。
+word-pattern 继续服务明确需要语言正则的 occurrence 等语言能力；browser pointer、
+键盘导航与按词删除使用 editor 配置的 `wordSeparators` 和标准 `WordOperations`，
+不把语言正则变成第二套 cursor 边界。TextMate grammar runtime 与 scope
+tokenization 由 Current 43 在独立 adapter 中补齐。
 
 ### Current 39：语言配对输入事务
 
@@ -1457,6 +1460,14 @@ Zeta 不以 VS Code `workbench/browser/parts/editor` 的文件数量作为完成
 Workbench editor 宿主负责资源视图的“在哪个 group/window、以哪个 pane、何时激活或关闭”；具体 pane 负责“如何解释和编辑内容”。跨窗口服务只注册同源 UI 窗口、镜像样式并提供布局/卸载事件，不获得文件或模型权限。Binary Pane 只消费 `IFileService.readFileBytes`，TextFile service 只向文本模型发布经过验证的 UTF-8，二者不会共享可写模型。
 
 新增 VS Code 对应能力前必须先判断基座所有者：需要稳定布局与事件时扩展 EditorPart/Group state；需要窗口时扩展 auxiliary-window service 与 scoped services；需要格式解释时新增 contribution/pane；需要 transaction、selection 或 language 状态时进入 `src/zeta/editor`。只有出现至少两个真实调用方时，才把领域无关 DOM、Grid、取消或生命周期原语下沉到 `base`。
+
+### Current 48：Overview Ruler 渲染边界
+
+`DecorationsOverviewRuler` 是标准 `ViewPart`，只拥有一个从无障碍树隐藏的 canvas。它在 `prepareRender` 阶段读取 ViewModel 的 overview decoration 分组，在 render 阶段按 layout、DPR 和 lane 写入 canvas；光标、配置、主题、滚动和 View Zone 变化都进入同一失效状态，不再由调用方拼装另一套 marker source。
+
+`editorOverviewRuler.border` 与 `editorOverviewRuler.background` 由 Zeta 主题注册表提供，普通主题保留安静的透明表面，高对比度主题保留明确边界。`hideCursorInOverviewRuler` 是完整 boolean 配置，不再只存在于枚举和默认值。该 canvas 不可聚焦、不可点击，也不承担 hover 或命令职责。
+
+`EditorScrollbar` 尚未进入本切片：它依赖的 base scrollable element 还没有标准 overview layout、wheel delegate 和 vertical pointer delegate API。必须先补齐 base owner，再迁移 `View → EditorScrollbar`；不能在上层补同名空方法。仅本地且无生产调用的旧 debug breakpoint decoration 文件也不属于 Overview Ruler owner，未接入本链。
 
 ### Proposed 3：语言边界
 

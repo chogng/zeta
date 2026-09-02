@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewParts/decorations/decorations.js";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
@@ -9,6 +8,7 @@ import { LanguageLexicalContextIndex } from "../../../../common/languages/langua
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
@@ -27,7 +27,7 @@ for (const [name, value] of Object.entries({
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { BracketMatchController } = await import("../../browser/bracketMatchController.js");
 
-test("Bracket match controller projects current pairs and clears them for a range selection", () => {
+test("Bracket match controller stores standard decoration options and clears them for a range selection", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("function value() {\n}");
@@ -46,30 +46,23 @@ test("Bracket match controller projects current pairs and clears them for a rang
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		decorationSources: [createStanzaDecorationSource(
-			decorations,
-			() => DecorationPresentation.BracketMatch,
-		)],
 	});
 	using controller = new BracketMatchController(selections, bracketPairs, decorations, "always");
 	viewport.layout({ width: 240, height: 40 });
 
-	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".bracket-match")].map(element => ({
-		lineIndex: element.parentElement?.dataset.lineIndex,
-		left: element.style.left,
-		width: element.style.width,
+	assert.deepEqual(model.getAllDecorations().map(decoration => ({
+		range: decoration.range,
+		className: decoration.options.className,
 	})), [{
-		lineIndex: "0",
-		left: "208px",
-		width: "10px",
+		range: new Range(1, 18, 1, 19),
+		className: 'bracket-match',
 	}, {
-		lineIndex: "1",
-		left: "38px",
-		width: "10px",
+		range: new Range(2, 1, 2, 2),
+		className: 'bracket-match',
 	}]);
 
 	selections.setSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1))]);
-	assert.equal(viewport.element.querySelectorAll(".bracket-match").length, 0);
+	assert.equal(model.getAllDecorations().filter(decoration => decoration.options.className === 'bracket-match').length, 0);
 	dom.window.close();
 });
 

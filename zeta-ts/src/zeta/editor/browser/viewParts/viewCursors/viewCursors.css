@@ -7,6 +7,27 @@
 	position: absolute;
 	overflow: hidden;
 	box-sizing: border-box;
+	background-color: var(--zeta-editor-cursor-foreground);
+	border-color: var(--zeta-editor-cursor-foreground);
+	color: var(--zeta-editor-cursor-background);
+}
+
+.stanza-editor .cursors-layer > .cursor.cursor-primary {
+	background-color: var(--zeta-editor-multi-cursor-primary-foreground);
+	border-color: var(--zeta-editor-multi-cursor-primary-foreground);
+	color: var(--zeta-editor-multi-cursor-primary-background);
+}
+
+.stanza-editor .cursors-layer > .cursor.cursor-secondary {
+	background-color: var(--zeta-editor-multi-cursor-secondary-foreground);
+	border-color: var(--zeta-editor-multi-cursor-secondary-foreground);
+	color: var(--zeta-editor-multi-cursor-secondary-background);
+}
+
+[data-color-scheme="high-contrast-dark"] .stanza-editor .cursors-layer.has-selection > .cursor,
+[data-color-scheme="high-contrast-light"] .stanza-editor .cursors-layer.has-selection > .cursor {
+	border-left: var(--zeta-stroke-thickness) solid currentColor;
+	border-right: var(--zeta-stroke-thickness) solid currentColor;
 }
 
 /* -- smooth-caret-animation -- */
@@ -35,7 +56,7 @@
 	background: transparent !important;
 }
 
-@keyframes monaco-cursor-smooth {
+@keyframes zeta-cursor-smooth {
 	0%,
 	20% {
 		opacity: 1;
@@ -46,7 +67,7 @@
 	}
 }
 
-@keyframes monaco-cursor-phase {
+@keyframes zeta-cursor-phase {
 	0%,
 	20% {
 		opacity: 1;
@@ -57,7 +78,7 @@
 	}
 }
 
-@keyframes monaco-cursor-expand {
+@keyframes zeta-cursor-expand {
 	0%,
 	20% {
 		transform: scaleY(1);
@@ -68,14 +89,14 @@
 	}
 }
 
-.cursor-smooth {
-	animation: monaco-cursor-smooth 0.5s ease-in-out 0s 20 alternate;
+.cursor-smooth > .cursor {
+	animation: zeta-cursor-smooth 0.5s ease-in-out 0s 20 alternate;
 }
 
-.cursor-phase {
-	animation: monaco-cursor-phase 0.5s ease-in-out 0s 20 alternate;
+.cursor-phase > .cursor {
+	animation: zeta-cursor-phase 0.5s ease-in-out 0s 20 alternate;
 }
 
 .cursor-expand > .cursor {
-	animation: monaco-cursor-expand 0.5s ease-in-out 0s 20 alternate;
+	animation: zeta-cursor-expand 0.5s ease-in-out 0s 20 alternate;
 }

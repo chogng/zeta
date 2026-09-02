@@ -8,11 +8,11 @@ registerTextEditorCapabilityContribution({
 	configure: context => {
 		if (context.options.showSymbolIcons === false || context.model.largeFile.tooLargeForTokenization) return;
 		const service = context.register(new DocumentSymbolService(context.model, context.languageFeaturesService.documentSymbolProvider, { resource: context.options.input.resource }));
-		context.addDecorationSource(context.register(new SymbolIconsController(
+		context.register(new SymbolIconsController(
 			context.model,
 			service,
 			context.languageId,
 			context.onLanguageError,
-		)));
+		));
 	},
 });

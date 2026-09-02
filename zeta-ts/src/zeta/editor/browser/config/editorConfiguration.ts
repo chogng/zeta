@@ -21,6 +21,7 @@ import { type BareFontInfo, type FontInfo, type IValidatedEditorOptions } from '
 import { createBareFontInfoFromValidatedSettings } from '../../common/config/fontInfoFromSettings.js';
 import { type IDimension } from '../../common/core/2d/dimension.js';
 import { InputMode } from '../../common/inputMode.js';
+import { type MenuId } from '../../../platform/actions/common/actions.js';
 import { ElementSizeObserver } from './elementSizeObserver.js';
 import { FontMeasurements } from './fontMeasurements.js';
 import { migrateOptions } from './migrateOptions.js';
@@ -92,14 +93,16 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 	private viewLineCount = 1;
 	private glyphMarginDecorationLaneCount = 1;
 
-	readonly isSimpleWidget = false;
-	readonly contextMenuId = undefined;
+	readonly isSimpleWidget: boolean;
+	readonly contextMenuId: MenuId;
 	readonly onDidChange = this.changeEmitter.event;
 	readonly onDidChangeFast = this.fastChangeEmitter.event;
 	options: ComputedEditorOptions;
 
-	constructor(options: Readonly<IEditorConstructionOptions>, container: HTMLElement) {
+	constructor(isSimpleWidget: boolean, contextMenuId: MenuId, options: Readonly<IEditorConstructionOptions>, container: HTMLElement) {
 		super();
+		this.isSimpleWidget = isSimpleWidget;
+		this.contextMenuId = contextMenuId;
 		this.targetWindow = getWindow(container);
 		const { dimension, overflowWidgetsDomNode: _overflowWidgetsDomNode, ...editorOptions } = options;
 		this.rawOptions = cloneAndMigrate(editorOptions);

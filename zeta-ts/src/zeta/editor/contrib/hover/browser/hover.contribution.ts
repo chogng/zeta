@@ -1,10 +1,8 @@
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
-import { DiagnosticHoverController } from "./diagnosticHoverController.js";
 import { HoverController } from "./hoverController.js";
 import { LanguageHoverService } from '../common/hover.js';
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.hover", install: context => {
 	if (context.kind !== "text") return;
-	context.register(new DiagnosticHoverController(context.viewport));
 	context.register(new HoverController(context.viewport, context.register(new LanguageHoverService(context.model, context.languageFeaturesService.hoverProvider, context.options.input.resource)), context.languageId));
 } });

@@ -4,25 +4,30 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type View } from "../../../browser/view.js";
 import { RenameService } from "../common/languageRename.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
+import { type IIdentifiedSingleEditOperation } from '../../../common/model.js';
 
 export const RenameCommandId = 'editor.action.rename';
 
-/** Owns the local rename input and applies provider edits through the cursor command contract. */
+interface RenameEditor {
+	pushUndoStop(): boolean;
+	executeEdits(source: string | null | undefined, edits: IIdentifiedSingleEditOperation[]): boolean;
+}
+
+/** Owns the local rename input and applies provider edits through the editor edit contract. */
 export class RenameController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly input: HTMLInputElement;
 	private readonly status: HTMLSpanElement;
 	private request: AbortController | undefined;
 
-	constructor(private readonly editorInput: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error), private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation()) {
+	constructor(private readonly editorInput: HTMLElement, private readonly editor: RenameEditor, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error), private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation()) {
 		super();
 		if (viewport.textModel !== selections.context.model) throw new TypeError("Stanza rename dependencies must share one text model");
-		const ownerDocument = viewport.element.ownerDocument;
+		const ownerDocument = viewport.domNode.domNode.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "stanza-editor-rename";
 		this.element.hidden = true;
@@ -34,7 +39,7 @@ export class RenameController extends Disposable {
 		this.status.className = "stanza-editor-rename-status";
 		this.status.setAttribute("aria-live", "polite");
 		this.element.append(this.input, this.status);
-		viewport.element.append(this.element);
+		viewport.domNode.domNode.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(addDisposableListener(editorInput, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.key !== "F2") return;
@@ -98,8 +103,10 @@ export class RenameController extends Disposable {
 				}
 				const documentEdit = edit.entries.find(candidate => candidate.kind === "textDocument" && candidate.resource.toString() === this.resource.toString());
 				if (edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource rename");
-				const command = createEditorEditCommand(this.viewport.textModel, this.selections.getSelections(), documentEdit.edits);
-				if (command) this.selections.execute(command);
+				if (documentEdit.edits.length === 0) return;
+				this.editor.pushUndoStop();
+				this.editor.executeEdits(RenameCommandId, [...documentEdit.edits]);
+				this.editor.pushUndoStop();
 			});
 			this.close();
 		} catch (error) {
@@ -122,5 +129,5 @@ export class RenameController extends Disposable {
 registerTextEditorCapabilityContribution({ id: "editor.contrib.rename", commands: [{ id: RenameCommandId, canTriggerInlineEdits: true }], install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new RenameService(context.model, context.options.input.resource, context.languageFeaturesService.renameProvider));
-	context.register(new RenameController(context.view.element, context.viewport, context.selectionController, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError, context.executeCommand));
+	context.register(new RenameController(context.view.element, context.editor, context.viewport, context.selectionController, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError, context.executeCommand));
 } });

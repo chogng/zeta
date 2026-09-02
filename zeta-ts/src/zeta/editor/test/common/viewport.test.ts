@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter, Event } from "../../../base/common/event.js";
 import { Disposable as DisposableBase } from '../../../base/common/lifecycle.js';
+import { MenuId } from '../../../platform/actions/common/actions.js';
 import { type IEditorConfiguration } from '../../common/config/editorConfiguration.js';
 import { EditorOption, type IComputedEditorOptions } from '../../common/config/editorOptions.js';
 import { Range } from "../../common/core/range.js";
@@ -44,7 +45,7 @@ function testConfiguration(lineHeight: number, padding: EditorViewportVerticalPa
 	]);
 	return {
 		isSimpleWidget: false,
-		contextMenuId: undefined,
+		contextMenuId: MenuId.EditorContext,
 		options: { get: id => values.get(id) } as IComputedEditorOptions,
 		onDidChangeFast: Event.None,
 		onDidChange: Event.None,
@@ -173,20 +174,24 @@ test('ViewLayout reserves independently addressable view zones between lines', (
 	const reasons: EditorViewportChangeReason[] = [];
 	using listener = viewport.onDidChange(change => reasons.push(change.reason));
 
-	const beforeFirst = viewport.addViewZone(-1, 10);
-	const beforeThird = viewport.addViewZone(1, 15);
+	let beforeFirst = '';
+	let beforeThird = '';
+	viewport.changeWhitespace(accessor => {
+		beforeFirst = accessor.insertWhitespace(0, 10_000, 10, 0);
+		beforeThird = accessor.insertWhitespace(2, 10_000, 15, 0);
+	});
 
 	assert.deepEqual({
 		contentHeight: viewport.layout.contentSize.height,
 		lineTops: Array.from({ length: 4 }, (_, lineIndex) => viewport.getVerticalOffsetForLineIndex(lineIndex)),
-		viewZones: viewport.layout.viewZones,
+		whitespaces: viewport.getWhitespaces().map(({ id, afterLineNumber, height }) => ({ id, afterLineNumber, height })),
 		visibleLines: viewport.layout.visibleLines,
 	}, {
 		contentHeight: 105,
 		lineTops: [10, 30, 65, 85],
-		viewZones: [
-			{ id: beforeFirst, afterLineIndex: -1, top: 0, heightInPixels: 10 },
-			{ id: beforeThird, afterLineIndex: 1, top: 50, heightInPixels: 15 },
+		whitespaces: [
+			{ id: beforeFirst, afterLineNumber: 0, height: 10 },
+			{ id: beforeThird, afterLineNumber: 2, height: 15 },
 		],
 		visibleLines: { startLineIndex: 0, endLineIndexExclusive: 1 },
 	});
@@ -197,43 +202,50 @@ test('ViewLayout reserves independently addressable view zones between lines', (
 	viewport.setScrollPosition({ scrollLeft: 0, scrollTop: 0 }, ScrollType.Immediate);
 	reasons.length = 0;
 
-	viewport.changeViewZone(beforeFirst, 0, 5);
-	viewport.removeViewZone(beforeThird);
+	viewport.changeWhitespace(accessor => {
+		accessor.changeOneWhitespace(beforeFirst, 1, 5);
+		accessor.removeWhitespace(beforeThird);
+	});
 
 	assert.deepEqual({
 		contentHeight: viewport.layout.contentSize.height,
 		lineTops: Array.from({ length: 4 }, (_, lineIndex) => viewport.getVerticalOffsetForLineIndex(lineIndex)),
-		viewZones: viewport.layout.viewZones,
+		whitespaces: viewport.getWhitespaces().map(({ id, afterLineNumber, height }) => ({ id, afterLineNumber, height })),
 		reasons,
 	}, {
 		contentHeight: 85,
 		lineTops: [0, 25, 45, 65],
-		viewZones: [{ id: beforeFirst, afterLineIndex: 0, top: 20, heightInPixels: 5 }],
-		reasons: [
-			EditorViewportChangeReason.EditorViewZones,
-			EditorViewportChangeReason.EditorViewZones,
-		],
+		whitespaces: [{ id: beforeFirst, afterLineNumber: 1, height: 5 }],
+		reasons: [EditorViewportChangeReason.EditorViewZones],
 	});
 });
 
 test('ViewLayout orders same-line view zones by explicit ordinal and creation order', () => {
 	using model = new TextModel(lines(2));
 	using viewport = new ViewLayout(model, { lineHeight: 20 });
-	const defaultOrdinal = viewport.addViewZone(0, 5);
-	const later = viewport.addViewZone(0, 7, 20);
-	const earlier = viewport.addViewZone(0, 3, 10);
+	let defaultOrdinal = '';
+	let later = '';
+	let earlier = '';
+	viewport.changeWhitespace(accessor => {
+		defaultOrdinal = accessor.insertWhitespace(1, 10_000, 5, 0);
+		later = accessor.insertWhitespace(1, 20, 7, 0);
+		earlier = accessor.insertWhitespace(1, 10, 3, 0);
+	});
 
-	assert.deepEqual(viewport.layout.viewZones, [
-		{ id: earlier, afterLineIndex: 0, top: 20, heightInPixels: 3 },
-		{ id: later, afterLineIndex: 0, top: 23, heightInPixels: 7 },
-		{ id: defaultOrdinal, afterLineIndex: 0, top: 30, heightInPixels: 5 },
+	assert.deepEqual(viewport.getWhitespaces().map(({ id, afterLineNumber, height }) => ({ id, afterLineNumber, height })), [
+		{ id: earlier, afterLineNumber: 1, height: 3 },
+		{ id: later, afterLineNumber: 1, height: 7 },
+		{ id: defaultOrdinal, afterLineNumber: 1, height: 5 },
 	]);
 
-	viewport.changeViewZone(defaultOrdinal, 0, 5, 0);
-	assert.deepEqual(viewport.layout.viewZones, [
-		{ id: defaultOrdinal, afterLineIndex: 0, top: 20, heightInPixels: 5 },
-		{ id: earlier, afterLineIndex: 0, top: 25, heightInPixels: 3 },
-		{ id: later, afterLineIndex: 0, top: 28, heightInPixels: 7 },
+	viewport.changeWhitespace(accessor => {
+		accessor.removeWhitespace(defaultOrdinal);
+		defaultOrdinal = accessor.insertWhitespace(1, 0, 5, 0);
+	});
+	assert.deepEqual(viewport.getWhitespaces().map(({ id, afterLineNumber, height }) => ({ id, afterLineNumber, height })), [
+		{ id: defaultOrdinal, afterLineNumber: 1, height: 5 },
+		{ id: earlier, afterLineNumber: 1, height: 3 },
+		{ id: later, afterLineNumber: 1, height: 7 },
 	]);
 });
 

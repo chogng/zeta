@@ -1,13 +1,12 @@
 import * as dom from '../../../../base/browser/dom.js';
 import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
 import * as strings from '../../../../base/common/strings.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
 import { EditorOption, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
-import { type BareFontInfo } from '../../../common/config/fontInfo.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
+import { TextDirection } from '../../../common/model.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
@@ -15,16 +14,12 @@ import { type HorizontalRange, type RenderingContext } from '../../view/renderin
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
+import { type ViewConfigurationChangedEvent } from '../../../common/viewEvents.js';
 
 export interface ViewCursorOptions {
-	readonly style: TextEditorCursorStyle;
-	readonly lineWidth: number;
-	readonly lineHeight: number;
-	readonly fontInfo: BareFontInfo;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readTextLeft: () => number;
 	readonly textMeasurer: TextMeasurer;
-	readonly isRightToLeftAtPosition: (position: Position) => boolean;
 }
 
 export interface IViewCursorRenderData {
@@ -74,7 +69,7 @@ interface DomCaretGeometry {
 }
 
 /** Owns one retained caret, its position, rendering data, and DOM writes. */
-export class ViewCursor extends AbstractDisposable {
+export class ViewCursor {
 	private readonly fastDomNode: FastDomNode<HTMLDivElement>;
 	private isVisible = true;
 	private position = new Position((0) + 1, (0) + 1);
@@ -98,14 +93,15 @@ export class ViewCursor extends AbstractDisposable {
 		private readonly semanticTokenSource: SemanticTokenSource | undefined,
 		plurality: CursorPlurality,
 	) {
-		super();
+		const configuration = context.configuration.options;
+		const fontInfo = configuration.get(EditorOption.fontInfo);
 		this.readVisualProjection = options.readVisualProjection;
 		this.readTextLeft = options.readTextLeft;
 		this.textMeasurer = options.textMeasurer;
-		this.isRightToLeftAtPosition = options.isRightToLeftAtPosition;
-		this.style = options.style;
-		this.lineWidth = options.lineWidth;
-		this.lineHeight = options.lineHeight;
+		this.isRightToLeftAtPosition = position => context.viewModel.getTextDirection(position.lineNumber) === TextDirection.RTL;
+		this.style = configuration.get(EditorOption.effectiveCursorStyle);
+		this.lineWidth = Math.min(configuration.get(EditorOption.cursorWidth), fontInfo.typicalHalfwidthCharacterWidth);
+		this.lineHeight = configuration.get(EditorOption.cursorHeight);
 		this.fastDomNode = createFastDomNode(dom.h(host.ownerDocument, 'div'));
 		this.fastDomNode.setClassName('cursor stanza-editor-caret');
 		this.fastDomNode.setAttribute('data-selection-index', String(selectionIndex));
@@ -113,7 +109,7 @@ export class ViewCursor extends AbstractDisposable {
 		this.fastDomNode.setHeight(this.context.configuration.options.get(EditorOption.lineHeight));
 		this.fastDomNode.setTop(0);
 		this.fastDomNode.setLeft(0);
-		applyFontInfo(this.fastDomNode, options.fontInfo);
+		applyFontInfo(this.fastDomNode, fontInfo);
 		this.fastDomNode.setDisplay('none');
 		this.setPlurality(plurality);
 		host.append(this.fastDomNode.domNode);
@@ -143,11 +139,13 @@ export class ViewCursor extends AbstractDisposable {
 		this.isVisible = false;
 	}
 
-	public onConfigurationChanged(options: ViewCursorOptions): boolean {
-		this.style = options.style;
-		this.lineWidth = options.lineWidth;
-		this.lineHeight = options.lineHeight;
-		applyFontInfo(this.fastDomNode, options.fontInfo);
+	public onConfigurationChanged(_event: ViewConfigurationChangedEvent): boolean {
+		const options = this.context.configuration.options;
+		const fontInfo = options.get(EditorOption.fontInfo);
+		this.style = options.get(EditorOption.effectiveCursorStyle);
+		this.lineWidth = Math.min(options.get(EditorOption.cursorWidth), fontInfo.typicalHalfwidthCharacterWidth);
+		this.lineHeight = options.get(EditorOption.cursorHeight);
+		applyFontInfo(this.fastDomNode, fontInfo);
 		return true;
 	}
 
@@ -224,12 +222,11 @@ export class ViewCursor extends AbstractDisposable {
 		});
 	}
 
-	protected override disposeCore(): void {
-		this.fastDomNode.domNode.remove();
-	}
-
 	private getGraphemeAwarePosition(): CursorGrapheme {
-		const line = this.model.getLineContent(this.position.lineNumber);
+		const line = this.context.viewModel.getLineContent(this.position.lineNumber);
+		if (this.position.column > line.length) {
+			return Object.freeze({ position: this.position, endColumn: this.position.column, character: '\u00a0' });
+		}
 		const [startColumnIndex, endColumnIndexExclusive] = strings.getCharContainingOffset(line, this.position.column - 1);
 		return Object.freeze({
 			position: new Position(this.position.lineNumber, startColumnIndex + 1),
@@ -241,7 +238,7 @@ export class ViewCursor extends AbstractDisposable {
 	private getCaretGeometry(context: RenderingContext, grapheme: CursorGrapheme): DomCaretGeometry | undefined {
 		const caret = context.visibleRangeForPosition(grapheme.position);
 		if (caret) {
-			const visualLineIndex = this.readVisualProjection().visualLineIndexAt(grapheme.position);
+			const visualLineIndex = grapheme.position.lineNumber - 1;
 			const geometry: DomCaretGeometry = Object.freeze({
 				visualLineIndex,
 				left: caret.originalLeft,
@@ -254,9 +251,10 @@ export class ViewCursor extends AbstractDisposable {
 				?.ranges[0];
 			return characterRange ? Object.freeze({ ...geometry, characterRange }) : geometry;
 		}
+		const modelPosition = this.context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(grapheme.position);
 		const geometry = createStanzaVisualSelectionGeometry(
 			this.model,
-			[Selection.fromPositions(grapheme.position)],
+			[Selection.fromPositions(modelPosition)],
 			this.readVisualProjection(),
 			{ startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber },
 			this.readTextLeft(),
@@ -266,19 +264,16 @@ export class ViewCursor extends AbstractDisposable {
 	}
 
 	private getCharacterWidth(grapheme: CursorGrapheme): number {
-		const line = this.model.getLineContent(grapheme.position.lineNumber);
-		const projection = this.readVisualProjection();
-		const visualLineIndex = projection.visualLineIndexAt(grapheme.position);
-		const visualLine = projection.lineAt(visualLineIndex);
-		const startColumn = visualLine?.logicalLineIndex === grapheme.position.lineNumber - 1 ? visualLine.startColumn : 0;
-		const prefix = line.slice(startColumn, grapheme.position.column - 1);
+		const line = this.context.viewModel.getLineContent(grapheme.position.lineNumber);
+		const prefix = line.slice(0, grapheme.position.column - 1);
 		const throughCursor = grapheme.character === '\u00a0' ? `${prefix} ` : `${prefix}${grapheme.character}`;
 		return Math.max(1, this.textMeasurer.measureLineWidth(throughCursor) - this.textMeasurer.measureLineWidth(prefix));
 	}
 
 	private getCharacterPresentation(position: Position): ViewCursorCharacterPresentation | undefined {
-		const columnIndex = position.column - 1;
-		const token = this.semanticTokenSource?.getLineTokens(position.lineNumber - 1)
+		const modelPosition = this.context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(position);
+		const columnIndex = modelPosition.column - 1;
+		const token = this.semanticTokenSource?.getLineTokens(modelPosition.lineNumber - 1)
 			.find(candidate => candidate.startColumn <= columnIndex && columnIndex < candidate.endColumn);
 		if (!token) return undefined;
 		const syntaxFontStyle = token.syntaxPresentation?.fontStyle ?? [];

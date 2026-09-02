@@ -12,7 +12,7 @@ class ClipboardContribution extends Disposable {
 		const ownerWindow = context.view.element.ownerDocument.defaultView;
 		const clipboardService = instantiationService.getOptional(IClipboardService)
 			?? new BrowserClipboardService(ownerWindow?.navigator.clipboard);
-		this._register(new ClipboardController(context.view.editContext, context.viewport, context.selectionController, clipboardService, {
+		this._register(new ClipboardController(context.view.editContext, context.viewport, context.selectionController, context.view, clipboardService, {
 			semanticTokens: context.getOptionalCapability(TextEditorCapability.semanticTokenSource),
 			isEditingAllowed: () => !context.view.compositionController.composing,
 		}));

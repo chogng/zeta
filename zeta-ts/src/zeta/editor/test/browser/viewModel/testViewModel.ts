@@ -13,7 +13,7 @@ import { getViewModelCursorController, ViewModel } from '../../../common/viewMod
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { createTestConfiguration } from '../config/testConfiguration.js';
 
-export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel' | 'selectionController'> & {
+export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel'> & {
 	readonly model: TextModel;
 	readonly selectionController?: CursorsController;
 };
@@ -21,6 +21,7 @@ export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'the
 /** Builds the same configuration-model-view chain used by an editor widget. */
 export class TestView extends View {
 	private readonly setupStore: DisposableStore;
+	readonly testConfiguration: ReturnType<typeof createTestConfiguration>;
 	readonly testViewModel: ViewModel;
 	readonly testSelectionController: CursorsController;
 
@@ -32,11 +33,11 @@ export class TestView extends View {
 			configuration: setup.configuration,
 			theme: setup.theme,
 			viewModel: setup.viewModel,
-			selectionController: setup.selectionController,
 		});
 		this.setupStore = setup.store;
+		this.testConfiguration = setup.configuration;
 		this.testViewModel = setup.viewModel;
-		this.testSelectionController = setup.selectionController;
+		this.testSelectionController = setup.viewModelSelectionController;
 	}
 
 	protected override disposeCore(): void {
@@ -52,7 +53,7 @@ function createViewModel(options: TestViewOptions): {
 	readonly configuration: ReturnType<typeof createTestConfiguration>;
 	readonly theme: ReturnType<ThemeService['getColorTheme']>;
 	readonly viewModel: ViewModel;
-	readonly selectionController: CursorsController;
+	readonly viewModelSelectionController: CursorsController;
 	readonly store: DisposableStore;
 } {
 	const ownerWindow = options.container.ownerDocument.defaultView;
@@ -66,10 +67,15 @@ function createViewModel(options: TestViewOptions): {
 		fontSize: options.fontSize,
 		fontLigatures: options.fontLigatures,
 		lineHeight: options.lineHeight,
-		lineNumbers: options.lineNumbers,
+		lineNumbers: options.lineNumbers ?? (options.presentation === 'embedded' ? 'off' : undefined),
 		lineNumbersMinChars: 1,
 		glyphMargin: options.glyphMargin,
+		guides: {
+			...options.guides,
+			indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
+		},
 		minimap: options.minimap ? { ...options.minimap } : undefined,
+		renderWhitespace: options.renderWhitespace,
 		padding: options.padding ? { top: options.padding.top, bottom: options.padding.bottom } : undefined,
 		wordWrap: options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off',
 		wrappingIndent: testWrappingIndent(options.wrappingIndent),
@@ -104,7 +110,14 @@ function createViewModel(options: TestViewOptions): {
 		synchronizeSelections();
 		store.add(options.selectionController.onDidChange(synchronizeSelections));
 	}
-	return { configuration, theme: themeService.getColorTheme(), viewModel, selectionController: options.selectionController ?? getViewModelCursorController(viewModel), store };
+	const viewModelSelectionController = getViewModelCursorController(viewModel);
+	return {
+		configuration,
+		theme: themeService.getColorTheme(),
+		viewModel,
+		viewModelSelectionController,
+		store,
+	};
 }
 
 function testWrappingIndent(value: WrappingIndent | undefined): IEditorOptions['wrappingIndent'] {

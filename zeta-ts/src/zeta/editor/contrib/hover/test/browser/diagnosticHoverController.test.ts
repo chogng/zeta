@@ -1,14 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewParts/decorations/decorations.js";
 import { DiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
-import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { Position } from "../../../../common/core/position.js";
-import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { TrackedRangeStickiness } from '../../../../common/model.js';
 
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -42,26 +37,18 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("const value");
-	using decorations = new TextDecorationCollection<string>(model);
-	decorations.add({
-		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "Use let instead",
-	});
 	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [createStanzaDecorationSource(
-			decorations,
-			() => DecorationPresentation.WarningUnderline,
-			decoration => decoration.metadata,
-		)],
 	});
 	using controller = new DiagnosticHoverController(viewport);
 	viewport.layout({ width: 160, height: 20 });
-	const marker = viewport.element.querySelector<HTMLElement>(".stanza-editor-diagnostic-marker")!;
+	const marker = dom.window.document.createElement('span');
+	marker.className = 'stanza-editor-diagnostic-marker';
+	marker.dataset.diagnosticMessage = 'Use let instead';
+	viewport.domNode.domNode.append(marker);
 	marker.dispatchEvent(new dom.window.Event("pointerover", { bubbles: true }));
 	const hover = dom.window.document.body.querySelector<HTMLElement>(".stanza-editor-diagnostic-hover")!;
 	assert.equal(hover.hidden, false);

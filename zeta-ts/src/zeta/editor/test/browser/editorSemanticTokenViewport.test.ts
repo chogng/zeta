@@ -57,16 +57,16 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
 	});
 	viewport.layout({ width: 200, height: 40 });
 
-	assert.deepEqual(renderedTokenLines(viewport.element), ["0"]);
+	assert.deepEqual(renderedTokenLines(viewport.domNode.domNode), ["0"]);
 	viewport.scrollTo({ left: 0, top: 40 });
-	const line3 = requiredLine(viewport.element, 3);
+	const line3 = requiredLine(viewport.domNode.domNode, 3);
 	const line3Token = requiredElement(line3, ".stanza-editor-token");
-	assert.deepEqual(renderedTokenLines(viewport.element), ["3"]);
+	assert.deepEqual(renderedTokenLines(viewport.domNode.domNode), ["3"]);
 
 	viewport.scrollTo({ left: 0, top: 60 });
-	assert.equal(requiredLine(viewport.element, 3), line3);
+	assert.equal(requiredLine(viewport.domNode.domNode, 3), line3);
 	assert.equal(requiredElement(line3, ".stanza-editor-token"), line3Token);
-	assert.equal(viewport.element.querySelector('[data-line-index="10"]'), null);
+	assert.equal(viewport.domNode.domNode.querySelector('[data-line-index="10"]'), null);
 	dom.window.close();
 });
 
@@ -87,7 +87,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
 		semanticTokenSource: source,
 	});
 	viewport.layout({ width: 200, height: 20 });
-	const textElement = requiredElement<HTMLElement>(requiredLine(viewport.element, 0), ".stanza-editor-line-text");
+	const textElement = requiredElement<HTMLElement>(requiredLine(viewport.domNode.domNode, 0), ".stanza-editor-line-text");
 	assert.equal(textElement.textContent, "<tag> value");
 	assert.equal(textElement.querySelector("tag"), null);
 	assert.equal(requiredElement(textElement, ".stanza-editor-token").classList.contains(SemanticTokenPresentation.String), true);
@@ -135,7 +135,7 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 	});
 	viewport.layout({ width: 70, height: 60 });
 
-	assert.deepEqual(lineTokenFragments(viewport.element), [{
+	assert.deepEqual(lineTokenFragments(viewport.domNode.domNode), [{
 		lineIndex: "0",
 		text: "b",
 	}, {
@@ -145,7 +145,7 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 		lineIndex: "2",
 		text: "e",
 	}]);
-	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-token")].map(element => ({
+	assert.deepEqual([...viewport.domNode.domNode.querySelectorAll<HTMLElement>(".stanza-editor-token")].map(element => ({
 		color: element.style.color,
 		fontStyle: element.style.fontStyle,
 	})), Array.from({ length: 3 }, () => ({ color: "rgb(18, 52, 86)", fontStyle: "italic" })));

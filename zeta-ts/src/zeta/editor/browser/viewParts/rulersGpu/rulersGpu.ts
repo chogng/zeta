@@ -1,5 +1,6 @@
 import { Color } from '../../../../base/common/color.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { autorun, type IReader } from '../../../../base/common/observable.js';
 import { type IObjectCollectionBufferEntry } from '../../gpu/objectCollectionBuffer.js';
 import { type RectangleRenderer, type RectangleRendererEntrySpec } from '../../gpu/rectangleRenderer.js';
 import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
@@ -14,17 +15,13 @@ import { type IColorTheme } from '../../../../platform/theme/common/colorTheme.j
 /** Renders configured editor rulers into the shared GPU rectangle buffer. */
 export class RulersGpu extends ViewPart {
 	private readonly shapes: IObjectCollectionBufferEntry<RectangleRendererEntrySpec>[] = [];
-	private entriesDirty = true;
-	private lastDevicePixelRatio = Number.NaN;
-	private lastTextLeft = Number.NaN;
-	private lastTheme: IColorTheme | undefined;
 
 	constructor(
 		context: ViewContext,
 		private readonly gpuContext: ViewGpuContext,
-		private readonly readTextLeft: () => number,
 	) {
 		super(context);
+		this._register(autorun(reader => this.updateEntries(reader)));
 		this._register(toDisposable(() => {
 			while (this.shapes.length > 0) this.shapes.pop()!.dispose();
 		}));
@@ -32,27 +29,22 @@ export class RulersGpu extends ViewPart {
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
 		const changed = event.hasChanged(EditorOption.rulers) || event.hasChanged(EditorOption.fontInfo);
-		this.entriesDirty ||= changed;
+		if (changed) this.updateEntries(undefined);
 		return changed;
+	}
+
+	public override onThemeChanged(_event: viewEvents.ViewThemeChangedEvent): boolean {
+		this.updateEntries(undefined, _event.theme);
+		return true;
 	}
 
 	public override prepareRender(_context: RenderingContext): void {
 	}
 
-	public render(_context: RestrictedRenderingContext): void {
-		if (this.gpuContext.status !== 'ready') return;
-		const devicePixelRatio = this.gpuContext.devicePixelRatio;
-		const textLeft = this.readTextLeft();
-		const theme = this._context.theme.value;
-		if (!this.entriesDirty && devicePixelRatio === this.lastDevicePixelRatio && textLeft === this.lastTextLeft && theme === this.lastTheme) return;
-		this.updateEntries(devicePixelRatio, textLeft);
-		this.entriesDirty = false;
-		this.lastDevicePixelRatio = devicePixelRatio;
-		this.lastTextLeft = textLeft;
-		this.lastTheme = theme;
-	}
+	public render(_context: RestrictedRenderingContext): void {}
 
-	private updateEntries(devicePixelRatio: number, textLeft: number): void {
+	private updateEntries(reader: IReader | undefined, theme: IColorTheme = this._context.theme.value): void {
+		const devicePixelRatio = this.gpuContext.devicePixelRatio.read(reader);
 		const editorOptions = this._context.configuration.options;
 		const rulers = editorOptions.get(EditorOption.rulers);
 		const typicalHalfwidthCharacterWidth = editorOptions.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
@@ -60,9 +52,9 @@ export class RulersGpu extends ViewPart {
 			const ruler = rulers[index]!;
 			const color = ruler.color
 				? Color.fromHex(ruler.color)
-				: this._context.theme.getColor(editorRulerForeground) ?? Color.white;
+				: theme.getColor(editorRulerForeground) ?? Color.white;
 			const entry: Parameters<RectangleRenderer['register']> = [
-				(textLeft + ruler.column * typicalHalfwidthCharacterWidth) * devicePixelRatio,
+				ruler.column * typicalHalfwidthCharacterWidth * devicePixelRatio,
 				0,
 				Math.max(1, Math.ceil(devicePixelRatio)),
 				Number.MAX_SAFE_INTEGER,

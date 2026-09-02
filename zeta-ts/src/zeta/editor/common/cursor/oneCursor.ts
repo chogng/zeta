@@ -43,9 +43,9 @@ export class Cursor {
 	}
 
 	public readSelectionFromMarkers(context: CursorContext): Selection {
-		if (this.selectionTrackedRange === null) return this.modelState.selection;
+		if (this.selectionTrackedRange === null) throw new ReferenceError('Cursor selection is not being tracked');
 		const tracked = context.model._getTrackedRange(this.selectionTrackedRange);
-		if (!tracked) return this.modelState.selection;
+		if (!tracked) throw new ReferenceError('Cursor selection marker no longer exists');
 		const range = this.modelState.selection.isEmpty() && !tracked.isEmpty()
 			? tracked.collapseToEnd()
 			: tracked;

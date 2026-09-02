@@ -50,6 +50,10 @@
 }
 
 .stanza-editor .view-lines {
+	position: absolute;
+	left: var(--stanza-editor-gutter-width);
+	right: 0;
+	cursor: text;
 	white-space: nowrap;
 }
 

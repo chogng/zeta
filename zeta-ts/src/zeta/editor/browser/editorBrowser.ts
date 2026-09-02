@@ -3,16 +3,21 @@ import { type IKeyboardEvent } from '../../base/browser/keyboardEvent.js';
 import { type IMouseEvent, type IMouseWheelEvent } from '../../base/browser/mouseEvent.js';
 import { type IDimension } from '../common/core/2d/dimension.js';
 import { type IPosition, type Position } from '../common/core/position.js';
-import { type Range } from '../common/core/range.js';
+import { type IRange, type Range } from '../common/core/range.js';
 import { type ISelection, type Selection } from '../common/core/selection.js';
-import { type GlyphMarginLane, type IModelDecorationsChangeAccessor, type PositionAffinity } from '../common/model.js';
+import { type GlyphMarginLane, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationsChangeAccessor, type PositionAffinity } from '../common/model.js';
 import { type IModelDeltaDecoration } from '../common/model.js';
 import { type InjectedText } from '../common/modelLineProjectionData.js';
-import { type EditorLayoutInfo, type EditorOption, type FindComputedEditorOptionValueById } from '../common/config/editorOptions.js';
+import { type ConfigurationChangedEvent, type EditorLayoutInfo, type EditorOption, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, type OverviewRulerPosition } from '../common/config/editorOptions.js';
 import { type ICommand, type IEditorContribution, type IEditorDecorationsCollection, type INewScrollPosition, type ScrollType } from '../common/editorCommon.js';
 import { type ITextModel } from '../common/model.js';
 import { type ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
-import { type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
+import { type IClipboardCopyEvent, type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
+import { type MenuId } from '../../platform/actions/common/actions.js';
+import { type TextModelEditSource } from '../common/textModelEditSource.js';
+import { type IViewModel } from '../common/viewModel.js';
+import { type OverviewRulerZone } from '../common/viewModel/overviewZoneManager.js';
+import { type ICursorPositionChangedEvent, type ICursorSelectionChangedEvent } from '../common/cursorEvents.js';
 
 export const enum MouseTargetType {
 	UNKNOWN,
@@ -145,21 +150,40 @@ export interface IPartialEditorMouseEvent {
 	readonly target: IMouseTarget | null;
 }
 
+export interface IOverviewRuler {
+	getDomNode(): HTMLElement;
+	dispose(): void;
+	setZones(zones: OverviewRulerZone[]): void;
+	setLayout(position: OverviewRulerPosition): void;
+}
+
 /** Browser-facing contract shared by editor services and contributions. */
 export interface ICodeEditor {
+	readonly isSimpleWidget: boolean;
+	readonly contextMenuId: MenuId;
 	readonly onDidDispose: Event<void>;
+	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
 	readonly onDidAttemptReadOnlyEdit: Event<void>;
 	readonly onDidLayoutChange: Event<EditorLayoutInfo>;
-	readonly onDidChangeCursorSelection: Event<void>;
+	readonly onDidChangeCursorPosition: Event<ICursorPositionChangedEvent>;
+	readonly onDidChangeCursorSelection: Event<ICursorSelectionChangedEvent>;
+	readonly onDidFocusEditorText: Event<void>;
+	readonly onDidBlurEditorText: Event<void>;
+	readonly onDidFocusEditorWidget: Event<void>;
+	readonly onDidBlurEditorWidget: Event<void>;
 	readonly onDidCompositionStart: Event<void>;
 	readonly onDidCompositionEnd: Event<void>;
 	readonly onDidType: Event<string>;
 	readonly onDidPaste: Event<IClipboardPasteEvent>;
+	readonly onWillCopy: Event<IClipboardCopyEvent>;
+	readonly onWillCut: Event<IClipboardCopyEvent>;
+	readonly onWillPaste: Event<IClipboardPasteEvent>;
 	readonly onMouseUp: Event<IEditorMouseEvent>;
 	readonly onMouseDown: Event<IEditorMouseEvent>;
 	readonly onMouseDrag: Event<IEditorMouseEvent>;
 	readonly onMouseDrop: Event<IPartialEditorMouseEvent>;
 	readonly onMouseDropCanceled: Event<void>;
+	readonly onDropIntoEditor: Event<{ readonly position: IPosition; readonly event: DragEvent }>;
 	readonly onContextMenu: Event<IEditorMouseEvent>;
 	readonly onMouseMove: Event<IEditorMouseEvent>;
 	readonly onMouseLeave: Event<IPartialEditorMouseEvent>;
@@ -173,6 +197,7 @@ export interface ICodeEditor {
 	hasWidgetFocus(): boolean;
 	getModel(): ITextModel | null;
 	hasModel(): boolean;
+	_getViewModel(): IViewModel | null;
 	getPosition(): IPosition | null;
 	getScrollTop(): number;
 	getScrollLeft(): number;
@@ -188,17 +213,24 @@ export interface ICodeEditor {
 	setScrollPosition(position: INewScrollPosition, scrollType?: ScrollType): void;
 	getSelection(): Selection | null;
 	getSelections(): Selection[] | null;
+	setPosition(position: IPosition, source?: string): void;
 	setSelection(selection: ISelection, source?: string): void;
 	setSelections(selections: readonly ISelection[], source?: string): void;
 	executeCommand(source: string | null | undefined, command: ICommand): void;
-	executeCommands(source: string | null | undefined, commands: ICommand[]): void;
+	executeEdits(source: string | null | undefined, edits: IIdentifiedSingleEditOperation[], endCursorState?: ICursorStateComputer | Selection[]): boolean;
+	executeEdits(source: TextModelEditSource | undefined, edits: IIdentifiedSingleEditOperation[], endCursorState?: ICursorStateComputer | Selection[]): boolean;
+	executeCommands(source: string | null | undefined, commands: (ICommand | null)[]): void;
 	pushUndoStop(): boolean;
+	trigger(source: string | null | undefined, handlerId: string, payload: unknown): void;
 	getContribution<T extends IEditorContribution>(id: string): T | null;
 	invokeWithinContext<T>(fn: (accessor: ServicesAccessor) => T): T;
 	getContainerDomNode(): HTMLElement;
 	getDomNode(): HTMLElement | null;
 	getLayoutInfo(): EditorLayoutInfo;
+	updateOptions(newOptions: Readonly<IEditorOptions> | undefined): void;
+	getOptions(): IComputedEditorOptions;
 	getOption<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T>;
+	getRawOptions(): IEditorOptions;
 	getScrolledVisiblePosition(position: IPosition): { top: number; left: number; height: number } | null;
 	getWidthOfLine(lineNumber: number): number;
 	applyFontInfo(target: HTMLElement): void;
@@ -212,8 +244,19 @@ export interface ICodeEditor {
 	addOverlayWidget(widget: IOverlayWidget): void;
 	layoutOverlayWidget(widget: IOverlayWidget): void;
 	removeOverlayWidget(widget: IOverlayWidget): void;
+	addGlyphMarginWidget(widget: IGlyphMarginWidget): void;
+	layoutGlyphMarginWidget(widget: IGlyphMarginWidget): void;
+	removeGlyphMarginWidget(widget: IGlyphMarginWidget): void;
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
 	revealRange(range: Range, scrollType?: ScrollType): void;
+}
+
+export interface PastePayload {
+	text: string;
+	pasteOnNewLine: boolean;
+	multicursorText: string[] | null;
+	mode: string | null;
+	clipboardEvent?: ClipboardEvent;
 }
 
 export interface IDiffEditor {
@@ -269,6 +312,18 @@ export interface IContentWidget {
 export interface IContentWidgetRenderedCoordinate {
 	readonly top: number;
 	readonly left: number;
+}
+
+export interface IGlyphMarginWidget {
+	getId(): string;
+	getDomNode(): HTMLElement;
+	getPosition(): IGlyphMarginWidgetPosition;
+}
+
+export interface IGlyphMarginWidgetPosition {
+	readonly lane: GlyphMarginLane;
+	readonly zIndex: number;
+	readonly range: IRange;
 }
 
 export const enum OverlayWidgetPositionPreference {

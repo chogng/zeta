@@ -37,7 +37,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
-	editor.layout({ width: 200, height: 40 });
+	editor.layout({ width: 200, height: 100 });
 	const viewport = editor.viewport;
 	using widget = new TestZoneWidget(editor, {
 		className: 'peek-widget test-widget',
@@ -63,7 +63,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		revealedRanges: widget.revealedRanges,
 	}, {
 		position: new Position((1) + 1, (2) + 1),
-		parent: requiredElement(viewport.element, '.stanza-editor-view-zones'),
+		parent: requiredElement(viewport.domNode.domNode, '.stanza-editor-view-zones'),
 		top: '40px',
 		height: '40px',
 		contentHeight: 100,
@@ -73,12 +73,12 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		arrowColor: '#654321',
 		revealedRanges: [Range.fromPositions(new Position((1) + 1, (2) + 1))],
 	});
-	editor.layout({ width: 240, height: 40 });
+	editor.layout({ width: 240, height: 100 });
 	assert.deepEqual({ height: widget.domNode.style.height, layout: widget.layouts.at(-1) }, {
 		height: '40px',
 		layout: { heightInPixels: 22, widthInPixels: 193 },
 	});
-	editor.layout({ width: 200, height: 40 });
+	editor.layout({ width: 200, height: 100 });
 
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'new\n' }]);
 	assert.deepEqual({ position: widget.position, top: widget.domNode.style.top }, {
@@ -115,7 +115,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		position: undefined,
 		parent: null,
 		hidden: true,
-		contentHeight: 80,
+		contentHeight: 100,
 	});
 	dom.window.close();
 });
@@ -181,7 +181,7 @@ test('ZoneWidget places an anchor after its wrapped visual line', () => {
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
-	editor.layout({ width: 100, height: 40 });
+	editor.layout({ width: 100, height: 500 });
 	const viewport = editor.viewport;
 	viewport.setLineWrapping(EditorLineWrapping.On);
 	const anchor = new Position((0) + 1, (18) + 1);

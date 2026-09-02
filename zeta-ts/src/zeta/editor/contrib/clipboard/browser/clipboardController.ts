@@ -5,8 +5,6 @@ import { isWindows } from '../../../../base/common/platform.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { type IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.js';
-import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
-import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from '../../../common/core/position.js';
@@ -18,6 +16,7 @@ import { AbstractEditContext } from "../../../browser/controller/editContext/edi
 import { InMemoryClipboardMetadataManager, readEditorClipboardText, type ClipboardDataToCopy, type ClipboardStoredMetadata, type IClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewParts/viewLines/viewLine.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from '../../dropOrPasteInto/browser/textFileTransfer.js';
+import { type ViewController } from '../../../browser/view/viewController.js';
 
 export const EDITOR_CLIPBOARD_MIME = 'application/x-stanza-editor';
 export const EDITOR_HTML_CLIPBOARD_MIME = 'text/html';
@@ -85,6 +84,7 @@ export class ClipboardController extends Disposable {
 		target: AbstractEditContext,
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
+		private readonly commandDelegate: Pick<ViewController, 'paste'>,
 		private readonly clipboardService: IClipboardService,
 		options: ClipboardControllerOptions = {},
 	) {
@@ -164,7 +164,7 @@ export class ClipboardController extends Disposable {
 			const uriList = readUriList(nativeClipboard.getData('text/uri-list'));
 			if (uriList) {
 				event.setHandled();
-				this.selectionController.execute(TypeOperations.paste(this.viewport.textModel, this.selectionController.getSelections(), uriList));
+				this.commandDelegate.paste(uriList, false, null, null);
 				this.afterEdit();
 				return;
 			}
@@ -172,19 +172,13 @@ export class ClipboardController extends Disposable {
 			this.pasteSystemText(event);
 			return;
 		}
-		const command = clipboardData
-			? createMetadataPasteCommand(
-				this.viewport.textModel,
-				this.selectionController.getSelections(),
-				clipboardData,
-			)
-			: TypeOperations.paste(
-				this.viewport.textModel,
-				this.selectionController.getSelections(),
-				text,
-			);
 		event.setHandled();
-		this.selectionController.execute(command);
+		this.commandDelegate.paste(
+			clipboardData?.texts[0] ?? text,
+			clipboardData?.modes.every(mode => mode === EditorClipboardPasteMode.Line) === true && canPasteCompleteLines(this.selectionController.getSelections()),
+			clipboardData ? [...clipboardData.texts] : null,
+			null,
+		);
 		this.afterEdit();
 	}
 
@@ -205,7 +199,7 @@ export class ClipboardController extends Disposable {
 			) {
 				return;
 			}
-			this.selectionController.execute(TypeOperations.paste(model, expectedSelections, text));
+			this.commandDelegate.paste(text, false, null, null);
 			this.afterEdit();
 		}).catch(() => {
 			// Clipboard permission failures leave the model unchanged.
@@ -314,7 +308,7 @@ export class ClipboardController extends Disposable {
 		event.setHandled();
 		void file.text().then(text => {
 			if (text.length > TEXT_FILE_TRANSFER_MAX_BYTES || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.getSelections(), expectedSelections)) return;
-			this.selectionController.execute(TypeOperations.paste(model, expectedSelections, text));
+			this.commandDelegate.paste(text, false, null, null);
 			this.afterEdit();
 		}).catch(() => {
 			// The supplied file could not be decoded as text.
@@ -528,13 +522,6 @@ function escapeHtml(text: string): string {
 function readUriList(value: string): string | undefined {
 	const entries = UriList.parse(value).map(entry => entry.trim()).filter(entry => entry.length > 0);
 	return entries.length > 0 ? entries.join('\n') : undefined;
-}
-
-function createMetadataPasteCommand(model: TextModel, selections: readonly Selection[], data: EditorClipboardPasteData): EditorEditCommand {
-	return data.modes.every(mode => mode === EditorClipboardPasteMode.Line) &&
-		canPasteCompleteLines(selections)
-		? TypeOperations.linePaste(model, selections, data.texts)
-		: TypeOperations.distributedPaste(model, selections, data.texts);
 }
 
 function canPasteCompleteLines(selections: readonly Selection[]): boolean {

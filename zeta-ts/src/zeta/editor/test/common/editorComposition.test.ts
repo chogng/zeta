@@ -6,6 +6,7 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModelChangeReason } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { ReplaceCommand } from '../../common/commands/replaceCommand.js';
 import { createTestCursorsController } from './testCursorConfiguration.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
@@ -50,12 +51,12 @@ test("Composition revisions commit as one selection-aware undo step", () => {
 		selections: controller.getSelections(),
 		active: composition.active,
 	};
-	controller.undo();
+	controller.context.model.undo();
 	const afterUndo = {
 		text: model.getText(),
 		selections: controller.getSelections(),
 	};
-	controller.redo();
+	controller.context.model.redo();
 
 	assert.deepEqual({
 		transactionIds: [
@@ -143,7 +144,7 @@ test("Composition cancellation restores text without redo history", () => {
 		active: composition.active,
 		canUndo: model.canUndo(),
 		canRedo: model.canRedo(),
-		undo: controller.undo(),
+		undo: controller.context.model.undo(),
 	}, {
 		text: "hello",
 		selections: selection(1, 4),
@@ -250,7 +251,7 @@ test("Composition returning to its original text leaves no undo step", () => {
 	assert.deepEqual({
 		text: model.getText(),
 		canUndo: model.canUndo(),
-		undo: controller.undo(),
+		undo: controller.context.model.undo(),
 	}, {
 		text: "a",
 		canUndo: false,
@@ -341,11 +342,7 @@ test("Composition rejects ambiguous ownership and invalid relative offsets", () 
 	const composition = controller.beginComposition();
 
 	assert.throws(
-		() => controller.execute({
-			edits: [{ range: range(0, 1), text: "X" }],
-			selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
-			primarySelectionIndex: 0,
-		}),
+		() => controller.executeCommand(new ReplaceCommand(range(0, 1), "X")),
 		/active composition/,
 	);
 	assert.throws(

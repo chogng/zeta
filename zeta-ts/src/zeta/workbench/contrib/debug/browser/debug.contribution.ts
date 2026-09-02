@@ -4,12 +4,10 @@ import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContain
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IDebugService } from "../../../services/debug/common/debugService.js";
 import { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
-import { DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID } from "../common/debug.js";
+import { BREAKPOINT_EDITOR_CONTRIBUTION_ID, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID } from "../common/debug.js";
 import { DebugViewPane } from "./debugViewPane.js";
 import { DebugConsoleViewPane } from "./debugConsoleViewPane.js";
-import { registerEditorDecorationSourceFactory } from "../../../browser/parts/editor/editorDecorations.js";
-import { DebugBreakpointController, DebugBreakpointDecorationProvider } from "./debugBreakpointDecorations.js";
-import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
+import { BreakpointEditorContribution } from "./breakpointEditorContribution.js";
 import { EditorContributionInstantiation, registerTextEditorCapabilityContribution } from "../../../../editor/browser/editorExtensions.js";
 import "./debugActions.js";
 import "./media/debug.css";
@@ -22,11 +20,10 @@ export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistr
 }
 
 registerDebugView();
-registerEditorDecorationSourceFactory(({ resource, model, accessor }) => resource.scheme === "file" || isRemoteResource(resource) ? new DebugBreakpointDecorationProvider(accessor.get(IDebugService), resource, model) : undefined);
 registerTextEditorCapabilityContribution({
-	id: 'workbench.contrib.debugBreakpointController',
+	id: BREAKPOINT_EDITOR_CONTRIBUTION_ID,
 	runtime: {
-		descriptor: new ServiceConstructionDescriptor(DebugBreakpointController, { serviceDependencies: [IDebugService] }),
+		descriptor: new ServiceConstructionDescriptor(BreakpointEditorContribution, { serviceDependencies: [IDebugService] }),
 		instantiation: EditorContributionInstantiation.Eager,
 	},
 });

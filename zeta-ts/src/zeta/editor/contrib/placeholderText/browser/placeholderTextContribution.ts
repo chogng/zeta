@@ -1,49 +1,62 @@
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { observableCodeEditor } from '../../../browser/observableCodeEditor.js';
-import { type CodeEditorWidget } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
-import { type CodeEditorContributionContext } from '../../../browser/widget/codeEditor/codeEditorContributions.js';
-import { Position } from '../../../common/core/position.js';
+import { type ICodeEditor, type IOverlayWidget, type IOverlayWidgetPosition } from '../../../browser/editorBrowser.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { type IEditorContribution } from '../../../common/editorCommon.js';
 
 /** Uses the editor option to present placeholder text while the model is empty. */
-export class PlaceholderTextContribution extends Disposable {
-	public static get(editor: CodeEditorWidget): PlaceholderTextContribution {
+export class PlaceholderTextContribution extends Disposable implements IEditorContribution {
+	public static get(editor: ICodeEditor): PlaceholderTextContribution {
 		return editor.getContribution<PlaceholderTextContribution>(PlaceholderTextContribution.ID)!;
 	}
 
 	public static readonly ID = 'editor.contrib.placeholderText';
+	private readonly element: HTMLDivElement;
+	private readonly widget: IOverlayWidget;
+	private position: IOverlayWidgetPosition | null = null;
+	private isEmpty: boolean;
 
-	private readonly element: HTMLDivElement | undefined;
-
-	constructor(context: CodeEditorContributionContext) {
+	constructor(private readonly editor: ICodeEditor) {
 		super();
-		const placeholder = context.placeholder;
-		if (!placeholder) return;
-
-		const editor = observableCodeEditor(context.editor);
-		const element = h(context.viewport.element.ownerDocument, 'div', {
+		const editorObservable = observableCodeEditor(editor);
+		const element = h(editor.getDomNode()!.ownerDocument, 'div', {
 			className: ['stanza-editor-placeholder-text', 'stanza-editor-overlay-widget'],
 			attributes: { 'aria-hidden': 'true' },
-		}, placeholder);
+		});
 		this.element = element;
-		context.viewport.element.append(element);
-		this._register(toDisposable(() => element.remove()));
-		this._register(editor.valueIsEmpty.onDidChange(empty => this.updateVisibility(empty)));
-		this._register(context.viewport.onDidChangeLayout(() => this.updateLayout(context)));
-		this.updateVisibility(editor.valueIsEmpty.get());
-		this.updateLayout(context);
+		this.isEmpty = editorObservable.valueIsEmpty.get();
+		this.widget = {
+			getId: () => PlaceholderTextContribution.ID,
+			getDomNode: () => this.element,
+			getPosition: () => this.position,
+		};
+		this.update();
+		editor.addOverlayWidget(this.widget);
+		this._register(toDisposable(() => editor.removeOverlayWidget(this.widget)));
+		this._register(editorObservable.valueIsEmpty.onDidChange(empty => {
+			this.isEmpty = empty;
+			this.update();
+		}));
+		this._register(editor.onDidChangeConfiguration(() => this.update()));
+		this._register(editor.onDidLayoutChange(() => this.updateLayout()));
 	}
 
-	private updateVisibility(isEmpty: boolean): void {
-		if (this.element) this.element.style.display = isEmpty ? 'block' : 'none';
+	private update(): void {
+		const placeholder = this.editor.getOption(EditorOption.placeholder);
+		this.element.textContent = placeholder ?? '';
+		this.position = placeholder && this.isEmpty ? { preference: { left: 0, top: 0 } } : null;
+		this.updateLayout();
 	}
 
-	private updateLayout(context: CodeEditorContributionContext): void {
-		if (!this.element) return;
-		const position = context.viewport.getPositionContentCoordinates(new Position((0) + 1, (0) + 1));
-		this.element.style.left = `${position.left}px`;
-		this.element.style.top = `${position.top}px`;
-		this.element.style.width = `${Math.max(0, context.viewport.currentLayout.viewportSize.width - position.left)}px`;
-		this.element.style.lineHeight = `${position.height}px`;
+	private updateLayout(): void {
+		const layout = this.editor.getLayoutInfo();
+		const top = this.editor.getTopForLineNumber(1);
+		this.position = this.position ? { preference: { left: layout.contentLeft, top } } : null;
+		this.element.style.width = `${Math.max(0, layout.contentWidth - layout.verticalScrollbarWidth)}px`;
+		this.element.style.fontFamily = this.editor.getOption(EditorOption.fontFamily);
+		this.element.style.fontSize = `${this.editor.getOption(EditorOption.fontSize)}px`;
+		this.element.style.lineHeight = `${this.editor.getOption(EditorOption.lineHeight)}px`;
+		this.editor.layoutOverlayWidget(this.widget);
 	}
 }

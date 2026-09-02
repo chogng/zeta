@@ -2,14 +2,12 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { FindController } from "./findController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
 
 registerTextEditorCapabilityContribution({
 	id: "editor.contrib.find",
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<void>(context.model));
 		context.provideCapability(TextEditorCapability.searchDecorations, decorations);
-		context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.SearchMatch));
 	},
 	install: context => {
 		if (context.kind !== "text") return;

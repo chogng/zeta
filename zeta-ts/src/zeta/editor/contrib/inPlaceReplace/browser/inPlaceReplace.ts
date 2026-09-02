@@ -1,24 +1,24 @@
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { type IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { type View } from '../../../browser/view.js';
-import { createEditorEditCommand } from '../../../common/commands/editorCommand.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { ReplaceCommandThatPreservesSelection } from '../../../common/commands/replaceCommand.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Range } from '../../../common/core/range.js';
 
 class InPlaceReplaceController extends Disposable {
 	constructor(
 		input: HTMLElement,
+		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly selections: CursorsController,
 		private readonly editorWorker: IVersionedEditorWorkerClient,
 		private readonly wordDefinition: () => RegExp,
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
-		if (viewport.textModel !== selections.context.model) throw new TypeError('In-place replace dependencies must share a text model');
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('In-place replace dependencies must share a text model');
 		this._register(addDisposableListener(input, 'keydown', event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey) return;
 			const direction = event.key === ',' ? -1 : event.key === '.' ? 1 : undefined;
@@ -30,14 +30,17 @@ class InPlaceReplaceController extends Disposable {
 
 	private async replace(direction: -1 | 1): Promise<boolean> {
 		const model = this.viewport.textModel;
-		const selectionState = this.selections.getSelections();
+		const selectionState = this.editor.getSelections()!;
 		const selection = selectionState[0]!;
 		if (selection.startLineNumber !== selection.endLineNumber) return false;
 		const result = await this.editorWorker.navigateValueSet(selection, direction > 0, this.wordDefinition());
-		if (!result || !Selection.selectionsArrEqual([...this.selections.getSelections()], [...selectionState])) return false;
-		const command = createEditorEditCommand(model, selectionState, [{ range: result.range, text: result.value }]);
-		if (!command) return false;
-		this.selections.execute(command);
+		if (!result || !Selection.selectionsArrEqual(this.editor.getSelections()!, selectionState)) return false;
+		this.editor.pushUndoStop();
+		this.editor.executeCommands('editor.action.inPlaceReplace', [
+			new ReplaceCommandThatPreservesSelection(Range.lift(result.range), result.value, selectionState[0]!),
+			...selectionState.slice(1).map(() => null),
+		]);
+		this.editor.pushUndoStop();
 		this.viewport.revealPosition(Range.lift(result.range).getStartPosition());
 		return true;
 	}
@@ -49,8 +52,8 @@ registerTextEditorCapabilityContribution({
 		if (context.kind !== 'text') return;
 		context.register(new InPlaceReplaceController(
 			context.view.element,
+			context.editor,
 			context.viewport,
-			context.selectionController,
 			context.editorWorker,
 			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
 			context.onLanguageError,

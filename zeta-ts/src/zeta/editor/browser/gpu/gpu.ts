@@ -1,3 +1,9 @@
+import { type IDisposable } from '../../../base/common/lifecycle.js';
+import { type ViewConfigurationChangedEvent, type ViewLinesChangedEvent, type ViewLinesDeletedEvent, type ViewLinesInsertedEvent, type ViewScrollChangedEvent, type ViewTokensChangedEvent } from '../../common/viewEvents.js';
+import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
+import { type ViewLineOptions } from '../viewParts/viewLines/viewLineOptions.js';
+import { type IGlyphRasterizer } from './raster/raster.js';
+
 export const enum BindingId {
 	GlyphInfo,
 	Cells,
@@ -8,45 +14,20 @@ export const enum BindingId {
 	ScrollOffset,
 }
 
-export interface GpuRenderInput {
-	readonly layout: EditorViewportLayout;
-	readonly model: TextModel;
-	readonly visualLines: EditorVisualLineProjection;
-	readonly visibleLineIndexes: ReadonlySet<number>;
-	readonly semanticTokenSource: SemanticTokenSource | undefined;
-	readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	readonly textLeft: number;
-	readonly paddingTop: number;
-	readonly textDirection: 'auto' | 'ltr' | 'rtl';
-	readonly fontLigatures: boolean;
-	readonly rootStyle: CSSStyleDeclaration;
-	readonly atlas: TextureAtlas;
-}
-
-export interface GpuFrame {
-	readonly vertices: Float32Array<ArrayBuffer>;
-	readonly gpuLineIndexes: ReadonlySet<number>;
-	readonly lineGeometries: ReadonlyMap<number, GpuLineGeometry>;
-}
-
-export interface GpuLineGeometry {
-	readonly leftByOffset: readonly number[];
-	readonly newLineWidth: number;
-}
-
 export interface IGpuRenderStrategy extends IDisposable {
 	readonly type: string;
 	readonly wgsl: string;
-	readonly bindGroupEntries: readonly GPUBindGroupEntry[];
-	readonly glyphRasterizer: GlyphRasterizer;
+	readonly bindGroupEntries: GPUBindGroupEntry[];
+	readonly glyphRasterizer: IGlyphRasterizer;
+
+	onLinesDeleted(event: ViewLinesDeletedEvent): boolean;
+	onConfigurationChanged(event: ViewConfigurationChangedEvent): boolean;
+	onTokensChanged(event: ViewTokensChangedEvent): boolean;
+	onLinesInserted(event: ViewLinesInsertedEvent): boolean;
+	onLinesChanged(event: ViewLinesChangedEvent): boolean;
+	onScrollChanged(event?: ViewScrollChangedEvent): boolean;
+
 	reset(): void;
-	update(input: GpuRenderInput): GpuFrame;
-	draw(pass: GPURenderPassEncoder, frame: GpuFrame): void;
+	update(viewportData: ViewportData, viewLineOptions: ViewLineOptions): number;
+	draw(pass: GPURenderPassEncoder, viewportData: ViewportData): void;
 }
-import { type IDisposable } from '../../../base/common/lifecycle.js';
-import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
-import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
-import { type TextModel } from '../../common/model/textModel.js';
-import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
-import { type TextureAtlas } from './atlas/textureAtlas.js';
-import { type GlyphRasterizer } from './raster/glyphRasterizer.js';

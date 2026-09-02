@@ -1,3 +1,14 @@
+.stanza-editor .colorpicker-color-decoration {
+	display: inline-block;
+	box-sizing: border-box;
+	width: 0.8em;
+	height: 0.8em;
+	margin: 0.1em 0.2em 0;
+	line-height: 0.8em;
+	border: 0.1em solid var(--zeta-editor-foreground);
+	cursor: pointer;
+}
+
 .stanza-editor-color-picker {
 	position: absolute;
 	z-index: 12;
@@ -155,6 +166,11 @@
 }
 
 @media (forced-colors: active) {
+	.stanza-editor .colorpicker-color-decoration {
+		border-color: CanvasText;
+		forced-color-adjust: none;
+	}
+
 	.stanza-editor-color-picker {
 		border-color: CanvasText;
 	}

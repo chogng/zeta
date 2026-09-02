@@ -9,6 +9,7 @@ const upstreamRoot = resolve(repositoryRoot, '../vscode/src/vs/editor');
 const sourceExtension = /\.(?:css|js|ts|tsx)$/u;
 const upstreamBrand = /(?:\bmonaco-[a-z0-9_-]+\b|--vscode-[a-z0-9_-]+)/giu;
 const upstreamProductRoot = /\bmonaco-editor\b/gu;
+const gitOutputBuffer = 64 * 1024 * 1024;
 
 export function normalizeCssBranding(source) {
 	return stripMicrosoftLicenseHeader(source)
@@ -38,7 +39,7 @@ export function findAddedUpstreamBrandLines(diff) {
 	for (const line of diff.split(/\r?\n/u)) {
 		const fileMatch = /^\+\+\+ b\/(.+)$/u.exec(line);
 		if (fileMatch) {
-			path = fileMatch[1];
+			path = sourceExtension.test(fileMatch[1]) ? fileMatch[1] : undefined;
 			continue;
 		}
 		const hunkMatch = /^@@ -\d+(?:,\d+)? \+(\d+)/u.exec(line);
@@ -143,7 +144,7 @@ function readUntrackedProductionFiles(resolvedRepositoryRoot, resolvedLocalRoot)
 }
 
 function runGit(cwd, args) {
-	const result = spawnSync('git', args, { cwd, encoding: 'utf8', shell: false });
+	const result = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: gitOutputBuffer, shell: false });
 	if (result.status !== 0) throw new Error(result.stderr || result.error?.message || `git ${args.join(' ')} failed`);
 	return result.stdout;
 }

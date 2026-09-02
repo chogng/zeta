@@ -5,6 +5,14 @@ description: VS Code CSS conventions, file organization, class naming, standard 
 
 This skill covers CSS file organization, naming, standard sizes, programmatic layout (SplitView, Grid, scrollable), responsive patterns, and text overflow handling.
 
+### Zeta upstream-alignment guard
+
+When this skill is used in Zeta together with `vscode-api-alignment`, the VS Code snippets below are convention examples, not implementation templates. Do not introduce `monaco-*` selectors, `--vscode-*` variables, VS Code DOM wrappers, or a matching private class hierarchy into Zeta merely to reuse an upstream rule. Establish the existing Zeta DOM owner, state classes, layout owner, input path, theme tokens, and browser behavior first; then implement only the required behavior with Zeta-owned names and structure.
+
+Never change a Zeta DOM hierarchy or scrolling/focus owner simply because an upstream CSS selector expects that hierarchy. A first change to DOM nesting, scroll ownership, focus handling, or programmatic layout must be verified in one minimal real-browser slice before migrating additional callers. Type checking, selector presence, screenshots, and file-count progress do not prove layout or interaction quality.
+
+Keep the surrounding Zeta TypeScript and CSS style readable even when the upstream API has many options: do not compress option objects, methods, selectors, or declarations to increase batch size. If the result could be produced by copying upstream and replacing prefixes, stop and redesign from the local owner and behavior contract.
+
 ---
 
 ## 1. File Organization

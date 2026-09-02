@@ -32,10 +32,14 @@ export class BracketEditingController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if ((!event.ctrlKey && !event.metaKey) || !event.altKey || event.shiftKey || event.key !== "Backspace") return;
-		const command = createRemoveMatchingBracketsCommand(this.bracketPairs, this.selections.getSelections());
-		if (!command) return;
+		const commands = createRemoveMatchingBracketsCommand(this.bracketPairs, this.selections.getSelections());
+		if (!commands) return;
 		stopEvent(event);
-		this.executeCommand(RemoveBracketsCommandId, () => this.selections.execute(command));
+		this.executeCommand(RemoveBracketsCommandId, () => {
+			this.selections.pushUndoStop();
+			this.selections.executeCommands(commands, RemoveBracketsCommandId);
+			this.selections.pushUndoStop();
+		});
 		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 }

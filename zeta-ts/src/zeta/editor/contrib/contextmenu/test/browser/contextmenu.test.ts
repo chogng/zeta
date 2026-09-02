@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { type IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
+import { Event } from '../../../../../base/common/event.js';
+import { MenuId } from '../../../../../platform/actions/common/actions.js';
+import { type IContextMenuMenuDelegate, type IContextMenuService as IContextMenuServiceContract } from '../../../../../platform/contextview/browser/contextView.js';
+import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -21,6 +26,7 @@ for (const [name, value] of Object.entries({
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { ContextMenuController } = await import('../../browser/contextmenu.js');
+const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 
 test.after(() => environment.window.close());
 
@@ -29,14 +35,22 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha\nbeta');
-	const requests: Array<{ readonly position: Position; readonly clientX: number; readonly clientY: number }> = [];
+	const requests: Array<IContextMenuDelegate | IContextMenuMenuDelegate> = [];
+	const contextMenuService: IContextMenuServiceContract = {
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
+		showContextMenu: request => { requests.push(request); },
+		hideContextMenu() {},
+	};
+	using services = new ServiceContainer();
+	services.registerInstance(IContextMenuService, contextMenuService);
 	using editor = new CodeEditorWidget({
 		container,
 		model,
 		input: { resource: model.uri },
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
-		onShowContextMenu: request => { requests.push(request); },
+		instantiationService: services,
 	});
 	editor.layout({ width: 400, height: 100 });
 	editor.setSelection(Selection.fromPositions(new Position(2, 3)));
@@ -45,9 +59,11 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 
 	assert.equal(event.defaultPrevented, true);
 	assert.equal(requests.length, 1);
-	assert.deepEqual(requests[0]!.position, new Position(2, 3));
-	assert.equal(Number.isFinite(requests[0]!.clientX), true);
-	assert.equal(Number.isFinite(requests[0]!.clientY), true);
+	const request = requests[0]! as IContextMenuMenuDelegate;
+	assert.strictEqual(request.menuId, MenuId.EditorContext);
+	const anchor = request.getAnchor();
+	assert.equal('x' in anchor && Number.isFinite(anchor.x), true);
+	assert.equal('y' in anchor && Number.isFinite(anchor.y), true);
 	assert.ok(ContextMenuController.get(editor));
 	dom.window.close();
 });

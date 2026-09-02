@@ -13,6 +13,7 @@ import { registerBuiltinLanguageDescriptions } from '../../../../../editor/commo
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../../editor/common/services/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
+import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontInfo.js";
 import type { EditorPanePartOptions } from "../../browser/codeEditorPane.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -49,7 +50,9 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("from disk");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using languageService = new LanguageService();
+	using builtinLanguages = registerBuiltinLanguageDescriptions(languageService.languages);
+	using models = new BrowserTextModelService(resourceStore, { languageService });
 	const pane = new EditorPane(resourceStore, { modelService: models, textDirection: EditorTextDirection.RightToLeft, fontFamily: "Fira Code, monospace", fontSize: 16 });
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
@@ -64,8 +67,10 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	assert.equal(parent.querySelectorAll(".stanza-editor-pane").length, 1);
 	assert.equal(parent.querySelectorAll(".stanza-editor").length, 1);
 	const editor = parent.querySelector<HTMLElement>(".stanza-editor")!;
+	const expectedFont = dom.window.document.createElement("div");
+	expectedFont.style.fontFamily = `"Fira Code", monospace, ${EDITOR_FONT_DEFAULTS.fontFamily}`;
 	assert.equal(editor.dir, "rtl");
-	assert.equal(editor.style.fontFamily, '"Fira Code", monospace');
+	assert.equal(editor.style.fontFamily, expectedFont.style.fontFamily);
 	assert.equal(editor.style.fontSize, "16px");
 	pane.focus();
 	assert.equal(dom.window.document.activeElement?.classList.contains("stanza-editor-input"), true);
@@ -89,12 +94,12 @@ test("Stanza editor pane acquires the Workbench language service for its detecte
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("const value = 1;");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
 	using languageService = new LanguageService();
 	using builtinLanguages = registerBuiltinLanguageDescriptions(languageService.languages);
 	using languages = new LanguageFeaturesService();
+	using models = new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService: languages });
 	const diagnostics = new RecordingLanguageDiagnosticsService();
-	const pane = new EditorPane(resourceStore, { modelService: models, languageFeaturesService: languages, languageConfigurationService: languages.languageConfigurationService, languageResolver: languageService, languageDiagnosticsService: diagnostics });
+	const pane = new EditorPane(resourceStore, { modelService: models, languageFeaturesService: languages, languageConfigurationService: languages.languageConfigurationService, languageDiagnosticsService: diagnostics });
 	pane.create(parent);
 	const resource = URI.file("C:\\project\\main.ts");
 
@@ -232,16 +237,15 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("#!/usr/bin/env demo\nprint('ok')");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
 	using registration = languageService.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" }, { priority: 100 });
+	using models = new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService: languages });
 	let languageId: string | undefined;
 	const pane = new EditorPane(resourceStore, {
 		modelService: models,
 		languageFeaturesService: languages,
 		languageConfigurationService: languages.languageConfigurationService,
-		languageResolver: languageService,
 		createPart: options => {
 			languageId = options.languageId;
 			return { layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} };

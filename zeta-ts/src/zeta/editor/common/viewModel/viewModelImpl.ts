@@ -13,7 +13,7 @@ import { Selection, type ISelection } from '../core/selection.js';
 import { type ICommand, type ICursorState, type IViewState, ScrollType } from '../editorCommon.js';
 import { EditorTheme } from '../editorTheme.js';
 import { type ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
-import { EndOfLinePreference, type IAttachedView, type ITextModel, PositionAffinity, TextDirection } from '../model.js';
+import { EndOfLinePreference, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextModel, PositionAffinity, TextDirection } from '../model.js';
 import { TextModel } from '../model/textModel.js';
 import { type ILineBreaksComputer, type ILineBreaksComputerContext, type ILineBreaksComputerFactory, type InjectedText } from '../modelLineProjectionData.js';
 import { type IActiveIndentGuideInfo, type BracketGuideOptions, type IndentGuide } from '../textModelGuides.js';
@@ -26,10 +26,12 @@ import {
 	FocusChangedEvent,
 	HiddenAreasChangedEvent,
 	ModelContentChangedEvent,
+	ModelTokensChangedEvent,
 	type OutgoingViewModelEvent,
 	ReadOnlyEditAttemptEvent,
 	ScrollChangedEvent,
 	ViewModelEventDispatcher,
+	type ViewModelEventsCollector,
 	ViewZonesChangedEvent,
 	WidgetFocusChangedEvent,
 } from '../viewModelEventDispatcher.js';
@@ -37,6 +39,7 @@ import { ViewLayout } from '../viewLayout/viewLayout.js';
 import { GlyphMarginLanesModel } from './glyphLanesModel.js';
 import { ViewModelDecorations } from './viewModelDecorations.js';
 import { type IViewModelLines, ViewModelLinesFromModelAsIs, ViewModelLinesFromProjectedModel } from './viewModelLines.js';
+import { type TextModelEditSource } from '../textModelEditSource.js';
 
 const cursorOwners = new WeakMap<ViewModel, CursorsController>();
 
@@ -48,7 +51,7 @@ export class ViewModel extends Disposable implements IViewModel {
 	private readonly decorations: ViewModelDecorations;
 	private hasFocus = false;
 	private previousSelections: Selection[];
-	private columnSelectData: IColumnSelectData = { isReal: false, fromViewLineNumber: 1, fromViewVisualColumn: 0, toViewLineNumber: 1, toViewVisualColumn: 0 };
+	private collectedCursorEventDepth = 0;
 
 	readonly onEvent: Event<OutgoingViewModelEvent> = this.events.onEvent;
 	readonly coordinatesConverter: ICoordinatesConverter;
@@ -63,7 +66,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		domLineBreaksComputerFactory: ILineBreaksComputerFactory,
 		monospaceLineBreaksComputerFactory: ILineBreaksComputerFactory,
 		scheduleAtNextAnimationFrame: (callback: () => void) => IDisposable,
-		languageConfigurationService: ILanguageConfigurationService,
+		private readonly languageConfigurationService: ILanguageConfigurationService,
 		themeService: IThemeService,
 		private readonly attachedView: IAttachedView,
 		private readonly transactionalTarget: IBatchableTarget,
@@ -81,12 +84,13 @@ export class ViewModel extends Disposable implements IViewModel {
 		this.lines = model.isTooLargeForTokenization()
 			? this._register(new ViewModelLinesFromModelAsIs(model))
 			: this._register(new ViewModelLinesFromProjectedModel(model, lineBreaksComputerFactory, fontInfo, model.getOptions().tabSize, {
+				editorId,
 				wrapping: wrappingInfo.wrappingColumn > 0 ? EditorLineWrapping.On : EditorLineWrapping.Off,
 				wrapWidth: Math.max(0, wrappingInfo.wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth,
 				wrappingIndent: options.get(EditorOption.wrappingIndent),
 			}));
 		this.coordinatesConverter = this.lines.createCoordinatesConverter();
-		this.cursorConfig = new CursorConfiguration(model.getLanguageId(), model.getOptions(), configuration, languageConfigurationService);
+		this.cursorConfig = new CursorConfiguration(model.getLanguageId(), model.getOptions(), configuration, this.languageConfigurationService);
 		this.cursor = this._register(new CursorsController(model, this, this.coordinatesConverter, this.cursorConfig));
 		cursorOwners.set(this, this.cursor);
 		this.previousSelections = [...this.cursor.getSelections()];
@@ -96,25 +100,57 @@ export class ViewModel extends Disposable implements IViewModel {
 		this.connectCursor();
 		if (this.lines instanceof ViewModelLinesFromProjectedModel) {
 			this._register(this.lines.onDidChange(() => {
-				this.viewLayout.onFlushed(this.lines.getViewLineCount(), []);
-				this.events.emitSingleViewEvent(new viewEvents.ViewLineMappingChangedEvent());
+				this.withViewEventsCollector(eventsCollector => {
+					this.decorations.onLineMappingChanged();
+					this.viewLayout.onFlushed(this.lines.getViewLineCount(), []);
+					eventsCollector.emitViewEvent(new viewEvents.ViewLineMappingChangedEvent());
+					eventsCollector.emitViewEvent(new viewEvents.ViewDecorationsChangedEvent(null));
+					this.cursor.onLineMappingChanged(eventsCollector);
+				});
 			}));
 		}
 		this._register(configuration.onDidChangeFast(event => {
 			this.viewLayout.onConfigurationChanged(event);
-			if (this.lines.setWrappingSettings(
+			this.lines.setWrappingSettings(
 				configuration.options.get(EditorOption.fontInfo),
 				configuration.options.get(EditorOption.wrappingStrategy),
 				configuration.options.get(EditorOption.wrappingInfo).wrappingColumn,
 				configuration.options.get(EditorOption.wrappingIndent),
 				configuration.options.get(EditorOption.wordBreak),
-			)) this.viewLayout.onFlushed(this.lines.getViewLineCount(), []);
+			);
+			if (CursorConfiguration.shouldRecreate(event)) this.recreateCursorConfiguration();
 			this.events.emitSingleViewEvent(new viewEvents.ViewConfigurationChangedEvent(event));
+		}));
+		this._register(model.onDidChangeLanguage(() => this.recreateCursorConfiguration()));
+		this._register(model.onDidChangeLanguageConfiguration(() => {
+			this.events.emitSingleViewEvent(new viewEvents.ViewLanguageConfigurationEvent());
+			this.recreateCursorConfiguration();
+		}));
+		this._register(model.onDidChangeOptions(() => {
+			this.withViewEventsCollector(eventsCollector => {
+				if (this.lines.setTabSize(model.getOptions().tabSize)) {
+					this.decorations.onLineMappingChanged();
+					this.viewLayout.onFlushed(this.lines.getViewLineCount(), []);
+					eventsCollector.emitViewEvent(new viewEvents.ViewFlushedEvent());
+					eventsCollector.emitViewEvent(new viewEvents.ViewLineMappingChangedEvent());
+					eventsCollector.emitViewEvent(new viewEvents.ViewDecorationsChangedEvent(null));
+					this.cursor.onLineMappingChanged(eventsCollector);
+				}
+				this.recreateCursorConfiguration();
+			});
 		}));
 		this._register(themeService.onDidColorThemeChange(theme => this.events.emitSingleViewEvent(new viewEvents.ViewThemeChangedEvent(theme))));
 		this._register(model.onDidChangeDecorations(event => {
 			this.decorations.onModelDecorationsChanged();
 			this.events.emitSingleViewEvent(new viewEvents.ViewDecorationsChangedEvent(event));
+		}));
+		this._register(model.onDidChangeTokens(event => {
+			const ranges = event.ranges.map(range => ({
+				fromLineNumber: this.coordinatesConverter.convertModelPositionToViewPosition(new Position(range.fromLineNumber, 1)).lineNumber,
+				toLineNumber: this.coordinatesConverter.convertModelPositionToViewPosition(new Position(range.toLineNumber, model.getLineMaxColumn(range.toLineNumber))).lineNumber,
+			}));
+			this.events.emitSingleViewEvent(new viewEvents.ViewTokensChangedEvent(ranges));
+			this.events.emitOutgoingEvent(new ModelTokensChangedEvent(event));
 		}));
 		model.registerViewModel(this);
 		this._register(toDisposable(() => model.unregisterViewModel(this)));
@@ -246,6 +282,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		if (this.hasFocus === hasFocus) return;
 		const previous = this.hasFocus;
 		this.hasFocus = hasFocus;
+		this.cursor.setHasFocus(hasFocus);
 		this.events.emitSingleViewEvent(new viewEvents.ViewFocusChangedEvent(hasFocus));
 		this.events.emitOutgoingEvent(new FocusChangedEvent(previous, hasFocus));
 	}
@@ -407,11 +444,18 @@ export class ViewModel extends Disposable implements IViewModel {
 		return null;
 	}
 
-	onDidChangeContentOrInjectedText(_event: textModelEvents.InternalModelContentChangeEvent | textModelEvents.ModelInjectedTextChangedEvent): void {
-		this.events.beginEmitViewEvents();
-		this.decorations.onLineMappingChanged();
-		this.viewLayout.onFlushed(this.lines.getViewLineCount(), []);
-		this.events.emitSingleViewEvent(new viewEvents.ViewFlushedEvent());
+	onDidChangeContentOrInjectedText(event: textModelEvents.InternalModelContentChangeEvent | textModelEvents.ModelInjectedTextChangedEvent): void {
+		this.collectedCursorEventDepth += 1;
+		try {
+			const eventsCollector = this.events.beginEmitViewEvents();
+			if (event instanceof textModelEvents.ModelInjectedTextChangedEvent) this.lines.onModelFlushed();
+			this.cursor.onModelContentChanged(eventsCollector, event);
+			this.decorations.onLineMappingChanged();
+			this.viewLayout.onFlushed(this.lines.getViewLineCount(), []);
+			this.events.emitSingleViewEvent(new viewEvents.ViewFlushedEvent());
+		} finally {
+			this.collectedCursorEventDepth -= 1;
+		}
 	}
 
 	emitContentChangeEvent(event: textModelEvents.InternalModelContentChangeEvent | textModelEvents.ModelInjectedTextChangedEvent): void {
@@ -434,10 +478,10 @@ export class ViewModel extends Disposable implements IViewModel {
 		return this.cursor.getCursorStates();
 	}
 
-	setCursorStates(_source: string | null | undefined, _reason: CursorChangeReason, states: PartialCursorState[] | null): boolean {
-		if (!states?.length) return false;
-		this.cursor.setSelections(states.map(state => state.modelState?.selection ?? this.toModelSelection(state.viewState!.selection)));
-		return true;
+	setCursorStates(source: string | null | undefined, reason: CursorChangeReason, states: PartialCursorState[] | null): boolean {
+		const changed = this.withCollectedCursorEvents(eventsCollector => this.cursor.setStates(eventsCollector, source, reason, states));
+		this.previousSelections = this.cursor.getSelections();
+		return changed;
 	}
 
 	getCursorAutoClosedCharacters(): Range[] {
@@ -445,11 +489,11 @@ export class ViewModel extends Disposable implements IViewModel {
 	}
 
 	getCursorColumnSelectData(): IColumnSelectData {
-		return { ...this.columnSelectData };
+		return this.cursor.getCursorColumnSelectData();
 	}
 
-	setCursorColumnSelectData(data: IColumnSelectData): void {
-		this.columnSelectData = { ...data };
+	setCursorColumnSelectData(columnSelectData: IColumnSelectData): void {
+		this.cursor.setCursorColumnSelectData(columnSelectData);
 	}
 
 	getPrevEditOperationType(): EditOperationType {
@@ -472,48 +516,61 @@ export class ViewModel extends Disposable implements IViewModel {
 		return this.cursor.getPosition();
 	}
 
-	setSelections(_source: string | null | undefined, selections: readonly ISelection[], reason = CursorChangeReason.NotSet): void {
-		this.cursor.setSelections(selections.map(selection => Selection.liftSelection(selection)), reason);
+	setSelections(source: string | null | undefined, selections: readonly ISelection[], reason = CursorChangeReason.NotSet): void {
+		this.setCursorStates(source, reason, CursorState.fromModelSelections(selections));
 	}
 
 	saveCursorState(): ICursorState[] {
-		return this.cursor.getSelections().map(selection => ({
-			inSelectionMode: !selection.isEmpty(),
-			selectionStart: selection.getSelectionStart(),
-			position: selection.getPosition(),
-		}));
+		return this.cursor.saveState();
 	}
 
 	restoreCursorState(states: ICursorState[]): void {
-		this.setSelections('restoreState', states.map(state => Selection.fromPositions(
-			Position.lift(state.selectionStart),
-			Position.lift(state.position),
-		)));
+		this.withCollectedCursorEvents(eventsCollector => this.cursor.restoreState(eventsCollector, states));
+		this.previousSelections = this.cursor.getSelections();
+	}
+
+	executeEdits(source: string | null | undefined, edits: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer, reason: TextModelEditSource): void {
+		this.executeCursorEdit(eventsCollector => this.cursor.executeEdits(eventsCollector, source, edits, cursorStateComputer, reason));
+	}
+
+	startComposition(): void {
+		this.executeCursorEdit(eventsCollector => this.cursor.startComposition(eventsCollector));
+	}
+
+	endComposition(source?: string | null): void {
+		this.executeCursorEdit(eventsCollector => this.cursor.endComposition(eventsCollector, source));
+	}
+
+	type(text: string, source?: string | null): void {
+		this.executeCursorEdit(eventsCollector => this.cursor.type(eventsCollector, text, source));
+	}
+
+	compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number, source?: string | null): void {
+		this.executeCursorEdit(eventsCollector => this.cursor.compositionType(eventsCollector, text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, source));
+	}
+
+	paste(text: string, pasteOnNewLine: boolean, multicursorText?: string[] | null, source?: string | null): void {
+		this.executeCursorEdit(eventsCollector => this.cursor.paste(eventsCollector, text, pasteOnNewLine, multicursorText, source));
+	}
+
+	cut(source?: string | null): void {
+		this.executeCursorEdit(eventsCollector => this.cursor.cut(eventsCollector, source));
 	}
 
 	executeCommand(command: ICommand, source?: string | null): void {
-		this.cursor.executeCommand(command, source);
+		this.executeCursorEdit(eventsCollector => this.cursor.executeCommand(eventsCollector, command, source));
 	}
 
-	executeCommands(commands: readonly (ICommand | null)[], source?: string | null): void {
-		this.cursor.executeCommands(commands, source);
+	executeCommands(commands: (ICommand | null)[], source?: string | null): void {
+		this.executeCursorEdit(eventsCollector => this.cursor.executeCommands(eventsCollector, commands, source));
 	}
 
 	revealAllCursors(source: string | null | undefined, revealHorizontal: boolean, minimalReveal = false): void {
-		this.events.emitSingleViewEvent(new viewEvents.ViewRevealRangeRequestEvent(
-			source,
-			minimalReveal,
-			null,
-			this.cursor.getSelections().map(selection => this.toViewSelection(selection)),
-			viewEvents.VerticalRevealType.Simple,
-			revealHorizontal,
-			ScrollType.Smooth,
-		));
+		this.withViewEventsCollector(eventsCollector => this.cursor.revealAll(eventsCollector, source, minimalReveal, viewEvents.VerticalRevealType.Simple, revealHorizontal, ScrollType.Smooth));
 	}
 
 	revealPrimaryCursor(source: string | null | undefined, revealHorizontal: boolean, minimalReveal = false): void {
-		const selection = this.toViewSelection(this.cursor.getSelections()[0]!);
-		this.events.emitSingleViewEvent(new viewEvents.ViewRevealRangeRequestEvent(source, minimalReveal, selection, null, viewEvents.VerticalRevealType.Simple, revealHorizontal, ScrollType.Smooth));
+		this.withViewEventsCollector(eventsCollector => this.cursor.revealPrimary(eventsCollector, source, minimalReveal, viewEvents.VerticalRevealType.Simple, revealHorizontal, ScrollType.Smooth));
 	}
 
 	revealTopMostCursor(source: string | null | undefined): void {
@@ -539,10 +596,40 @@ export class ViewModel extends Disposable implements IViewModel {
 	}
 
 	batchEvents(callback: () => void): void {
-		this.transactionalTarget.batchChanges(() => {
-			this.events.beginEmitViewEvents();
-			try { callback(); } finally { this.events.endEmitViewEvents(); }
+		this.withViewEventsCollector(() => callback());
+	}
+
+	private withViewEventsCollector<T>(callback: (eventsCollector: ViewModelEventsCollector) => T): T {
+		return this.transactionalTarget.batchChanges(() => {
+			try {
+				return callback(this.events.beginEmitViewEvents());
+			} finally {
+				this.events.endEmitViewEvents();
+			}
 		});
+	}
+
+	private withCollectedCursorEvents<T>(callback: (eventsCollector: ViewModelEventsCollector) => T): T {
+		this.collectedCursorEventDepth += 1;
+		try {
+			return this.withViewEventsCollector(callback);
+		} finally {
+			this.collectedCursorEventDepth -= 1;
+		}
+	}
+
+	private executeCursorEdit(callback: (eventsCollector: ViewModelEventsCollector) => void): void {
+		if (this.cursorConfig.readOnly) {
+			this.events.emitOutgoingEvent(new ReadOnlyEditAttemptEvent());
+			return;
+		}
+		this.withCollectedCursorEvents(callback);
+		this.previousSelections = this.cursor.getSelections();
+	}
+
+	private recreateCursorConfiguration(): void {
+		this.cursorConfig = new CursorConfiguration(this.model.getLanguageId(), this.model.getOptions(), this.configuration, this.languageConfigurationService);
+		this.cursor.updateConfiguration(this.cursorConfig);
 	}
 
 	private connectLayout(): void {
@@ -560,6 +647,7 @@ export class ViewModel extends Disposable implements IViewModel {
 	private connectCursor(): void {
 		this._register(this.cursor.onDidAttemptReadOnlyEdit(() => this.events.emitOutgoingEvent(new ReadOnlyEditAttemptEvent())));
 		this._register(this.cursor.onDidChange(change => {
+			if (this.collectedCursorEventDepth > 0) return;
 			const modelSelections = [...change.selections];
 			const viewSelections = modelSelections.map(selection => this.toViewSelection(selection));
 			this.events.emitSingleViewEvent(new viewEvents.ViewCursorStateChangedEvent(viewSelections, modelSelections, change.reason));
@@ -585,11 +673,6 @@ export class ViewModel extends Disposable implements IViewModel {
 
 	private toViewSelection(selection: Selection): Selection {
 		const range = this.coordinatesConverter.convertModelRangeToViewRange(selection);
-		return Selection.fromPositions(range.getStartPosition(), range.getEndPosition());
-	}
-
-	private toModelSelection(selection: Selection): Selection {
-		const range = this.coordinatesConverter.convertViewRangeToModelRange(selection);
 		return Selection.fromPositions(range.getStartPosition(), range.getEndPosition());
 	}
 

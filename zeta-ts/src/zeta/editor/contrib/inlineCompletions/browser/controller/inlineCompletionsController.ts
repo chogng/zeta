@@ -3,19 +3,22 @@ import "../media/inlineCompletions.css";
 import { registerTextEditorCapabilityContribution } from "../../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { createEditorEditCommand } from "../../../../common/commands/editorCommand.js";
 import { Range } from "../../../../common/core/range.js";
-import { type CursorsController } from "../../../../common/cursor/cursor.js";
+import { Selection } from '../../../../common/core/selection.js';
+import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { InlineCompletionsService, InlineCompletionsServiceCapability, type IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import { type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider } from "../../common/inlineCompletions.js";
 import { type View } from "../../../../browser/view.js";
-import { isCompletionsEnablementEnabled } from "../../../../common/services/ownedCompletionsEnablement.js";
+import { isCompletionsEnabledFromObject } from "../../../../common/services/completionsEnablement.js";
 import { type Event } from '../../../../../base/common/event.js';
 import { type EditorCommandEvent } from '../../../../browser/editorExtensions.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { provideInlineCompletions } from '../model/provideInlineCompletions.js';
+import { type TextEdit } from '../../../../common/languages.js';
+import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../../common/editorCommon.js';
+import { type ITextModel } from '../../../../common/model.js';
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
 export class InlineCompletionsController extends Disposable {
@@ -24,12 +27,13 @@ export class InlineCompletionsController extends Disposable {
 	private item: LanguageInlineCompletionItem | undefined;
 	private completionRequestId = 0;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>, private readonly inlineCompletionsService: IInlineCompletionsService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly editor: ICodeEditor, private readonly viewport: View, private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>, private readonly inlineCompletionsService: IInlineCompletionsService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
 		super();
-		const element = this.element = h(viewport.element.ownerDocument, "span");
+		if (editor.getModel() !== model || viewport.textModel !== model) throw new TypeError('Inline completion dependencies must share one text model');
+		const element = this.element = h(viewport.domNode.domNode.ownerDocument, "span");
 		element.className = "stanza-editor-inline-completion";
 		element.hidden = true;
-		viewport.element.append(element);
+		viewport.domNode.domNode.append(element);
 		this._register(toDisposable(() => element.remove()));
 		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.ctrlKey || !event.altKey || event.key !== " ") return;
@@ -41,7 +45,7 @@ export class InlineCompletionsController extends Disposable {
 			stopEvent(event);
 			this.accept();
 		}));
-		this._register(selections.onDidChange(() => this.clear()));
+		this._register(editor.onDidChangeCursorSelection(() => this.clear()));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
 		this._register(viewport.textModel.onDidChangeContent(() => this.clear()));
 		if (onDidExecuteCommand) {
@@ -58,7 +62,8 @@ export class InlineCompletionsController extends Disposable {
 			this.clear();
 			return;
 		}
-		const selection = this.selections.getSelections()[0]!;
+		const selection = this.editor.getSelection();
+		if (!selection) return;
 		if (!selection.isEmpty()) return;
 		this.request?.abort();
 		const request = this.request = new AbortController();
@@ -79,7 +84,8 @@ export class InlineCompletionsController extends Disposable {
 			this.element.hidden = true;
 			return;
 		}
-		const selection = this.selections.getSelections()[0]!;
+		const selection = this.editor.getSelection();
+		if (!selection) return;
 		const range = item.range ?? Range.fromPositions(selection.getPosition());
 		const coordinates = this.viewport.getPositionContentCoordinates(range.getStartPosition());
 		const scroll = this.viewport.viewportLayout.scrollPosition;
@@ -92,10 +98,14 @@ export class InlineCompletionsController extends Disposable {
 	private accept(): void {
 		const item = this.item;
 		if (!item) return;
-		const selection = this.selections.getSelections()[0]!;
-		const edits = [...(item.additionalTextEdits ?? []), { range: item.range ?? Range.fromPositions(selection.getPosition()), text: item.insertText }].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()));
-		const command = createEditorEditCommand(this.viewport.textModel, this.selections.getSelections(), edits);
-		if (command) this.selections.execute(command);
+		const selection = this.editor.getSelection();
+		if (!selection) return;
+		const mainEdit = { range: item.range ?? Range.fromPositions(selection.getPosition()), text: item.insertText };
+		const edits = [...(item.additionalTextEdits ?? []), mainEdit].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()));
+		const command = new AcceptInlineCompletionCommand(edits, edits.indexOf(mainEdit));
+		this.editor.pushUndoStop();
+		this.editor.executeCommands('editor.action.inlineSuggest.commit', [command, ...(this.editor.getSelections() ?? []).slice(1).map(() => null)]);
+		this.editor.pushUndoStop();
 		this.clear();
 	}
 
@@ -108,10 +118,22 @@ export class InlineCompletionsController extends Disposable {
 	}
 }
 
+class AcceptInlineCompletionCommand implements ICommand {
+	constructor(private readonly edits: readonly TextEdit[], private readonly mainEditIndex: number) {}
+
+	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
+		for (const edit of this.edits) builder.addTrackedEditOperation(edit.range, edit.text);
+	}
+
+	computeCursorState(_model: ITextModel, helper: ICursorStateComputerData): Selection {
+		return Selection.fromPositions(helper.getInverseEditOperations()[this.mainEditIndex]!.range.getEndPosition());
+	}
+}
+
 registerTextEditorCapabilityContribution({ id: "editor.contrib.inlineCompletions", configure: context => {
 	if (context.kind !== 'text') return;
 	context.provideCapability(InlineCompletionsServiceCapability, context.register(new InlineCompletionsService()));
 }, install: context => {
-	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnablementEnabled(context.options.inlineCompletions, context.languageId))) return;
-	context.register(new InlineCompletionsController(context.view.element, context.viewport, context.selectionController, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.getCapability(InlineCompletionsServiceCapability), context.languageId, context.onDidExecuteCommand, context.onLanguageError));
+	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.languageId))) return;
+	context.register(new InlineCompletionsController(context.view.element, context.editor, context.viewport, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.getCapability(InlineCompletionsServiceCapability), context.languageId, context.onDidExecuteCommand, context.onLanguageError));
 } });

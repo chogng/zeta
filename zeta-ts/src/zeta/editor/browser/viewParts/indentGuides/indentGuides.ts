@@ -1,6 +1,6 @@
 import "./indentGuides.css";
 import { h } from "../../../../base/browser/dom.js";
-import { type InternalGuidesOptions } from '../../../common/config/editorOptions.js';
+import { EditorOption, type InternalGuidesOptions } from '../../../common/config/editorOptions.js';
 import { Position } from '../../../common/core/position.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { type EditorVisualLine } from '../../../common/viewModel/modelLineProjection.js';
@@ -11,10 +11,9 @@ import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type BracketColorizationSource, type BracketGuide } from '../viewLines/viewLine.js';
 import { renderViewPartRows } from '../../view/viewLayer.js';
+import * as viewEvents from '../../../common/viewEvents.js';
 
 interface IndentGuidesOptions {
-	readonly guides: InternalGuidesOptions;
-	readonly tabSize: number;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly viewModel: IViewModel;
 	readonly ownerDocument: Document;
@@ -26,8 +25,9 @@ interface IndentGuidesOptions {
 /** Owns and projects the visible indentation-guide rows. */
 export class IndentGuidesOverlay extends DynamicViewOverlay {
 	private _renderResult: string[] = [];
-	private readonly guides: InternalGuidesOptions;
-	private readonly tabSize: number;
+	private guides: InternalGuidesOptions;
+	private tabSize: number;
+	private primaryPosition: Position | undefined;
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	private readonly viewModel: IViewModel;
 	private readonly ownerDocument: Document;
@@ -37,8 +37,9 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	constructor(private readonly context: ViewContext, options: IndentGuidesOptions) {
 		super();
 		this.context.addEventHandler(this);
-		this.guides = options.guides;
-		this.tabSize = options.tabSize;
+		this.guides = this.context.configuration.options.get(EditorOption.guides);
+		this.tabSize = options.viewModel.model.getOptions().tabSize;
+		this.primaryPosition = options.viewModel.getPrimaryCursorState().modelState.position;
 		this.bracketColorizationSource = options.bracketColorizationSource;
 		this.viewModel = options.viewModel;
 		this.ownerDocument = options.ownerDocument;
@@ -49,8 +50,33 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 
 	public override dispose(): void {
 		this.context.removeEventHandler(this);
+		this._renderResult = [];
 		super.dispose();
 	}
+
+	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		this.guides = this.context.configuration.options.get(EditorOption.guides);
+		return true;
+	}
+
+	public override onCursorStateChanged(event: viewEvents.ViewCursorStateChangedEvent): boolean {
+		const position = event.modelSelections[0]?.getPosition();
+		if (!position || this.primaryPosition?.equals(position)) return false;
+		this.primaryPosition = position;
+		return true;
+	}
+
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
+		this.tabSize = this.viewModel.model.getOptions().tabSize;
+		return true;
+	}
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
+	public override onLanguageConfigurationChanged(_event: viewEvents.ViewLanguageConfigurationEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
 		const bracketGuides = this.resolveBracketGuides(context);

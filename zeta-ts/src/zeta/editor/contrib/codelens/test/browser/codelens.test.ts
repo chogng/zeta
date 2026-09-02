@@ -7,9 +7,8 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
-import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
+import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../../browser/editorBrowser.js';
 import { type View as EditorView } from '../../../../browser/view.js';
-import { MouseTargetFactory, MouseTargetKind } from '../../../../browser/controller/mouseTarget.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { type CodeLens, type CodeLensProvider } from '../../../../common/languages.js';
@@ -33,6 +32,10 @@ for (const [name, value] of Object.entries({
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { CodeLensContribution } = await import('../../browser/codelensController.js');
+
+test('CodeLens contribution exposes the canonical editor contribution ID', () => {
+	assert.equal(CodeLensContribution.ID, 'css.editor.codeLens');
+});
 
 test('CodeLens model preserves provider ownership, provider rank, and independent failures', async () => {
 	using model = new TextModel('first\nsecond', { languageId: 'typescript' });
@@ -91,12 +94,16 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	using changeEmitter = new Emitter<CodeLensProvider>();
 	let title = 'Deferred';
 	let resolveCount = 0;
+	let providerToken: CancellationToken | undefined;
 	const provider: CodeLensProvider = {
 		onDidChange: changeEmitter.event,
-		provideCodeLenses: () => ({ lenses: [
+		provideCodeLenses: (_model, token) => {
+			providerToken = token;
+			return { lenses: [
 			lens(1, 0, command('immediate', 'Immediate')),
 			lens(1, 5, undefined, 'deferred'),
-		] }),
+			] };
+		},
 		resolveCodeLens: (_model, value) => {
 			resolveCount += 1;
 			return { ...value, command: command('deferred', title) };
@@ -116,20 +123,18 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, undefined, executeCommand, error => contributionErrors.push(error));
 
 	await contribution.getModel();
-	let widget = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-codelens');
+	let widget = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-codelens');
 	const initialWidget = widget;
-	assert.equal(viewport.element.querySelectorAll('.stanza-editor-codelens').length, 1);
+	assert.equal(viewport.domNode.domNode.querySelectorAll('.stanza-editor-codelens').length, 1);
 	assert.equal(widget.getAttribute('aria-label'), 'CodeLens commands');
 	assert.equal(widget.style.top, '20px');
 	assert.equal(viewport.getPositionContentCoordinates(new Position((1) + 1, (0) + 1)).top, 34);
 	assert.deepEqual([...widget.querySelectorAll('button')].map(button => button.textContent), ['Immediate', 'Deferred']);
 	assert.equal(resolveCount, 1);
-	const pointerTarget = new MouseTargetFactory(viewport).create({
-		clientX: 0,
-		clientY: 0,
-		target: widget.querySelector('button'),
-	});
-	assert.equal(pointerTarget?.kind, MouseTargetKind.ViewZone);
+	let mouseDown: IEditorMouseEvent | undefined;
+	viewport.controller.userInputEvents.onMouseDown = event => { mouseDown = event; };
+	widget.querySelector('button')!.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: 80 }));
+	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_VIEW_ZONE);
 	viewport.layout({ width: 320, height: 60 });
 	await Promise.resolve();
 	assert.equal(resolveCount, 1);
@@ -141,13 +146,14 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	changeEmitter.fire(provider);
 	await Promise.resolve();
 	await contribution.getModel();
-	widget = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-codelens');
+	widget = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-codelens');
 	assert.equal(widget, initialWidget);
 	assert.deepEqual([...widget.querySelectorAll('button')].map(button => button.textContent), ['Immediate', 'Updated']);
 	assert.equal(resolveCount, 2);
 
 	contribution.dispose();
-	assert.equal(viewport.element.querySelector('.stanza-editor-codelens'), null);
+	assert.equal(providerToken?.isCancellationRequested, true);
+	assert.equal(viewport.domNode.domNode.querySelector('.stanza-editor-codelens'), null);
 	dom.window.close();
 });
 
@@ -227,14 +233,14 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 		const executions: string[] = [];
 		using secondContribution = new CodeLensContribution(editorFor(secondViewport), secondViewport, secondProviders, resource, id => { executions.push(id); });
 
-		const cachedCommand = requiredElement<HTMLElement>(secondViewport.element, '.stanza-editor-codelens-command');
+		const cachedCommand = requiredElement<HTMLElement>(secondViewport.domNode.domNode, '.stanza-editor-codelens-command');
 		assert.deepEqual({ tagName: cachedCommand.tagName, title: cachedCommand.textContent }, { tagName: 'SPAN', title: 'Cached' });
 		cachedCommand.dispatchEvent(new secondDom.window.MouseEvent('click', { bubbles: true }));
 		assert.deepEqual(executions, []);
 
 		provideFreshLenses!([lens(1, 0, command('fresh.run', 'Fresh'))]);
 		await secondContribution.getModel();
-		const freshCommand = requiredElement<HTMLButtonElement>(secondViewport.element, 'button.stanza-editor-codelens-command');
+		const freshCommand = requiredElement<HTMLButtonElement>(secondViewport.domNode.domNode, 'button.stanza-editor-codelens-command');
 		assert.equal(freshCommand.textContent, 'Fresh');
 		freshCommand.dispatchEvent(new secondDom.window.MouseEvent('click', { bubbles: true }));
 		assert.deepEqual(executions, ['fresh.run']);
@@ -271,7 +277,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		});
 		restoredViewport.layout({ width: 300, height: 20 });
 		using restoredContribution = new CodeLensContribution(editorFor(restoredViewport), restoredViewport, restoredProviders, restoredResource, undefined);
-		const restoredWidget = requiredElement<HTMLElement>(restoredViewport.element, '.stanza-editor-codelens');
+		const restoredWidget = requiredElement<HTMLElement>(restoredViewport.domNode.domNode, '.stanza-editor-codelens');
 		assert.deepEqual({
 			hidden: restoredWidget.hidden,
 			zoneTop: restoredWidget.style.top,
@@ -279,7 +285,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 			contentHeight: restoredViewport.viewportLayout.contentSize.height,
 		}, {
 			hidden: true,
-			zoneTop: '40px',
+			zoneTop: '0px',
 			thirdLineTop: 54,
 			contentHeight: 74,
 		});

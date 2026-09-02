@@ -14,15 +14,15 @@ export class HoverController extends Disposable {
 
 	constructor(private readonly viewport: View, private readonly service: LanguageHoverService, private readonly languageId: string) {
 		super();
-		this.element = h(viewport.element.ownerDocument, "div");
+		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
 		this.element.className = "stanza-editor-hover";
 		this.element.hidden = true;
 		this.element.setAttribute("role", "tooltip");
-		viewport.element.append(this.element);
+		viewport.domNode.domNode.append(this.element);
 		this._register(toDisposable(() => { this.cancelRequest(); this.element.remove(); }));
-		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.schedule(event)));
-		this._register(addDisposableListener(viewport.element, "pointerleave", () => this.hide()));
-		this._register(addDisposableListener(viewport.element, "scroll", () => this.hide()));
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointermove", event => this.schedule(event)));
+		this._register(addDisposableListener(viewport.domNode.domNode, "pointerleave", () => this.hide()));
+		this._register(addDisposableListener(viewport.domNode.domNode, "scroll", () => this.hide()));
 		this._register(viewport.textModel.onDidChangeContent(() => this.hide()));
 	}
 
@@ -61,7 +61,7 @@ export class HoverController extends Disposable {
 			return node;
 		}));
 		const coordinates = this.viewport.getPositionContentCoordinates(hover.range?.getStartPosition() ?? position);
-		const bounds = this.viewport.element.getBoundingClientRect();
+		const bounds = this.viewport.domNode.domNode.getBoundingClientRect();
 		const width = Math.min(480, Math.max(160, bounds.width - 16));
 		this.element.style.maxWidth = `${width}px`;
 		this.element.style.left = `${Math.max(8, coordinates.left - this.viewport.viewportLayout.scrollPosition.left)}px`;

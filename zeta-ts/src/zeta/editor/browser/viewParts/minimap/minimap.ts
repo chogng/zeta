@@ -1,6 +1,7 @@
 import './minimap.css';
 
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
 import { type EditorMinimapLayoutInfo, type EditorMinimapOptions, RenderMinimap } from '../../../common/config/editorOptions.js';
@@ -12,7 +13,7 @@ import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout
 import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
 import { ViewPart, PartFingerprint, PartFingerprints } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-import { type DecorationsOverlayMarker } from '../decorations/decorations.js';
+import { Range } from '../../../common/core/range.js';
 
 export interface MinimapOptions {
 	readonly host: HTMLElement;
@@ -27,24 +28,27 @@ export interface MinimapOptions {
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readProjectionRevision: () => number;
 	readonly scrollTo: (position: EditorScrollPosition) => void;
-	readonly readMarkers: () => readonly DecorationsOverlayMarker[];
-	readonly readMarkersRevision: () => number;
 }
 
 /** Owns the document overview canvas, viewport indicator, markers, and pointer navigation. */
 export class Minimap extends ViewPart {
-	readonly domNode: HTMLDivElement;
+	private readonly domNode: HTMLDivElement;
+	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly canvas: HTMLCanvasElement;
 	private dragging = false;
 
 	constructor(context: ViewContext, private readonly source: MinimapOptions) {
 		super(context);
 		this.domNode = h(source.host.ownerDocument, 'div');
+		this.root = new FastDomNode(this.domNode);
 		this.domNode.className = 'minimap';
+		this.root.setPosition('absolute');
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
 		PartFingerprints.write(this.domNode, PartFingerprint.Minimap);
 		this.canvas = h(source.host.ownerDocument, 'canvas');
+		this.canvas.style.position = 'absolute';
+		this.canvas.style.left = '0';
 		this.domNode.append(this.canvas);
 		source.host.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -63,6 +67,10 @@ export class Minimap extends ViewPart {
 			if (this.domNode.hasPointerCapture(event.pointerId)) this.domNode.releasePointerCapture(event.pointerId);
 		}));
 		this._register(addDisposableListener(this.domNode, 'pointercancel', () => this.dragging = false));
+	}
+
+	public getDomNode(): FastDomNode<HTMLElement> {
+		return this.root;
 	}
 
 	render(context: RestrictedRenderingContext): void {
@@ -105,10 +113,15 @@ export class Minimap extends ViewPart {
 		}
 		painter.globalAlpha = 1;
 
-		for (const marker of this.source.readMarkers()) {
-			painter.fillStyle = markerColor(marker.presentation, styles);
-			const top = Math.floor(marker.startLineIndex / Math.max(1, this.source.model.lineCount) * height);
-			const markerHeight = Math.max(2, Math.ceil((marker.endLineIndexExclusive - marker.startLineIndex) * scaleY));
+		const fullRange = new Range(1, 1, this._context.viewModel.getLineCount(), this._context.viewModel.getLineMaxColumn(this._context.viewModel.getLineCount()));
+		for (const decoration of this._context.viewModel.getMinimapDecorationsInRange(fullRange)) {
+			const minimap = decoration.options.minimap;
+			if (!minimap?.color) continue;
+			const color = typeof minimap.color === 'string' ? minimap.color : this._context.theme.getColor(minimap.color.id)?.toString();
+			if (!color) continue;
+			painter.fillStyle = color;
+			const top = Math.floor((decoration.range.startLineNumber - 1) / Math.max(1, this._context.viewModel.getLineCount()) * height);
+			const markerHeight = Math.max(2, Math.ceil((decoration.range.endLineNumber - decoration.range.startLineNumber + 1) * scaleY));
 			painter.fillRect(Math.max(0, width - 3), top, 3, markerHeight);
 		}
 
@@ -137,11 +150,4 @@ function leadingWidth(text: string, tabSize: number): number {
 		else break;
 	}
 	return width;
-}
-
-function markerColor(presentation: string, styles: CSSStyleDeclaration): string {
-	if (presentation.includes('error') || presentation.includes('deleted')) return styles.getPropertyValue('--vscode-editorError-foreground').trim() || '#f14c4c';
-	if (presentation.includes('warning') || presentation.includes('modified')) return styles.getPropertyValue('--vscode-editorWarning-foreground').trim() || '#cca700';
-	if (presentation.includes('added')) return styles.getPropertyValue('--vscode-gitDecoration-addedResourceForeground').trim() || '#73c991';
-	return styles.getPropertyValue('--vscode-editorInfo-foreground').trim() || '#3794ff';
 }

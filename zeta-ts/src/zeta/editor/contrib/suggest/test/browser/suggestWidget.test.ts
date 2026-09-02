@@ -54,7 +54,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
 	using suggest = new SuggestController(input, selections, service, session, "plaintext");
-	input.focus();
+	viewport.focus();
 	accept(service.results, model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword, "declaration"),
 		completion("console", "console", LanguageCompletionItemKind.Variable, "global", true),
@@ -107,7 +107,7 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
 	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "both");
 	assert.equal(fixture.dom.window.document.activeElement, fixture.input.element);
 
-	fixture.selections.undo();
+	fixture.selections.context.model.undo();
 	assert.equal(fixture.model.getText(), "con");
 });
 
@@ -126,7 +126,7 @@ test("Typing a declared completion commit character accepts it atomically before
 	assert.equal(fixture.model.getText(), "console.");
 	assert.equal(Position.compare(fixture.selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (8) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
-	fixture.selections.undo();
+	fixture.selections.context.model.undo();
 	assert.equal(fixture.model.getText(), "con");
 });
 
@@ -329,7 +329,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
 	const suggest = new SuggestController(input, selections, service, session, "plaintext");
-	input.focus();
+	viewport.focus();
 	return {
 		dom,
 		model,

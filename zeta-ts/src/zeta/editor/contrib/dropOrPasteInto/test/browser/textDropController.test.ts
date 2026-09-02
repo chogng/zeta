@@ -76,18 +76,18 @@ test("Plain-text drops insert at the viewport hit target", () => {
 	using model = new TextModel("ab\ncd");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((1) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	viewport.element.getBoundingClientRect = () => rectangle(120, 40);
+	viewport.domNode.domNode.getBoundingClientRect = () => rectangle(120, 40);
 	viewport.layout({ width: 120, height: 40 });
 	using controller = new TextDropController(viewport, selections, progress);
 	const data = new MemoryDragData(["text/plain"], new Map([["text/plain", "X\r\nY"]]));
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 100, 5);
-	viewport.element.dispatchEvent(dragOver);
+	viewport.domNode.domNode.dispatchEvent(dragOver);
 	assert.equal(dragOver.defaultPrevented, true);
 	assert.equal(data.dropEffect, "copy");
 
 	const drop = dragEvent(dom.window, "drop", data, 100, 5);
-	viewport.element.dispatchEvent(drop);
+	viewport.domNode.domNode.dispatchEvent(drop);
 	assert.equal(drop.defaultPrevented, true);
 	assert.equal(model.getText(), "abX\nY\ncd");
 	assert.deepEqual(selections.getSelections(), [Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
@@ -100,15 +100,15 @@ test("Non-text drops remain available to their host", () => {
 	using model = new TextModel("alpha");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
+	viewport.domNode.domNode.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
 	using controller = new TextDropController(viewport, selections, progress);
 	const data = new MemoryDragData(["Files"], new Map());
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 50, 5);
 	const drop = dragEvent(dom.window, "drop", data, 50, 5);
-	viewport.element.dispatchEvent(dragOver);
-	viewport.element.dispatchEvent(drop);
+	viewport.domNode.domNode.dispatchEvent(dragOver);
+	viewport.domNode.domNode.dispatchEvent(drop);
 	assert.equal(dragOver.defaultPrevented, false);
 	assert.equal(drop.defaultPrevented, false);
 	assert.equal(model.getText(), "alpha");
@@ -125,15 +125,15 @@ test("Read-only editors leave text drops available to their host", () => {
 		{ readOnly: true },
 	);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
+	viewport.domNode.domNode.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
 	using controller = new TextDropController(viewport, selections, progress);
 	const data = new MemoryDragData(["text/plain"], new Map([["text/plain", "dropped"]]));
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 50, 5);
 	const drop = dragEvent(dom.window, "drop", data, 50, 5);
-	viewport.element.dispatchEvent(dragOver);
-	viewport.element.dispatchEvent(drop);
+	viewport.domNode.domNode.dispatchEvent(dragOver);
+	viewport.domNode.domNode.dispatchEvent(drop);
 
 	assert.equal(dragOver.defaultPrevented, false);
 	assert.equal(drop.defaultPrevented, false);
@@ -147,16 +147,16 @@ test("Rich HTML drops reduce to inert text when plain text is unavailable", () =
 	using model = new TextModel("ab");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
+	viewport.domNode.domNode.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
 	using controller = new TextDropController(viewport, selections, progress);
 	const data = new MemoryDragData(["text/html"], new Map([["text/html", "<div>first</div><script>ignored()</script><div>second<br>third</div>"]]));
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 100, 5);
-	viewport.element.dispatchEvent(dragOver);
+	viewport.domNode.domNode.dispatchEvent(dragOver);
 	assert.equal(dragOver.defaultPrevented, true);
 	const drop = dragEvent(dom.window, "drop", data, 100, 5);
-	viewport.element.dispatchEvent(drop);
+	viewport.domNode.domNode.dispatchEvent(drop);
 	assert.equal(drop.defaultPrevented, true);
 	assert.equal(model.getText(), "abfirst\nsecond\nthird");
 	dom.window.close();
@@ -168,19 +168,19 @@ test("One user-provided text file drop inserts at the hit target after decoding"
 	using model = new TextModel("ab\ncd");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	viewport.element.getBoundingClientRect = () => rectangle(120, 40);
+	viewport.domNode.domNode.getBoundingClientRect = () => rectangle(120, 40);
 	viewport.layout({ width: 120, height: 40 });
 	using controller = new TextDropController(viewport, selections, progress);
 	const file = new DeferredTextFile("snippet.rs");
 	const data = new MemoryDragData(["Files"], new Map(), [file as unknown as File]);
 
 	const dragOver = dragEvent(dom.window, "dragover", data, 100, 5);
-	viewport.element.dispatchEvent(dragOver);
+	viewport.domNode.domNode.dispatchEvent(dragOver);
 	assert.equal(dragOver.defaultPrevented, true);
 	assert.equal(data.dropEffect, "copy");
 
 	const drop = dragEvent(dom.window, "drop", data, 100, 5);
-	viewport.element.dispatchEvent(drop);
+	viewport.domNode.domNode.dispatchEvent(drop);
 	assert.equal(drop.defaultPrevented, true);
 	file.resolve("X\r\nY");
 	await flushPromises();

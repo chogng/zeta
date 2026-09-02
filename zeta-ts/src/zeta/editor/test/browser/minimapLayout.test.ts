@@ -22,11 +22,11 @@ test('Minimap owns one canvas and removes its DOM node on disposal', () => {
 		readVisualProjection: () => { throw new Error('not rendered'); },
 		readProjectionRevision: () => 0,
 		scrollTo: () => { },
-		readMarkers: () => [],
-		readMarkersRevision: () => 0,
 	});
 	assert.equal(host.querySelectorAll('canvas').length, 1);
-	assert.equal(PartFingerprints.read(minimap.domNode), PartFingerprint.Minimap);
+	const root = minimap.getDomNode();
+	assert.strictEqual(minimap.getDomNode(), root);
+	assert.equal(PartFingerprints.read(root.domNode), PartFingerprint.Minimap);
 	minimap.dispose();
 	assert.equal(host.children.length, 0);
 	dom.window.close();

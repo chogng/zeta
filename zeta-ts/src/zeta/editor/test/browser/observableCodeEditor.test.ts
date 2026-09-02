@@ -53,7 +53,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	assert.equal(observableEditor.value.get(), 'beta');
 	assert.equal(observableEditor.valueIsEmpty.get(), false);
 
-	editor.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (2) + 1))]);
+	editor.setSelection(Selection.fromPositions(new Position((0) + 1, (2) + 1)));
 	assert.equal(observableEditor.cursorPosition.get()?.column, 3);
 
 	observableEditor.value.set('');

@@ -3,7 +3,7 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { Range } from "../core/range.js";
 import { TextModel } from "./textModel.js";
-import { TrackedRangeStickiness } from '../model.js';
+import { type IModelDecorationOptions, TrackedRangeStickiness } from '../model.js';
 
 declare const textDecorationIdBrand: unique symbol;
 
@@ -14,6 +14,7 @@ export type TextDecorationId = number & {
 export interface TextDecorationSpec<TMetadata> {
 	readonly range: Range;
 	readonly stickiness: TrackedRangeStickiness;
+	readonly options?: Omit<IModelDecorationOptions, 'stickiness'>;
 	readonly metadata: TMetadata;
 }
 
@@ -250,7 +251,7 @@ function toModelDecoration<TMetadata>(spec: TextDecorationSpec<TMetadata>) {
 	return {
 		range: spec.range,
 		options: {
-			description: 'TextDecorationCollection',
+			...(spec.options ?? { description: 'TextDecorationCollection' }),
 			stickiness: spec.stickiness,
 		},
 	};

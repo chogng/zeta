@@ -1,3 +1,4 @@
+import '../../../../base/browser/ui/scrollbar/scrollbar.css';
 import { RunOnceScheduler } from "../../../../base/common/async.js";
 import { isFiniteNumber } from "../../../../base/common/numbers.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";

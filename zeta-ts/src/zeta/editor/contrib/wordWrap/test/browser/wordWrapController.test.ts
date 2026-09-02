@@ -36,7 +36,7 @@ test("Word-wrap shortcut switches Stanza's visual projection without editing tex
 	input.dispatchEvent(enable);
 	assert.equal(enable.defaultPrevented, true);
 	assert.equal(viewport.lineWrapping, EditorLineWrapping.On);
-	assert.equal(viewport.element.classList.contains("word-wrapped"), true);
+	assert.equal(viewport.domNode.domNode.classList.contains("word-wrapped"), true);
 	assert.equal(viewport.viewportLayout.contentSize.height, 60);
 	assert.equal(model.getText(), "abcdef");
 
@@ -44,7 +44,7 @@ test("Word-wrap shortcut switches Stanza's visual projection without editing tex
 	input.dispatchEvent(disable);
 	assert.equal(disable.defaultPrevented, true);
 	assert.equal(viewport.lineWrapping, EditorLineWrapping.Off);
-	assert.equal(viewport.element.classList.contains("word-wrapped"), false);
+	assert.equal(viewport.domNode.domNode.classList.contains("word-wrapped"), false);
 	assert.equal(viewport.viewportLayout.contentSize.height, 40);
 
 	const unrelated = keydown(dom.window, "z", { altKey: true, shiftKey: true });

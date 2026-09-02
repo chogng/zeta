@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { type Event } from '../../../base/common/event.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
+import { MenuId } from '../../../platform/actions/common/actions.js';
 import { type IEditorConfiguration } from '../../common/config/editorConfiguration.js';
 import { EditorOption, EditorOptions, type ConfigurationChangedEvent, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions } from '../../common/config/editorOptions.js';
 import { FontInfo } from '../../common/config/fontInfo.js';
@@ -58,7 +59,7 @@ function createEditorConfiguration(): IEditorConfiguration {
 	const noChange: Event<ConfigurationChangedEvent> = () => toDisposable(() => {});
 	return {
 		isSimpleWidget: false,
-		contextMenuId: undefined,
+		contextMenuId: MenuId.EditorContext,
 		options,
 		onDidChangeFast: noChange,
 		onDidChange: noChange,

@@ -1190,6 +1190,7 @@ interface EditorOptionValueMap {
 	[EditorOption.rulers]: readonly IRulerOption[];
 	[EditorOption.minimap]: EditorMinimapOptions;
 	[EditorOption.scrollbar]: InternalEditorScrollbarOptions;
+	[EditorOption.revealHorizontalRightPadding]: number;
 	[EditorOption.stickyScroll]: EditorStickyScrollOptions;
 	[EditorOption.find]: EditorFindOptions;
 	[EditorOption.accessibilitySupport]: AccessibilitySupport;
@@ -1224,6 +1225,7 @@ interface EditorOptionValueMap {
 	[EditorOption.quickSuggestions]: InternalQuickSuggestionsOptions;
 	[EditorOption.readOnlyMessage]: IMarkdownString | undefined;
 	[EditorOption.renameOnType]: boolean;
+	[EditorOption.renderRichScreenReaderContent]: boolean;
 	[EditorOption.renderControlCharacters]: boolean;
 	[EditorOption.renderFinalNewline]: 'off' | 'on' | 'dimmed';
 	[EditorOption.renderLineHighlight]: 'none' | 'gutter' | 'line' | 'all';
@@ -1263,6 +1265,7 @@ interface EditorOptionValueMap {
 	[EditorOption.inertialScroll]: boolean;
 	[EditorOption.stickyTabStops]: boolean;
 	[EditorOption.overtypeOnPaste]: boolean;
+	[EditorOption.hideCursorInOverviewRuler]: boolean;
 	[EditorOption.overviewRulerBorder]: boolean;
 	[EditorOption.overviewRulerLanes]: number;
 	[EditorOption.stopRenderingLineAfter]: number;
@@ -1778,6 +1781,7 @@ type EditorOptionsCollection = Record<string, IEditorOption<EditorOption, unknow
 	readonly guides: IEditorOption<EditorOption.guides, InternalGuidesOptions>;
 	readonly accessibilitySupport: IEditorOption<EditorOption.accessibilitySupport, AccessibilitySupport>;
 	readonly scrollbar: IEditorOption<EditorOption.scrollbar, InternalEditorScrollbarOptions>;
+	readonly revealHorizontalRightPadding: IEditorOption<EditorOption.revealHorizontalRightPadding, number>;
 	readonly quickSuggestions: IEditorOption<EditorOption.quickSuggestions, InternalQuickSuggestionsOptions>;
 	readonly suggest: IEditorOption<EditorOption.suggest, InternalSuggestOptions>;
 	readonly inlineSuggest: IEditorOption<EditorOption.inlineSuggest, InternalInlineSuggestOptions>;

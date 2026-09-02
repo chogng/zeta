@@ -26,7 +26,7 @@ interface ClearedGpuEditorState {
 
 interface GpuFrameLayeringState {
 	readonly hasFrame: boolean;
-	readonly everyFrameIsAtomic: boolean;
+	readonly everyFrameIsLayered: boolean;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -43,7 +43,7 @@ test.afterEach(async ({ page }) => {
 test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', async ({ page }) => {
 	await page.goto('/gpuText.html');
 	await expect(page.locator('.stanza-editor-gpu-canvas')).toBeVisible();
-	await expect(page.locator('.stanza-editor-fold-toggle').first()).toBeVisible();
+	await expect(page.locator('[data-decoration-owner="folding"]').first()).toBeVisible();
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 
 	const input = page.locator('.stanza-editor-input');
@@ -58,12 +58,12 @@ test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', asy
 		gpuRowCount: 1,
 		text: '',
 	});
-	await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsAtomic: true });
+	await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsLayered: true });
 
 	await page.evaluate(() => window.zetaGpuTextIntegration.resetGpuFrameTrace());
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
-	await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsAtomic: true });
+	await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsLayered: true });
 });
 
 function healthyGpuEditorState(): GpuEditorState {
@@ -91,12 +91,12 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 		};
 		const editor = requireElement(document, '.stanza-editor');
 		const canvas = requireElement<HTMLCanvasElement>(document, '.stanza-editor-gpu-canvas');
-		const firstLine = requireElement(document, '.stanza-editor-line[data-logical-line-index="0"]');
+		const firstLine = requireElement(document, '.view-line[data-logical-line-index="0"]');
 		const glyphMargin = requireElement(document, '.stanza-editor-glyph-margin');
-		const lineNumber = requireElement(document, '.stanza-editor-line-margin[data-line-index="0"] .stanza-editor-line-number');
-		const folding = requireElement(document, '.stanza-editor-fold-toggle[data-logical-line-index="0"]');
+		const lineNumber = requireElement(document, '.margin-view-overlays .view-overlay-line[data-line-index="0"] .line-numbers');
+		const folding = requireElement(document, '[data-decoration-owner="folding"][data-logical-line-index="0"]');
 		const text = requireElement(firstLine, '.stanza-editor-line-text');
-		const rows = [...editor.querySelectorAll<HTMLElement>('.stanza-editor-line')];
+		const rows = [...editor.querySelectorAll<HTMLElement>('.view-line')];
 		const rowRectangles = rows.map(row => row.getBoundingClientRect());
 		const glyphMarginRectangle = glyphMargin.getBoundingClientRect();
 		const lineNumberRectangle = lineNumber.getBoundingClientRect();
@@ -132,9 +132,9 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 async function clearedGpuEditorState(page: Page): Promise<ClearedGpuEditorState> {
 	return page.evaluate(() => ({
 		value: window.zetaGpuTextIntegration.getValue(),
-		lineNumber: document.querySelector('.stanza-editor-line-number')?.textContent ?? null,
-		renderedRowCount: document.querySelectorAll('.stanza-editor-line').length,
-		gpuRowCount: document.querySelectorAll('.stanza-editor-line.gpu-rendered').length,
+		lineNumber: document.querySelector('.line-numbers')?.textContent ?? null,
+		renderedRowCount: document.querySelectorAll('.view-line').length,
+		gpuRowCount: document.querySelectorAll('.view-line.gpu-rendered').length,
 		text: document.querySelector('.stanza-editor-line-text')?.textContent ?? null,
 	}));
 }
@@ -143,20 +143,19 @@ async function gpuFrameLayeringState(page: Page): Promise<GpuFrameLayeringState>
 	return page.evaluate(() => {
 		const passes = window.zetaGpuTextIntegration.readGpuFrameTrace();
 		const hasFrame = passes.length >= 2 && passes.length % 2 === 0;
-		let everyFrameIsAtomic = hasFrame;
-		for (let index = 0; everyFrameIsAtomic && index < passes.length; index += 2) {
+		let everyFrameIsLayered = hasFrame;
+		for (let index = 0; everyFrameIsLayered && index < passes.length; index += 2) {
 			const rectanglePass = passes[index]!;
 			const textPass = passes[index + 1]!;
-			everyFrameIsAtomic = rectanglePass.label === 'Stanza rectangle pass'
+			everyFrameIsLayered = rectanglePass.label === 'Zeta rectangle pass'
 				&& rectanglePass.loadOp === 'clear'
-				&& textPass.label === 'Stanza StyledViewLinesGpu pass'
+				&& textPass.label === 'Stanza ViewLinesGpu pass'
 				&& textPass.loadOp === 'load'
-				&& rectanglePass.viewId === textPass.viewId
-				&& rectanglePass.submissionId === textPass.submissionId;
+				&& textPass.submissionId === rectanglePass.submissionId + 1;
 		}
 		return {
 			hasFrame,
-			everyFrameIsAtomic,
+			everyFrameIsLayered,
 		};
 	});
 }

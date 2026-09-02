@@ -1,6 +1,4 @@
 import { AbstractCodeEditorService } from './abstractCodeEditorService.js';
-import { registerTextEditorCapabilityContribution } from '../editorExtensions.js';
-import { MarkerDecorationsContribution } from './markerDecorations.js';
 import { BrowserWorkerClientPort } from '../../../platform/webWorker/browser/browserWorkerClientPort.js';
 import { LanguageCompletionCatalogWorkerClient } from '../../common/languages/completion/languageCompletionCatalogWire.js';
 import { type LanguageCompletionWorkerFactory } from '../../common/languages/completion/languageCompletionService.js';
@@ -13,7 +11,6 @@ import { NullRenameSymbolTrackerService } from './renameSymbolTrackerService.js'
 import { OpenerService } from './openerService.js';
 
 export function registerEditorBrowserContributions(): void {
-	registerTextEditorCapabilityContribution(MarkerDecorationsContribution);
 }
 
 class BrowserCodeEditorService extends AbstractCodeEditorService {

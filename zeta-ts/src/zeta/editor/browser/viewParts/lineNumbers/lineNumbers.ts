@@ -1,15 +1,15 @@
 import "./lineNumbers.css";
 import { h, reset } from "../../../../base/browser/dom.js";
-import { type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
+import { EditorOption, type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type IViewModel } from '../../../common/viewModel.js';
 import { type RenderingContext } from "../../view/renderingContext.js";
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { renderViewPartRows } from '../../view/viewLayer.js';
+import * as viewEvents from '../../../common/viewEvents.js';
 
 interface LineNumbersOverlayOptions {
-	readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	readonly viewModel: IViewModel;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly ownerDocument: Document;
@@ -19,7 +19,8 @@ interface LineNumbersOverlayOptions {
 export class LineNumbersOverlay extends DynamicViewOverlay {
 	public static readonly CLASS_NAME = 'line-numbers';
 	private _renderResult: string[] = [];
-	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
+	private lineNumbers: InternalEditorRenderLineNumbersOptions;
+	private activeLineNumber: number;
 	private readonly viewModel: IViewModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly ownerDocument: Document;
@@ -27,16 +28,38 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	constructor(private readonly context: ViewContext, options: LineNumbersOverlayOptions) {
 		super();
 		this.context.addEventHandler(this);
-		this.lineNumbers = options.lineNumbers;
+		this.lineNumbers = this.context.configuration.options.get(EditorOption.lineNumbers);
 		this.viewModel = options.viewModel;
+		this.activeLineNumber = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber;
 		this.readVisualProjection = options.readVisualProjection;
 		this.ownerDocument = options.ownerDocument;
 	}
 
 	public override dispose(): void {
 		this.context.removeEventHandler(this);
+		this._renderResult = [];
 		super.dispose();
 	}
+
+	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		this.lineNumbers = this.context.configuration.options.get(EditorOption.lineNumbers);
+		return true;
+	}
+
+	public override onCursorStateChanged(event: viewEvents.ViewCursorStateChangedEvent): boolean {
+		const activeLineNumber = event.modelSelections[0]?.positionLineNumber ?? this.activeLineNumber;
+		const activeLineChanged = activeLineNumber !== this.activeLineNumber;
+		this.activeLineNumber = activeLineNumber;
+		return activeLineChanged || this.lineNumbers.renderType === RenderLineNumbersType.Relative || this.lineNumbers.renderType === RenderLineNumbersType.Interval;
+	}
+
+	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean { return event.affectsLineNumber; }
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
 		const visualProjection = this.readVisualProjection();

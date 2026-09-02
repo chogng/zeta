@@ -6,19 +6,23 @@ import { CursorContext } from './cursorContext.js';
 import { Selection, SelectionDirection } from '../core/selection.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
-import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation, type ITextModel, type IValidEditOperation } from '../model.js';
+import { TrackedRangeStickiness, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextModel, type IValidEditOperation } from '../model.js';
 import { type TrackedRange } from '../model/trackedRange.js';
 import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange } from '../core/textChange.js';
 import { TextEditHistoryMergeMode } from '../core/editOperation.js';
 import { TextModel } from "../model/textModel.js";
-import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../commands/editorEditCommand.js";
 import { CursorChangeReason } from '../cursorEvents.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
-import { type ICommand, type IEditOperationBuilder } from '../editorCommon.js';
+import { ScrollType, type ICommand, type ICursorState, type IEditOperationBuilder } from '../editorCommon.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
-import { CursorConfiguration, CursorState, EditOperationType, type ICursorSimpleModel } from '../cursorCommon.js';
+import { CursorConfiguration, CursorState, EditOperationResult, EditOperationType, type IColumnSelectData, type ICursorSimpleModel, type PartialCursorState } from '../cursorCommon.js';
 import { type ICoordinatesConverter } from '../coordinatesConverter.js';
-import { type TextEdit } from '../languages.js';
+import { CursorStateChangedEvent, ViewModelEventsCollector } from '../viewModelEventDispatcher.js';
+import { VerticalRevealType, ViewCursorStateChangedEvent, ViewRevealRangeRequestEvent } from '../viewEvents.js';
+import { DeleteOperations } from './cursorDeleteOperations.js';
+import { BaseTypeWithAutoClosingCommand } from './cursorTypeEditOperations.js';
+import { CompositionOutcome, TypeOperations } from './cursorTypeOperations.js';
+import { RawContentChangedType, type InternalModelContentChangeEvent, type ModelInjectedTextChangedEvent } from '../textModelEvents.js';
 
 export interface CursorSelectionChange {
 	readonly selections: readonly Selection[];
@@ -28,7 +32,10 @@ export interface CursorSelectionChange {
 
 export interface CompositionUpdate {
 	readonly text: string;
-	readonly selection: TextSelectionOffsets;
+	readonly selection: {
+		readonly anchorOffset: number;
+		readonly activeOffset: number;
+	};
 }
 
 interface CursorsControllerOptions {
@@ -69,6 +76,7 @@ export class CommandExecutor {
 		selectionsBefore: Selection[],
 		commands: readonly (ICommand | null)[],
 		editReason: TextModelEditSource = EditSources.unknown({ name: 'executeCommands' }),
+		historyGroup?: UndoRedoGroup,
 	): Selection[] | null {
 		const tracked = new Map<string, TrackedCommandSelection>();
 		const fallbackSelections = selectionsBefore.map(selection => ({
@@ -88,7 +96,7 @@ export class CommandExecutor {
 				selectionsBefore,
 				operations,
 				inverse => computeCommandSelections(model, accepted, inverse, tracked, fallbackSelections),
-				undefined,
+				historyGroup,
 				editReason,
 			);
 		} finally {
@@ -219,7 +227,7 @@ function computeCommandSelections(
 interface CompositionHost {
 	isActive(): boolean;
 	assertActive(): void;
-	apply(command: EditorEditCommand): TextModelChange | undefined;
+	apply(range: Range, text: string, anchorOffset: number, activeOffset: number): TextModelChange | undefined;
 	commit(): void;
 	cancel(): TextModelChange | undefined;
 }
@@ -231,8 +239,70 @@ interface SelectionHistoryEntry {
 
 interface ActiveComposition {
 	readonly historyGroup: UndoRedoGroup;
+	readonly deletions: Array<CompositionDeletion | null>;
+	outcomes: CompositionOutcome[] | null;
 	transactionId?: number;
 	valid: boolean;
+}
+
+interface CompositionDeletion {
+	readonly text: string;
+	readonly selectionStart: number;
+	readonly selectionEnd: number;
+}
+
+function compositionReplacementRange(model: ITextModel, selection: Selection, replacePrevCharCnt: number, replaceNextCharCnt: number): Range {
+	if (!selection.isEmpty()) {
+		return selection;
+	}
+	const position = selection.getPosition();
+	return new Range(
+		position.lineNumber,
+		Math.max(1, position.column - replacePrevCharCnt),
+		position.lineNumber,
+		Math.min(model.getLineMaxColumn(position.lineNumber), position.column + replaceNextCharCnt),
+	);
+}
+
+function compositionOutcomes(model: ITextModel, selections: readonly Selection[], deletions: readonly (CompositionDeletion | null)[], text: string, positionDelta: number): CompositionOutcome[] | null {
+	if (selections.length !== deletions.length) {
+		return null;
+	}
+	const insertedText = normalizeTextLineEndings(text);
+	const insertedSelectionOffset = insertedText.length + positionDelta;
+	if (insertedSelectionOffset < 0 || insertedSelectionOffset > insertedText.length) {
+		return null;
+	}
+	const outcomes: CompositionOutcome[] = [];
+	for (let index = 0; index < selections.length; index += 1) {
+		const selection = selections[index]!;
+		const deletion = deletions[index];
+		if (!deletion || !selection.isEmpty()) {
+			return null;
+		}
+		let insertedEnd: Position;
+		let insertedStart: Position;
+		try {
+			insertedEnd = model.modifyPosition(selection.getPosition(), -positionDelta);
+			insertedStart = model.modifyPosition(insertedEnd, -insertedText.length);
+		} catch {
+			return null;
+		}
+		const insertedTextRange = Range.fromPositions(insertedStart, insertedEnd);
+		if (model.getValueInRange(insertedTextRange) !== insertedText) {
+			return null;
+		}
+		outcomes.push(new CompositionOutcome(
+			deletion.text,
+			deletion.selectionStart,
+			deletion.selectionEnd,
+			insertedText,
+			insertedSelectionOffset,
+			insertedSelectionOffset,
+			insertedTextRange,
+		));
+	}
+	return outcomes;
 }
 
 interface AutoClosedAction {
@@ -254,7 +324,9 @@ export class CursorsController extends Disposable {
 	private readonly changeEmitter =
 		this._register(new Emitter<CursorSelectionChange>());
 	private readonly readOnlyEditEmitter = this._register(new Emitter<void>());
-	private readonly cursors: CursorCollection;
+	private cursors: CursorCollection;
+	private readonly viewModel: ICursorSimpleModel;
+	private readonly coordinatesConverter: ICoordinatesConverter;
 	private readonly selectionHistory =
 		new Map<number, SelectionHistoryEntry>();
 	private readonly selectionHistoryOrder: number[] = [];
@@ -262,11 +334,12 @@ export class CursorsController extends Disposable {
 	private readonly cursorRedoHistory: Array<readonly Selection[]> = [];
 	private autoClosedActions: AutoClosedAction[] = [];
 	private currentSelections: readonly Selection[];
-	private activeHistoryGroup: UndoRedoGroup | undefined;
-	private activeHistoryMode: EditorCommandHistoryMode | undefined;
 	private activeComposition: ActiveComposition | undefined;
 	private executingCommand = false;
 	private previousEditOperationType = EditOperationType.Other;
+	private hasFocus = false;
+	private columnSelectData: IColumnSelectData | null = null;
+	private knownModelVersion: number;
 
 	readonly onDidChange: Event<CursorSelectionChange> =
 		this.changeEmitter.event;
@@ -280,10 +353,13 @@ export class CursorsController extends Disposable {
 		options: CursorsControllerOptions = {},
 	) {
 		super();
+		this.viewModel = viewModel;
+		this.coordinatesConverter = coordinatesConverter;
 		this.context = new CursorContext(model, viewModel, coordinatesConverter, cursorConfig);
 		this.settings = new CursorControllerSettings(options);
 		this.cursors = new CursorCollection(this.context);
 		this.currentSelections = this.cursors.getSelections();
+		this.knownModelVersion = model.version;
 		try {
 			this._register(toDisposable(() => this.cursors.dispose()));
 			this._register(model.onDidChangeContent(change => this.acceptModelChange(change)));
@@ -305,6 +381,23 @@ export class CursorsController extends Disposable {
 		}
 	}
 
+	public updateConfiguration(cursorConfig: CursorConfiguration): void {
+		this.assertNotDisposed();
+		this.context = new CursorContext(this.model, this.viewModel, this.coordinatesConverter, cursorConfig);
+		this.cursors.updateContext(this.context);
+	}
+
+	public setHasFocus(hasFocus: boolean): void {
+		this.assertNotDisposed();
+		this.hasFocus = hasFocus;
+	}
+
+	public onLineMappingChanged(eventsCollector: ViewModelEventsCollector): void {
+		this.assertNotDisposed();
+		if (this.knownModelVersion !== this.model.version) return;
+		this.setStates(eventsCollector, 'viewModel', CursorChangeReason.NotSet, this.getCursorStates());
+	}
+
 	public getPrimaryCursorState(): CursorState {
 		this.assertNotDisposed();
 		return this.cursors.getPrimaryCursor();
@@ -320,9 +413,73 @@ export class CursorsController extends Disposable {
 		return this.cursors.getAll();
 	}
 
+	public setStates(eventsCollector: ViewModelEventsCollector, source: string | null | undefined, reason: CursorChangeReason, states: PartialCursorState[] | null): boolean {
+		this.assertNotDisposed();
+		if (states === null) return false;
+
+		let reachedMaxCursorCount = false;
+		if (states.length > this.context.cursorConfig.multiCursorLimit) {
+			states = states.slice(0, this.context.cursorConfig.multiCursorLimit);
+			reachedMaxCursorCount = true;
+		}
+		if (states.length === 0) throw new RangeError('Cursor states must not be empty');
+
+		const oldStates = this.cursors.getAll();
+		const oldSelections = this.cursors.getSelections();
+		const modelVersion = this.model.version;
+		this.cursors.setStates(states);
+		this.cursors.normalize();
+		this.currentSelections = this.cursors.getSelections();
+		this.columnSelectData = null;
+		this.pruneAutoClosedActions();
+
+		const newStates = this.cursors.getAll();
+		if (cursorStatesEqual(oldStates, newStates)) return false;
+
+		const selections = this.cursors.getSelections();
+		eventsCollector.emitViewEvent(new ViewCursorStateChangedEvent(this.cursors.getViewSelections(), selections, reason));
+		if (!selectionsEqual(oldSelections, selections)) {
+			eventsCollector.emitOutgoingEvent(new CursorStateChangedEvent(
+				oldSelections,
+				selections,
+				modelVersion,
+				this.model.version,
+				source || 'keyboard',
+				reason,
+				reachedMaxCursorCount,
+			));
+			this.changeEmitter.fire(Object.freeze({
+				selections,
+				reason,
+				modelVersion: this.model.version,
+			}));
+		}
+		return true;
+	}
+
 	public getSelection(): Selection {
 		this.assertNotDisposed();
 		return this.cursors.getPrimaryCursor().modelState.selection;
+	}
+
+	public getCursorColumnSelectData(): IColumnSelectData {
+		this.assertNotDisposed();
+		if (this.columnSelectData) return { ...this.columnSelectData };
+		const primary = this.cursors.getPrimaryCursor();
+		const selectionStart = primary.viewState.selectionStart.getStartPosition();
+		const position = primary.viewState.position;
+		return {
+			isReal: false,
+			fromViewLineNumber: selectionStart.lineNumber,
+			fromViewVisualColumn: this.context.cursorConfig.visibleColumnFromColumn(this.viewModel, selectionStart),
+			toViewLineNumber: position.lineNumber,
+			toViewVisualColumn: this.context.cursorConfig.visibleColumnFromColumn(this.viewModel, position),
+		};
+	}
+
+	public setCursorColumnSelectData(columnSelectData: IColumnSelectData): void {
+		this.assertNotDisposed();
+		this.columnSelectData = { ...columnSelectData };
 	}
 
 	public getTopMostViewPosition(): Position {
@@ -345,6 +502,233 @@ export class CursorsController extends Disposable {
 		return this.cursors.getPrimaryCursor().modelState.position;
 	}
 
+	public revealAll(eventsCollector: ViewModelEventsCollector, source: string | null | undefined, minimalReveal: boolean, verticalType: VerticalRevealType, revealHorizontal: boolean, scrollType: ScrollType): void {
+		this.assertNotDisposed();
+		const viewPositions = this.cursors.getViewPositions();
+		const range = viewPositions.length === 1 ? Range.fromPositions(viewPositions[0]!) : null;
+		const selections = viewPositions.length > 1 ? this.cursors.getViewSelections() : null;
+		eventsCollector.emitViewEvent(new ViewRevealRangeRequestEvent(source, minimalReveal, range, selections, verticalType, revealHorizontal, scrollType));
+	}
+
+	public revealPrimary(eventsCollector: ViewModelEventsCollector, source: string | null | undefined, minimalReveal: boolean, verticalType: VerticalRevealType, revealHorizontal: boolean, scrollType: ScrollType): void {
+		this.assertNotDisposed();
+		eventsCollector.emitViewEvent(new ViewRevealRangeRequestEvent(
+			source,
+			minimalReveal,
+			null,
+			[this.cursors.getPrimaryCursor().viewState.selection],
+			verticalType,
+			revealHorizontal,
+			scrollType,
+		));
+	}
+
+	public saveState(): ICursorState[] {
+		this.assertNotDisposed();
+		return this.cursors.getSelections().map(selection => ({
+			inSelectionMode: !selection.isEmpty(),
+			selectionStart: selection.getSelectionStart(),
+			position: selection.getPosition(),
+		}));
+	}
+
+	public restoreState(eventsCollector: ViewModelEventsCollector, states: ICursorState[]): void {
+		this.assertNotDisposed();
+		const selections = states.map(state => {
+			const position = new Position(state.position?.lineNumber || 1, state.position?.column || 1);
+			const selectionStart = new Position(
+				state.selectionStart?.lineNumber || position.lineNumber,
+				state.selectionStart?.column || position.column,
+			);
+			return Selection.fromPositions(selectionStart, position);
+		});
+		this.setStates(eventsCollector, 'restoreState', CursorChangeReason.NotSet, CursorState.fromModelSelections(selections));
+		this.revealAll(eventsCollector, 'restoreState', false, VerticalRevealType.Simple, true, ScrollType.Immediate);
+	}
+
+	public executeEdits(eventsCollector: ViewModelEventsCollector, source: string | null | undefined, edits: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer, reason: TextModelEditSource): void {
+		this.assertNotDisposed();
+		if (edits.length === 0) return;
+		const before = this.getSelections();
+		this.executingCommand = true;
+		try {
+			const after = this.model.pushEditOperations(before, edits, cursorStateComputer, undefined, reason);
+			if (after) this.setStates(eventsCollector, source, CursorChangeReason.NotSet, CursorState.fromModelSelections(after));
+		} finally {
+			this.executingCommand = false;
+		}
+	}
+
+	public startComposition(_eventsCollector: ViewModelEventsCollector): void {
+		this.assertNotDisposed();
+		this.assertNoActiveComposition('begin another composition');
+		this.activeComposition = this.createActiveComposition(this.getSelections());
+		this.model.beginHistoryRevision(this.activeComposition.historyGroup);
+	}
+
+	private createActiveComposition(selections: readonly Selection[]): ActiveComposition {
+		const deletions = selections.map(selection => {
+			if (selection.isEmpty()) {
+				return null;
+			}
+			const text = this.model.getValueInRange(selection);
+			return { text, selectionStart: 0, selectionEnd: text.length };
+		});
+		return {
+			historyGroup: new UndoRedoGroup(),
+			deletions,
+			outcomes: null,
+			valid: true,
+		};
+	}
+
+	public endComposition(eventsCollector: ViewModelEventsCollector, source?: string | null): void {
+		this.assertNotDisposed();
+		const active = this.activeComposition;
+		if (!active) return;
+		active.valid = false;
+		try {
+			if (source === 'keyboard') {
+				this.executeEditOperation(eventsCollector, TypeOperations.compositionEndWithInterceptors(this.previousEditOperationType, this.context.cursorConfig, this.model, active.outcomes, this.getSelections(), [...this.getAutoClosedCharacters()]), EditSources.cursor({ kind: 'compositionEnd', detailedSource: source }), source);
+			}
+		} finally {
+			if (this.activeComposition === active) {
+				this.activeComposition = undefined;
+			}
+			this.model.finishHistoryRevision(active.historyGroup);
+		}
+	}
+
+	public type(eventsCollector: ViewModelEventsCollector, text: string, source?: string | null): void {
+		this.assertNotDisposed();
+		if (source === 'keyboard' && this.canOvertypeAutoClosedText(text)) {
+			const selections = this.getSelections().map(selection => Selection.fromPositions(this.model.modifyPosition(selection.getPosition(), text.length)));
+			this.setStates(eventsCollector, source, CursorChangeReason.NotSet, CursorState.fromModelSelections(selections));
+			this.previousEditOperationType = EditOperationType.TypingOther;
+			return;
+		}
+		const configuration = this.context.cursorConfig.languageConfigurationService.getLanguageConfiguration(this.model.getLanguageIdAtPosition(this.getPosition().lineNumber, this.getPosition().column));
+		const typedUnits = source === 'keyboard' && !configuration.characterPair.getAutoClosingPairs().some(pair => pair.open === text)
+			? Array.from(text)
+			: [text];
+		for (const character of typedUnits) {
+			const operation = source === 'keyboard'
+				? TypeOperations.typeWithInterceptors(Boolean(this.activeComposition), this.previousEditOperationType, this.context.cursorConfig, this.model, this.getSelections(), [...this.getAutoClosedCharacters()], character)
+				: TypeOperations.typeWithoutInterceptors(this.previousEditOperationType, this.context.cursorConfig, this.model, this.getSelections(), character);
+			this.executeEditOperation(eventsCollector, operation, EditSources.cursor({ kind: 'type', detailedSource: source }), source);
+		}
+	}
+
+	private canOvertypeAutoClosedText(text: string): boolean {
+		if (!text || text.includes('\n')) return false;
+		const owned = this.getAutoClosedCharacters();
+		return this.getSelections().every(selection => selection.isEmpty() && owned.some(range => (
+			Position.equals(range.getStartPosition(), selection.getPosition())
+			&& this.model.getValueInRange(range) === text
+		)));
+	}
+
+	public compositionType(eventsCollector: ViewModelEventsCollector, text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number, source?: string | null): void {
+		this.assertNotDisposed();
+		if (text.length === 0 && replacePrevCharCnt === 0 && replaceNextCharCnt === 0) {
+			if (positionDelta !== 0) {
+				const selections = this.getSelections().map(selection => {
+					const position = selection.getPosition().delta(0, positionDelta);
+					return Selection.fromPositions(position);
+				});
+				this.setStates(eventsCollector, source, CursorChangeReason.NotSet, CursorState.fromModelSelections(selections));
+			}
+			return;
+		}
+		const active = this.activeComposition;
+		const selections = this.getSelections();
+		if (active) {
+			for (let index = 0; index < selections.length; index += 1) {
+				if (active.deletions[index]) {
+					continue;
+				}
+				const selection = selections[index]!;
+				const range = compositionReplacementRange(this.model, selection, replacePrevCharCnt, replaceNextCharCnt);
+				active.deletions[index] = {
+					text: this.model.getValueInRange(range),
+					selectionStart: replacePrevCharCnt,
+					selectionEnd: replacePrevCharCnt,
+				};
+			}
+		}
+		this.executeEditOperation(eventsCollector, TypeOperations.compositionType(this.previousEditOperationType, this.context.cursorConfig, this.model, this.getSelections(), text, replacePrevCharCnt, replaceNextCharCnt, positionDelta), EditSources.cursor({ kind: 'compositionType', detailedSource: source }), source);
+		if (active && this.activeComposition === active) {
+			active.outcomes = compositionOutcomes(this.model, this.getSelections(), active.deletions, text, positionDelta);
+		}
+	}
+
+	public paste(eventsCollector: ViewModelEventsCollector, text: string, pasteOnNewLine: boolean, multicursorText?: string[] | null, source?: string | null): void {
+		this.assertNotDisposed();
+		this.executeEditOperation(eventsCollector, TypeOperations.paste(this.context.cursorConfig, this.model, this.getSelections(), text, pasteOnNewLine, multicursorText ?? []), EditSources.cursor({ kind: 'paste', detailedSource: source }), source, CursorChangeReason.Paste);
+	}
+
+	public cut(eventsCollector: ViewModelEventsCollector, source?: string | null): void {
+		this.assertNotDisposed();
+		this.executeEditOperation(eventsCollector, DeleteOperations.cut(this.context.cursorConfig, this.model, this.getSelections()), EditSources.cursor({ kind: 'cut', detailedSource: source }), source);
+	}
+
+	public onModelContentChanged(eventsCollector: ViewModelEventsCollector, event: InternalModelContentChangeEvent | ModelInjectedTextChangedEvent): void {
+		this.assertNotDisposed();
+		if (!('rawContentChangedEvent' in event)) {
+			if (this.executingCommand) return;
+			this.executingCommand = true;
+			try {
+				this.setStates(eventsCollector, 'modelChange', CursorChangeReason.NotSet, this.getCursorStates());
+			} finally {
+				this.executingCommand = false;
+			}
+			return;
+		}
+		const rawEvent = event.rawContentChangedEvent;
+		this.knownModelVersion = rawEvent.versionId;
+		if (this.executingCommand) return;
+		this.previousEditOperationType = EditOperationType.Other;
+		this.cursorHistory.length = 0;
+		this.cursorRedoHistory.length = 0;
+		this.invalidateActiveComposition();
+		if (rawEvent.containsEvent(RawContentChangedType.Flush)) {
+			const oldSelections = this.cursors.getSelections();
+			this.cursors.dispose();
+			this.cursors = new CursorCollection(this.context);
+			this.currentSelections = this.cursors.getSelections();
+			this.columnSelectData = null;
+			this.pruneAutoClosedActions();
+			const selections = [...this.currentSelections];
+			eventsCollector.emitViewEvent(new ViewCursorStateChangedEvent(this.cursors.getViewSelections(), selections, CursorChangeReason.ContentFlush));
+			eventsCollector.emitOutgoingEvent(new CursorStateChangedEvent(
+				oldSelections,
+				selections,
+				rawEvent.versionId,
+				rawEvent.versionId,
+				'model',
+				CursorChangeReason.ContentFlush,
+				false,
+			));
+			this.changeEmitter.fire(Object.freeze({
+				selections,
+				reason: CursorChangeReason.ContentFlush,
+				modelVersion: rawEvent.versionId,
+			}));
+			return;
+		}
+		const reason = rawEvent.isUndoing
+				? CursorChangeReason.Undo
+				: rawEvent.isRedoing
+					? CursorChangeReason.Redo
+					: CursorChangeReason.RecoverFromMarkers;
+		const selections = this.hasFocus && rawEvent.resultingSelection?.length
+			? rawEvent.resultingSelection
+			: this.cursors.readSelectionFromMarkers();
+		if (this.setStates(eventsCollector, 'modelChange', reason, CursorState.fromModelSelections(selections)) && this.hasFocus && rawEvent.resultingSelection?.length) {
+			this.revealAll(eventsCollector, 'modelChange', false, VerticalRevealType.Simple, true, ScrollType.Smooth);
+		}
+	}
+
 	getPrevEditOperationType(): EditOperationType {
 		this.assertNotDisposed();
 		return this.previousEditOperationType;
@@ -363,7 +747,7 @@ export class CursorsController extends Disposable {
 	}
 
 	/** Records the paired ranges produced by one committed type operation. */
-	recordAutoClosedCharacters(closers: readonly Range[], enclosing: readonly Range[], committedModelVersion: number): void {
+	private recordAutoClosedCharacters(closers: readonly Range[], enclosing: readonly Range[], committedModelVersion: number): void {
 		this.assertNotDisposed();
 		if (!Array.isArray(closers) || !Array.isArray(enclosing) || closers.length !== enclosing.length) {
 			throw new RangeError('Auto-closed character and enclosing ranges must have the same length');
@@ -385,7 +769,6 @@ export class CursorsController extends Disposable {
 		this.pruneAutoClosedActions();
 	}
 
-	/** Whether this editor instance may submit document-changing commands. */
 	get readOnly(): boolean {
 		this.assertNotDisposed();
 		return this.context.cursorConfig.readOnly;
@@ -394,7 +777,7 @@ export class CursorsController extends Disposable {
 	setSelections(selections: readonly Selection[], reason = CursorChangeReason.NotSet): void {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("set selections");
-		this.breakHistoryGroup();
+		this.previousEditOperationType = EditOperationType.Other;
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
 		this.installSelections(selections, reason);
@@ -404,7 +787,7 @@ export class CursorsController extends Disposable {
 	setCursorSelections(selections: readonly Selection[]): void {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("set cursor selections");
-		this.breakHistoryGroup();
+		this.previousEditOperationType = EditOperationType.Other;
 		if (selectionsEqual(this.currentSelections, selections)) return;
 		this.rememberCursorSelections(this.currentSelections);
 		this.cursorRedoHistory.length = 0;
@@ -415,7 +798,6 @@ export class CursorsController extends Disposable {
 	undoCursorOperation(): boolean {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("undo cursor operation");
-		this.breakHistoryGroup();
 		const previous = this.cursorHistory.pop();
 		if (!previous) return false;
 		this.rememberCursorRedoSelections(this.currentSelections);
@@ -427,7 +809,6 @@ export class CursorsController extends Disposable {
 	redoCursorOperation(): boolean {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition('redo cursor operation');
-		this.breakHistoryGroup();
 		const next = this.cursorRedoHistory.pop();
 		if (!next) return false;
 		this.rememberCursorSelections(this.currentSelections);
@@ -439,57 +820,77 @@ export class CursorsController extends Disposable {
 	pushUndoStop(): void {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("push an undo stop");
-		this.breakHistoryGroup();
 		this.model.pushStackElement();
 	}
 
-	execute(command: EditorEditCommand): TextModelChange | undefined {
+	public executeCommand(eventsCollector: ViewModelEventsCollector, command: ICommand, source?: string | null): void;
+	public executeCommand(command: ICommand, source?: string | null): void;
+	public executeCommand(eventsCollectorOrCommand: ViewModelEventsCollector | ICommand, commandOrSource?: ICommand | string | null, source?: string | null): void {
 		this.assertNotDisposed();
-		this.assertNoActiveComposition("execute a command");
-		if (this.context.cursorConfig.readOnly) {
-			this.readOnlyEditEmitter.fire();
-			return undefined;
-		}
-		this.cursorHistory.length = 0;
-		this.cursorRedoHistory.length = 0;
-		const historyGroup = this.historyGroupFor(command.historyMode);
-		return this.executeEditCommand(
-			command,
-			historyGroup,
-			TextEditHistoryMergeMode.Sequential,
-		);
+		this.assertNoActiveComposition('execute a command');
+		const eventsCollector = eventsCollectorOrCommand instanceof ViewModelEventsCollector ? eventsCollectorOrCommand : new ViewModelEventsCollector();
+		const command = eventsCollectorOrCommand instanceof ViewModelEventsCollector ? commandOrSource as ICommand : eventsCollectorOrCommand;
+		const detailedSource = eventsCollectorOrCommand instanceof ViewModelEventsCollector ? source : commandOrSource as string | null | undefined;
+		this.cursors.killSecondaryCursors();
+		this.executeEditOperation(eventsCollector, new EditOperationResult(EditOperationType.Other, [command], {
+			shouldPushStackElementBefore: false,
+			shouldPushStackElementAfter: false,
+		}), EditSources.cursor({ kind: 'executeCommand', detailedSource }), detailedSource);
 	}
 
-	executeCommand(command: ICommand, source?: string | null): void {
-		this.executeCommands([command], source);
-	}
-
-	executeCommands(commands: readonly (ICommand | null)[], source?: string | null): void {
+	public executeCommands(eventsCollector: ViewModelEventsCollector, commands: (ICommand | null)[], source?: string | null): void;
+	public executeCommands(commands: readonly (ICommand | null)[], source?: string | null): void;
+	public executeCommands(eventsCollectorOrCommands: ViewModelEventsCollector | readonly (ICommand | null)[], commandsOrSource?: (ICommand | null)[] | string | null, source?: string | null): void {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition('execute commands');
+		const eventsCollector = eventsCollectorOrCommands instanceof ViewModelEventsCollector ? eventsCollectorOrCommands : new ViewModelEventsCollector();
+		const commands = eventsCollectorOrCommands instanceof ViewModelEventsCollector ? commandsOrSource as (ICommand | null)[] : eventsCollectorOrCommands;
+		const detailedSource = eventsCollectorOrCommands instanceof ViewModelEventsCollector ? source : commandsOrSource as string | null | undefined;
 		if (commands.length === 0) return;
+		this.executeEditOperation(eventsCollector, new EditOperationResult(EditOperationType.Other, [...commands], {
+			shouldPushStackElementBefore: false,
+			shouldPushStackElementAfter: false,
+		}), EditSources.cursor({ kind: 'executeCommands', detailedSource }), detailedSource);
+	}
+
+	private executeEditOperation(eventsCollector: ViewModelEventsCollector, operation: EditOperationResult | null, reason: TextModelEditSource, source: string | null | undefined, cursorChangeReason = CursorChangeReason.NotSet): void {
+		if (!operation) return;
 		if (this.context.cursorConfig.readOnly) {
 			this.readOnlyEditEmitter.fire();
 			return;
 		}
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
-		const before = [...this.currentSelections];
+		const compositionOwnsHistory = this.activeComposition !== undefined;
+		if (operation.shouldPushStackElementBefore && !compositionOwnsHistory) {
+			this.model.pushStackElement();
+		}
+		const before = this.getSelections();
 		let change: TextModelChange | undefined;
 		const capture = this.model.onDidChangeContent(event => { change = event; });
 		this.executingCommand = true;
 		try {
-			const after = CommandExecutor.executeCommands(
-				this.model,
-				before,
-				commands,
-				EditSources.unknown({ name: source ?? 'executeCommands' }),
-			);
-			if (after) this.installSelections(after, CursorChangeReason.NotSet, true);
-			if (change && after) this.rememberSelectionHistory(change.transactionId, { before, after: this.currentSelections });
+			const after = CommandExecutor.executeCommands(this.model, before, operation.commands, reason, this.activeComposition?.historyGroup);
+			if (after) {
+				this.setStates(eventsCollector, source, cursorChangeReason, CursorState.fromModelSelections(after));
+				const closers: Range[] = [];
+				const enclosing: Range[] = [];
+				for (const command of operation.commands) {
+					if (command instanceof BaseTypeWithAutoClosingCommand && command.closeCharacterRange && command.enclosingRange) {
+						closers.push(command.closeCharacterRange);
+						enclosing.push(command.enclosingRange);
+					}
+				}
+				if (closers.length > 0) this.recordAutoClosedCharacters(closers, enclosing, this.model.version);
+				this.previousEditOperationType = operation.type;
+				if (change) this.rememberSelectionHistory(change.transactionId, { before, after: this.getSelections() });
+			}
 		} finally {
 			this.executingCommand = false;
 			capture.dispose();
+		}
+		if (operation.shouldPushStackElementAfter && !compositionOwnsHistory) {
+			this.model.pushStackElement();
 		}
 	}
 
@@ -508,17 +909,13 @@ export class CursorsController extends Disposable {
 				"IME composition currently requires exactly one selection",
 			);
 		}
-		this.breakHistoryGroup();
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
 		const initialSelections = this.currentSelections;
 		const initialRange = initialSelections[0]!;
 		const startOffset = this.model.offsetAt(initialRange.getStartPosition());
 		const endOffset = this.model.offsetAt(initialRange.getEndPosition());
-		const state: ActiveComposition = {
-			historyGroup: new UndoRedoGroup(),
-			valid: true,
-		};
+		const state = this.createActiveComposition(initialSelections);
 		this.model.beginHistoryRevision(state.historyGroup);
 		this.activeComposition = state;
 		return new CompositionSession(
@@ -529,12 +926,8 @@ export class CursorsController extends Disposable {
 				isActive: () =>
 					state.valid && this.activeComposition === state,
 				assertActive: () => this.assertActiveComposition(state),
-				apply: command => {
-					const change = this.executeEditCommand(
-						command,
-						state.historyGroup,
-						TextEditHistoryMergeMode.ReplacePrevious,
-					);
+				apply: (range, text, anchorOffset, activeOffset) => {
+					const change = this.executeCompositionUpdate(range, text, anchorOffset, activeOffset, state.historyGroup);
 					if (change) state.transactionId = change.transactionId;
 					return change;
 				},
@@ -571,37 +964,26 @@ export class CursorsController extends Disposable {
 		);
 	}
 
-	private executeEditCommand(
-		command: EditorEditCommand,
-		historyGroup: UndoRedoGroup | undefined,
-		historyMergeMode: TextEditHistoryMergeMode,
-	): TextModelChange | undefined {
-		const resultLength = calculateResultLength(this.model, command.edits);
-		validateSelectionOffsets(
-			command.selectionsAfter,
-			command.primarySelectionIndex,
-			resultLength,
-		);
+	private executeCompositionUpdate(range: Range, text: string, anchorOffset: number, activeOffset: number, historyGroup: UndoRedoGroup): TextModelChange | undefined {
+		const resultLength = this.model.length + text.length - (this.model.offsetAt(range.getEndPosition()) - this.model.offsetAt(range.getStartPosition()));
+		assertOffset(anchorOffset, resultLength, 'anchorOffset');
+		assertOffset(activeOffset, resultLength, 'activeOffset');
 		const before = this.currentSelections;
 		const versionBefore = this.model.version;
 		let change: TextModelChange | undefined;
 		this.executingCommand = true;
 		try {
 			change = this.model.applyOperations(
-				command.edits,
-				historyGroup
-					? { historyGroup, historyMergeMode }
-					: {},
+				[{ range, text }],
+				{ historyGroup, historyMergeMode: TextEditHistoryMergeMode.ReplacePrevious },
 			);
 		} catch (error) {
-			this.breakHistoryGroup();
 			throw error;
 		} finally {
 			this.executingCommand = false;
 		}
 
 		if (change && this.model.version !== change.version) {
-			this.breakHistoryGroup();
 			this.invalidateActiveComposition();
 			this.refreshTrackedSelections(
 				CursorChangeReason.RecoverFromMarkers,
@@ -611,25 +993,13 @@ export class CursorsController extends Disposable {
 			return change;
 		}
 		if (!change && this.model.version !== versionBefore) {
-			this.breakHistoryGroup();
 			this.invalidateActiveComposition();
 			this.refreshTrackedSelections(
 				CursorChangeReason.RecoverFromMarkers,
 			);
 			return undefined;
 		}
-		if (
-			!change &&
-			historyMergeMode !== TextEditHistoryMergeMode.ReplacePrevious
-		) {
-			this.breakHistoryGroup();
-		}
-
-		const after = selectionsFromOffsets(
-			this.model,
-			command.selectionsAfter,
-			command.primarySelectionIndex,
-		);
+		const after = [Selection.fromPositions(this.model.positionAt(anchorOffset), this.model.positionAt(activeOffset))];
 		this.installSelections(
 			after,
 			CursorChangeReason.NotSet,
@@ -643,41 +1013,12 @@ export class CursorsController extends Disposable {
 		return change;
 	}
 
-	undo(): TextModelChange | undefined {
-		this.assertNotDisposed();
-		this.assertNoActiveComposition("undo");
-		if (this.context.cursorConfig.readOnly) {
-			this.readOnlyEditEmitter.fire();
-			return undefined;
-		}
-		this.cursorHistory.length = 0;
-		this.cursorRedoHistory.length = 0;
-		this.breakHistoryGroup();
-		return this.model.undo();
-	}
-
-	redo(): TextModelChange | undefined {
-		this.assertNotDisposed();
-		this.assertNoActiveComposition("redo");
-		if (this.context.cursorConfig.readOnly) {
-			this.readOnlyEditEmitter.fire();
-			return undefined;
-		}
-		this.cursorHistory.length = 0;
-		this.cursorRedoHistory.length = 0;
-		this.breakHistoryGroup();
-		return this.model.redo();
-	}
-
 	private acceptModelChange(change: TextModelChange): void {
+		this.knownModelVersion = change.version;
 		if (this.executingCommand) {
-			this.refreshTrackedSelections(
-				CursorChangeReason.RecoverFromMarkers,
-				false,
-			);
+			this.refreshTrackedSelections(CursorChangeReason.RecoverFromMarkers, false);
 			return;
 		}
-		this.breakHistoryGroup();
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
 		this.invalidateActiveComposition();
@@ -697,6 +1038,17 @@ export class CursorsController extends Disposable {
 			this.installSelections(
 				history.after,
 				CursorChangeReason.Redo,
+			);
+			return;
+		}
+		if (
+			this.hasFocus
+			&& change.resultingSelection?.length
+			&& (change.reason === TextModelChangeReason.Undo || change.reason === TextModelChangeReason.Redo)
+		) {
+			this.installSelections(
+				change.resultingSelection,
+				change.reason === TextModelChangeReason.Undo ? CursorChangeReason.Undo : CursorChangeReason.Redo,
 			);
 			return;
 		}
@@ -798,41 +1150,6 @@ export class CursorsController extends Disposable {
 		if (index >= 0) this.selectionHistoryOrder.splice(index, 1);
 	}
 
-	private historyGroupFor(
-		mode: EditorCommandHistoryMode | undefined,
-	): UndoRedoGroup | undefined {
-		if (
-			mode === undefined ||
-			mode === EditorCommandHistoryMode.Isolated
-		) {
-			this.breakHistoryGroup();
-			return undefined;
-		}
-		if (mode === EditorCommandHistoryMode.BeginCoalescedTyping) {
-			this.breakHistoryGroup();
-			this.activeHistoryGroup = new UndoRedoGroup();
-			this.activeHistoryMode = EditorCommandHistoryMode.CoalesceTyping;
-			return this.activeHistoryGroup;
-		}
-		if (
-			mode !== EditorCommandHistoryMode.CoalesceTyping &&
-			mode !== EditorCommandHistoryMode.CoalesceBackspace &&
-			mode !== EditorCommandHistoryMode.CoalesceDelete
-		) {
-			throw new TypeError("Unknown editor command history mode");
-		}
-		if (!this.activeHistoryGroup || this.activeHistoryMode !== mode) {
-			this.activeHistoryGroup = new UndoRedoGroup();
-			this.activeHistoryMode = mode;
-		}
-		return this.activeHistoryGroup;
-	}
-
-	private breakHistoryGroup(): void {
-		this.activeHistoryGroup = undefined;
-		this.activeHistoryMode = undefined;
-	}
-
 	private assertNoActiveComposition(operation: string): void {
 		if (this.activeComposition?.valid) {
 			throw new Error(`Cannot ${operation} during an active composition`);
@@ -932,17 +1249,12 @@ export class CompositionSession {
 		if (typeof update.text !== 'string') throw new TypeError('CompositionUpdate.text must be a string');
 		const text = normalizeTextLineEndings(update.text);
 		validateRelativeSelection(update.selection, text.length);
-		const change = this.host.apply({
-			edits: [{
-				range: Range.fromPositions(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset)),
-				text,
-			}],
-			selectionsAfter: [{
-				anchorOffset: this.startOffset + update.selection.anchorOffset,
-				activeOffset: this.startOffset + update.selection.activeOffset,
-			}],
-			primarySelectionIndex: 0,
-		});
+		const change = this.host.apply(
+			Range.fromPositions(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset)),
+			text,
+			this.startOffset + update.selection.anchorOffset,
+			this.startOffset + update.selection.activeOffset,
+		);
 		this.host.assertActive();
 		this.currentEndOffset = this.startOffset + text.length;
 		return change;
@@ -967,7 +1279,7 @@ export class CompositionSession {
 	}
 }
 
-function validateRelativeSelection(selection: TextSelectionOffsets, textLength: number): void {
+function validateRelativeSelection(selection: CompositionUpdate['selection'], textLength: number): void {
 	assertRelativeOffset(selection.anchorOffset, textLength, 'selection.anchorOffset');
 	assertRelativeOffset(selection.activeOffset, textLength, 'selection.activeOffset');
 }
@@ -975,36 +1287,6 @@ function validateRelativeSelection(selection: TextSelectionOffsets, textLength: 
 function assertRelativeOffset(offset: number, textLength: number, name: string): void {
 	if (!Number.isSafeInteger(offset) || offset < 0 || offset > textLength) {
 		throw new RangeError(`${name} must be between 0 and ${textLength}`);
-	}
-}
-
-function calculateResultLength(model: TextModel, edits: readonly TextEdit[]): number {
-	let length = model.length;
-	for (const edit of edits) {
-		const range = Range.lift(edit.range);
-		length += normalizeTextLineEndings(edit.text).length
-			- (model.offsetAt(range.getEndPosition()) - model.offsetAt(range.getStartPosition()));
-	}
-	return length;
-}
-
-function selectionsFromOffsets(model: TextModel, selections: readonly TextSelectionOffsets[], primarySelectionIndex: number): readonly Selection[] {
-	const result = selections.map(selection => Selection.fromPositions(
-		model.positionAt(selection.anchorOffset),
-		model.positionAt(selection.activeOffset),
-	));
-	if (primarySelectionIndex === 0) return Object.freeze(result);
-	return Object.freeze([result[primarySelectionIndex]!, ...result.slice(0, primarySelectionIndex), ...result.slice(primarySelectionIndex + 1)]);
-}
-
-function validateSelectionOffsets(selections: readonly TextSelectionOffsets[], primarySelectionIndex: number, documentLength: number): void {
-	if (selections.length === 0) throw new RangeError('selectionsAfter must not be empty');
-	if (!Number.isSafeInteger(primarySelectionIndex) || primarySelectionIndex < 0 || primarySelectionIndex >= selections.length) {
-		throw new RangeError('primarySelectionIndex must identify selectionsAfter');
-	}
-	for (const selection of selections) {
-		assertOffset(selection.anchorOffset, documentLength, 'anchorOffset');
-		assertOffset(selection.activeOffset, documentLength, 'activeOffset');
 	}
 }
 
@@ -1018,6 +1300,10 @@ function validateSelections(model: TextModel, selections: readonly Selection[]):
 
 function selectionsEqual(left: readonly Selection[], right: readonly Selection[]): boolean {
 	return left.length === right.length && left.every((selection, index) => selection.equalsSelection(right[index]!));
+}
+
+function cursorStatesEqual(left: readonly CursorState[], right: readonly CursorState[]): boolean {
+	return left.length === right.length && left.every((state, index) => state.equals(right[index]!));
 }
 
 function assertOffset(offset: number, documentLength: number, name: string): void {

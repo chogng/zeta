@@ -53,11 +53,21 @@ test('Rename reports its command after applying the provider edit', async () => 
 		return operation();
 	};
 	const errors: unknown[] = [];
-	using controller = new RenameController(editorInput, viewport, selections, service, 'typescript', resource, undefined, error => errors.push(error), executeCommand);
+	const editor = {
+		pushUndoStop: () => {
+			model.pushStackElement();
+			return true;
+		},
+		executeEdits: (_source: string | null | undefined, edits: Parameters<TextModel['applyEdits']>[0]) => {
+			model.applyEdits(edits);
+			return true;
+		},
+	};
+	using controller = new RenameController(editorInput, editor, viewport, selections, service, 'typescript', resource, undefined, error => errors.push(error), executeCommand);
 
 	editorInput.dispatchEvent(keydown(dom.window, 'F2'));
 	await flushPromises();
-	const renameInput = viewport.element.querySelector<HTMLInputElement>('.stanza-editor-rename-input');
+	const renameInput = viewport.domNode.domNode.querySelector<HTMLInputElement>('.stanza-editor-rename-input');
 	assert.ok(renameInput);
 	assert.equal(renameInput.value, 'abc');
 	renameInput.value = 'xyz';

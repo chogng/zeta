@@ -21,7 +21,7 @@ Stanza Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本�
 
 - `TextModel` 是文本、版本、事务、文档历史、snapshot 和 tracked range 的唯一同步 mutation authority。
 - 对外 `Position` / `Range` 使用 1-based line、1-based UTF-16 column；内部 visual-line、buffer offset 和局部投影可以使用 0-based 索引，但必须在 owner 边界转换一次。range 有序且 end-exclusive；进入模型的换行统一为当前 `ITextBuffer` 的 EOL。
-- `CursorsController` 拥有一个 editor instance 的 selection、composition 和 cursor history，不把 selection 写入共享 `TextModel`。
+- `CursorsController` 拥有一个 editor instance 的 selection、composition revision 和 cursor history，不把 selection 写入共享 `TextModel`；浏览器侧 composition 范围只通过标准 model decoration 投影。
 - model、view model、layout 和 browser projection 依赖单向流动；`common` 不依赖 DOM、Workbench、Electron 或 generated DTO。
 - 输入热路径不等待 Worker、Rust、App Server、文件系统或语言服务。
 - 异步结果必须绑定准确的 model identity、model version 和 request identity；过期结果不得映射到当前文档。
@@ -78,7 +78,9 @@ flowchart LR
 
 一个 `TextModel` 可以由多个编辑器共享，但 selection、cursor 和 composition 状态属于各自的 `ViewModelImpl`。目标生产链固定为 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor`；模型只保存文本、装饰和 undo/redo 数据，不保存某个编辑器的 cursor 状态。
 
-当前生产构造已经是 `ViewModelImpl → CursorsController`，`CodeEditorWidget` 只通过内部入口取得同一个 controller，不再创建第二份 selection owner。Contribution context 分别暴露真实 `IViewModel` 和同一份 `selectionController`，不再用选择 owner 冒充视图模型。键盘、行选择和上下添加多光标通过 `CursorMoveCommands` 的标准模型/视图状态 API；删除、输入、转置和行操作使用 `MoveOperations` 的标准位置 API。剩余缺口是 selection 存储仍以简化 controller 为主，`CursorCollection`、`CursorContext` 和 `Cursor` 尚未完整进入 ViewModel 命令链。
+当前生产构造已经是 `ViewModelImpl → CursorsController → CursorCollection → Cursor`，`CodeEditorWidget` 只通过内部入口取得同一个 controller，不再创建第二份 selection owner。模型内容事件由 ViewModel 的 collector 进入 `CursorsController.onModelContentChanged`，flush 会重建 collection 和 tracked marker；同一状态变化不会再由 collector 与 controller 事件重复投影。Contribution context 分别暴露真实 `IViewModel` 和同一份 `selectionController`，不再用选择 owner 冒充视图模型。键盘、行选择和上下添加多光标通过 `CursorMoveCommands` 的标准模型/视图状态 API；删除、输入、转置和行操作使用 `MoveOperations` 的标准位置 API。剩余缺口是 contribution 仍直接调用若干仅本地 controller 入口，需继续迁回 `IViewModel` / `ICodeEditor` 的标准公共边界。
+
+`WordOperations` 是词边界的唯一 command owner：`CursorConfiguration.wordSeparators + wordSegmenterLocales` 生成共享 classifier，模型层提供标准词移动、词段、选词、词内删除和删除范围。鼠标双击/拖选、平台词移动与 EditContext 的 `deleteWord*` 输入都消费这些入口；browser 不再持有 `getTextWordRanges`、`getWordSelectionRange` 或 language word-pattern callback。
 
 `common/cursor` 的目标文件集合与 VS Code 保持一致：12 个同路径文件，不保留额外的 SelectionSet、导航或语言输入 owner。当前 12 个同路径文件中有 8 个正文一致，但除 `ColumnSelection` 外，多数仍缺生产调用闭环；文件内容一致不代表完成。完成状态以 [`api-alignment-status.md`](./api-alignment-status.md) 的调用者与生命周期证据为准。
 
@@ -115,7 +117,7 @@ flowchart LR
 
 ### 渲染上下文与输入 Part
 
-`RestrictedRenderingContext` 只发布一次渲染所需的滚动、视口、纵向坐标与装饰查询；`RenderingContext` 在此基础上合并 DOM/GPU `IViewLines` 几何。特性状态由各 Part 显式接收，不再通过共享元数据容器查找。剩余工作是让两个输入实现进入同一 `ViewPart` 渲染阶段。
+`RestrictedRenderingContext` 只发布一次渲染所需的滚动、视口、纵向坐标与装饰查询；`RenderingContext` 在此基础上合并 DOM/GPU `IViewLines` 几何。特性状态由各 Part 显式接收，不再通过共享元数据容器查找。组合输入的临时范围也进入同一 decoration 查询，不再由光标 Part 接收额外状态。
 
 ### DOM 与 Part 边界
 
@@ -139,7 +141,7 @@ flowchart LR
 
 没有这些条件时，直接使用 frame context 中的当前值。
 
-`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且同步 scheduler 会重复写入相同样式的节点。`ViewLine` 只对文字行根节点使用 wrapper；line number、diagnostic marker、indent guide、decoration、selection、cursor 和 composition 由各自 Part 通过 `ViewPartRows` 拥有独立 DOM。`SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 projection DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
+`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且同步 scheduler 会重复写入相同样式的节点。`ViewLine` 只对文字行根节点使用 wrapper；line number、diagnostic marker、indent guide、decoration、selection 和 cursor 由各自 Part 通过 `ViewPartRows` 拥有独立 DOM，composition 使用普通 decoration 行片段。`SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 projection DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
 
 ## 输入与 Controller
 
@@ -148,8 +150,9 @@ Browser controller 的职责是把一个 DOM event 解析成一个 editor intent
 - `EditorInputContext`：browser input contract；`BrowserEditContext` 使用浏览器 EditContext，`EditorTextAreaInputContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`ViewController` 选择并暴露这份契约、执行 common command，suggest widget 通过 `ViewController.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：把平台 chord 转成 `CursorMoveCommands` 使用的无 DOM 移动参数，并保留连续垂直移动的期望列。
-- `PointerEventRouter`：pointer dispatch、drag session 和浏览器 capture 的 browser adapter。
-- `EditorPointerSelectionHandler`：当前把 mouse/pointer hit target 转换为 selection intent，并在 `ViewController` 内拥有指针选区合并策略；拖选滚动仍由仅本地 `BidirectionalDragScrolling` 承担。目标 owner 是 `DragScrolling` 及其上下、左右两个 operation，必须随 `ViewContext`、`MouseTargetFactory`、render/hit-test 和 `dispatchMouse` 同批迁移，之后删除旧文件。
+- `editorDom.ts`：页面、客户区、编辑器相对坐标和可释放 mouse/pointer 事件工厂的 browser owner。
+- `MouseTargetFactory`：使用 `ViewContext + IPointerHandlerHelper` 直接生成标准 `IMouseTarget`，不保留第二套 target 类型。
+- `MouseHandler`：持有 pointer capture、单次拖动会话、公开鼠标事件和 `ViewController.dispatchMouse` 入口；`PointerHandler` 与 `GlobalEditorPointerMoveMonitor` 负责可释放的浏览器监听。越界拖动统一生成 `IMouseTargetOutsideEditor`，由 `TopBottomDragScrolling` 或 `LeftRightDragScrolling` 按轴滚动、同步渲染并从视口边缘继续扩选；返回、释放、取消、失焦、布局变化和 owner 释放都会停止 operation 与后续动画帧。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。
@@ -203,11 +206,11 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | --- | --- | --- |
 | TextModel、ITextBuffer、history、snapshot、tracked range | 部分具备 | 行为可用；`ITextModel`、PieceTree 与 ModelService 契约仍在待处理账目 |
 | Multi-selection、IME、clipboard、pointer/keyboard input | 部分具备 | 本地链可用；cursor 与 edit-context owner 尚未对齐 |
-| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | ViewPart 生命周期、统一覆盖层、标准渲染上下文和 DOM/GPU `IViewLines` 几何已接通；GPU 初始化 owner 仍待收敛 |
+| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | ViewPart 生命周期、统一覆盖层、标准渲染上下文和 DOM/GPU `IViewLines` 几何已接通；GPU context 与两个策略的初始化、cell buffer 和释放 owner 已收敛 |
 | Token、diagnostic、completion、TextMate 和 App Server parser provider | 部分具备 | 异步版本边界存在；language service 与 tokenization owner 尚未对齐 |
 | Diff editor 与 App Server diff | 部分具备 | 本地 review widget 可用；canonical DiffEditorWidget/MultiDiffEditorWidget 契约尚未完成 |
 | `ViewContext → ViewPart → View` | 部分具备 | 事件、渲染阶段和释放已统一；两个输入实现仍待进入同一 Part 生命周期 |
-| `ViewModelImpl → CursorsController` | 部分具备 | ViewModel 已持有 controller；输入与 contribution 仍需移除内部执行器入口 |
+| `ViewModelImpl → CursorsController → CursorCollection → Cursor` | 部分具备 | selection 状态、marker、normalize、flush 和单命令 primary 语义已接通；输入与 contribution 仍需移除 controller 的仅本地公共入口 |
 | Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |
 
 ## 关键实现入口

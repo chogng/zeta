@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
+import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { Selection } from "../../../../common/core/selection.js";
+import { Selection, type ISelection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
+import { type ICommand } from '../../../../common/editorCommon.js';
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
@@ -26,7 +29,6 @@ for (const [name, value] of Object.entries({
 }
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
-const { DecorationPresentation, createStanzaDecorationSource } = await import("../../../../browser/viewParts/decorations/decorations.js");
 const { FindController } = await import("../../browser/findController.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -42,7 +44,10 @@ test("find opens from the editor shortcut, highlights matches, navigates, and re
 	assert.equal(fixture.find.visible, true);
 	assert.equal(fixture.find.searchInput.value, "alpha");
 	assert.equal(fixture.find.element.querySelector(".stanza-editor-find-result")?.textContent, "1 of 2");
-	assert.equal(fixture.viewport.element.querySelectorAll(".stanza-editor-decoration.search-match").length, 2);
+	assert.deepEqual(fixture.model.getAllDecorations().filter(decoration => decoration.options.className === 'search-match').map(decoration => decoration.range), [
+		new Range(1, 1, 1, 6),
+		new Range(1, 12, 1, 17),
+	]);
 	assert.equal(fixture.dom.window.document.activeElement, fixture.find.searchInput);
 
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
@@ -114,7 +119,7 @@ test("find in selection restricts replace all to its tracked opening scope", () 
 	requiredElement<HTMLButtonElement>(fixture.find.element, '[aria-label="Replace all matches"]').click();
 
 	assert.equal(fixture.model.getText(), "alpha beta x beta alpha");
-	fixture.selections.undo();
+	fixture.selections.context.model.undo();
 	assert.equal(fixture.model.getText(), "alpha beta alpha beta alpha");
 });
 
@@ -157,9 +162,9 @@ test("replace current and replace all use isolated undo transactions", () => {
 	requiredElement<HTMLButtonElement>(fixture.find.element, '[aria-label="Replace all matches"]').click();
 	assert.equal(fixture.model.getText(), "long x x");
 
-	fixture.selections.undo();
+	fixture.selections.context.model.undo();
 	assert.equal(fixture.model.getText(), "long a a");
-	fixture.selections.undo();
+	fixture.selections.context.model.undo();
 	assert.equal(fixture.model.getText(), "a a a");
 });
 
@@ -185,12 +190,11 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		decorationSources: [createStanzaDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
 	});
 	viewport.layout({ width: 600, height: 120 });
 	const editorInput = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
-	viewport.element.append(editorInput);
-	const find = new FindController(editorInput, viewport, selections, decorations, options);
+	viewport.domNode.domNode.append(editorInput);
+	const find = new FindController(editorInput, createEditor(model, selections), viewport, decorations, options);
 	return {
 		dom,
 		model,
@@ -209,6 +213,16 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 			dom.window.close();
 		},
 	};
+}
+
+function createEditor(model: TextModel, selections: CursorsController): ICodeEditor {
+	return {
+		getModel: () => model,
+		getSelection: () => selections.getSelections()[0] ?? null,
+		setSelection: (selection: ISelection) => selections.setSelections([Selection.liftSelection(selection)]),
+		pushUndoStop: () => selections.pushUndoStop(),
+		executeCommand: (source: string | null | undefined, command: ICommand) => selections.executeCommand(command, source),
+	} as unknown as ICodeEditor;
 }
 
 function setInputValue(input: HTMLInputElement, value: string): void {

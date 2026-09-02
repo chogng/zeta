@@ -8,45 +8,16 @@ export interface IGlyphRasterizer {
 }
 
 export interface IBoundingBox {
-	readonly left: number;
-	readonly top: number;
-	readonly right: number;
-	readonly bottom: number;
+	left: number;
+	top: number;
+	right: number;
+	bottom: number;
 }
 
 export interface IRasterizedGlyph {
-	readonly source: OffscreenCanvas;
-	readonly boundingBox: IBoundingBox;
-	readonly originOffset: { x: number; y: number };
-	readonly fontBoundingBoxAscent: number;
-	readonly fontBoundingBoxDescent: number;
-}
-
-export interface IStyledGlyphStyle {
-	readonly color: string;
-	readonly fontFamily: string;
-	readonly fontSize: number;
-	readonly fontStyle: string;
-	readonly fontVariant: string;
-	readonly fontWeight: string;
-	readonly letterSpacing: number;
-}
-
-/** Browser-canvas rasterizer contract used by Zeta's current GPU renderer. */
-export interface IStyledGlyphRasterizer {
-	readonly id: number;
-	readonly cacheKey: string;
-	readonly devicePixelRatio: number;
-	styleKey(style: IStyledGlyphStyle): string;
-	rasterizeGlyph(chars: string, style: IStyledGlyphStyle, subPixelX: number): Readonly<IStyledRasterizedGlyph>;
-	getTextMetrics(text: string, style: IStyledGlyphStyle): TextMetrics;
-}
-
-export interface IStyledRasterizedGlyph {
-	readonly source: HTMLCanvasElement;
-	readonly boundingBox: IBoundingBox;
-	readonly originOffset: { readonly x: number; readonly y: number };
-	readonly advance: number;
-	readonly fontBoundingBoxAscent: number;
-	readonly fontBoundingBoxDescent: number;
+	source: OffscreenCanvas;
+	boundingBox: IBoundingBox;
+	originOffset: { x: number; y: number };
+	fontBoundingBoxAscent: number;
+	fontBoundingBoxDescent: number;
 }

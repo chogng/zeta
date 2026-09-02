@@ -4,13 +4,30 @@
 
 ## 当前结论
 
-- 2026-08-31 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 590 个，VS Code Editor 729 个；381 个同路径，209 个仅本地，348 个仅上游。
+- 2026-09-01 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 597 个，VS Code Editor 729 个；392 个同路径，205 个仅本地，337 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：当前表格记录 119 组同名声明结构差异，已处理 42 组，剩余 77 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
-- 209 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题。上游存在而本地缺失的文件按原相对路径直接建立，先恢复 API 名称并独立实现逻辑，再把现有 import 迁入该 owner；同路径文件只原地修改。
+- 账目摘要：当前表格记录 119 组同名声明结构差异，已处理 79 组，剩余 40 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
+- 205 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题。上游存在而本地缺失的文件按原相对路径直接建立，先恢复 API 名称并独立实现逻辑，再把现有 import 迁入该 owner；同路径文件只原地修改。
 - 用户已确认仅本地项的处理原则：架构文档明确归属的 Zeta 专属能力按既有职责保留；与 VS Code 重叠的职责迁回对应路径。文件删除仍需在每批执行前按准确路径、原因、剩余调用方和 Git 可恢复性单独确认。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
 - 输入、参数和返回类型一致不代表行为已经一致。剩余项仍需继续核对状态 owner、事件顺序、失效条件、调度阶段、坐标转换、可见副作用、失败语义和释放时机。
+- 本轮补齐 `comment.ts`、`dropIntoEditorController.ts`、`dropIntoEditorContribution.ts` 与 `completionsEnablement.ts` 四个上游同路径 owner；`editor.all.ts` 已改接 canonical comment、drop、find 入口，Find contribution ID 恢复为 `editor.contrib.findController`，drop 的 `BeforeFirstInteraction` 阶段已覆盖 `dragover` / `drop`。旧 comment controllers、旧 contribution、`textDropController.ts`、`find.contribution.ts` 和 `ownedCompletionsEnablement.ts` 均不再有外部生产调用，待逐批确认删除。
+- Editor contribution 批次已把 Placeholder、Message、Read-only Message、Cursor Undo 与 Context Menu 接入标准 `registerEditorContribution`；`transpose.ts` 与 `linesOperations.ts` 删除不存在于上游的运行时 contribution，action 直接执行标准 `ICommand`。`editorEditCommand.ts` 与 `editorCommand.ts` 已删除且残留引用为 0。Clipboard 已建立上游同路径 `clipboard.ts`，命令与菜单使用标准 `MultiCommand`，默认 copy/cut/paste 回到 TextArea/Native EditContext；URI-list 与有界文本文件粘贴迁入上游同路径 `CopyPasteController`，`CodeEditorContributions` 不再接受 contextual 描述。`NativeEditContext.handleWillCopy` / `handleWillPaste` 已接回标准 Clipboard action 调用链。旧 `clipboard.contribution.ts` 与 `clipboardController.ts` 已无生产 import，待用户确认后删除。
+- ViewPart 根节点批次将 `Margin`、`Minimap`、`OverviewRuler`、`ViewCursors` 和 `ViewLines` 的外部 DOM 访问统一到各自上游 `getDomNode()` 入口；内部节点不再额外公开。`Margin` 恢复 `OUTER_CLASS_NAME = 'margin'` 与独立 `glyph-margin` 背景层，沿用 Zeta 的滚动和尺寸计算，未修改或复制 CSS。`ViewLines` 的公开成员差异归零，并接通 `ViewModel → ViewRevealRangeRequestEvent → ViewLines` 的纵向与延迟横向 reveal；`CodeEditorWidget.revealRange` 不再绕过事件链直接调用 `View`。View 释放阶段不再由组合输入和 overtype 清理回调触发已释放 Part 的重绘；Widget、Minimap、视区、光标和 ZoneWidget 共 34 项相关测试通过。
+- View Zone 批次把 `ViewZones` 的公开成员差异归零，`changeViewZones` 只通过 `ViewModel.changeWhitespace` 改动标准空白区，CodeLens、ZoneWidget 与鼠标抑制链不再使用并行 zone handle 或 ViewLayout zone API。真实 Chromium 验证高度、最小宽度、移除、gutter 横向固定和释放；编辑器根尺寸及 Minimap、OverviewRuler、输入层、scrollbar 的定位回到各自现有 Zeta DOM/CSS owner，没有引入 Monaco class 或变量。
+- Widget 端口批次把 `ViewContentWidgets` 与 `GlyphMarginWidgets` 的公开成员差异同时归零。Content Widget 构造只接收标准 `ViewContext + FastDomNode`，配置、模型坐标、失效和释放均由 Part 自己读取；`suppressMouseDown` 进入 `MouseHandler` 的真实焦点/默认事件链。Glyph Margin 的 add/layout/remove API 已从 `ICodeEditor → CodeEditorWidget → View → GlyphMarginWidgets` 接通，构造只接收 `ViewContext`，标准模型 decoration 与 caller widget 按 line、lane、z-index 选出 winner。
+- Decoration owner 批次恢复了标准 `DecorationsOverlay(ViewContext)`：它只读取 `RenderingContext.getDecorationsInViewport()`，处理整行、普通、collapsed、换行填充、z-index 与逐行片段；`View` 在任一 Part 因模型 decoration 事件需要重绘时统一执行投影。Diagnostics、Color Picker、Debug、Quick Diff、Bracket、Anchor、Selection Highlight、Find、Unicode、异常行终止符与 Word Highlight 均写入标准模型 decoration options，生产 View、Widget 与 Workbench 不再接受或聚合 `DecorationSource`。旧定义只剩无生产调用的仅本地文件，待按删除确认规则处理。
+- 标准边栏与块装饰批次把 `Margin`、`LinesDecorationsOverlay` 和 `BlockDecorations` 的构造器、公开成员及布局输入收敛到 `ViewContext + EditorLayoutInfo + RenderingContext`。Folding 与 Symbol Icons 已移除 `DecorationSource` 注册并直接写标准模型 decoration options；真实 Chromium 验证 Rust syntax provider、折叠、符号图标、标准 line/block decoration 以及横向滚动后的固定 gutter。Workbench 文本模型服务在创建 `TextModel` 时设置真实 resource 和语言，显式语言优先，其次 MIME、路径与首行；`CodeEditorPane` 不再另算一份语言。
+- Injected Text 批次接通 `TextModel.getLineInjectedText → ViewModelLines → ViewLineData → ViewLine → MouseTarget`。无换行模式不再跳过 injection projection，行 token、inline class、model/view 坐标和 `attachedData` 使用同一 `ModelLineProjectionData`；Color Picker swatch 因此通过标准 before decoration 渲染并从鼠标目标读取 marker，不再按附近坐标猜测颜色。`DynamicCssRules` 的 owner/ref 释放顺序也已闭合，Color Picker、软换行装饰、语义 token、指针命中、ViewModel 与动态 CSS 聚焦测试通过。
+- 鼠标目标批次建立 `editorDom.ts` 的标准页面/客户区/编辑器相对坐标和可释放事件工厂，`MouseTargetFactory` 直接生成公开 `IMouseTarget`，不再发布仅本地的中间 target 类型。`MouseHandler(ViewContext, ViewController, IPointerHandlerHelper)` 统一处理指针、拖动、drop、context menu 和选择分发；Folding、Debug 与 Color Picker 均消费编辑器公开鼠标事件，相关 DOM 监听及单次拖动会话由可释放 owner 持有。
+- 越界拖选批次把同路径 `dragScrolling.ts` 原地改为 `DragScrolling`、`DragScrollingOperation`、`TopBottomDragScrolling` 与 `LeftRightDragScrolling` owner；`MouseHandler` 只生成标准 `OUTSIDE_EDITOR` target，并按轴启动或停止对应 operation。每帧通过 `ViewLayout` 滚动、同步 render、重新命中边缘位置并使用 `NavigationCommandRevealType.None` 扩选；返回编辑器、pointerup、cancel、blur、布局变化或释放都会清理当前 operation 和动画帧。
+- 光标批次先修正 `RenderingContext → IViewLines` 的坐标端口：DOM 与 GPU 行几何统一接收视图行范围，选区、装饰、内容小组件、组合输入和双向文字调用方在边界处明确转换。`ViewCursor` 与 `ViewCursors` 的公开成员差异已归零；`ViewCursors` 只持有光标 DOM、配置和闪烁状态，组合输入范围改由 `CompositionController` 写入标准模型 decoration，再由普通装饰渲染链投影。光标 CSS 使用 Zeta 主题变量和动画名，未新增 Monaco 名称。
+- 光标状态 owner 批次继续收口 `CursorsController`：文档 `undo` / `redo` 已从该控制器公开面移除，浏览器输入与 26 个相关测试文件直接进入 `TextModel` 历史；自动闭合记录改为控制器内部实现，不再作为测试或跨文件 API。成员差异由 12 项降至 9 项；剩余 read-only、cursor-only history、composition 与事件入口仍依赖尚未完成的 ViewModel/contribution 迁移，因此本声明继续留在待处理表。
+- 输入与选区端口批次继续沿现有生产链收口，而没有按上游缺失文件横向铺开：`View → ViewController → IViewModel` 统一读取和提交选区，TextArea、Native EditContext、ScreenReaderSupport 与 CompositionController 不再直接依赖 `CursorsController`；Anchor Select、In-place Replace 和 Line Selection 分别改用 `ICodeEditor` 或 `IViewModel`。当前 Editor 生产代码仍有 31 个文件引用 `CursorsController`，扣除 `cursor.ts` 与 `viewModelImpl.ts` 两个 owner 后还有 29 个外部调用方；其中 contribution 装配契约、LanguageEditingAdapter 和仅本地贡献尚未形成闭合切片，本批不继续迁移，也不新增上游外围文件。
+- Native 辅助阅读端口批次把 `ScreenReaderSupport` 的公开成员差异从 9 项收敛为 0，并把 `IScreenReaderContent` 收敛为标准的 cut、paste、focus、configuration、content 和 scroll 六个入口：简单内容 owner 直接实现现有分页镜像、选区映射和滚动行为，富内容 owner 继承这些入口并只覆盖自身 token/bracket DOM 渲染，没有添加只调用 `super` 的包装方法。`EditorConfiguration` 现在是 page size 与 rich/simple 选择的唯一配置 owner，Widget、ViewController 和 EditContext 不再传递第二份构造快照；运行时切换会由一个可替换资源 owner 释放旧内容并保持焦点与当前模型投影。装饰、flush、行、滚动和空白区变化仍由 `NativeEditContext` 自身的 ViewPart 事件决定重绘，再在 `prepareRender` 统一同步内容；构造时强制内容模型、ViewModel 与 Viewport 使用同一 `TextModel`。本批保持 Zeta 现有 DOM child 和布局 owner，没有改动 CSS、DOM 层级或上游外围文件。
+- Cursor Undo 端口批次把 `CursorStateChangedEvent` 的 primary/secondary selection、旧 selection、模型版本、来源和原因完整投影为标准 `ICodeEditor.onDidChangeCursorPosition` / `onDidChangeCursorSelection`。同路径 `cursorUndo.ts` 只记录同版本 selection 事件并在模型变化时清空有界历史；同路径 `linkedEditing.ts` 改由 `ICodeEditor` 读取 selection 和订阅位置事件，不再直接依赖内部 selection controller。上游已有而本地缺失的 `contrib/cursorUndo/test/browser/cursorUndo.test.ts` 已原路径建立并独立覆盖状态恢复与模型失效。
+- Overview Ruler 批次把 `DecorationsOverviewRuler` 的公开成员差异归零：标准光标事件、配置/主题/滚动失效、`prepareRender` 读取阶段和显式释放进入同一 `ViewPart` 生命周期；装饰 lane、光标标记、边框、DPR 与隐藏光标配置由同一 canvas owner 绘制。`editorOverviewRuler.border/background` 已进入 Zeta 主题注册表，高对比度边框和透明背景不依赖 Monaco CSS。`EditorScrollbar` 因其所需的 base scrollable API 尚未对齐而继续留在待处理项，不在上层伪造入口。仅本地 `workbench/contrib/debug/browser/debugBreakpointDecorations.ts` 没有生产调用方、本批未修改，也没有被接入该链。
+- GPU 渲染只保留标准 `ViewportData + ViewLineOptions → cell buffer → atlas storage/texture` 链，旧 `GpuFrame`、逐 glyph vertex frame 和 `IStyled*` 接口已删除。`View` 唯一持有 `ViewGpuContext`，`ViewLines` 自己投影 GPU 行 DOM 状态；`BaseRenderStrategy` 只保留标准抽象和事件生命周期，完整文件与视口策略分别在自身文件编码 cell，不再通过 base 的额外成员共享实现。canvas 继续标记为 `aria-hidden`，颜色由 Zeta 主题快照进入共享 atlas；canvas、行层和 gutter 只补充 Zeta 自有布局规则，没有复制上游 CSS 或引入 Monaco class。
 
 ## 处理规则
 
@@ -24,8 +41,8 @@
 | 文件 | 声明 | 结果 |
 | --- | --- | --- |
 | `browser/controller/editContext/native/debugEditContext.ts` | `DebugEditContext` | 构造入口、状态代理、事件包装、调试开关和边界标记职责与上游一致；该类型只用于手动诊断，明确不进入生产输入创建链，所有标记使用调用方 document 并从无障碍树隐藏，定向测试覆盖状态、事件、开关与清理 |
-| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardPasteEvent` | 字段、构造行为和外部数据转换与上游一致；生产调用经过输入上下文、Clipboard contribution 和 Observable Editor，浏览器测试覆盖 metadata 与外部数据转换 |
-| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 公开成员与上游归零；事件在输入上下文中生成选区文本、来源范围、富文本和内存元数据，Clipboard contribution 直接消费该事件，浏览器测试覆盖复制、剪切、多选区、整行和系统剪贴板回退 |
+| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardPasteEvent` | 字段、构造行为和外部数据转换与上游一致；生产调用由 TextArea/Native EditContext 默认消费并保留 `onWillPaste` 拦截点，Observable Editor 继续发布同一事件；浏览器测试覆盖 metadata、外部数据转换和默认粘贴 |
+| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 公开成员与上游归零；事件在输入上下文中生成选区文本、来源范围、富文本和内存元数据，TextArea/Native EditContext 在拦截器未处理时写入标准数据并执行剪切；浏览器测试覆盖复制、剪切、多选区、整行和系统剪贴板回退 |
 | `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 五参数入口与上游一致；由 `ViewContext` 读取配置和选区并负责标准剪贴板数据及元数据写入，旧的无模型事件入口已删除，生产调用只经过两个输入实现 |
 | `browser/controller/editContext/native/nativeEditContextUtils.ts` | `FocusTracker` | 构造契约恢复日志服务、目标元素和焦点回调三个参数；生产日志依赖从编辑器服务容器经 `CodeEditorWidget` 和 `View` 进入原生输入，Standalone 明确注册空日志实现。测试覆盖焦点、失焦、暂停恢复、Shadow DOM、日志与监听释放 |
 | `browser/services/codeEditorService.ts` | `ICodeEditorOpenHandler` | 由 `AbstractCodeEditorService` 按新注册优先顺序调用，首个返回编辑器的处理器终止链路；单项释放只移除对应处理器，测试覆盖继续查找、短路和释放 |
@@ -35,13 +52,18 @@
 | `browser/observableCodeEditor.ts` | `observableCodeEditor` | 单参数入口直接接受 `ICodeEditor`，同一编辑器始终返回同一 facade，编辑器销毁时同步释放并移出缓存 |
 | `browser/observableCodeEditor.ts` | `ObservableCodeEditor` | 公共成员与上游归零；模型、版本、选区、焦点、组合输入、键入、粘贴、布局、滚动、内容尺寸、装饰和 Widget 均通过 `ICodeEditor` 观察，不再读取 `CodeEditorWidget.view` 或 `viewport`，3 项测试覆盖响应式更新、行坐标、装饰所有权与销毁 |
 | `browser/view/viewUserInputEvents.ts` | `ViewUserInputEvents` | 公开回调、构造参数、事件类型和静态目标转换入口与上游一致；鼠标事件由 `MouseHandler` 解析为视图坐标，经 `ViewController` 转发后在此统一转换为模型坐标，Widget 不再另建 DOM 监听链；测试覆盖普通 target、View Zone 嵌套坐标和真实 Widget 事件发布 |
+| `browser/controller/mouseHandler.ts` | `MouseHandler` | 构造参数、protected/public 成员和 `ViewEventHandler` 生命周期与上游一致；生产链只通过 `EditorMouseEventFactory`、`EditorPointerEventFactory`、`MouseTargetFactory` 和 `IPointerHandlerHelper` 发布标准 `IMouseTarget`，不再生成或二次翻译仅本地 target。拖动会话、全局 pointer 监听、捕获释放和 ViewContext 注销均由该实例持有，定向测试覆盖文本、边栏、View Zone、Widget、Injected Text、drop、Folding 与 Debug |
+| `browser/controller/dragScrolling.ts` | `DragScrolling` | 同路径文件保留上游抽象 owner、`start` / `stop` 生命周期及上下/左右 operation 拆分；生产由 `MouseHandler` 根据 `IMouseTargetOutsideEditor` 轴向调用，滚动、同步 render、边缘命中、RTL 行首尾和 `dispatchMouse` 形成闭环。operation 由可替换资源持有，重复位置更新不重建，停止与释放取消后续动画帧；直接生命周期测试和真实 Widget 双轴拖选测试覆盖调用链 |
 | `contrib/zoneWidget/browser/zoneWidget.ts` | `ZoneWidget` | 恢复 `IOptions`、`IStyles`、`OverlayWidgetDelegate`、`ZoneWidget` 及其子类扩展点；独立实现通过 `ICodeEditor` 持有模型锚点、视图区、布局、滚动、选区与释放，Peek、Call/Type Hierarchy、跳转结果和 Quick Diff 均传递真实编辑器对象，定向测试覆盖换行锚点、布局、缩放、样式和选区保持 |
 | `contrib/wordHighlighter/browser/textualHighlightProvider.ts` | `TextualMultiDocumentHighlightFeature` | 由语言能力服务统一注册单文档与多文档文本高亮 provider；多编辑器共享同一服务时按引用计数持有注册，不再维护重复的模型 target 表，provider 直接使用 `ITextModel.uri` 返回跨文档结果，Word/Selection Highlighter 7 项测试覆盖 Unicode、语义优先、多文件、取消和导航 |
 | `common/cursor/cursorColumnSelection.ts` | `ColumnSelection` | 同路径实现与上游归一化文本一致；生产鼠标列选经过 `MouseHandler`、`CursorConfiguration`、视觉行模型和坐标转换，直接测试覆盖方向与短行行为 |
 | `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 公开成员差异归零；17 个标准移动入口直接使用 `CursorConfiguration`、`ICursorSimpleModel` 与 `SingleCursorState`，旧 `navigate` 总入口及全部调用已移除。键盘控制器按命令调用标准入口，删除、输入、转置与行操作使用标准位置 API；定向测试覆盖水平、垂直、可视列余量、原子缩进、空行、行/文档边界以及真实 Widget 连续键盘导航 |
 | `common/cursor/cursorMoveCommands.ts` | `CursorMoveCommands`、`CursorMove` | 15 个标准命令入口、参数元数据、方向、单位和解析契约的公开差异归零；实现直接使用真实 `IViewModel`、模型/视图光标状态及坐标转换。键盘、行选择和多光标生产调用统一进入该 owner，指针选区合并与行尾多光标辅助逻辑分别回到 `ViewController` 和 `MultiCursorController`；契约测试锁定公开面，真实 Widget 与 contribution 测试覆盖连续垂直移动、重复 caret 归一化和行选择 |
+| `common/cursor/cursorWordOperations.ts` | `WordOperations` | 公开成员差异归零；标准 classifier、移动、删除、词内删除、词段、选词和 `getWordAtPosition` 由同路径 common owner 实现，并同时导出标准 `WordPartOperations`。浏览器双击/拖选、平台词移动和 `beforeinput deleteWord*` 均改接该 API；旧 `getWordSelectionRange`、`getTextWordRanges` 及浏览器自算词边界已移除，common 与真实 Widget 聚焦测试覆盖调用链 |
+| `common/cursor/cursorCollection.ts` | `CursorCollection` | 公开成员、primary-first 状态、last-added cursor、tracked marker 生命周期、重叠归一化和 model/view selection 投影与上游职责一致；生产由 `ViewModelImpl → CursorsController` 直接构造并持有，模型 flush 重建 collection，单命令执行先移除 secondary cursors，定向测试覆盖归一化、位置 tie、flush 与释放 |
+| `common/cursor/oneCursor.ts` | `Cursor` | 公开成员、model/view 双状态、tracked selection 与折行坐标转换进入 `CursorCollection` 的生产生命周期；marker 缺失或停止跟踪时明确失败，不再返回可能过期的 selection，定向测试覆盖 marker 恢复与释放 |
 | `contrib/colorPicker/browser/colorPickerModel.ts` | `ColorPickerModel` | 公共成员、颜色与 presentation 事件、切换和释放生命周期与上游一致；生产由 Color Picker controller 创建并由 dialog 消费 |
-| `contrib/folding/browser/foldingDecorations.ts` | `FoldingDecorationProvider` | 公共配置与装饰事务由该 provider 持有；生产链从 Folding Model 经编辑器所有者写入 TextModel，再由 Folding decoration source 交给 View 渲染，释放时只清理对应编辑器的装饰；折叠背景、占位符和控制图标颜色由主题 token 持有，测试覆盖配置、所有权、折叠状态和 DOM 输出 |
+| `contrib/folding/browser/foldingDecorations.ts` | `FoldingDecorationProvider` | 公共配置与装饰事务由该 provider 持有；生产链从 Folding Model 经编辑器所有者写入 TextModel，再由标准 line/block/minimap ViewPart 渲染，释放时只清理对应编辑器的装饰；折叠背景、占位符和控制图标颜色由主题 token 持有，测试覆盖配置、所有权、折叠状态和 DOM 输出 |
 | `standalone/browser/standaloneEditor.ts` | `createModel`、`getModel`、`getModels`、`setModelLanguage` | 公共模型边界使用 `ITextModel`；`createModel` 委托 `standaloneCodeEditor.ts::createTextModel`，未显式给语言时按 URI 和首行推断，显式语言优先；模型注册、查询、语言事件和释放由 Standalone 测试覆盖 |
 | `common/viewLayout/lineHeights.ts` | `CustomLineHeightData` | 构造参数、公开字段和 `fromDecorations` owner 与上游一致；生产由 `ViewModelImpl` 转换模型装饰，再交给 `LinesLayout`，测试覆盖视觉范围转换与配置行高倍率 |
 | `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `PieceTreeTextBuffer` | 实现 `common/model.ts` 的 `ITextBuffer` 契约；独立红黑树实现负责 1-based 查询、原子编辑与逆编辑、搜索、内容事件、BOM/EOL、快照和释放，确定性编辑测试同时检查字符串结果与树不变量 |
@@ -54,12 +76,44 @@
 | `standalone/browser/standaloneEditor.ts` | `create` | 创建并返回同一个 `StandaloneEditor` 实例；该实例由代码编辑器服务登记并触发创建事件，释放时从服务移除，仅隐式创建的模型随编辑器释放 |
 | `standalone/browser/standaloneEditor.ts` | `getEditors` | 直接读取代码编辑器服务持有的当前实例；与 `create`、`onDidCreateEditor` 共享对象身份和释放时机，Standalone 测试覆盖双编辑器登记、共享模型和独立释放 |
 | `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 公开成员差异归零；从计算后的编辑器配置和主题类型生成不可变行渲染快照，由 `ViewLines` 持有并在配置变化时比较后通知已渲染行；段落方向、制表宽度和 GPU 输入不再错误归入该类型，定向测试覆盖全部快照字段、相等比较与调用链 |
+| `browser/gpu/atlas/textureAtlas.ts` | `TextureAtlas` | 删除本地 styled atlas 分支；页面查找、子像素键、空闲预热、清空事件、用量预览和统计统一由标准 atlas owner 持有，生产帧只调用标准 token metadata 入口 |
+| `browser/gpu/atlas/textureAtlasPage.ts` | `TextureAtlasPage` | 删除页面 `index` 和 styled glyph API；页面以标准四元缓存键持有 OffscreenCanvas、glyph 顺序、版本与使用区域，页索引由 atlas 数组位置决定 |
+| `browser/gpu/atlas/textureAtlasShelfAllocator.ts` | `TextureAtlasShelfAllocator` | 直接实现标准 `ITextureAtlasAllocator`，接收 `IRasterizedGlyph` 并输出不含本地 `advance` 字段的标准 glyph；预览与像素统计由 allocator 持有 |
+| `browser/gpu/atlas/textureAtlasSlabAllocator.ts` | `TextureAtlasSlabAllocator` | 直接实现标准 `ITextureAtlasAllocator`，按 OffscreenCanvas 分配标准 glyph 并保留 slab 粒度与溢出语义；不再依赖 styled raster 接口 |
+| `browser/gpu/raster/glyphRasterizer.ts` | `GlyphRasterizer` | 构造输入恢复字体大小、字体族、设备像素比和 decoration cache；公开成员、token metadata、颜色表、子像素偏移与复用 glyph 契约归零，atlas 为唯一生产调用方 |
+| `browser/gpu/viewGpuContext.ts` | `ViewGpuContext` | 公开成员差异归零；`View` 唯一创建并挂载 `FastDomNode` canvas，`ctx`、共享 `device` / `deviceSync`、共享 atlas、物理尺寸、DPR 与 contentLeft 均由标准 owner 提供，RectangleRenderer 直接消费 observable；主题更新清理共享 decoration/atlas 状态，窗口级 device 在 pagehide 释放。GPU 定向测试覆盖 canvas/ARIA、observable 更新、handler/ResizeObserver 释放和 rectangle/ruler 调用链 |
+| `browser/gpu/rectangleRenderer.ts` | `RectangleRenderer` | 公开成员与 `draw(ViewportData)` 契约归零；该 owner 自行清屏、写入布局与滚动 uniform、提交 rectangle pass，并在释放时注销 `ViewContext` 事件监听 |
+| `browser/gpu/renderStrategy/baseRenderStrategy.ts` | `BaseRenderStrategy` | 公开成员差异归零；只持有标准 `ViewContext`、`ViewGpuContext`、device、glyph rasterizer、update/draw 抽象和事件注销，不再承载两个具体策略的 cell 编码辅助入口 |
+| `browser/gpu/renderStrategy/fullFileRenderStrategy.ts` | `FullFileRenderStrategy` | 标准 `ViewportData` 更新写入文档行定位的 cell storage buffer，滚动偏移扣除 `bigNumbersDelta`，绘制从对应文档实例起点开始；配置、装饰、token、行映射和行变化统一失效 |
+| `browser/gpu/renderStrategy/viewportRenderStrategy.ts` | `ViewportRenderStrategy` | 标准 `ViewportData` 更新写入视口 cell storage buffer，容量按视口增长并通过 `onDidChangeBindGroupEntries` 重建 bind group；滚动与全部视图失效事件接入同一 owner |
+| `browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | `ViewLinesGpu` | 构造入口、公开成员与上游归零；生产只消费 `View` 持有的 `ViewGpuContext`，上传 glyph metadata/atlas、调用标准策略并提供 GPU 行几何，不再创建 context、修改兄弟 Part DOM 或公开本地失效入口 |
+| `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 公开成员差异归零；根节点只通过 `getDomNode()` 暴露，标准 reveal 事件使用未来视口计算纵向位置，并在目标行进入 DOM 后完成横向 reveal。范围与位置几何按标准接收视图坐标，软换行不再被当成模型行；`CodeEditorWidget.revealRange` 已改经 `ViewModel` 发布事件，定向测试覆盖普通、居中滚动和软换行光标/装饰 |
+| `browser/viewParts/viewZones/viewZones.ts` | `ViewZones` | 公开成员差异归零；标准 `IViewZoneChangeAccessor` 只在回调生命周期内有效，新增、重排和移除统一进入 `ViewModel.changeWhitespace`。模型到视图坐标、隐藏区、高度、最小宽度、DOM top 回调和鼠标抑制由同一 owner 持有；CodeLens 与 ZoneWidget 只调用编辑器公开 `changeViewZones`。33 项相关单测和真实 Chromium 几何/释放场景通过 |
+| `browser/viewParts/viewCursors/viewCursor.ts` | `ViewCursor` | 公开成员差异归零；光标样式、宽高和字体从计算配置读取，位置使用视图选区，token 展示在边界转换回模型坐标；完整字素、软换行、双向文本和行尾空光标仍由独立实现渲染 |
+| `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 公开成员差异归零；只持有配置、焦点、只读、组合输入事件、光标 DOM 和可释放闪烁计时器。组合输入范围由 `CompositionController` 写入标准模型 decoration，不再通过 View 和 ViewCursors 的额外公开入口投影 |
 | `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 类成员差异归零，只保留准备与逐行输出抽象契约；可见行临时 DOM 由 `viewLayer.ts` 的通用行投影负责，各具体 overlay 自己持有输出并实现 `render`，不再由基类藏一份共享状态 |
 | `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 公开构造和成员契约归零；正文与边栏覆盖层共享 `ViewContext` 的配置、焦点、选区、换行坐标和释放链，主题系统提供聚焦、失焦及高对比度颜色，组件 CSS 负责状态投影。定向测试覆盖焦点、选区与正文/边栏 class，真实 Chromium 验证自定义主题切换和高对比度边框 |
 | `browser/viewParts/rulers/rulers.ts` | `Rulers` | 公开成员差异归零；配置与字体变化从 `ViewContext` 读取，滚动尺寸变化触发重绘，DOM 标尺节点按数量稳定复用并随 Part 释放；CSS 使用 Zeta 类名与主题 token，定向测试覆盖配置、几何、颜色、节点复用和释放 |
 | `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 公开成员差异归零；CPU 与 GPU 路径共享同一标尺配置和主题颜色，GPU 矩形按设备像素比与文字起点更新、按数量复用并随 Part 释放，定向测试覆盖配置、主题切换、缓存和释放 |
 | `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 公开成员差异归零；独立 Part 读取可见装饰并持有稳定块级 DOM，配置、滚动、装饰和 View Zone 事件进入统一渲染链，组件 CSS 使用实际 Zeta 类名且不拦截输入；测试覆盖块级几何、节点复用、可访问性属性和布局变化 |
+| `browser/viewParts/margin/margin.ts` | `Margin` | 构造器和公开成员与上游一致；只从 `EditorLayoutInfo` 读取 content、glyph、line-number 与 decoration 几何，`View` 不再维护第二份 gutter 测量。Zeta 宿主的横向滚动补偿和 CSS 变量由同一布局快照写入，真实 Chromium 验证滚动后 margin 仍固定 |
 | `contrib/middleScroll/browser/middleScrollController.ts` | `MiddleScrollController` | 构造入口恢复为 `ICodeEditor`，由标准 editor contribution 注册表在首次交互前安装；滚动只通过编辑器公开位置 API，配置在触发与动画帧读取，窗口监听、动画帧和装饰节点随 contribution 释放，定向测试覆盖首次交互实例化、横纵滚动、键盘/指针结束和无障碍隐藏 |
+| `browser/view/viewOverlays.ts` | `ViewOverlays` | 公开成员差异归零；动态 overlay 由同一 `Disposable` 链持有，释放时子层先释放再清除引用，真实 Widget 创建与销毁测试覆盖 DOM 和 Part 生命周期 |
+| `browser/viewParts/lineNumbers/lineNumbers.ts` | `LineNumbersOverlay` | 公开成员差异归零；配置、主光标、文本行、滚动、View Zone 和行号装饰事件均进入 margin overlay 失效链，行号配置不再保留构造时快照；真实 Widget 测试覆盖相对行号随光标变化以及运行时关闭行号后的内容和 gutter 几何 |
+| `browser/viewParts/selections/selections.ts` | `SelectionsOverlay` | 公开成员差异归零；配置、光标、装饰、文本行、滚动和 View Zone 事件均触发选区几何重算，逐行输出仍只由 `ContentViewOverlays` 持有且释放时清空缓存；真实 Widget 测试覆盖选区变化后的 DOM 投影 |
+| `browser/viewParts/whitespace/whitespace.ts` | `WhitespaceOverlay` | 公开成员差异归零；`renderWhitespace` 从计算配置动态读取，selection 模式只在光标变化时失效，配置、装饰、文本行、滚动和 View Zone 变化进入同一覆盖层；真实 Widget 测试覆盖 selection → all 运行时切换和空白字符数量 |
+| `browser/viewParts/indentGuides/indentGuides.ts` | `IndentGuidesOverlay` | 公开成员差异归零；guides 配置、主光标、装饰、语言配置、文本行、滚动和 View Zone 事件进入同一失效链，模型 tabSize 变化通过 `ViewModel` flush 更新；真实 Widget 和 ViewModel 测试覆盖逐行 guide、运行时关闭、tabSize 映射刷新与语言配置事件 |
+| `browser/viewParts/linesDecorations/linesDecorations.ts` | `LinesDecorationsOverlay` | `_getDecorations` 恢复为子类可扩展的 protected owner；生产仍从统一 Decorations overlay 读取可见装饰，装饰视口测试覆盖行侧 lane、软换行和更新投影 |
+| `browser/viewParts/marginDecorations/marginDecorations.ts` | `MarginViewLineDecorationsOverlay` | `_getDecorations` 恢复为 protected owner；诊断严重度、边栏 DOM 与 hover 均沿 Decorations → Margin overlay 链投影，现有装饰和诊断 hover 测试覆盖 |
+| `browser/viewParts/scrollDecoration/scrollDecoration.ts` | `ScrollDecorationViewPart` | 删除本地公开 `domNode`，恢复 canonical `getDomNode()`；View 和测试均改接该入口，阴影几何、配置变化、ARIA presentation 和释放行为通过定向测试 |
+| `browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` | `DecorationsOverviewRuler` | 公开成员差异归零；标准光标、装饰、配置、主题、滚动和 View Zone 事件进入同一失效状态机，`prepareRender` 读取模型 decoration 后由 canvas owner 绘制 lane、光标和主题边框；canvas 保持 `aria-hidden`，29 项配置、主题、几何和投影测试通过 |
+| `browser/viewParts/contentWidgets/contentWidgets.ts` | `ViewContentWidgets` | 公开成员差异归零；标准配置、装饰、flush、line mapping、行增删、滚动和 View Zone 事件进入同一 Part 失效链，构造只接收 `ViewContext + FastDomNode`。Content Widget 的测量、定位、overflow root、鼠标抑制和释放由该 owner 持有，真实 Widget API 与 Chromium 几何场景通过 |
+| `contrib/codelens/browser/codelensController.ts` | `CodeLensContribution` | 公开成员差异归零且 contribution ID 恢复为 `css.editor.codeLens`；显式 `dispose()` 取消当前请求、清理模型和 Widget 引用，CodeLens provider、缓存、解析、命令与释放 7 项测试通过 |
+| `contrib/message/browser/messageController.ts` | `MessageController` | 公开成员差异归零并通过标准 `registerEditorContribution` 延迟创建；消息使用编辑器公开 Widget、光标、模型和鼠标事件，ARIA alert、可见 Context Key、Markdown 链接、blur timer 与释放均由同一实例持有；只读消息调用链测试覆盖显示、关闭和释放 |
+| `contrib/placeholderText/browser/placeholderTextContribution.ts` | `PlaceholderTextContribution` | 公开成员差异归零并通过标准 contribution 注册表 eager 创建；占位文本、空模型、配置、字体和布局只从 `ICodeEditor` 与 `observableCodeEditor` 读取，Overlay Widget 随 contribution 释放；真实 Widget 测试覆盖空/非空切换、padding 和 content 几何 |
+| `contrib/multicursor/browser/multicursor.ts` | `SelectionHighlighter` | `ID` 与 `dispose()` 恢复且实际拆成 `editor.contrib.selectionHighlighter` owner；释放后清空装饰并移除选区/模型监听，3 项定向测试覆盖文本匹配、策略和释放后不再更新 |
+| `browser/widget/codeEditor/codeEditorContributions.ts` | `CodeEditorContributions` | 标准 contribution 的 staged 创建、显式读取、view state 与释放统一由该 owner 管理；Context Menu 已只依赖 `ICodeEditor` 和平台菜单服务，Clipboard 默认输入职责已回到 EditContext，额外 contextual 描述、动态参数和初始化入口全部删除；真实 Widget 测试覆盖 eager、首次交互、延迟和释放阶段 |
+| `common/cursor/cursorTypeOperations.ts` | `TypeOperations` | 10 个公开入口的成员和签名差异归零；Tab 区分部分选区、跨行选区与纯空白行，每个光标按自身语言配置构造自动闭合命令，组合输入替换局部窗口或选区并把结束结果交回同一组合历史修订。生产调用覆盖 `CursorsController`、`ViewController` 与文本 drop，定向测试覆盖输入、粘贴、缩进、覆盖模式、组合环绕、多光标、语言配置和一次撤销 |
 
 ## 尚未补齐的同名契约
 
@@ -67,72 +121,39 @@
 
 | 文件 | 声明 | 此前结论（已撤回） |
 | --- | --- | --- |
-| `browser/controller/dragScrolling.ts` | `DragScrolling` | 当前只有仅本地 `bidirectionalDragScrolling.ts`，其双轴像素滚动职责不同于上游抽象 owner；需随 `ViewContext`、outside-editor target、`MouseTargetFactory`、render/hit-test、RTL 与 `dispatchMouse` 整链迁移后删除旧文件 |
-| `browser/controller/mouseHandler.ts` | `MouseHandler` | 已只保留浏览器指针捕获、拖动、自动滚动、目标解析和输入事件发布；选区策略已迁入 `ViewController.dispatchMouse`，构造参数仍待随 `ViewContext` 和 pointer helper 收敛 |
 | `browser/controller/editContext/editContext.ts` | `AbstractEditContext` | 已进入 `ViewPart` 生命周期并统一剪贴板事件、输入路由和组合输入状态；抽象层仍保留 Zeta 的公共输入契约，需继续缩小与上游声明成员的差异 |
-| `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 已由 `View` 持有，接入 `ViewContext`、视图事件、预渲染几何读取、渲染写入、按编辑器 ID 注册及跨 document 重新挂接；浏览器缓冲区和辅助阅读器的成员契约仍待收敛 |
-| `browser/controller/editContext/native/screenReaderContentRich.ts` | `RichScreenReaderContent` | 已恢复公开名并由 `ScreenReaderSupport` 实际选择；配置事件和视图渲染阶段仍待收敛 |
-| `browser/controller/editContext/native/screenReaderContentSimple.ts` | `SimpleScreenReaderContent` | 已恢复公开名并实际承担简单无障碍镜像；选择同步和 `ViewContext` 构造契约仍待收敛 |
-| `browser/controller/editContext/native/screenReaderSupport.ts` | `ScreenReaderSupport` | 已由 `NativeEditContext` 持有并接入配置、光标、内容、装饰、滚动、空白区及 prepare/render 生命周期；动态辅助阅读器配置和剩余成员契约仍待收敛 |
+| `browser/controller/editContext/native/nativeEditContext.ts` | `NativeEditContext` | 已进入 `View` 的 Part 生命周期，接入 `ViewContext`、视图事件、预渲染几何读取、渲染写入、按编辑器 ID 注册及跨 document 重新挂接；`handleWillCopy` / `handleWillPaste` 已由标准 Clipboard action 调用，浏览器缓冲区和辅助阅读器的其余成员契约仍待收敛 |
+| `browser/controller/editContext/native/screenReaderContentRich.ts` | `RichScreenReaderContent` | 已恢复公开名并由 `ScreenReaderSupport` 实际选择；标准内容入口由简单内容基类继承，富内容类只保留 token/bracket DOM 渲染差异，没有为成员报告添加空转发方法。运行时配置切换会创建当前实现并释放旧内容；构造契约仍待收敛 |
+| `browser/controller/editContext/native/screenReaderContentSimple.ts` | `SimpleScreenReaderContent` | 已恢复公开名并实际承担简单无障碍镜像；标准 cut、paste、focus、configuration、content 和 scroll 入口已由生产 `ScreenReaderSupport` 调用，现有分页、选区映射和滚动实现保持在该 owner。内部协作边界与构造契约仍待收敛 |
+| `browser/controller/editContext/native/screenReaderSupport.ts` | `ScreenReaderSupport` | 公开成员名差异已归零；由 `NativeEditContext` 持有，焦点、配置、剪切、粘贴与光标进入标准内容入口，其余 ViewPart 变化直接触发 `prepareRender` 内容同步。`EditorConfiguration` 已成为 page size 与 rich/simple 选择的唯一配置 owner，动态重建由单个可替换资源持有并释放旧内容；Zeta 现有分页、DOM child、选区映射和布局 owner 保持不变，并验证三处共享同一模型。构造签名仍待收敛，因此继续留在待处理表 |
 | `browser/controller/editContext/textArea/textAreaEditContext.ts` | `TextAreaEditContext` | 已由 `View` 持有，接入 `ViewContext`、视图事件、渲染阶段、按编辑器 ID 注册、`getTextAreaDomNode` 和真实输入调用链；文本窗口与辅助阅读器成员契约仍待收敛 |
 | `browser/controller/editContext/textArea/textAreaEditContextInput.ts` | `TextAreaInput` | 已恢复公开名并由 `focusTextArea`、DOM 事件、选区和释放形成真实调用链；host 事件契约仍待收敛 |
-| `browser/gpu/atlas/textureAtlas.ts` | `TextureAtlas` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/atlas/textureAtlasPage.ts` | `TextureAtlasPage` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/atlas/textureAtlasShelfAllocator.ts` | `TextureAtlasShelfAllocator` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/atlas/textureAtlasSlabAllocator.ts` | `TextureAtlasSlabAllocator` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/raster/glyphRasterizer.ts` | `GlyphRasterizer` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/rectangleRenderer.ts` | `RectangleRenderer` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/renderStrategy/baseRenderStrategy.ts` | `BaseRenderStrategy` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/renderStrategy/fullFileRenderStrategy.ts` | `FullFileRenderStrategy` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/renderStrategy/viewportRenderStrategy.ts` | `ViewportRenderStrategy` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/viewGpuContext.ts` | `ViewGpuContext` | 本地职责已改名或移出上游 owner |
 | `browser/viewParts/overlayWidgets/overlayWidgets.ts` | `ViewOverlayWidgets` | 拥有小组件 DOM、配置驱动的溢出与布局策略、最小内容宽度和生命周期；仅保留本地渲染调度依赖 |
-| `browser/view/viewOverlays.ts` | `ViewOverlays` | 拥有覆盖层集合、统一可见行 DOM、字体、焦点、正文及边栏几何和子层生命周期；`ContentViewOverlays` / `MarginViewOverlays` 分别投影两类根层 |
-| `browser/view/viewController.ts` | `ViewController` | 已只负责命令、组合输入协调、焦点调用和 `dispatchMouse` 选区策略；输入 Part 的创建、渲染与释放已迁入 `View`，剪贴板委托和剩余公开成员仍待收敛 |
+| `browser/view/viewController.ts` | `ViewController` | 已移除 `layout`、焦点、ARIA 和辅助阅读器转发入口，只保留命令、组合输入协调、输入事件桥接和 `dispatchMouse` 选区策略；输入实例仍需从 Controller 构造阶段完全移回 `View` 后，才能继续删除其余错位公开成员 |
 | `browser/viewParts/gpuMark/gpuMark.ts` | `GpuMarkOverlay` | 本地职责已改名或移出上游 owner |
-| `browser/viewParts/contentWidgets/contentWidgets.ts` | `ViewContentWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/decorations/decorations.ts` | `DecorationsOverlay` | 已恢复逐行片段职责、装饰快照和失效事件 owner，并由 `ContentViewOverlays` 持有 |
+| `browser/viewParts/decorations/decorations.ts` | `DecorationsOverlay` | 构造器、公开成员和标准模型 decoration 渲染职责与上游一致；只从 `RenderingContext` 读取视区 decoration，由 `ContentViewOverlays` 持有，生产 View 不再装配第二套 source overlay |
 | `browser/viewParts/editorScrollbar/editorScrollbar.ts` | `EditorScrollbar` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/glyphMargin/glyphMargin.ts` | `GlyphMarginWidgets` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/indentGuides/indentGuides.ts` | `IndentGuidesOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
-| `browser/viewParts/lineNumbers/lineNumbers.ts` | `LineNumbersOverlay` | 已从独立 Part 改为 margin 逐行覆盖层，并由 `MarginViewOverlays` 持有 |
-| `browser/viewParts/linesDecorations/linesDecorations.ts` | `LinesDecorationsOverlay` | 已恢复逐行片段职责并由 `MarginViewOverlays` 持有 |
-| `browser/viewParts/margin/margin.ts` | `Margin` | 已恢复公开名和 `ViewPart` 生命周期，并持有 margin 覆盖层、视图区与 glyph margin DOM |
-| `browser/viewParts/marginDecorations/marginDecorations.ts` | `MarginViewLineDecorationsOverlay` | 已恢复逐行片段职责并由 `MarginViewOverlays` 持有 |
+| `browser/viewParts/glyphMargin/glyphMargin.ts` | `GlyphMarginWidgets` | 构造只接收 `ViewContext`；共享 `DecorationToRender`、`LineDecorationToRender`、`VisibleLineDecorationsToRender` 与 `DedupOverlay` 供标准 model decoration 和 caller widget 使用，不再读取 browser source |
 | `browser/viewParts/minimap/minimap.ts` | `Minimap` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` | `DecorationsOverviewRuler` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/overviewRuler/overviewRuler.ts` | `OverviewRuler` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/scrollDecoration/scrollDecoration.ts` | `ScrollDecorationViewPart` | 配置、滚动、渲染、主题色、CSS 和释放链已补齐；本地公开 `domNode` 与上游 `getDomNode()` 仍是一增一缺，需用户决定后再移除旧接口，不能并存两个入口 |
-| `browser/viewParts/selections/selections.ts` | `SelectionsOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
-| `browser/viewParts/viewCursors/viewCursor.ts` | `ViewCursor` | 已恢复公开名并由 `ViewCursors` 独立持有 |
-| `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 已从逐行覆盖层移回独立 `ViewPart`，持有光标 DOM、组合输入显示和移动动画 |
+| `browser/viewParts/overviewRuler/overviewRuler.ts` | `OverviewRuler` | 已接通标准 `IOverviewRuler`：`CodeEditorWidget.createOverviewRuler → View.createOverviewRuler → OverviewRuler`，canvas、zone manager、layout、DPR/lineHeight 更新及 context 注销均由该 owner 持有 |
 | `browser/viewParts/viewLines/viewLine.ts` | `ViewLine` | 类成员名差异归零；单行独立持有 DOM、字符映射、宽度缓存、等宽假设校验和范围测量，调用方不再读取内部文本节点；渲染参数签名仍需随标准 `ViewportData` 输入继续收敛 |
-| `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 已进入 `ViewPart` 事件、渲染和释放链，统一负责逐行定位、DOM 到文档位置转换、范围几何、宽度缓存与等宽假设校验；`View` 与 GPU 层不再读取 `ViewLine` 内部状态，行集合和逐行几何 helper 已回到对应 owner，剩余成员差异从 64 降至 32 |
-| `browser/viewParts/viewZones/viewZones.ts` | `ViewZones` | 已恢复公开名并接入 `ViewPart` 事件与释放链 |
-| `browser/viewParts/whitespace/whitespace.ts` | `WhitespaceOverlay` | 已恢复逐行片段职责并由 `ContentViewOverlays` 持有 |
-| `browser/widget/codeEditor/codeEditorContributions.ts` | `CodeEditorContributions` | 本地多 context contribution owner 改为 `WidgetContributionCollection` |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | `DiffEditorWidget` | 本地只读虚拟化审阅面板改为 `EditorDiffWidget` |
 | `browser/widget/multiDiffEditor/multiDiffEditorWidget.ts` | `MultiDiffEditorWidget` | 本地多文件审阅面板改为 `EditorMultiDiffWidget` |
-| `browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | `ViewLinesGpu` | 已接入 `ViewPart` 事件、渲染和释放链，并由实际绘制帧实现 `IViewLines`、行宽与横坐标命中；初始化和渲染阶段的内部 owner 仍待继续收敛 |
 | `common/services/languageService.ts` | `LanguageService` | 已按上游契约对齐 |
 | `common/services/languageFeatures.ts` | `ILanguageFeaturesService` | 本地 provider 集合契约改为 `IEditorLanguageFeaturesService` |
 | `common/services/languageFeaturesService.ts` | `LanguageFeaturesService` | 本地 provider registry 改为 `EditorLanguageFeaturesService` |
-| `common/viewLayout/viewLayout.ts` | `ViewLayout` | 已恢复标准构造入口、配置更新和 `Scrollable` 所有权；生产由唯一 `ViewModel` 持有，内容/滚动尺寸、当前视口、行坐标、可见行、空白区、特殊行高以及滚动/内容尺寸事件均由它发布；`View` 只读取布局结果，不再创建或更新第二份布局 |
-| `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 只拥有无拦截输入的编辑构造；结果选区去重由 `editorEditCommand.ts` 统一负责，不再伪装成类 API |
-| `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 拥有 `_runAutoClosingOvertype` 执行阶段，并保持多光标、完整字素和物理行边界行为 |
+| `common/viewLayout/viewLayout.ts` | `ViewLayout` | View Zone 的并行 map、`addViewZone` / `changeViewZone` / `removeViewZone` / `getViewZoneLayout` 已删除，标准 whitespace 同时决定纵向空间和最小内容宽度；仍多出 `layout`、`lineCount`、`onDidChange`、`setLineHeight`、`setViewportSize` 及两个零基行坐标入口，需等待 View/Widget 调用方迁完后收敛 |
+| `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 只拥有无拦截输入的编辑构造；结果选区由标准 `ICommand` 收集和 `CursorsController` 事务归一化，不再依赖仅本地编辑命令协议 |
+| `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 只根据自动闭合来源和当前位置构造覆盖命令；多光标、完整字素和物理行边界由本地行为测试直接验证，不要求复刻上游私有执行阶段 |
 | `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 本地职责已改名或移出上游 owner |
-| `contrib/message/browser/messageController.ts` | `MessageController` | 本地职责已改名或移出上游 owner |
 | `contrib/peekView/browser/peekView.ts` | `PeekViewWidget` | 本地职责已改名或移出上游 owner |
-| `contrib/placeholderText/browser/placeholderTextContribution.ts` | `PlaceholderTextContribution` | 具体 Widget/DOM 生命周期实现改为 `WidgetPlaceholderTextContribution` |
 | `contrib/codeAction/browser/codeActionController.ts` | `CodeActionController` | 本地 contribution 实现改为 `EditorCodeActionController` |
-| `contrib/codelens/browser/codelensController.ts` | `CodeLensContribution` | 本地 contribution 实现改为 `EditorCodeLensContribution` |
 | `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 本地 contribution Widget 改为 `EditorCodeLensWidget` |
-| `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 本地 contribution 实现改为 `EditorColorDetector` |
+| `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 已恢复上游公开名；颜色 provider 结果写入标准 before decoration，动态 class ref 先于 CSS owner 释放，注入 marker 由标准鼠标目标读取 |
 | `contrib/find/browser/findController.ts` | `FindController` | 本地 contribution 实现改为 `EditorFindController` |
 | `contrib/folding/browser/folding.ts` | `FoldingController` | 本地 contribution 实现改为 `EditorFoldingController` |
 | `contrib/inlayHints/browser/inlayHintsController.ts` | `InlayHintsController` | 本地 contribution 实现改为 `EditorInlayHintsController` |
 | `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | `InlineCompletionsController` | 本地 contribution 实现改为 `EditorInlineCompletionsController` |
-| `contrib/multicursor/browser/multicursor.ts` | `SelectionHighlighter` | 本地 occurrence 高亮实现改为 `EditorSelectionHighlighter` |
 | `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 本地 contribution 实现改为 `EditorStickyScrollController` |
 | `contrib/suggest/browser/suggestController.ts` | `SuggestController` | 本地 contribution 实现改为 `EditorSuggestController` |
 
@@ -140,23 +161,20 @@
 
 | 文件 | 声明 | 分类 |
 | --- | --- | --- |
-| `browser/view.ts` | `View` | 已统一持有 `ViewController` 和输入 Part，并把输入纳入视图挂载、渲染、几何更新与释放链；其余视图部件和公开成员仍待逐项收敛 |
-| `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表，并补齐 `setScrollLeft` / `setScrollPosition` 供 contribution 只依赖公开编辑器契约；完整 Widget 声明仍需随 model attach/detach、view state 和对象生命周期继续收敛 |
-| `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；ViewModel 与 cursor context 调用链尚未补齐 |
-| `common/cursor/cursorCollection.ts` | `CursorCollection` | 成员边界、primary-first 状态、marker 生命周期和 overlap normalize 已与上游一致；仍需随统一 `ViewModel` 接入生产 `CursorsController` |
+| `browser/view.ts` | `View` | 根节点已从仅本地 `element` 迁为标准 `domNode`，40 余个 Editor/Workbench 调用方全部改接；焦点、Widget 焦点、ARIA、辅助阅读器、强制渲染、行宽缓存与 `onWillCopy` / `onWillCut` / `onWillPaste` 已回到该 owner。输入实例当前仍由 Controller 构造回调建立，需继续迁回 `View` 后再计为完成 |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表，并补齐 `setScrollLeft` / `setScrollPosition`、`updateOptions`、`getOptions`、`getRawOptions` 和 `onDidChangeConfiguration` 供 contribution 只依赖公开编辑器契约；完整 Widget 声明仍需随 model attach/detach、view state 和对象生命周期继续收敛 |
+| `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，成员差异由 12 项降至 9 项。View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace 和 Line Selection 已改走 `IViewModel` 或 `ICodeEditor`；仍有 29 个外部生产调用方，剩余只读事件、cursor-only history、LanguageEditingAdapter 和 contribution 装配链尚未补齐 |
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
-| `common/cursor/cursorTypeOperations.ts` | `TypeOperations` | 已恢复上游公开名；输入策略仍需逐项核对 |
-| `common/cursor/cursorWordOperations.ts` | `WordOperations` | 文件正文与上游一致，鼠标选词已接入；按词删除仍由仅本地 `selectionSetWordOperations.ts` 承担。历史 `wordSelection.ts` 已删除且无残留 import；仍需随统一 `CursorsController` 接入生产编辑链 |
-| `common/cursor/oneCursor.ts` | `Cursor` | 成员边界、`modelState` / `viewState`、tracked range 与折行坐标转换已与上游一致；仍需随统一 `ViewModel` 进入生产生命周期 |
 | `common/model/textModel.ts` | `TextModel` | 文本模型与 Piece Tree |
 
 ## 当前已验证能力
 
-- 当前 40 项严格完成项均已进入生产调用链并核对 owner 与生命周期，或属于已验证不会进入生产创建链的诊断工具；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
+- 当前 79 项严格完成项均已进入生产调用链并核对 owner 与生命周期，或属于已验证不会进入生产创建链的诊断工具；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
 - Standalone 模型创建现在由 `standaloneCodeEditor.ts::createTextModel` 统一决定语言：显式语言优先，否则读取 URI 与第一行；Model Service 仍是模型注册、查询、语言事件和释放 owner。
 - `IClipboardPasteEvent`、`ColumnSelection`、`ColorPickerModel` 已分别通过真实输入、鼠标列选和 Color Picker 生产调用链复核。
-- `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 118 项完成数。
+- `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 119 项完成数。
 - `ITextModel` 的公开成员、内部历史入口和 ViewModel 生命周期已对齐；`TextModel` 现在唯一持有 decoration range、owner 隔离、模型部件事件与 tokenization/bracket pairs 调度。实现类仍需继续统一私有 owner，因此 `TextModel` 声明本身尚未计入完成数。
+- `LineNumbersOverlay`、`SelectionsOverlay`、`WhitespaceOverlay` 与 `IndentGuidesOverlay` 的公开成员差异归零；配置不再由各 Part 保存构造时快照，`CodeEditorWidget` 的标准配置 API 驱动 `EditorConfiguration → ViewModel → ViewContext`，模型 tabSize 与语言配置变化也进入对应视图事件。
 
 ## 待处理 owner 顺序
 
@@ -167,14 +185,25 @@
 | 3 | ViewModel 与 Cursor | 生产构造链已收敛为 `CodeEditorWidget → ViewModel → View`；行映射、坐标转换、光标、布局、装饰和事件只有一份，`ViewModelLinesFromProjectedModel` 只由 `ViewModel` 创建。当前缺口是输入与 contribution 仍通过内部光标执行器工作，Widget 还保留获取该执行器的内部入口 | 将选择、输入、组合输入、命令执行和只读事件逐项改为 `ViewModel` 契约，删除内部执行器入口；相关调用方完成迁移后再把本切片计为完成 |
 | 4 | ViewContext、ViewPart 与 View | `ViewContext → ViewPart → View` 生命周期已经接通，内容/margin 覆盖层统一逐行 DOM，块装饰和光标回到独立 Part；标准渲染上下文与 DOM/GPU `IViewLines` 几何已接通。当前缺口只剩两个输入实现尚未进入同一 Part 渲染阶段 | 迁移输入 Part，不保留第二套调度框架 |
 | 5 | CodeEditor Widget 与服务 | `CodeEditorWidget`、`ICodeEditor`、编辑器服务和 contribution 生命周期不完整；Workbench 仍导入缺失的 Diff/MultiDiff canonical export | Widget、服务、贡献初始化、model attach/detach、view state 和公开对象身份同批闭环 |
-| 6 | GPU 与 Editor contribution | Styled GPU 是一条独立生产链；19 个 contribution 通过改成 `Editor*` 隐藏同路径声明缺口 | GPU 按 atlas→rasterizer→strategy→context→ViewLinesGpu 整链迁移；contribution 随各自 Widget/服务 owner 迁移 |
+| 6 | GPU 与 Editor contribution | GPU context、atlas、page、allocator、glyph rasterizer、两个 strategy、RectangleRenderer 与 ViewLinesGpu 已统一到标准 buffer/atlas 链；19 个 contribution 仍通过改成 `Editor*` 隐藏同路径声明缺口 | GPU 基础链已闭合，后续按各自 Widget/服务 owner 迁移 contribution |
 
 ## 验证状态
 
-- 文件集合审计：381 个同路径、0 个大小写错误、209 个仅本地、348 个仅上游；Zeta 590 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
-- 119 项账本：42 项已处理、77 项待处理、总计 119 个唯一声明。
+- 文件集合审计：392 个同路径、0 个大小写错误、205 个仅本地、337 个仅上游；Zeta 597 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
+- 119 项账本：79 项已处理、40 项待处理、总计 119 个唯一声明。
 - `tsconfig.test.json` 编译通过；`MoveOperations` 的 17 个标准入口通过 12 项定向行为测试，真实 `CodeEditorWidget` 连续向下移动测试证明短行后的可视列余量能够恢复。`tsconfig.json --noEmit` 仍只报既有 Electron、Embedded Editor、BrowserView、Workbench 与 TextMate 基线错误，本批文件无新增类型错误。
-- Editor 浏览器总入口仍被 4 个既有测试编译错误阻断：缺少 `styledGlyphRasterizer.js`、`selectionSet.js`，以及 bracket pair 配置和 TextModel 构造参数不匹配。真实 Chromium 集成测试 5 项通过 4 项，其中无障碍契约通过；失败项是既有的 `Control+Home` 光标行为。
+- Editor 浏览器测试 TypeScript 已编译通过；GPU Chromium 用例通过，证明 WGSL pipeline、Rectangle clear pass、ViewLinesGpu load pass、编辑与 undo 的真实帧链可用。本批 Widget、pointer、decoration 与 CodeEditorWidget 相关 40 项单测全部通过；Decoration owner 本批另有 25 项聚焦单测通过，真实 Chromium 验证标准 inline、whole-line、collapsed decoration 的非零几何和删除重绘。View Zone 场景精确验证 4 行 × 18px + 500px 空白区高度、1200px 最小宽度及移除后恢复，Widget 场景验证 Content Widget 非零几何、Glyph Widget 跨行迁移、模型 decoration z-index winner 和释放。全量浏览器入口仍有既有 Academic 多行键入、旧 token/语法分析断言和旧 minimap slider 断言，不通过兼容文件恢复退场 API。
 - Editor 完整单测运行到 882 项时为 845 项通过、11 项失败；`codeEditorPane.test.js` 挂起约 4 分钟后终止，后续 26 项被取消。失败覆盖 Cursor Undo/Redo、Folding、Join Lines、输入事件次数、占位符几何、字体配置和换行符等既有基线，本批 4 个定向用例均通过。
 - 当前行高亮的 Widget 行为测试和主题 token 测试通过；真实 Chromium 验证普通主题下聚焦/失焦背景分别读取对应 token，高对比度主题使用 `1px` 语义边框。Editor 根 DOM 和组件 CSS 已统一使用 `.stanza-editor`，不再依赖上游产品 class，并由架构测试守住该边界。完整设计 token 门禁仍被范围外 `multiDiffEditorPane.css` 使用未注册的 `--zeta-widget-background` 阻断，本批新增变量均已注册。
-- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 78 项中扣减。
+- 本轮 `findController`、canonical comment actions、canonical drop 事件与 controller、completion enablement 共 19 条定向断言通过；`tsconfig.test.json --noEmit` 通过。整份 `codeEditorWidget.test.ts` 仍有既有 placeholder 几何 1px 波动，相关 drop / shared-event 3 条测试按测试名独立通过。
+- View overlay、行/边栏装饰、Scroll Decoration、CodeLens、Message 和 Selection Highlighter 本轮共 23 条定向断言通过；成员审计的精确项由 12 增至 19，差异项由 63 降至 56。泄漏审计确认 DOM 监听均走可释放入口，重复 blur timer 改为单实例持有。
+- View DOM owner、焦点/ARIA、Suggest、Clipboard、CopyPasteController、CodeLens、Selection/Word Highlight 与 Linked Editing 共 60 条相关断言通过；`tsconfig.test.json --noEmit` 和 Stanza 类型检查通过。文件/API 扫描与账本校验在本批结束时复跑。本批没有修改 CSS。
+- 本批 `typecheck:stanza`、`tsconfig.test.json` 和浏览器测试 TypeScript 编译通过；模型 language/resource owner 4 项聚焦测试通过。Chromium 的 Rust syntax/diagnostics/folding/symbols、gutter 顺序与横向滚动固定、标准 line/block decoration 三个场景全部通过。本批没有修改 CSS。
+- 鼠标目标批次的 Stanza 类型检查、测试类型检查和测试编译通过；坐标/指针、Widget、Context Menu、Middle Scroll、Color Picker、CodeLens、Folding 与 Debug 共 56 项聚焦测试全部通过。统一检查器当时确认对应账本、文件集合、diff 和生成文件检查通过；CSS ownership 子进程因当前大工作区 diff 超出其默认缓冲区报 `ENOBUFS`，无 diff 的全文件检查确认 55 个 CSS 中不存在上游原样副本或 `monaco-editor` 产品根。本批未修改 CSS。完整 browser 入口当前为 7/15，通过项和失败项继续按既有基线分别处理，失败仍集中在 Academic 多行输入、undo、18/20px 光标断言、旧 diagnostics/minimap/gutter/overview-ruler DOM 断言及 GPU folding marker。
+- 本轮光标历史 owner 批次的 `tsconfig.test.json` 与 Stanza 类型检查通过；common、composition、自动闭合和 contribution 聚焦测试 179 项通过。另一个 Suggest Widget 布局断言在本批 undo 调用之前失败（期望 `68px`、实际 `24px`），不通过恢复 `CursorsController.undo/redo` 掩盖。统一成员检查确认 `CursorsController` 只剩 9 项差异；CSS ownership 审计仍因当前大工作区 Git 输出触发 `ENOBUFS`，本批没有修改 CSS。
+- Cursor Undo 端口批次的 Stanza 与测试类型检查通过；Cursor Undo、Linked Editing、Message、Inline Completions、Observable Editor 和真实 CodeEditorWidget 共 43 项聚焦测试通过，覆盖完整 cursor event、同版本 undo/redo、模型变化失效和下游事件消费。本批没有新增交互、快捷键、焦点目标或视觉表面，既有 `Ctrl/Cmd+U` 键盘路径保持不变，无需新增 accessibility help 或样式。
+- Overview Ruler 批次的 Stanza 与测试 TypeScript 编译通过；成员比较从 3 项差异降为 0，配置、装饰 canvas、标准 zone geometry 和主题共 29 项聚焦测试通过。本批没有修改 CSS；canvas 继续从无障碍树隐藏，没有新增焦点目标、快捷键或可操作控件。包含 User Theme 的扩展定向集合仍有 2 个既有颜色序列化断言失败（旧断言期望十六进制 alpha，当前返回 `rgba()`；序列化后的 `rgba()` 又未被 parser 接受），失败行未在本批修改。
+- 本轮 `TypeOperations`、组合会话和模型历史修订共 66 项定向测试通过；覆盖模式组合结束与组合环绕均在一次撤销内恢复原文。CSS ownership 审计工具已能处理当前大工作树，并只报告 9 个未触及的 branding-equivalent 历史债务，没有新增上游品牌引用或本批阻断项。
+- 输入与选区端口批次的 Stanza 类型检查和 `tsconfig.test.json` 编译通过。三组精确 Node 运行分别为 17、33、67 项通过，其中 history 的 13 项在两组中重复执行；覆盖 ViewModel owner、Anchor Select、Line Selection、CodeEditorWidget、TextArea/Native EditContext、组合输入、word delete、in-place replace、选区事件和模型历史。真实 Chromium 的公开输入/撤销/保存链及无障碍契约 2 项通过。结构门禁仍为 392 个同路径、0 个大小写错误、205 个仅本地、337 个仅上游；CSS 审计没有新增上游品牌引用或本批等价复制，`CursorsController` 保持 9 项差异并继续留在待处理表。
+- Native 辅助阅读端口的 Stanza、测试和浏览器 TypeScript 编译通过；完整 `codeEditorWidget.test.ts` 32 项及 `editorConfiguration.test.ts` 11 项通过。新增用例覆盖简单与富内容分支、内容随模型更新、失焦清理、模型 owner 错配拒绝，以及 `CodeEditorWidget → View → NativeEditContext → ScreenReaderSupport` 的运行时配置切换和旧 DOM 释放。真实 Chromium 的 WCAG/ARIA 场景 1 项同时验证焦点后的简单内容、rich 切换、旧节点释放和切回简单内容；先前公开输入/撤销链 1 项保持通过。成员检查器现在解析 Editor 范围内的继承，并按声明 owner 比较：继承可以满足上游声明，但基类额外成员不会重复算到每个子类，也不需要添加只调用 `super` 的包装方法；脚本与 CSS ownership 共 6 项回归测试通过。结构门禁保持 10 个精确成员项、28 个差异项；CSS ownership 仍为 0 个新增上游品牌引用、0 个本批等价复制，本批没有修改 CSS。
+- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 79 项中继续扣减。

@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorCommandHistoryMode } from '../../../../common/commands/editorEditCommand.js';
+import { ReplaceCommand } from '../../../../common/commands/replaceCommand.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, LanguageCompletionSessionController } from "../../common/languageCompletionSessionController.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
@@ -84,7 +84,7 @@ test("Accepting a completion is one isolated selection-aware undo step", () => {
 	assert.equal(session.state, undefined);
 	assert.equal(reasons.at(-1), LanguageCompletionSessionChangeReason.Accepted);
 
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "con tail");
 	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });
@@ -102,7 +102,7 @@ test("A declared commit character accepts completion and text as one isolated un
 	assert.equal(session.acceptSelectedWithCommitCharacter("."), true);
 	assert.equal(model.getText(), "console. tail");
 	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (8) + 1)), 0);
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "con tail");
 	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });
@@ -147,7 +147,7 @@ test("Completion acceptance applies additional edits and maps the caret through 
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "import xconsole");
 	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (15) + 1)), 0);
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "xcon");
 	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (4) + 1)), 0);
 });
@@ -216,9 +216,9 @@ test("Completion snippets cycle choice tabstops and replace every mirror atomica
 	], 0));
 	assert.equal(session.selectPreviousSnippetChoice(), true);
 	assert.equal(model.getText(), "a-a");
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "long-long");
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "a-a");
 });
 
@@ -244,12 +244,10 @@ test("Completion snippets refresh tabstop transforms when navigation leaves a so
 
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "name => NAME");
-	selections.execute({
-		edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)), text: "next" }],
-		selectionsAfter: [{ anchorOffset: 4, activeOffset: 4 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.Isolated,
-	});
+	selections.executeCommand(new ReplaceCommand(
+		Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
+		"next",
+	));
 	assert.equal(model.getText(), "next => NAME");
 	assert.equal(session.selectNextSnippetPlaceholder(), true);
 	assert.equal(model.getText(), "next => NEXT");

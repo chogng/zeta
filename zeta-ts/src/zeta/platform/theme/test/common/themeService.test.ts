@@ -55,6 +55,8 @@ test("color identifiers map to stable CSS custom properties", () => {
 	assert.equal(colorCssVariable(ColorId.editorInactiveLineHighlightBackground), '--zeta-editor-inactive-line-highlight-background');
 	assert.equal(colorCssVariable(ColorId.editorLineHighlightBorder), '--zeta-editor-line-highlight-border');
 	assert.equal(colorCssVariable(ColorId.editorRulerForeground), '--zeta-editor-ruler-foreground');
+	assert.equal(colorCssVariable(ColorId.editorOverviewRulerBorder), '--zeta-editor-overview-ruler-border');
+	assert.equal(colorCssVariable(ColorId.editorOverviewRulerBackground), '--zeta-editor-overview-ruler-background');
 	assert.equal(sizeCssVariable('strokeThickness'), '--zeta-stroke-thickness');
 });
 
@@ -85,5 +87,23 @@ test('editor ruler colors preserve the editor theme contract', () => {
 		light: '#d3d3d3',
 		highContrastDark: '#ffffff',
 		highContrastLight: '#292929',
+	});
+});
+
+test('overview ruler colors preserve transparent normal borders and a solid high-contrast light border', () => {
+	assert.deepEqual({
+		darkBorder: darkColorTheme.colors[ColorId.editorOverviewRulerBorder],
+		lightBorder: lightColorTheme.colors[ColorId.editorOverviewRulerBorder],
+		highContrastDarkBorder: highContrastDarkColorTheme.colors[ColorId.editorOverviewRulerBorder],
+		highContrastLightBorder: highContrastLightColorTheme.colors[ColorId.editorOverviewRulerBorder],
+		darkBackground: darkColorTheme.colors[ColorId.editorOverviewRulerBackground],
+		lightBackground: lightColorTheme.colors[ColorId.editorOverviewRulerBackground],
+	}, {
+		darkBorder: 'rgba(127, 127, 127, 0.3)',
+		lightBorder: 'rgba(127, 127, 127, 0.3)',
+		highContrastDarkBorder: 'rgba(127, 127, 127, 0.3)',
+		highContrastLightBorder: '#666666',
+		darkBackground: 'rgba(30, 30, 30, 0)',
+		lightBackground: 'rgba(255, 255, 255, 0)',
 	});
 });

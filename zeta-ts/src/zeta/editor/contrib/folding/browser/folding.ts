@@ -1,16 +1,13 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { Icon } from '../../../../base/common/icon.js';
-import type { Event } from '../../../../base/common/event.js';
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
+import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
 import { EditorFoldingModel } from "./foldingModel.js";
 import { EditorFoldingRangeSource, type EditorFoldingRegion } from "./foldingRanges.js";
 import { Position } from "../../../common/core/position.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type View } from "../../../browser/view.js";
 import { type TextEditorContributionConfigurationContext, type TextEditorContributionContext } from "../../../browser/editorExtensions.js";
-import { MouseTargetFactory, MouseTargetKind } from "../../../browser/controller/mouseTarget.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
@@ -20,15 +17,11 @@ import { FoldingRangeService } from "../common/languageFoldingRanges.js";
 import { FoldingDecorationProvider } from './foldingDecorations.js';
 import type { IDecorationProvider } from './foldingModel.js';
 import { Range } from '../../../common/core/range.js';
-import type { TextDecorationId } from '../../../common/model/decorationCollection.js';
-import { DecorationPresentation, type OwnedDecorationSource, type ResolvedDecoration } from '../../../browser/viewParts/decorations/decorations.js';
 import './folding.css';
 
 registerTextEditorCapabilityContribution({
 	id: "editor.contrib.folding",
 	configure: context => {
-		const decorationSource = context.register(new FoldingDecorationSource(context.model));
-		context.addDecorationSource(decorationSource);
 		const folding = context.register(new EditorFoldingModel(context.model));
 		const hidden = context.register(new EditorHiddenRangeModel(context.model, folding));
 		context.provideCapability(TextEditorCapability.folding, folding);
@@ -46,62 +39,6 @@ registerTextEditorCapabilityContribution({
 		context.register(new FoldingController(context));
 	},
 });
-
-class FoldingDecorationSource extends Disposable implements OwnedDecorationSource {
-	private readonly model: import('../../../common/model/textModel.js').TextModel;
-	private readonly ids = new Map<string, TextDecorationId>();
-	private nextId = 1;
-
-	readonly onDidChange: Event<void>;
-	readonly glyphMarginLanes = Object.freeze([]);
-	readonly linesDecorationLanes = Object.freeze([{ owner: 'folding', width: 18 }]);
-
-	constructor(model: import('../../../common/model/textModel.js').TextModel) {
-		super();
-		this.model = model;
-		this.onDidChange = listener => model.onDidChangeDecorations(() => listener());
-	}
-
-	get decorations(): readonly ResolvedDecoration[] {
-		return Object.freeze(this.model.getAllDecorations()
-			.filter(decoration => decoration.options.description.startsWith('folding-'))
-			.map(decoration => {
-				const options = decoration.options;
-				const iconId = foldingIconId(options.firstLineDecorationClassName);
-				const tooltip = options.linesDecorationsTooltip ?? undefined;
-				const collapsed = options.description.endsWith('-collapsed');
-				const id = this.ids.get(decoration.id) ?? this.allocateId(decoration.id);
-				return Object.freeze({
-					id,
-					range: decoration.range,
-					presentation: DecorationPresentation.LineDecoration,
-					...(tooltip ? { hoverText: tooltip } : {}),
-					...(iconId ? {
-						linesDecoration: {
-							owner: 'folding',
-							firstLineClassName: options.firstLineDecorationClassName ?? undefined,
-							tooltip,
-							icon: Icon.fromId(iconId),
-							ariaLabel: tooltip ?? (collapsed ? 'Expand folded range' : 'Collapse range'),
-							expanded: !collapsed,
-						},
-					} : {}),
-					...(options.className ? { blockDecoration: { className: options.className } } : {}),
-					...(options.minimap ? { minimap: true } : {}),
-				});
-			}));
-	}
-
-	private allocateId(modelDecorationId: string): TextDecorationId {
-		const id = this.nextId++ as TextDecorationId;
-		this.ids.set(modelDecorationId, id);
-		return id;
-	}
-}
-
-function foldingIconId(className: string | null | undefined): string | undefined {
-	return /(?:^|\s)zeta-icon-(folding-(?:manual-)?(?:collapsed|expanded))(?:\s|$)/u.exec(className ?? '')?.[1];
-}
 
 class FoldingDecorationPresenter extends Disposable {
 	private decorationIds: string[] = [];
@@ -193,9 +130,8 @@ export interface FoldingControllerOptions {
 export class FoldingController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly viewport: View;
-	private readonly selections: CursorsController;
+	private readonly editor: ICodeEditor;
 	private readonly folding: EditorFoldingModel;
-	private readonly mouseTargets: MouseTargetFactory;
 	private awaitingChord = false;
 
 	constructor(
@@ -204,17 +140,16 @@ export class FoldingController extends Disposable {
 	) {
 		super();
 		this.viewport = context.viewport;
-		this.selections = context.selectionController;
+		this.editor = context.editor;
 		this.folding = context.getCapability(TextEditorCapability.folding);
-		this.mouseTargets = new MouseTargetFactory(this.viewport);
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
-			if (this.viewport.textModel !== this.selections.context.model || this.viewport.textModel !== this.folding.model) {
+			if (this.viewport.textModel !== this.editor.getModel() || this.viewport.textModel !== this.folding.model) {
 				throw new TypeError("Stanza folding dependencies must share one text model");
 			}
 			if (context.model.largeFile.tooLargeForTokenization) return;
 			this._register(addDisposableListener(context.view.element, "keydown", event => this.handleKeydown(event)));
-			this._register(addDisposableListener(this.viewport.element, "pointerdown", event => this.handleGutterPointerDown(event), true));
+			this._register(this.editor.onMouseDown(event => this.handleGutterPointerDown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -251,23 +186,25 @@ export class FoldingController extends Disposable {
 		this.setContainingFoldCollapsed(command === FoldingCommand.Collapse);
 	}
 
-	private handleGutterPointerDown(event: PointerEvent): void {
-		const target = this.mouseTargets.create(event);
-		if (target?.kind !== MouseTargetKind.GutterDecoration || target.decorationOwner !== "folding") return;
-		const lineIndex = target.editorTarget?.position.lineNumber === undefined ? undefined : target.editorTarget.position.lineNumber - 1;
-		if (lineIndex === undefined) return;
-		event.preventDefault();
-		event.stopPropagation();
-		this.viewport.element.focus({ preventScroll: true });
+	private handleGutterPointerDown(event: IEditorMouseEvent): void {
+		const target = event.target;
+		const foldingMarker = target.element?.closest<HTMLElement>('.stanza-editor-line-decoration[class*="zeta-icon-folding-"]');
+		if (target.type !== MouseTargetType.GUTTER_LINE_DECORATIONS || !foldingMarker || !target.position) return;
+		const lineIndex = target.position.lineNumber - 1;
+		event.event.preventDefault();
+		event.event.stopPropagation();
+		this.viewport.domNode.domNode.focus({ preventScroll: true });
 		const region = this.folding.toggleAtLine(lineIndex);
 		if (region?.collapsed) this.relocateHiddenSelections(region);
 	}
 
 	private setContainingFoldCollapsed(collapsed: boolean): void {
-		const region = this.folding.setContainingLineCollapsed(this.selections.getSelections()[0]!.getPosition().lineNumber - 1, collapsed);
+		const position = this.editor.getPosition();
+		if (!position) return;
+		const region = this.folding.setContainingLineCollapsed(position.lineNumber - 1, collapsed);
 		if (!region) return;
 		if (region.collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
+		this.revealPosition();
 	}
 
 	private setAllCollapsed(collapsed: boolean): void {
@@ -275,48 +212,58 @@ export class FoldingController extends Disposable {
 		if (collapsed) {
 			for (const region of this.folding.regions) if (region.collapsed) this.relocateHiddenSelections(region);
 		}
-		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
+		this.revealPosition();
 	}
 
 	private setContainingFoldRecursively(collapsed: boolean): void {
-		const lineIndex = this.selections.getSelections()[0]!.getPosition().lineNumber - 1;
+		const position = this.editor.getPosition();
+		if (!position) return;
+		const lineIndex = position.lineNumber - 1;
 		const region = collapsed
 			? this.folding.collapseContainingRegionRecursively(lineIndex)
 			: this.folding.expandContainingRegionRecursively(lineIndex);
 		if (!region) return;
 		if (collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
+		this.revealPosition();
 	}
 
 	private createManualRange(): void {
-		const selection = this.selections.getSelections()[0]!;
+		const selection = this.editor.getSelection();
+		if (!selection) return;
 		const endLineIndex = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
 			? selection.endLineNumber - 2
 			: selection.endLineNumber - 1;
 		const region = this.folding.addManualRange(selection.startLineNumber - 1, endLineIndex);
-		if (region) this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
+		if (region) this.revealPosition();
 	}
 
 	private removeManualRange(): void {
-		const region = this.folding.removeContainingManualRange(this.selections.getSelections()[0]!.getPosition().lineNumber - 1);
-		if (region) this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
+		const position = this.editor.getPosition();
+		if (!position) return;
+		const region = this.folding.removeContainingManualRange(position.lineNumber - 1);
+		if (region) this.revealPosition();
 	}
 
 	private setCollapsedToLevel(level: number): void {
 		if (!this.folding.collapseToLevel(level)) return;
 		for (const region of this.folding.regions) if (region.collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
+		this.revealPosition();
 	}
 
 	private relocateHiddenSelections(region: EditorFoldingRegion): void {
 		const header = new Position((region.startLineIndex) + 1, (this.viewport.textModel.getLineContent((region.startLineIndex) + 1).length) + 1);
-		const selections = this.selections.getSelections().map(selection => {
+		const selections = (this.editor.getSelections() ?? []).map(selection => {
 			const activeLineIndex = selection.getPosition().lineNumber - 1;
 			return activeLineIndex > region.startLineIndex && activeLineIndex <= region.endLineIndex
 				? Selection.fromPositions(header)
 				: selection;
 		});
-		this.selections.setSelections(selections);
+		this.editor.setSelections(selections, 'folding');
+	}
+
+	private revealPosition(): void {
+		const position = this.editor.getPosition();
+		if (position) this.viewport.revealPosition(Position.lift(position));
 	}
 }
 

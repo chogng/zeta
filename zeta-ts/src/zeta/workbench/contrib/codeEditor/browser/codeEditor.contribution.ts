@@ -82,7 +82,6 @@ registerEditorPane({
 			onSave: options.onSave,
 			onOpenLocation: options.onOpenLocation,
 			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
-			createDecorationSources: options.createDecorationSources,
 		});
 	},
 });

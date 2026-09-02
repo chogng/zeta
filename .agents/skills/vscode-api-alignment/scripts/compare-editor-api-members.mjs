@@ -1,15 +1,30 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import ts from '../../../../zeta-ts/node_modules/typescript/lib/typescript.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
 const zetaEditorRoot = resolve(repositoryRoot, 'zeta-ts/src/zeta/editor');
 const vscodeEditorRoot = resolve(repositoryRoot, '../vscode/src/vs/editor');
 const ledgerPath = resolve(zetaEditorRoot, 'api-alignment-status.md');
-const ledger = readFileSync(ledgerPath, 'utf8');
-const declarations = readDeclarations(ledger, '尚未补齐的同名契约');
+const sourceCache = new Map();
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+	const ledger = readFileSync(ledgerPath, 'utf8');
+	const declarations = readDeclarations(ledger, '尚未补齐的同名契约');
+	const results = declarations.map(({ file, declaration }) => compareDeclaration(file, declaration)).sort((left, right) => {
+		const difference = value => value.missing.length + value.extra.length;
+		return difference(left) - difference(right) || left.file.localeCompare(right.file) || left.declaration.localeCompare(right.declaration);
+	});
 
-const results = declarations.map(({ file, declaration }) => {
+	for (const result of results) {
+		const differenceCount = result.missing.length + result.extra.length;
+		process.stdout.write(`${String(differenceCount).padStart(3)} ${result.file}::${result.declaration} [${result.kind}]\n`);
+		if (result.missing.length > 0) process.stdout.write(`    missing: ${result.missing.join(', ')}\n`);
+		if (result.extra.length > 0) process.stdout.write(`    extra:   ${result.extra.join(', ')}\n`);
+	}
+}
+
+function compareDeclaration(file, declaration) {
 	const localFile = resolve(zetaEditorRoot, file);
 	const upstreamFile = resolve(vscodeEditorRoot, file);
 	if (!existsSync(localFile) || !existsSync(upstreamFile)) {
@@ -21,8 +36,8 @@ const results = declarations.map(({ file, declaration }) => {
 			extra: [],
 		};
 	}
-	const local = readDeclaration(localFile, declaration);
-	const upstream = readDeclaration(upstreamFile, declaration);
+	const local = readDeclaration(localFile, declaration, zetaEditorRoot);
+	const upstream = readDeclaration(upstreamFile, declaration, vscodeEditorRoot);
 	if (!local || !upstream) {
 		return {
 			file,
@@ -32,31 +47,24 @@ const results = declarations.map(({ file, declaration }) => {
 			extra: [],
 		};
 	}
-	const missing = upstream.members.filter(member => !local.members.includes(member));
-	const extra = local.members.filter(member => !upstream.members.includes(member));
+	const missing = upstream.declaredMembers.filter(member => !local.members.includes(member));
+	const extra = local.declaredMembers.filter(member => !upstream.declaredMembers.includes(member));
 	return { file, declaration, kind: `${local.kind}/${upstream.kind}`, missing, extra };
-}).sort((left, right) => {
-	const difference = value => value.missing.length + value.extra.length;
-	return difference(left) - difference(right) || left.file.localeCompare(right.file) || left.declaration.localeCompare(right.declaration);
-});
-
-for (const result of results) {
-	const differenceCount = result.missing.length + result.extra.length;
-	process.stdout.write(`${String(differenceCount).padStart(3)} ${result.file}::${result.declaration} [${result.kind}]\n`);
-	if (result.missing.length > 0) process.stdout.write(`    missing: ${result.missing.join(', ')}\n`);
-	if (result.extra.length > 0) process.stdout.write(`    extra:   ${result.extra.join(', ')}\n`);
 }
 
-function readDeclaration(file, declarationName) {
-	const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+export function readDeclaration(file, declarationName, editorRoot = dirname(file)) {
+	const source = readSource(file);
 	const declarations = source.statements
 		.filter(node => hasName(node, declarationName))
-		.map(node => ({ kind: ts.SyntaxKind[node.kind], members: readMembers(node) }));
+		.map(node => ({
+			kind: ts.SyntaxKind[node.kind],
+			declaredMembers: readDeclaredMembers(node),
+			members: readMembers(node, file, source, editorRoot, new Set([`${file}::${declarationName}`])),
+		}));
 	const preferred = declarations.filter(declaration => declaration.kind !== 'VariableDeclaration');
 	const candidates = preferred.length > 0 ? preferred : declarations;
 	if (candidates.length !== 1) return undefined;
 	return candidates[0];
-
 }
 
 function hasName(node, name) {
@@ -64,7 +72,15 @@ function hasName(node, name) {
 	return node.name.getText() === name;
 }
 
-function readMembers(node) {
+function readMembers(node, file, source, editorRoot, seen) {
+	const directMembers = readDeclaredMembers(node);
+	const inheritedMembers = ts.isClassDeclaration(node)
+		? readInheritedMembers(node, file, source, editorRoot, seen)
+		: [];
+	return [...new Set([...directMembers, ...inheritedMembers])].sort();
+}
+
+function readDeclaredMembers(node) {
 	if (ts.isFunctionDeclaration(node)) return [`(${node.parameters.length})`];
 	if (ts.isVariableDeclaration(node)) return readObjectMembers(node.initializer);
 	if (!('members' in node) || !node.members) return [];
@@ -76,6 +92,71 @@ function readMembers(node) {
 			.map(parameter => parameter.name.getText());
 		return [name, ...properties];
 	}).filter(Boolean).sort();
+}
+
+function readInheritedMembers(node, file, source, editorRoot, seen) {
+	const heritage = node.heritageClauses?.find(clause => clause.token === ts.SyntaxKind.ExtendsKeyword);
+	if (!heritage || heritage.types.length !== 1) return [];
+	const resolved = resolveHeritageDeclaration(heritage.types[0].expression, file, source, editorRoot);
+	if (!resolved) return [];
+	const key = `${resolved.file}::${resolved.node.name?.getText() ?? ''}`;
+	if (seen.has(key)) return [];
+	seen.add(key);
+	return readMembers(resolved.node, resolved.file, resolved.source, editorRoot, seen)
+		.filter(member => member !== 'constructor');
+}
+
+function resolveHeritageDeclaration(expression, file, source, editorRoot) {
+	if (!ts.isIdentifier(expression)) return undefined;
+	const local = source.statements.find(node => ts.isClassDeclaration(node) && hasName(node, expression.text));
+	if (local) return { file, source, node: local };
+
+	for (const statement of source.statements) {
+		if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+		if (!statement.moduleSpecifier.text.startsWith('.')) continue;
+		const importedName = importedDeclarationName(statement, expression.text);
+		if (!importedName) continue;
+		const importedFile = resolveImportedFile(file, statement.moduleSpecifier.text);
+		if (!importedFile || !isWithin(importedFile, editorRoot)) return undefined;
+		const importedSource = readSource(importedFile);
+		const imported = importedSource.statements.find(node => ts.isClassDeclaration(node) && hasName(node, importedName));
+		if (imported) return { file: importedFile, source: importedSource, node: imported };
+	}
+	return undefined;
+}
+
+function importedDeclarationName(statement, localName) {
+	const clause = statement.importClause;
+	if (!clause) return undefined;
+	if (clause.name?.text === localName) return 'default';
+	if (!clause.namedBindings || !ts.isNamedImports(clause.namedBindings)) return undefined;
+	const element = clause.namedBindings.elements.find(candidate => candidate.name.text === localName);
+	return element ? element.propertyName?.text ?? element.name.text : undefined;
+}
+
+function resolveImportedFile(containingFile, specifier) {
+	const base = resolve(dirname(containingFile), specifier);
+	const candidates = [
+		base,
+		base.replace(/\.js$/u, '.ts'),
+		`${base}.ts`,
+		resolve(base, 'index.ts'),
+	];
+	return candidates.find(candidate => existsSync(candidate));
+}
+
+function isWithin(file, root) {
+	const relative = file.slice(resolve(root).length);
+	return relative.startsWith('/') && !relative.includes('/../');
+}
+
+function readSource(file) {
+	let source = sourceCache.get(file);
+	if (!source) {
+		source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+		sourceCache.set(file, source);
+	}
+	return source;
 }
 
 function hasModifier(node, kind) {

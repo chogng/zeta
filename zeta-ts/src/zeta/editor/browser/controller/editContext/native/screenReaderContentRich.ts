@@ -1,11 +1,13 @@
 import { fragment as createFragment, h, text as createText } from "../../../../../base/browser/dom.js";
-import { type TextModel } from "../../../../common/model/textModel.js";
+import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
+import { type IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
+import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
+import { type EditContextViewController } from '../editContext.js';
 import { projectStanzaSemanticTokenLine, type BracketColorizationSource, type BracketColorizationSpan, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type ScreenReaderContentState } from "./screenReaderUtils.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 
 export interface RichScreenReaderContentOptions {
-	readonly model: TextModel;
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly bracketColorizationSource?: BracketColorizationSource;
 }
@@ -20,14 +22,18 @@ export interface RichScreenReaderContentOptions {
  */
 export class RichScreenReaderContent extends SimpleScreenReaderContent {
 	constructor(
-		host: HTMLElement,
+		domNode: FastDomNode<HTMLElement>,
+		context: ViewContext,
+		viewController: EditContextViewController,
+		accessibilityService: IAccessibilityService | undefined,
 		private readonly options: RichScreenReaderContentOptions,
 	) {
-		super(host);
-		if (options.semanticTokenSource && options.semanticTokenSource.textModel !== options.model) {
+		super(domNode, context, viewController, accessibilityService);
+		const model = context.viewModel.model;
+		if (options.semanticTokenSource && options.semanticTokenSource.textModel !== model) {
 			throw new TypeError("Native rich screen-reader semantic tokens must share the text model");
 		}
-		if (options.bracketColorizationSource && options.bracketColorizationSource.textModel !== options.model) {
+		if (options.bracketColorizationSource && options.bracketColorizationSource.textModel !== model) {
 			throw new TypeError("Native rich screen-reader brackets must share the text model");
 		}
 	}
@@ -43,7 +49,7 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 				)));
 			}
 			const segmentText = text.slice(segment.contentStartOffset, segment.contentEndOffset);
-			const startPosition = this.options.model.positionAt(segment.modelStartOffset);
+			const startPosition = this.context.viewModel.model.getPositionAt(segment.modelStartOffset);
 			renderSegment(
 				fragment,
 				segmentText,

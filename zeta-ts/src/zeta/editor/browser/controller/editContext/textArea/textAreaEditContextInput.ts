@@ -1,7 +1,6 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
-import { type TextSelectionOffsets } from "../../../../common/commands/editorEditCommand.js";
 import { normalizeTextLineEndings } from "../../../../common/core/textChange.js";
 import { type EditContextCompositionEvent } from "../editContext.js";
 import { type ITextAreaWrapper, TextAreaState } from "./textAreaEditContextState.js";
@@ -206,7 +205,7 @@ function toCompositionEvent(element: HTMLTextAreaElement, browserEvent: Composit
 	};
 }
 
-function readCompositionSelection(element: HTMLTextAreaElement, rawText: string, normalizedText: string): TextSelectionOffsets {
+function readCompositionSelection(element: HTMLTextAreaElement, rawText: string, normalizedText: string): { readonly anchorOffset: number; readonly activeOffset: number } {
 	if (element.value !== rawText) {
 		return {
 			anchorOffset: normalizedText.length,

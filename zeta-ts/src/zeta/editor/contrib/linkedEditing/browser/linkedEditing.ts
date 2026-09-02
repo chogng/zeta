@@ -5,11 +5,10 @@ import { registerTextEditorCapabilityContribution } from '../../../browser/edito
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type View } from '../../../browser/view.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
-import { extendEditorEditCommand } from '../../../common/commands/editorCommand.js';
-import { type EditorEditCommand } from '../../../common/commands/editorEditCommand.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { ReplaceCommandThatPreservesSelection } from '../../../common/commands/replaceCommand.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
+import { TextModelChangeReason, type TextModelChange } from '../../../common/core/textChange.js';
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type LinkedEditingRangeProvider, type LinkedEditingRanges } from '../../../common/languages.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
@@ -29,18 +28,20 @@ export class LinkedEditingContribution extends Disposable {
 	private isActivationScheduled = false;
 	private request: CancellationTokenSource | undefined;
 	private wordPattern: RegExp | undefined;
+	private syncToken = 0;
+	private syncing = false;
 
 	constructor(
 		private readonly view: ViewController,
+		private readonly editor: ICodeEditor,
 		input: HTMLElement,
 		private readonly viewport: View,
-		private readonly selections: CursorsController,
 		private readonly providers: LanguageFeatureRegistry<LinkedEditingRangeProvider>,
 		private readonly defaultWordPattern: () => RegExp | undefined,
 		private readonly onError: (error: unknown) => void = error => console.error('Stanza linked editing failed', error),
 	) {
 		super();
-		if (viewport.textModel !== selections.context.model) throw new TypeError('Linked editing dependencies must share a text model');
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('Linked editing dependencies must share a text model');
 		this._register(addDisposableListener(input, 'keydown', event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'l') return;
 			stopEvent(event);
@@ -51,8 +52,8 @@ export class LinkedEditingContribution extends Disposable {
 			stopEvent(event);
 			this.clear();
 		}, true));
-		this._register(view.registerCommandTransformer(command => this.extendCommand(command)));
-		this._register(selections.onDidChange(() => this.scheduleActivation()));
+		this._register(viewport.textModel.onDidChangeContent(change => this.onDidChangeContent(change)));
+		this._register(editor.onDidChangeCursorPosition(() => this.scheduleActivation()));
 		this._register(providers.onDidChange(() => this.scheduleActivation()));
 		this._register(toDisposable(() => this.clear()));
 		this.scheduleActivation();
@@ -63,7 +64,8 @@ export class LinkedEditingContribution extends Disposable {
 		this.request?.dispose(true);
 		const request = this.request = new CancellationTokenSource();
 		try {
-			const primary = this.selections.getSelections()[0]!;
+			const primary = this.editor.getSelection();
+			if (!primary) return;
 			if (!primary.isEmpty()) {
 				this.clear();
 				return;
@@ -103,7 +105,7 @@ export class LinkedEditingContribution extends Disposable {
 			});
 			this.wordPattern = result.wordPattern ?? this.defaultWordPattern();
 			this.isActive = true;
-			this.viewport.element.classList.add('linked-editing-active');
+			this.viewport.domNode.domNode.classList.add('linked-editing-active');
 			this.viewport.announceAccessibilityStatus(`${normalizedRanges.length} linked editing ranges active`);
 		} finally {
 			if (this.request === request) {
@@ -113,37 +115,41 @@ export class LinkedEditingContribution extends Disposable {
 		}
 	}
 
-	private extendCommand(command: EditorEditCommand): EditorEditCommand {
-		if (!this.isActive || command.edits.length !== 1) return command;
-		const sourceEdit = command.edits[0]!;
-		const sourceRange = Range.lift(sourceEdit.range);
-		const source = this.trackedRanges.find(candidate => candidate.range.containsRange(sourceRange));
-		if (!source) return command;
-
+	private onDidChangeContent(change: TextModelChange): void {
+		if (this.syncing || !this.isActive || change.reason !== TextModelChangeReason.Edit || change.changes.length === 0) return;
 		const model = this.viewport.textModel;
-		const sourceStart = model.offsetAt(source.range.getStartPosition());
-		const relativeStart = model.offsetAt(sourceRange.getStartPosition()) - sourceStart;
-		const relativeEnd = model.offsetAt(sourceRange.getEndPosition()) - sourceStart;
-		const currentValue = model.getTextInRange(source.range);
-		const nextValue = currentValue.slice(0, relativeStart) + sourceEdit.text + currentValue.slice(relativeEnd);
-		if (this.wordPattern && !matchesEntirePattern(this.wordPattern, nextValue)) {
-			this.clear();
-			return command;
-		}
+		const changedRanges = change.changes.map(item => Range.fromPositions(
+			model.positionAt(item.rangeOffset),
+			model.positionAt(item.rangeOffset + item.text.length),
+		));
+		const source = this.trackedRanges.find(candidate => changedRanges.every(range => candidate.range.containsRange(range)));
+		if (!source) return;
+		const token = ++this.syncToken;
+		queueMicrotask(() => {
+			if (token !== this.syncToken || !this.isActive || this.isDisposed) return;
+			this.syncRanges(source);
+		});
+	}
 
-		const edits = this.trackedRanges
-			.filter(candidate => candidate !== source)
-			.map(candidate => {
-				const targetStart = model.offsetAt(candidate.range.getStartPosition());
-				const targetEnd = model.offsetAt(candidate.range.getEndPosition());
-				const start = targetStart + relativeStart;
-				const end = targetStart + relativeEnd;
-				if (start < targetStart || end > targetEnd) return undefined;
-				return { range: Range.fromPositions(model.positionAt(start), model.positionAt(end)), text: sourceEdit.text };
-			})
-			.filter((edit): edit is { readonly range: Range; readonly text: string } => edit !== undefined)
-			.sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
-		return extendEditorEditCommand(model, command, edits);
+	private syncRanges(source: TrackedRange): void {
+		const model = this.viewport.textModel;
+		const value = model.getTextInRange(source.range);
+		if (this.wordPattern && !matchesEntirePattern(this.wordPattern, value)) {
+			this.clear();
+			return;
+		}
+		const selection = this.editor.getSelection();
+		if (!selection) return;
+		const commands = this.trackedRanges
+			.filter(candidate => candidate !== source && model.getTextInRange(candidate.range) !== value)
+			.map(candidate => new ReplaceCommandThatPreservesSelection(candidate.range, value, selection));
+		if (commands.length === 0) return;
+		this.syncing = true;
+		try {
+			this.editor.executeCommands('linkedEditing', commands);
+		} finally {
+			this.syncing = false;
+		}
 	}
 
 	private scheduleActivation(): void {
@@ -156,13 +162,14 @@ export class LinkedEditingContribution extends Disposable {
 	}
 
 	private clear(): void {
+		this.syncToken += 1;
 		this.request?.dispose(true);
 		this.request = undefined;
 		this.ranges.clear();
 		this.trackedRanges = [];
 		this.wordPattern = undefined;
 		this.isActive = false;
-		this.viewport.element.classList.remove('linked-editing-active');
+		this.viewport.domNode.domNode.classList.remove('linked-editing-active');
 	}
 }
 
@@ -179,9 +186,9 @@ registerTextEditorCapabilityContribution({
 		if (context.kind !== 'text') return;
 		context.register(new LinkedEditingContribution(
 			context.view,
+			context.editor,
 			context.view.element,
 			context.viewport,
-			context.selectionController,
 			context.languageFeaturesService.linkedEditingRangeProvider,
 			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
 			context.onLanguageError,

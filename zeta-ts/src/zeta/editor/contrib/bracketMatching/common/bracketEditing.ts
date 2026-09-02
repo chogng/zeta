@@ -1,84 +1,36 @@
-import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
+import { ReplaceCommand } from '../../../common/commands/replaceCommand.js';
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
-import { type Selection } from "../../../common/core/selection.js";
-import { type TextEdit } from '../../../common/languages.js';
+import { Selection } from "../../../common/core/selection.js";
+import { type Range } from '../../../common/core/range.js';
+import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../common/editorCommon.js';
+import { type ITextModel } from '../../../common/model.js';
 
-
-interface BracketDeletion {
-	readonly startOffset: number;
-	readonly endOffset: number;
-	readonly edit: TextEdit;
-}
 
 /** Removes every distinct matched bracket pair containing a collapsed cursor. */
-export function createRemoveMatchingBracketsCommand(bracketPairs: LanguageBracketPairs, selections: readonly Selection[]): EditorEditCommand | undefined {
-	const model = bracketPairs.textModel;
-	const deletions = new Map<string, BracketDeletion>();
-	for (const selection of selections) {
-		if (!selection.isEmpty()) continue;
-		const match = bracketPairs.matchBracket(selection.getPosition()) ?? bracketPairs.findEnclosingBrackets(selection.getPosition());
-		if (!match) continue;
-		addDeletion(deletions, model.offsetAt(match.opening.getStartPosition()), model.offsetAt(match.opening.getEndPosition()), match.opening);
-		addDeletion(deletions, model.offsetAt(match.closing.getStartPosition()), model.offsetAt(match.closing.getEndPosition()), match.closing);
-	}
-	if (deletions.size === 0) return undefined;
-	const ordered = [...deletions.values()].sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset);
-	const selectionsAfter = selections.map(selection => {
-		const match = selection.isEmpty() ? bracketPairs.matchBracket(selection.getPosition()) ?? bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined;
-		const targetOffset = match ? model.offsetAt(match.opening.getStartPosition()) : model.offsetAt(selection.getPosition());
-		const mapped = mapOffsetThroughDeletions(targetOffset, ordered);
-		return Object.freeze({
-			anchorOffset: selection.isEmpty() ? mapped : mapOffsetThroughDeletions(model.offsetAt(selection.getSelectionStart()), ordered),
-			activeOffset: mapped,
-		});
-	});
-	const normalizedSelections = normalizeSelectionsAfter(selectionsAfter, 0);
-	return Object.freeze({
-		edits: Object.freeze(ordered.map(deletion => deletion.edit)),
-		selectionsAfter: normalizedSelections.selections,
-		primarySelectionIndex: normalizedSelections.primaryIndex,
-		historyMode: EditorCommandHistoryMode.Isolated,
-	});
-}
-
-function addDeletion(target: Map<string, BracketDeletion>, startOffset: number, endOffset: number, range: TextEdit["range"]): void {
-	const key = `${startOffset}:${endOffset}`;
-	if (target.has(key)) return;
-	target.set(key, Object.freeze({
-		startOffset,
-		endOffset,
-		edit: Object.freeze({ range, text: "" }),
-	}));
-}
-
-function mapOffsetThroughDeletions(offset: number, deletions: readonly BracketDeletion[]): number {
-	let delta = 0;
-	for (const deletion of deletions) {
-		if (offset < deletion.startOffset) break;
-		if (offset <= deletion.endOffset) return deletion.startOffset - delta;
-		delta += deletion.endOffset - deletion.startOffset;
-	}
-	return offset - delta;
-}
-
-function normalizeSelectionsAfter(selections: readonly { readonly anchorOffset: number; readonly activeOffset: number }[], primaryIndex: number): {
-	readonly selections: readonly { readonly anchorOffset: number; readonly activeOffset: number }[];
-	readonly primaryIndex: number;
-} {
-	const normalized: { readonly anchorOffset: number; readonly activeOffset: number }[] = [];
-	const sourceToNormalized: number[] = [];
-	for (const selection of selections) {
-		let index = normalized.findIndex(candidate =>
-			candidate.anchorOffset === selection.anchorOffset && candidate.activeOffset === selection.activeOffset
-		);
-		if (index < 0) {
-			index = normalized.length;
-			normalized.push(selection);
+export function createRemoveMatchingBracketsCommand(bracketPairs: LanguageBracketPairs, selections: readonly Selection[]): ICommand[] | undefined {
+	let hasMatch = false;
+	const commands = selections.map(selection => {
+		if (selection.isEmpty()) {
+			const match = bracketPairs.matchBracket(selection.getPosition()) ?? bracketPairs.findEnclosingBrackets(selection.getPosition());
+			if (match) {
+				hasMatch = true;
+				return new RemoveMatchingBracketsCommand(match.opening, match.closing);
+			}
 		}
-		sourceToNormalized.push(index);
-	}
-	return Object.freeze({
-		selections: Object.freeze(normalized),
-		primaryIndex: sourceToNormalized[primaryIndex]!,
+		return new ReplaceCommand(selection, '');
 	});
+	return hasMatch ? commands : undefined;
+}
+
+class RemoveMatchingBracketsCommand implements ICommand {
+	constructor(private readonly opening: Range, private readonly closing: Range) {}
+
+	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
+		builder.addTrackedEditOperation(this.opening, '');
+		builder.addTrackedEditOperation(this.closing, '');
+	}
+
+	computeCursorState(_model: ITextModel, helper: ICursorStateComputerData): Selection {
+		return Selection.fromPositions(helper.getInverseEditOperations()[0]!.range.getStartPosition());
+	}
 }

@@ -2,8 +2,9 @@ import "./findWidget.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
-import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { CursorsController } from "../../../common/cursor/cursor.js";
+import { type ICodeEditor } from "../../../browser/editorBrowser.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { Selection } from "../../../common/core/selection.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -13,6 +14,7 @@ import { type TrackedRange } from "../../../common/model/trackedRange.js";
 import { type View } from "../../../browser/view.js";
 import { EditorOptions, type IEditorFindOptions } from '../../../common/config/editorOptions.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
+import { TextEditorCapability } from '../../textEditorCapabilities.js';
 
 const DISPLAY_RESULT_LIMIT = 999;
 const REPLACE_ALL_RESULT_LIMIT = 100_000;
@@ -23,6 +25,8 @@ export interface FindControllerOptions extends IEditorFindOptions {
 
 /** Owns Stanza's browser find/replace widget, shortcuts, match navigation, and search decorations. */
 export class FindController extends Disposable {
+	public static readonly ID = 'editor.contrib.findController';
+
 	readonly element: HTMLDivElement;
 	readonly searchInput: HTMLInputElement;
 	readonly replaceInput: HTMLInputElement;
@@ -49,8 +53,8 @@ export class FindController extends Disposable {
 
 	constructor(
 		private readonly editorInput: HTMLElement,
+		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly selections: CursorsController,
 		private readonly decorations: TextDecorationCollection<void>,
 		options: FindControllerOptions = {},
 	) {
@@ -60,11 +64,11 @@ export class FindController extends Disposable {
 		this.autoFindInSelection = options.autoFindInSelection ?? 'never';
 		this.loop = options.loop ?? true;
 		this.wordSeparators = options.wordSeparators ?? EditorOptions.wordSeparators.defaultValue;
-		if (viewport.textModel !== selections.context.model || viewport.textModel !== decorations.textModel) {
+		if (viewport.textModel !== editor.getModel() || viewport.textModel !== decorations.textModel) {
 			this.dispose();
 			throw new TypeError("Stanza find dependencies must share one text model");
 		}
-		const ownerDocument = viewport.element.ownerDocument;
+		const ownerDocument = viewport.domNode.domNode.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "stanza-editor-find-widget";
 		this.element.hidden = true;
@@ -113,7 +117,7 @@ export class FindController extends Disposable {
 		projectToggle(this.matchCaseButton, this.matchCase);
 		projectToggle(this.wholeWordButton, this.wholeWord);
 		projectToggle(this.regularExpressionButton, this.regularExpression);
-		viewport.element.append(this.element);
+		viewport.domNode.domNode.append(this.element);
 		this._register(toDisposable(() => {
 			this.decorations.clear();
 			this.element.remove();
@@ -165,7 +169,7 @@ export class FindController extends Disposable {
 		if (options.showReplace) this.setReplaceVisible(true);
 		if (!wasVisible) {
 			this.captureSelectionScope();
-			const selection = this.selections.getSelections()[0]!;
+			const selection = this.selection;
 			if (this.autoFindInSelection === 'always' || this.autoFindInSelection === 'multiline' && selection.startLineNumber !== selection.endLineNumber) {
 				this.setFindInSelection(true);
 			}
@@ -265,6 +269,7 @@ export class FindController extends Disposable {
 		this.decorations.replaceAll(this.matches.map(match => ({
 			range: match.range,
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: { description: 'find-match', className: 'search-match' },
 			metadata: undefined,
 		})));
 		this.currentMatchIndex = this.findCurrentMatchIndex();
@@ -274,7 +279,7 @@ export class FindController extends Disposable {
 
 	private findCurrentMatchIndex(): number {
 		if (this.matches.length === 0) return -1;
-		const primaryRange = this.selections.getSelections()[0]!;
+		const primaryRange = this.selection;
 		const selectionStart = this.model.offsetAt(primaryRange.getStartPosition());
 		const selectionEnd = this.model.offsetAt(primaryRange.getEndPosition());
 		const exact = this.matches.findIndex(match =>
@@ -282,7 +287,7 @@ export class FindController extends Disposable {
 			this.model.offsetAt(match.range.getEndPosition()) === selectionEnd
 		);
 		if (exact >= 0) return exact;
-		const activeOffset = this.model.offsetAt(this.selections.getSelections()[0]!.getPosition());
+		const activeOffset = this.model.offsetAt(this.selection.getPosition());
 		const following = this.matches.findIndex(match => this.model.offsetAt(match.range.getStartPosition()) >= activeOffset);
 		return following >= 0 ? following : 0;
 	}
@@ -301,7 +306,7 @@ export class FindController extends Disposable {
 		const match = this.matches[index];
 		if (!match) return;
 		this.currentMatchIndex = index;
-		this.selections.setSelections([Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition())]);
+		this.editor.setSelection(Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition()), 'find');
 		this.viewport.revealPosition(match.range.getStartPosition());
 		this.projectResultLabel(this.matchesTruncated);
 	}
@@ -310,7 +315,9 @@ export class FindController extends Disposable {
 		const match = this.matches[this.currentMatchIndex];
 		if (!match) return;
 		const replacement = this.replacementFor(match);
-		this.selections.execute(createReplaceTextMatchCommand(this.model, match, replacement));
+		this.editor.pushUndoStop();
+		this.editor.executeCommand('editor.action.replaceOne', createReplaceTextMatchCommand(this.model, match, replacement));
+		this.editor.pushUndoStop();
 		this.refreshMatches({ selectMatch: true });
 		this.replaceInput.focus({ preventScroll: true });
 	}
@@ -326,7 +333,9 @@ export class FindController extends Disposable {
 		}
 		if (matches.length === 0) return;
 		const replacements = matches.map(match => this.replacementFor(match));
-		this.selections.execute(createReplaceAllTextMatchesCommand(this.model, matches, replacements));
+		this.editor.pushUndoStop();
+		this.editor.executeCommand('editor.action.replaceAll', createReplaceAllTextMatchesCommand(this.model, matches, replacements));
+		this.editor.pushUndoStop();
 		this.refreshMatches({ selectMatch: true });
 		this.replaceInput.focus({ preventScroll: true });
 	}
@@ -358,7 +367,7 @@ export class FindController extends Disposable {
 	}
 
 	private captureSelectionScope(): void {
-		const range = this.selections.getSelections()[0]!;
+		const range = this.selection;
 		this.selectionScope.value = range.isEmpty() ? undefined : this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		this.projectFindInSelectionAvailability();
 	}
@@ -396,7 +405,7 @@ export class FindController extends Disposable {
 	}
 
 	private readSelectedSearchText(): string | undefined {
-		const selection = this.selections.getSelections()[0]!;
+		const selection = this.selection;
 		if (selection.isEmpty()) return undefined;
 		const text = this.model.getTextInRange(selection);
 		return text.length <= 4_096 && !text.includes("\n") ? text : undefined;
@@ -414,6 +423,12 @@ export class FindController extends Disposable {
 
 	private get model(): TextModel {
 		return this.viewport.textModel;
+	}
+
+	private get selection(): Selection {
+		const selection = this.editor.getSelection();
+		if (!selection) throw new Error('Find controller requires an attached text model');
+		return selection;
 	}
 }
 
@@ -450,3 +465,21 @@ function validateFindControllerOptions(options: FindControllerOptions): void {
 		if (typeof value !== "boolean") throw new TypeError(`Stanza Find option '${name}' must be boolean`);
 	}
 }
+
+registerTextEditorCapabilityContribution({
+	id: FindController.ID,
+	configure: context => {
+		const decorations = context.register(new TextDecorationCollection<void>(context.model));
+		context.provideCapability(TextEditorCapability.searchDecorations, decorations);
+	},
+	install: context => {
+		if (context.kind !== 'text') return;
+		context.register(new FindController(
+			context.view.element,
+			context.editor,
+			context.viewport,
+			context.getCapability(TextEditorCapability.searchDecorations),
+			context.options.find,
+		));
+	},
+});

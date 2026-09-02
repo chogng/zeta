@@ -43,17 +43,17 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 		clientX: { value: 40 },
 		clientY: { value: 30 },
 	});
-	editor.viewport.element.dispatchEvent(pointer);
+	editor.viewport.domNode.domNode.dispatchEvent(pointer);
 
 	assert.ok(MiddleScrollController.get(editor));
 	assert.equal(pointer.defaultPrevented, true);
-	assert.equal(editor.viewport.element.classList.contains('scroll-editor-on-middle-click-editor'), true);
-	const dot = editor.viewport.element.querySelector('.scroll-editor-on-middle-click-dot');
+	assert.equal(editor.viewport.domNode.domNode.classList.contains('scroll-editor-on-middle-click-editor'), true);
+	const dot = editor.viewport.domNode.domNode.querySelector('.scroll-editor-on-middle-click-dot');
 	assert.ok(dot);
 	assert.equal(dot.getAttribute('aria-hidden'), 'true');
 	editor.view.element.dispatchEvent(new environment.window.KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
-	assert.equal(editor.viewport.element.classList.contains('scroll-editor-on-middle-click-editor'), false);
-	assert.equal(editor.viewport.element.querySelector('.scroll-editor-on-middle-click-dot'), null);
+	assert.equal(editor.viewport.domNode.domNode.classList.contains('scroll-editor-on-middle-click-editor'), false);
+	assert.equal(editor.viewport.domNode.domNode.querySelector('.scroll-editor-on-middle-click-dot'), null);
 });
 
 test('disabled middle-click scrolling does not create a scroll session', () => {
@@ -69,11 +69,11 @@ test('disabled middle-click scrolling does not create a scroll session', () => {
 	});
 	editor.layout({ width: 300, height: 60 });
 	const pointer = pointerEvent('pointerdown', 1, 5, 40, 30);
-	editor.viewport.element.dispatchEvent(pointer);
+	editor.viewport.domNode.domNode.dispatchEvent(pointer);
 
 	assert.ok(MiddleScrollController.get(editor));
-	assert.equal(editor.viewport.element.classList.contains('scroll-editor-on-middle-click-editor'), false);
-	assert.equal(editor.viewport.element.querySelector('.scroll-editor-on-middle-click-dot'), null);
+	assert.equal(editor.viewport.domNode.domNode.classList.contains('scroll-editor-on-middle-click-editor'), false);
+	assert.equal(editor.viewport.domNode.domNode.querySelector('.scroll-editor-on-middle-click-dot'), null);
 });
 
 test('pointer displacement continuously scrolls and release ends an active movement', async () => {
@@ -88,14 +88,14 @@ test('pointer displacement continuously scrolls and release ends an active movem
 		scrollOnMiddleClick: true,
 	});
 	editor.layout({ width: 300, height: 60 });
-	editor.viewport.element.dispatchEvent(pointerEvent('pointerdown', 1, 7, 40, 30));
+	editor.viewport.domNode.domNode.dispatchEvent(pointerEvent('pointerdown', 1, 7, 40, 30));
 	environment.window.dispatchEvent(pointerEvent('pointermove', 0, 7, 120, 100));
 	await new Promise(resolve => setTimeout(resolve, 50));
 	environment.window.dispatchEvent(pointerEvent('pointerup', 0, 7, 120, 100));
 
 	assert.ok(editor.viewport.currentLayout.scrollPosition.top > 0);
 	assert.ok(editor.viewport.currentLayout.scrollPosition.left > 0);
-	assert.equal(editor.viewport.element.classList.contains('scroll-editor-on-middle-click-editor'), false);
+	assert.equal(editor.viewport.domNode.domNode.classList.contains('scroll-editor-on-middle-click-editor'), false);
 });
 
 function pointerEvent(type: string, button: number, pointerId: number, clientX: number, clientY: number): Event {

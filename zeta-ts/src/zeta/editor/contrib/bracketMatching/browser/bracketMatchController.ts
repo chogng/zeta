@@ -45,6 +45,7 @@ export class BracketMatchController extends Disposable {
 		this.decorations.replaceAll([...ranges.values()].map(range => ({
 			range,
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: { description: 'bracket-match', className: 'bracket-match' },
 			metadata: undefined,
 		})));
 	}

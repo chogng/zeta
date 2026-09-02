@@ -1,7 +1,5 @@
-import { type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { type URI } from '../../../../base/common/uri.js';
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from '../../../../editor/browser/viewParts/decorations/decorations.js';
+import { themeColorFromId } from '../../../../base/common/themables.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { LineDiffKind, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
@@ -9,35 +7,23 @@ import { TextDecorationCollection } from '../../../../editor/common/model/decora
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
 
 import { type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { type IQuickDiffModelService, type QuickDiffComparison } from '../common/quickDiff.js';
+import { ColorId } from '../../../../platform/theme/common/colorTheme.js';
+import { type QuickDiffComparison, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
-import { TrackedRangeStickiness } from '../../../../editor/common/model.js';
+import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../../editor/common/model.js';
 
 interface QuickDiffDecorationMetadata {
-	readonly presentation: DecorationPresentation.DiffAdded | DecorationPresentation.DiffModified | DecorationPresentation.DiffDeleted;
+	readonly kind: LineDiffKind.Added | LineDiffKind.Modified | LineDiffKind.Removed;
 	readonly providerLabels: readonly string[];
 }
 
-const QUICK_DIFF_DECORATION_OWNER = 'quick-diff';
-
 /** Projects one shared Quick Diff model into gutter, overview-ruler, and minimap decorations. */
-export class QuickDiffDecorator extends Disposable implements OwnedDecorationSource {
-	readonly glyphMarginLanes;
-	readonly linesDecorationLanes;
+export class QuickDiffDecorator extends Disposable {
 	private readonly collection: TextDecorationCollection<QuickDiffDecorationMetadata>;
-	private readonly source: DecorationSource;
-	readonly onDidChange: Event<void>;
 
-	constructor(resource: URI, private readonly model: TextModel, modelService: IQuickDiffModelService, private readonly configurationService: IConfigurationService) {
+	constructor(private readonly model: TextModel, modelReference: QuickDiffModelReference, private readonly configurationService: IConfigurationService) {
 		super();
-		const modelReference = this._register(modelService.createModelReference(resource, model));
 		this.collection = this._register(new TextDecorationCollection<QuickDiffDecorationMetadata>(model));
-		this.source = createStanzaDecorationSource(this.collection, decoration => this.resolve(decoration.metadata), decoration => hoverText(decoration.metadata), {
-			linesDecorationLanes: [{ owner: QUICK_DIFF_DECORATION_OWNER, width: 4 }],
-		});
-		this.onDidChange = this.source.onDidChange;
-		this.glyphMarginLanes = this.source.glyphMarginLanes;
-		this.linesDecorationLanes = this.source.linesDecorationLanes;
 		this._register(modelReference.object.onDidChange(() => this.rebuild(modelReference.object.state.comparisons)));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ScmConfiguration.diffDecorations)) this.rebuild(modelReference.object.state.comparisons);
@@ -45,20 +31,24 @@ export class QuickDiffDecorator extends Disposable implements OwnedDecorationSou
 		this.rebuild(modelReference.object.state.comparisons);
 	}
 
-	get decorations(): readonly ResolvedDecoration[] {
-		return this.source.decorations;
-	}
-
-	private resolve(metadata: QuickDiffDecorationMetadata) {
+	private resolve(metadata: QuickDiffDecorationMetadata): Omit<IModelDecorationOptions, 'stickiness'> {
 		const setting = this.configurationService.getValue(ScmConfiguration.diffDecorations);
-		if (setting === 'none') return undefined;
 		const gutter = setting === 'all' || setting === 'gutter';
-		return Object.freeze({
-			presentation: metadata.presentation,
-			...(gutter ? { linesDecoration: { owner: QUICK_DIFF_DECORATION_OWNER, className: `zeta-quick-diff-gutter ${classNameForPresentation(metadata.presentation)}`, tooltip: hoverText(metadata) } } : {}),
-			overviewRuler: setting === 'all' || setting === 'overview',
-			minimap: setting === 'all' || setting === 'minimap',
-		});
+		const color = themeColorFromId(colorForKind(metadata.kind));
+		return {
+			description: 'dirty-diff-decoration',
+			isWholeLine: metadata.kind !== LineDiffKind.Removed,
+			...(gutter ? {
+				linesDecorationsClassName: `zeta-quick-diff-gutter ${classNameForKind(metadata.kind)}`,
+				linesDecorationsTooltip: hoverText(metadata),
+			} : {}),
+			...((setting === 'all' || setting === 'overview') ? {
+				overviewRuler: { color, position: OverviewRulerLane.Left },
+			} : {}),
+			...((setting === 'all' || setting === 'minimap') ? {
+				minimap: { color, position: MinimapPosition.Gutter },
+			} : {}),
+		};
 	}
 
 	private rebuild(comparisons: readonly QuickDiffComparison[]): void {
@@ -74,19 +64,20 @@ export class QuickDiffDecorator extends Disposable implements OwnedDecorationSou
 				const row = rows[rowIndex]!;
 				if (row.kind === LineDiffKind.Unchanged) continue;
 				const lineIndex = row.modifiedLineIndex ?? deletionAnchor(rows, rowIndex, this.model.lineCount);
-				const presentation = presentationForRow(row);
+				const kind = decorationKindForRow(row);
 				const current = byLine.get(lineIndex);
-				if (!current || presentationPriority(presentation) > presentationPriority(current.presentation)) {
-					byLine.set(lineIndex, Object.freeze({ presentation, providerLabels: Object.freeze([comparison.original.label]) }));
+				if (!current || kindPriority(kind) > kindPriority(current.kind)) {
+					byLine.set(lineIndex, Object.freeze({ kind, providerLabels: Object.freeze([comparison.original.label]) }));
 				} else if (!current.providerLabels.includes(comparison.original.label)) {
 					byLine.set(lineIndex, Object.freeze({ ...current, providerLabels: Object.freeze([...current.providerLabels, comparison.original.label]) }));
 				}
 			}
 		}
 		this.collection.replaceAll(Object.freeze([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => Object.freeze({
-			range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (this.model.getLineLength((lineIndex) + 1)) + 1)),
-			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			metadata,
+				range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (this.model.getLineLength((lineIndex) + 1)) + 1)),
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				options: this.resolve(metadata),
+				metadata,
 		}))));
 	}
 }
@@ -103,35 +94,42 @@ function deletionAnchor(rows: readonly LineDiffRow[], rowIndex: number, lineCoun
 	return Math.max(0, lineCount - 1);
 }
 
-function presentationForRow(row: LineDiffRow): QuickDiffDecorationMetadata['presentation'] {
+function decorationKindForRow(row: LineDiffRow): QuickDiffDecorationMetadata['kind'] {
 	switch (row.kind) {
-		case LineDiffKind.Added: return DecorationPresentation.DiffAdded;
-		case LineDiffKind.Modified: return DecorationPresentation.DiffModified;
-		case LineDiffKind.Removed: return DecorationPresentation.DiffDeleted;
+		case LineDiffKind.Added: return LineDiffKind.Added;
+		case LineDiffKind.Modified: return LineDiffKind.Modified;
+		case LineDiffKind.Removed: return LineDiffKind.Removed;
 		case LineDiffKind.Unchanged: throw new TypeError('Unchanged rows do not create Quick Diff decorations');
 	}
 }
 
-function presentationPriority(presentation: DecorationPresentation): number {
-	switch (presentation) {
-		case DecorationPresentation.DiffDeleted: return 3;
-		case DecorationPresentation.DiffModified: return 2;
-		case DecorationPresentation.DiffAdded: return 1;
-		default: return 0;
+function kindPriority(kind: QuickDiffDecorationMetadata['kind']): number {
+	switch (kind) {
+		case LineDiffKind.Removed: return 3;
+		case LineDiffKind.Modified: return 2;
+		case LineDiffKind.Added: return 1;
 	}
 }
 
-function classNameForPresentation(presentation: QuickDiffDecorationMetadata['presentation']): string {
-	switch (presentation) {
-		case DecorationPresentation.DiffAdded: return 'zeta-quick-diff-added';
-		case DecorationPresentation.DiffModified: return 'zeta-quick-diff-modified';
-		case DecorationPresentation.DiffDeleted: return 'zeta-quick-diff-deleted';
+function classNameForKind(kind: QuickDiffDecorationMetadata['kind']): string {
+	switch (kind) {
+		case LineDiffKind.Added: return 'zeta-quick-diff-added';
+		case LineDiffKind.Modified: return 'zeta-quick-diff-modified';
+		case LineDiffKind.Removed: return 'zeta-quick-diff-deleted';
+	}
+}
+
+function colorForKind(kind: QuickDiffDecorationMetadata['kind']): string {
+	switch (kind) {
+		case LineDiffKind.Added: return ColorId.diffEditorInsertedLineMarker;
+		case LineDiffKind.Modified: return ColorId.warningForeground;
+		case LineDiffKind.Removed: return ColorId.diffEditorRemovedLineMarker;
 	}
 }
 
 function hoverText(metadata: QuickDiffDecorationMetadata): string {
-	const kind = metadata.presentation === DecorationPresentation.DiffAdded
+	const kind = metadata.kind === LineDiffKind.Added
 		? 'Added'
-		: metadata.presentation === DecorationPresentation.DiffModified ? 'Modified' : 'Deleted';
+		: metadata.kind === LineDiffKind.Modified ? 'Modified' : 'Deleted';
 	return `${kind} relative to ${metadata.providerLabels.join(', ')}`;
 }

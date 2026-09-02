@@ -1,8 +1,9 @@
 import { MarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import * as nls from '../../../../nls.js';
-import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
-import { EditorContributionInstantiation, registerTextEditorCapabilityContribution, type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import type { IEditorContribution } from '../../../common/editorCommon.js';
 import { MessageController } from '../../message/browser/messageController.js';
 
@@ -10,25 +11,19 @@ import { MessageController } from '../../message/browser/messageController.js';
 export class ReadOnlyMessageController extends Disposable implements IEditorContribution {
 	public static readonly ID = 'editor.contrib.readOnlyMessageController';
 
-	constructor(private readonly context: TextEditorContributionContext) {
+	constructor(private readonly editor: ICodeEditor) {
 		super();
-		this._register(context.editor.onDidAttemptReadOnlyEdit(() => this.showMessage()));
+		this._register(editor.onDidAttemptReadOnlyEdit(() => this.showMessage()));
 	}
 
 	private showMessage(): void {
-		const controller = MessageController.get(this.context.editor);
-		const position = this.context.editor.getPosition();
+		const controller = MessageController.get(this.editor);
+		const position = this.editor.getPosition();
 		if (!controller || !position) return;
-		const message = this.context.options.readOnlyMessage
+		const message = this.editor.getOption(EditorOption.readOnlyMessage)
 			?? new MarkdownString(nls.localize('editor.readonly', 'Cannot edit in read-only editor'));
 		controller.showMessage(message, position);
 	}
 }
 
-registerTextEditorCapabilityContribution({
-	id: ReadOnlyMessageController.ID,
-	runtime: {
-		descriptor: new ServiceConstructionDescriptor(ReadOnlyMessageController),
-		instantiation: EditorContributionInstantiation.BeforeFirstInteraction,
-	},
-});
+registerEditorContribution(ReadOnlyMessageController.ID, ReadOnlyMessageController, EditorContributionInstantiation.BeforeFirstInteraction);

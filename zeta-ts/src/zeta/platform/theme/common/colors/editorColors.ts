@@ -55,6 +55,21 @@ export const multiCursorPrimaryForeground = alias("editorMultiCursor.primary.for
 export const multiCursorPrimaryBackground = alias("editorMultiCursor.primary.background", cursorBackground, "Foreground for a character covered by the primary cursor when multiple cursors are active.");
 export const multiCursorSecondaryForeground = alias("editorMultiCursor.secondary.foreground", cursorForeground, "Foreground for secondary cursors when multiple cursors are active.");
 export const multiCursorSecondaryBackground = alias("editorMultiCursor.secondary.background", cursorBackground, "Foreground for a character covered by a secondary cursor when multiple cursors are active.");
+export const overviewRulerBorder = registerColor(
+	'editorOverviewRuler.border',
+	{ dark: '#7f7f7f4d', light: '#7f7f7f4d', highContrastDark: '#7f7f7f4d', highContrastLight: '#666666' },
+	{ description: 'Color of the editor overview ruler border.', owner },
+);
+export const overviewRulerBackground = registerColor(
+	'editorOverviewRuler.background',
+	{
+		dark: transparent(editorBackground, 0),
+		light: transparent(editorBackground, 0),
+		highContrastDark: transparent(editorBackground, 0),
+		highContrastLight: transparent(editorBackground, 0),
+	},
+	{ description: 'Background color of the editor overview ruler.', owner, needsTransparency: true },
+);
 export const lineHighlightBackground = registerColor(
 	"editor.lineHighlightBackground",
 	{ dark: "#00000000", light: "#00000000", highContrastDark: "#00000000", highContrastLight: "#00000000" },

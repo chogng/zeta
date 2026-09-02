@@ -1,5 +1,4 @@
 import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
-import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { LanguageBracketPairs } from '../../../common/languages/languageBracketPairs.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { TextEditorCapability } from '../../textEditorCapabilities.js';
@@ -18,7 +17,6 @@ registerTextEditorCapabilityContribution({
 		const decorations = context.register(new TextDecorationCollection<void>(context.model));
 		context.provideCapability(TextEditorCapability.bracketPairs, bracketPairs);
 		context.provideCapability(TextEditorCapability.bracketDecorations, decorations);
-		context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.BracketMatch));
 		const colorizeBrackets = context.options.bracketPairColorization?.enabled !== false;
 		const renderBracketGuides = context.options.guides?.bracketPairs !== undefined && context.options.guides.bracketPairs !== false;
 		if (!largeFile && (colorizeBrackets || renderBracketGuides)) {

@@ -49,7 +49,7 @@ export class ViewLayer<TLine> extends Disposable {
 		this._register(toDisposable(() => domNode.remove()));
 		this.domNode = domNode;
 		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName('stanza-editor-lines');
+		this.root.setClassName('view-lines');
 	}
 
 	get renderedLines(): ReadonlyMap<number, TLine> {

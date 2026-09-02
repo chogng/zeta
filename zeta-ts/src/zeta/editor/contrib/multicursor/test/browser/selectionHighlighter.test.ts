@@ -3,7 +3,6 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
-import { createStanzaDecorationSource } from '../../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -33,7 +32,6 @@ for (const [name, value] of Object.entries({
 
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-const { resolveSelectionHighlightPresentation } = await import('../../../wordHighlighter/browser/highlightDecorations.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
 const { SelectionHighlighter } = await import('../../browser/multicursor.js');
 
@@ -46,7 +44,7 @@ test('Selection highlighter owns non-empty textual matches and excludes active s
 		Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (16) + 1)),
 		Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (2) + 1)),
 	]);
-	assert.equal(harness.viewport.element.querySelectorAll('.selection-highlight').length, 3);
+	assert.equal(harness.model.getAllDecorations().filter(decoration => decoration.options.className === 'selection-highlight').length, 3);
 });
 
 test('Selection highlighter applies whole-word, whitespace, multiline, and maximum-length policy', () => {
@@ -63,6 +61,18 @@ test('Selection highlighter applies whole-word, whitespace, multiline, and maxim
 	assert.equal(harness.decorations.size, 0);
 });
 
+test('Selection highlighter exposes its canonical ID and clears listeners and decorations on dispose', () => {
+	using languages = new TestLanguageFeaturesService();
+	using harness = createHarness('item item item', languages, Selection.fromPositions(new Position(1, 1), new Position(1, 5)));
+	assert.equal(SelectionHighlighter.ID, 'editor.contrib.selectionHighlighter');
+	assert.equal(harness.decorations.size, 2);
+
+	harness.controller.dispose();
+	assert.equal(harness.decorations.size, 0);
+	harness.selections.setSelections([Selection.fromPositions(new Position(1, 6), new Position(1, 10))]);
+	assert.equal(harness.decorations.size, 0);
+});
+
 function createHarness(text: string, languages: TestLanguageFeaturesService, initialSelection: Selection): SelectionHarness {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
@@ -76,14 +86,13 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, ini
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		decorationSources: [createStanzaDecorationSource(decorations, decoration => resolveSelectionHighlightPresentation(decoration.metadata))],
 	});
 	const view = viewport.controller;
 	const controller = new SelectionHighlighter(view, selections, decorations, {
 		languageId: 'typescript',
 		languageFeaturesService: languages,
 	});
-	view.layout({ width: 240, height: 60 });
+	viewport.layout({ width: 240, height: 60 });
 	return new SelectionHarness(dom, model, selections, decorations, viewport, view, controller, textualProvider);
 }
 

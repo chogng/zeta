@@ -1,8 +1,9 @@
 import './codelensWidget.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { type View, type EditorViewZone, type EditorViewZoneHandle } from '../../../browser/view.js';
+import { type IViewZone } from '../../../browser/editorBrowser.js';
+import { type View } from '../../../browser/view.js';
 import { Position } from '../../../common/core/position.js';
 import { type CodeLens, type Command } from '../../../common/languages.js';
 import { type CodeLensItem } from './codelens.js';
@@ -15,22 +16,29 @@ export class CodeLensWidget extends Disposable {
 	private items: readonly CodeLensItem[];
 	private currentCommands: readonly Command[] = [];
 	private commandsResolved = false;
-	private readonly viewZone: EditorViewZone;
-	private readonly viewZoneHandle: EditorViewZoneHandle;
+	private readonly viewZone: IViewZone;
+	private readonly viewZoneId: string;
+	private computedHeight = 0;
 
 	public constructor(private readonly viewport: View, items: readonly CodeLensItem[], private readonly executeCommand?: ExecuteCodeLensCommand) {
 		super();
 		this.items = items;
-		this.domNode = h(viewport.element.ownerDocument, 'div');
+		this.domNode = h(viewport.domNode.domNode.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-widget stanza-editor-codelens';
 		this.domNode.setAttribute('role', 'group');
 		this.domNode.setAttribute('aria-label', localize('commands', 'CodeLens commands'));
 		this.viewZone = {
-			afterLineNumber: this.afterVisualLineIndex + 1,
+			afterLineNumber: this.afterLineNumber,
+			afterColumn: Number.MAX_SAFE_INTEGER,
 			heightInPx: this.codeLensHeight,
+			suppressMouseDown: true,
 			domNode: this.domNode,
+			onComputedHeight: height => { this.computedHeight = height; },
 		};
-		this.viewZoneHandle = this._register(viewport.addViewZone(this.viewZone));
+		let viewZoneId = '';
+		viewport.changeViewZones(accessor => { viewZoneId = accessor.addZone(this.viewZone); });
+		this.viewZoneId = viewZoneId;
+		this._register(toDisposable(() => viewport.changeViewZones(accessor => accessor.removeZone(this.viewZoneId))));
 		this._register(addDisposableListener<MouseEvent>(this.domNode, 'click', event => {
 			const button = (event.target as Element | null)?.closest<HTMLButtonElement>('.stanza-editor-codelens-command');
 			if (!(button instanceof this.domNode.ownerDocument.defaultView!.HTMLButtonElement) || button.parentElement !== this.domNode || !this.executeCommand) return;
@@ -63,22 +71,21 @@ export class CodeLensWidget extends Disposable {
 	}
 
 	public layout(): void {
-		this.viewZone.afterLineNumber = this.afterVisualLineIndex + 1;
+		this.viewZone.afterLineNumber = this.afterLineNumber;
 		this.viewZone.heightInPx = this.codeLensHeight;
-		this.viewZoneHandle.layout();
+		this.viewport.changeViewZones(accessor => accessor.layoutZone(this.viewZoneId));
 		const range = this.items[0]!.symbol.range;
 		const coordinates = this.viewport.getPositionContentCoordinates(new Position(range.startLineNumber, range.startColumn));
 		this.domNode.style.left = `${Math.max(4, coordinates.left)}px`;
 	}
 
 	public isVisible(): boolean {
-		const layout = this.viewport.viewportLayout;
-		return this.viewZoneHandle.top + this.viewZoneHandle.heightInPixels >= layout.scrollPosition.top && this.viewZoneHandle.top <= layout.scrollPosition.top + layout.viewportSize.height;
+		return this.computedHeight > 0 && this.domNode.dataset.visibleViewZone === 'true';
 	}
 
-	private get afterVisualLineIndex(): number {
+	private get afterLineNumber(): number {
 		const range = this.items[0]!.symbol.range;
-		return this.viewport.getVisualLineProjection().visualLineIndexAt(new Position(range.startLineNumber, range.startColumn)) - 1;
+		return range.startLineNumber - 1;
 	}
 
 	private get codeLensHeight(): number {

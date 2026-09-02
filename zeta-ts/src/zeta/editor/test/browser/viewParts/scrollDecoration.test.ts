@@ -11,14 +11,15 @@ test('ScrollDecorationViewPart follows layout and scrollbar configuration', () =
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const state = configurationState();
 	const scrollDecoration = new ScrollDecorationViewPart(testViewContext(state), dom.window.document.querySelector('main')!);
-	dom.window.document.querySelector('main')!.append(scrollDecoration.domNode);
+	const domNode = scrollDecoration.getDomNode().domNode;
+	dom.window.document.querySelector('main')!.append(domNode);
 
-	assert.equal(scrollDecoration.domNode.getAttribute('role'), 'presentation');
-	assert.equal(scrollDecoration.domNode.getAttribute('aria-hidden'), 'true');
+	assert.equal(domNode.getAttribute('role'), 'presentation');
+	assert.equal(domNode.getAttribute('aria-hidden'), 'true');
 	scrollDecoration.render(renderingContext({ scrollLeft: 15, scrollTop: 0, scrollHeight: 300, viewportHeight: 100 }));
-	assert.equal(scrollDecoration.domNode.style.width, '500px');
-	assert.equal(scrollDecoration.domNode.style.height, '100px');
-	assert.equal(scrollDecoration.domNode.style.transform, 'translate3d(15px, 0px, 0)');
+	assert.equal(domNode.style.width, '500px');
+	assert.equal(domNode.style.height, '100px');
+	assert.equal(domNode.style.transform, 'translate3d(15px, 0px, 0)');
 	assert.equal(shadow(scrollDecoration, 'top').classList.contains('visible'), false);
 	assert.equal(shadow(scrollDecoration, 'bottom').classList.contains('visible'), true);
 
@@ -30,7 +31,7 @@ test('ScrollDecorationViewPart follows layout and scrollbar configuration', () =
 	state.scrollbar = { useShadows: false } as InternalEditorScrollbarOptions;
 	assert.equal(scrollDecoration.onConfigurationChanged(configurationChange(EditorOption.layoutInfo, EditorOption.scrollbar)), true);
 	scrollDecoration.render(renderingContext({ scrollTop: 50, scrollHeight: 300, viewportHeight: 100 }));
-	assert.equal(scrollDecoration.domNode.style.width, '486px');
+	assert.equal(domNode.style.width, '486px');
 	assert.equal(shadow(scrollDecoration, 'top').classList.contains('visible'), false);
 	assert.equal(shadow(scrollDecoration, 'bottom').classList.contains('visible'), false);
 
@@ -118,5 +119,5 @@ function scrollChange(changed: Partial<ViewScrollChangedEvent>): ViewScrollChang
 }
 
 function shadow(scrollDecoration: ScrollDecorationViewPart, edge: 'top' | 'bottom'): HTMLElement {
-	return scrollDecoration.domNode.querySelector<HTMLElement>(`.stanza-editor-scroll-decoration-shadow.${edge}`)!;
+	return scrollDecoration.getDomNode().domNode.querySelector<HTMLElement>(`.stanza-editor-scroll-decoration-shadow.${edge}`)!;
 }

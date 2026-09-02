@@ -50,7 +50,7 @@ export class CursorCollection {
 	}
 
 	public getBottomMostViewPosition(): Position {
-		return this.cursors.reduce((bottom, cursor) => Position.compare(cursor.viewState.position, bottom) > 0 ? cursor.viewState.position : bottom, this.cursors[0]!.viewState.position);
+		return this.cursors.reduce((bottom, cursor) => Position.compare(cursor.viewState.position, bottom) >= 0 ? cursor.viewState.position : bottom, this.cursors[0]!.viewState.position);
 	}
 
 	public getSelections(): Selection[] {

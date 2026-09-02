@@ -11,3 +11,4 @@ export const PAUSE_DEBUG_COMMAND_ID = "workbench.action.debug.pause";
 export const STEP_OVER_DEBUG_COMMAND_ID = "workbench.action.debug.stepOver";
 export const STEP_INTO_DEBUG_COMMAND_ID = "workbench.action.debug.stepInto";
 export const STEP_OUT_DEBUG_COMMAND_ID = "workbench.action.debug.stepOut";
+export const BREAKPOINT_EDITOR_CONTRIBUTION_ID = 'editor.contrib.breakpoint';

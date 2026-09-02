@@ -1462,7 +1462,10 @@ export class TextModel implements ITextModel {
 			beforeCursorState,
 			editOperations,
 			cursorStateComputer,
-			{ historyGroup: group, editSource: reason ?? EditSources.unknown({ name: 'pushEditOperations' }) },
+			{
+				historyGroup: group,
+				editSource: reason ?? EditSources.unknown({ name: 'pushEditOperations' }),
+			},
 		)?.change.resultingSelection ?? null;
 	}
 
@@ -1527,7 +1530,10 @@ export class TextModel implements ITextModel {
 				[...coalescingEntry.textChanges],
 				result.textChanges,
 			);
-			const mergedEdits = options.historyGroup === undefined
+			const accumulatesActiveRevision = options.historyGroup !== undefined
+				&& historyMergeMode === TextEditHistoryMergeMode.Sequential
+				&& this.history.isRevisionActive(options.historyGroup);
+			const mergedEdits = options.historyGroup === undefined || accumulatesActiveRevision
 				? inverseEditsFromTextChanges(mergedTextChanges)
 				: historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
 					? replaceHistoryUndoEdits(
@@ -1759,7 +1765,7 @@ export class TextModel implements ITextModel {
 			previous => historyGroup === undefined || (
 				historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
 					? canReplaceHistoryEdits(previous.edits, edits)
-					: canCoalesceHistoryEdits(previous.edits, edits)
+					: this.history.isRevisionActive(historyGroup) || canCoalesceHistoryEdits(previous.edits, edits)
 			),
 		);
 	}
@@ -2196,6 +2202,23 @@ export class TextModel implements ITextModel {
 		if (this.disposed) throw new ReferenceError('TextModel is already disposed');
 	}
 
+}
+
+export function getLineTokensWithInjections(tokens: LineTokens, injectionOptions: model.InjectedTextOptions[] | null, injectionOffsets: number[] | null): LineTokens {
+	if (!injectionOffsets) return tokens;
+	const tokensToInsert: { offset: number; text: string; tokenMetadata: number }[] = [];
+	for (let index = 0; index < injectionOffsets.length; index += 1) {
+		const offset = injectionOffsets[index]!;
+		const options = injectionOptions![index]!;
+		if (options.tokens) {
+			options.tokens.forEach((range, info) => {
+				tokensToInsert.push({ offset, text: range.substring(options.content), tokenMetadata: info.metadata });
+			});
+		} else {
+			tokensToInsert.push({ offset, text: options.content, tokenMetadata: LineTokens.defaultTokenMetadata });
+		}
+	}
+	return tokens.withInserted(tokensToInsert);
 }
 
 function toModelContentChangedEvent(change: TextModelChange): IModelContentChangedEvent {

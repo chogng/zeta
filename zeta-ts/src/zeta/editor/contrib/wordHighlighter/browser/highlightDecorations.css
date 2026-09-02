@@ -1,31 +1,31 @@
-.stanza-editor-decoration.word-highlight,
-.stanza-editor-decoration.word-highlight-text,
-.stanza-editor-decoration.word-highlight-strong,
-.stanza-editor-decoration.selection-highlight {
+.stanza-editor .word-highlight,
+.stanza-editor .word-highlight-text,
+.stanza-editor .word-highlight-strong,
+.stanza-editor .selection-highlight {
 	box-sizing: border-box;
 }
 
-.stanza-editor-decoration.word-highlight {
+.stanza-editor .word-highlight {
 	background: color-mix(in srgb, var(--zeta-foreground) 18%, transparent);
 }
 
-.stanza-editor-decoration.word-highlight-text {
+.stanza-editor .word-highlight-text {
 	background: var(--zeta-search-match-background);
 }
 
-.stanza-editor-decoration.word-highlight-strong {
+.stanza-editor .word-highlight-strong {
 	background: color-mix(in srgb, var(--zeta-focus-border) 28%, transparent);
 }
 
-.stanza-editor.input-focused .stanza-editor-decoration.selection-highlight {
+.stanza-editor.input-focused .selection-highlight {
 	background: color-mix(in srgb, var(--zeta-selection-background) 50%, transparent);
 }
 
 @media (forced-colors: active) {
-	.stanza-editor-decoration.word-highlight,
-	.stanza-editor-decoration.word-highlight-text,
-	.stanza-editor-decoration.word-highlight-strong,
-	.stanza-editor-decoration.selection-highlight {
+	.stanza-editor .word-highlight,
+	.stanza-editor .word-highlight-text,
+	.stanza-editor .word-highlight-strong,
+	.stanza-editor .selection-highlight {
 		border: 1px dotted CanvasText;
 	}
 }

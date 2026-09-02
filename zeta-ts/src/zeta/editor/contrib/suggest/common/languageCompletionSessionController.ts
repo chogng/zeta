@@ -1,7 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
-import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type VersionedLanguageResult } from "../../../common/languages/languageRequestCoordinator.js";
 import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
@@ -9,7 +8,10 @@ import { assertLanguageCompletionCommitCharacter, LanguageCompletionInsertTextFo
 import { parseLanguageCompletionSnippet, type LanguageCompletionSnippet, type LanguageCompletionSnippetVariableResolver } from "../../snippet/common/languageCompletionSnippetParser.js";
 import { LanguageCompletionSnippetSession } from "../../snippet/common/languageCompletionSnippetSession.js";
 import { Position } from "../../../common/core/position.js";
+import { Selection } from "../../../common/core/selection.js";
 import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
+import { type ICommand, type ICursorStateComputerData, type IEditOperationBuilder } from "../../../common/editorCommon.js";
+import { type ITextModel } from "../../../common/model.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export enum LanguageCompletionSessionChangeReason {
@@ -184,23 +186,25 @@ export class LanguageCompletionSessionController extends Disposable {
 		);
 		this.accepting = true;
 		try {
-			this.selectionController.execute(command);
+			this.selectionController.pushUndoStop();
+			this.selectionController.executeCommand(command, "suggest.accept");
+			this.selectionController.pushUndoStop();
+			if (insertion.snippet && insertion.snippet.placeholderGroups.length > 0) {
+				this.snippetSession?.dispose();
+				this.snippetSession = new LanguageCompletionSnippetSession(
+					this.textModel,
+					this.selectionController,
+					insertion.resultStartOffset,
+					insertion.snippet,
+					insertion.text.length,
+				);
+			}
 		} catch (error) {
 			this.accepting = false;
 			this.replaceState(this.store.result, LanguageCompletionSessionChangeReason.Store);
 			throw error;
 		}
 		this.accepting = false;
-		if (insertion.snippet && insertion.snippet.placeholderGroups.length > 0) {
-			this.snippetSession?.dispose();
-			this.snippetSession = new LanguageCompletionSnippetSession(
-				this.textModel,
-				this.selectionController,
-				insertion.resultStartOffset,
-				insertion.snippet,
-				insertion.text.length,
-			);
-		}
 		if (state.selectedItem.command && this.onDidAccept) void Promise.resolve().then(() => this.onDidAccept!(state.selectedItem)).catch(this.onResolveError);
 		this.close(LanguageCompletionSessionChangeReason.Accepted);
 		return true;
@@ -348,7 +352,7 @@ export class LanguageCompletionSessionController extends Disposable {
 	}
 }
 
-export function createLanguageCompletionAcceptCommand(model: TextModel, selectionController: CursorsController, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: LanguageCompletionSnippetVariableResolver): EditorEditCommand {
+export function createLanguageCompletionAcceptCommand(model: TextModel, selectionController: CursorsController, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: LanguageCompletionSnippetVariableResolver): ICommand {
 	if (model !== selectionController.context.model) {
 		throw new TypeError("Language completion command and selection controller must share one text model");
 	}
@@ -367,18 +371,31 @@ export function createLanguageCompletionAcceptCommand(model: TextModel, selectio
 		}
 	}
 	const insertion = resolveLanguageCompletionInsertion(item, commitCharacter, model, snippetVariables);
-	const insertText = insertion.text;
-	const additionalTextEdits = item.additionalTextEdits ?? [];
-	const selectionsAfter = insertion.snippet?.placeholderGroups[0]?.placeholders.map(placeholder => ({
-		anchorOffset: insertion.resultStartOffset + placeholder.startOffset,
-		activeOffset: insertion.resultStartOffset + placeholder.endOffset,
-	})) ?? [{ anchorOffset: insertion.resultStartOffset + insertText.length, activeOffset: insertion.resultStartOffset + insertText.length }];
-	return Object.freeze({
-		edits: Object.freeze([{ range: item.range, text: insertText }, ...additionalTextEdits]),
-		selectionsAfter: Object.freeze(selectionsAfter),
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.Isolated,
-	});
+	return new LanguageCompletionAcceptCommand(item.range, insertion.text, item.additionalTextEdits ?? []);
+}
+
+class LanguageCompletionAcceptCommand implements ICommand {
+	private readonly edits: readonly { readonly range: import("../../../common/core/range.js").Range; readonly text: string }[];
+	private readonly primaryEditIndex: number;
+
+	constructor(primaryRange: import("../../../common/core/range.js").Range, text: string, additionalEdits: readonly { readonly range: import("../../../common/core/range.js").Range; readonly text: string }[]) {
+		const primaryEdit = { range: primaryRange, text };
+		this.edits = [primaryEdit, ...additionalEdits].sort((left, right) => {
+			const start = Position.compare(left.range.getStartPosition(), right.range.getStartPosition());
+			return start || Position.compare(left.range.getEndPosition(), right.range.getEndPosition());
+		});
+		this.primaryEditIndex = this.edits.indexOf(primaryEdit);
+	}
+
+	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
+		for (const edit of this.edits) builder.addTrackedEditOperation(edit.range, edit.text);
+	}
+
+	computeCursorState(_model: ITextModel, helper: ICursorStateComputerData): Selection {
+		const primaryInverseEdit = helper.getInverseEditOperations()[this.primaryEditIndex];
+		if (!primaryInverseEdit) throw new Error("Language completion primary edit was not applied");
+		return Selection.fromPositions(primaryInverseEdit.range.getEndPosition());
+	}
 }
 
 interface LanguageCompletionInsertion {

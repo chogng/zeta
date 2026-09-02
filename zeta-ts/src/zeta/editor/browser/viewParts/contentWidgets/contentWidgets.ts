@@ -1,4 +1,3 @@
-import * as dom from '../../../../base/browser/dom.js';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { getClientArea, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -6,24 +5,12 @@ import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidg
 import { type IPosition, Position } from '../../../common/core/position.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { PositionAffinity } from '../../../common/model.js';
-import { type RenderingContext } from '../../view/renderingContext.js';
+import { type RenderingContext, type RestrictedRenderingContext } from '../../view/renderingContext.js';
 import { PartFingerprint, PartFingerprints, ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-import { type TextModel } from '../../../common/model/textModel.js';
-import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
-
-interface ViewContentWidgetsOptions {
-	readonly viewDomNode: HTMLElement;
-	readonly allowOverflow: boolean;
-	readonly fixedOverflowWidgets: boolean;
-	readonly readContentLeft: () => number;
-	readonly readContentWidth: () => number;
-	readonly model: TextModel;
-	readonly readVisualProjection: () => EditorVisualLineProjection;
-	readonly readTextLeft: () => number;
-	readonly textMeasurer: TextMeasurer;
-}
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import * as viewEvents from '../../../common/viewEvents.js';
+import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 
 interface BoxLayoutResult {
 	readonly fitsAbove: boolean;
@@ -51,15 +38,15 @@ export class ViewContentWidgets extends ViewPart {
 	public readonly overflowingContentWidgetsDomNode: FastDomNode<HTMLDivElement>;
 	private readonly widgets = this._register(new DisposableMap<string, ContentWidget>());
 
-	constructor(context: ViewContext, private readonly options: ViewContentWidgetsOptions) {
+	constructor(context: ViewContext, private readonly viewDomNode: FastDomNode<HTMLElement>) {
 		super(context);
-		this.domNode = createFastDomNode(options.viewDomNode.ownerDocument.createElement('div'));
+		this.domNode = createFastDomNode(viewDomNode.domNode.ownerDocument.createElement('div'));
 		PartFingerprints.write(this.domNode, PartFingerprint.ContentWidgets);
 		this.domNode.setClassName('stanza-editor-content-widgets');
 		this.domNode.setPosition('absolute');
 		this.domNode.setTop(0);
 		this.domNode.setAttribute('role', 'presentation');
-		this.overflowingContentWidgetsDomNode = createFastDomNode(options.viewDomNode.ownerDocument.createElement('div'));
+		this.overflowingContentWidgetsDomNode = createFastDomNode(viewDomNode.domNode.ownerDocument.createElement('div'));
 		PartFingerprints.write(this.overflowingContentWidgetsDomNode, PartFingerprint.OverflowingContentWidgets);
 		this.overflowingContentWidgetsDomNode.setClassName('stanza-editor-overflowing-content-widgets');
 		this.overflowingContentWidgetsDomNode.setAttribute('role', 'presentation');
@@ -69,32 +56,89 @@ export class ViewContentWidgets extends ViewPart {
 		}));
 	}
 
+	public override dispose(): void {
+		super.dispose();
+	}
+
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		for (const [, widget] of this.widgets) widget.onConfigurationChanged(event);
+		return true;
+	}
+
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
+		return true;
+	}
+
+	public override onLineMappingChanged(_event: viewEvents.ViewLineMappingChangedEvent): boolean {
+		return true;
+	}
+
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
+		return true;
+	}
+
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
+		return true;
+	}
+
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
+		return true;
+	}
+
+	public override onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): boolean {
+		return true;
+	}
+
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
+
 	public addWidget(widget: IContentWidget): void {
 		const id = widget.getId();
 		if (!id || this.widgets.has(id)) throw new RangeError(`Content widget '${id}' is already registered`);
-		const contentWidget = this.widgets.set(id, new ContentWidget(this.options, widget));
+		const contentWidget = this.widgets.set(id, new ContentWidget(this._context, this.viewDomNode, widget));
 		if (contentWidget.allowEditorOverflow) {
 			this.overflowingContentWidgetsDomNode.domNode.append(contentWidget.domNode.domNode);
 		} else {
 			this.domNode.domNode.append(contentWidget.domNode.domNode);
 		}
+		this.setShouldRender();
 	}
 
 	public setWidgetPosition(widget: IContentWidget, position: IContentWidgetPosition | null): void {
-		this.widget(widget)?.setPosition(position);
+		const contentWidget = this.widget(widget);
+		if (!contentWidget) return;
+		contentWidget.setPosition(position);
+		if (!contentWidget.useDisplayNone) this.setShouldRender();
 	}
 
 	public removeWidget(widget: IContentWidget): void {
 		const id = widget.getId();
 		if (!this.widget(widget)) return;
 		this.widgets.deleteAndDispose(id);
+		this.setShouldRender();
+	}
+
+	public shouldSuppressMouseDownOnWidget(widgetId: string): boolean {
+		for (const [id, widget] of this.widgets) {
+			if (id === widgetId) return widget.suppressMouseDown;
+		}
+		return false;
+	}
+
+	public override onBeforeRender(viewportData: ViewportData): void {
+		for (const [, widget] of this.widgets) widget.onBeforeRender(viewportData);
 	}
 
 	public override prepareRender(context: RenderingContext): void {
 		for (const [, widget] of this.widgets) widget.prepareRender(context);
 	}
 
-	public render(context: RenderingContext): void {
+	public render(context: RestrictedRenderingContext): void {
 		for (const [, widget] of this.widgets) widget.render(context);
 	}
 
@@ -111,6 +155,7 @@ class ContentWidget extends Disposable {
 	public readonly id: string;
 	public readonly allowEditorOverflow: boolean;
 	public readonly useDisplayNone: boolean;
+	public readonly suppressMouseDown: boolean;
 	public readonly actual: IContentWidget;
 	private readonly fixedOverflowWidgets: boolean;
 	private position: IContentWidgetPosition | null = null;
@@ -120,24 +165,40 @@ class ContentWidget extends Disposable {
 	private visible = false;
 	private renderData: RenderData | null = null;
 
-	constructor(private readonly options: ViewContentWidgetsOptions, actual: IContentWidget) {
+	constructor(private readonly context: ViewContext, private readonly viewDomNode: FastDomNode<HTMLElement>, actual: IContentWidget) {
 		super();
 		this.actual = actual;
 		this.id = actual.getId();
-		this.allowEditorOverflow = Boolean(actual.allowEditorOverflow) && options.allowOverflow;
+		this.allowEditorOverflow = Boolean(actual.allowEditorOverflow) && context.configuration.options.get(EditorOption.allowOverflow);
 		this.useDisplayNone = Boolean(actual.useDisplayNone);
-		this.fixedOverflowWidgets = options.fixedOverflowWidgets;
+		this.suppressMouseDown = Boolean(actual.suppressMouseDown);
+		this.fixedOverflowWidgets = context.configuration.options.get(EditorOption.fixedOverflowWidgets);
 		this.domNode = createFastDomNode(actual.getDomNode());
 		this.domNode.setPosition(this.fixedOverflowWidgets && this.allowEditorOverflow ? 'fixed' : 'absolute');
 		this.domNode.setDisplay('none');
 		this.domNode.setVisibility('hidden');
 		this.domNode.setAttribute('widgetId', this.id);
-		if (actual.suppressMouseDown) this._register(dom.addDisposableListener(this.domNode.domNode, 'mousedown', event => event.preventDefault()));
 		this._register(toDisposable(() => {
 			this.domNode.domNode.remove();
 			this.domNode.removeAttribute('widgetId');
 			this.domNode.removeAttribute('data-stanza-visible-content-widget');
 		}));
+	}
+
+	public onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): void {
+		if (event.hasChanged(EditorOption.layoutInfo) || event.hasChanged(EditorOption.fontInfo)) {
+			this.maxWidth = -1;
+			this.cachedWidth = -1;
+			this.cachedHeight = -1;
+		}
+	}
+
+	public onBeforeRender(viewportData: ViewportData): void {
+		const position = this.position?.position;
+		if (!position) return;
+		const viewPosition = this.context.viewModel.coordinatesConverter.convertModelPositionToViewPosition(this.context.viewModel.model.validatePosition(position), this.position?.positionAffinity);
+		if (viewPosition.lineNumber < viewportData.startLineNumber || viewPosition.lineNumber > viewportData.endLineNumber) return;
+		this.updateMaxWidth();
 	}
 
 	public setPosition(position: IContentWidgetPosition | null): void {
@@ -152,7 +213,7 @@ class ContentWidget extends Disposable {
 		this.renderData = this.prepareRenderData(context);
 	}
 
-	public render(_context: RenderingContext): void {
+	public render(_context: RestrictedRenderingContext): void {
 		const renderData = this.renderData;
 		if (!renderData || renderData.kind === 'offViewport') {
 			if (renderData?.preserveFocus) {
@@ -182,16 +243,16 @@ class ContentWidget extends Disposable {
 	private prepareRenderData(context: RenderingContext): RenderData | null {
 		const position = this.position;
 		if (this.useDisplayNone || !position || !position.position || position.preference.length === 0) return null;
-		const primary = anchorCoordinate(context, this.options, position.position, position.positionAffinity);
+		const primary = anchorCoordinate(context, this.context, position.position, position.positionAffinity);
 		if (!primary) {
 			return {
 				kind: 'offViewport',
 				preserveFocus: this.domNode.domNode.contains(this.domNode.domNode.ownerDocument.activeElement),
 			};
 		}
-		const secondary = position.secondaryPosition ? anchorCoordinate(context, this.options, position.secondaryPosition, position.positionAffinity) : null;
+		const secondary = position.secondaryPosition ? anchorCoordinate(context, this.context, position.secondaryPosition, position.positionAffinity) : null;
 		this.updateDimensions();
-		const anchor = reduceAnchor(primary, secondary?.visualLineIndex === primary.visualLineIndex ? secondary : null, this.cachedWidth, this.options);
+		const anchor = reduceAnchor(primary, secondary?.visualLineIndex === primary.visualLineIndex ? secondary : null, this.cachedWidth, this.context);
 		const placement = this.allowEditorOverflow
 			? this.layoutBoxInPage(anchor, context)
 			: layoutBoxInViewport(anchor, this.cachedWidth, this.cachedHeight, context);
@@ -212,15 +273,7 @@ class ContentWidget extends Disposable {
 	}
 
 	private updateDimensions(): void {
-		const nextMaxWidth = this.allowEditorOverflow
-			? getClientArea(this.options.viewDomNode.ownerDocument.body).width
-			: Math.max(0, this.options.readContentWidth());
-		if (nextMaxWidth !== this.maxWidth) {
-			this.maxWidth = nextMaxWidth;
-			this.domNode.setMaxWidth(nextMaxWidth);
-			this.cachedWidth = -1;
-			this.cachedHeight = -1;
-		}
+		this.updateMaxWidth();
 		if (this.cachedWidth >= 0 && this.cachedHeight >= 0) return;
 		const preferred = safeInvoke(this.actual.beforeRender, this.actual);
 		if (preferred && validDimension(preferred)) {
@@ -233,14 +286,28 @@ class ContentWidget extends Disposable {
 		this.cachedHeight = Math.round(rectangle.height);
 	}
 
+	private updateMaxWidth(): void {
+		const layoutInfo = this.context.configuration.options.get(EditorOption.layoutInfo);
+		const nextMaxWidth = this.allowEditorOverflow
+			? getClientArea(this.viewDomNode.domNode.ownerDocument.body).width
+			: Math.max(0, layoutInfo.contentWidth);
+		if (nextMaxWidth !== this.maxWidth) {
+			this.maxWidth = nextMaxWidth;
+			this.domNode.setMaxWidth(nextMaxWidth);
+			this.cachedWidth = -1;
+			this.cachedHeight = -1;
+		}
+	}
+
 	private layoutBoxInPage(anchor: AnchorCoordinate, context: RenderingContext): BoxLayoutResult {
-		const viewPosition = getDomNodePagePosition(this.options.viewDomNode);
-		const ownerWindow = this.options.viewDomNode.ownerDocument.defaultView;
+		const viewPosition = getDomNodePagePosition(this.viewDomNode.domNode);
+		const ownerWindow = this.viewDomNode.domNode.ownerDocument.defaultView;
 		const windowScrollLeft = ownerWindow?.scrollX ?? 0;
 		const windowScrollTop = ownerWindow?.scrollY ?? 0;
-		const viewport = getClientArea(this.options.viewDomNode.ownerDocument.body);
+		const viewport = getClientArea(this.viewDomNode.domNode.ownerDocument.body);
 		const fixed = this.fixedOverflowWidgets;
-		const anchorLeft = viewPosition.left + this.options.readContentLeft() + anchor.left - context.scrollLeft - (fixed ? windowScrollLeft : 0);
+		const contentLeft = this.context.configuration.options.get(EditorOption.layoutInfo).contentLeft;
+		const anchorLeft = viewPosition.left + contentLeft + anchor.left - context.scrollLeft - (fixed ? windowScrollLeft : 0);
 		const anchorTop = viewPosition.top + anchor.top - context.scrollTop - (fixed ? windowScrollTop : 0);
 		const minimumLeft = (fixed ? 0 : windowScrollLeft) + 15;
 		const maximumRight = (fixed ? viewport.width : windowScrollLeft + viewport.width) - 15;
@@ -259,8 +326,8 @@ class ContentWidget extends Disposable {
 	private exactCoordinate(anchor: AnchorCoordinate, context: RenderingContext): RenderedCoordinate {
 		if (!this.allowEditorOverflow) return new RenderedCoordinate(anchor.top, anchor.left);
 		const placement = this.layoutBoxInPage(anchor, context);
-		const viewPosition = getDomNodePagePosition(this.options.viewDomNode);
-		const ownerWindow = this.options.viewDomNode.ownerDocument.defaultView;
+		const viewPosition = getDomNodePagePosition(this.viewDomNode.domNode);
+		const ownerWindow = this.viewDomNode.domNode.ownerDocument.defaultView;
 		return new RenderedCoordinate(
 			viewPosition.top + anchor.top - context.scrollTop - (this.fixedOverflowWidgets ? ownerWindow?.scrollY ?? 0 : 0),
 			placement.left,
@@ -284,31 +351,27 @@ class RenderedCoordinate implements IContentWidgetRenderedCoordinate {
 	) {}
 }
 
-function anchorCoordinate(context: RenderingContext, options: ViewContentWidgetsOptions, position: IPosition, affinity: PositionAffinity | undefined): AnchorCoordinate | null {
+function anchorCoordinate(context: RenderingContext, viewContext: ViewContext, position: IPosition, affinity: PositionAffinity | undefined): AnchorCoordinate | null {
 	let validPosition: Position;
 	try {
-		validPosition = Position.lift(position);
-		options.model.offsetAt(validPosition);
+		validPosition = viewContext.viewModel.model.validatePosition(Position.lift(position));
 	} catch {
 		return null;
 	}
-	const projection = options.readVisualProjection();
-	const visualLineIndex = projection.visualLineIndexAt(validPosition);
-	if (visualLineIndex < context.viewportData.startLineNumber - 1 || visualLineIndex >= context.viewportData.endLineNumber) return null;
-	const visualLine = projection.lineAt(visualLineIndex);
-	if (!visualLine) return null;
-	const renderedPosition = context.visibleRangeForPosition(validPosition);
-	const left = validPosition.column === 1 && affinity === PositionAffinity.LeftOfInjectedText
+	const viewPosition = viewContext.viewModel.coordinatesConverter.convertModelPositionToViewPosition(validPosition, affinity);
+	const visualLineIndex = viewPosition.lineNumber - 1;
+	if (viewPosition.lineNumber < context.viewportData.startLineNumber || viewPosition.lineNumber > context.viewportData.endLineNumber) return null;
+	const renderedPosition = context.visibleRangeForPosition(viewPosition);
+	if (!renderedPosition) return null;
+	const left = viewPosition.column === 1 && affinity === PositionAffinity.LeftOfInjectedText
 		? 0
-		: renderedPosition?.left ?? options.readTextLeft() + (visualLine.wrappedTextIndentWidth ?? 0) + options.textMeasurer.measureLineWidth(
-			options.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, validPosition.column - 1),
-		);
-	return new AnchorCoordinate(context.getVerticalOffsetForLineNumber(visualLineIndex + 1), left, context.viewportData.lineHeight, visualLineIndex);
+		: renderedPosition.left;
+	return new AnchorCoordinate(context.getVerticalOffsetForLineNumber(viewPosition.lineNumber), left, context.getLineHeightForLineNumber(viewPosition.lineNumber), visualLineIndex);
 }
 
-function reduceAnchor(primary: AnchorCoordinate, secondary: AnchorCoordinate | null, width: number, options: ViewContentWidgetsOptions): AnchorCoordinate {
+function reduceAnchor(primary: AnchorCoordinate, secondary: AnchorCoordinate | null, width: number, context: ViewContext): AnchorCoordinate {
 	if (!secondary) return primary;
-	const clearance = options.textMeasurer.measureLineWidth('Ｍ');
+	const clearance = context.configuration.options.get(EditorOption.fontInfo).typicalFullwidthCharacterWidth;
 	const left = secondary.left < primary.left
 		? Math.max(secondary.left, primary.left - width + clearance)
 		: Math.min(secondary.left, primary.left + width - clearance);

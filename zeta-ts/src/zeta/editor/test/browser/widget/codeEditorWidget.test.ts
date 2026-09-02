@@ -1,18 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { StandardMouseEvent } from '../../../../base/browser/mouseEvent.js';
+import { Event as EditorEvent } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { MouseTargetType, type IMouseTarget } from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, MouseTargetType, type ICodeEditor, type IContentWidget, type IGlyphMarginWidget, type IMouseTarget } from '../../../browser/editorBrowser.js';
 import { NavigationCommandRevealType } from '../../../browser/coreCommands.js';
 import { ViewUserInputEvents } from '../../../browser/view/viewUserInputEvents.js';
 import { type ICoordinatesConverter } from '../../../common/coordinatesConverter.js';
-import type { CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
 import { TextModel } from "../../../common/model/textModel.js";
-import { EditorLineWrapping } from '../../../common/config/editorOptions.js';
+import { GlyphMarginLane } from '../../../common/model.js';
+import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
+import { ScrollType } from '../../../common/editorCommon.js';
+import { type ViewConfigurationChangedEvent, VerticalRevealType } from '../../../common/viewEvents.js';
+import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { AccessibilitySupport, type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { CursorChangeReason } from '../../../common/cursorEvents.js';
+import { ViewContext } from '../../../common/viewModel/viewContext.js';
+import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 class TestResizeObserver {
@@ -37,10 +46,12 @@ for (const [name, value] of Object.entries({
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { NativeEditContext } = await import('../../../browser/controller/editContext/native/nativeEditContext.js');
 const { NativeEditContextRegistry } = await import('../../../browser/controller/editContext/native/nativeEditContextRegistry.js');
+const { ScreenReaderSupport } = await import('../../../browser/controller/editContext/native/screenReaderSupport.js');
 const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
+const { TestView } = await import('../viewModel/testViewModel.js');
 const { ViewPart } = await import('../../../browser/view/viewPart.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
-const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
+const { ServiceContainer } = await import("../../../../platform/instantiation/common/instantiation.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 const { createEditorBrowserServices } = await import('../../../browser/services/contribution.js');
@@ -48,6 +59,31 @@ await import("../../../contrib/placeholderText/browser/placeholderText.contribut
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
 
 test.after(() => browserEnvironment.window.close());
+
+const enabledAccessibilityService: IAccessibilityService = {
+	onDidChangeScreenReaderOptimized: EditorEvent.None,
+	onDidChangeReducedMotion: EditorEvent.None,
+	onDidChangeReducedTransparency: EditorEvent.None,
+	onDidChangeLinkUnderlines: EditorEvent.None,
+	alwaysUnderlineAccessKeys: async () => false,
+	isScreenReaderOptimized: () => true,
+	isMotionReduced: () => false,
+	isTransparencyReduced: () => false,
+	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
+	setAccessibilitySupport: () => {},
+	alert: () => {},
+	status: () => {},
+};
+
+function pointerEvent(dom: JSDOM, type: string, pointerId: number, buttons: number, clientX: number, clientY: number): Event {
+	const event = new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons, clientX, clientY }) as unknown as Event & { pointerId: number };
+	Object.defineProperty(event, 'pointerId', { configurable: true, value: pointerId });
+	return event;
+}
+
+function delay(targetWindow: Pick<Window, 'setTimeout'>, duration: number): Promise<void> {
+	return new Promise(resolve => targetWindow.setTimeout(resolve, duration));
+}
 
 test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -64,6 +100,10 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(editor.element.parentElement, container);
 	assert.equal(editor.element.getAttribute("aria-label"), "Code");
 	assert.equal(editor.view.element.getAttribute("aria-label"), "Code");
+	const margin = requiredElement<HTMLElement>(editor.element, '.margin');
+	assert.equal(margin.getAttribute('role'), 'presentation');
+	assert.equal(margin.getAttribute('aria-hidden'), 'true');
+	assert.equal(margin.firstElementChild?.className, 'glyph-margin');
 	assert.ok(editor.view.editContext instanceof ViewPart);
 	assert.strictEqual(TextAreaEditContextRegistry.get(editor.ownerId), editor.view.editContext);
 	assert.deepEqual(editor.viewport.viewportLayout.viewportSize, { width: 320, height: 80 });
@@ -76,6 +116,250 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(model.getText(), "alpha");
 	assert.equal(editor.selections.context.model, model);
 	assert.throws(() => editor.selections.getSelections(), /already disposed/);
+	dom.window.close();
+});
+
+test('CodeEditorWidget scopes and updates the standard editor context keys', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using services = new ServiceContainer();
+	using rootContextKeys = new ContextKeyService();
+	services.registerInstance(IContextKeyService, rootContextKeys);
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		instantiationService: services,
+	});
+	const scoped = editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+	assert.notStrictEqual(scoped, rootContextKeys);
+	assert.equal(scoped.getValue('editorSimpleInput'), false);
+	assert.equal(scoped.getValue('editorReadonly'), false);
+	assert.equal(scoped.getValue('editorHasSelection'), false);
+	assert.equal(scoped.getValue('editorLangId'), model.getLanguageId());
+
+	editor.setSelection(new Selection(1, 1, 1, 3));
+	assert.equal(scoped.getValue('editorHasSelection'), true);
+	editor.updateOptions({ readOnly: true });
+	assert.equal(scoped.getValue('editorReadonly'), true);
+	dom.window.close();
+});
+
+test('EditContext owns default copy, paste, and cut behavior without a clipboard contribution', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha beta');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	const input = editor.view.editContext.domNode.domNode;
+	editor.setSelection(new Selection(1, 1, 1, 6));
+	const copied = new TestClipboardData();
+	const copy = testClipboardEvent(dom.window, 'copy', copied);
+	input.dispatchEvent(copy);
+	assert.equal(copy.defaultPrevented, true);
+	assert.equal(copied.getData('text/plain'), 'alpha');
+
+	const pasted = new TestClipboardData();
+	pasted.setData('text/plain', 'omega');
+	const paste = testClipboardEvent(dom.window, 'paste', pasted);
+	input.dispatchEvent(paste);
+	assert.equal(paste.defaultPrevented, true);
+	assert.equal(model.getText(), 'omega beta');
+
+	editor.setSelection(new Selection(1, 1, 1, 6));
+	const cutData = new TestClipboardData();
+	const cut = testClipboardEvent(dom.window, 'cut', cutData);
+	input.dispatchEvent(cut);
+	assert.equal(cut.defaultPrevented, true);
+	assert.equal(cutData.getData('text/plain'), 'omega');
+	assert.equal(model.getText(), ' beta');
+	dom.window.close();
+});
+
+test('EditContext rejects cut and paste while composition owns the edit transaction', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	editor.setSelection(new Selection(1, 6, 1, 6));
+	const input = editor.view.editContext.domNode.domNode;
+	input.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { data: '' }));
+	assert.equal(editor.inComposition, true);
+	const pasteData = new TestClipboardData();
+	pasteData.setData('text/plain', 'omega');
+	const paste = testClipboardEvent(dom.window, 'paste', pasteData);
+	input.dispatchEvent(paste);
+	const cut = testClipboardEvent(dom.window, 'cut', new TestClipboardData());
+	input.dispatchEvent(cut);
+	assert.equal(paste.defaultPrevented, true);
+	assert.equal(cut.defaultPrevented, true);
+	assert.equal(model.getText(), 'alpha');
+	const textArea = input as HTMLTextAreaElement;
+	try {
+		textArea.value = 'x';
+		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: 'x' }));
+		assert.equal(model.getText(), 'alphax');
+		assert.deepEqual(model.getAllDecorations().map(decoration => decoration.options.inlineClassName), ['edit-context-composition-primary']);
+	} finally {
+		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: 'x' }));
+	}
+	assert.equal(model.getAllDecorations().some(decoration => decoration.options.description === 'composition-decoration'), false);
+	dom.window.close();
+});
+
+test('EditContext routes word deletion through standard WordOperations ranges', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha beta');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	const input = editor.view.editContext.domNode.domNode;
+	editor.setPosition(new Position(1, 11));
+	const backward = new dom.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteWordBackward' });
+	input.dispatchEvent(backward);
+	assert.equal(backward.defaultPrevented, true);
+	assert.equal(model.getText(), 'alpha ');
+
+	editor.view.undo();
+	editor.setPosition(new Position(1, 1));
+	const forward = new dom.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteWordForward' });
+	input.dispatchEvent(forward);
+	assert.equal(forward.defaultPrevented, true);
+	assert.equal(model.getText(), ' beta');
+	dom.window.close();
+});
+
+test('editor configuration updates rerender line-number, selection, whitespace, and indent overlays', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('one\n    two\n\tthree');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		lineNumbers: 'relative',
+		renderWhitespace: 'selection',
+		guides: { indentation: true },
+		minimap: { enabled: false },
+	});
+	editor.layout({ width: 280, height: 60 });
+
+	const lineNumber = (lineIndex: number): string => requiredElement<HTMLElement>(
+		editor.element,
+		`.margin-view-overlays .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`,
+	).textContent ?? '';
+	assert.equal(lineNumber(0), '1');
+	editor.setPosition(new Position(3, 1));
+	assert.equal(lineNumber(0), '2');
+	assert.equal(lineNumber(2), '3');
+
+	editor.setSelection(new Selection(2, 1, 2, 5));
+	assert.equal(editor.element.querySelectorAll('.stanza-editor-selection').length, 1);
+	assert.equal(editor.element.querySelectorAll('.stanza-editor-whitespace').length, 4);
+	assert.equal(editor.element.querySelectorAll('.view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide').length, 1);
+	assert.equal(editor.element.querySelectorAll('.view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide').length, 1);
+
+	let configurationChanges = 0;
+	using configurationListener = editor.onDidChangeConfiguration(() => configurationChanges += 1);
+	editor.updateOptions({
+		lineNumbers: 'off',
+		renderWhitespace: 'all',
+		guides: { indentation: false },
+	});
+	assert.equal(configurationChanges, 1);
+	assert.equal(editor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
+	assert.equal(editor.getOptions().get(EditorOption.renderWhitespace), 'all');
+	assert.equal(editor.getRawOptions().lineNumbers, 'off');
+	assert.equal(editor.element.classList.contains('hide-line-numbers'), true);
+	assert.equal(requiredElement<HTMLElement>(editor.element, '.margin').style.getPropertyValue('--stanza-editor-line-numbers-width'), '0px');
+	assert.deepEqual([0, 1, 2].map(lineNumber), ['', '', '']);
+	assert.equal(editor.element.querySelectorAll('.stanza-editor-whitespace').length, 5);
+	assert.equal(editor.element.querySelectorAll('.stanza-editor-indent-guide').length, 0);
+	dom.window.close();
+});
+
+test('executeEdits applies one editor transaction and its requested cursor state', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+
+	editor.pushUndoStop();
+	assert.equal(editor.executeEdits('test.executeEdits', [
+		{ range: new Range(1, 1, 1, 6), text: 'beta' },
+	], [Selection.fromPositions(new Position(1, 5))]), true);
+	editor.pushUndoStop();
+	assert.equal(model.getText(), 'beta');
+	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(1, 5)));
+
+	editor.selections.context.model.undo();
+	assert.equal(model.getText(), 'alpha');
+	dom.window.close();
+});
+
+test('CodeEditorWidget publishes canonical cursor position and selection events', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	const positions: Parameters<Parameters<typeof editor.onDidChangeCursorPosition>[0]>[0][] = [];
+	const selections: Parameters<Parameters<typeof editor.onDidChangeCursorSelection>[0]>[0][] = [];
+	using positionListener = editor.onDidChangeCursorPosition(event => positions.push(event));
+	using selectionListener = editor.onDidChangeCursorSelection(event => selections.push(event));
+
+	editor.setSelections([
+		Selection.fromPositions(new Position(1, 3)),
+		Selection.fromPositions(new Position(1, 5)),
+	], 'test.cursorEvents');
+
+	assert.deepEqual(positions, [{
+		position: new Position(1, 3),
+		secondaryPositions: [new Position(1, 5)],
+		reason: CursorChangeReason.NotSet,
+		source: 'test.cursorEvents',
+	}]);
+	assert.deepEqual(selections, [{
+		selection: Selection.fromPositions(new Position(1, 3)),
+		secondarySelections: [Selection.fromPositions(new Position(1, 5))],
+		modelVersionId: model.getVersionId(),
+		oldSelections: [Selection.fromPositions(new Position(1, 1))],
+		oldModelVersionId: model.getVersionId(),
+		source: 'test.cursorEvents',
+		reason: CursorChangeReason.NotSet,
+	}]);
 	dom.window.close();
 });
 
@@ -158,6 +442,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
+		accessibilityService: enabledAccessibilityService,
 	});
 	const ownerId = editor.ownerId;
 	assert.ok(editor.view.editContext instanceof NativeEditContext);
@@ -169,6 +454,17 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.ok((editContext.nativeContext as TestEditContext).controlBounds);
 	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
+	editContext.focus();
+	editContext.writeScreenReaderContent('test');
+	const simpleContent = requiredElement<HTMLElement>(input, '.stanza-native-screen-reader-content');
+	assert.equal(simpleContent.textContent, 'alpha');
+	assert.equal(simpleContent.querySelector('span[data-line-index]'), null);
+	editor.updateOptions({ renderRichScreenReaderContent: true });
+	editContext.writeScreenReaderContent('test');
+	const richContent = requiredElement<HTMLElement>(input, '.stanza-native-screen-reader-content');
+	assert.notStrictEqual(richContent, simpleContent);
+	assert.equal(simpleContent.isConnected, false);
+	assert.equal(richContent.querySelector('span[data-line-index="0"]')?.textContent, 'alpha');
 
 	const adoptedDom = new JSDOM('<!doctype html><body></body>');
 	input.editContext = undefined;
@@ -181,6 +477,113 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	adoptedDom.window.close();
 	dom.window.close();
 });
+
+test('ScreenReaderSupport projects one model and screen-reader selection returns through its content owner', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	using viewport = new TestView({
+		container,
+		model,
+		lineHeight: 20,
+	});
+	viewport.layout({ width: 320, height: 80 });
+	const element = dom.window.document.createElement('div');
+	container.append(element);
+	const context = new ViewContext(viewport.testConfiguration, darkColorTheme, viewport.testViewModel);
+	using support = new ScreenReaderSupport({
+		domNode: new FastDomNode(element),
+		context,
+		viewport,
+		viewController: viewport.controller,
+		accessibilityService: enabledAccessibilityService,
+	});
+
+	support.handleFocusChange(true);
+	support.writeScreenReaderContent();
+	const content = requiredElement<HTMLElement>(element, '.stanza-native-screen-reader-content');
+	assert.equal(content.textContent, 'alpha');
+	assert.equal(content.getAttribute('aria-hidden'), 'false');
+
+	model.setValue('beta');
+	support.writeScreenReaderContent();
+	assert.equal(content.textContent, 'beta');
+	await new Promise(resolve => setTimeout(resolve, 110));
+	const textNode = content.firstChild;
+	const domSelection = dom.window.document.getSelection();
+	assert.ok(textNode);
+	assert.ok(domSelection);
+	domSelection.setBaseAndExtent(textNode, 1, textNode, 3);
+	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
+	assert.deepEqual(
+		viewport.testViewModel.getSelections(),
+		[Selection.fromPositions(new Position(1, 2), new Position(1, 4))],
+	);
+
+	viewport.testConfiguration.updateOptions({ renderRichScreenReaderContent: true });
+	support.onConfigurationChanged(configurationChange(EditorOption.renderRichScreenReaderContent));
+	support.writeScreenReaderContent();
+	const richContent = requiredElement<HTMLElement>(element, '.stanza-native-screen-reader-content');
+	assert.notStrictEqual(richContent, content);
+	assert.equal(content.isConnected, false);
+	assert.equal(richContent.textContent, 'beta');
+	assert.equal(richContent.querySelector('span[data-line-index="0"]')?.textContent, 'beta');
+	await new Promise(resolve => setTimeout(resolve, 110));
+	const richTextNode = firstTextNode(richContent);
+	assert.ok(richTextNode);
+	domSelection.setBaseAndExtent(richTextNode, 0, richTextNode, 2);
+	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
+	assert.deepEqual(
+		viewport.testViewModel.getSelections(),
+		[Selection.fromPositions(new Position(1, 1), new Position(1, 3))],
+	);
+
+	viewport.testConfiguration.updateOptions({ renderRichScreenReaderContent: false });
+	support.onConfigurationChanged(configurationChange(EditorOption.renderRichScreenReaderContent));
+	support.writeScreenReaderContent();
+	const nextSimpleContent = requiredElement<HTMLElement>(element, '.stanza-native-screen-reader-content');
+	assert.notStrictEqual(nextSimpleContent, richContent);
+	assert.equal(richContent.isConnected, false);
+	assert.equal(nextSimpleContent.textContent, 'beta');
+	assert.equal(nextSimpleContent.querySelector('span[data-line-index="0"]'), null);
+
+	support.handleFocusChange(false);
+	assert.equal(nextSimpleContent.textContent, '');
+	assert.equal(nextSimpleContent.getAttribute('aria-hidden'), 'true');
+	const outsideText = dom.window.document.createTextNode('outside');
+	container.append(outsideText);
+	domSelection.setBaseAndExtent(outsideText, 0, outsideText, 4);
+	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
+	assert.deepEqual(
+		viewport.testViewModel.getSelections(),
+		[Selection.fromPositions(new Position(1, 1), new Position(1, 3))],
+	);
+
+	using unrelatedModel = new TextModel('unrelated');
+	using unrelatedViewport = new TestView({
+		container,
+		model: unrelatedModel,
+		lineHeight: 20,
+	});
+	const unrelatedContext = new ViewContext(
+		unrelatedViewport.testConfiguration,
+		darkColorTheme,
+		unrelatedViewport.testViewModel,
+	);
+	assert.throws(() => new ScreenReaderSupport({
+		domNode: new FastDomNode(element),
+		context: unrelatedContext,
+		viewport,
+		viewController: unrelatedViewport.controller,
+		accessibilityService: enabledAccessibilityService,
+	}), /must share one text model/u);
+	dom.window.close();
+});
+
+function configurationChange(...changed: EditorOption[]): ViewConfigurationChangedEvent {
+	return { hasChanged: option => changed.includes(option) } as ViewConfigurationChangedEvent;
+}
 
 test('ViewUserInputEvents converts view targets once and CodeEditorWidget publishes the shared event', () => {
 	const converter: ICoordinatesConverter = {
@@ -237,11 +640,17 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 	let received: Parameters<Parameters<typeof editor.onMouseMove>[0]>[0] | undefined;
 	let releasedKey: string | undefined;
 	let dropped = false;
+	let dropPosition: Position | undefined;
 	using listener = editor.onMouseMove(event => received = event);
 	using keyListener = editor.onKeyUp(event => releasedKey = event.key);
 	using dropListener = editor.onMouseDrop(event => dropped = event.target !== null);
-	const browserEvent = new dom.window.MouseEvent('mousemove', { bubbles: true, clientX: 80, clientY: 10 });
-	editor.element.dispatchEvent(browserEvent);
+	using dropIntoEditorListener = editor.onDropIntoEditor(event => dropPosition = Position.lift(event.position));
+	const browserEvent = new dom.window.MouseEvent('mousemove', {
+		bubbles: true,
+		clientX: editor.getLayoutInfo().contentLeft + 2,
+		clientY: 10,
+	});
+	requiredElement<HTMLElement>(editor.element, '.view-line .stanza-editor-line-text > span').dispatchEvent(browserEvent);
 	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
 	editor.element.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, clientX: 80, clientY: 10 }) as unknown as DragEvent);
 
@@ -252,6 +661,7 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 	assert.equal(received.target.position?.lineNumber, 1);
 	assert.equal(releasedKey, 'a');
 	assert.equal(dropped, true);
+	assert.deepEqual(dropPosition, new Position(1, 6));
 	editor.dispose();
 	dom.window.close();
 });
@@ -305,6 +715,36 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 		Selection.fromPositions(new Position(3, 2)),
 		Selection.fromPositions(new Position(1, 1)),
 	]);
+	dom.window.close();
+});
+
+test('pointer selection uses outside-editor targets to scroll both axes and stops on release', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel(Array.from({ length: 40 }, (_, index) => `${index} ${'wide '.repeat(30)}`).join('\n'));
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	editor.layout({ width: 120, height: 60 });
+	editor.element.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 120, bottom: 60, width: 120, height: 60, toJSON: () => ({}) });
+
+	editor.element.dispatchEvent(pointerEvent(dom, 'pointerdown', 17, 1, editor.getLayoutInfo().contentLeft + 8, 10));
+	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 17, 1, editor.getLayoutInfo().contentLeft + 8, 120));
+	await delay(dom.window, 45);
+	assert.ok(editor.getScrollTop() > 0);
+	assert.ok((editor.getSelection()?.endLineNumber ?? 1) > 1);
+
+	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 17, 1, 260, 20));
+	await delay(dom.window, 45);
+	assert.ok(editor.getScrollLeft() > 0);
+	dom.window.dispatchEvent(pointerEvent(dom, 'pointerup', 17, 0, 260, 20));
+	const releasedScroll = { left: editor.getScrollLeft(), top: editor.getScrollTop() };
+	await delay(dom.window, 35);
+	assert.deepEqual({ left: editor.getScrollLeft(), top: editor.getScrollTop() }, releasedScroll);
 	dom.window.close();
 });
 
@@ -421,13 +861,88 @@ test('CodeEditorWidget owns decoration collections and reveals without moving se
 	dom.window.close();
 });
 
+test('CodeEditorWidget owns content and glyph margin widget layout through the standard APIs', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('one\ntwo\nthree');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		glyphMargin: true,
+	});
+	editor.layout({ width: 240, height: 60 });
+
+	const contentNode = dom.window.document.createElement('div');
+	const contentWidget: IContentWidget = {
+		suppressMouseDown: true,
+		getId: () => 'test.content.widget',
+		getDomNode: () => contentNode,
+		getPosition: () => ({ position: new Position(2, 2), preference: [ContentWidgetPositionPreference.EXACT] }),
+	};
+	editor.addContentWidget(contentWidget);
+	assert.equal(contentNode.getAttribute('widgetId'), 'test.content.widget');
+	assert.equal(contentNode.style.display, 'block');
+	const pointerDown = new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 });
+	contentNode.dispatchEvent(pointerDown);
+	assert.equal(pointerDown.defaultPrevented, true);
+
+	const glyphNode = dom.window.document.createElement('button');
+	let glyphPosition = { lane: GlyphMarginLane.Center, zIndex: 1, range: new Range(1, 1, 1, 1) };
+	const glyphWidget: IGlyphMarginWidget = {
+		getId: () => 'test.glyph.widget',
+		getDomNode: () => glyphNode,
+		getPosition: () => glyphPosition,
+	};
+	editor.addGlyphMarginWidget(glyphWidget);
+	assert.equal(glyphNode.getAttribute('widgetId'), 'test.glyph.widget');
+	assert.equal(glyphNode.style.display, 'block');
+	assert.equal(glyphNode.style.top, '0px');
+
+	glyphPosition = { lane: GlyphMarginLane.Center, zIndex: 2, range: new Range(2, 1, 2, 1) };
+	editor.layoutGlyphMarginWidget(glyphWidget);
+	assert.equal(glyphNode.style.top, '20px');
+	editor.removeGlyphMarginWidget(glyphWidget);
+	assert.equal(glyphNode.isConnected, false);
+	editor.removeContentWidget(contentWidget);
+	assert.equal(contentNode.isConnected, false);
+	dom.window.close();
+});
+
+test('CodeEditorWidget reveals ranges through the ViewModel event contract', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel(Array.from({ length: 20 }, (_, index) => `line ${index + 1}`).join('\n'));
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	editor.layout({ width: 240, height: 40 });
+	const target = new Range(10, 1, 10, 1);
+
+	editor.revealRange(target, ScrollType.Immediate);
+	assert.ok(editor.getScrollTop() > 0);
+	assert.ok(editor.getTopForLineNumber(10) >= editor.getScrollTop());
+	assert.ok(editor.getBottomForLineNumber(10) <= editor.getScrollTop() + 40);
+
+	editor.setScrollTop(0, ScrollType.Immediate);
+	editor._getViewModel().revealRange('test', false, target, VerticalRevealType.Center, ScrollType.Immediate);
+	assert.equal(editor.getScrollTop(), 170);
+	dom.window.close();
+});
+
 test('CodeEditorWidget runs in-place replacement through the registered contribution', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('value 1');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
-	editor.selections.setSelections([Selection.fromPositions(new Position(1, 7), new Position(1, 8))]);
+	editor.setSelection(Selection.fromPositions(new Position(1, 7), new Position(1, 8)));
 
 	const next = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true, shiftKey: true }) as unknown as KeyboardEvent;
 	editor.view.element.dispatchEvent(next);
@@ -445,7 +960,7 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
+	using model = new TextModel();
 	using editor = new CodeEditorWidget({
 		container,
 		model,
@@ -461,13 +976,67 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 
 	assert.equal(editor.element.querySelector(".view-line.active"), null);
 	assert.ok(editor.element.querySelector(".stanza-editor-caret"));
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-lines").style.top, "0px");
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-lines").style.transform, "");
+	assert.equal(requiredElement<HTMLElement>(editor.element, ".view-lines").style.top, "0px");
+	assert.equal(requiredElement<HTMLElement>(editor.element, ".view-lines").style.transform, "");
 	assert.equal(requiredElement<HTMLElement>(editor.element, ".view-line").style.top, "20px");
 	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-left"), "12px");
 	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-right"), "12px");
 	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text").style.top, "20px");
 	assert.equal(editor.viewport.viewportLayout.contentSize.height, 60);
+	dom.window.close();
+});
+
+test('ViewCursors follows view positions, configuration, focus, composition, and multicursor state', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const model = new TextModel('alpha beta gamma delta epsilon');
+	const editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		lineWrapping: EditorLineWrapping.On,
+		cursorBlinking: 'blink',
+		cursorStyle: 'line',
+		overtypeCursorStyle: 'block',
+	});
+	editor.layout({ width: 90, height: 100 });
+	const targetPosition = editor._getViewModel().coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
+	editor.setPosition(targetPosition);
+
+	const layer = requiredElement<HTMLElement>(editor.element, '.cursors-layer');
+	const primary = requiredElement<HTMLElement>(layer, '.cursor');
+	assert.equal(layer.getAttribute('role'), 'presentation');
+	assert.equal(layer.getAttribute('aria-hidden'), 'true');
+	const viewPosition = editor._getViewModel().coordinatesConverter.convertModelPositionToViewPosition(targetPosition);
+	assert.equal(viewPosition.lineNumber, 3);
+	assert.equal(primary.style.top, `${(viewPosition.lineNumber - 1) * 20}px`);
+	assert.equal(primary.style.visibility, 'hidden');
+
+	editor.focus();
+	assert.equal(primary.style.visibility, 'inherit');
+	editor.setSelections([new Selection(1, 1, 1, 2), new Selection(1, 3, 1, 3)]);
+	assert.equal(layer.classList.contains('has-selection'), true);
+	assert.equal(layer.querySelectorAll('.cursor').length, 2);
+	assert.ok(layer.querySelector('.cursor-primary'));
+	assert.ok(layer.querySelector('.cursor-secondary'));
+
+	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
+	assert.equal(editor.element.classList.contains('overtype'), true);
+	assert.equal(layer.classList.contains('cursor-block-style'), true);
+
+	editor._getViewModel().onCompositionStart();
+	assert.equal(primary.style.visibility, 'hidden');
+	editor._getViewModel().onCompositionEnd();
+	assert.equal(primary.style.visibility, 'inherit');
+	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
+	assert.equal(editor.element.classList.contains('overtype'), false);
+	assert.equal(layer.classList.contains('cursor-line-style'), true);
+
+	editor.dispose();
+	assert.equal(layer.isConnected, false);
+	model.dispose();
 	dom.window.close();
 });
 
@@ -488,6 +1057,7 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 
 	editor.layout({ width: 320, height: 80 });
 	const placeholder = requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text");
+	const layout = editor.getLayoutInfo();
 	assert.strictEqual(PlaceholderTextContribution.get(editor), editor.getContribution(PlaceholderTextContribution.ID));
 	assert.deepEqual({
 		display: placeholder.style.display,
@@ -497,9 +1067,9 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 		lineHeight: placeholder.style.lineHeight,
 	}, {
 		display: "block",
-		left: "45px",
+		left: `${layout.contentLeft}px`,
 		top: "8px",
-		width: "275px",
+		width: `${layout.contentWidth - layout.verticalScrollbarWidth}px`,
 		lineHeight: "20px",
 	});
 
@@ -516,58 +1086,56 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
 	const events: string[] = [];
-	const service = { kind: "test" };
-	const serviceId = createServiceIdentifier<typeof service>("test.codeEditorContribution");
-	const services = new ServiceContainer();
-	services.registerInstance(serviceId, service);
-	const instantiationService = services;
-	const state = { events, instantiationService, model, service };
+	let restoredState: unknown;
+	class EagerContribution extends Disposable {
+		constructor(editor: ICodeEditor) {
+			super();
+			assert.strictEqual(editor.getModel(), model);
+			events.push('eager:create');
+			this._register(toDisposable(() => events.push('eager:dispose')));
+		}
+		saveViewState(): unknown { return { marker: 'saved' }; }
+		restoreViewState(state: unknown): void { restoredState = state; }
+	}
+	class LazyContribution extends Disposable {
+		constructor(editor: ICodeEditor) {
+			super();
+			assert.strictEqual(editor.getModel(), model);
+			events.push('lazy:create');
+			this._register(toDisposable(() => events.push('lazy:dispose')));
+		}
+	}
 	using editor = new CodeEditorWidget({
 		container,
 		model,
 		input: { resource: model.uri },
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
-		instantiationService,
 		contributions: [
 			{
 				id: "test.eager",
 				instantiation: EditorContributionInstantiation.Eager,
-				descriptor: new ServiceConstructionDescriptor(TestCodeEditorContribution, { staticArguments: [state, "eager"], serviceDependencies: [serviceId, IInstantiationService] }),
+				ctor: EagerContribution,
 			},
 			{
 				id: "test.lazy",
 				instantiation: EditorContributionInstantiation.Lazy,
-				descriptor: new ServiceConstructionDescriptor(TestCodeEditorContribution, { staticArguments: [state, "lazy"], serviceDependencies: [serviceId, IInstantiationService] }),
+				ctor: LazyContribution,
 			},
 		],
 	});
 
 	assert.deepEqual(events, ["eager:create"]);
+	const saved = editor.saveViewState();
+	assert.deepEqual(saved.contributionsState, { 'test.eager': { marker: 'saved' } });
+	editor.restoreViewState({ ...saved, contributionsState: { 'test.eager': { marker: 'restored' } } });
+	assert.deepEqual(restoredState, { marker: 'restored' });
 	assert.ok(editor.contributions.get("test.lazy"));
 	assert.deepEqual(events, ["eager:create", "lazy:create"]);
 	editor.dispose();
 	assert.deepEqual(events, ["eager:create", "lazy:create", "lazy:dispose", "eager:dispose"]);
 	dom.window.close();
 });
-
-class TestCodeEditorContribution extends Disposable {
-	constructor(
-		private readonly state: { readonly events: string[]; readonly instantiationService: InstanceType<typeof ServiceContainer>; readonly model: TextModel; readonly service: { readonly kind: string } },
-		private readonly id: string,
-		context: CodeEditorContributionContext,
-		service: { readonly kind: string },
-		instantiationService: InstanceType<typeof ServiceContainer>,
-	) {
-		super();
-		assert.equal(context.model, state.model);
-		assert.equal(service, state.service);
-		assert.notEqual(instantiationService, state.instantiationService);
-		assert.equal(instantiationService.get(IInstantiationService), instantiationService);
-		state.events.push(`${id}:create`);
-		this._register(toDisposable(() => state.events.push(`${id}:dispose`)));
-	}
-}
 
 test("CodeEditorWidget creates one selection controller for its model", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -611,17 +1179,145 @@ test("CodeEditorWidget leaves text drops available to its host", () => {
 	dom.window.close();
 });
 
-function textDropEvent(targetWindow: typeof browserEnvironment.window, text: string): DragEvent {
-	const event = new targetWindow.Event("drop", { bubbles: true, cancelable: true });
-	Object.defineProperty(event, "dataTransfer", {
-		value: {
-			types: ["text/plain"],
-			getData(type: string): string {
-				return type === "text/plain" ? text : "";
-			},
-		},
+test('DropIntoEditorController inserts text through the canonical editor drop event', async () => {
+	await import('../../../contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	editor.layout({ width: 240, height: 40 });
+	editor.element.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON: () => ({}) });
+	const drop = textDropEvent(dom.window, ' dropped', 80, 10);
+
+	editor.element.dispatchEvent(drop);
+
+	assert.equal(drop.defaultPrevented, true);
+	assert.equal(model.getText(), 'alpha dropped');
+	assert.deepEqual(editor.getPosition(), new Position(1, 14));
+	dom.window.close();
+});
+
+test('DropIntoEditorController leaves read-only and non-text drops to the host', async () => {
+	await import('../../../contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using readOnlyModel = new TextModel('alpha');
+	using readOnlyEditor = new CodeEditorWidget({
+		container,
+		model: readOnlyModel,
+		input: { resource: readOnlyModel.uri, readOnly: true },
+		languageId: readOnlyModel.getLanguageId(),
+		lineHeight: 20,
+	});
+	readOnlyEditor.layout({ width: 240, height: 40 });
+	readOnlyEditor.element.getBoundingClientRect = () => editorRectangle(240, 40);
+	const textDrop = textDropEvent(dom.window, 'dropped', 80, 10);
+	readOnlyEditor.element.dispatchEvent(textDrop);
+	assert.equal(textDrop.defaultPrevented, false);
+	assert.equal(readOnlyModel.getText(), 'alpha');
+
+	using model = new TextModel('beta');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	editor.layout({ width: 240, height: 40 });
+	editor.element.getBoundingClientRect = () => editorRectangle(240, 40);
+	const binaryDrop = transferDropEvent(dom.window, {
+		types: ['Files'],
+		files: [{ name: 'image.png', type: 'image/png', size: 16, text: async () => 'binary' } as File],
+		getData: () => '',
+	});
+	editor.element.dispatchEvent(binaryDrop);
+	assert.equal(binaryDrop.defaultPrevented, false);
+	assert.equal(model.getText(), 'beta');
+	dom.window.close();
+});
+
+test('DropIntoEditorController converts an HTML-only drop to inert text', async () => {
+	await import('../../../contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	editor.layout({ width: 240, height: 40 });
+	editor.element.getBoundingClientRect = () => editorRectangle(240, 40);
+	const drop = transferDropEvent(dom.window, {
+		types: ['text/html'],
+		files: [],
+		getData: type => type === 'text/html' ? '<div>first</div><script>ignored()</script><div>second<br>third</div>' : '',
+	});
+
+	editor.element.dispatchEvent(drop);
+
+	assert.equal(drop.defaultPrevented, true);
+	assert.equal(model.getText(), 'alphafirst\nsecond\nthird');
+	dom.window.close();
+});
+
+test('DropIntoEditorController inserts one decoded text file at the captured position', async () => {
+	await import('../../../contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	editor.layout({ width: 240, height: 40 });
+	editor.element.getBoundingClientRect = () => editorRectangle(240, 40);
+	const file = new DeferredTextFile('snippet.rs');
+	const drop = transferDropEvent(dom.window, { types: ['Files'], files: [file as unknown as File], getData: () => '' });
+
+	editor.element.dispatchEvent(drop);
+	file.resolve(' file');
+	await waitForText(model, 'alpha file');
+
+	assert.equal(drop.defaultPrevented, true);
+	dom.window.close();
+});
+
+function textDropEvent(targetWindow: typeof browserEnvironment.window, text: string, clientX = 0, clientY = 0): DragEvent {
+	return transferDropEvent(targetWindow, {
+		types: ['text/plain'],
+		files: [],
+		getData: type => type === 'text/plain' ? text : '',
+	}, clientX, clientY);
+}
+
+interface TestDataTransfer {
+	readonly types: readonly string[];
+	readonly files: readonly File[];
+	getData(type: string): string;
+}
+
+function transferDropEvent(targetWindow: typeof browserEnvironment.window, dataTransfer: TestDataTransfer, clientX = 80, clientY = 10): DragEvent {
+	const event = new targetWindow.Event('drop', { bubbles: true, cancelable: true });
+	Object.defineProperties(event, {
+		clientX: { value: clientX },
+		clientY: { value: clientY },
+		dataTransfer: { value: dataTransfer },
 	});
 	return event as unknown as DragEvent;
+}
+
+function editorRectangle(width: number, height: number): DOMRect {
+	return { x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) };
+}
+
+class DeferredTextFile {
+	private readonly result: Promise<string>;
+	private resolveResult: ((text: string) => void) | undefined;
+
+	constructor(readonly name: string, readonly type = '', readonly size = 16) {
+		this.result = new Promise(resolve => this.resolveResult = resolve);
+	}
+
+	text(): Promise<string> {
+		return this.result;
+	}
+
+	resolve(text: string): void {
+		this.resolveResult?.(text);
+	}
 }
 
 async function waitForText(model: TextModel, expected: string): Promise<void> {
@@ -636,4 +1332,29 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	const element = root.querySelector<T>(selector);
 	assert.ok(element);
 	return element;
+}
+
+function firstTextNode(root: Node): Text | undefined {
+	if (root.nodeType === 3) return root as Text;
+	for (const child of Array.from(root.childNodes)) {
+		const text = firstTextNode(child);
+		if (text) return text;
+	}
+	return undefined;
+}
+
+class TestClipboardData {
+	readonly files: readonly File[] = [];
+	private readonly values = new Map<string, string>();
+
+	get types(): string[] { return [...this.values.keys()]; }
+	getData(type: string): string { return this.values.get(type) ?? '';
+	}
+	setData(type: string, value: string): void { this.values.set(type, value); }
+}
+
+function testClipboardEvent(targetWindow: typeof browserEnvironment.window, type: 'copy' | 'cut' | 'paste', clipboardData: TestClipboardData): ClipboardEvent {
+	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true });
+	Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData });
+	return event as unknown as ClipboardEvent;
 }

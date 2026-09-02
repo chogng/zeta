@@ -2,6 +2,8 @@ import { SelectionDirection, type Selection } from "../../../../common/core/sele
 import { Position } from "../../../../common/core/position.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
+import { type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { type IComputedEditorOptions } from '../../../../common/config/editorOptions.js';
 
 /** Keeps the screen-reader mirror bounded for the same reason as the native text window. */
 export const SCREEN_READER_CONTENT_LENGTH = 32 * 1_024;
@@ -45,18 +47,15 @@ export interface ScreenReaderContentLayout {
 	readonly width: number;
 	readonly height: number;
 	readonly lineHeight: number;
-	readonly scrollTop: number;
 }
 
-export interface IScreenReaderContent {
-	readonly element: HTMLElement;
-	getState(): ScreenReaderContentState | undefined;
-	sync(state: ScreenReaderContentState): void;
-	clear(): void;
-	layout(layout: ScreenReaderContentLayout): void;
-	readSelection(): { readonly anchorOffset: number; readonly activeOffset: number } | undefined;
-	setIgnoreSelectionChange(): void;
-	shouldIgnoreSelectionChange(): boolean;
+export interface IScreenReaderContent extends IDisposable {
+	onWillCut(): void;
+	onWillPaste(): void;
+	onFocusChange(focused: boolean): void;
+	onConfigurationChanged(options: IComputedEditorOptions): void;
+	updateScreenReaderContent(primarySelection: Selection): void;
+	updateScrollTop(primarySelection: Selection): void;
 }
 
 export function createScreenReaderContentState(

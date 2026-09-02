@@ -42,7 +42,7 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	assert.ok(container.querySelector(".stanza-editor"));
 	assert.ok(container.querySelector(".stanza-editor-input"));
 	assert.equal(container.querySelector(".stanza-editor-token"), null);
-	assert.equal(container.querySelector(".stanza-editor-decoration"), null);
+	assert.equal(container.querySelector(".view-overlays .cdr"), null);
 	assert.equal(container.querySelector(".stanza-editor-fold-toggle"), null);
 	assert.equal(container.querySelector(".stanza-editor-completion"), null);
 	assert.equal(container.querySelector(".stanza-editor-placeholder-text"), null);

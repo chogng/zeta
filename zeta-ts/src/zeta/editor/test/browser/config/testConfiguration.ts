@@ -1,9 +1,10 @@
 import { EditorConfiguration } from '../../../browser/config/editorConfiguration.js';
 import { EditorFontLigatures, EditorFontVariations, type IEditorOptions } from '../../../common/config/editorOptions.js';
 import { type BareFontInfo, FontInfo } from '../../../common/config/fontInfo.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
 
 export function createTestConfiguration(container: HTMLElement, options: IEditorOptions = {}): EditorConfiguration {
-	return new TestEditorConfiguration(options, container);
+	return new TestEditorConfiguration(false, MenuId.EditorContext, options, container);
 }
 
 class TestEditorConfiguration extends EditorConfiguration {

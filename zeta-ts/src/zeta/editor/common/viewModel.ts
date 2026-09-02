@@ -7,9 +7,9 @@ import { IPosition, Position } from './core/position.js';
 import { Range } from './core/range.js';
 import { CursorConfiguration, CursorState, EditOperationType, IColumnSelectData, ICursorSimpleModel, PartialCursorState } from './cursorCommon.js';
 import { CursorChangeReason } from './cursorEvents.js';
-import { INewScrollPosition, ScrollType } from './editorCommon.js';
+import { ICommand, INewScrollPosition, ScrollType } from './editorCommon.js';
 import { EditorTheme } from './editorTheme.js';
-import { EndOfLinePreference, IGlyphMarginLanesModel, IModelDecorationOptions, ITextModel, TextDirection } from './model.js';
+import { EndOfLinePreference, ICursorStateComputer, IGlyphMarginLanesModel, IIdentifiedSingleEditOperation, IModelDecorationOptions, ITextModel, TextDirection } from './model.js';
 import { ILineBreaksComputer, ILineBreaksComputerContext, InjectedText } from './modelLineProjectionData.js';
 import { InternalModelContentChangeEvent, ModelInjectedTextChangedEvent } from './textModelEvents.js';
 import { BracketGuideOptions, IActiveIndentGuideInfo, IndentGuide } from './textModelGuides.js';
@@ -18,6 +18,8 @@ import { ViewEventHandler } from './viewEventHandler.js';
 import { VerticalRevealType } from './viewEvents.js';
 import { InlineDecoration } from './viewModel/inlineDecorations.js';
 import { EditorOption, FindComputedEditorOptionValueById } from './config/editorOptions.js';
+import { ISelection, Selection } from './core/selection.js';
+import { TextModelEditSource } from './textModelEditSource.js';
 
 export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 
@@ -96,6 +98,21 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 	setCursorColumnSelectData(columnSelectData: IColumnSelectData): void;
 	getPrevEditOperationType(): EditOperationType;
 	setPrevEditOperationType(type: EditOperationType): void;
+	getSelection(): Selection;
+	getSelections(): Selection[];
+	getPosition(): Position;
+	setSelections(source: string | null | undefined, selections: readonly ISelection[], reason?: CursorChangeReason): void;
+	saveCursorState(): import('./editorCommon.js').ICursorState[];
+	restoreCursorState(states: import('./editorCommon.js').ICursorState[]): void;
+	executeEdits(source: string | null | undefined, edits: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer, reason: TextModelEditSource): void;
+	startComposition(): void;
+	endComposition(source?: string | null): void;
+	type(text: string, source?: string | null): void;
+	compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number, source?: string | null): void;
+	paste(text: string, pasteOnNewLine: boolean, multicursorText?: string[] | null, source?: string | null): void;
+	cut(source?: string | null): void;
+	executeCommand(command: ICommand, source?: string | null): void;
+	executeCommands(commands: (ICommand | null)[], source?: string | null): void;
 	revealAllCursors(source: string | null | undefined, revealHorizontal: boolean, minimalReveal?: boolean): void;
 	revealPrimaryCursor(source: string | null | undefined, revealHorizontal: boolean, minimalReveal?: boolean): void;
 	revealTopMostCursor(source: string | null | undefined): void;

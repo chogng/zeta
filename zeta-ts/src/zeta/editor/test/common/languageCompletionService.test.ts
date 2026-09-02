@@ -190,7 +190,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	assert.equal(model.getText(), "console");
 	assert.equal(session.state, undefined);
 
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "con");
 	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });

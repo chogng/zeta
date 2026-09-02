@@ -10,11 +10,10 @@ import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
-import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
-import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
+import { CODE_EDITOR_ID } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { type ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
@@ -26,8 +25,6 @@ import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import { type OwnedDecorationSource } from "../../../../editor/browser/viewParts/decorations/decorations.js";
-import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import type { CursorsController } from "../../../../editor/common/cursor/cursor.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
@@ -51,7 +48,6 @@ export interface EditorPanePartOptions extends CodeEditorWidgetOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
-	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly instantiationService?: CodeEditorWidgetOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
@@ -64,7 +60,6 @@ export interface EditorPaneOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
-	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly instantiationService?: CodeEditorWidgetOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
@@ -105,11 +100,9 @@ export interface EditorPaneOptions {
 	/** Browser paragraph direction forwarded to every created editor part. */
 	readonly textDirection?: EditorTextDirection;
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
-	readonly onShowContextMenu?: CodeEditorWidgetOptions["onShowContextMenu"];
 	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions["onExecuteEditorCommand"];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
-	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
 	readonly insertFinalNewLine?: boolean;
@@ -174,7 +167,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		const beforeSaveHooks: Array<() => void | Promise<void>> = [];
 		try {
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
-			const languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent((0) + 1) }, this.options.languageResolver);
+			const languageId = modelReference.model.getLanguageId();
 			part = this.createPart({
 				container,
 				input,
@@ -220,11 +213,9 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				indentation: this.options.indentation,
 				textDirection: this.options.textDirection,
 				onOpenLink: this.options.onOpenLink,
-				onShowContextMenu: this.options.onShowContextMenu,
 				onExecuteEditorCommand: this.options.onExecuteEditorCommand,
 				onOpenLocation: this.options.onOpenLocation,
 				onApplyWorkspaceEdit: this.options.onApplyWorkspaceEdit,
-				decorationSources: this.options.createDecorationSources?.(input.resource, modelReference.model),
 				placeholder: this.options.placeholder,
 				showUnicodeHighlights: this.options.showUnicodeHighlights,
 				registerBeforeSave: hook => {
@@ -270,7 +261,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		this.part.value = part;
 		this.beforeSaveHooks = beforeSaveHooks;
 		this.workingCopySlot.value = workingCopy;
-		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent((0) + 1) }, this.options.languageResolver);
+		this.languageId = modelReference.model.getLanguageId();
 		const statusListeners = new DisposableStore();
 		if (part.onDidChange) statusListeners.add(part.onDidChange(() => this.statusChangeEmitter.fire()));
 		statusListeners.add(modelReference.onDidChangeExternalChange(() => {

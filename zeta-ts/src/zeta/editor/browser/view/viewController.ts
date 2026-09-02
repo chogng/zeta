@@ -1,25 +1,23 @@
 import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
 import { type IMouseWheelEvent } from '../../../base/browser/mouseEvent.js';
-import { addDisposableListener, getClientArea } from '../../../base/browser/dom.js';
+import { addDisposableListener } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isLinux, operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
-import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
 import { ReplaceCommand } from '../../common/commands/replaceCommand.js';
 import { EditorLineWrapping, EditorOption } from '../../common/config/editorOptions.js';
 import { ColumnSelection } from '../../common/cursor/cursorColumnSelection.js';
 import { CursorMove, CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
 import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
-import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
+import { type DeleteWordContext, WordNavigationType, WordOperations } from '../../common/cursor/cursorWordOperations.js';
 import { type CursorsController } from '../../common/cursor/cursor.js';
 import { CursorChangeReason } from '../../common/cursorEvents.js';
-import { CursorState, EditOperationType, type SingleCursorState } from '../../common/cursorCommon.js';
-import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
+import { CursorState, EditOperationType, SelectionStartKind, SingleCursorState } from '../../common/cursorCommon.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../common/core/selection.js';
 import { Position } from '../../common/core/position.js';
-import { type IDimension } from '../../common/core/2d/dimension.js';
 import { Range } from '../../common/core/range.js';
+import { getMapForWordSeparators } from '../../common/core/wordCharacterClassifier.js';
 import { type TextModelChange } from '../../common/core/textChange.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
 import { type ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
@@ -35,20 +33,15 @@ import { type AbstractEditContext, type CompositionController, type EditContextT
 import { TextAreaEditContext } from '../controller/editContext/textArea/textAreaEditContext.js';
 import { ViewUserInputEvents } from './viewUserInputEvents.js';
 import { type IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
-import { type IEditorAriaOptions, type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editorBrowser.js';
+import { type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editorBrowser.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
 import { type ILogService } from '../../../platform/log/common/log.js';
 import { type ICommand } from '../../common/editorCommon.js';
-
-export interface EditorCommandContext {
-	readonly inputType: string;
-}
-
-/** Extends one browser edit command before it becomes an atomic model transaction. */
-export type EditorCommandTransformer = (command: EditorEditCommand, context: EditorCommandContext) => EditorEditCommand;
+import { type EditOperationResult } from '../../common/cursorCommon.js';
+import { InputMode } from '../../common/inputMode.js';
 
 export interface EditorLanguageTypeCommand {
-	readonly command: EditorEditCommand;
+	readonly command: EditOperationResult;
 	readonly insertedText: boolean;
 	afterExecute?(change: TextModelChange): void;
 }
@@ -57,7 +50,7 @@ export interface EditorLanguageTypeCommand {
 export interface EditorLanguageEditingAdapter extends IDisposable {
 	readonly textModel: TextModel;
 	createTypeCommand(selections: readonly Selection[], text: string): EditorLanguageTypeCommand | undefined;
-	createEnterCommand(selections: readonly Selection[]): EditorEditCommand | undefined;
+	createEnterCommand(selections: readonly Selection[]): EditOperationResult | undefined;
 }
 
 /** A native text update that can be consumed by an editor contribution before model routing. */
@@ -78,12 +71,9 @@ export interface ViewControllerOptions {
 	readonly logService?: ILogService;
 	readonly ariaLabel?: string;
 	readonly accessibilityService?: IAccessibilityService;
-	readonly renderRichScreenReaderContent?: boolean;
-	readonly accessibilityPageSize?: number;
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly bracketColorizationSource?: BracketColorizationSource;
 	readonly languageEditing?: EditorLanguageEditingAdapter;
-	readonly wordPattern?: () => RegExp | undefined;
 	readonly userInputEvents?: ViewUserInputEvents;
 }
 
@@ -128,9 +118,7 @@ interface MouseSelectionState {
 export class ViewController extends Disposable {
 	private readonly didChangeOvertypeEmitter = this._register(new Emitter<boolean>());
 	private readonly didEditEmitter = this._register(new Emitter<EditorViewDidEditEvent>());
-	private readonly commandTransformers: EditorCommandTransformer[] = [];
 	private readonly languageEditing: EditorLanguageEditingAdapter | undefined;
-	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	readonly userInputEvents: ViewUserInputEvents;
 	readonly ownerId: string;
 	readonly editContext: AbstractEditContext;
@@ -148,24 +136,16 @@ export class ViewController extends Disposable {
 
 	constructor(
 		readonly viewport: View,
-		readonly selectionController: CursorsController,
+		private readonly viewModel: IViewModel,
 		options: ViewControllerOptions,
 		createEditContext: (viewController: ViewController) => AbstractEditContext,
 	) {
 		super();
 		try {
-			validateAccessibilityPageSize(options.accessibilityPageSize);
-			if (viewport.textModel !== selectionController.context.model) {
-				throw new TypeError('Stanza view and selection controllers must share one text model');
-			}
 			if (options.languageEditing && options.languageEditing.textModel !== viewport.textModel) {
 				throw new TypeError('Stanza view language editing must share its text model');
 			}
-			if (options.wordPattern !== undefined && typeof options.wordPattern !== 'function') {
-				throw new TypeError('Stanza view word pattern resolver must be a function');
-			}
 			this.languageEditing = options.languageEditing;
-			this.wordPattern = options.wordPattern;
 			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents(viewport.coordinatesConverter);
 			this.ownerId = options.ownerId === undefined ? nextViewId() : validateOwnerId(options.ownerId);
 			this.editContext = createEditContext(this);
@@ -176,20 +156,18 @@ export class ViewController extends Disposable {
 			this.onWillTextUpdate = this.editContext.onWillTextUpdate;
 			this.onWillKeydown = this.editContext.onWillKeydown;
 			this._register(this.onDidChangeOvertype(overtyping => {
-				viewport.element.classList.toggle('overtype', overtyping);
-				viewport.setOvertype(overtyping);
+				viewport.domNode.domNode.classList.toggle('overtype', overtyping);
 			}));
 			this._register(toDisposable(() => {
-				viewport.element.classList.remove('input-focused');
-				viewport.element.classList.remove('overtype');
-				viewport.setOvertype(false);
+				viewport.domNode.domNode.classList.remove('input-focused');
+				viewport.domNode.domNode.classList.remove('overtype');
 			}));
-			this._register(addDisposableListener(viewport.element, 'focus', event => {
-				if (event.target === viewport.element) this.focus();
+			this._register(addDisposableListener(viewport.domNode.domNode, 'focus', event => {
+				if (event.target === viewport.domNode.domNode) viewport.focus();
 			}));
-			this._register(this.editContext.onDidFocus(() => viewport.element.classList.add('input-focused')));
+			this._register(this.editContext.onDidFocus(() => viewport.domNode.domNode.classList.add('input-focused')));
 			this._register(this.editContext.onDidBlur(() => {
-				viewport.element.classList.remove('input-focused');
+				viewport.domNode.domNode.classList.remove('input-focused');
 				this.editContext.clear();
 			}));
 		} catch (error) {
@@ -198,15 +176,6 @@ export class ViewController extends Disposable {
 		}
 	}
 
-	layout(dimension: IDimension = getClientArea(this.viewport.element)): void {
-		this.viewport.layout({ width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) });
-	}
-
-	focus(): void { this.editContext.focus(); }
-	isFocused(): boolean { return this.editContext.isFocused(); }
-	refreshFocusState(): void { this.editContext.refreshFocusState(); }
-	setAriaOptions(options: IEditorAriaOptions): void { this.editContext.setAriaOptions(options); }
-	writeScreenReaderContent(reason: string): void { this.editContext.writeScreenReaderContent(reason); }
 	revealPosition(position: Position): void { this.viewport.revealPosition(position); }
 	clearInput(): void { this.editContext.clear(); }
 
@@ -215,18 +184,18 @@ export class ViewController extends Disposable {
 	}
 
 	get hasExpandedSelections(): boolean {
-		return this.selectionController.getSelections().some(selection => !selection.isEmpty());
+		return this.viewModel.getSelections().some(selection => !selection.isEmpty());
 	}
 
 	public setSelection(modelSelection: Selection): void {
 		this.viewport.textModel.validateRange(modelSelection);
-		this.selectionController.setSelections([modelSelection]);
+		this.viewModel.setSelections('api', [modelSelection]);
 		this.viewport.revealPosition(modelSelection.getPosition());
 	}
 
 	public moveTo(viewPosition: Position, revealType: NavigationCommandRevealType): void {
 		const position = this.viewport.coordinatesConverter.convertViewPositionToModelPosition(viewPosition);
-		this.selectionController.setSelections([Selection.fromPositions(position)]);
+		this.viewModel.setSelections('mouse', [Selection.fromPositions(position)]);
 		this.revealMousePosition(position, revealType);
 	}
 
@@ -281,12 +250,12 @@ export class ViewController extends Disposable {
 	}
 
 	private beginMouseSelection(kind: MouseSelectionKind, position: Position, data: IMouseDispatchData, addSelection: boolean): void {
-		const primary = this.selectionController.getSelections()[0]!;
+		const primary = this.viewModel.getSelections()[0]!;
 		const extend = data.shiftKey || data.inSelectionMode;
 		let anchorRange: Range;
 		switch (kind) {
 			case MouseSelectionKind.Word:
-				anchorRange = WordOperations.getWordSelectionRange(this.viewport.textModel, position, this.currentWordPattern);
+				anchorRange = wordSelectionRange(this.viewport.cursorConfig, this.viewport.textModel, position);
 				break;
 			case MouseSelectionKind.WholeLine:
 				anchorRange = Range.fromPositions(lineStart(position.lineNumber));
@@ -300,8 +269,8 @@ export class ViewController extends Disposable {
 				anchorRange = Range.fromPositions(extend ? primary.getSelectionStart() : position);
 				break;
 		}
-		const initialSelection = selectionForMouseTarget(kind, this.viewport.textModel, anchorRange, position, this.currentWordPattern);
-		const baseSelections = addSelection ? Object.freeze([...this.selectionController.getSelections()]) : undefined;
+		const initialSelection = selectionForMouseTarget(kind, this.viewport.cursorConfig, this.viewport.textModel, anchorRange, position);
+		const baseSelections = addSelection ? Object.freeze([...this.viewModel.getSelections()]) : undefined;
 		this.mouseSelection = {
 			kind,
 			anchorRange,
@@ -313,12 +282,12 @@ export class ViewController extends Disposable {
 
 	private applyMouseSelection(state: MouseSelectionState, position: Position, revealType: NavigationCommandRevealType): void {
 		if (state.kind === MouseSelectionKind.Column) {
-			this.selectionController.setSelections(ColumnSelection.columnSelect(this.viewport.textModel, state.anchorRange.getStartPosition(), position));
+			this.viewModel.setSelections('mouse', ColumnSelection.columnSelect(this.viewport.textModel, state.anchorRange.getStartPosition(), position));
 			this.revealMousePosition(position, revealType);
 			return;
 		}
-		const selection = selectionForMouseTarget(state.kind, this.viewport.textModel, state.anchorRange, position, this.currentWordPattern);
-		this.selectionController.setSelections(state.baseSelections
+		const selection = selectionForMouseTarget(state.kind, this.viewport.cursorConfig, this.viewport.textModel, state.anchorRange, position);
+		this.viewModel.setSelections('mouse', state.baseSelections
 			? combinePointerSelection(state.baseSelections, selection, state.toggleCandidateIndex)
 			: [selection]);
 		this.revealMousePosition(position, revealType);
@@ -340,55 +309,67 @@ export class ViewController extends Disposable {
 		}
 	}
 
-	registerCommandTransformer(transformer: EditorCommandTransformer): IDisposable {
-		if (typeof transformer !== 'function') throw new TypeError('Stanza view command transformer must be a function');
-		this.commandTransformers.push(transformer);
-		return toDisposable(() => {
-			const index = this.commandTransformers.indexOf(transformer);
-			if (index >= 0) this.commandTransformers.splice(index, 1);
-		});
-	}
-
 	toggleOvertype(): boolean {
 		this.overtype = !this.overtype;
+		InputMode.setInputMode(this.overtype ? 'overtype' : 'insert');
 		this.didChangeOvertypeEmitter.fire(this.overtype);
 		return this.overtype;
 	}
 
 	public type(text: string, inputType = 'insertText'): TextModelChange | undefined {
-		return this.executeType(this.selectionController.getSelections(), text, inputType);
+		return this.executeType(this.viewModel.getSelections(), text, inputType);
+	}
+
+	public paste(text: string, pasteOnNewLine: boolean, multicursorText: string[] | null, _mode: string | null = null): void {
+		this.runViewModelEdit('insertFromPaste', undefined, () => this.viewModel.paste(text, pasteOnNewLine, multicursorText, 'keyboard'));
+	}
+
+	public compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): void {
+		this.runViewModelEdit('insertCompositionText', text, () => this.viewModel.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, 'keyboard'));
+	}
+
+	public compositionStart(): void {
+		this.viewModel.startComposition();
+	}
+
+	public compositionEnd(): void {
+		this.viewModel.endComposition('keyboard');
+	}
+
+	public cut(): void {
+		this.runViewModelEdit('deleteByCut', undefined, () => this.viewModel.cut('keyboard'));
 	}
 
 	public enter(inputType = 'insertLineBreak'): TextModelChange | undefined {
-		return this.executeEnter(this.selectionController.getSelections(), inputType);
+		return this.executeEnter(this.viewModel.getSelections(), inputType);
 	}
 
 	public deleteBackward(inputType = 'deleteContentBackward'): TextModelChange | undefined {
-		return this.executeDelete('left', this.selectionController.getSelections(), inputType);
+		return this.executeDelete('left', this.viewModel.getSelections(), inputType);
 	}
 
 	public deleteForward(inputType = 'deleteContentForward'): TextModelChange | undefined {
-		return this.executeDelete('right', this.selectionController.getSelections(), inputType);
+		return this.executeDelete('right', this.viewModel.getSelections(), inputType);
 	}
 
 	public deleteWordBackward(inputType = 'deleteWordBackward'): TextModelChange | undefined {
-		return this.execute(WordOperations.deleteWordLeft(this.viewport.textModel, this.selectionController.getSelections(), this.currentWordPattern), inputType);
+		return this.executeCommands(createWordDeleteCommands(this.viewport.cursorConfig, this.viewport.textModel, this.viewModel, 'left'), inputType, EditOperationType.DeletingLeft, true, false);
 	}
 
 	public deleteWordForward(inputType = 'deleteWordForward'): TextModelChange | undefined {
-		return this.execute(WordOperations.deleteWordRight(this.viewport.textModel, this.selectionController.getSelections(), this.currentWordPattern), inputType);
+		return this.executeCommands(createWordDeleteCommands(this.viewport.cursorConfig, this.viewport.textModel, this.viewModel, 'right'), inputType, EditOperationType.DeletingRight, true, false);
 	}
 
 	public deleteSoftLineBackward(inputType = 'deleteSoftLineBackward'): TextModelChange | undefined {
-		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.selectionController.getSelections(), 'start'), inputType, EditOperationType.Other, true, true);
+		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.viewModel.getSelections(), 'start'), inputType, EditOperationType.Other, true, true);
 	}
 
 	public deleteSoftLineForward(inputType = 'deleteSoftLineForward'): TextModelChange | undefined {
-		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.selectionController.getSelections(), 'end'), inputType, EditOperationType.Other, true, true);
+		return this.executeCommands(createDeleteToLineBoundaryCommands(this.viewport.textModel, this.viewModel.getSelections(), 'end'), inputType, EditOperationType.Other, true, true);
 	}
 
 	public insertTab(): TextModelChange | undefined {
-		return this.execute(TypeOperations.typeWithoutInterceptors(this.viewport.textModel, this.selectionController.getSelections(), '\t'), 'insertText', '\t', undefined, false);
+		return this.runViewModelEdit('insertText', '\t', () => this.viewModel.executeCommands(TypeOperations.tab(this.viewport.cursorConfig, this.viewport.textModel, this.viewModel.getSelections()), 'keyboard'), false);
 	}
 
 	public applyTextUpdate(update: EditContextTextUpdate): TextModelChange | undefined {
@@ -403,37 +384,36 @@ export class ViewController extends Disposable {
 		if (inputType === 'deleteContentBackward') {
 			return this.executeDelete('left', selections, inputType);
 		}
-		return this.execute(TypeOperations.typeWithoutInterceptors(model, selections, ''), inputType);
+		this.viewModel.setSelections(inputType, selections);
+		return this.runViewModelEdit(inputType, undefined, () => this.viewModel.type('', inputType));
 	}
 
 	public undo(): void {
-		this.selectionController.undo();
+		if (this.viewModel.cursorConfig.readOnly) return;
+		this.viewport.textModel.undo();
 		this.revealPrimary();
 	}
 
 	public redo(): void {
-		this.selectionController.redo();
+		if (this.viewModel.cursorConfig.readOnly) return;
+		this.viewport.textModel.redo();
 		this.revealPrimary();
 	}
 
 	private executeType(selections: readonly Selection[], text: string, inputType: string): TextModelChange | undefined {
-		const languageTypeCommand = this.languageEditing?.createTypeCommand(selections, text);
-		const insertedText = languageTypeCommand?.insertedText === false ? undefined : text;
-		const command = languageTypeCommand?.command ?? (this.overtype
-			? AutoClosingOvertypeOperation.getEdits(this.viewport.textModel, selections, text)
-			: TypeOperations.typeWithoutInterceptors(this.viewport.textModel, selections, text));
-		return this.execute(command, inputType, insertedText, languageTypeCommand?.afterExecute);
+		this.viewModel.setSelections(inputType, selections);
+		return this.runViewModelEdit(inputType, text, () => this.viewModel.type(text, 'keyboard'));
 	}
 
 	private executeEnter(selections: readonly Selection[], inputType: string, text = '\n'): TextModelChange | undefined {
-		const command = this.languageEditing?.createEnterCommand(selections) ?? TypeOperations.typeWithoutInterceptors(this.viewport.textModel, selections, text);
-		return this.execute(command, inputType);
+		this.viewModel.setSelections(inputType, selections);
+		return this.runViewModelEdit(inputType, undefined, () => this.viewModel.type(text, 'keyboard'));
 	}
 
 	private executeDelete(direction: 'left' | 'right', selections: readonly Selection[], inputType: string): TextModelChange | undefined {
-		const previousType = this.selectionController.getPrevEditOperationType();
+		const previousType = this.viewModel.getPrevEditOperationType();
 		const operation = direction === 'left'
-			? DeleteOperations.deleteLeft(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections], [...this.selectionController.getAutoClosedCharacters()])
+			? DeleteOperations.deleteLeft(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections], this.viewModel.getCursorAutoClosedCharacters())
 			: DeleteOperations.deleteRight(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections]);
 		return this.executeCommands(
 			operation[1],
@@ -445,23 +425,23 @@ export class ViewController extends Disposable {
 	}
 
 	private executeCommands(commands: readonly (ICommand | null)[], inputType: string, type: EditOperationType, pushBefore: boolean, pushAfter: boolean): TextModelChange | undefined {
-		if (pushBefore) this.selectionController.pushUndoStop();
+		if (pushBefore) this.viewport.textModel.pushStackElement();
 		let change: TextModelChange | undefined;
 		const capture = this.viewport.textModel.onDidChangeContent(event => { change = event; });
 		try {
-			this.selectionController.executeCommands(commands, inputType);
+			this.viewModel.executeCommands([...commands], inputType);
 		} finally {
 			capture.dispose();
 		}
-		this.selectionController.setPrevEditOperationType(type);
-		if (pushAfter) this.selectionController.pushUndoStop();
+		this.viewModel.setPrevEditOperationType(type);
+		if (pushAfter) this.viewport.textModel.pushStackElement();
 		this.revealPrimary();
 		if (change) this.didEditEmitter.fire(Object.freeze({ inputType, insertedText: undefined, change }));
 		return change;
 	}
 
 	private selectionsForTextUpdate(update: EditContextTextUpdate): readonly Selection[] {
-		const current = this.selectionController.getSelections();
+		const current = this.viewModel.getSelections();
 		const primary = current[0]!;
 		const primaryStart = this.viewport.textModel.offsetAt(primary.getStartPosition());
 		const primaryEnd = this.viewport.textModel.offsetAt(primary.getEndPosition());
@@ -472,23 +452,21 @@ export class ViewController extends Disposable {
 		)];
 	}
 
-	private execute(command: EditorEditCommand, inputType: string, insertedText: string | undefined = undefined, afterExecute?: (change: TextModelChange) => void, emitDidEdit = true): TextModelChange | undefined {
-		for (const transformer of this.commandTransformers) command = transformer(command, { inputType });
-		const change = this.selectionController.execute(command);
-		this.revealPrimary();
-		if (change) {
-			afterExecute?.(change);
-			if (emitDidEdit) this.didEditEmitter.fire(Object.freeze({ inputType, insertedText, change }));
+	private runViewModelEdit(inputType: string, insertedText: string | undefined, edit: () => void, emitDidEdit = true): TextModelChange | undefined {
+		let change: TextModelChange | undefined;
+		const capture = this.viewport.textModel.onDidChangeContent(event => { change = event; });
+		try {
+			edit();
+		} finally {
+			capture.dispose();
 		}
+		this.revealPrimary();
+		if (change && emitDidEdit) this.didEditEmitter.fire(Object.freeze({ inputType, insertedText, change }));
 		return change;
 	}
 
 	private revealPrimary(): void {
-		this.viewport.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
-	}
-
-	private get currentWordPattern(): RegExp | undefined {
-		return this.wordPattern?.();
+		this.viewport.revealPosition(this.viewModel.getSelections()[0]!.getPosition());
 	}
 
 	/** Forwards view-originated input without taking ownership of its policy. */
@@ -574,7 +552,7 @@ function pointOverlapsSelection(point: Position, selection: Selection): boolean 
 		: !point.isBefore(selection.getStartPosition()) && point.isBefore(selection.getEndPosition());
 }
 
-function selectionForMouseTarget(kind: MouseSelectionKind, model: TextModel, anchorRange: Range, position: Position, wordPattern: RegExp | undefined): Selection {
+function selectionForMouseTarget(kind: MouseSelectionKind, config: View['cursorConfig'], model: TextModel, anchorRange: Range, position: Position): Selection {
 	const anchor = anchorRange.getStartPosition();
 	switch (kind) {
 		case MouseSelectionKind.Character:
@@ -582,27 +560,32 @@ function selectionForMouseTarget(kind: MouseSelectionKind, model: TextModel, anc
 		case MouseSelectionKind.Column:
 			return Selection.fromPositions(anchor);
 		case MouseSelectionKind.Word:
-			return wordSelection(model, anchorRange, position, wordPattern);
+			return wordSelection(config, model, anchorRange, position);
 		case MouseSelectionKind.WholeLine:
 			return wholeLineSelection(model, anchor.lineNumber, position.lineNumber);
 		case MouseSelectionKind.ExtendToWord:
-			return extendSelectionToWord(model, anchor, position, wordPattern);
+			return extendSelectionToWord(config, model, anchor, position);
 		case MouseSelectionKind.ExtendToLine:
 			return extendSelectionToLine(model, anchor, position.lineNumber);
 	}
 }
 
-function wordSelection(model: TextModel, anchorRange: Range, position: Position, wordPattern: RegExp | undefined): Selection {
-	const activeRange = WordOperations.getWordSelectionRange(model, position, wordPattern);
+function wordSelection(config: View['cursorConfig'], model: TextModel, anchorRange: Range, position: Position): Selection {
+	const activeRange = wordSelectionRange(config, model, position);
 	return Position.compare(activeRange.getStartPosition(), anchorRange.getStartPosition()) < 0
 		? Selection.fromPositions(anchorRange.getEndPosition(), activeRange.getStartPosition())
 		: Selection.fromPositions(anchorRange.getStartPosition(), activeRange.getEndPosition());
 }
 
-function extendSelectionToWord(model: TextModel, anchor: Position, position: Position, wordPattern: RegExp | undefined): Selection {
-	const range = WordOperations.getWordSelectionRange(model, position, wordPattern);
+function extendSelectionToWord(config: View['cursorConfig'], model: TextModel, anchor: Position, position: Position): Selection {
+	const range = wordSelectionRange(config, model, position);
 	const active = Position.compare(range.getStartPosition(), anchor) < 0 ? range.getStartPosition() : range.getEndPosition();
 	return Selection.fromPositions(anchor, active);
+}
+
+function wordSelectionRange(config: View['cursorConfig'], model: TextModel, position: Position): Range {
+	const cursor = new SingleCursorState(Range.fromPositions(position), SelectionStartKind.Simple, 0, position, 0);
+	return WordOperations.word(config, model, cursor, false, position).selection;
 }
 
 function wholeLineSelection(model: TextModel, anchorLineNumber: number, activeLineNumber: number): Selection {
@@ -635,12 +618,6 @@ function validateOwnerId(value: string): string {
 	return value;
 }
 
-function validateAccessibilityPageSize(value: number | undefined): void {
-	if (value !== undefined && (!Number.isSafeInteger(value) || value < 1 || value > 10_000)) {
-		throw new RangeError('Editor accessibility page size must be a safe integer between 1 and 10000');
-	}
-}
-
 /** Browser input adapter for DOM-free language editing commands. */
 export class LanguageEditingAdapter extends Disposable implements EditorLanguageEditingAdapter {
 	private readonly lexicalContext: LanguageLexicalContextSource;
@@ -656,30 +633,22 @@ export class LanguageEditingAdapter extends Disposable implements EditorLanguage
 
 	createTypeCommand(selections: readonly Selection[], text: string): EditorLanguageTypeCommand | undefined {
 		const result = TypeOperations.typeWithInterceptors(
+			false,
+			this.selections.getPrevEditOperationType(),
+			this.selections.context.cursorConfig,
 			this.textModel,
-			selections,
+			[...selections],
+			[...this.selections.getAutoClosedCharacters()],
 			text,
-			this.configurationAt(selections[0]!.getPosition()),
-			this.selections.getAutoClosedCharacters(),
-			this.lexicalContext,
 		);
-		if (!result) return undefined;
 		return Object.freeze({
-			command: result.command,
-			insertedText: result.insertedText,
-			afterExecute: (change: TextModelChange) => {
-				if (result.autoClosedCharacters.length === 0) return;
-				this.selections.recordAutoClosedCharacters(
-					result.autoClosedCharacters.map(range => Range.fromPositions(this.textModel.positionAt(range.startOffset), this.textModel.positionAt(range.endOffset))),
-					result.autoClosedEnclosing.map(range => Range.fromPositions(this.textModel.positionAt(range.startOffset), this.textModel.positionAt(range.endOffset))),
-					change.version,
-				);
-			},
+			command: result,
+			insertedText: true,
 		});
 	}
 
-	createEnterCommand(selections: readonly Selection[]): EditorEditCommand {
-		return TypeOperations.enter(this.textModel, selections, this.configurationAt(selections[0]!.getPosition()), this.indentation, this.lexicalContext);
+	createEnterCommand(selections: readonly Selection[]): EditOperationResult {
+		return TypeOperations.typeWithInterceptors(false, this.selections.getPrevEditOperationType(), this.selections.context.cursorConfig, this.textModel, [...selections], [...this.selections.getAutoClosedCharacters()], '\n');
 	}
 
 	private configurationAt(position: Position) {
@@ -699,10 +668,30 @@ function createDeleteToLineBoundaryCommands(model: TextModel, selections: readon
 	});
 }
 
+function createWordDeleteCommands(config: View['cursorConfig'], model: TextModel, viewModel: IViewModel, direction: 'left' | 'right'): Array<ICommand | null> {
+	const wordSeparators = getMapForWordSeparators(config.wordSeparators, config.wordSegmenterLocales);
+	const autoClosedCharacters = viewModel.getCursorAutoClosedCharacters();
+	return viewModel.getSelections().map(selection => {
+		const context: DeleteWordContext = {
+			wordSeparators,
+			model,
+			selection,
+			whitespaceHeuristics: true,
+			autoClosingDelete: config.autoClosingDelete,
+			autoClosingBrackets: config.autoClosingBrackets,
+			autoClosingQuotes: config.autoClosingQuotes,
+			autoClosingPairs: config.autoClosingPairs,
+			autoClosedCharacters,
+		};
+		const range = direction === 'left'
+			? WordOperations.deleteWordLeft(context, WordNavigationType.WordStart)
+			: WordOperations.deleteWordRight(context, WordNavigationType.WordEnd);
+		return range && !range.isEmpty() ? new ReplaceCommand(range, '') : null;
+	});
+}
+
 export interface KeyboardNavigationControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
-	/** Resolves the active language word matcher for word navigation. */
-	readonly wordPattern?: () => RegExp | undefined;
 }
 
 export interface KeyboardNavigationCommand {
@@ -715,7 +704,6 @@ export interface KeyboardNavigationCommand {
  */
 export class KeyboardNavigationController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
-	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	private modelNavigationStates: readonly SingleCursorState[] | undefined;
 	private preferredVisualHorizontalOffsets: readonly number[] | undefined;
 	private applyingNavigation = false;
@@ -731,10 +719,6 @@ export class KeyboardNavigationController extends Disposable {
 			this.targetOperatingSystem = readOperatingSystem(
 				options.operatingSystem,
 			);
-			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
-				throw new TypeError("Stanza keyboard word pattern resolver must be a function");
-			}
-			this.wordPattern = options.wordPattern;
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -812,9 +796,7 @@ export class KeyboardNavigationController extends Disposable {
 			&& this.modelNavigationStates.every((state, index) => state.selection.equalsSelection(currentStates[index]!.modelState.selection))
 			? currentStates.map((state, index) => new CursorState(this.modelNavigationStates![index]!, state.viewState))
 			: currentStates;
-		const movedStates = visualResult ? undefined : moveCursorStates(
-			this.viewModel, sourceStates, navigation, pageLineCount, this.wordPattern?.(),
-		);
+		const movedStates = visualResult ? undefined : moveCursorStates(this.viewModel, sourceStates, navigation, pageLineCount);
 		const modelStates = visualResult
 			? visualResult.selections.map(selection => CursorState.fromModelSelection(selection))
 			: movedStates!;
@@ -832,7 +814,7 @@ export class KeyboardNavigationController extends Disposable {
 	}
 }
 
-function moveCursorStates(viewModel: IViewModel, cursors: CursorState[], navigation: KeyboardNavigationCommand, pageLineCount: number, wordPattern: RegExp | undefined) {
+function moveCursorStates(viewModel: IViewModel, cursors: CursorState[], navigation: KeyboardNavigationCommand, pageLineCount: number) {
 	const inSelectionMode = navigation.mode === EditorCursorNavigationMode.Extend;
 	switch (navigation.command) {
 		case EditorCursorNavigationCommand.CharacterLeft:
@@ -856,40 +838,23 @@ function moveCursorStates(viewModel: IViewModel, cursors: CursorState[], navigat
 		case EditorCursorNavigationCommand.DocumentEnd:
 			return CursorMoveCommands.moveToEndOfBuffer(viewModel, cursors, inSelectionMode);
 		case EditorCursorNavigationCommand.WordLeft:
-			return cursors.map(cursor => CursorState.fromModelState(moveModelCursorByWord(viewModel.model, cursor.modelState, inSelectionMode, 'left', wordPattern)));
+			return cursors.map(cursor => CursorState.fromModelState(moveModelCursorByWord(viewModel, cursor.modelState, inSelectionMode, 'left', cursors.length > 1)));
 		case EditorCursorNavigationCommand.WordRight:
-			return cursors.map(cursor => CursorState.fromModelState(moveModelCursorByWord(viewModel.model, cursor.modelState, inSelectionMode, 'right', wordPattern)));
+			return cursors.map(cursor => CursorState.fromModelState(moveModelCursorByWord(viewModel, cursor.modelState, inSelectionMode, 'right', cursors.length > 1)));
 	}
 }
 
-function moveModelCursorByWord(model: IViewModel['model'], cursor: SingleCursorState, inSelectionMode: boolean, direction: 'left' | 'right', wordPattern: RegExp | undefined): SingleCursorState {
+function moveModelCursorByWord(viewModel: IViewModel, cursor: SingleCursorState, inSelectionMode: boolean, direction: 'left' | 'right', hasMulticursor: boolean): SingleCursorState {
 	if (cursor.hasSelection() && !inSelectionMode) {
 		const edge = direction === 'left' ? cursor.selection.getStartPosition() : cursor.selection.getEndPosition();
 		return cursor.move(false, edge.lineNumber, edge.column, 0);
 	}
-	const target = wordNavigationPosition(model, cursor.position, direction, wordPattern);
+	const config = viewModel.cursorConfig;
+	const classifier = getMapForWordSeparators(config.wordSeparators, config.wordSegmenterLocales);
+	const target = direction === 'left'
+		? WordOperations.moveWordLeft(classifier, viewModel.model, cursor.position, WordNavigationType.WordStartFast, hasMulticursor)
+		: WordOperations.moveWordRight(classifier, viewModel.model, cursor.position, WordNavigationType.WordEnd);
 	return cursor.move(inSelectionMode, target.lineNumber, target.column, 0);
-}
-
-function wordNavigationPosition(model: IViewModel['model'], position: Position, direction: 'left' | 'right', wordPattern: RegExp | undefined): Position {
-	if (direction === 'left') {
-		for (let lineNumber = position.lineNumber; lineNumber >= 1; lineNumber -= 1) {
-			const limit = lineNumber === position.lineNumber ? position.column - 1 : Number.POSITIVE_INFINITY;
-			const ranges = WordOperations.getTextWordRanges(model.getLineContent(lineNumber), wordPattern);
-			for (let index = ranges.length - 1; index >= 0; index -= 1) {
-				if (ranges[index]!.start < limit) return new Position(lineNumber, ranges[index]!.start + 1);
-			}
-		}
-		return new Position(1, model.getLineMinColumn(1));
-	}
-	for (let lineNumber = position.lineNumber; lineNumber <= model.getLineCount(); lineNumber += 1) {
-		const limit = lineNumber === position.lineNumber ? position.column - 1 : -1;
-		for (const range of WordOperations.getTextWordRanges(model.getLineContent(lineNumber), wordPattern)) {
-			if (range.start > limit) return new Position(lineNumber, range.start + 1);
-		}
-	}
-	const lineNumber = model.getLineCount();
-	return new Position(lineNumber, model.getLineMaxColumn(lineNumber));
 }
 
 function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown {

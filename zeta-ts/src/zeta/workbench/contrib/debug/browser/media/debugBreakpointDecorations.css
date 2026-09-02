@@ -2,6 +2,16 @@
   color: var(--zeta-error-foreground);
 }
 
+.zeta-debug-breakpoint-gutter::before {
+  display: block;
+  width: 0.65em;
+  height: 0.65em;
+  margin: 0.175em auto;
+  background: currentColor;
+  border-radius: 50%;
+  content: '';
+}
+
 .zeta-debug-breakpoint-gutter.unverified,
 .zeta-debug-breakpoint-gutter.disabled {
   opacity: 0.55;

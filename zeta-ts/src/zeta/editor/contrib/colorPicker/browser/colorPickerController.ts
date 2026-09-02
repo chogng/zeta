@@ -4,7 +4,7 @@ import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Color, RGBA } from '../../../../base/common/color.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { createEditorEditCommand } from '../../../common/commands/editorCommand.js';
+import { MouseTargetType, type ICodeEditor, type IEditorMouseEvent } from '../../../browser/editorBrowser.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
@@ -12,13 +12,12 @@ import { type IColor } from '../../../common/languages.js';
 import { type View } from '../../../browser/view.js';
 import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { ColorService, type ColorData } from '../common/languageColors.js';
-import { ColorDetector } from './colorDetector.js';
+import { ColorDecorationInjectedTextMarker, ColorDetector } from './colorDetector.js';
 import { ColorPickerModel } from './colorPickerModel.js';
 import { EditorColorPickerDialog } from './editorColorPickerDialog.js';
 
 interface ColorPickerCapabilityValue {
 	readonly service: ColorService;
-	readonly detector: ColorDetector;
 }
 
 const ColorPickerCapability: EditorCapability<ColorPickerCapabilityValue> = Object.freeze({ id: 'editor.colorPicker' });
@@ -37,6 +36,7 @@ export class ColorPickerController extends Disposable {
 
 	constructor(
 		private readonly editorInput: HTMLElement,
+		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		private readonly service: ColorService,
@@ -49,17 +49,17 @@ export class ColorPickerController extends Disposable {
 		super();
 		if (viewport.textModel !== selections.context.model) throw new TypeError('Stanza color picker dependencies must share a text model');
 		this.widget = this._register(new EditorColorPickerDialog(
-			viewport.element,
+			viewport.domNode.domNode,
 			color => this.refreshPresentations(color),
 			() => this.apply(),
 			() => this.close(true),
 		));
-		viewport.element.append(this.widget.domNode);
+		viewport.domNode.domNode.append(this.widget.domNode);
 		this._register(addDisposableListener(editorInput, 'keydown', event => this.handleEditorKeyDown(event), true));
-		this._register(addDisposableListener(viewport.element, 'pointerdown', event => this.handlePointerDown(event), true));
-		this._register(addDisposableListener(viewport.element, 'pointerover', event => this.handlePointerOver(event)));
-		this._register(addDisposableListener(viewport.element, 'pointerout', event => this.handlePointerOut(event)));
-		this._register(addDisposableListener(viewport.element.ownerDocument, 'pointerdown', event => {
+		this._register(editor.onMouseDown(event => this.handleEditorMouseDown(event)));
+		this._register(addDisposableListener(viewport.domNode.domNode, 'pointerover', event => this.handlePointerOver(event)));
+		this._register(addDisposableListener(viewport.domNode.domNode, 'pointerout', event => this.handlePointerOut(event)));
+		this._register(addDisposableListener(viewport.domNode.domNode.ownerDocument, 'pointerdown', event => {
 			const target = event.target;
 			const targetNode = target && typeof (target as Node).nodeType === 'number' ? target as Node : undefined;
 			if (!this.widget.visible) return;
@@ -110,13 +110,14 @@ export class ColorPickerController extends Disposable {
 		void this.showAtPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
-	private handlePointerDown(event: PointerEvent): void {
+	private handleEditorMouseDown(event: IEditorMouseEvent): void {
 		if (this.activatedOn === 'hover') return;
-		const swatch = colorSwatch(event.target);
-		if (!swatch) return;
-		const data = this.detector.findByDecorationId(swatch.dataset.decorationId);
+		const target = event.target;
+		if (target?.type !== MouseTargetType.CONTENT_TEXT || target.detail.injectedText?.options.attachedData !== ColorDecorationInjectedTextMarker || !target.position) return;
+		const data = this.detector.findAtPosition(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(target.position));
 		if (!data) return;
-		stopEvent(event);
+		event.event.preventDefault();
+		event.event.stopPropagation();
 		void this.show(data, true);
 	}
 
@@ -124,7 +125,7 @@ export class ColorPickerController extends Disposable {
 		if (this.activatedOn === 'click') return;
 		const swatch = colorSwatch(event.target);
 		if (!swatch) return;
-		const data = this.detector.findByDecorationId(swatch.dataset.decorationId);
+		const data = this.dataAtPointer(event);
 		if (!data) return;
 		this.hoverTimer.value = disposableWindowTimeout(this.widget.domNode.ownerDocument.defaultView!, () => {
 			this.hoverTimer.clear();
@@ -137,6 +138,18 @@ export class ColorPickerController extends Disposable {
 		const related = event.relatedTarget;
 		if (!swatch || related && typeof (related as Node).nodeType === 'number' && swatch.contains(related as Node)) return;
 		this.hoverTimer.clear();
+	}
+
+	private dataAtPointer(event: PointerEvent): ColorData | undefined {
+		const swatch = colorSwatch(event.target);
+		if (swatch) {
+			const viewPosition = this.viewport.getPositionFromDOMInfo(swatch, 0);
+			if (viewPosition && this.viewport.getInjectedTextAt(viewPosition)?.options.attachedData === ColorDecorationInjectedTextMarker) {
+				return this.detector.findAtPosition(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(viewPosition));
+			}
+		}
+		const target = this.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
+		return target ? this.detector.findAtPosition(target.position) : undefined;
 	}
 
 	private async show(data: ColorData, focus: boolean): Promise<void> {
@@ -186,8 +199,9 @@ export class ColorPickerController extends Disposable {
 			...(presentation.additionalTextEdits ?? []),
 		].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()) || Position.compare(Range.lift(left.range).getEndPosition(), Range.lift(right.range).getEndPosition()));
 		try {
-			const command = createEditorEditCommand(this.viewport.textModel, this.selections.getSelections(), edits);
-			if (command) this.selections.execute(command);
+			this.editor.pushUndoStop();
+			this.editor.executeEdits('editor.action.colorPicker', edits);
+			this.editor.pushUndoStop();
 			this.close(true);
 		} catch (error) {
 			this.onError(error);
@@ -238,7 +252,7 @@ function toLanguageColor(color: Color): IColor {
 
 function colorSwatch(target: EventTarget | null): HTMLElement | undefined {
 	return target && typeof (target as Element).closest === 'function'
-		? (target as Element).closest<HTMLElement>('.stanza-editor-decoration.color-swatch') ?? undefined
+		? (target as Element).closest<HTMLElement>('.colorpicker-color-decoration') ?? undefined
 		: undefined;
 }
 
@@ -246,11 +260,17 @@ registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.colorPicker',
 	configure: context => {
 		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.options.input.resource, context.onLanguageError);
-		const targetWindow = context.options.container.ownerDocument.defaultView;
+		context.provideCapability(ColorPickerCapability, Object.freeze({ service }));
+	},
+	install: context => {
+		if (context.kind !== 'text') return;
+		const capability = context.getCapability(ColorPickerCapability);
+		const targetWindow = context.view.element.ownerDocument.defaultView;
 		if (!targetWindow) throw new Error('Color picker requires an attached browser window');
 		const detector = context.register(new ColorDetector(
+			context.editor,
 			context.model,
-			service,
+			capability.service,
 			context.languageId,
 			targetWindow,
 			{
@@ -260,18 +280,13 @@ registerTextEditorCapabilityContribution({
 			},
 			context.onLanguageError,
 		));
-		context.addDecorationSource(detector.decorationSource);
-		context.provideCapability(ColorPickerCapability, Object.freeze({ service, detector }));
-	},
-	install: context => {
-		if (context.kind !== 'text') return;
-		const capability = context.getCapability(ColorPickerCapability);
 		context.register(new ColorPickerController(
 			context.view.element,
+			context.editor,
 			context.viewport,
 			context.selectionController,
 			capability.service,
-			capability.detector,
+			detector,
 			context.languageId,
 			context.options.colorDecoratorsActivatedOn ?? 'clickAndHover',
 			context.options.input.readOnly === true,

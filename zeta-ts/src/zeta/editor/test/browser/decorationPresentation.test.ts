@@ -1,214 +1,104 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { DecorationPresentation, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewParts/decorations/decorations.js";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
-import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { TrackedRangeStickiness, GlyphMarginLane } from '../../common/model.js';
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { themeColorFromId } from '../../../base/common/themables.js';
+import { ColorId } from '../../../platform/theme/common/colorTheme.js';
+import { TextDecorationCollection } from '../../common/model/decorationCollection.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeStickiness } from '../../common/model.js';
 
-
-test("Decoration source resolves opaque metadata without owning the collection", () => {
-	using model = new TextModel("abcd\nefgh\nij");
-	using collection = new TextDecorationCollection<DecorationMetadata>(model);
-	const matchId = collection.add({
-		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
+test('TextDecorationCollection keeps opaque metadata beside standard model options', () => {
+	using model = new TextModel('abcd\nefgh\nij');
+	using collection = new TextDecorationCollection<{ readonly kind: 'match' | 'error' }>(model);
+	const match = collection.add({
+		range: new Range(1, 2, 2, 3),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: { presentation: DecorationPresentation.SearchMatch },
+		options: { description: 'find-match', className: 'findMatch' },
+		metadata: { kind: 'match' },
 	});
+	const error = collection.add({
+		range: new Range(3, 1, 3, 3),
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: {
+			description: 'marker-decoration',
+			className: 'squiggly-error',
+			hoverMessage: { value: 'error' },
+			overviewRuler: { color: themeColorFromId(ColorId.errorForeground), position: OverviewRulerLane.Right },
+			minimap: { color: themeColorFromId(ColorId.errorForeground), position: MinimapPosition.Inline },
+		},
+		metadata: { kind: 'error' },
+	});
+
+	assert.deepEqual(collection.decorations.map(decoration => [decoration.id, decoration.metadata.kind]), [[match, 'match'], [error, 'error']]);
+	assert.deepEqual(model.getAllDecorations().map(decoration => decoration.options.className), ['findMatch', 'squiggly-error']);
+	collection.delete(error);
+	assert.deepEqual(model.getAllDecorations().map(decoration => decoration.options.className), ['findMatch']);
+});
+
+test('TextDecorationCollection updates empty-range presentation through model options', () => {
+	using model = new TextModel('abcd\nefgh');
+	using collection = new TextDecorationCollection<string>(model);
+	const id = collection.add({
+		range: new Range(2, 3, 2, 3),
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		options: { description: 'hint', className: 'squiggly-hint', showIfCollapsed: true },
+		metadata: 'hint',
+	});
+	collection.update(id, {
+		range: new Range(2, 2, 2, 4),
+		stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+		options: { description: 'warning', className: 'squiggly-warning', showIfCollapsed: true },
+		metadata: 'warning',
+	});
+
+	const [decoration] = model.getAllDecorations();
+	assert.deepEqual(decoration?.range, new Range(2, 2, 2, 4));
+	assert.equal(decoration?.options.className, 'squiggly-warning');
+	assert.equal(collection.get(id)?.metadata, 'warning');
+});
+
+test('Glyph margin presentation uses the standard lane and z-index options', () => {
+	using model = new TextModel('abc');
+	using collection = new TextDecorationCollection<string>(model);
 	collection.add({
-		range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (1) + 1)),
+		range: new Range(1, 1, 1, 1),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: {},
+		options: {
+			description: 'folding',
+			glyphMarginClassName: 'folding-marker',
+			glyphMargin: { position: GlyphMarginLane.Center },
+			glyphMarginHoverMessage: { value: 'Collapse lines' },
+			zIndex: 4,
+		},
+		metadata: 'folding',
 	});
-	const errorId = collection.add({
-		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: { presentation: DecorationPresentation.ErrorUnderline },
-	});
-	const source = createStanzaDecorationSource(
-		collection,
-		decoration => decoration.metadata.presentation,
-	);
 
-	assert.deepEqual(source.decorations, [{
-		id: matchId,
-		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
-		presentation: DecorationPresentation.SearchMatch,
-	}, {
-		id: errorId,
-		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
-		presentation: DecorationPresentation.ErrorUnderline,
-	}]);
-	assert.equal(Object.isFrozen(source.decorations), true);
-
-	const rectangles = createStanzaDecorationRectangles(
-		model,
-		source.decorations,
-		{ startLineIndex: 0, endLineIndexExclusive: 3 },
-		38,
-		new FixedTextMeasurer(),
-	);
-	assert.deepEqual(rectangles, [{
-		id: matchId,
-		presentation: DecorationPresentation.SearchMatch,
-		lineIndex: 0,
-		left: 48,
-		width: 40,
-	}, {
-		id: matchId,
-		presentation: DecorationPresentation.SearchMatch,
-		lineIndex: 1,
-		left: 38,
-		width: 20,
-	}, {
-		id: errorId,
-		presentation: DecorationPresentation.ErrorUnderline,
-		lineIndex: 2,
-		left: 38,
-		width: 20,
-	}]);
-
-	let changes = 0;
-	using listener = source.onDidChange(() => changes += 1);
-	collection.delete(errorId);
-	assert.equal(changes, 1);
-	assert.equal(collection.size, 2);
+	const [decoration] = model.getAllMarginDecorations();
+	assert.equal(decoration?.options.glyphMarginClassName, 'folding-marker');
+	assert.equal(decoration?.options.glyphMargin?.position, GlyphMarginLane.Center);
+	assert.equal(decoration?.options.zIndex, 4);
 });
 
-test("Decoration geometry clips lines and rejects unknown presentations", () => {
-	using model = new TextModel("abcd\nefgh");
+test('Line-side and block presentation remain standard model decoration options', () => {
+	using model = new TextModel('one\ntwo\nthree');
 	using collection = new TextDecorationCollection<string>(model);
-	const id = collection.add({
-		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
+	collection.add({
+		range: new Range(1, 1, 3, 1),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "match",
+		options: {
+			description: 'line-and-block',
+			linesDecorationsClassName: 'line-marker',
+			firstLineDecorationClassName: 'first-line-marker',
+			linesDecorationsTooltip: 'Changed lines',
+			blockClassName: 'changed-block',
+			blockPadding: [1, 2, 3, 4],
+		},
+		metadata: 'changed',
 	});
-	const source = createStanzaDecorationSource(
-		collection,
-		() => DecorationPresentation.SearchMatch,
-	);
 
-	assert.deepEqual(createStanzaDecorationRectangles(
-		model,
-		source.decorations,
-		{ startLineIndex: 1, endLineIndexExclusive: 2 },
-		38,
-		new FixedTextMeasurer(),
-	), [{
-		id,
-		presentation: DecorationPresentation.SearchMatch,
-		lineIndex: 1,
-		left: 38,
-		width: 20,
-	}]);
-
-	const invalid = createStanzaDecorationSource(
-		collection,
-		() => "unknown" as DecorationPresentation,
-	);
-	assert.throws(() => invalid.decorations, /Unknown Stanza decoration/);
+	const [decoration] = model.getAllDecorations();
+	assert.equal(decoration?.options.linesDecorationsClassName, 'line-marker');
+	assert.equal(decoration?.options.firstLineDecorationClassName, 'first-line-marker');
+	assert.equal(decoration?.options.blockClassName, 'changed-block');
+	assert.deepEqual(decoration?.options.blockPadding, [1, 2, 3, 4]);
 });
-
-test("Decoration geometry presents an empty diagnostic at its text position", () => {
-	using model = new TextModel("abcd\nefgh");
-	using collection = new TextDecorationCollection<DecorationPresentation>(model);
-	const id = collection.add({
-		range: Range.fromPositions(new Position((1) + 1, (2) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: DecorationPresentation.HintUnderline,
-	});
-	const source = createStanzaDecorationSource(collection, decoration => decoration.metadata);
-
-	assert.deepEqual(createStanzaDecorationRectangles(
-		model,
-		source.decorations,
-		{ startLineIndex: 0, endLineIndexExclusive: 2 },
-		38,
-		new FixedTextMeasurer(),
-	), [{
-		id,
-		presentation: DecorationPresentation.HintUnderline,
-		lineIndex: 1,
-		left: 58,
-		width: 10,
-	}]);
-});
-
-test("Decoration sources declare and validate glyph-margin ownership", () => {
-	using model = new TextModel("abc");
-	using collection = new TextDecorationCollection<string>(model);
-	const id = collection.add({
-		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "folding",
-	});
-	const source = createStanzaDecorationSource(collection, () => ({
-		presentation: DecorationPresentation.GlyphMargin,
-		glyphMargin: { owner: "folding", lane: GlyphMarginLane.Center, ariaLabel: "Collapse lines", expanded: true },
-	}), undefined, {
-		glyphMarginLanes: [{ owner: "folding", lane: GlyphMarginLane.Center }],
-	});
-
-	assert.deepEqual(source.glyphMarginLanes, [{ owner: "folding", lane: GlyphMarginLane.Center }]);
-	assert.deepEqual(source.decorations, [{
-		id,
-		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		presentation: DecorationPresentation.GlyphMargin,
-		glyphMargin: { owner: "folding", lane: GlyphMarginLane.Center, ariaLabel: "Collapse lines", expanded: true },
-	}]);
-
-	const undeclared = createStanzaDecorationSource(collection, () => ({
-		presentation: DecorationPresentation.GlyphMargin,
-		glyphMargin: { owner: "debug", lane: GlyphMarginLane.Left, ariaLabel: "Add breakpoint" },
-	}));
-	assert.throws(() => undeclared.decorations, /did not declare lane/);
-});
-
-test("Decoration sources declare and validate line-decoration ownership", () => {
-	using model = new TextModel("abc");
-	using collection = new TextDecorationCollection<string>(model);
-	const id = collection.add({
-		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "folding",
-	});
-	const source = createStanzaDecorationSource(collection, () => ({
-		presentation: DecorationPresentation.LineDecoration,
-		linesDecoration: { owner: "folding", className: "folding-marker" },
-	}), undefined, {
-		linesDecorationLanes: [{ owner: "folding", width: 20 }],
-	});
-
-	assert.deepEqual(source.linesDecorationLanes, [{ owner: "folding", width: 20 }]);
-	assert.deepEqual(source.decorations, [{
-		id,
-		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		presentation: DecorationPresentation.LineDecoration,
-		linesDecoration: { owner: "folding", className: "folding-marker" },
-	}]);
-
-	const undeclared = createStanzaDecorationSource(collection, () => ({
-		presentation: DecorationPresentation.LineDecoration,
-		linesDecoration: { owner: "quick-diff", className: "quick-diff-marker" },
-	}));
-	assert.throws(() => undeclared.decorations, /did not declare a lane/);
-});
-
-interface DecorationMetadata {
-	readonly presentation?: DecorationPresentation;
-}
-
-class FixedTextMeasurer implements TextMeasurer {
-	readonly horizontalPadding = 24;
-	readonly contentLeftPadding = 12;
-
-	refresh(): boolean {
-		return false;
-	}
-
-	measureLineWidth(text: string): number {
-		return [...text].length * 10;
-	}
-}

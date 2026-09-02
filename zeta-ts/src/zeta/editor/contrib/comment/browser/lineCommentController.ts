@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { createToggleLineCommentCommand } from "../common/lineCommentCommands.js";
+import { LineCommentCommand, Type } from './lineCommentCommand.js';
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { type View } from "../../../browser/view.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
@@ -45,15 +45,19 @@ export class LineCommentController extends Disposable {
 		const lineComment = this.options.configurations.getLanguageConfiguration(languageId).comments?.lineCommentToken;
 		if (!lineComment) return;
 		stopEvent(event);
-		const command = createToggleLineCommentCommand(
-			this.viewport.textModel,
-			this.selections.getSelections(),
-			{
-				lineComment,
-				insertSpace: this.options.insertSpace,
-			},
-		);
-		this.executeCommand(ToggleLineCommentCommandId, () => this.selections.execute(command));
+		const commands = this.selections.getSelections().map(selection => new LineCommentCommand(
+			this.options.configurations,
+			selection,
+			this.viewport.textModel.getOptions().indentSize,
+			Type.Toggle,
+			this.options.insertSpace !== false,
+			false,
+		));
+		this.executeCommand(ToggleLineCommentCommandId, () => {
+			this.selections.pushUndoStop();
+			this.selections.executeCommands(commands, ToggleLineCommentCommandId);
+			this.selections.pushUndoStop();
+		});
 		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 }

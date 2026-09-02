@@ -24,8 +24,8 @@ export class TextDropController extends Disposable {
 			this.dispose();
 			throw new TypeError('Text drop dependencies must share one text model');
 		}
-		this._register(addDisposableListener<DragEvent>(viewport.element, 'dragover', event => this.handleDragOver(event)));
-		this._register(addDisposableListener<DragEvent>(viewport.element, 'drop', event => this.handleDrop(event)));
+		this._register(addDisposableListener<DragEvent>(viewport.domNode.domNode, 'dragover', event => this.handleDragOver(event)));
+		this._register(addDisposableListener<DragEvent>(viewport.domNode.domNode, 'drop', event => this.handleDrop(event)));
 		this._register(toDisposable(() => {
 			this.asynchronousDropRequest += 1;
 		}));
@@ -40,7 +40,7 @@ export class TextDropController extends Disposable {
 
 	private handleDrop(event: DragEvent): void {
 		if (this.selections.readOnly || event.defaultPrevented) return;
-		const text = readDropText(event.dataTransfer, this.viewport.element.ownerDocument);
+		const text = readDropText(event.dataTransfer, this.viewport.domNode.domNode.ownerDocument);
 		const target = this.viewport.getNearestTargetAtClientPoint(event);
 		if (!target) return;
 		if (text.length === 0) {
@@ -48,8 +48,8 @@ export class TextDropController extends Disposable {
 			return;
 		}
 		stopEvent(event);
-		this.viewport.element.focus({ preventScroll: true });
-		this.selections.execute(TypeOperations.paste(this.viewport.textModel, [Selection.fromPositions(target.position)], text));
+		this.viewport.domNode.domNode.focus({ preventScroll: true });
+		this.pasteAt(target.position, text);
 		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 
@@ -60,7 +60,7 @@ export class TextDropController extends Disposable {
 		const expectedVersion = model.version;
 		const request = ++this.asynchronousDropRequest;
 		stopEvent(event);
-		this.viewport.element.focus({ preventScroll: true });
+		this.viewport.domNode.domNode.focus({ preventScroll: true });
 		const text = this.progress.showWhile(position, 'Reading dropped file', file.text(), {
 			cancel: () => {
 				if (request === this.asynchronousDropRequest) this.asynchronousDropRequest += 1;
@@ -68,11 +68,20 @@ export class TextDropController extends Disposable {
 		});
 		void text.then(text => {
 			if (this.isDisposed || request !== this.asynchronousDropRequest || text.length > TEXT_FILE_TRANSFER_MAX_BYTES || model.version !== expectedVersion) return;
-			this.selections.execute(TypeOperations.paste(model, [Selection.fromPositions(position)], text));
+			this.pasteAt(position, text);
 			this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 		}).catch(() => {
 			// The supplied file could not be decoded as text.
 		});
+	}
+
+	private pasteAt(position: Position, text: string): void {
+		this.selections.setSelections([Selection.fromPositions(position)]);
+		const operation = TypeOperations.paste(this.viewport.cursorConfig, this.viewport.textModel, this.selections.getSelections(), text, false, []);
+		if (operation.shouldPushStackElementBefore) this.selections.pushUndoStop();
+		this.selections.executeCommands(operation.commands, 'drop');
+		this.selections.setPrevEditOperationType(operation.type);
+		if (operation.shouldPushStackElementAfter) this.selections.pushUndoStop();
 	}
 }
 

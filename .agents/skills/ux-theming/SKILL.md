@@ -5,6 +5,16 @@ description: VS Code theming, color tokens, widget styles, focus indicators, and
 
 This skill covers color registration, CSS variable usage, widget style patterns, focus indicators, and high-contrast theme requirements.
 
+### Zeta upstream-alignment guard
+
+When the target is Zeta, the VS Code names and snippets below describe theme semantics only; they are not copyable CSS or DOM templates. Keep Zeta's existing theme owner and generate variables through `zeta-ts/src/zeta/platform/theme/common/colorRegistry.ts`, which emits `--zeta-*`. Never add `--vscode-*`, `.monaco-*`, `.monaco-workbench`, `.hc-black`, `.vscode-high-contrast`, or an upstream DOM/state wrapper merely to reuse a VS Code rule.
+
+Map an upstream color ID to an existing Zeta token when the semantics match. Register a new Zeta token only when the component has a distinct, durable semantic role and provide the theme variants required by Zeta's registry. Theme-name equivalence does not justify copying upstream selector structure, default hex values, focus state ownership, or high-contrast class plumbing.
+
+Before changing Editor or Workbench theming, record the local component root, state classes, focus owner, token owner, and computed-style behavior. Verify the first state-changing slice in a real browser, including focus and high contrast when affected, before migrating more selectors. A prefix replacement from `--vscode-*` to `--zeta-*`, matching screenshots, type checking, and selector-count progress do not prove correct theming.
+
+Concrete rule: `var(--zeta-editor-background)` produced by Zeta's color registry is valid when the component already owns the editor-background semantic. Copying `var(--vscode-editor-background)` or renaming it while also importing `.monaco-editor` nesting is invalid.
+
 ---
 
 ## 1. Registering Colors

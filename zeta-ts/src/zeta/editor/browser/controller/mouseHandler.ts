@@ -1,19 +1,40 @@
 import { addDisposableListener } from '../../../base/browser/dom.js';
-import { StandardMouseEvent, StandardWheelEvent } from '../../../base/browser/mouseEvent.js';
-import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
-import { Range } from "../../common/core/range.js";
-import { type View } from "../view.js";
-import { DragScrolling } from "./dragScrolling.js";
-import { PointerHandler } from "./pointerHandler.js";
-import { MouseTargetFactory, MouseTargetKind } from "./mouseTarget.js";
-import { type MouseTarget } from './mouseTarget.js';
-import { EditorHitTargetKind, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
-import { type IMouseDispatchData, type ViewController } from '../view/viewController.js';
-import { type IEditorMouseEvent, type IMouseTarget, MouseTargetType } from '../editorBrowser.js';
+import { StandardWheelEvent } from '../../../base/browser/mouseEvent.js';
+import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { EditorOption } from '../../common/config/editorOptions.js';
+import { Position } from '../../common/core/position.js';
+import { TextDirection } from '../../common/model.js';
+import { ViewEventHandler } from '../../common/viewEventHandler.js';
+import { type ViewContext } from '../../common/viewModel/viewContext.js';
+import { type ViewConfigurationChangedEvent, type ViewCursorStateChangedEvent, type ViewFocusChangedEvent } from '../../common/viewEvents.js';
 import { NavigationCommandRevealType } from '../coreCommands.js';
+import { type IEditorMouseEvent, type IMouseTarget, type IMouseTargetOutsideEditor, MouseTargetType } from '../editorBrowser.js';
+import { ClientCoordinates, EditorMouseEvent, EditorMouseEventFactory, createCoordinatesRelativeToEditor, createEditorPagePosition } from '../editorDom.js';
+import { type HorizontalPosition } from '../view/renderingContext.js';
+import { type IMouseDispatchData, type ViewController } from '../view/viewController.js';
+import { type ViewLinesGpu } from '../viewParts/viewLinesGpu/viewLinesGpu.js';
+import { LeftRightDragScrolling, TopBottomDragScrolling } from './dragScrolling.js';
+import { MouseTarget, MouseTargetFactory, PointerHandlerLastRenderData } from './mouseTarget.js';
+import { PointerHandler } from './pointerHandler.js';
+
+export interface IPointerHandlerHelper {
+	viewDomNode: HTMLElement;
+	linesContentDomNode: HTMLElement;
+	viewLinesDomNode: HTMLElement;
+	viewLinesGpu: ViewLinesGpu | undefined;
+	focusTextArea(): void;
+	dispatchTextAreaEvent(event: CustomEvent): void;
+	getLastRenderData(): PointerHandlerLastRenderData;
+	renderNow(): void;
+	shouldSuppressMouseDownOnViewZone(viewZoneId: string): boolean;
+	shouldSuppressMouseDownOnWidget(widgetId: string): boolean;
+	getPositionFromDOMInfo(spanNode: HTMLElement, offset: number): Position | null;
+	visibleRangeForPosition(lineNumber: number, column: number): HorizontalPosition | null;
+	getLineWidth(lineNumber: number): number;
+}
 
 interface PointerGesture {
-	readonly pointerId: number | undefined;
+	readonly pointerId: number;
 	readonly startedOnLineNumbers: boolean;
 	readonly mouseDownCount: number;
 	readonly altKey: boolean;
@@ -24,79 +45,111 @@ interface PointerGesture {
 	readonly middleButton: boolean;
 }
 
-/** Owns pointer capture, drag scrolling, target resolution, and browser event publication. */
-export class MouseHandler extends Disposable {
-	private readonly dragListeners =
-		this._register(new DisposableStore());
+/** Owns editor pointer gestures and publishes one canonical IMouseTarget contract. */
+export class MouseHandler extends ViewEventHandler {
+	protected readonly _context: ViewContext;
+	protected readonly viewController: ViewController;
+	protected readonly viewHelper: IPointerHandlerHelper;
+	protected readonly mouseTargetFactory: MouseTargetFactory;
+	protected readonly _mouseDownOperation = this._register(new DisposableStore());
 	private readonly pointerHandler: PointerHandler;
-	private readonly mouseTargetFactory: MouseTargetFactory;
+	private readonly topBottomDragScrolling: TopBottomDragScrolling;
+	private readonly leftRightDragScrolling: LeftRightDragScrolling;
 	private gesture: PointerGesture | undefined;
-	private autoScroller: DragScrolling | undefined;
 
-	constructor(
-		private readonly viewport: View,
-		private readonly viewController: ViewController,
-	) {
+	constructor(context: ViewContext, viewController: ViewController, viewHelper: IPointerHandlerHelper) {
 		super();
-		this.pointerHandler = this._register(new PointerHandler(viewport.element));
-		this.mouseTargetFactory = new MouseTargetFactory(viewport);
-		this._register(this.pointerHandler.onDidPointerDown(event => this.beginPointerSelection(event)));
-		this._register(this.pointerHandler.onDidContextMenu(event => this.handleContextMenu(event)));
-		this._register(addDisposableListener<MouseEvent>(viewport.element, 'mousemove', event => this.handleMouseMove(event)));
-		this._register(addDisposableListener<MouseEvent>(viewport.element, 'mouseleave', event => this.handleMouseLeave(event)));
-		this._register(addDisposableListener<WheelEvent>(viewport.element, 'wheel', event => this.viewController.emitMouseWheel(new StandardWheelEvent(event, { lineHeight: viewport.currentLayout.lineHeight }))));
-		this._register(addDisposableListener<DragEvent>(viewport.element, 'drop', event => {
-			const target = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
-				? this.mouseTargetFactory.create(event, true)
-				: undefined;
-			this.viewController.emitMouseDrop({ event: new StandardMouseEvent(event), target: target ? this.toViewMouseTarget(target) : null });
-		}));
+		this._context = context;
+		this.viewController = viewController;
+		this.viewHelper = viewHelper;
+		this.mouseTargetFactory = new MouseTargetFactory(context, viewHelper);
+		this.pointerHandler = this._register(new PointerHandler(viewHelper.viewDomNode));
+		this.topBottomDragScrolling = this._register(new TopBottomDragScrolling(
+			this._context,
+			this.viewHelper,
+			this.mouseTargetFactory,
+			(target, inSelectionMode, revealType) => this.dispatchTarget(target, inSelectionMode, revealType),
+		));
+		this.leftRightDragScrolling = this._register(new LeftRightDragScrolling(
+			this._context,
+			this.viewHelper,
+			this.mouseTargetFactory,
+			(target, inSelectionMode, revealType) => this.dispatchTarget(target, inSelectionMode, revealType),
+		));
+		context.addEventHandler(this);
+		this._register(toDisposable(() => context.removeEventHandler(this)));
+		this._register(this.pointerHandler.onDidPointerDown(({ event, pointerId }) => this._onMouseDown(event, pointerId)));
+		this._register(this.pointerHandler.onDidContextMenu(event => this._onContextMenu(event)));
+		const mouseEvents = new EditorMouseEventFactory(viewHelper.viewDomNode);
+		this._register(mouseEvents.onMouseMove(viewHelper.viewDomNode, event => this._onMouseMove(event)));
+		this._register(mouseEvents.onMouseLeave(viewHelper.viewDomNode, event => this._onMouseLeave(event)));
+		this._register(mouseEvents.onMouseUp(viewHelper.viewDomNode, event => this._onMouseUp(event)));
+		this._register(addDisposableListener<WheelEvent>(viewHelper.viewDomNode, 'wheel', event => this._onMouseWheel(event)));
+		this._register(addDisposableListener<DragEvent>(viewHelper.viewDomNode, 'drop', event => this._onDrop(event)));
 		this._register(toDisposable(() => this.stopPointerSelection()));
 	}
 
-	private beginPointerSelection(event: PointerEvent): void {
-		const target = this.mouseTargetFactory.create(event);
+	public getTargetAtClientPoint(clientX: number, clientY: number): IMouseTarget {
+		const editorPos = createEditorPagePosition(this.viewHelper.viewDomNode);
+		const pos = new ClientCoordinates(clientX, clientY).toPageCoordinates(this.viewHelper.viewDomNode.ownerDocument.defaultView!);
+		const relativePos = createCoordinatesRelativeToEditor(this.viewHelper.viewDomNode, editorPos, pos);
+		return this.mouseTargetFactory.createMouseTarget(this.viewHelper.getLastRenderData(), editorPos, pos, relativePos, null);
+	}
+
+	public override onConfigurationChanged(event: ViewConfigurationChangedEvent): boolean {
+		if (event.hasChanged(EditorOption.layoutInfo)) this.stopPointerSelection();
+		return false;
+	}
+	public override onCursorStateChanged(_event: ViewCursorStateChangedEvent): boolean { return false; }
+	public override onFocusChanged(_event: ViewFocusChangedEvent): boolean { return false; }
+
+	protected _createMouseTarget(event: EditorMouseEvent, testEventTarget: boolean): IMouseTarget {
+		const target = testEventTarget ? eventTargetElement(event.target, this.viewHelper.viewDomNode.ownerDocument) : null;
+		return this.mouseTargetFactory.createMouseTarget(this.viewHelper.getLastRenderData(), event.editorPos, event.pos, event.relativePos, target);
+	}
+
+	private _getMouseColumn(event: EditorMouseEvent): number {
+		return this.mouseTargetFactory.getMouseColumn(event.relativePos);
+	}
+
+	protected _onContextMenu(event: EditorMouseEvent): void {
+		this.viewController.emitContextMenu(this.toEditorMouseEvent(event, this._createMouseTarget(event, true)));
+	}
+
+	protected _onMouseDown(event: EditorMouseEvent, pointerId: number): void {
+		const target = this._createMouseTarget(event, true);
 		const editorEvent = this.toEditorMouseEvent(event, target);
-		if (event.defaultPrevented || (event.button !== 0 && event.button !== 1) || !target || target.kind === MouseTargetKind.Scrollbar || target.kind === MouseTargetKind.Widget || target.kind === MouseTargetKind.ViewZone) {
-			this.viewController.emitMouseDown(editorEvent);
-			return;
+		const suppressedViewZone = isViewZone(target) && this.viewHelper.shouldSuppressMouseDownOnViewZone(target.detail.viewZoneId);
+		const suppressedWidget = isWidget(target) && this.viewHelper.shouldSuppressMouseDownOnWidget(target.detail);
+		if (suppressedWidget && (event.leftButton || event.middleButton)) {
+			event.preventDefault();
+			this.viewHelper.focusTextArea();
 		}
-		const hitTarget = target.editorTarget;
-		if (!hitTarget) {
+		if (event.defaultPrevented || (!event.leftButton && !event.middleButton) || target.type === MouseTargetType.UNKNOWN || target.type === MouseTargetType.SCROLLBAR || isWidget(target) || isViewZone(target) && !suppressedViewZone || !target.position) {
 			this.viewController.emitMouseDown(editorEvent);
 			return;
 		}
 		event.preventDefault();
-		this.viewport.element.focus({ preventScroll: true });
+		this.viewHelper.focusTextArea();
 		this.stopPointerSelection();
-		const pointerId = readPointerId(event);
 		try {
 			this.gesture = {
 				pointerId,
-				startedOnLineNumbers: target.kind === MouseTargetKind.LineNumber,
-				mouseDownCount: readClickCount(event),
+				startedOnLineNumbers: target.type === MouseTargetType.GUTTER_LINE_NUMBERS,
+				mouseDownCount: Math.min(Math.max(1, event.detail), 4),
 				altKey: event.altKey,
 				ctrlKey: event.ctrlKey,
 				metaKey: event.metaKey,
 				shiftKey: event.shiftKey,
-				leftButton: event.button === 0,
-				middleButton: event.button === 1,
+				leftButton: event.leftButton,
+				middleButton: event.middleButton,
 			};
-			this.dispatchTarget(hitTarget, false);
+			this.dispatchTarget(target, false);
 			this.pointerHandler.capturePointer(pointerId);
-
-			const targetWindow = this.pointerHandler.targetWindow;
-			this.autoScroller = this.dragListeners.add(
-				new DragScrolling(
-					targetWindow,
-					this.viewport,
-					target => this.dispatchTarget(target, true),
-				),
-			);
-			this.dragListeners.add(this.pointerHandler.startTracking(pointerId, {
+			this._mouseDownOperation.add(this.pointerHandler.startTracking(pointerId, event.buttons || buttonMask(event), {
 				onMove: event => this.updatePointerSelection(event),
 				onUp: event => this.finishPointerSelection(event),
-				onCancel: event => this.cancelPointerSelection(event),
+				onCancel: () => this.stopPointerSelection(),
 				onBlur: () => this.stopPointerSelection(),
 			}));
 		} catch (error) {
@@ -106,49 +159,129 @@ export class MouseHandler extends Disposable {
 		this.viewController.emitMouseDown(editorEvent);
 	}
 
-	private handleContextMenu(event: MouseEvent): void {
-		const target = this.mouseTargetFactory.create(event, true);
-		this.viewController.emitContextMenu(this.toEditorMouseEvent(event, target));
-	}
-
-	private handleMouseMove(event: MouseEvent): void {
+	protected _onMouseMove(event: EditorMouseEvent): void {
 		if (this.gesture) return;
-		this.viewController.emitMouseMove(this.toEditorMouseEvent(event, this.mouseTargetFactory.create(event, true)));
+		this.viewController.emitMouseMove(this.toEditorMouseEvent(event, this._createMouseTarget(event, true)));
 	}
 
-	private handleMouseLeave(event: MouseEvent): void {
-		this.viewController.emitMouseLeave({ event: new StandardMouseEvent(event), target: null });
+	protected _onMouseLeave(event: EditorMouseEvent): void {
+		this.viewController.emitMouseLeave({ event, target: null });
 	}
 
-	private updatePointerSelection(event: PointerEvent): void {
+	protected _onMouseUp(event: EditorMouseEvent): void {
+		if (this.gesture) return;
+		this.viewController.emitMouseUp(this.toEditorMouseEvent(event, this._createMouseTarget(event, true)));
+	}
+
+	protected _onMouseWheel(event: WheelEvent): void {
+		this.viewController.emitMouseWheel(new StandardWheelEvent(event, { lineHeight: this._context.configuration.options.get(EditorOption.lineHeight) }));
+	}
+
+	private _onDrop(event: DragEvent): void {
+		const editorEvent = new EditorMouseEvent(event, false, this.viewHelper.viewDomNode);
+		const target = Number.isFinite(event.clientX) && Number.isFinite(event.clientY) ? this._createMouseTarget(editorEvent, true) : null;
+		this.viewController.emitMouseDrop({ event: editorEvent, target });
+	}
+
+	private updatePointerSelection(event: EditorMouseEvent): void {
 		if (!this.accepts(event)) return;
-		const hitTarget = this.viewport.getNearestTargetAtClientPoint(event);
-		if (hitTarget) this.dispatchTarget(hitTarget, true);
-		this.autoScroller?.updatePointer(event);
-		this.viewController.emitMouseDrag(this.toEditorMouseEvent(event, this.mouseTargetFactory.create(event, true)));
+		const target = this.findMousePosition(event, false);
+		if (!target) return;
+		if (target.type === MouseTargetType.OUTSIDE_EDITOR) {
+			this.startDragScrolling(target, event);
+		} else {
+			this.stopDragScrolling();
+			this.dispatchTarget(target, true, NavigationCommandRevealType.Minimal);
+		}
+		this.viewController.emitMouseDrag(this.toEditorMouseEvent(event, target));
 	}
 
-	private finishPointerSelection(event: PointerEvent): void {
+	private finishPointerSelection(event: EditorMouseEvent): void {
 		if (!this.accepts(event)) return;
-		const hitTarget = this.viewport.getNearestTargetAtClientPoint(event);
-		if (hitTarget) this.dispatchTarget(hitTarget, true);
-		this.viewController.emitMouseUp(this.toEditorMouseEvent(event, this.mouseTargetFactory.create(event, true)));
+		const target = this.findMousePosition(event, false);
+		if (target) {
+			this.dispatchTarget(target, true, NavigationCommandRevealType.None);
+			this.viewController.emitMouseUp(this.toEditorMouseEvent(event, target));
+		}
 		this.stopPointerSelection();
 	}
 
-	private cancelPointerSelection(event: PointerEvent): void {
-		if (!this.accepts(event)) return;
-		this.stopPointerSelection();
+	private findMousePosition(event: EditorMouseEvent, testEventTarget: boolean): IMouseTarget | null {
+		return this.getPositionOutsideEditor(event) ?? this._createMouseTarget(event, testEventTarget);
 	}
 
-	private dispatchTarget(hitTarget: EditorHitTarget, inSelectionMode: boolean): void {
+	private getPositionOutsideEditor(event: EditorMouseEvent): IMouseTargetOutsideEditor | null {
+		const editorPosition = event.editorPos;
+		const model = this._context.viewModel;
+		const viewLayout = this._context.viewLayout;
+		const mouseColumn = this._getMouseColumn(event);
+		if (event.pos.y < editorPosition.y) {
+			const outsideDistance = editorPosition.y - event.pos.y;
+			const verticalOffset = Math.max(viewLayout.getCurrentScrollTop() - outsideDistance, 0);
+			const lineNumber = viewLayout.getLineNumberAtVerticalOffset(verticalOffset);
+			return MouseTarget.createOutsideEditor(mouseColumn, new Position(lineNumber, 1), 'above', outsideDistance);
+		}
+		if (event.pos.y > editorPosition.y + editorPosition.height) {
+			const outsideDistance = event.pos.y - editorPosition.y - editorPosition.height;
+			const verticalOffset = viewLayout.getCurrentScrollTop() + event.relativePos.y;
+			const lineNumber = viewLayout.getLineNumberAtVerticalOffset(verticalOffset);
+			return MouseTarget.createOutsideEditor(mouseColumn, new Position(lineNumber, model.getLineMaxColumn(lineNumber)), 'below', outsideDistance);
+		}
+
+		const lineNumber = viewLayout.getLineNumberAtVerticalOffset(viewLayout.getCurrentScrollTop() + event.relativePos.y);
+		const layoutInfo = this._context.configuration.options.get(EditorOption.layoutInfo);
+		if (event.relativePos.x <= layoutInfo.contentLeft) {
+			const isRtl = model.getTextDirection(lineNumber) === TextDirection.RTL;
+			return MouseTarget.createOutsideEditor(
+				mouseColumn,
+				new Position(lineNumber, isRtl ? model.getLineMaxColumn(lineNumber) : 1),
+				'left',
+				layoutInfo.contentLeft - event.relativePos.x,
+			);
+		}
+
+		const contentRight = layoutInfo.minimap.minimapLeft === 0
+			? layoutInfo.width - layoutInfo.verticalScrollbarWidth
+			: layoutInfo.minimap.minimapLeft;
+		if (event.relativePos.x >= contentRight) {
+			const isRtl = model.getTextDirection(lineNumber) === TextDirection.RTL;
+			return MouseTarget.createOutsideEditor(
+				mouseColumn,
+				new Position(lineNumber, isRtl ? 1 : model.getLineMaxColumn(lineNumber)),
+				'right',
+				event.relativePos.x - contentRight,
+			);
+		}
+		return null;
+	}
+
+	private startDragScrolling(target: IMouseTargetOutsideEditor, event: EditorMouseEvent): void {
+		if (target.outsidePosition === 'above' || target.outsidePosition === 'below') {
+			this.topBottomDragScrolling.start(target, event);
+			this.leftRightDragScrolling.stop();
+		} else {
+			this.leftRightDragScrolling.start(target, event);
+			this.topBottomDragScrolling.stop();
+		}
+	}
+
+	private stopDragScrolling(): void {
+		this.topBottomDragScrolling.stop();
+		this.leftRightDragScrolling.stop();
+	}
+
+	private dispatchTarget(target: IMouseTarget, inSelectionMode: boolean, revealType = NavigationCommandRevealType.Minimal): void {
+		if (!target.position) return;
+		this.dispatchPosition(target.position, target.type === MouseTargetType.CONTENT_TEXT && !!target.detail.injectedText, inSelectionMode, target.mouseColumn, revealType);
+	}
+
+	private dispatchPosition(position: Position, onInjectedText: boolean, inSelectionMode: boolean, mouseColumn = position.column, revealType = NavigationCommandRevealType.Minimal): void {
 		const gesture = this.gesture;
 		if (!gesture) return;
-		const position = this.viewport.coordinatesConverter.convertModelPositionToViewPosition(hitTarget.position);
 		const data: IMouseDispatchData = {
 			position,
-			mouseColumn: position.column,
-			revealType: NavigationCommandRevealType.Minimal,
+			mouseColumn,
+			revealType,
 			startedOnLineNumbers: gesture.startedOnLineNumbers,
 			inSelectionMode,
 			mouseDownCount: gesture.mouseDownCount,
@@ -158,82 +291,44 @@ export class MouseHandler extends Disposable {
 			shiftKey: gesture.shiftKey,
 			leftButton: gesture.leftButton,
 			middleButton: gesture.middleButton,
-			onInjectedText: false,
+			onInjectedText,
 		};
 		this.viewController.dispatchMouse(data);
 	}
 
-	private accepts(event: PointerEvent): boolean {
-		const gesture = this.gesture;
-		if (!gesture) return false;
-		const pointerId = readPointerId(event);
-		return gesture.pointerId === undefined ||
-			pointerId === undefined ||
-			pointerId === gesture.pointerId;
+	private accepts(event: EditorMouseEvent): boolean {
+		return this.gesture?.pointerId === (event.browserEvent as PointerEvent).pointerId;
 	}
 
 	private stopPointerSelection(): void {
-		const gesture = this.gesture;
+		const pointerId = this.gesture?.pointerId;
 		this.gesture = undefined;
-		this.autoScroller = undefined;
-		this.dragListeners.clear();
-		const pointerId = gesture?.pointerId;
-		this.pointerHandler.releasePointer(pointerId);
+		this.stopDragScrolling();
+		this._mouseDownOperation.clear();
+		if (pointerId !== undefined) this.pointerHandler.releasePointer(pointerId);
 	}
 
-	private toEditorMouseEvent(event: MouseEvent | PointerEvent, target: MouseTarget | undefined): IEditorMouseEvent {
-		return { event: new StandardMouseEvent(event), target: this.toViewMouseTarget(target) };
-	}
-
-	private toViewMouseTarget(target: MouseTarget | undefined): IMouseTarget {
-		const elementConstructor = this.viewport.element.ownerDocument.defaultView?.HTMLElement;
-		const element = elementConstructor && target?.element instanceof elementConstructor ? target.element as HTMLElement : null;
-		const modelPosition = target?.editorTarget?.position;
-		const position = modelPosition ? this.viewport.coordinatesConverter.convertModelPositionToViewPosition(modelPosition) : null;
-		const range = position ? Range.fromPositions(position) : null;
-		const mouseColumn = position?.column ?? 0;
-		if (!target) return { type: MouseTargetType.UNKNOWN, element, mouseColumn, position, range };
-		if (!position || !range) {
-			if (target.kind === MouseTargetKind.Widget) {
-				return { type: MouseTargetType.CONTENT_WIDGET, element, mouseColumn, position: null, range: null, detail: element?.id ?? '' };
-			}
-			return { type: MouseTargetType.UNKNOWN, element, mouseColumn, position, range };
-		}
-		switch (target.kind) {
-			case MouseTargetKind.Text:
-				return { type: MouseTargetType.CONTENT_TEXT, element, mouseColumn, position, range, detail: { mightBeForeignElement: false, injectedText: null } };
-			case MouseTargetKind.EmptyContent:
-			case MouseTargetKind.AfterLines:
-				return { type: MouseTargetType.CONTENT_EMPTY, element, mouseColumn, position, range, detail: { isAfterLines: target.kind === MouseTargetKind.AfterLines } };
-			case MouseTargetKind.Gutter:
-			case MouseTargetKind.LineNumber:
-			case MouseTargetKind.GutterDecoration: {
-				const layout = this.viewport.getLayoutInfo();
-				const type = target.kind === MouseTargetKind.LineNumber
-					? MouseTargetType.GUTTER_LINE_NUMBERS
-					: target.glyphMarginLane === undefined ? MouseTargetType.GUTTER_LINE_DECORATIONS : MouseTargetType.GUTTER_GLYPH_MARGIN;
-				return { type, element, mouseColumn, position, range, detail: { isAfterLines: target.editorTarget?.kind === EditorHitTargetKind.AfterLines, glyphMarginLeft: layout.glyphMarginLeft, glyphMarginWidth: layout.glyphMarginWidth, glyphMarginLane: target.glyphMarginLane, lineNumbersWidth: layout.lineNumbersWidth, offsetX: 0 } };
-			}
-			case MouseTargetKind.Widget:
-				return { type: MouseTargetType.CONTENT_WIDGET, element, mouseColumn, position: null, range: null, detail: element?.id ?? '' };
-			case MouseTargetKind.Scrollbar:
-				return position && range
-					? { type: MouseTargetType.SCROLLBAR, element, mouseColumn, position, range }
-					: { type: MouseTargetType.UNKNOWN, element, mouseColumn, position, range };
-			case MouseTargetKind.ViewZone:
-				return { type: MouseTargetType.UNKNOWN, element, mouseColumn, position, range };
-		}
+	private toEditorMouseEvent(event: EditorMouseEvent, target: IMouseTarget): IEditorMouseEvent {
+		return { event, target };
 	}
 }
 
-function readPointerId(event: PointerEvent): number | undefined {
-	return Number.isFinite(event.pointerId)
-		? event.pointerId
-		: undefined;
+function eventTargetElement(target: EventTarget | null, ownerDocument: Document): HTMLElement | null {
+	const HTMLElementConstructor = ownerDocument.defaultView?.HTMLElement;
+	return HTMLElementConstructor && target instanceof HTMLElementConstructor ? target : null;
 }
 
-function readClickCount(event: PointerEvent): number {
-	return Number.isSafeInteger(event.detail) && event.detail > 0
-		? Math.min(event.detail, 4)
-		: 1;
+function isViewZone(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.GUTTER_VIEW_ZONE | MouseTargetType.CONTENT_VIEW_ZONE }> {
+	return target.type === MouseTargetType.GUTTER_VIEW_ZONE || target.type === MouseTargetType.CONTENT_VIEW_ZONE;
+}
+
+function isWidget(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.CONTENT_WIDGET | MouseTargetType.OVERLAY_WIDGET }> {
+	return target.type === MouseTargetType.CONTENT_WIDGET || target.type === MouseTargetType.OVERLAY_WIDGET;
+}
+
+function buttonMask(event: EditorMouseEvent): number {
+	if (event.leftButton) return 1;
+	if (event.middleButton) return 4;
+	if (event.rightButton) return 2;
+	return 0;
 }

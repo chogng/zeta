@@ -22,12 +22,12 @@ test("replace match is isolated, positions the caret, and rejects stale results"
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	const match = findTextMatches(model, { pattern: "one" })[0]!;
 
-	selections.execute(createReplaceTextMatchCommand(model, match, "first"));
+	selections.executeCommand(createReplaceTextMatchCommand(model, match, "first"));
 	assert.equal(model.getText(), "first two");
 	assert.deepEqual(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (5) + 1));
 	assert.throws(() => createReplaceTextMatchCommand(model, match, "stale"), /stale model version/);
 
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "one two");
 });
 
@@ -36,10 +36,10 @@ test("replace all maps the result caret and undoes as one transaction", () => {
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	const matches = findTextMatches(model, { pattern: "a", matchCase: true });
 
-	selections.execute(createReplaceAllTextMatchesCommand(model, matches, ["long", "", "x"]));
+	selections.executeCommand(createReplaceAllTextMatchesCommand(model, matches, ["long", "", "x"]));
 	assert.equal(model.getText(), "long  x");
 	assert.deepEqual(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (7) + 1));
 
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "a a a");
 });

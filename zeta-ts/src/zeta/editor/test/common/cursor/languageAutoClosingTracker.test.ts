@@ -2,23 +2,22 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { DeleteOperations } from "../../../common/cursor/cursorDeleteOperations.js";
-import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
+import { EditOperationType } from "../../../common/cursorCommon.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
-import { createTestCursorConfiguration } from '../testCursorConfiguration.js';
-import { createTestCursorsController } from '../testCursorConfiguration.js';
+import { createTestCursorConfiguration, createTestCursorsController, executeTestDeleteOperation } from '../testCursorConfiguration.js';
+import { ViewModelEventsCollector } from '../../../common/viewModelEventDispatcher.js';
 
 test("Auto-closing trust follows external edits and rejects a changed closer", () => {
-	using model = new TextModel("x");
-	using selections = createTestCursorsController(model, [caret(1)]);
+	using model = new TextModel('x', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	const configuration = configurations.getLanguageConfiguration("typescript");
-	executeAndRecord(model, selections, typeCommand(model, selections, "(", configuration)!);
+	using selections = createTestCursorsController(model, [caret(1)], {}, configurations);
+	typeText(selections, '(');
 
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "pre" }]);
 	assert.deepEqual(selections.getSelections()[0]!, caret(5));
@@ -29,12 +28,11 @@ test("Auto-closing trust follows external edits and rejects a changed closer", (
 });
 
 test("Leaving an auto-closed pair invalidates its trust permanently", () => {
-	using model = new TextModel("");
-	using selections = createTestCursorsController(model, [caret(0)]);
+	using model = new TextModel('', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	const configuration = configurations.getLanguageConfiguration("typescript");
-	executeAndRecord(model, selections, typeCommand(model, selections, "(", configuration)!);
+	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
+	typeText(selections, '(');
 	assert.equal(canOvertype(model, selections, new Position((0) + 1, (1) + 1), ")"), true);
 
 	selections.setSelections([caret(0)]);
@@ -44,14 +42,11 @@ test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 
 test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 	using model = new TextModel("()", { languageId: 'typescript' });
-	using selections = createTestCursorsController(model, [caret(1)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	const configuration = configurations.getLanguageConfiguration("typescript");
+	using selections = createTestCursorsController(model, [caret(1)], {}, configurations);
 
-	const closing = typeCommand(model, selections, ")", configuration)!;
-	assert.equal(closing.insertedText, true);
-	selections.execute(closing.command);
+	typeText(selections, ')');
 	assert.equal(model.getText(), "())");
 
 	selections.setSelections([caret(1)]);
@@ -60,12 +55,11 @@ test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 });
 
 test("Multi-selection auto-closing entries retain independent ownership", () => {
-	using model = new TextModel("a b");
-	using selections = createTestCursorsController(model, primaryFirst([caret(1), caret(3)], 0));
+	using model = new TextModel('a b', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	const configuration = configurations.getLanguageConfiguration("typescript");
-	executeAndRecord(model, selections, typeCommand(model, selections, "(", configuration)!);
+	using selections = createTestCursorsController(model, primaryFirst([caret(1), caret(3)], 0), {}, configurations);
+	typeText(selections, '(');
 	assert.equal(model.getText(), "a() b()");
 	assert.equal(canOvertype(model, selections, new Position((0) + 1, (2) + 1), ")"), true);
 	assert.equal(canOvertype(model, selections, new Position((0) + 1, (6) + 1), ")"), true);
@@ -77,47 +71,34 @@ test("Multi-selection auto-closing entries retain independent ownership", () => 
 
 test("Undo removes provenance and redo does not invent it again", () => {
 	using model = new TextModel("", { languageId: 'typescript' });
-	using selections = createTestCursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	const configuration = configurations.getLanguageConfiguration("typescript");
-	executeAndRecord(model, selections, typeCommand(model, selections, "(", configuration)!);
+	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
+	typeText(selections, '(');
 
-	selections.undo();
+	selections.context.model.undo();
 	assert.equal(model.getText(), "");
-	selections.redo();
+	selections.context.model.redo();
 	assert.equal(model.getText(), "()");
 	assert.equal(canOvertype(model, selections, new Position((0) + 1, (1) + 1), ")"), false);
 	executeBackspace(model, selections, configurations);
 	assert.equal(model.getText(), ")");
 });
 
-test("Stale recording is ignored and cursor disposal leaves the model alive", () => {
-	using model = new TextModel("");
-	using selections = createTestCursorsController(model, [caret(0)]);
+test("Cursor disposal leaves the model alive", () => {
+	using model = new TextModel('()', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	const configuration = configurations.getLanguageConfiguration("typescript");
-	const command = typeCommand(model, selections, "(", configuration)!;
-	const change = selections.execute(command.command);
-	assert.ok(change);
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "x" }]);
-	recordAutoClosed(model, selections, command, change.version);
-	assert.equal(canOvertype(model, selections, selections.getSelections()[0]!.getPosition(), ")"), false);
+	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
 
 	selections.dispose();
 	assert.throws(() => selections.getAutoClosedCharacters(), ReferenceError);
-	assert.equal(model.getText(), "x()");
+	model.applyEdits([{ range: Range.fromPositions(new Position(1, 1)), text: "x" }]);
+	assert.equal(model.getText(), 'x()');
 });
 
-function typeCommand(model: TextModel, selections: CursorsController, text: string, configuration: Parameters<typeof TypeOperations.typeWithInterceptors>[3]) {
-	return TypeOperations.typeWithInterceptors(model, selections.getSelections(), text, configuration, selections.getAutoClosedCharacters());
-}
-
-function executeAndRecord(model: TextModel, selections: CursorsController, command: NonNullable<ReturnType<typeof TypeOperations.typeWithInterceptors>>): void {
-	const change = selections.execute(command.command);
-	assert.ok(change);
-	recordAutoClosed(model, selections, command, change.version);
+function typeText(selections: CursorsController, text: string): void {
+	selections.type(new ViewModelEventsCollector(), text, 'keyboard');
 }
 
 function executeBackspace(model: TextModel, selections: CursorsController, configurations: TestLanguageConfigurationService): void {
@@ -128,16 +109,7 @@ function executeBackspace(model: TextModel, selections: CursorsController, confi
 		[...selections.getSelections()],
 		[...selections.getAutoClosedCharacters()],
 	);
-	if (operation[0]) selections.pushUndoStop();
-	selections.executeCommands(operation[1]);
-}
-
-function recordAutoClosed(model: TextModel, selections: CursorsController, command: NonNullable<ReturnType<typeof TypeOperations.typeWithInterceptors>>, version: number): void {
-	selections.recordAutoClosedCharacters(
-		command.autoClosedCharacters.map(range => Range.fromPositions(model.positionAt(range.startOffset), model.positionAt(range.endOffset))),
-		command.autoClosedEnclosing.map(range => Range.fromPositions(model.positionAt(range.startOffset), model.positionAt(range.endOffset))),
-		version,
-	);
+	executeTestDeleteOperation(selections, operation, EditOperationType.DeletingLeft);
 }
 
 function canOvertype(model: TextModel, selections: CursorsController, position: Position, close: string): boolean {

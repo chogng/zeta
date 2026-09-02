@@ -1,6 +1,7 @@
-import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
+import { ReplaceCommand } from '../../../common/commands/replaceCommand.js';
+import { Selection } from '../../../common/core/selection.js';
 import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
-
+import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../common/editorCommon.js';
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type TextSearchMatch } from "../../../common/model/textModelSearch.js";
 import { type TextEdit } from '../../../common/languages.js';
@@ -22,31 +23,19 @@ export function resolveTextSearchReplacement(match: TextSearchMatch, replacement
 }
 
 /** Replaces one current-version search match as an isolated undo step. */
-export function createReplaceTextMatchCommand(model: TextModel, match: TextSearchMatch, replacement: string): EditorEditCommand {
+export function createReplaceTextMatchCommand(model: TextModel, match: TextSearchMatch, replacement: string): ICommand {
 	assertCurrentMatch(model, match);
-	const normalized = normalizeTextLineEndings(replacement);
-	const startOffset = model.offsetAt(match.range.getStartPosition());
-	return Object.freeze({
-		edits: Object.freeze([{ range: match.range, text: normalized }]),
-		selectionsAfter: Object.freeze([Object.freeze({
-			anchorOffset: startOffset + normalized.length,
-			activeOffset: startOffset + normalized.length,
-		})]),
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.Isolated,
-	});
+	return new ReplaceCommand(match.range, normalizeTextLineEndings(replacement));
 }
 
 /** Replaces ordered, non-overlapping current-version matches as one isolated undo step. */
-export function createReplaceAllTextMatchesCommand(model: TextModel, matches: readonly TextSearchMatch[], replacements: readonly string[]): EditorEditCommand {
+export function createReplaceAllTextMatchesCommand(model: TextModel, matches: readonly TextSearchMatch[], replacements: readonly string[]): ICommand {
 	if (matches.length !== replacements.length) {
 		throw new RangeError("Text search replacements must match the result count");
 	}
 	if (matches.length === 0) throw new RangeError("Replace all requires at least one text search match");
 
 	const edits: TextEdit[] = [];
-	let cumulativeDelta = 0;
-	let caretOffset = 0;
 	let previousEndOffset = -1;
 	for (let index = 0; index < matches.length; index += 1) {
 		const match = matches[index]!;
@@ -56,20 +45,22 @@ export function createReplaceAllTextMatchesCommand(model: TextModel, matches: re
 		const endOffset = model.offsetAt(match.range.getEndPosition());
 		if (startOffset < previousEndOffset) throw new RangeError("Text search matches must not overlap");
 		edits.push(Object.freeze({ range: match.range, text: replacement }));
-		caretOffset = startOffset + cumulativeDelta + replacement.length;
-		cumulativeDelta += replacement.length - (endOffset - startOffset);
 		previousEndOffset = endOffset;
 	}
+	return new ReplaceAllTextMatchesCommand(edits);
+}
 
-	return Object.freeze({
-		edits: Object.freeze(edits),
-		selectionsAfter: Object.freeze([Object.freeze({
-			anchorOffset: caretOffset,
-			activeOffset: caretOffset,
-		})]),
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.Isolated,
-	});
+class ReplaceAllTextMatchesCommand implements ICommand {
+	constructor(private readonly edits: readonly TextEdit[]) {}
+
+	getEditOperations(_model: TextModel, builder: IEditOperationBuilder): void {
+		for (const edit of this.edits) builder.addTrackedEditOperation(edit.range, edit.text);
+	}
+
+	computeCursorState(_model: TextModel, helper: ICursorStateComputerData) {
+		const inverse = helper.getInverseEditOperations();
+		return Selection.fromPositions(inverse.at(-1)!.range.getEndPosition());
+	}
 }
 
 function assertCurrentMatch(model: TextModel, match: TextSearchMatch): void {

@@ -8,6 +8,7 @@ import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegis
 import { TextModel } from '../../../../common/model/textModel.js';
 import { ColorService, type LanguageColorProvider } from '../../common/languageColors.js';
 import { ColorDetector } from '../../browser/colorDetector.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -35,6 +36,7 @@ test.after(() => browserEnvironment.window.close());
 
 test('color picker decorates, edits, and undoes a CSS color as one operation', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeDom = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('const color = #ff000080;');
@@ -48,9 +50,9 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	});
 	editor.layout({ width: 500, height: 160 });
 
-	await waitFor(() => container.querySelector('.stanza-editor-decoration.color-swatch') !== null);
-	const swatch = container.querySelector<HTMLElement>('.stanza-editor-decoration.color-swatch')!;
-	assert.equal(swatch.style.getPropertyValue('--stanza-editor-color-swatch'), '#ff000080');
+	await waitFor(() => container.querySelector('.colorpicker-color-decoration') !== null);
+	const swatch = container.querySelector<HTMLElement>('.colorpicker-color-decoration')!;
+	assert.match(swatch.className, /dyn-rule-/u);
 	swatch.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
 
 	const dialog = container.querySelector<HTMLElement>('.stanza-editor-color-picker')!;
@@ -68,19 +70,27 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	model.undo();
 	assert.equal(model.getText(), 'const color = #ff000080;');
 	assert.deepEqual(errors, []);
-	dom.window.close();
 });
 
 test('color detector returns the tracked range before its debounced provider refresh', async () => {
-	const dom = new JSDOM('<!doctype html><body></body>');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeDom = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('#f00');
+	using editor = new CodeEditorWidget({
+		container,
+		input: { resource: URI.file('C:\\project\\tracked.css'), label: 'tracked.css' },
+		languageId: 'css',
+		model,
+	});
 	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
 	const service = new ColorService(model, providers);
-	using detector = new ColorDetector(model, service, 'css', dom.window as unknown as Window, {
+	using detector = new ColorDetector(editor, model, service, 'css', dom.window as unknown as Window, {
 		enabled: true,
 		limit: 500,
 		defaultColorDecorators: 'auto',
-	}, error => assert.fail(String(error)));
+	}, (error: unknown) => assert.fail(String(error)));
 	detector.refresh();
 	await waitFor(() => detector.totalColorCount === 1);
 
@@ -89,7 +99,6 @@ test('color detector returns the tracked range before its debounced provider ref
 
 	assert.ok(data);
 	assert.equal(model.getTextInRange(data.information.range), '#f00');
-	dom.window.close();
 });
 
 async function waitFor(predicate: () => boolean): Promise<void> {

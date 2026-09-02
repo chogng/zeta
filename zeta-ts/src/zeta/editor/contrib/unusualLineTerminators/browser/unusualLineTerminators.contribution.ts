@@ -2,12 +2,10 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { UnusualLineTerminatorsController } from "./unusualLineTerminatorsController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.unusualLineTerminators", configure: context => {
 	const decorations = context.register(new TextDecorationCollection<void>(context.model));
 	context.provideCapability(TextEditorCapability.unusualLineTerminatorDecorations, decorations);
-	context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.UnusualLineTerminator, () => "Unusual line terminator"));
 }, install: context => {
 	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
 	context.register(new UnusualLineTerminatorsController(context.model, context.getCapability(TextEditorCapability.unusualLineTerminatorDecorations)));

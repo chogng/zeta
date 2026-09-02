@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
-import { EditorCommandHistoryMode } from '../../common/commands/editorEditCommand.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
+import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
+import { EditOperationType } from '../../common/cursorCommon.js';
 import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
@@ -10,6 +11,7 @@ import type { TextModelChange } from '../../common/core/textChange.js';
 import type { IIdentifiedSingleEditOperation } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
 import { createTestCursorsController } from './testCursorConfiguration.js';
+import { ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
@@ -43,6 +45,48 @@ function pushEdits(model: TextModel, edits: IIdentifiedSingleEditOperation[], gr
 	} finally {
 		listener.dispose();
 	}
+	return change;
+}
+
+function captureChange(model: TextModel, operation: () => void): TextModelChange | undefined {
+	let change: TextModelChange | undefined;
+	const listener = model.onDidChangeContent(event => change = event);
+	try {
+		operation();
+	} finally {
+		listener.dispose();
+	}
+	return change;
+}
+
+function typeText(controller: CursorsController, model: TextModel, text: string): TextModelChange | undefined {
+	return captureChange(model, () => controller.type(new ViewModelEventsCollector(), text, 'test'));
+}
+
+function deleteLeft(controller: CursorsController, model: TextModel): TextModelChange | undefined {
+	const [shouldPushUndoStop, commands] = DeleteOperations.deleteLeft(
+		controller.getPrevEditOperationType(),
+		controller.context.cursorConfig,
+		model,
+		controller.getSelections(),
+		[],
+	);
+	if (shouldPushUndoStop) controller.pushUndoStop();
+	const change = captureChange(model, () => controller.executeCommands(commands, 'deleteLeft'));
+	controller.setPrevEditOperationType(EditOperationType.DeletingLeft);
+	return change;
+}
+
+function deleteRight(controller: CursorsController, model: TextModel): TextModelChange | undefined {
+	const [shouldPushUndoStop, commands] = DeleteOperations.deleteRight(
+		controller.getPrevEditOperationType(),
+		controller.context.cursorConfig,
+		model,
+		controller.getSelections(),
+	);
+	if (shouldPushUndoStop) controller.pushUndoStop();
+	const change = captureChange(model, () => controller.executeCommands(commands, 'deleteRight'));
+	controller.setPrevEditOperationType(EditOperationType.DeletingRight);
 	return change;
 }
 
@@ -119,35 +163,13 @@ test("CursorsController coalesces multi-cursor typing", () => {
 		cursors([0, 2]),
 	);
 
-	const first = controller.execute({
-		edits: [
-			{ range: range(0, 0), text: "X" },
-			{ range: range(2, 2), text: "X" },
-		],
-		selectionsAfter: [
-			{ anchorOffset: 1, activeOffset: 1 },
-			{ anchorOffset: 4, activeOffset: 4 },
-		],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
-	const second = controller.execute({
-		edits: [
-			{ range: range(1, 1), text: "Y" },
-			{ range: range(4, 4), text: "Y" },
-		],
-		selectionsAfter: [
-			{ anchorOffset: 2, activeOffset: 2 },
-			{ anchorOffset: 6, activeOffset: 6 },
-		],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
+	const first = typeText(controller, model, "X");
+	const second = typeText(controller, model, "Y");
 
 	const afterTyping = controller.getSelections();
-	controller.undo();
+	controller.context.model.undo();
 	const afterUndo = controller.getSelections();
-	controller.redo();
+	controller.context.model.redo();
 
 	assert.deepEqual({
 		transactionIds: [
@@ -167,27 +189,31 @@ test("CursorsController coalesces multi-cursor typing", () => {
 	});
 });
 
+test("The first space starts a history group that following text joins", () => {
+	using model = new TextModel("");
+	using controller = createTestCursorsController(model, cursors([0]));
+
+	typeText(controller, model, "abc");
+	typeText(controller, model, " ");
+	typeText(controller, model, "def");
+
+	controller.context.model.undo();
+	assert.equal(model.getText(), "abc");
+	controller.context.model.undo();
+	assert.equal(model.getText(), "");
+});
+
 test("Explicit selection changes break typing coalescing", () => {
 	using model = new TextModel("");
 	using controller = createTestCursorsController(
 		model,
 		cursors([0]),
 	);
-	const first = controller.execute({
-		edits: [{ range: range(0, 0), text: "A" }],
-		selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
+	const first = typeText(controller, model, "A");
 	controller.setSelections(cursors([1]));
-	const second = controller.execute({
-		edits: [{ range: range(1, 1), text: "B" }],
-		selectionsAfter: [{ anchorOffset: 2, activeOffset: 2 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
+	const second = typeText(controller, model, "B");
 
-	controller.undo();
+	controller.context.model.undo();
 
 	assert.deepEqual({
 		first: first?.transactionId,
@@ -206,60 +232,35 @@ test("Explicit undo stops break coalescing without adding a step", () => {
 		model,
 		cursors([0]),
 	);
-	const first = controller.execute({
-		edits: [{ range: range(0, 0), text: "A" }],
-		selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
+	const first = typeText(controller, model, "A");
 	controller.pushUndoStop();
 	controller.pushUndoStop();
-	const second = controller.execute({
-		edits: [{ range: range(1, 1), text: "B" }],
-		selectionsAfter: [{ anchorOffset: 2, activeOffset: 2 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
+	const second = typeText(controller, model, "B");
 
 	assert.notEqual(first?.transactionId, second?.transactionId);
-	controller.undo();
+	controller.context.model.undo();
 	assert.equal(model.getText(), "A");
-	controller.undo();
+	controller.context.model.undo();
 	assert.equal(model.getText(), "");
 });
 
-test("Typing coalesces an initial replacement and following overwrite", () => {
+test("Typing coalesces an initial replacement and following insertions", () => {
 	using model = new TextModel("hello");
 	using controller = createTestCursorsController(
 		model,
 		selections([[1, 4]]),
 	);
-	const first = controller.execute({
-		edits: [{ range: range(1, 4), text: "X" }],
-		selectionsAfter: [{ anchorOffset: 2, activeOffset: 2 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
-	const second = controller.execute({
-		edits: [{ range: range(2, 2), text: "Y" }],
-		selectionsAfter: [{ anchorOffset: 3, activeOffset: 3 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
-	const third = controller.execute({
-		edits: [{ range: range(3, 4), text: "Z" }],
-		selectionsAfter: [{ anchorOffset: 4, activeOffset: 4 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
+	const first = typeText(controller, model, "X");
+	const second = typeText(controller, model, "Y");
+	const third = typeText(controller, model, "Z");
 
 	const afterTyping = model.getText();
-	controller.undo();
+	controller.context.model.undo();
 	const afterUndo = {
 		text: model.getText(),
 		selections: controller.getSelections(),
 	};
-	controller.redo();
+	controller.context.model.redo();
 
 	assert.deepEqual({
 		transactionIds: [
@@ -275,13 +276,13 @@ test("Typing coalesces an initial replacement and following overwrite", () => {
 		},
 	}, {
 		transactionIds: [1, 1, 1],
-		afterTyping: "hXYZ",
+		afterTyping: "hXYZo",
 		afterUndo: {
 			text: "hello",
 			selections: selections([[1, 4]]),
 		},
 		afterRedo: {
-			text: "hXYZ",
+			text: "hXYZo",
 			selections: cursors([4]),
 		},
 	});
@@ -293,32 +294,10 @@ test("Typing coalesces replacements independently at multiple selections", () =>
 		model,
 		selections([[0, 2], [4, 6]], 1),
 	);
-	controller.execute({
-		edits: [
-			{ range: range(0, 2), text: "X" },
-			{ range: range(4, 6), text: "X" },
-		],
-		selectionsAfter: [
-			{ anchorOffset: 1, activeOffset: 1 },
-			{ anchorOffset: 4, activeOffset: 4 },
-		],
-		primarySelectionIndex: 1,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
-	controller.execute({
-		edits: [
-			{ range: range(1, 1), text: "Y" },
-			{ range: range(4, 4), text: "Y" },
-		],
-		selectionsAfter: [
-			{ anchorOffset: 2, activeOffset: 2 },
-			{ anchorOffset: 6, activeOffset: 6 },
-		],
-		primarySelectionIndex: 1,
-		historyMode: EditorCommandHistoryMode.CoalesceTyping,
-	});
+	typeText(controller, model, "X");
+	typeText(controller, model, "Y");
 
-	controller.undo();
+	controller.context.model.undo();
 	assert.deepEqual({
 		text: model.getText(),
 		selections: controller.getSelections(),
@@ -326,7 +305,7 @@ test("Typing coalesces replacements independently at multiple selections", () =>
 		text: "ab__CD",
 		selections: selections([[0, 2], [4, 6]], 1),
 	});
-	controller.redo();
+	controller.context.model.redo();
 	assert.deepEqual({
 		text: model.getText(),
 		selections: controller.getSelections(),
@@ -360,23 +339,13 @@ test("Coalesced history obeys the text-unit budget", () => {
 		model,
 		cursors([2]),
 	);
-	const first = controller.execute({
-		edits: [{ range: range(1, 2), text: "" }],
-		selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceBackspace,
-	});
-	const second = controller.execute({
-		edits: [{ range: range(0, 1), text: "" }],
-		selectionsAfter: [{ anchorOffset: 0, activeOffset: 0 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceBackspace,
-	});
+	const first = deleteLeft(controller, model);
+	const second = deleteLeft(controller, model);
 
 	assert.deepEqual({
 		transactionIds: [first?.transactionId, second?.transactionId],
 		text: model.getText(),
-		undo: controller.undo(),
+		undo: controller.context.model.undo(),
 	}, {
 		transactionIds: [1, 1],
 		text: "",
@@ -390,22 +359,12 @@ test("CursorsController coalesces Backspace commands", () => {
 		model,
 		cursors([4]),
 	);
-	const first = controller.execute({
-		edits: [{ range: range(3, 4), text: "" }],
-		selectionsAfter: [{ anchorOffset: 3, activeOffset: 3 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceBackspace,
-	});
-	const second = controller.execute({
-		edits: [{ range: range(2, 3), text: "" }],
-		selectionsAfter: [{ anchorOffset: 2, activeOffset: 2 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceBackspace,
-	});
+	const first = deleteLeft(controller, model);
+	const second = deleteLeft(controller, model);
 
-	controller.undo();
+	controller.context.model.undo();
 	const afterUndo = controller.getSelections();
-	controller.redo();
+	controller.context.model.redo();
 
 	assert.deepEqual({
 		transactionIds: [
@@ -429,22 +388,12 @@ test("CursorsController coalesces forward Delete commands", () => {
 		model,
 		cursors([1]),
 	);
-	const first = controller.execute({
-		edits: [{ range: range(1, 2), text: "" }],
-		selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceDelete,
-	});
-	const second = controller.execute({
-		edits: [{ range: range(1, 2), text: "" }],
-		selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceDelete,
-	});
+	const first = deleteRight(controller, model);
+	const second = deleteRight(controller, model);
 
-	controller.undo();
+	controller.context.model.undo();
 	const afterUndo = model.getText();
-	controller.redo();
+	controller.context.model.redo();
 
 	assert.deepEqual({
 		transactionIds: [
@@ -466,32 +415,10 @@ test("Backspace coalescing adjusts separated multi-cursor offsets", () => {
 		model,
 		cursors([2, 6]),
 	);
-	controller.execute({
-		edits: [
-			{ range: range(1, 2), text: "" },
-			{ range: range(5, 6), text: "" },
-		],
-		selectionsAfter: [
-			{ anchorOffset: 1, activeOffset: 1 },
-			{ anchorOffset: 4, activeOffset: 4 },
-		],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceBackspace,
-	});
-	controller.execute({
-		edits: [
-			{ range: range(0, 1), text: "" },
-			{ range: range(3, 4), text: "" },
-		],
-		selectionsAfter: [
-			{ anchorOffset: 0, activeOffset: 0 },
-			{ anchorOffset: 2, activeOffset: 2 },
-		],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.CoalesceBackspace,
-	});
+	deleteLeft(controller, model);
+	deleteLeft(controller, model);
 
-	controller.undo();
+	controller.context.model.undo();
 
 	assert.deepEqual({
 		text: model.getText(),

@@ -36,7 +36,6 @@ import { type DocumentCollaborationInvite, type DocumentCollaborationMember, typ
 import { type ICodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
 import { type ViewController } from './view/viewController.js';
 import { type View } from './view.js';
-import { type DecorationSource } from './viewParts/decorations/decorations.js';
 import { type EditorLineVisibilitySource } from '../common/viewModel/viewModelLines.js';
 import { type LanguageLexicalContextSource } from '../common/languages/languageLexicalContext.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
@@ -540,7 +539,6 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 	readonly selectionController: CursorsController;
 	readonly resolvedSemanticTokensService: IResolvedSemanticTokensService;
 	readonly provideCapability: <T>(capability: EditorCapability<T>, value: T) => void;
-	readonly addDecorationSource: (source: DecorationSource) => void;
 	readonly setLineProjection: (value: { readonly visibilitySource: EditorLineVisibilitySource }) => void;
 	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
 	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;

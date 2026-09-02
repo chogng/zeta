@@ -1,12 +1,15 @@
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
-import { MutableDisposable, Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, Disposable, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
+import { DynamicCssRules } from '../../../browser/editorDom.js';
 import { type Position } from '../../../common/core/position.js';
-import { type TextDecorationId, TextDecorationCollection, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
+import { TextDecorationCollection, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { ColorService, type ColorData, type DefaultColorDecoratorsEnablement } from '../common/languageColors.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
+
+export const ColorDecorationInjectedTextMarker = Object.freeze({});
 
 export interface ColorDetectorOptions {
 	readonly enabled: boolean;
@@ -17,12 +20,14 @@ export interface ColorDetectorOptions {
 /** Owns provider refresh, version cancellation, tracked ranges, and color-swatch metadata. */
 export class ColorDetector extends Disposable {
 	private readonly decorations: TextDecorationCollection<ColorData>;
+	private readonly dynamicCssRules: DynamicCssRules;
+	private readonly colorDecorationClassRefs: DisposableStore;
 	private readonly refreshTimer = this._register(new MutableDisposable<IDisposable>());
 	private request: AbortController | undefined;
 	private detectedCount = 0;
-	readonly decorationSource: DecorationSource;
 
 	constructor(
+		private readonly editor: ICodeEditor,
 		private readonly model: TextModel,
 		private readonly service: ColorService,
 		private readonly languageId: string,
@@ -33,12 +38,8 @@ export class ColorDetector extends Disposable {
 		super();
 		if (!Number.isSafeInteger(options.limit) || options.limit < 0) throw new RangeError('Color decorator limit must be a non-negative integer');
 		this.decorations = this._register(new TextDecorationCollection<ColorData>(model));
-		this.decorationSource = createStanzaDecorationSource(this.decorations, decoration => ({
-			presentation: DecorationPresentation.ColorSwatch,
-			color: colorToHex8(decoration.metadata.information.color),
-			overviewRuler: false,
-			minimap: false,
-		}), decoration => model.getTextInRange(decoration.range));
+		this.dynamicCssRules = this._register(new DynamicCssRules(editor));
+		this.colorDecorationClassRefs = this._register(new DisposableStore());
 		this._register(model.onDidChangeContent(() => this.scheduleRefresh(250)));
 		this._register(service.onDidChange(() => this.scheduleRefresh(0)));
 		this.scheduleRefresh(0);
@@ -57,18 +58,13 @@ export class ColorDetector extends Disposable {
 		return decoration ? colorDataAtCurrentRange(decoration) : undefined;
 	}
 
-	findByDecorationId(id: string | undefined): ColorData | undefined {
-		if (!id || !/^\d+$/u.test(id)) return undefined;
-		const decoration = this.decorations.get(Number(id) as TextDecorationId);
-		return decoration ? colorDataAtCurrentRange(decoration) : undefined;
-	}
-
 	refresh(): void {
 		this.assertNotDisposed();
 		this.refreshTimer.clear();
 		this.request?.abort();
 		if (!this.options.enabled || this.model.largeFile.tooLargeForTokenization) {
 			this.detectedCount = 0;
+			this.colorDecorationClassRefs.clear();
 			this.decorations.clear();
 			return;
 		}
@@ -76,11 +72,28 @@ export class ColorDetector extends Disposable {
 		void this.service.provideDocumentColors(this.languageId, this.options.defaultColorDecorators, request.signal).then(colors => {
 			if (request.signal.aborted || this.isDisposed) return;
 			this.detectedCount = colors.length;
-			this.decorations.replaceAll(colors.slice(0, this.options.limit).map(data => ({
-				range: data.information.range,
-				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				metadata: data,
-			})));
+			this.colorDecorationClassRefs.clear();
+			this.decorations.replaceAll(colors.slice(0, this.options.limit).map(data => {
+				const ref = this.colorDecorationClassRefs.add(this.dynamicCssRules.createClassNameRef({
+					backgroundColor: colorToCss(data.information.color),
+				}));
+				return {
+					range: data.information.range,
+					stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+					options: {
+						description: 'colorDetector',
+						before: {
+							content: '\u00a0',
+							inlineClassName: `${ref.className} colorpicker-color-decoration`,
+							inlineClassNameAffectsLetterSpacing: true,
+							attachedData: ColorDecorationInjectedTextMarker,
+							widthInEm: 1.2,
+						},
+						hoverMessage: { value: this.model.getTextInRange(data.information.range) },
+					},
+					metadata: data,
+				};
+			}));
 		}, error => {
 			if (!request.signal.aborted) this.onError(error);
 		});
@@ -100,8 +113,8 @@ export class ColorDetector extends Disposable {
 	}
 }
 
-function colorToHex8(color: { readonly red: number; readonly green: number; readonly blue: number; readonly alpha: number }): string {
-	return `#${[color.red, color.green, color.blue, color.alpha].map(channel => Math.round(channel * 255).toString(16).padStart(2, '0')).join('')}`;
+function colorToCss(color: { readonly red: number; readonly green: number; readonly blue: number; readonly alpha: number }): string {
+	return `rgba(${Math.round(color.red * 255)}, ${Math.round(color.green * 255)}, ${Math.round(color.blue * 255)}, ${color.alpha})`;
 }
 
 function colorDataAtCurrentRange(decoration: TextDecorationSnapshot<ColorData>): ColorData {

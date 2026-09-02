@@ -8,8 +8,9 @@ import { type Range } from '../../../common/core/range.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
+import { InlineDecorationType, type InlineDecoration } from '../../../common/viewModel/inlineDecorations.js';
 import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
-import { VisibleRanges } from '../../view/renderingContext.js';
+import { FloatHorizontalRange, VisibleRanges } from '../../view/renderingContext.js';
 
 /** Owns one reusable virtual-line DOM subtree rendered by ViewLines. */
 export class ViewLine {
@@ -71,9 +72,9 @@ export class ViewLine {
 		return false;
 	}
 
-	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[], wrappedTextIndentWidth = 0): boolean {
+	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[], wrappedTextIndentWidth = 0, inlineDecorations: readonly InlineDecoration[] = [], lineNumber = 1): boolean {
 		if (!Number.isFinite(wrappedTextIndentWidth) || wrappedTextIndentWidth < 0) throw new RangeError('View line indent must be finite and non-negative');
-		this._renderedViewLine.render(text, tokens, brackets, wrappedTextIndentWidth);
+		this._renderedViewLine.render(text, tokens, brackets, wrappedTextIndentWidth, inlineDecorations, lineNumber);
 		this._isMaybeInvalid = false;
 		return true;
 	}
@@ -109,7 +110,10 @@ export class ViewLine {
 
 	public getVisibleRangesForRange(_lineNumber: number, startColumn: number, endColumn: number, context: DomReadingContext): VisibleRanges | null {
 		const ranges = this._renderedViewLine.getVisibleRanges(startColumn, endColumn, context);
-		return ranges ? new VisibleRanges(false, ranges) : null;
+		if (ranges && ranges.length > 0) return new VisibleRanges(false, ranges);
+		if (!this._options.useMonospaceOptimizations || this._renderedViewLine.isRightToLeft()) return null;
+		const fastRange = this._renderedViewLine.getMonospaceVisibleRange(startColumn, endColumn, this._options.spaceWidth);
+		return fastRange ? new VisibleRanges(false, [fastRange]) : null;
 	}
 
 	public getColumnOfNodeOffset(spanNode: HTMLElement, offset: number): number {
@@ -144,8 +148,8 @@ class RenderedViewLine {
 		return this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
 	}
 
-	render(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[], wrappedTextIndentWidth: number): void {
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, brackets, this.tabSize);
+	render(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number): void {
+		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, brackets, this.tabSize, inlineDecorations, lineNumber);
 		this.textElement.style.marginInlineStart = `${wrappedTextIndentWidth}px`;
 		this.renderedText = text;
 		this.wrappedTextIndentWidth = wrappedTextIndentWidth;
@@ -162,6 +166,13 @@ class RenderedViewLine {
 		const start = this.characterMapping.getDomPosition(startColumn);
 		const end = this.characterMapping.getDomPosition(endColumn);
 		return RangeUtil.readHorizontalRanges(this.textElement, start.partIndex, start.charIndex, end.partIndex, end.charIndex, context);
+	}
+
+	getMonospaceVisibleRange(startColumn: number, endColumn: number, spaceWidth: number): FloatHorizontalRange | null {
+		if (!this.useMonospaceMeasurement || !this.hasColumn(startColumn) || !this.hasColumn(endColumn) || endColumn < startColumn) return null;
+		const start = this.wrappedTextIndentWidth + this.characterMapping.getHorizontalOffset(startColumn) * spaceWidth;
+		const end = this.wrappedTextIndentWidth + this.characterMapping.getHorizontalOffset(endColumn) * spaceWidth;
+		return new FloatHorizontalRange(start, Math.max(0, end - start));
 	}
 
 	getColumnOfNodeOffset(spanNode: HTMLElement, offset: number): number {
@@ -236,13 +247,16 @@ export function projectStanzaSemanticTokenLine(
 	tokens: readonly ResolvedSemanticToken[],
 	brackets: readonly BracketColorizationSpan[] = [],
 	tabSize = 4,
+	inlineDecorations: readonly InlineDecoration[] = [],
+	lineNumber = 1,
 ): CharacterMapping {
 	validateLineTokens(lineText, tokens);
 	validateBracketColorizations(lineText, brackets);
 	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
 	const ownerDocument = element.ownerDocument;
 	const fragment = createFragment(ownerDocument);
-	const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...brackets.flatMap(bracket => [bracket.startColumn, bracket.endColumn])])].sort((left, right) => left - right);
+	const lineDecorations = inlineDecorations.filter(decoration => decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber);
+	const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...brackets.flatMap(bracket => [bracket.startColumn, bracket.endColumn]), ...lineDecorations.flatMap(decoration => [Math.max(0, decoration.range.startColumn - 1), Math.min(lineText.length, decoration.range.endColumn - 1)])])].sort((left, right) => left - right);
 	const characterMapping = new CharacterMapping(lineText.length + 1, Math.max(1, boundaries.length - 1));
 	let visibleColumn = 0;
 	if (lineText.length === 0) {
@@ -252,14 +266,22 @@ export function projectStanzaSemanticTokenLine(
 	for (let index = 0; index + 1 < boundaries.length; index += 1) {
 		const startColumn = boundaries[index]!;
 		const endColumn = boundaries[index + 1]!;
+		for (const decoration of lineDecorations) {
+			if (decoration.type !== InlineDecorationType.WidthOnly || decoration.range.startColumn - 1 !== startColumn) continue;
+			const injectedElement = h(ownerDocument, 'span');
+			injectedElement.className = decoration.inlineClassName;
+			fragment.append(injectedElement);
+		}
 		const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
 		const bracket = brackets.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
+		const decorations = lineDecorations.filter(decoration => decoration.type !== InlineDecorationType.WidthOnly && decoration.range.startColumn - 1 <= startColumn && decoration.range.endColumn - 1 >= endColumn);
 		const tokenElement = h(ownerDocument, "span");
-		if (token || bracket) tokenElement.className = "stanza-editor-token";
+		if (token || bracket || decorations.length > 0) tokenElement.className = "stanza-editor-token";
 		if (token?.presentation) tokenElement.classList.add(token.presentation);
 		for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
 		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
 		if (bracket) tokenElement.classList.add(`stanza-editor-bracket-level-${bracket.level}`);
+		for (const decoration of decorations) tokenElement.classList.add(...decoration.inlineClassName.split(/\s+/u).filter(Boolean));
 		tokenElement.textContent = lineText.slice(startColumn, endColumn);
 		for (let offset = startColumn; offset < endColumn; offset += 1) {
 			characterMapping.setColumnInfo(offset + 1, index, offset - startColumn, visibleColumn);

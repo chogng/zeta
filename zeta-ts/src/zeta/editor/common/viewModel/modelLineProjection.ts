@@ -1,7 +1,11 @@
 import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { Position } from "../core/position.js";
-import { type TextModel } from "../model/textModel.js";
+import { getLineTokensWithInjections, type TextModel } from "../model/textModel.js";
+import { PositionAffinity } from "../model.js";
+import { type InjectedText, type ModelLineProjectionData } from "../modelLineProjectionData.js";
+import { ViewLineData } from "../viewModel.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
+import { InjectedTextInlineDecorationsComputer } from "./inlineDecorations.js";
 
 /** One fixed-height visual row projected from a logical TextModel line. */
 export interface EditorVisualLine {
@@ -13,6 +17,8 @@ export interface EditorVisualLine {
 	readonly lastForLogicalLine: boolean;
 	/** Pixel width reserved before text on a wrapped continuation row. */
 	readonly wrappedTextIndentWidth?: number;
+	readonly outputLineIndex?: number;
+	readonly projectionData?: ModelLineProjectionData;
 }
 
 /** Immutable source-to-visual-line mapping for one exact TextModel version. */
@@ -78,6 +84,36 @@ export class EditorVisualLineProjection {
 		);
 	}
 
+	static fromLineBreakData(model: TextModel, lineBreakData: readonly (ModelLineProjectionData | null)[], spaceWidth: number): EditorVisualLineProjection {
+		if (lineBreakData.length !== model.lineCount) throw new RangeError("Line-break data must contain one entry for every model line");
+		if (!Number.isFinite(spaceWidth) || spaceWidth <= 0) throw new RangeError("Projection space width must be positive");
+		if (lineBreakData.every(value => value === null)) return EditorVisualLineProjection.identity(model);
+		const lines: EditorVisualLine[] = [];
+		const starts: number[] = [];
+		for (let logicalLineIndex = 0; logicalLineIndex < model.lineCount; logicalLineIndex += 1) {
+			starts.push(lines.length);
+			const data = lineBreakData[logicalLineIndex];
+			if (!data) {
+				lines.push(Object.freeze({ visualLineIndex: lines.length, logicalLineIndex, startColumn: 0, endColumn: model.getLineLength(logicalLineIndex + 1), firstForLogicalLine: true, lastForLogicalLine: true }));
+				continue;
+			}
+			for (let outputLineIndex = 0; outputLineIndex < data.getOutputLineCount(); outputLineIndex += 1) {
+				lines.push(Object.freeze({
+					visualLineIndex: lines.length,
+					logicalLineIndex,
+					startColumn: data.translateToInputOffset(outputLineIndex, data.getMinOutputOffset(outputLineIndex)),
+					endColumn: data.translateToInputOffset(outputLineIndex, data.getMaxOutputOffset(outputLineIndex)),
+					firstForLogicalLine: outputLineIndex === 0,
+					lastForLogicalLine: outputLineIndex + 1 === data.getOutputLineCount(),
+					outputLineIndex,
+					projectionData: data,
+					...(outputLineIndex > 0 && data.wrappedTextIndentLength > 0 ? { wrappedTextIndentWidth: data.wrappedTextIndentLength * spaceWidth } : {}),
+				}));
+			}
+		}
+		return new EditorVisualLineProjection(model.version, model.lineCount, Object.freeze(lines), Object.freeze(starts), Object.freeze(Array.from({ length: model.lineCount }, () => true)), undefined);
+	}
+
 	/**
 	 * Builds a visual projection whose lines may omit folded logical lines.
 	 *
@@ -113,6 +149,8 @@ export class EditorVisualLineProjection {
 				firstForLogicalLine: line.firstForLogicalLine,
 				lastForLogicalLine: line.lastForLogicalLine,
 				...(wrappedTextIndentWidth > 0 ? { wrappedTextIndentWidth } : {}),
+				...(line.outputLineIndex === undefined ? {} : { outputLineIndex: line.outputLineIndex }),
+				...(line.projectionData === undefined ? {} : { projectionData: line.projectionData }),
 			});
 		});
 		for (let logicalLineIndex = 0; logicalLineIndex < logicalLineCount; logicalLineIndex += 1) {
@@ -152,6 +190,72 @@ export class EditorVisualLineProjection {
 		return Number.isSafeInteger(visualLineIndex) && visualLineIndex >= 0 && visualLineIndex < this.logicalLineCount
 			? this.identityLineAt(visualLineIndex)
 			: undefined;
+	}
+
+	getViewLineData(model: TextModel, viewLineNumber: number): ViewLineData {
+		const line = this.lineAt(viewLineNumber - 1);
+		if (!line) throw new RangeError("View line number is outside the projection");
+		const modelLineNumber = line.logicalLineIndex + 1;
+		const data = line.projectionData;
+		if (!data) {
+			const lineTokens = model.tokenization.getLineTokens(modelLineNumber);
+			const content = lineTokens.getLineContent().slice(line.startColumn, line.endColumn);
+			const tokens = lineTokens.sliceAndInflate(line.startColumn, line.endColumn, -line.startColumn);
+			return new ViewLineData(content, !line.lastForLogicalLine, 1, content.length + 1, 0, tokens, null);
+		}
+		const outputLineIndex = line.outputLineIndex!;
+		const injectedTokens = getLineTokensWithInjections(model.tokenization.getLineTokens(modelLineNumber), data.injectionOptions, data.injectionOffsets);
+		const start = outputLineIndex > 0 ? data.breakOffsets[outputLineIndex - 1]! : 0;
+		const end = data.breakOffsets[outputLineIndex]!;
+		const indent = outputLineIndex > 0 ? data.wrappedTextIndentLength : 0;
+		const tokens = injectedTokens.sliceAndInflate(start, end, indent);
+		const content = `${" ".repeat(indent)}${tokens.getLineContent()}`;
+		const firstViewLineNumber = this.firstVisualLineIndex(line.logicalLineIndex) + 1;
+		const inlineDecorations = new InjectedTextInlineDecorationsComputer({
+			getInjectionOptions: () => data.injectionOptions,
+			getInjectionOffsets: () => data.injectionOffsets,
+			getBreakOffsets: () => data.breakOffsets,
+			getWrappedTextIndentLength: () => data.wrappedTextIndentLength,
+			getBaseViewLineNumber: () => firstViewLineNumber,
+		}).getInlineDecorations(modelLineNumber)[outputLineIndex] ?? null;
+		return new ViewLineData(
+			content,
+			outputLineIndex + 1 < data.getOutputLineCount(),
+			data.getMinOutputOffset(outputLineIndex) + 1,
+			content.length + 1,
+			outputLineIndex === 0 ? 0 : data.breakOffsetsVisibleColumn[outputLineIndex - 1] ?? 0,
+			tokens,
+			inlineDecorations,
+		);
+	}
+
+	convertViewPositionToModelPosition(position: Position): Position {
+		const line = this.lineAt(position.lineNumber - 1);
+		if (!line) throw new RangeError("View position is outside the projection");
+		const column = line.projectionData
+			? line.projectionData.translateToInputOffset(line.outputLineIndex!, position.column - 1) + 1
+			: line.startColumn + position.column;
+		return new Position(line.logicalLineIndex + 1, column);
+	}
+
+	convertModelPositionToViewPosition(position: Position, affinity: PositionAffinity = PositionAffinity.None): Position {
+		const visualLineIndex = this.visualLineIndexAt(position);
+		const line = this.lineAt(visualLineIndex)!;
+		if (line.projectionData) {
+			return line.projectionData.translateToOutputPosition(position.column - 1, affinity).toPosition(this.firstVisualLineIndex(line.logicalLineIndex) + 1);
+		}
+		return new Position(visualLineIndex + 1, position.column - line.startColumn);
+	}
+
+	getInjectedTextAt(position: Position): InjectedText | null {
+		const line = this.lineAt(position.lineNumber - 1);
+		return line?.projectionData?.getInjectedText(line.outputLineIndex!, position.column - 1) ?? null;
+	}
+
+	normalizePosition(position: Position, affinity: PositionAffinity): Position {
+		const line = this.lineAt(position.lineNumber - 1);
+		if (!line?.projectionData) return position;
+		return line.projectionData.normalizeOutputPosition(line.outputLineIndex!, position.column - 1, affinity).toPosition(this.firstVisualLineIndex(line.logicalLineIndex) + 1);
 	}
 
 	firstVisualLineIndex(logicalLineIndex: number): number {

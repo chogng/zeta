@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { createToggleBlockCommentCommand } from "../common/blockCommentCommands.js";
+import { BlockCommentCommand } from './blockCommentCommand.js';
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { type View } from "../../../browser/view.js";
@@ -43,14 +43,13 @@ export class BlockCommentController extends Disposable {
 		const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.getSelections()[0]!.getPosition()) ?? this.options.languageId;
 		const comments = this.options.configurations.getLanguageConfiguration(languageId).comments;
 		if (!comments?.blockCommentStartToken || !comments.blockCommentEndToken) return;
-		const blockComment = { open: comments.blockCommentStartToken, close: comments.blockCommentEndToken };
 		stopEvent(event);
-		const command = createToggleBlockCommentCommand(
-			this.viewport.textModel,
-			this.selections.getSelections(),
-			blockComment,
-		);
-		this.executeCommand(ToggleBlockCommentCommandId, () => this.selections.execute(command));
+		const commands = this.selections.getSelections().map(selection => new BlockCommentCommand(selection, true, this.options.configurations));
+		this.executeCommand(ToggleBlockCommentCommandId, () => {
+			this.selections.pushUndoStop();
+			this.selections.executeCommands(commands, ToggleBlockCommentCommandId);
+			this.selections.pushUndoStop();
+		});
 		this.viewport.revealPosition(this.selections.getSelections()[0]!.getPosition());
 	}
 }

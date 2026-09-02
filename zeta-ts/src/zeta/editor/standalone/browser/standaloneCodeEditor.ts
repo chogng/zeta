@@ -13,7 +13,7 @@ export interface IStandaloneCodeEditor extends CodeEditorWidget {
 
 /** Standalone editor owner whose identity is shared by create(), editor events, and the editor registry. */
 export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCodeEditor {
-	constructor(options: CodeEditorWidgetOptions, private readonly model: TextModel, private readonly ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorService: ICodeEditorService) {
+	constructor(options: CodeEditorWidgetOptions, private readonly modelToDispose: TextModel, private readonly ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorService: ICodeEditorService) {
 		super({ ...options, codeEditorService });
 		try {
 			this._register(bindColorTheme(themeService, options.container));
@@ -23,13 +23,11 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		}
 	}
 
-	public getModel(): TextModel { return this.model; }
-
 	protected override disposeCore(): void {
 		try {
 			super.disposeCore();
 		} finally {
-			if (this.ownsModel) this.model.dispose();
+			if (this.ownsModel) this.modelToDispose.dispose();
 		}
 	}
 }

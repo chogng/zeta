@@ -14,12 +14,12 @@ export class ParameterHintsController extends Disposable {
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error)) {
 		super();
-		this.element = h(viewport.element.ownerDocument, "div");
+		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
 		this.element.className = "stanza-editor-parameter-hints";
 		this.element.hidden = true;
 		this.element.setAttribute("role", "dialog");
 		this.element.setAttribute("aria-label", "Parameter hints");
-		viewport.element.append(this.element);
+		viewport.domNode.domNode.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || event.altKey || (!event.ctrlKey && !event.metaKey) || event.key !== " ") return;

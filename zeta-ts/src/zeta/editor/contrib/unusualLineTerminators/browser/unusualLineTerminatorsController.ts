@@ -20,6 +20,15 @@ export class UnusualLineTerminatorsController extends Disposable {
 	private update(): void {
 		if (this.lastVersion === this.model.version) return;
 		this.lastVersion = this.model.version;
-		this.decorations.replaceAll(findUnusualLineTerminators(this.model).map(range => ({ range, stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: undefined })));
+		this.decorations.replaceAll(findUnusualLineTerminators(this.model).map(range => ({
+			range,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: {
+				description: 'unusual-line-terminator',
+				className: 'unusual-line-terminator',
+				hoverMessage: { value: 'Unusual line terminator' },
+			},
+			metadata: undefined,
+		})));
 	}
 }

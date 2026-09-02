@@ -3,9 +3,10 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
-import { Selection } from '../../../../common/core/selection.js';
+import { Selection, type ISelection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
@@ -28,13 +29,16 @@ const { SelectionAnchorController } = await import('../../browser/anchorSelect.j
 
 test.after(() => browserEnvironment.window.close());
 
-test('Selection anchor follows edits and supports set, go to, select, and cancel', () => {
+test('Selection anchor follows edits and supports set, go to, select, and cancel', async () => {
 	const fixture = createFixture('abcd');
 	using resources = fixture.resources;
 	fixture.selections.setSelections(singleCaret(0, 2));
 	fixture.controller.setSelectionAnchor();
+	fixture.viewport.layout({ width: 240, height: 40 });
+	await Promise.resolve();
 	assert.equal(fixture.controller.selectionAnchorSet, true);
 	assert.deepEqual(fixture.decorations.decorations[0]?.range, Range.fromPositions(new Position((0) + 1, (2) + 1)));
+	assert.equal(fixture.model.getAllDecorations()[0]?.options.className, 'selection-anchor');
 
 	fixture.model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'x' }]);
 	fixture.selections.setSelections(singleCaret(0, 0));
@@ -100,7 +104,12 @@ function createFixture(text: string): {
 	const viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, 'textarea') as unknown as HTMLTextAreaElement;
 	container.append(input);
-	const controller = new SelectionAnchorController(input, viewport, selections, decorations);
+	const editor = {
+		getModel: () => model,
+		getPosition: () => selections.getPosition(),
+		setSelection: (selection: ISelection) => selections.setSelections([Selection.liftSelection(selection)]),
+	} as unknown as ICodeEditor;
+	const controller = new SelectionAnchorController(input, editor, viewport, decorations);
 	const resources = new DisposableStore();
 	resources.add(model);
 	resources.add(selections);

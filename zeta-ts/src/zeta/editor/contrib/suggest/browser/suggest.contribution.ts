@@ -1,7 +1,7 @@
 import { registerTextEditorCapabilityContribution, type EditorCapability } from "../../../browser/editorExtensions.js";
 import { type ICodeEditorWidgetOptions } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
-import { isCompletionsEnablementEnabled } from "../../../common/services/ownedCompletionsEnablement.js";
+import { isCompletionsEnabledFromObject } from "../../../common/services/completionsEnablement.js";
 import { LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
 import { SuggestController } from "./suggestController.js";
 
@@ -17,7 +17,7 @@ const suggestState: EditorCapability<SuggestContributionState> = {
 registerTextEditorCapabilityContribution({
 	id: "editor.contrib.suggest",
 	configure: context => {
-		if (context.options.suggestions !== undefined && !isCompletionsEnablementEnabled(context.options.suggestions, context.languageId)) return;
+		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.languageId)) return;
 		const completions = context.register(new LanguageCompletionService(context.model, context.languageFeaturesService.completionProvider, {
 			resource: context.options.input.resource,
 			...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),

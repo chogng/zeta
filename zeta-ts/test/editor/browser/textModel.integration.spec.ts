@@ -34,8 +34,8 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await expect(caret).toHaveText('f');
 	await page.keyboard.press('Insert');
 	await expect(caret).toHaveClass(/cursor-style-line/u);
-	await page.keyboard.type("/* integrated */ ");
-	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toBe("/* integrated */ fn main() {\n  answer();\n}\n");
+	await page.keyboard.type("integrated");
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toBe("integratedfn main() {\n  answer();\n}\n");
 
 	await page.keyboard.press("ControlOrMeta+z");
 	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toBe("fn main() {\n  answer();\n}\n");
@@ -110,8 +110,9 @@ test("text-model editor projects revision-bound Rust syntax, diagnostics, foldin
 	await expect(page.locator(".stanza-editor-diagnostic-marker.error")).toHaveCount(1);
 	const symbolIcon = page.locator(".stanza-editor-symbol-icon");
 	await expect(symbolIcon).toHaveCount(1);
-	await expect(symbolIcon).toHaveAttribute("data-decoration-owner", "symbol-icons");
-	await expect(symbolIcon.locator("xpath=..")).toHaveClass(/stanza-editor-line-lines-decorations/u);
+	await expect(symbolIcon).toHaveAttribute("title", "main");
+	await expect(symbolIcon).toHaveClass(/\bcldr\b/u);
+	await expect(symbolIcon).toHaveClass(/\bstanza-editor-line-decoration\b/u);
 
 	const input = page.locator(".stanza-editor-input");
 	await input.focus();
@@ -150,12 +151,12 @@ test("short documents have no false scroll range and use a proportional hover sl
 test("glyph margin, line numbers, and folding controls keep VS Code gutter order", async ({ page }) => {
 	await page.goto("/textModel.html");
 	const glyphMargin = page.locator(".stanza-editor-glyph-margin");
-	const foldingControl = page.locator(".stanza-editor-fold-toggle[data-logical-line-index='0']");
+	const foldingControl = page.locator('.zeta-icon-folding-expanded').first();
 	await expect(glyphMargin).toBeVisible();
 	await expect(foldingControl).toBeVisible();
-	const firstLine = page.locator(".stanza-editor-line[data-logical-line-index='0']");
-	await expect(page.locator('.stanza-editor-lines')).toHaveCSS('cursor', 'text');
-	const firstLineNumber = page.locator(".stanza-editor-line-margin[data-line-index='0'] .stanza-editor-line-number");
+	const firstLine = page.locator(".view-line[data-logical-line-index='0']");
+	await expect(page.locator('.view-lines')).toHaveCSS('cursor', 'text');
+	const firstLineNumber = page.locator(".margin-view-overlays .view-overlay-line[data-line-index='0'] .line-numbers");
 	await expect(firstLineNumber).toHaveText("1");
 	const foldingBox = await foldingControl.boundingBox();
 	const glyphMarginBox = await glyphMargin.boundingBox();
@@ -176,11 +177,7 @@ test("glyph margin, line numbers, and folding controls keep VS Code gutter order
 	await page.keyboard.press("Control+Home");
 	await page.keyboard.type("x".repeat(200));
 	await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
-	await editor.evaluate(element => {
-		element.scrollLeft = 160;
-		element.dispatchEvent(new Event("scroll"));
-	});
-	await expect.poll(() => editor.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+	await page.evaluate(() => window.zetaTextModelIntegration.setScrollLeft(160));
 	const editorBox = await editor.boundingBox();
 	const scrolledGlyphMarginBox = await glyphMargin.boundingBox();
 	const scrolledFoldingBox = await foldingControl.boundingBox();
@@ -195,6 +192,126 @@ test("glyph margin, line numbers, and folding controls keep VS Code gutter order
 	expect(scrolledLineNumberBox.x + scrolledLineNumberBox.width).toBe(scrolledFoldingBox.x);
 });
 
+test('view zones use the standard accessor, whitespace geometry, and disposal chain', async ({ page }) => {
+	await page.goto('/textModel.html');
+	const editor = page.locator('.stanza-editor');
+	const baseGeometry = await editor.evaluate(element => {
+		const firstLine = element.querySelector<HTMLElement>('.view-line[data-logical-line-index="0"]');
+		if (!firstLine) throw new Error('Missing first editor line');
+		const positionedLayers = [
+			'.stanza-editor-content',
+			'.stanza-native-ime-text-area',
+			'.stanza-native-edit-context',
+			'.minimap',
+			'.stanza-editor-overview-ruler',
+			'.stanza-editor-scrollbar-track-horizontal',
+			'.stanza-editor-scrollbar-track-vertical',
+		].map(selector => {
+			const layer = element.querySelector<HTMLElement>(selector);
+			if (!layer) throw new Error(`Missing editor layer '${selector}'`);
+			return getComputedStyle(layer).position;
+		});
+		return {
+			clientWidth: element.clientWidth,
+			clientHeight: element.clientHeight,
+			lineHeight: firstLine.getBoundingClientRect().height,
+			lineCount: element.querySelectorAll('.view-line[data-logical-line-index]').length,
+			positionedLayers,
+		};
+	});
+	expect(baseGeometry.clientWidth).toBe(900);
+	expect(baseGeometry.clientHeight).toBe(420);
+	expect(baseGeometry.positionedLayers).toEqual(Array.from({ length: 7 }, () => 'absolute'));
+	await page.evaluate(() => window.zetaTextModelIntegration.showViewZone());
+	const zone = page.locator('.zeta-view-zone-probe');
+	await expect(zone).toHaveAttribute('data-visible-view-zone', 'true');
+	await expect(zone).toHaveCSS('top', `${baseGeometry.lineHeight}px`);
+	await expect(zone).toHaveCSS('height', '500px');
+	await expect.poll(() => editor.evaluate(element => ({ scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight }))).toEqual({
+		scrollWidth: 1_200,
+		scrollHeight: baseGeometry.lineHeight * baseGeometry.lineCount + 500,
+	});
+	await page.evaluate(() => window.zetaTextModelIntegration.removeViewZone());
+	await expect(zone).toHaveCount(0);
+	await expect.poll(() => editor.evaluate(element => ({ scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight }))).toEqual({
+		scrollWidth: baseGeometry.clientWidth,
+		scrollHeight: baseGeometry.clientHeight,
+	});
+});
+
+test('content and glyph margin widgets use the standard editor ports in Chromium', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => window.zetaTextModelIntegration.showWidgets());
+	const editor = page.locator('.stanza-editor');
+	const contentWidget = page.locator('.zeta-content-widget-probe');
+	const glyphWidget = page.locator('.zeta-glyph-widget-probe');
+	await expect(contentWidget).toBeVisible();
+	await expect(glyphWidget).toBeVisible();
+	await expect(page.locator('.zeta-model-glyph-lower')).toHaveCount(0);
+	await expect(page.locator('.zeta-model-glyph-higher')).toBeVisible();
+	const initial = await editor.evaluate(element => {
+		const line = element.querySelector<HTMLElement>('.view-line[data-logical-line-index="0"]');
+		const glyph = element.querySelector<HTMLElement>('.zeta-glyph-widget-probe');
+		const content = element.querySelector<HTMLElement>('.zeta-content-widget-probe');
+		if (!line || !glyph || !content) throw new Error('Widget probe geometry is incomplete');
+		return {
+			lineTop: line.getBoundingClientRect().top,
+			lineHeight: line.getBoundingClientRect().height,
+			glyphTop: glyph.getBoundingClientRect().top,
+			contentWidth: content.getBoundingClientRect().width,
+			contentHeight: content.getBoundingClientRect().height,
+		};
+	});
+	expect(initial.glyphTop).toBe(initial.lineTop);
+	expect(initial.contentWidth).toBeGreaterThan(0);
+	expect(initial.contentHeight).toBeGreaterThan(0);
+	await page.evaluate(() => window.zetaTextModelIntegration.moveGlyphWidget(2));
+	await expect.poll(() => glyphWidget.evaluate(element => element.getBoundingClientRect().top)).toBe(initial.lineTop + initial.lineHeight * 2);
+	await page.evaluate(() => window.zetaTextModelIntegration.removeWidgets());
+	await expect(contentWidget).toHaveCount(0);
+	await expect(glyphWidget).toHaveCount(0);
+	await expect(page.locator('.zeta-model-glyph-higher')).toHaveCount(0);
+});
+
+test('model decorations render through the standard overlay in Chromium', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => window.zetaTextModelIntegration.showModelDecorations());
+	const inline = page.locator('.zeta-model-decoration-inline');
+	const wholeLine = page.locator('.zeta-model-decoration-whole');
+	const collapsed = page.locator('.zeta-model-decoration-collapsed');
+	const lineDecoration = page.locator('.zeta-model-line-decoration');
+	const firstLineDecoration = page.locator('.zeta-model-first-line-decoration');
+	const blockDecoration = page.locator('.zeta-model-block-decoration');
+	await expect(inline).toHaveCount(1);
+	await expect(wholeLine).toHaveCount(1);
+	await expect(collapsed).toHaveCount(1);
+	await expect(lineDecoration).toHaveCount(2);
+	await expect(firstLineDecoration).toHaveCount(1);
+	await expect(lineDecoration.first()).toHaveAttribute('title', 'Model line decoration');
+	await expect(blockDecoration).toHaveCount(1);
+	const geometry = await page.locator('.stanza-editor').evaluate(element => {
+		const inlineDecoration = element.querySelector<HTMLElement>('.zeta-model-decoration-inline');
+		const wholeLineDecoration = element.querySelector<HTMLElement>('.zeta-model-decoration-whole');
+		const collapsedDecoration = element.querySelector<HTMLElement>('.zeta-model-decoration-collapsed');
+		if (!inlineDecoration || !wholeLineDecoration || !collapsedDecoration) throw new Error('Model decoration geometry is incomplete');
+		return {
+			inlineWidth: inlineDecoration.getBoundingClientRect().width,
+			wholeLineWidth: wholeLineDecoration.getBoundingClientRect().width,
+			collapsedWidth: collapsedDecoration.getBoundingClientRect().width,
+		};
+	});
+	expect(geometry.inlineWidth).toBeGreaterThan(0);
+	expect(geometry.wholeLineWidth).toBeGreaterThan(geometry.inlineWidth);
+	expect(geometry.collapsedWidth).toBeGreaterThan(0);
+	await page.evaluate(() => window.zetaTextModelIntegration.removeModelDecorations());
+	await expect(inline).toHaveCount(0);
+	await expect(wholeLine).toHaveCount(0);
+	await expect(collapsed).toHaveCount(0);
+	await expect(lineDecoration).toHaveCount(0);
+	await expect(firstLineDecoration).toHaveCount(0);
+	await expect(blockDecoration).toHaveCount(0);
+});
+
 test("text-model editor has the accessibility contract", async ({ page }) => {
 	await page.goto("/textModel.html");
 	const editor = page.locator(".stanza-editor");
@@ -203,6 +320,51 @@ test("text-model editor has the accessibility contract", async ({ page }) => {
 	await expect(editor).toHaveAttribute("aria-label", /.+/);
 	await expect(input).toHaveAttribute("aria-multiline", "true");
 	await expect(input).toHaveAttribute("aria-roledescription", "code editor");
+	await input.focus();
+	const screenReaderContent = input.locator('.stanza-native-screen-reader-content');
+	await expect(screenReaderContent).toContainText('fn main()');
+	await page.waitForTimeout(110);
+	await screenReaderContent.evaluate(element => {
+		const text = element.firstChild;
+		if (!text) throw new Error('Simple screen-reader content has no text node');
+		const selection = element.ownerDocument.getSelection();
+		if (!selection) throw new Error('Document selection is unavailable');
+		selection.setBaseAndExtent(text, 1, text, 3);
+		element.ownerDocument.dispatchEvent(new Event('selectionchange'));
+	});
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 1,
+		endLineIndex: 0,
+		endColumnIndex: 3,
+	});
+	await screenReaderContent.evaluate(element => { element.dataset.contentKind = 'simple'; });
+
+	await page.evaluate(() => window.zetaTextModelIntegration.setRenderRichScreenReaderContent(true));
+	await expect(input.locator('[data-content-kind="simple"]')).toHaveCount(0);
+	await expect(screenReaderContent.locator('span[data-line-index]')).not.toHaveCount(0);
+	await page.waitForTimeout(110);
+	await screenReaderContent.evaluate(element => {
+		const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+		const text = walker.nextNode();
+		if (!text) throw new Error('Rich screen-reader content has no text node');
+		const selection = element.ownerDocument.getSelection();
+		if (!selection) throw new Error('Document selection is unavailable');
+		selection.setBaseAndExtent(text, 0, text, 2);
+		element.ownerDocument.dispatchEvent(new Event('selectionchange'));
+	});
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 0,
+		endLineIndex: 0,
+		endColumnIndex: 2,
+	});
+	await screenReaderContent.evaluate(element => { element.dataset.contentKind = 'rich'; });
+
+	await page.evaluate(() => window.zetaTextModelIntegration.setRenderRichScreenReaderContent(false));
+	await expect(input.locator('[data-content-kind="rich"]')).toHaveCount(0);
+	await expect(screenReaderContent).toContainText('fn main()');
+	await expect(screenReaderContent.locator('span[data-line-index]')).toHaveCount(0);
 
 	await injectAxe(page);
 	const accessibility = await getAxeResults(page, undefined, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] } });

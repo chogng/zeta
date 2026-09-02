@@ -5,7 +5,6 @@ import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
-import { createStanzaDecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
@@ -17,7 +16,7 @@ import { TextDecorationCollection } from '../../../common/model/decorationCollec
 import { type TextModel } from '../../../common/model/textModel.js';
 
 import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { resolveDocumentHighlightPresentation } from './highlightDecorations.js';
+import { getDocumentHighlightDecorationClassName } from './highlightDecorations.js';
 import { TextualMultiDocumentHighlightFeature } from './textualHighlightProvider.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
@@ -222,6 +221,10 @@ class WordHighlighter extends Disposable {
 		this.decorations.replaceAll(normalized.map(highlight => ({
 			range: highlight.range,
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: {
+				description: 'word-highlight',
+				className: getDocumentHighlightDecorationClassName(highlight.kind),
+			},
 			metadata: highlight.kind,
 		})));
 	}
@@ -422,7 +425,6 @@ registerTextEditorCapabilityContribution({
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
 		context.provideCapability(occurrenceDecorations, decorations);
-		context.addDecorationSource(createStanzaDecorationSource(decorations, decoration => resolveDocumentHighlightPresentation(decoration.metadata)));
 		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService));
 	},
 	install: context => {

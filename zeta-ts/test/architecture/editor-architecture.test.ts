@@ -538,7 +538,8 @@ test("ViewLine owns text rows while overlays own their row DOM", () => {
 	const viewCursors = readFileSync(join(editorRoot, "browser/viewParts/viewCursors/viewCursors.ts"), "utf8");
 	assert.match(viewCursors, /new ViewPartRows/u);
 	const symbolIcons = readFileSync(join(editorRoot, "contrib/symbolIcons/browser/symbolIcons.ts"), "utf8");
-	assert.match(symbolIcons, /DecorationPresentation\.LineDecoration/u);
+	assert.match(symbolIcons, /linesDecorationsClassName/u);
+	assert.doesNotMatch(symbolIcons, /DecorationPresentation|DecorationSource/u);
 	assert.doesNotMatch(symbolIcons, /querySelector|\bh\(/u);
 });
 

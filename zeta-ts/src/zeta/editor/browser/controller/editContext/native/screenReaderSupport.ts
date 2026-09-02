@@ -1,35 +1,32 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
+import { Disposable, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type Event } from "../../../../../base/common/event.js";
-import { IME } from "../../../../../base/common/ime.js";
 import { type IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
-import { type CursorsController } from "../../../../common/cursor/cursor.js";
-import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
-import { type TextModel } from "../../../../common/model/textModel.js";
 import { type View } from "../../../view.js";
 import { RichScreenReaderContent } from "./screenReaderContentRich.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
-import { createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, screenReaderLineOffsetAtModelOffset, type IScreenReaderContent } from "./screenReaderUtils.js";
+import { type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
 import * as viewEvents from '../../../../common/viewEvents.js';
+import { EditorOption } from '../../../../common/config/editorOptions.js';
+import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
+import { type EditContextViewController } from '../editContext.js';
 
 export interface NativeScreenReaderSupportOptions {
-	readonly element: HTMLElement;
-	readonly model: TextModel;
+	readonly domNode: FastDomNode<HTMLElement>;
+	readonly context: ViewContext;
 	readonly viewport: View;
-	readonly selectionController: CursorsController;
+	readonly viewController: EditContextViewController;
 	/** Logical focus events from NativeEditContext; they hide the IME bridge hop. */
 	readonly onDidFocus?: Event<void>;
 	readonly onDidBlur?: Event<void>;
 	readonly accessibilityService?: IAccessibilityService;
-	readonly renderRichContent?: boolean;
-	readonly accessibilityPageSize?: number;
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly bracketColorizationSource?: BracketColorizationSource;
-	readonly isComposing?: () => boolean;
 }
 
 /**
@@ -40,34 +37,32 @@ export interface NativeScreenReaderSupportOptions {
  * is on and keeps that mirror aligned with the viewport's active cursor.
  */
 export class ScreenReaderSupport extends Disposable {
-	private readonly content: IScreenReaderContent;
+	private readonly content = this._register(new MutableDisposable<NativeScreenReaderContent>());
+	private rendersRichContent: boolean | undefined;
 	private focused = false;
 	private syncScheduled = false;
-	private previousSelectionChangeEventTime = 0;
 
 	constructor(private readonly options: NativeScreenReaderSupportOptions) {
 		super();
+		if (options.context.viewModel.model !== options.viewport.textModel) {
+			this.dispose();
+			throw new TypeError('Native screen-reader content, view model, and viewport must share one text model');
+		}
 		this._register(toDisposable(() => this.resetNativeScreenReaderLayout()));
-		this.content = this._register(options.renderRichContent
-			? new RichScreenReaderContent(options.element, {
-				model: options.model,
-				semanticTokenSource: options.semanticTokenSource,
-				bracketColorizationSource: options.bracketColorizationSource,
-			})
-			: new SimpleScreenReaderContent(options.element));
+		this.refreshContent();
+		const element = options.domNode.domNode;
 		if (options.onDidFocus) {
 			this._register(options.onDidFocus(() => this.handleFocusChange(true)));
 		} else {
-			this._register(addDisposableListener(options.element, "focus", () => this.handleFocusChange(true)));
+			this._register(addDisposableListener(element, "focus", () => this.handleFocusChange(true)));
 		}
 		if (options.onDidBlur) {
 			this._register(options.onDidBlur(() => this.handleFocusChange(false)));
 		} else {
-			this._register(addDisposableListener(options.element, "blur", () => this.handleFocusChange(false)));
+			this._register(addDisposableListener(element, "blur", () => this.handleFocusChange(false)));
 		}
-		this._register(addDisposableListener(options.element, "cut", () => this.onWillCut()));
-		this._register(addDisposableListener(options.element, "paste", () => this.onWillPaste()));
-		this._register(addDisposableListener(options.element.ownerDocument, "selectionchange", () => this.acceptDomSelection()));
+		this._register(addDisposableListener(element, "cut", () => this.onWillCut()));
+		this._register(addDisposableListener(element, "paste", () => this.onWillPaste()));
 		this._register(options.viewport.onDidChangeLayout(() => this.layoutContent()));
 		if (options.semanticTokenSource) {
 			this._register(options.semanticTokenSource.onDidChange(() => this.scheduleSynchronization()));
@@ -78,69 +73,43 @@ export class ScreenReaderSupport extends Disposable {
 		this.scheduleSynchronization();
 	}
 
-	get isEnabled(): boolean {
+	private isEnabled(): boolean {
 		return this.options.accessibilityService?.isScreenReaderOptimized() ?? false;
 	}
 
 	onWillCut(): void {
-		this.content.setIgnoreSelectionChange();
+		this.content.value?.onWillCut();
 	}
 
 	onWillPaste(): void {
-		this.content.setIgnoreSelectionChange();
+		this.content.value?.onWillPaste();
 	}
 
 	setAriaOptions(options: IEditorAriaOptions): void {
+		const element = this.options.domNode.domNode;
 		if (options.activeDescendant) {
-			this.options.element.setAttribute('aria-haspopup', 'true');
-			this.options.element.setAttribute('aria-autocomplete', 'list');
-			this.options.element.setAttribute('aria-activedescendant', options.activeDescendant);
+			element.setAttribute('aria-haspopup', 'true');
+			element.setAttribute('aria-autocomplete', 'list');
+			element.setAttribute('aria-activedescendant', options.activeDescendant);
 		} else {
-			this.options.element.setAttribute('aria-haspopup', 'false');
-			this.options.element.setAttribute('aria-autocomplete', 'both');
-			this.options.element.removeAttribute('aria-activedescendant');
+			element.setAttribute('aria-haspopup', 'false');
+			element.setAttribute('aria-autocomplete', 'both');
+			element.removeAttribute('aria-activedescendant');
 		}
-		if (options.role) this.options.element.setAttribute('role', options.role);
+		if (options.role) element.setAttribute('role', options.role);
 	}
 
-	writeScreenReaderContent(_reason?: string): void {
+	writeScreenReaderContent(): void {
 		this.synchronize();
 		this.layoutContent();
 	}
 
 	onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): void {
+		this.refreshContent();
 		this.scheduleSynchronization();
 	}
 
 	onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): void {
-		this.scheduleSynchronization();
-	}
-
-	onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): void {
-		this.scheduleSynchronization();
-	}
-
-	onFlushed(_event: viewEvents.ViewFlushedEvent): void {
-		this.scheduleSynchronization();
-	}
-
-	onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): void {
-		this.scheduleSynchronization();
-	}
-
-	onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): void {
-		this.scheduleSynchronization();
-	}
-
-	onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): void {
-		this.scheduleSynchronization();
-	}
-
-	onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): void {
-		this.scheduleSynchronization();
-	}
-
-	onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): void {
 		this.scheduleSynchronization();
 	}
 
@@ -152,12 +121,12 @@ export class ScreenReaderSupport extends Disposable {
 		this.layoutContent();
 	}
 
-	private handleFocusChange(focused: boolean): void {
+	handleFocusChange(focused: boolean): void {
 		if (this.focused === focused) return;
 		this.focused = focused;
+		this.content.value?.onFocusChange(focused);
 		if (focused) this.scheduleSynchronization();
 		else {
-			this.content.clear();
 			this.resetNativeScreenReaderLayout();
 		}
 	}
@@ -173,38 +142,38 @@ export class ScreenReaderSupport extends Disposable {
 	}
 
 	private synchronize(): void {
+		const content = this.content.value;
+		if (!content) return;
 		if (
 			this.isDisposed ||
-			!this.isEnabled ||
+			!this.isEnabled() ||
 			!this.focused ||
-			this.options.isComposing?.()
+			this.options.viewController.compositionController.composing
 		) {
-			this.content.clear();
+			content.clear();
 			this.resetNativeScreenReaderLayout();
 			return;
 		}
-		this.content.sync(createScreenReaderContentState(
-			this.options.model,
-			this.options.selectionController.getSelections()[0]!,
-			{ pageSize: this.options.accessibilityPageSize ?? DEFAULT_SCREEN_READER_PAGE_SIZE },
-		));
+		content.updateScreenReaderContent(this.options.context.viewModel.getSelections()[0]!);
 	}
 
 	private layoutContent(): void {
-		const state = this.content.getState();
+		const content = this.content.value;
+		if (!content) return;
+		const state = content.getState();
 		if (
 			!state ||
 			this.isDisposed ||
-			!this.isEnabled ||
+			!this.isEnabled() ||
 			!this.focused ||
-			this.options.isComposing?.()
+			this.options.viewController.compositionController.composing
 		) {
 			this.resetNativeScreenReaderLayout();
 			return;
 		}
 
 		const viewportLayout = this.options.viewport.currentLayout;
-		const selection = this.options.selectionController.getSelections()[0]!;
+		const selection = this.options.context.viewModel.getSelections()[0]!;
 		const position = this.options.viewport.getPositionContentCoordinates(selection.getPosition());
 		const scrollPosition = viewportLayout.scrollPosition;
 		const viewportWidth = viewportLayout.viewportSize.width;
@@ -218,45 +187,59 @@ export class ScreenReaderSupport extends Disposable {
 		const desiredLeft = cursorVisible ? textLeft - scrollPosition.left : 0;
 		const desiredTop = cursorVisible ? position.top - scrollPosition.top : 0;
 		const lineHeight = Math.max(1, position.height);
-		const rootLeft = readInlinePixel(this.options.element.style.left);
-		const rootTop = readInlinePixel(this.options.element.style.top);
-		this.options.element.classList.add("stanza-native-screen-reader-content-active");
-		this.content.layout({
+		const element = this.options.domNode.domNode;
+		const rootLeft = readInlinePixel(element.style.left);
+		const rootTop = readInlinePixel(element.style.top);
+		element.classList.add("stanza-native-screen-reader-content-active");
+		content.layout({
 			left: desiredLeft - rootLeft,
 			top: desiredTop - rootTop,
 			width: Math.max(1, viewportWidth),
 			height: lineHeight,
 			lineHeight,
-			scrollTop: screenReaderLineOffsetAtModelOffset(state, this.options.model.offsetAt(selection.getPosition())) * lineHeight,
 		});
+		content.updateScrollTop(selection);
 	}
 
 	private resetNativeScreenReaderLayout(): void {
-		this.options.element.classList.remove("stanza-native-screen-reader-content-active");
+		this.options.domNode.domNode.classList.remove("stanza-native-screen-reader-content-active");
 	}
 
-	private acceptDomSelection(): void {
-		if (
-			this.isDisposed ||
-			!this.isEnabled ||
-			!this.focused ||
-			this.options.isComposing?.() ||
-			this.content.shouldIgnoreSelectionChange()
-		) return;
-		if (!IME.enabled) return;
-		const now = Date.now();
-		if (now - this.previousSelectionChangeEventTime < 5) return;
-		this.previousSelectionChangeEventTime = now;
-		const domSelection = this.content.readSelection();
-		if (!domSelection) return;
-		const model = this.options.model;
-		const anchor = model.positionAt(domSelection.anchorOffset);
-		const active = model.positionAt(domSelection.activeOffset);
-		const current = this.options.selectionController.getSelections()[0]!;
-		if (current.getSelectionStart().equals(anchor) && current.getPosition().equals(active)) return;
-		this.options.selectionController.setSelections([Selection.fromPositions(anchor, active)]);
-		this.options.viewport.revealPosition(active);
+	private refreshContent(): void {
+		const configuration = this.options.context.configuration;
+		const renderRichContent = configuration.options.get(EditorOption.renderRichScreenReaderContent);
+		if (this.rendersRichContent === renderRichContent) {
+			this.content.value?.onConfigurationChanged(configuration.options);
+			return;
+		}
+		const content = renderRichContent
+			? new RichScreenReaderContent(
+				this.options.domNode,
+				this.options.context,
+				this.options.viewController,
+				this.options.accessibilityService,
+				{
+					semanticTokenSource: this.options.semanticTokenSource,
+					bracketColorizationSource: this.options.bracketColorizationSource,
+				},
+			)
+			: new SimpleScreenReaderContent(
+				this.options.domNode,
+				this.options.context,
+				this.options.viewController,
+				this.options.accessibilityService,
+			);
+		content.onConfigurationChanged(configuration.options);
+		content.onFocusChange(this.focused);
+		this.content.value = content;
+		this.rendersRichContent = renderRichContent;
 	}
+}
+
+interface NativeScreenReaderContent extends IScreenReaderContent {
+	getState(): ScreenReaderContentState | undefined;
+	clear(): void;
+	layout(layout: ScreenReaderContentLayout): void;
 }
 
 function readInlinePixel(value: string): number {

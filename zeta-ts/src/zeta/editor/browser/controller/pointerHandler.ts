@@ -1,40 +1,40 @@
-import { addDisposableListener, getWindow } from '../../../base/browser/dom.js';
+import { getWindow } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { EditorMouseEvent, EditorMouseEventFactory, EditorPointerEventFactory, GlobalEditorPointerMoveMonitor } from '../editorDom.js';
 
 export interface PointerTrackingHandlers {
-	readonly onMove: (event: PointerEvent) => void;
-	readonly onUp: (event: PointerEvent) => void;
-	readonly onCancel: (event: PointerEvent) => void;
+	readonly onMove: (event: EditorMouseEvent) => void;
+	readonly onUp: (event: EditorMouseEvent) => void;
+	readonly onCancel: (event: EditorMouseEvent) => void;
 	readonly onBlur: () => void;
+}
+
+export interface EditorPointerDownEvent {
+	readonly event: EditorMouseEvent;
+	readonly pointerId: number;
 }
 
 /** Owns browser pointer dispatch, capture, and one-window drag sessions. */
 export class PointerHandler extends Disposable {
-	private readonly pointerDownEmitter = this._register(new Emitter<PointerEvent>());
-	private readonly contextMenuEmitter = this._register(new Emitter<MouseEvent>());
+	private readonly pointerDownEmitter = this._register(new Emitter<EditorPointerDownEvent>());
+	private readonly contextMenuEmitter = this._register(new Emitter<EditorMouseEvent>());
 
-	readonly onDidPointerDown: Event<PointerEvent> = this.pointerDownEmitter.event;
-	readonly onDidContextMenu: Event<MouseEvent> = this.contextMenuEmitter.event;
+	readonly onDidPointerDown: Event<EditorPointerDownEvent> = this.pointerDownEmitter.event;
+	readonly onDidContextMenu: Event<EditorMouseEvent> = this.contextMenuEmitter.event;
 	readonly targetWindow: Window;
 
 	constructor(readonly element: HTMLElement) {
 		super();
 		this.targetWindow = getWindow(element);
-		this._register(addDisposableListener<PointerEvent>(
-			element,
-			'pointerdown',
-			event => this.pointerDownEmitter.fire(event),
-		));
-		this._register(addDisposableListener<MouseEvent>(
-			element,
-			'contextmenu',
-			event => this.contextMenuEmitter.fire(event),
-		));
+		const pointerEvents = new EditorPointerEventFactory(element);
+		const mouseEvents = new EditorMouseEventFactory(element);
+		this._register(pointerEvents.onPointerDown(element, (event, pointerId) => this.pointerDownEmitter.fire({ event, pointerId })));
+		this._register(mouseEvents.onContextMenu(element, event => this.contextMenuEmitter.fire(event)));
 	}
 
-	startTracking(pointerId: number | undefined, handlers: PointerTrackingHandlers): IDisposable {
-		return new PointerTrackingSession(this.targetWindow, handlers);
+	startTracking(pointerId: number, initialButtons: number, handlers: PointerTrackingHandlers): IDisposable {
+		return new PointerTrackingSession(this.element, pointerId, initialButtons, handlers);
 	}
 
 	capturePointer(pointerId: number | undefined): void {
@@ -59,13 +59,21 @@ export class PointerHandler extends Disposable {
 
 class PointerTrackingSession extends Disposable {
 	constructor(
-		targetWindow: Window,
+		element: HTMLElement,
+		pointerId: number,
+		initialButtons: number,
 		handlers: PointerTrackingHandlers,
 	) {
 		super();
-		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointermove', handlers.onMove));
-		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointerup', handlers.onUp));
-		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', handlers.onCancel));
-		this._register(addDisposableListener(targetWindow, 'blur', handlers.onBlur, { once: true }));
+		const monitor = this._register(new GlobalEditorPointerMoveMonitor(element));
+		monitor.startMonitoring(element, pointerId, initialButtons, handlers.onMove, browserEvent => {
+			if (!browserEvent || browserEvent.type === 'keydown') {
+				handlers.onBlur();
+				return;
+			}
+			const event = new EditorMouseEvent(browserEvent as PointerEvent, true, element);
+			if (browserEvent.type === 'pointerup') handlers.onUp(event);
+			else handlers.onCancel(event);
+		});
 	}
 }

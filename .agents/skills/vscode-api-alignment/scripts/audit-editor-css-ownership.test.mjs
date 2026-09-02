@@ -60,6 +60,18 @@ test('checks added diff lines without treating removed upstream branding as new 
 	assert.deepEqual(findChangedPaths(diff), ['zeta-ts/src/zeta/editor/editor.css']);
 });
 
+test('ignores upstream branding mentioned only in Editor documentation', () => {
+	const diff = [
+		'diff --git a/zeta-ts/src/zeta/editor/api-alignment-status.md b/zeta-ts/src/zeta/editor/api-alignment-status.md',
+		'--- a/zeta-ts/src/zeta/editor/api-alignment-status.md',
+		'+++ b/zeta-ts/src/zeta/editor/api-alignment-status.md',
+		'@@ -1,0 +2 @@',
+		'+Do not add monaco-editor or --vscode-editor-foreground to Zeta source.',
+	].join('\n');
+
+	assert.deepEqual(findAddedUpstreamBrandLines(diff), []);
+});
+
 test('blocks a changed CSS file whose only substantive difference is Zeta branding', () => {
 	const fixtureRoot = mkdtempSync(join(tmpdir(), 'zeta-css-ownership-'));
 	try {

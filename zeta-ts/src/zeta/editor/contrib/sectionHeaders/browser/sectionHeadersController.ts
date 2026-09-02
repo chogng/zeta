@@ -31,7 +31,7 @@ export class SectionHeadersController extends Disposable {
 			foldingRules: configuration.foldingRules,
 		}).filter(header => !header.shouldBeInComments || this.lexicalContext.getTokenTypeAt(new Position(header.range.startLineNumber, header.range.startColumn)) === "comment")
 			.map(header => [header.range.startLineNumber - 1, header]));
-		for (const line of [...this.viewport.element.querySelectorAll<HTMLElement>(".view-line")]) {
+		for (const line of [...this.viewport.domNode.domNode.querySelectorAll<HTMLElement>(".view-line")]) {
 			const logicalLineIndex = Number(line.dataset.logicalLineIndex);
 			const header = headers.get(logicalLineIndex);
 			line.classList.toggle("section-header", Boolean(header));

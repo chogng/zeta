@@ -28,7 +28,16 @@ export class UnicodeHighlighterController extends Disposable {
 		try {
 			const highlights = await this.editorWorker.computeUnicodeHighlights();
 			if (!highlights || this.isDisposed || this.model.version !== version) return;
-			this.decorations.replaceAll(highlights.map(highlight => ({ range: highlight.range, stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: highlight })));
+			this.decorations.replaceAll(highlights.map(highlight => ({
+				range: highlight.range,
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				options: {
+					description: 'unicode-highlight',
+					className: 'unicode-highlight',
+					hoverMessage: { value: `${highlight.kind} Unicode character U+${highlight.character.codePointAt(0)!.toString(16).toUpperCase()}` },
+				},
+				metadata: highlight,
+			})));
 		} catch (error) {
 			if (!this.isDisposed && this.model.version === version) {
 				this.lastVersion = -1;

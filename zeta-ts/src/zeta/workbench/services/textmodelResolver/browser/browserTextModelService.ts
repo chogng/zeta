@@ -74,7 +74,16 @@ export class BrowserTextModelService implements ITextModelResourceService {
 		this.ensureAlive();
 		const concurrent = this.entries.get(key);
 		if (concurrent) return this.reference(key, concurrent);
+		const languageSelection = this.options.languageService
+			? input.languageId !== undefined
+				? this.options.languageService.createById(input.languageId)
+				: input.contentType !== undefined
+					? this.options.languageService.createByMimeType(input.contentType)
+					: this.options.languageService.createByFilepathOrFirstLine(input.resource, firstLine(content.text))
+			: undefined;
 		const model = new TextModel(content.text, {
+			resource: input.resource,
+			languageId: languageSelection?.languageId ?? input.languageId,
 			maintenance: this.options.maintenance,
 			...(this.options.languageService && this.options.languageFeaturesService ? {
 					tokenization: {
@@ -86,6 +95,7 @@ export class BrowserTextModelService implements ITextModelResourceService {
 					},
 			} : {}),
 		});
+		if (languageSelection) model.setLanguage(languageSelection);
 		this.undoRedoParticipant.restore(input.resource, model);
 		const dirtyEmitter = new Emitter<void>();
 		const externalChangeEmitter = new Emitter<void>();
@@ -253,6 +263,11 @@ export class BrowserTextModelService implements ITextModelResourceService {
 	private ensureAlive(): void {
 		if (this.disposed) throw new ReferenceError("BrowserTextModelService is already disposed");
 	}
+}
+
+function firstLine(text: string): string {
+	const lineBreak = text.search(/[\r\n]/u);
+	return lineBreak < 0 ? text : text.slice(0, lineBreak);
 }
 
 /** Returns a browser model service with the renderer's idle maintenance policy. */

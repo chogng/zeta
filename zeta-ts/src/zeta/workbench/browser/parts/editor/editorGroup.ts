@@ -32,8 +32,6 @@ import { EditorTitleControl, type EditorTitleActions } from "./editorTitleContro
 import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import type { OwnedDecorationSource } from "../../../../editor/browser/viewParts/decorations/decorations.js";
-import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService, IScopedContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
@@ -105,7 +103,6 @@ export interface EditorGroupOptions {
 	readonly onWillCloseEditor?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
-	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 	readonly titleActions?: EditorTitleActions;
 	readonly welcome?: EditorWelcomeOptions;
 	readonly welcomeVisible?: boolean;
@@ -156,7 +153,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	private readonly onWillCloseEditor: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
-	private readonly createDecorationSources: ((resource: URI, model: TextModel) => readonly OwnedDecorationSource[]) | undefined;
 	private readonly titleActions: EditorTitleActions | undefined;
 	private readonly titleControl: EditorTitleControl;
 	private readonly welcome: EditorWelcome;
@@ -199,7 +195,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		this.onWillCloseEditor = options.onWillCloseEditor;
 		this.onOpenLocation = options.onOpenLocation;
 		this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
-		this.createDecorationSources = options.createDecorationSources;
 		this.titleActions = options.titleActions;
 		this.domNode = h(ownerDocument, "section");
 		this.domNode.className = "zeta-editor-group";
@@ -405,7 +400,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				workingCopyService: this.workingCopyService,
 				onOpenLocation: this.onOpenLocation,
 				onApplyWorkspaceEdit: this.onApplyWorkspaceEdit,
-				createDecorationSources: this.createDecorationSources,
 				...(this.onSave ? {
 					onSave: () => {
 						if (!createdPane) return Promise.reject(new Error("Editor save is unavailable"));

@@ -17,7 +17,7 @@ export class GotoSymbolController extends Disposable {
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
 		super();
-		const ownerDocument = viewport.element.ownerDocument;
+		const ownerDocument = viewport.domNode.domNode.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "stanza-editor-goto-symbol";
 		this.element.hidden = true;
@@ -32,7 +32,7 @@ export class GotoSymbolController extends Disposable {
 		this.list.className = "stanza-editor-goto-symbol-list";
 		this.list.setAttribute("role", "listbox");
 		this.element.append(this.queryInput, this.list);
-		viewport.element.append(this.element);
+		viewport.domNode.domNode.append(this.element);
 		this._register(toDisposable(() => {
 			this.request?.abort();
 			this.element.remove();

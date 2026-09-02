@@ -34,16 +34,16 @@ export class CompletionWidget extends Disposable {
 			throw error;
 		}
 		this.widgetId = `stanza-completion-${nextCompletionWidgetId++}`;
-		const ownerDocument = viewport.element.ownerDocument;
+		const ownerDocument = viewport.domNode.domNode.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.id = this.widgetId;
 		this.element.className = "stanza-editor-completion";
 		this.element.setAttribute("role", "listbox");
 		this.element.hidden = true;
-		(container ?? viewport.element).append(this.element);
+		(container ?? viewport.domNode.domNode).append(this.element);
 		this._register(toDisposable(() => {
 			this.element.remove();
-			this.view.setAriaOptions({ activeDescendant: undefined });
+			this.viewport.setAriaOptions({ activeDescendant: undefined });
 		}));
 		this._register(session.onDidChange(() => this.render()));
 		this._register(viewport.onDidChangeLayout(() => this.position()));
@@ -104,7 +104,7 @@ export class CompletionWidget extends Disposable {
 	private accept(): void {
 		if (!this.session.acceptSelected()) return;
 		this.viewport.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
-		this.view.focus();
+		this.viewport.focus();
 	}
 
 	private render(): void {
@@ -113,7 +113,7 @@ export class CompletionWidget extends Disposable {
 			reset(this.element);
 			this.element.classList.remove("visible");
 			this.element.hidden = true;
-			this.view.setAriaOptions({ activeDescendant: undefined });
+			this.viewport.setAriaOptions({ activeDescendant: undefined });
 			return;
 		}
 		const ownerDocument = this.element.ownerDocument;
@@ -153,7 +153,7 @@ export class CompletionWidget extends Disposable {
 		reset(this.element, fragment);
 		this.element.hidden = false;
 		this.element.classList.add("visible");
-		this.view.setAriaOptions({ activeDescendant: `${this.widgetId}-option-${state.selectedIndex}` });
+		this.viewport.setAriaOptions({ activeDescendant: `${this.widgetId}-option-${state.selectedIndex}` });
 		this.position(state);
 	}
 

@@ -45,7 +45,8 @@ test("Remove-brackets shortcut mutates through an isolated Stanza transaction", 
 	input.dispatchEvent(remove);
 	assert.equal(remove.defaultPrevented, true);
 	assert.equal(model.getText(), "value");
-	selections.undo();
+	assert.deepEqual(selections.getSelections(), [Selection.fromPositions(new Position(1, 1))]);
+	selections.context.model.undo();
 	assert.equal(model.getText(), "(value)");
 
 	dom.window.close();

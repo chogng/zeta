@@ -67,6 +67,13 @@ export class MenuId {
 	static readonly TitleBar = new MenuId("TitleBar");
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
 	static readonly EditorTitle = new MenuId("EditorTitle");
+	static readonly EditorContext = new MenuId("EditorContext");
+	static readonly SimpleEditorContext = new MenuId("SimpleEditorContext");
+	static readonly EditorContextCopy = new MenuId("EditorContextCopy");
+	static readonly EditorContextShare = new MenuId("EditorContextShare");
+	static readonly ExplorerContext = new MenuId("ExplorerContext");
+	static readonly ExplorerContextShare = new MenuId("ExplorerContextShare");
+	static readonly MenubarCopy = new MenuId("MenubarCopy");
 	static readonly MultiDiffEditorFileToolbar = new MenuId("MultiDiffEditorFileToolbar");
 	static readonly ChatTitle = new MenuId("ChatTitle");
 	static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");

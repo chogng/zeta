@@ -2,12 +2,11 @@ import './anchorSelect.css';
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { type View } from '../../../browser/view.js';
-import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { Selection } from '../../../common/core/selection.js';
-import { type Position } from '../../../common/core/position.js';
+import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
@@ -23,13 +22,13 @@ export class SelectionAnchorController extends Disposable {
 
 	constructor(
 		input: HTMLElement,
+		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly selections: CursorsController,
 		private readonly decorations: TextDecorationCollection<void>,
 	) {
 		super();
 		try {
-			if (viewport.textModel !== selections.context.model || viewport.textModel !== decorations.textModel) {
+			if (viewport.textModel !== editor.getModel() || viewport.textModel !== decorations.textModel) {
 				throw new TypeError('Selection anchor dependencies must share one text model');
 			}
 			this._register(addDisposableListener(input, 'keydown', event => this.handleKeydown(event), true));
@@ -45,10 +44,15 @@ export class SelectionAnchorController extends Disposable {
 	}
 
 	setSelectionAnchor(): void {
-		const position = this.selections.getSelections()[0]!.getPosition();
+		const position = Position.lift(this.editor.getPosition()!);
 		const [decorationId] = this.decorations.replaceAll([{
 			range: Range.fromPositions(position),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: {
+				description: 'selection-anchor',
+				className: 'selection-anchor',
+				hoverMessage: { value: 'Selection Anchor' },
+			},
 			metadata: undefined,
 		}]);
 		this.decorationId = decorationId;
@@ -58,15 +62,15 @@ export class SelectionAnchorController extends Disposable {
 	goToSelectionAnchor(): void {
 		const position = this.selectionAnchorPosition;
 		if (!position) return;
-		this.selections.setSelections([Selection.fromPositions(position)]);
+		this.editor.setSelection(Selection.fromPositions(position), 'selectionAnchor');
 		this.viewport.revealPosition(position);
 	}
 
 	selectFromAnchorToCursor(): void {
 		const anchor = this.selectionAnchorPosition;
 		if (!anchor) return;
-		const cursor = this.selections.getSelections()[0]!.getPosition();
-		this.selections.setSelections([Selection.fromPositions(anchor, cursor)]);
+		const cursor = Position.lift(this.editor.getPosition()!);
+		this.editor.setSelection(Selection.fromPositions(anchor, cursor), 'selectionAnchor');
 		this.cancelSelectionAnchor();
 		this.viewport.revealPosition(cursor);
 	}
@@ -120,11 +124,10 @@ registerTextEditorCapabilityContribution({
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<void>(context.model));
 		context.provideCapability(selectionAnchorDecorations, decorations);
-		context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.SelectionAnchor, () => 'Selection Anchor'));
 	},
 	install: context => {
 		if (context.kind !== 'text') return;
-		context.register(new SelectionAnchorController(context.view.element, context.viewport, context.selectionController, context.getCapability(selectionAnchorDecorations)));
+		context.register(new SelectionAnchorController(context.view.element, context.editor, context.viewport, context.getCapability(selectionAnchorDecorations)));
 	},
 });
 

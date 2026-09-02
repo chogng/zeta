@@ -52,6 +52,7 @@ export interface IViewModelLines extends IDisposable {
 }
 
 interface ProjectedLinesOptions {
+	readonly editorId?: number;
 	readonly wrapping?: EditorLineWrapping;
 	readonly wrapWidth?: number;
 	readonly wrappingIndent?: WrappingIndent;
@@ -93,6 +94,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
 	private readonly pendingMeasurement = this._register(new MutableDisposable<IDisposable>());
 	private readonly visibilitySource: EditorLineVisibilitySource | undefined;
+	private readonly editorId: number;
 	private hiddenAreas: Range[] = [];
 	private wrapping: EditorLineWrapping;
 	private wrapWidth: number;
@@ -123,6 +125,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		if (!fontInfo || !isFiniteNumber(fontInfo.typicalHalfwidthCharacterWidth) || fontInfo.typicalHalfwidthCharacterWidth <= 0) throw new TypeError('Editor view-model lines require measured font information');
 		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Editor view-model tab size must be a positive safe integer');
 		this.visibilitySource = options.visibilitySource;
+		this.editorId = options.editorId ?? 0;
 		this.wrapping = readWrapping(options.wrapping);
 		this.wrapWidth = readWrapWidth(options.wrapWidth);
 		this.currentWrappingIndent = readWrappingIndent(options.wrappingIndent);
@@ -178,7 +181,8 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Editor view-model tab size must be a positive safe integer');
 		if (this.tabSize === tabSize) return false;
 		this.tabSize = tabSize;
-		this.refresh();
+		if (this.usesInitialMeasurement()) this.startInitialMeasurement(false);
+		else this.rebuild(false);
 		return true;
 	}
 
@@ -203,8 +207,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	}
 
 	getLineContent(lineNumber: number): string {
-		const line = this.getVisualLine(lineNumber);
-		return this.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
+		return this.ensureCurrent().getViewLineData(this.model, lineNumber).content;
 	}
 
 	getViewLineContent(viewLineNumber: number): string {
@@ -212,11 +215,11 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	}
 
 	getViewLineLength(viewLineNumber: number): number {
-		return this.getViewLineContent(viewLineNumber).length;
+		return this.ensureCurrent().getViewLineData(this.model, viewLineNumber).maxColumn - 1;
 	}
 
-	getLineMinColumn(_lineNumber: number): number {
-		return 1;
+	getLineMinColumn(lineNumber: number): number {
+		return this.ensureCurrent().getViewLineData(this.model, lineNumber).minColumn;
 	}
 
 	getViewLineMinColumn(viewLineNumber: number): number {
@@ -224,7 +227,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	}
 
 	getLineMaxColumn(lineNumber: number): number {
-		return this.getLineContent(lineNumber).length + 1;
+		return this.ensureCurrent().getViewLineData(this.model, lineNumber).maxColumn;
 	}
 
 	getViewLineMaxColumn(viewLineNumber: number): number {
@@ -244,9 +247,10 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		return 0;
 	}
 
-	normalizePosition(position: Position, _affinity: PositionAffinity): Position {
+	normalizePosition(position: Position, affinity: PositionAffinity): Position {
 		const lineNumber = Math.min(Math.max(position.lineNumber, 1), this.getLineCount());
-		return new Position(lineNumber, Math.min(Math.max(position.column, 1), this.getLineMaxColumn(lineNumber)));
+		const clamped = new Position(lineNumber, Math.min(Math.max(position.column, this.getLineMinColumn(lineNumber)), this.getLineMaxColumn(lineNumber)));
+		return this.ensureCurrent().normalizePosition(clamped, affinity);
 	}
 
 	getLineIndentColumn(lineNumber: number): number {
@@ -318,10 +322,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	}
 
 	getViewLineData(viewLineNumber: number): ViewLineData {
-		const line = this.getVisualLine(viewLineNumber);
-		const content = this.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
-		const tokens = this.model.tokenization.getLineTokens(line.logicalLineIndex + 1).sliceAndInflate(line.startColumn, line.endColumn, -line.startColumn);
-		return new ViewLineData(content, !line.lastForLogicalLine, 1, content.length + 1, 0, tokens, null);
+		return this.ensureCurrent().getViewLineData(this.model, viewLineNumber);
 	}
 
 	getViewLinesData(viewStartLineNumber: number, viewEndLineNumber: number, needed: boolean[]): Array<ViewLineData | null> {
@@ -341,20 +342,20 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		);
 	}
 
-	getInjectedTextAt(_viewPosition: Position): InjectedText | null {
-		return null;
+	getInjectedTextAt(viewPosition: Position): InjectedText | null {
+		return this.ensureCurrent().getInjectedTextAt(viewPosition);
 	}
 
 	public createLineBreaksComputer(context?: ILineBreaksComputerContext): ILineBreaksComputer {
 		const source = context ?? {
 			getLineContent: lineNumber => this.model.getLineContent(lineNumber),
-			getLineInjectedText: _lineNumber => null,
+			getLineInjectedText: lineNumber => this.model.getLineInjectedText(lineNumber, this.editorId),
 		};
 		return this.lineBreaksComputerFactory.createLineBreaksComputer(
 			source,
 			this.fontInfo,
 			this.tabSize,
-			Math.max(0, Math.floor(this.wrapWidth / this.fontInfo.typicalHalfwidthCharacterWidth)),
+			this.wrapping === EditorLineWrapping.Off ? -1 : Math.max(1, Math.floor(this.wrapWidth / this.fontInfo.typicalHalfwidthCharacterWidth)),
 			this.currentWrappingIndent,
 			this.currentWordBreak,
 			false,
@@ -394,15 +395,15 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		else this.rebuild();
 	}
 
-	private rebuild(): void {
+	private rebuild(emit = true): void {
 		this.pendingMeasurement.clear();
 		this.pendingBreaks = undefined;
 		this.nextLineIndex = this.model.lineCount;
 		this.scanVersion = this.model.version;
-		this.replaceWrappingProjection(this.createWrappingProjection());
+		this.replaceWrappingProjection(this.createWrappingProjection(), emit);
 	}
 
-	private startInitialMeasurement(): void {
+	private startInitialMeasurement(emit = true): void {
 		const options = this.initialMeasurement;
 		if (!options) return;
 		this.pendingMeasurement.clear();
@@ -410,7 +411,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		this.nextLineIndex = 0;
 		this.pendingBreaks = Array.from({ length: this.model.lineCount }, () => null);
 		this.measureNextSlice(options.initialLineCount);
-		this.replaceWrappingProjection(this.createProjectionFromPendingBreaks());
+		this.replaceWrappingProjection(this.createProjectionFromPendingBreaks(), emit);
 		this.scheduleNextSlice();
 	}
 
@@ -440,13 +441,13 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		for (const result of measured) breaks[this.nextLineIndex++] = result;
 	}
 
-	private replaceWrappingProjection(next: EditorVisualLineProjection): void {
+	private replaceWrappingProjection(next: EditorVisualLineProjection, emit = true): void {
 		const previousLineCount = this.currentProjection.visualLineCount;
 		this.wrappingProjection = next;
 		this.currentProjection = this.createVisibleProjection(next);
 		this.projectionRevision += 1;
 		if (this.currentProjection.visualLineCount !== previousLineCount) this.lineCountChangeEmitter.fire();
-		this.changeEmitter.fire();
+		if (emit) this.changeEmitter.fire();
 	}
 
 	private rebuildVisibleProjection(): void {
@@ -462,9 +463,6 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	}
 
 	private createWrappingProjection(): EditorVisualLineProjection {
-		if (this.wrapping === EditorLineWrapping.Off || this.wrapWidth === 0) {
-			return EditorVisualLineProjection.identity(this.model);
-		}
 		const computer = this.createLineBreaksComputer();
 		for (let lineNumber = 1; lineNumber <= this.model.lineCount; lineNumber += 1) computer.addRequest(lineNumber, null);
 		return this.createProjection(computer.finalize());
@@ -478,9 +476,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 
 	private createProjection(breaks: readonly (ModelLineProjectionData | null)[]): EditorVisualLineProjection {
 		if (breaks.length !== this.model.lineCount) throw new Error('Line-break data must match the model line count');
-		return EditorVisualLineProjection.fromBreakColumns(this.model, breaks.map((result, lineIndex) => (
-			result?.breakOffsets ?? [this.model.getLineContent(lineIndex + 1).length]
-		)), breaks.map(result => (result?.wrappedTextIndentLength ?? 0) * this.fontInfo.spaceWidth));
+		return EditorVisualLineProjection.fromLineBreakData(this.model, breaks, this.fontInfo.spaceWidth);
 	}
 
 	private createVisibleProjection(source: EditorVisualLineProjection): EditorVisualLineProjection {
@@ -646,8 +642,7 @@ class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 
 	public convertViewPositionToModelPosition(viewPosition: Position): Position {
 		const position = this.lines.normalizePosition(viewPosition, PositionAffinity.None);
-		const line = this.lines.projection.lineAt(position.lineNumber - 1)!;
-		return this.model.validatePosition(new Position(line.logicalLineIndex + 1, line.startColumn + position.column));
+		return this.model.validatePosition(this.lines.projection.convertViewPositionToModelPosition(position));
 	}
 
 	public convertViewRangeToModelRange(viewRange: Range): Range {
@@ -674,17 +669,7 @@ class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 
 	public convertModelPositionToViewPosition(modelPosition: Position, affinity: PositionAffinity = PositionAffinity.None): Position {
 		const position = this.model.validatePosition(modelPosition);
-		const projection = this.lines.ensureCurrent();
-		let visualLineIndex = projection.visualLineIndexAt(position);
-		let line = projection.lineAt(visualLineIndex)!;
-		if (affinity === PositionAffinity.Left && position.column - 1 === line.startColumn && visualLineIndex > 0) {
-			const previous = projection.lineAt(visualLineIndex - 1)!;
-			if (previous.logicalLineIndex === line.logicalLineIndex) {
-				visualLineIndex -= 1;
-				line = previous;
-			}
-		}
-		return new Position(visualLineIndex + 1, position.column - line.startColumn);
+		return this.lines.ensureCurrent().convertModelPositionToViewPosition(position, affinity);
 	}
 
 	public convertModelRangeToViewRange(modelRange: Range, affinity: PositionAffinity = PositionAffinity.None): Range {

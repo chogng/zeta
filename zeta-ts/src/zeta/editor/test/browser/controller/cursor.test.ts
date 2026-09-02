@@ -34,6 +34,15 @@ test('CursorsController owns per-editor selections and cursor-only undo', () => 
 test('CursorsController validates read-only ownership', () => {
 	using model = new TextModel('text');
 	using cursors = createTestCursorsController(model, [new Selection(1, 1, 1, 1)], { readOnly: true });
-	assert.equal(cursors.readOnly, true);
+	assert.equal(cursors.context.cursorConfig.readOnly, true);
 	assert.equal(cursors.context.model, model);
+});
+
+test('CursorCollection keeps the last bottom-most view position on ties', () => {
+	using model = new TextModel('text');
+	const shared = new Selection(1, 3, 1, 3);
+	using cursors = createTestCursorsController(model, [shared, shared], { multiCursorMergeOverlapping: false });
+	const states = cursors.getCursorStates();
+
+	assert.strictEqual(cursors.getBottomMostViewPosition(), states[1]!.viewState.position);
 });

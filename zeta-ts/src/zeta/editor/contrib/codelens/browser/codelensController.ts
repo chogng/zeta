@@ -4,7 +4,7 @@ import { type View } from '../../../browser/view.js';
 import { StableEditorScrollState } from '../../../browser/stableEditorScroll.js';
 import { TimeoutTimer } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type CodeLens, type CodeLensProvider, type Command } from '../../../common/languages.js';
@@ -16,7 +16,7 @@ export type ExecuteCodeLensCommand = (id: string, args: readonly unknown[] | und
 
 /** Coordinates provider requests, visible deferred resolves, and line-owned CodeLens widgets. */
 export class CodeLensContribution extends Disposable {
-	public static readonly ID = 'editor.contrib.codelens';
+	public static readonly ID = 'css.editor.codeLens';
 
 	private readonly widgets = this._register(new DisposableMap<number, CodeLensWidget>());
 	private readonly providerListeners = this._register(new DisposableStore());
@@ -48,10 +48,6 @@ export class CodeLensContribution extends Disposable {
 			this.scheduleRefresh();
 		}));
 		this._register(viewport.onDidChangeLayout(() => this.layoutAndResolve()));
-		this._register(toDisposable(() => {
-			this.request?.dispose(true);
-			if (this.currentModel !== CodeLensModel.Empty) this.currentModel.dispose();
-		}));
 		const cachedModel = resource ? codeLensCache.get(resource, viewport.textModel.lineCount) : undefined;
 		if (cachedModel) {
 			this.cachedModel = cachedModel;
@@ -59,6 +55,21 @@ export class CodeLensContribution extends Disposable {
 			this.reconcileWidgets(cachedModel.lenses);
 		}
 		this.refreshPromise = this.refresh();
+	}
+
+	public override dispose(): void {
+		if (this.isDisposed) return;
+		this.request?.dispose(true);
+		this.request = undefined;
+		this.refreshPromise = undefined;
+		this.resolvePromise = undefined;
+		this.refreshScheduled = false;
+		this.resolvingWidgets.clear();
+		this.cachedModel = undefined;
+		const model = this.currentModel;
+		this.currentModel = CodeLensModel.Empty;
+		if (model !== CodeLensModel.Empty) model.dispose();
+		super.dispose();
 	}
 
 	public async getModel(): Promise<CodeLensModel> {

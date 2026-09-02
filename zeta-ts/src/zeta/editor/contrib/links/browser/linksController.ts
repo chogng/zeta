@@ -15,9 +15,9 @@ export class LinksController extends Disposable {
 
 	constructor(private readonly viewport: View, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Stanza link opening failed", error)) {
 		super();
-		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.update(event)));
-		this._register(addDisposableListener(viewport.element, "pointerleave", () => this.clear()));
-		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointerdown", event => {
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointermove", event => this.update(event)));
+		this._register(addDisposableListener(viewport.domNode.domNode, "pointerleave", () => this.clear()));
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointerdown", event => {
 			if (event.button !== 0 || !this.activeLink) return;
 			stopEvent(event);
 			void this.open(this.activeLink.target);
@@ -33,7 +33,7 @@ export class LinksController extends Disposable {
 		}
 		this.hoverPosition = target.position;
 		this.activeLink = this.links.find(link => link.range.containsPosition(target.position));
-		this.viewport.element.classList.toggle("stanza-editor-link-target", this.activeLink !== undefined);
+		this.viewport.domNode.domNode.classList.toggle("stanza-editor-link-target", this.activeLink !== undefined);
 		if (this.links.length > 0) return;
 		this.request?.abort();
 		const request = this.request = new AbortController();
@@ -48,7 +48,7 @@ export class LinksController extends Disposable {
 			this.activeLink = this.hoverPosition
 				? this.links.find(link => link.range.containsPosition(this.hoverPosition!))
 				: undefined;
-			this.viewport.element.classList.toggle("stanza-editor-link-target", this.activeLink !== undefined);
+			this.viewport.domNode.domNode.classList.toggle("stanza-editor-link-target", this.activeLink !== undefined);
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
 		}
@@ -68,7 +68,7 @@ export class LinksController extends Disposable {
 		this.links = [];
 		this.activeLink = undefined;
 		this.hoverPosition = undefined;
-		this.viewport.element.classList.remove("stanza-editor-link-target");
+		this.viewport.domNode.domNode.classList.remove("stanza-editor-link-target");
 	}
 }
 

@@ -1,12 +1,10 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
-import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { EditorContributionInstantiation, registerTextEditorCapabilityContribution } from '../../../../editor/browser/editorExtensions.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
-import { registerEditorDecorationSourceFactory } from '../../../browser/parts/editor/editorDecorations.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IGitService } from '../../../services/git/common/gitService.js';
@@ -14,7 +12,6 @@ import { IDiffService } from '../../../services/diff/common/diffService.js';
 import { CODE_EDITOR_ID } from '../../codeEditor/browser/codeEditorInput.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService, IQuickDiffService } from '../common/quickDiff.js';
 import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
-import { QuickDiffDecorator } from './quickDiffDecorator.js';
 import { QuickDiffEditorController, QuickDiffEditorControllerService } from './quickDiffEditorController.js';
 import { QuickDiffModelService } from './quickDiffModel.js';
 import { WorkbenchQuickDiffService } from './workbenchQuickDiffService.js';
@@ -42,11 +39,6 @@ registerWorkbenchContribution('workbench.contrib.gitQuickDiffProvider', Workbenc
 	const provider = resources.add(new GitQuickDiffProvider(accessor.get(IGitService)));
 	resources.add(accessor.get(IQuickDiffService).addProvider(provider));
 	return resources;
-});
-
-registerEditorDecorationSourceFactory(({ accessor, model, resource }) => {
-	if (resource.scheme !== 'file' && !isRemoteResource(resource)) return undefined;
-	return new QuickDiffDecorator(resource, model, accessor.get(IQuickDiffModelService), accessor.get(IConfigurationService));
 });
 
 registerTextEditorCapabilityContribution({

@@ -226,7 +226,6 @@ import { BrowserEditorService } from "../services/editor/browser/browserEditorSe
 import { IEditorService } from "../services/editor/common/editorService.js";
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
-import { createEditorDecorationSources } from "./parts/editor/editorDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { type WorkbenchContextMenuServiceFactory, WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 import { ConnectToRemoteCommandId } from "../contrib/remote/browser/remoteActions.js";
@@ -663,7 +662,6 @@ export class Workbench extends Disposable {
 			workingCopyService,
 			dialogService,
 			bulkEditService,
-			createDecorationSources: (resource, model) => createEditorDecorationSources({ accessor: services, model, resource }),
 			saveAsResource: nativeHostApi
 				? async (defaultName) => {
 					const filePath = await nativeHostApi.saveFile({ defaultName });

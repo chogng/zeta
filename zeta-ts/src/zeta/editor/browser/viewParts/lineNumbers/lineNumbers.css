@@ -1,5 +1,7 @@
 .stanza-editor .margin-view-overlays .line-numbers {
 	bottom: 0;
+	left: var(--stanza-editor-line-numbers-left);
+	width: var(--stanza-editor-line-numbers-width);
 	font-variant-numeric: tabular-nums;
 	position: absolute;
 	text-align: right;
