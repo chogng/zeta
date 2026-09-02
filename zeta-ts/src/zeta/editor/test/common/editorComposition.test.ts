@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { IME } from "../../../base/common/ime.js";
 import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
-import { TextModelChangeReason } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { ReplaceCommand } from '../../common/commands/replaceCommand.js';
+import { ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.js';
 import { createTestCursorsController } from './testCursorConfiguration.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
@@ -31,25 +30,15 @@ test("Composition revisions commit as one selection-aware undo step", () => {
 		model,
 		selection(1, 4),
 	);
-	const composition = controller.beginComposition();
-	const first = composition.update({
-		text: "n",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-	const second = composition.update({
-		text: "ni",
-		selection: { anchorOffset: 2, activeOffset: 2 },
-	});
-	const third = composition.update({
-		text: "你",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-
-	composition.commit();
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, "n", 0, 0, 0, "keyboard");
+	controller.compositionType(events, "ni", 1, 0, 0, "keyboard");
+	controller.compositionType(events, "你", 2, 0, 0, "keyboard");
+	controller.endComposition(events, "keyboard");
 	const afterCommit = {
 		text: model.getText(),
 		selections: controller.getSelections(),
-		active: composition.active,
 	};
 	controller.context.model.undo();
 	const afterUndo = {
@@ -59,11 +48,6 @@ test("Composition revisions commit as one selection-aware undo step", () => {
 	controller.context.model.redo();
 
 	assert.deepEqual({
-		transactionIds: [
-			first?.transactionId,
-			second?.transactionId,
-			third?.transactionId,
-		],
 		afterCommit,
 		afterUndo,
 		afterRedo: {
@@ -71,11 +55,9 @@ test("Composition revisions commit as one selection-aware undo step", () => {
 			selections: controller.getSelections(),
 		},
 	}, {
-		transactionIds: [1, 1, 1],
 		afterCommit: {
 			text: "h你o",
 			selections: selection(2, 2),
-			active: false,
 		},
 		afterUndo: {
 			text: "hello",
@@ -88,7 +70,7 @@ test("Composition revisions commit as one selection-aware undo step", () => {
 	});
 });
 
-test("Composition exposes only its active provisional model range", () => {
+test("Composition normalizes multiline text through the production cursor path", () => {
 	using model = new TextModel("a\nbc");
 	using controller = createTestCursorsController(
 		model,
@@ -97,138 +79,81 @@ test("Composition exposes only its active provisional model range", () => {
 			position(1, 2),
 		)],
 	);
-	const composition = controller.beginComposition();
-	assert.deepEqual(
-		composition.currentRange,
-		Range.fromPositions(position(1, 1), position(1, 2)),
-	);
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, "x\r\ny", 0, 0, 0, "keyboard");
+	controller.endComposition(events, "keyboard");
 
-	composition.update({
-		text: "x\r\ny",
-		selection: { anchorOffset: 3, activeOffset: 3 },
-	});
-	assert.deepEqual({
-		text: model.getText(),
-		range: composition.currentRange,
-	}, {
-		text: "a\nbx\ny",
-		range: Range.fromPositions(position(1, 1), position(2, 1)),
-	});
-
-	composition.commit();
-	assert.throws(() => composition.currentRange, /already closed/);
+	assert.equal(model.getText(), "a\nbx\ny");
 });
 
-test("Composition cancellation restores text without redo history", () => {
-	using model = new TextModel("hello");
+test("External model edits release the active cursor composition", () => {
+	using model = new TextModel("ab");
+	using controller = createTestCursorsController(
+		model,
+		selection(0, 1),
+	);
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, "X", 0, 0, 0, "keyboard");
+	model.applyEdits([{ range: range(2, 2), text: "!" }]);
+
+	assert.doesNotThrow(() => controller.startComposition(events));
+	controller.endComposition(events, "keyboard");
+	assert.equal(model.getText(), "Xb!");
+});
+
+test("Active composition survives zero history budgets until resolution", () => {
+	using model = new TextModel("hello", {
+		historyLimit: { transactions: 0, textUnits: 0 },
+	});
 	using controller = createTestCursorsController(
 		model,
 		selection(1, 4),
 	);
-	const composition = controller.beginComposition();
-	composition.update({
-		text: "ni",
-		selection: { anchorOffset: 2, activeOffset: 2 },
-	});
-	composition.update({
-		text: "你",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, "你", 0, 0, 0, "keyboard");
+	assert.equal(model.canUndo(), true);
+	controller.endComposition(events, "keyboard");
 
-	const cancellation = composition.cancel();
-
-	assert.deepEqual({
-		text: model.getText(),
-		selections: controller.getSelections(),
-		reason: cancellation?.reason,
-		active: composition.active,
-		canUndo: model.canUndo(),
-		canRedo: model.canRedo(),
-		undo: controller.context.model.undo(),
-	}, {
-		text: "hello",
-		selections: selection(1, 4),
-		reason: TextModelChangeReason.HistoryCancellation,
-		active: false,
-		canUndo: false,
-		canRedo: false,
-		undo: undefined,
-	});
+	assert.equal(model.getText(), "h你o");
+	assert.equal(model.canUndo(), false);
 });
 
-test("Active composition survives zero history budgets until resolution", () => {
-	using cancelModel = new TextModel("hello", {
-		historyLimit: { transactions: 0, textUnits: 0 },
-	});
-	using cancelController = createTestCursorsController(
-		cancelModel,
-		selection(1, 4),
-	);
-	const cancelled = cancelController.beginComposition();
-	cancelled.update({
-		text: "n",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-	cancelled.update({
-		text: "你",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-	assert.equal(cancelModel.canUndo(), true);
-	cancelled.cancel();
-
-	using commitModel = new TextModel("hello", {
-		historyLimit: { transactions: 0, textUnits: 0 },
-	});
-	using commitController = createTestCursorsController(
-		commitModel,
-		selection(1, 4),
-	);
-	const committed = commitController.beginComposition();
-	committed.update({
-		text: "你",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-	assert.equal(commitModel.canUndo(), true);
-	committed.commit();
-
-	assert.deepEqual({
-		cancelledText: cancelModel.getText(),
-		cancelledCanUndo: cancelModel.canUndo(),
-		committedText: commitModel.getText(),
-		committedCanUndo: commitModel.canUndo(),
-	}, {
-		cancelledText: "hello",
-		cancelledCanUndo: false,
-		committedText: "h你o",
-		committedCanUndo: false,
-	});
-});
-
-test("No-op composition updates may move the caret without history", () => {
+test("No-op composition updates preserve the selection without history", () => {
 	using model = new TextModel("a");
 	using controller = createTestCursorsController(
 		model,
 		selection(0, 1),
 	);
-	const composition = controller.beginComposition();
-	const change = composition.update({
-		text: "a",
-		selection: { anchorOffset: 0, activeOffset: 0 },
-	});
-
-	composition.commit();
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, "a", 0, 0, -1, "keyboard");
+	controller.endComposition(events, "keyboard");
 
 	assert.deepEqual({
-		change,
 		text: model.getText(),
 		selections: controller.getSelections(),
 		canUndo: model.canUndo(),
 	}, {
-		change: undefined,
 		text: "a",
-		selections: selection(0, 0),
+		selections: selection(0, 1),
 		canUndo: false,
 	});
+});
+
+test("Disposing a cursor releases its active model history revision", () => {
+	using model = new TextModel("ab");
+	const controller = createTestCursorsController(model, selection(0, 1));
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, "X", 0, 0, 0, "keyboard");
+	controller.dispose();
+
+	using nextController = createTestCursorsController(model, selection(0, 1));
+	assert.doesNotThrow(() => nextController.startComposition(events));
+	nextController.endComposition(events, "keyboard");
 });
 
 test("Composition returning to its original text leaves no undo step", () => {
@@ -237,16 +162,11 @@ test("Composition returning to its original text leaves no undo step", () => {
 		model,
 		selection(0, 1),
 	);
-	const committed = controller.beginComposition();
-	committed.update({
-		text: "X",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-	committed.update({
-		text: "a",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-	committed.commit();
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, "X", 0, 0, 0, "keyboard");
+	controller.compositionType(events, "a", 1, 0, 0, "keyboard");
+	controller.endComposition(events, "keyboard");
 
 	assert.deepEqual({
 		text: model.getText(),
@@ -257,135 +177,38 @@ test("Composition returning to its original text leaves no undo step", () => {
 		canUndo: false,
 		undo: undefined,
 	});
-
-	controller.setSelections(selection(0, 1));
-	const cancelled = controller.beginComposition();
-	cancelled.update({
-		text: "X",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-	cancelled.update({
-		text: "a",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-	assert.equal(cancelled.cancel(), undefined);
-	assert.equal(model.canUndo(), false);
 });
 
-test("External model edits invalidate an active composition", () => {
+test("Composition keeps command ownership inside the standard lifecycle", () => {
 	using model = new TextModel("ab");
 	using controller = createTestCursorsController(
 		model,
 		selection(0, 1),
 	);
-	const composition = controller.beginComposition();
-	composition.update({
-		text: "X",
-		selection: { anchorOffset: 1, activeOffset: 1 },
-	});
-
-	model.applyEdits([{ range: range(2, 2), text: "!" }]);
-
-	assert.equal(composition.active, false);
-	assert.throws(
-		() => composition.update({
-			text: "Y",
-			selection: { anchorOffset: 1, activeOffset: 1 },
-		}),
-		/no longer active/,
-	);
-	assert.throws(() => composition.commit(), /no longer active/);
-	assert.throws(() => composition.cancel(), /no longer active/);
-	assert.equal(model.getText(), "Xb!");
-});
-
-test("Reentrant model edits invalidate composition before update returns", () => {
-	using model = new TextModel("ab");
-	using controller = createTestCursorsController(
-		model,
-		selection(0, 1),
-	);
-	let nestedEditApplied = false;
-	using listener = model.onDidChangeContent(() => {
-		if (nestedEditApplied) return;
-		nestedEditApplied = true;
-		const end = model.positionAt(model.getText().length);
-		model.applyEdits([{
-			range: Range.fromPositions(end),
-			text: "!",
-		}]);
-	});
-	const composition = controller.beginComposition();
-
-	assert.throws(
-		() => composition.update({
-			text: "X",
-			selection: { anchorOffset: 1, activeOffset: 1 },
-		}),
-		/no longer active/,
-	);
-	assert.deepEqual({
-		active: composition.active,
-		text: model.getText(),
-	}, {
-		active: false,
-		text: "Xb!",
-	});
-});
-
-test("Composition rejects ambiguous ownership and invalid relative offsets", () => {
-	using model = new TextModel("ab");
-	using controller = createTestCursorsController(
-		model,
-		selection(0, 1),
-	);
-	const composition = controller.beginComposition();
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
 
 	assert.throws(
 		() => controller.executeCommand(new ReplaceCommand(range(0, 1), "X")),
 		/active composition/,
 	);
-	assert.throws(
-		() => composition.update({
-			text: "X",
-			selection: { anchorOffset: 2, activeOffset: 2 },
-		}),
-		/must be between/,
-	);
-	assert.equal(model.getText(), "ab");
-	composition.cancel();
+	controller.compositionType(events, "X", 0, 0, 0, "keyboard");
+	controller.endComposition(events, "keyboard");
+	assert.equal(model.getText(), "Xb");
 
+	using multiModel = new TextModel("ab");
 	using multiController = createTestCursorsController(
-		model,
+		multiModel,
 		primaryFirst([
 			Selection.fromPositions(position(0, 0)),
 			Selection.fromPositions(position(0, 2)),
 		], 0),
 	);
-	assert.throws(
-		() => multiController.beginComposition(),
-		/exactly one selection/,
-	);
-});
-
-test("Composition observes the shared base IME coordination state", () => {
-	using model = new TextModel("a");
-	using controller = createTestCursorsController(
-		model,
-		selection(0, 1),
-	);
-
-	IME.disable();
-	try {
-		assert.throws(
-			() => controller.beginComposition(),
-			/currently disabled/,
-		);
-		assert.equal(model.getText(), "a");
-		assert.equal(model.canUndo(), false);
-	} finally {
-		IME.enable();
-	}
+	const multiEvents = new ViewModelEventsCollector();
+	multiController.startComposition(multiEvents);
+	multiController.compositionType(multiEvents, "X", 0, 0, 0, "keyboard");
+	multiController.endComposition(multiEvents, "keyboard");
+	assert.equal(multiModel.getText(), "XabX");
 });
 
 function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {

@@ -1,5 +1,4 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { IME } from "../../../base/common/ime.js";
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { CursorCollection } from './cursorCollection.js';
 import { CursorContext } from './cursorContext.js';
@@ -9,7 +8,6 @@ import { Range } from '../core/range.js';
 import { TrackedRangeStickiness, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextModel, type IValidEditOperation } from '../model.js';
 import { type TrackedRange } from '../model/trackedRange.js';
 import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange } from '../core/textChange.js';
-import { TextEditHistoryMergeMode } from '../core/editOperation.js';
 import { TextModel } from "../model/textModel.js";
 import { CursorChangeReason } from '../cursorEvents.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
@@ -28,14 +26,6 @@ export interface CursorSelectionChange {
 	readonly selections: readonly Selection[];
 	readonly reason: CursorChangeReason;
 	readonly modelVersion: number;
-}
-
-export interface CompositionUpdate {
-	readonly text: string;
-	readonly selection: {
-		readonly anchorOffset: number;
-		readonly activeOffset: number;
-	};
 }
 
 interface CursorsControllerOptions {
@@ -224,14 +214,6 @@ function computeCommandSelections(
 	});
 }
 
-interface CompositionHost {
-	isActive(): boolean;
-	assertActive(): void;
-	apply(range: Range, text: string, anchorOffset: number, activeOffset: number): TextModelChange | undefined;
-	commit(): void;
-	cancel(): TextModelChange | undefined;
-}
-
 interface SelectionHistoryEntry {
 	readonly before: readonly Selection[];
 	readonly after: readonly Selection[];
@@ -241,7 +223,6 @@ interface ActiveComposition {
 	readonly historyGroup: UndoRedoGroup;
 	readonly deletions: Array<CompositionDeletion | null>;
 	outcomes: CompositionOutcome[] | null;
-	transactionId?: number;
 	valid: boolean;
 }
 
@@ -370,10 +351,7 @@ export class CursorsController extends Disposable {
 				this.cursorRedoHistory.length = 0;
 				for (const action of this.autoClosedActions) this.disposeAutoClosedAction(action);
 				this.autoClosedActions = [];
-				if (this.activeComposition) {
-					this.activeComposition.valid = false;
-					this.activeComposition = undefined;
-				}
+				this.invalidateActiveComposition();
 			}));
 		} catch (error) {
 			this.dispose();
@@ -894,125 +872,6 @@ export class CursorsController extends Disposable {
 		}
 	}
 
-	beginComposition(): CompositionSession {
-		this.assertNotDisposed();
-		this.assertNoActiveComposition("begin another composition");
-		if (this.context.cursorConfig.readOnly) {
-			this.readOnlyEditEmitter.fire();
-			throw new Error("Cannot begin composition in a read-only editor");
-		}
-		if (!IME.enabled) {
-			throw new Error("IME composition is currently disabled");
-		}
-		if (this.currentSelections.length !== 1) {
-			throw new Error(
-				"IME composition currently requires exactly one selection",
-			);
-		}
-		this.cursorHistory.length = 0;
-		this.cursorRedoHistory.length = 0;
-		const initialSelections = this.currentSelections;
-		const initialRange = initialSelections[0]!;
-		const startOffset = this.model.offsetAt(initialRange.getStartPosition());
-		const endOffset = this.model.offsetAt(initialRange.getEndPosition());
-		const state = this.createActiveComposition(initialSelections);
-		this.model.beginHistoryRevision(state.historyGroup);
-		this.activeComposition = state;
-		return new CompositionSession(
-			this.model,
-			startOffset,
-			endOffset,
-			{
-				isActive: () =>
-					state.valid && this.activeComposition === state,
-				assertActive: () => this.assertActiveComposition(state),
-				apply: (range, text, anchorOffset, activeOffset) => {
-					const change = this.executeCompositionUpdate(range, text, anchorOffset, activeOffset, state.historyGroup);
-					if (change) state.transactionId = change.transactionId;
-					return change;
-				},
-				commit: () => {
-					this.assertActiveComposition(state);
-					state.valid = false;
-					this.activeComposition = undefined;
-					const retained = this.model.finishHistoryRevision(
-						state.historyGroup,
-					);
-					if (!retained && state.transactionId !== undefined) {
-						this.forgetSelectionHistory(state.transactionId);
-					}
-				},
-				cancel: () => {
-					this.assertActiveComposition(state);
-					state.valid = false;
-					this.activeComposition = undefined;
-					const change = this.model.cancelHistoryRevision(
-						state.historyGroup,
-					);
-					if (!change) {
-						if (state.transactionId !== undefined) {
-							this.forgetSelectionHistory(state.transactionId);
-						}
-						this.installSelections(
-							initialSelections,
-							CursorChangeReason.Undo,
-						);
-					}
-					return change;
-				},
-			},
-		);
-	}
-
-	private executeCompositionUpdate(range: Range, text: string, anchorOffset: number, activeOffset: number, historyGroup: UndoRedoGroup): TextModelChange | undefined {
-		const resultLength = this.model.length + text.length - (this.model.offsetAt(range.getEndPosition()) - this.model.offsetAt(range.getStartPosition()));
-		assertOffset(anchorOffset, resultLength, 'anchorOffset');
-		assertOffset(activeOffset, resultLength, 'activeOffset');
-		const before = this.currentSelections;
-		const versionBefore = this.model.version;
-		let change: TextModelChange | undefined;
-		this.executingCommand = true;
-		try {
-			change = this.model.applyOperations(
-				[{ range, text }],
-				{ historyGroup, historyMergeMode: TextEditHistoryMergeMode.ReplacePrevious },
-			);
-		} catch (error) {
-			throw error;
-		} finally {
-			this.executingCommand = false;
-		}
-
-		if (change && this.model.version !== change.version) {
-			this.invalidateActiveComposition();
-			this.refreshTrackedSelections(
-				CursorChangeReason.RecoverFromMarkers,
-				true,
-				true,
-			);
-			return change;
-		}
-		if (!change && this.model.version !== versionBefore) {
-			this.invalidateActiveComposition();
-			this.refreshTrackedSelections(
-				CursorChangeReason.RecoverFromMarkers,
-			);
-			return undefined;
-		}
-		const after = [Selection.fromPositions(this.model.positionAt(anchorOffset), this.model.positionAt(activeOffset))];
-		this.installSelections(
-			after,
-			CursorChangeReason.NotSet,
-		);
-		if (change) {
-			this.rememberSelectionHistory(
-				change.transactionId,
-				{ before, after },
-			);
-		}
-		return change;
-	}
-
 	private acceptModelChange(change: TextModelChange): void {
 		this.knownModelVersion = change.version;
 		if (this.executingCommand) {
@@ -1156,17 +1015,12 @@ export class CursorsController extends Disposable {
 		}
 	}
 
-	private assertActiveComposition(state: ActiveComposition): void {
-		this.assertNotDisposed();
-		if (!state.valid || this.activeComposition !== state) {
-			throw new Error("Editor composition is no longer active");
-		}
-	}
-
 	private invalidateActiveComposition(): void {
-		if (!this.activeComposition) return;
-		this.activeComposition.valid = false;
+		const active = this.activeComposition;
+		if (!active) return;
+		active.valid = false;
 		this.activeComposition = undefined;
+		this.model.finishHistoryRevision(active.historyGroup);
 	}
 
 	private createAutoClosedAction(closerRange: Range, enclosingRange: Range): AutoClosedAction {
@@ -1220,76 +1074,6 @@ export class CursorsController extends Disposable {
 
 }
 
-export class CompositionSession {
-	private currentEndOffset: number;
-	private closed = false;
-
-	constructor(
-		private readonly model: TextModel,
-		private readonly startOffset: number,
-		endOffset: number,
-		private readonly host: CompositionHost,
-	) {
-		this.currentEndOffset = endOffset;
-	}
-
-	public get active(): boolean {
-		return !this.closed && this.host.isActive();
-	}
-
-	public get currentRange(): Range {
-		this.ensureActive();
-		this.host.assertActive();
-		return Range.fromPositions(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset));
-	}
-
-	public update(update: CompositionUpdate): TextModelChange | undefined {
-		this.ensureActive();
-		this.host.assertActive();
-		if (typeof update.text !== 'string') throw new TypeError('CompositionUpdate.text must be a string');
-		const text = normalizeTextLineEndings(update.text);
-		validateRelativeSelection(update.selection, text.length);
-		const change = this.host.apply(
-			Range.fromPositions(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset)),
-			text,
-			this.startOffset + update.selection.anchorOffset,
-			this.startOffset + update.selection.activeOffset,
-		);
-		this.host.assertActive();
-		this.currentEndOffset = this.startOffset + text.length;
-		return change;
-	}
-
-	public commit(): void {
-		this.ensureActive();
-		this.host.assertActive();
-		this.closed = true;
-		this.host.commit();
-	}
-
-	public cancel(): TextModelChange | undefined {
-		this.ensureActive();
-		this.host.assertActive();
-		this.closed = true;
-		return this.host.cancel();
-	}
-
-	private ensureActive(): void {
-		if (this.closed) throw new ReferenceError('Editor composition is already closed');
-	}
-}
-
-function validateRelativeSelection(selection: CompositionUpdate['selection'], textLength: number): void {
-	assertRelativeOffset(selection.anchorOffset, textLength, 'selection.anchorOffset');
-	assertRelativeOffset(selection.activeOffset, textLength, 'selection.activeOffset');
-}
-
-function assertRelativeOffset(offset: number, textLength: number, name: string): void {
-	if (!Number.isSafeInteger(offset) || offset < 0 || offset > textLength) {
-		throw new RangeError(`${name} must be between 0 and ${textLength}`);
-	}
-}
-
 function validateSelections(model: TextModel, selections: readonly Selection[]): void {
 	if (selections.length === 0) throw new RangeError('Selections must not be empty');
 	for (const selection of selections) {
@@ -1304,10 +1088,4 @@ function selectionsEqual(left: readonly Selection[], right: readonly Selection[]
 
 function cursorStatesEqual(left: readonly CursorState[], right: readonly CursorState[]): boolean {
 	return left.length === right.length && left.every((state, index) => state.equals(right[index]!));
-}
-
-function assertOffset(offset: number, documentLength: number, name: string): void {
-	if (!Number.isSafeInteger(offset) || offset < 0 || offset > documentLength) {
-		throw new RangeError(`${name} must be between 0 and ${documentLength}`);
-	}
 }

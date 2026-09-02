@@ -1,6 +1,6 @@
 import { stopEvent } from "../../../../base/browser/dom.js";
 import { type FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { StandardKeyboardEvent } from "../../../../base/browser/keyboardEvent.js";
+import { type IKeyboardEvent } from "../../../../base/browser/keyboardEvent.js";
 import { Emitter, Event, type Event as EditorEvent } from "../../../../base/common/event.js";
 import { IME } from "../../../../base/common/ime.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -41,12 +41,16 @@ export interface EditContextTextUpdate {
 	readonly inputType: string | undefined;
 }
 
-/** A normalized composition event shared by textarea and native EditContext. */
-export interface EditContextCompositionEvent {
+/** Composition lifecycle data shared by textarea and native EditContext. */
+export interface EditContextCompositionData {
 	readonly data: string;
+}
+
+interface CompositionTypeData {
 	readonly text: string;
-	readonly selection: { readonly anchorOffset: number; readonly activeOffset: number };
-	readonly browserEvent: globalThis.Event;
+	readonly replacePrevCharCnt: number;
+	readonly replaceNextCharCnt: number;
+	readonly positionDelta: number;
 }
 
 /** Composition formatting reported by the native EditContext implementation. */
@@ -107,8 +111,8 @@ export interface EditContextViewController {
 	compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): void;
 	compositionStart(): void;
 	compositionEnd(): void;
-	emitKeyDown(event: StandardKeyboardEvent): void;
-	emitKeyUp(event: StandardKeyboardEvent): void;
+	emitKeyDown(event: IKeyboardEvent): void;
+	emitKeyUp(event: IKeyboardEvent): void;
 }
 
 /** Content coordinates of the primary editor caret. */
@@ -135,6 +139,7 @@ export abstract class AbstractEditContext extends ViewPart {
 	private readonly willBeforeInputEmitter = this._register(new Emitter<InputEvent>());
 	private readonly willTextUpdateEmitter = this._register(new Emitter<EditorViewTextUpdateEvent>());
 	private readonly willKeydownEmitter = this._register(new Emitter<KeyboardEvent>());
+	private readonly typeEmitter = this._register(new Emitter<CompositionTypeData>());
 	private compositionControllerValue: CompositionController | undefined;
 	abstract readonly onDidFocus: EditorEvent<void>;
 	abstract readonly onDidBlur: EditorEvent<void>;
@@ -147,12 +152,11 @@ export abstract class AbstractEditContext extends ViewPart {
 	readonly onDidTextUpdate: EditorEvent<EditContextTextUpdate> = Event.None;
 	/** Native EditContext publishes composition formatting; textarea has no equivalent. */
 	readonly onDidTextFormatUpdate: EditorEvent<EditContextTextFormatUpdate> = Event.None;
-	abstract readonly onDidSelect: EditorEvent<void>;
-	abstract readonly onDidKeydown: EditorEvent<KeyboardEvent>;
-	abstract readonly onDidKeyup: EditorEvent<KeyboardEvent>;
-	abstract readonly onDidCompositionStart: EditorEvent<EditContextCompositionEvent>;
-	abstract readonly onDidCompositionUpdate: EditorEvent<EditContextCompositionEvent>;
-	abstract readonly onDidCompositionEnd: EditorEvent<EditContextCompositionEvent>;
+	abstract readonly onKeyDown: EditorEvent<IKeyboardEvent>;
+	abstract readonly onKeyUp: EditorEvent<IKeyboardEvent>;
+	abstract readonly onDidCompositionStart: EditorEvent<EditContextCompositionData>;
+	abstract readonly onDidCompositionUpdate: EditorEvent<EditContextCompositionData>;
+	abstract readonly onDidCompositionEnd: EditorEvent<void>;
 	/** Clipboard events are emitted before the editor's clipboard contribution handles them. */
 	readonly onWillCopy: EditorEvent<IClipboardCopyEvent> = this._onWillCopy.event;
 	readonly onWillCut: EditorEvent<IClipboardCopyEvent> = this._onWillCut.event;
@@ -195,7 +199,13 @@ export abstract class AbstractEditContext extends ViewPart {
 		if (this.compositionControllerValue) throw new ReferenceError('Edit context controller is already initialized');
 		this.viewport = options.viewport;
 		this.viewControllerValue = options.viewController;
-		const compositionController = this._register(new CompositionController(this, options.viewport, this._context.viewModel, options.viewController));
+		const compositionController = this._register(new CompositionController(
+			this,
+			options.viewport,
+			this._context.viewModel,
+			options.viewController,
+			this.typeEmitter.event,
+		));
 		this.compositionControllerValue = compositionController;
 		const viewController = options.viewController;
 		this._register(this.onDidBeforeInput(event => this.routeBeforeInput(event, viewController, compositionController)));
@@ -203,14 +213,19 @@ export abstract class AbstractEditContext extends ViewPart {
 			if (!event.isComposing || !compositionController.composing) this.clear();
 		}));
 		this._register(this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)));
-		this._register(this.onDidKeydown(event => this.routeKeydown(event, viewController)));
-		this._register(this.onDidKeyup(event => viewController.emitKeyUp(new StandardKeyboardEvent(event))));
+		this._register(this.onKeyDown(event => this.routeKeydown(event, viewController)));
+		this._register(this.onKeyUp(event => viewController.emitKeyUp(event)));
 		return compositionController;
 	}
 
 	protected get viewController(): EditContextViewController {
 		if (!this.viewControllerValue) throw new ReferenceError('Edit context view controller is not initialized');
 		return this.viewControllerValue;
+	}
+
+	protected emitType(event: CompositionTypeData): void {
+		if (!this.compositionController.composing) this.clear();
+		this.typeEmitter.fire(event);
 	}
 
 	protected readPosition(): EditContextPosition {
@@ -239,10 +254,6 @@ export abstract class AbstractEditContext extends ViewPart {
 		switch (event.inputType) {
 			case "insertText":
 			case "insertReplacementText":
-				if (!event.data) return;
-				stopEvent(event);
-				this.clear();
-				viewController.type(event.data, event.inputType);
 				return;
 			case "insertLineBreak":
 			case "insertParagraph":
@@ -304,27 +315,28 @@ export abstract class AbstractEditContext extends ViewPart {
 		viewController.applyTextUpdate(update);
 	}
 
-	private routeKeydown(event: KeyboardEvent, viewController: EditContextViewController): void {
-		if (event.defaultPrevented) return;
-		viewController.emitKeyDown(new StandardKeyboardEvent(event));
-		this.willKeydownEmitter.fire(event);
-		if (event.defaultPrevented) return;
-		if (!event.isComposing && !event.getModifierState("AltGraph")) {
-			if (isUndoKeybinding(event)) {
-				stopEvent(event);
+	private routeKeydown(event: IKeyboardEvent, viewController: EditContextViewController): void {
+		const browserEvent = event.browserEvent;
+		if (browserEvent.defaultPrevented) return;
+		viewController.emitKeyDown(event);
+		this.willKeydownEmitter.fire(browserEvent);
+		if (browserEvent.defaultPrevented) return;
+		if (!event.isComposing && !event.altGraphKey) {
+			if (isUndoKeybinding(browserEvent)) {
+				event.stop();
 				this.clear();
 				viewController.undo();
 				return;
 			}
-			if (isRedoKeybinding(event)) {
-				stopEvent(event);
+			if (isRedoKeybinding(browserEvent)) {
+				event.stop();
 				this.clear();
 				viewController.redo();
 				return;
 			}
 		}
 		if (!event.isComposing && event.key === "Insert" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
-			stopEvent(event);
+			event.stop();
 			viewController.toggleOvertype();
 			return;
 		}
@@ -337,7 +349,7 @@ export abstract class AbstractEditContext extends ViewPart {
 			event.metaKey
 		) return;
 		if (viewController.hasExpandedSelections) return;
-		stopEvent(event);
+		event.stop();
 		// Tab is a keyboard command, not a browser text-input transaction. Keep it
 		// out of post-edit consumers such as SuggestController, matching VS Code's
 		// command dispatch ordering.
@@ -391,8 +403,7 @@ function hasPrimaryModifier(event: Pick<KeyboardEvent, "ctrlKey" | "altKey" | "m
 
 interface ActiveComposition {
 	readonly startOffset: number;
-	text: string;
-	selection: EditContextCompositionEvent['selection'];
+	length: number;
 	updated: boolean;
 	cancelRequested: boolean;
 }
@@ -415,6 +426,7 @@ export class CompositionController extends Disposable {
 		private readonly viewport: View,
 		private readonly viewModel: IViewModel,
 		private readonly viewController: EditContextViewController,
+		onType: Event<CompositionTypeData>,
 	) {
 		super();
 		if (viewport.textModel !== viewModel.model) {
@@ -431,10 +443,10 @@ export class CompositionController extends Disposable {
 			this.input.setReadOnly(this.initialReadOnly);
 			this.clearPresentation();
 		}));
-		this._register(input.onDidCompositionStart(event => this.handleCompositionStart(event)));
-		this._register(input.onDidCompositionUpdate(event => this.handleCompositionUpdate(event)));
-		this._register(input.onDidCompositionEnd(event => this.handleCompositionEnd(event)));
-		this._register(input.onDidKeydown(event => {
+		this._register(input.onDidCompositionStart(() => this.handleCompositionStart()));
+		this._register(input.onDidCompositionEnd(() => this.handleCompositionEnd()));
+		this._register(onType(event => this.handleType(event)));
+		this._register(input.onKeyDown(event => {
 			if (event.isComposing && event.key === "Escape" && this.activeComposition) {
 				this.activeComposition.cancelRequested = true;
 			}
@@ -454,23 +466,19 @@ export class CompositionController extends Disposable {
 		return Boolean(this.activeComposition);
 	}
 
-	private handleCompositionStart(event: EditContextCompositionEvent): void {
-		if (event.browserEvent.defaultPrevented || this.activeComposition) return;
+	private handleCompositionStart(): void {
+		if (this.activeComposition) return;
 		if (
 			!IME.enabled ||
 			this.viewport.cursorConfig.readOnly ||
 			this.viewModel.getSelections().length !== 1
-		) {
-			event.browserEvent.preventDefault();
-			return;
-		}
+		) return;
 		this.input.prepareComposition();
 		const startPosition = this.viewModel.getSelections()[0]!.getStartPosition();
 		this.viewController.compositionStart();
 		this.activeComposition = {
 			startOffset: this.viewport.textModel.getOffsetAt(startPosition),
-			text: "",
-			selection: { anchorOffset: 0, activeOffset: 0 },
+			length: 0,
 			updated: false,
 			cancelRequested: false,
 		};
@@ -480,46 +488,48 @@ export class CompositionController extends Disposable {
 		this.positionInput(startPosition);
 	}
 
-	private handleCompositionUpdate(event: EditContextCompositionEvent): void {
-		if (event.browserEvent.defaultPrevented) return;
-		this.updateComposition(event.text, event.selection);
-	}
-
-	private handleCompositionEnd(event: EditContextCompositionEvent): void {
+	private handleCompositionEnd(): void {
 		const active = this.activeComposition;
 		if (!active) return;
 		if (active.cancelRequested) {
 			this.cancelComposition();
 			return;
 		}
-		this.updateComposition(event.text, event.selection);
-		const current = this.activeComposition;
-		if (!current) return;
 		this.activeComposition = undefined;
 		this.viewController.compositionEnd();
 		this.finishPresentation();
 	}
 
-	private updateComposition(text: string, selection: EditContextCompositionEvent['selection']): void {
+	private handleType(event: CompositionTypeData): void {
 		const active = this.activeComposition;
-		if (!active) return;
-		text = normalizeTextLineEndings(text);
-		if (
-			active.updated &&
-			active.text === text &&
-			selectionsEqual(active.selection, selection)
-		) {
-			this.positionInputAtPrimary();
+		if (!active) {
+			if (event.replacePrevCharCnt || event.replaceNextCharCnt || event.positionDelta) {
+				this.viewController.compositionType(
+					event.text,
+					event.replacePrevCharCnt,
+					event.replaceNextCharCnt,
+					event.positionDelta,
+				);
+			} else {
+				this.viewController.type(event.text);
+			}
 			return;
 		}
-		this.viewController.compositionType(text, active.text.length, 0, selection.activeOffset - text.length);
+		this.viewController.compositionType(
+			event.text,
+			event.replacePrevCharCnt,
+			event.replaceNextCharCnt,
+			event.positionDelta,
+		);
 		if (this.activeComposition !== active) return;
-		active.text = text;
-		active.selection = selection;
+		active.length = Math.max(
+			0,
+			active.length - event.replacePrevCharCnt - event.replaceNextCharCnt + event.text.length,
+		);
 		active.updated = true;
 		this.setCompositionRange(Range.fromPositions(
 			this.viewport.textModel.positionAt(active.startOffset),
-			this.viewport.textModel.positionAt(active.startOffset + text.length),
+			this.viewport.textModel.positionAt(active.startOffset + active.length),
 		));
 		this.viewport.revealPosition(
 			this.viewModel.getSelections()[0]!.getPosition(),
@@ -577,9 +587,4 @@ export class CompositionController extends Disposable {
 	private synchronizeReadOnly(): void {
 		this.input.setReadOnly(this.initialReadOnly || !IME.enabled);
 	}
-}
-
-function selectionsEqual(left: EditContextCompositionEvent['selection'], right: EditContextCompositionEvent['selection']): boolean {
-	return left.anchorOffset === right.anchorOffset &&
-		left.activeOffset === right.activeOffset;
 }

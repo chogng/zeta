@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { StandardKeyboardEvent, type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { StandardMouseEvent } from '../../../../base/browser/mouseEvent.js';
 import { Event as EditorEvent } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -47,6 +48,7 @@ const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/co
 const { NativeEditContext } = await import('../../../browser/controller/editContext/native/nativeEditContext.js');
 const { NativeEditContextRegistry } = await import('../../../browser/controller/editContext/native/nativeEditContextRegistry.js');
 const { ScreenReaderSupport } = await import('../../../browser/controller/editContext/native/screenReaderSupport.js');
+const { TextAreaEditContext } = await import('../../../browser/controller/editContext/textArea/textAreaEditContext.js');
 const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
 const { TestView } = await import('../viewModel/testViewModel.js');
 const { ViewPart } = await import('../../../browser/view/viewPart.js');
@@ -119,6 +121,64 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	dom.window.close();
 });
 
+test('textarea system-caret movement returns through TextAreaInput and stops after blur', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		accessibilityService: enabledAccessibilityService,
+	});
+	editor.layout({ width: 320, height: 80 });
+	assert.ok(editor.view.editContext instanceof TextAreaEditContext);
+	const editContext = editor.view.editContext as InstanceType<typeof TextAreaEditContext>;
+	const textArea = editContext.getTextAreaDomNode();
+	editContext.focus();
+	editContext.writeScreenReaderContent('test');
+	editContext.textAreaInput.resetSelectionChangeTime();
+
+	textArea.setSelectionRange(1, 3, 'forward');
+	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
+	assert.deepEqual(editor.getSelections(), [new Selection(1, 2, 1, 4)]);
+
+	textArea.blur();
+	textArea.setSelectionRange(0, 1, 'forward');
+	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
+	assert.deepEqual(editor.getSelections(), [new Selection(1, 2, 1, 4)]);
+	dom.window.close();
+});
+
+test('textarea system-caret movement maps LF screen-reader content back to a CRLF model', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('ab\r\ncd');
+	using editor = new CodeEditorWidget({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		accessibilityService: enabledAccessibilityService,
+	});
+	editor.layout({ width: 320, height: 80 });
+	assert.ok(editor.view.editContext instanceof TextAreaEditContext);
+	const editContext = editor.view.editContext as InstanceType<typeof TextAreaEditContext>;
+	const textArea = editContext.getTextAreaDomNode();
+	editContext.focus();
+	editContext.writeScreenReaderContent('test');
+	editContext.textAreaInput.resetSelectionChangeTime();
+	assert.equal(textArea.value, 'ab\ncd');
+
+	textArea.setSelectionRange(1, 4, 'forward');
+	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
+	assert.deepEqual(editor.getSelections(), [new Selection(1, 2, 2, 2)]);
+	dom.window.close();
+});
+
 test('CodeEditorWidget scopes and updates the standard editor context keys', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -160,12 +220,21 @@ test('EditContext owns default copy, paste, and cut behavior without a clipboard
 		lineHeight: 20,
 	});
 	const input = editor.view.editContext.domNode.domNode;
+	assert.ok(editor.view.editContext instanceof TextAreaEditContext);
+	const textAreaInput = editor.view.editContext.textAreaInput;
+	let willCopyCount = 0;
+	let cutCount = 0;
+	let pasteCount = 0;
+	using willCopyListener = textAreaInput.onWillCopy(() => willCopyCount += 1);
+	using cutListener = textAreaInput.onCut(() => cutCount += 1);
+	using pasteListener = textAreaInput.onPaste(() => pasteCount += 1);
 	editor.setSelection(new Selection(1, 1, 1, 6));
 	const copied = new TestClipboardData();
 	const copy = testClipboardEvent(dom.window, 'copy', copied);
 	input.dispatchEvent(copy);
 	assert.equal(copy.defaultPrevented, true);
 	assert.equal(copied.getData('text/plain'), 'alpha');
+	assert.equal(willCopyCount, 1);
 
 	const pasted = new TestClipboardData();
 	pasted.setData('text/plain', 'omega');
@@ -173,6 +242,7 @@ test('EditContext owns default copy, paste, and cut behavior without a clipboard
 	input.dispatchEvent(paste);
 	assert.equal(paste.defaultPrevented, true);
 	assert.equal(model.getText(), 'omega beta');
+	assert.equal(pasteCount, 1);
 
 	editor.setSelection(new Selection(1, 1, 1, 6));
 	const cutData = new TestClipboardData();
@@ -181,6 +251,7 @@ test('EditContext owns default copy, paste, and cut behavior without a clipboard
 	assert.equal(cut.defaultPrevented, true);
 	assert.equal(cutData.getData('text/plain'), 'omega');
 	assert.equal(model.getText(), ' beta');
+	assert.equal(cutCount, 1);
 	dom.window.close();
 });
 
@@ -210,12 +281,14 @@ test('EditContext rejects cut and paste while composition owns the edit transact
 	assert.equal(model.getText(), 'alpha');
 	const textArea = input as HTMLTextAreaElement;
 	try {
-		textArea.value = 'x';
-		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: 'x' }));
-		assert.equal(model.getText(), 'alphax');
+		textArea.value = 'xy';
+		textArea.setSelectionRange(1, 1);
+		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: 'xy' }));
+		assert.equal(model.getText(), 'alphaxy');
+		assert.deepEqual(editor.getPosition(), new Position(1, 7));
 		assert.deepEqual(model.getAllDecorations().map(decoration => decoration.options.inlineClassName), ['edit-context-composition-primary']);
 	} finally {
-		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: 'x' }));
+		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: 'xy' }));
 	}
 	assert.equal(model.getAllDecorations().some(decoration => decoration.options.description === 'composition-decoration'), false);
 	dom.window.close();
@@ -454,6 +527,18 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.ok((editContext.nativeContext as TestEditContext).controlBounds);
 	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
+	let receivedKeyDown: IKeyboardEvent | undefined;
+	let receivedKeyUp: IKeyboardEvent | undefined;
+	using keyDownListener = editor.onKeyDown(event => receivedKeyDown = event);
+	using keyUpListener = editor.onKeyUp(event => receivedKeyUp = event);
+	const keyDown = new dom.window.KeyboardEvent('keydown', { bubbles: true, code: 'F2', key: 'F2' });
+	const keyUp = new dom.window.KeyboardEvent('keyup', { bubbles: true, code: 'F2', key: 'F2' });
+	input.dispatchEvent(keyDown);
+	input.dispatchEvent(keyUp);
+	assert.ok(receivedKeyDown instanceof StandardKeyboardEvent);
+	assert.ok(receivedKeyUp instanceof StandardKeyboardEvent);
+	assert.strictEqual(receivedKeyDown.browserEvent, keyDown);
+	assert.strictEqual(receivedKeyUp.browserEvent, keyUp);
 	editContext.focus();
 	editContext.writeScreenReaderContent('test');
 	const simpleContent = requiredElement<HTMLElement>(input, '.stanza-native-screen-reader-content');
@@ -465,6 +550,22 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.notStrictEqual(richContent, simpleContent);
 	assert.equal(simpleContent.isConnected, false);
 	assert.equal(richContent.querySelector('span[data-line-index="0"]')?.textContent, 'alpha');
+	const nativeComposition = editContext.nativeContext as TestEditContext;
+	nativeComposition.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { data: '' }));
+	assert.equal(editor.inComposition, true);
+	const textUpdate = Object.assign(new dom.window.Event('textupdate'), {
+		text: '你',
+		updateRangeStart: 0,
+		updateRangeEnd: 0,
+		selectionStart: 1,
+		selectionEnd: 1,
+	});
+	nativeComposition.dispatchEvent(textUpdate);
+	assert.equal(model.getText(), '你alpha');
+	nativeComposition.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: '你' }));
+	assert.equal(editor.inComposition, false);
+	model.undo();
+	assert.equal(model.getText(), 'alpha');
 
 	const adoptedDom = new JSDOM('<!doctype html><body></body>');
 	input.editContext = undefined;
@@ -1159,6 +1260,11 @@ test('CodeEditorWidget keyboard navigation uses standard cursor movement state',
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 	assert.deepEqual(editor.getPosition(), new Position(2, 2));
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+	assert.deepEqual(editor.getPosition(), new Position(3, 5));
+	using keyDownListener = editor.onKeyDown(event => event.stop());
+	const prevented = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowUp' });
+	input.dispatchEvent(prevented);
+	assert.equal(prevented.defaultPrevented, true);
 	assert.deepEqual(editor.getPosition(), new Position(3, 5));
 
 	dom.window.close();

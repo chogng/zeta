@@ -44,6 +44,45 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await expect.poll(() => workers.length).toBeGreaterThan(0);
 });
 
+test('textarea fallback routes type and composition through the standard input pipeline', async ({ page }) => {
+	await page.addInitScript(() => {
+		Reflect.deleteProperty(window, 'EditContext');
+	});
+	await page.goto('/textModel.html');
+	const editor = page.locator('.stanza-editor');
+	const input = page.locator('textarea.stanza-editor-input');
+	await input.focus();
+	await page.evaluate(() => window.zetaTextModelIntegration.setCursors([{ lineIndex: 0, columnIndex: 0 }]));
+	await page.keyboard.type('x');
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toMatch(/^xfn main/u);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toMatch(/^fn main/u);
+
+	await input.evaluate(element => {
+		element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+	});
+	await expect(editor).toHaveClass(/\bcomposing\b/u);
+	await input.evaluate(element => {
+		const textArea = element as HTMLTextAreaElement;
+		textArea.value = 'xy';
+		textArea.setSelectionRange(1, 1);
+		textArea.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: 'xy' }));
+	});
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toMatch(/^xyfn main/u);
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 1,
+		endLineIndex: 0,
+		endColumnIndex: 1,
+	});
+	await input.evaluate(element => {
+		element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'xy' }));
+	});
+	await expect(editor).not.toHaveClass(/\bcomposing\b/u);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toMatch(/^fn main/u);
+});
+
 test("cursor layer retains nodes, animates stable moves, and resolves multi-cursor colors", async ({ page }) => {
 	await page.goto("/textModel.html");
 	await expect(page.locator(".stanza-editor")).toBeVisible();
@@ -371,6 +410,82 @@ test("text-model editor has the accessibility contract", async ({ page }) => {
 	expect(accessibility.violations.filter(violation => violation.impact === "critical")).toEqual([]);
 	const contrast = await getAxeResults(page, undefined, { runOnly: { type: "rule", values: ["color-contrast"] } });
 	expect(contrast.violations).toEqual([]);
+});
+
+test('textarea system-caret movement updates the editor only while focused', async ({ page }) => {
+	await page.addInitScript(() => {
+		Reflect.deleteProperty(window, 'EditContext');
+	});
+	await page.goto('/textModel.html');
+	const input = page.locator('textarea.stanza-editor-input');
+	await expect(input).toHaveCount(1);
+	await input.focus();
+	await page.waitForTimeout(110);
+	await input.evaluate(element => {
+		const textArea = element as HTMLTextAreaElement;
+		textArea.setSelectionRange(1, 3, 'forward');
+		textArea.ownerDocument.dispatchEvent(new Event('selectionchange'));
+	});
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 1,
+		endLineIndex: 0,
+		endColumnIndex: 3,
+	});
+
+	await input.blur();
+	await input.evaluate(element => {
+		const textArea = element as HTMLTextAreaElement;
+		textArea.setSelectionRange(0, 1, 'forward');
+		textArea.ownerDocument.dispatchEvent(new Event('selectionchange'));
+	});
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 1,
+		endLineIndex: 0,
+		endColumnIndex: 3,
+	});
+});
+
+test('textarea clipboard events pass through TextAreaInput semantic events', async ({ page }) => {
+	await page.addInitScript(() => {
+		Reflect.deleteProperty(window, 'EditContext');
+	});
+	await page.goto('/textModel.html');
+	const input = page.locator('textarea.stanza-editor-input');
+	await input.focus();
+	await page.waitForTimeout(110);
+	const copied = await input.evaluate(element => {
+		const textArea = element as HTMLTextAreaElement;
+		textArea.setSelectionRange(1, 3, 'forward');
+		textArea.ownerDocument.dispatchEvent(new Event('selectionchange'));
+		const clipboardData = new DataTransfer();
+		const event = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData });
+		textArea.dispatchEvent(event);
+		return { defaultPrevented: event.defaultPrevented, text: clipboardData.getData('text/plain') };
+	});
+	expect(copied).toEqual({ defaultPrevented: true, text: 'n ' });
+
+	await input.evaluate(element => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', 'ZZ');
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	});
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toMatch(/^fZZmain\(\)/u);
+	await expect(input).toHaveValue(/^fZZmain\(\)/u);
+	await page.waitForTimeout(110);
+
+	await input.evaluate(element => {
+		const textArea = element as HTMLTextAreaElement;
+		textArea.setSelectionRange(0, 3, 'forward');
+		textArea.ownerDocument.dispatchEvent(new Event('selectionchange'));
+		textArea.dispatchEvent(new ClipboardEvent('cut', {
+			bubbles: true,
+			cancelable: true,
+			clipboardData: new DataTransfer(),
+		}));
+	});
+	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toMatch(/^main\(\)/u);
 });
 
 function assertBox(box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null, name: string): asserts box is { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {

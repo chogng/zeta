@@ -75,17 +75,19 @@ export class TextAreaState {
 	}
 
 	deduceEditorPosition(offset: number): [Position | null, number, number] {
-		if (offset <= this.selectionStart) {
-			return this._finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, this.value.substring(offset, this.selectionStart), -1);
+		const selectionStart = Math.min(this.selectionStart, this.selectionEnd);
+		const selectionEnd = Math.max(this.selectionStart, this.selectionEnd);
+		if (offset <= selectionStart) {
+			return this._finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, this.value.substring(offset, selectionStart), -1);
 		}
-		if (offset >= this.selectionEnd) {
-			return this._finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(this.selectionEnd, offset), 1);
+		if (offset >= selectionEnd) {
+			return this._finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(selectionEnd, offset), 1);
 		}
-		const textBeforeOffset = this.value.substring(this.selectionStart, offset);
+		const textBeforeOffset = this.value.substring(selectionStart, offset);
 		if (!textBeforeOffset.includes(String.fromCharCode(8230))) {
 			return this._finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, textBeforeOffset, 1);
 		}
-		return this._finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(offset, this.selectionEnd), -1);
+		return this._finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(offset, selectionEnd), -1);
 	}
 
 	private _finishDeduceEditorPosition(anchor: Position | null, deltaText: string, signum: number): [Position | null, number, number] {

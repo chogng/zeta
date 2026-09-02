@@ -1,4 +1,5 @@
 import { addDisposableListener, h, text as createText } from "../../../../../base/browser/dom.js";
+import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { IME } from '../../../../../base/common/ime.js';
 import { Disposable, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
@@ -8,7 +9,6 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type EditContextViewController } from '../editContext.js';
 import { clampScreenReaderOffset, createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, screenReaderLineOffsetAtModelOffset, type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
-import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 
 /** Plain-text screen-reader projection used by the native EditContext. */
 export class SimpleScreenReaderContent extends Disposable implements IScreenReaderContent {
@@ -24,7 +24,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 
 	constructor(
 		private readonly domNode: FastDomNode<HTMLElement>,
-		protected readonly context: ViewContext,
+		private readonly context: ViewContext,
 		private readonly viewController: EditContextViewController,
 		private readonly accessibilityService: IAccessibilityService | undefined,
 	) {

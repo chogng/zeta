@@ -245,7 +245,6 @@ test("Read-only editor instances preserve selection while rejecting document com
 	assert.deepEqual(controller.getSelections(), single(2, 2));
 	assert.equal(model.undo(), undefined);
 	assert.equal(model.redo(), undefined);
-	assert.throws(() => controller.beginComposition(), /read-only/);
 });
 
 test("Cursor-only selection history restores multi-cursor operations without changing document undo", () => {

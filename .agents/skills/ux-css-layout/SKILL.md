@@ -1,9 +1,16 @@
 ---
 name: ux-css-layout
-description: VS Code CSS conventions, file organization, class naming, standard sizes, SplitView/Grid layout, scrollable content, responsive layout, and text overflow/ellipsis patterns. Use when writing CSS, building layouts, or fixing text truncation issues.
+description: Apply repository-aware CSS layout rules, file organization, naming, scrolling, responsive layout, and text overflow patterns to VS Code or Zeta UI. Use when writing CSS, building layouts, or fixing text truncation; in Zeta, preserve its DOM owners and naming instead of importing VS Code structure or branding.
 ---
 
 This skill covers CSS file organization, naming, standard sizes, programmatic layout (SplitView, Grid, scrollable), responsive patterns, and text overflow handling.
+
+## Repository routing
+
+Determine the target repository before applying any selector, token, DOM, or widget example in this skill:
+
+- In `../vscode`, the `src/vs`, `.monaco-*`, and `--vscode-*` examples below are literal repository conventions.
+- In Zeta, those names are upstream reference syntax only. Apply the layout principle to the existing Zeta component and use its registered names and owners; never paste the example and replace prefixes.
 
 ### Zeta upstream-alignment guard
 
@@ -13,9 +20,13 @@ Never change a Zeta DOM hierarchy or scrolling/focus owner simply because an ups
 
 Keep the surrounding Zeta TypeScript and CSS style readable even when the upstream API has many options: do not compress option objects, methods, selectors, or declarations to increase batch size. If the result could be produced by copying upstream and replacing prefixes, stop and redesign from the local owner and behavior contract.
 
+Only modify CSS that is required by the current verified behavior slice. A missing upstream CSS file, a selector diff, or an API-alignment batch does not authorize replacing an existing stylesheet, renaming unrelated selectors, rebuilding DOM wrappers, or importing the whole upstream visual system.
+
 ---
 
 ## 1. File Organization
+
+The `src/vs` paths in this section are literal only for the VS Code repository. In Zeta, keep the same co-location principle but use the owning Zeta component path; do not create a parallel `src/vs`-shaped style tree.
 
 CSS files are **co-located** with their TypeScript components:
 
@@ -40,10 +51,9 @@ Workbench-level global styles live in `src/vs/workbench/browser/media/`.
 
 ## 2. Class Naming
 
-- **`monaco-` prefix** for all major components: `.monaco-workbench`, `.monaco-split-view2`, `.monaco-scrollable-element`
-- **Modifier classes**: `.monaco-split-view2.vertical`, `.monaco-split-view2.horizontal`
-- **State classes**: `.visible`, `.focused`, `.active`, `.highlight`
-- Feature-specific classes use kebab-case without prefix: `.my-feature`, `.outline-pane`, `.welcome-view-content`
+- **VS Code repository:** use its established `monaco-` component roots such as `.monaco-workbench`, `.monaco-split-view2`, and `.monaco-scrollable-element`; use its existing modifier and state-class conventions.
+- **Zeta repository:** preserve the owning component's existing Zeta root and feature vocabulary. Never introduce or retain a new `.monaco-*` selector to claim alignment, and never rename unrelated local selectors merely to resemble VS Code.
+- In either repository, feature-specific classes use readable kebab-case and state classes describe real component state rather than an upstream selector that the local DOM does not produce.
 
 ## 3. Standard Sizes
 
@@ -269,6 +279,8 @@ For `IconLabel` and list/tree renderers, this is handled automatically. For cust
 ---
 
 ## 10. Design-System Size Tokens (spacing, radius, font, codicon, stroke)
+
+This section documents the VS Code repository's literal `--vscode-*` size-token system. In Zeta, use a size token only if Zeta already registers and owns the equivalent token; do not copy the variable, mechanically rename it to `--zeta-*`, or create a token solely because VS Code has one. Otherwise preserve the local component's established sizing rules and validate the resulting geometry in the browser.
 
 VS Code ships a design-system **size** ramp, registered in
 `src/vs/platform/theme/common/sizes/baseSizes.ts` and emitted as `--vscode-*` CSS

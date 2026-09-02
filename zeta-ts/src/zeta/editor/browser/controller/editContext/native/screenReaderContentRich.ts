@@ -23,13 +23,13 @@ export interface RichScreenReaderContentOptions {
 export class RichScreenReaderContent extends SimpleScreenReaderContent {
 	constructor(
 		domNode: FastDomNode<HTMLElement>,
-		context: ViewContext,
+		private readonly richContext: ViewContext,
 		viewController: EditContextViewController,
 		accessibilityService: IAccessibilityService | undefined,
 		private readonly options: RichScreenReaderContentOptions,
 	) {
-		super(domNode, context, viewController, accessibilityService);
-		const model = context.viewModel.model;
+		super(domNode, richContext, viewController, accessibilityService);
+		const model = richContext.viewModel.model;
 		if (options.semanticTokenSource && options.semanticTokenSource.textModel !== model) {
 			throw new TypeError("Native rich screen-reader semantic tokens must share the text model");
 		}
@@ -49,7 +49,7 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 				)));
 			}
 			const segmentText = text.slice(segment.contentStartOffset, segment.contentEndOffset);
-			const startPosition = this.context.viewModel.model.getPositionAt(segment.modelStartOffset);
+			const startPosition = this.richContext.viewModel.model.getPositionAt(segment.modelStartOffset);
 			renderSegment(
 				fragment,
 				segmentText,

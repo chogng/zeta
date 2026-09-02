@@ -1,9 +1,16 @@
 ---
 name: ux-theming
-description: VS Code theming, color tokens, widget styles, focus indicators, and high-contrast theme support. Use when registering colors, styling widgets with theme tokens, or ensuring HC/focus compliance.
+description: Apply repository-aware theming, color-token, widget, focus, and high-contrast rules to VS Code or Zeta UI. Use when registering colors or styling themed states; in Zeta, use its existing theme registry and DOM state owners rather than VS Code variables or selectors.
 ---
 
 This skill covers color registration, CSS variable usage, widget style patterns, focus indicators, and high-contrast theme requirements.
+
+## Repository routing
+
+Determine the target repository before using any literal name or snippet below:
+
+- In `../vscode`, `.monaco-*`, `.hc-*`, `.vscode-high-contrast`, `src/vs`, and `--vscode-*` are literal repository conventions.
+- In Zeta, they describe upstream semantics only. Resolve the equivalent through Zeta's existing component root, state owner, and color registry; never paste the snippet or perform a prefix replacement.
 
 ### Zeta upstream-alignment guard
 
@@ -15,7 +22,13 @@ Before changing Editor or Workbench theming, record the local component root, st
 
 Concrete rule: `var(--zeta-editor-background)` produced by Zeta's color registry is valid when the component already owns the editor-background semantic. Copying `var(--vscode-editor-background)` or renaming it while also importing `.monaco-editor` nesting is invalid.
 
+Only theme the states required by the current verified component change. A missing upstream stylesheet, color ID, selector, or high-contrast rule does not authorize replacing a Zeta stylesheet, renaming unrelated local states, adding upstream wrappers, or recreating the full VS Code theme surface.
+
 ---
+
+## VS Code repository reference
+
+Sections 1–7 below describe literal APIs, selectors, and variables for the VS Code repository. When the target is Zeta, keep only the semantic requirement—such as “use a registered background color” or “focus remains visible in high contrast”—and resolve its concrete token and selector from Zeta source.
 
 ## 1. Registering Colors
 
@@ -45,6 +58,8 @@ export const myWidgetBackground = registerColor('myWidget.background',
 | `src/vs/workbench/common/theme.ts` | Tabs, sidebar, status bar, panels, editor groups, banner |
 
 ## 3. Using Colors in CSS
+
+The names in this section apply literally only in the VS Code repository. In Zeta, use a `--zeta-*` variable only when it is emitted by Zeta's registry and matches the component's semantic role; never synthesize a variable by changing the prefix.
 
 Colors are injected as CSS custom properties on `.monaco-workbench`:
 
@@ -87,6 +102,8 @@ Available defaults: `defaultButtonStyles`, `defaultInputBoxStyles`, `defaultChec
 
 ## 5. Focus Indicators
 
+The selector and variable below are a VS Code repository example. In Zeta, keep the existing focus owner and use the registered Zeta focus token and component state selector; do not introduce `.monaco-*` nesting or `--vscode-focusBorder`.
+
 Defined in `src/vs/workbench/browser/media/style.css`:
 
 ```css
@@ -98,8 +115,8 @@ Defined in `src/vs/workbench/browser/media/style.css`:
 }
 ```
 
-**Rules**:
-- Use `var(--vscode-focusBorder)` — never hardcode a focus color.
+**VS Code repository rules**:
+- Use `var(--vscode-focusBorder)` — never hardcode a focus color in VS Code.
 - Default `outline-offset: -1px` (inset). Exception: checkboxes use `2px`.
 - Active elements suppress focus ring: `.my-widget:active { outline: 0 !important; }`
 - Use `.synthetic-focus` class for programmatic focus indication.
@@ -110,6 +127,8 @@ Defined in `src/vs/workbench/browser/media/style.css`:
 Modal dialogs must trap focus within the dialog until dismissed. Use `dom.trackFocus()` and handle `Tab`/`Shift+Tab` cycling.
 
 ## 6. High Contrast Theme Rules
+
+The `.hc-black`, `.hc-light`, and `.vscode-high-contrast` selectors below apply literally only in the VS Code repository. In Zeta, inspect and use its existing high-contrast root/state mechanism; do not add those upstream classes or mirror their DOM nesting.
 
 - **Always** provide `hcDark` and `hcLight` defaults when registering colors.
 - HC backgrounds: `Color.black` (hcDark), `Color.white` (hcLight).
@@ -132,6 +151,8 @@ Modal dialogs must trap focus within the dialog until dismissed. Use `dom.trackF
   ```
 
 ## 7. No Hardcoded Visual Values
+
+The right-hand variables in the table are VS Code repository examples. In Zeta, the same semantic rule means selecting an existing registered `--zeta-*` token; it never means copying `--vscode-*` or inventing a token by prefix substitution.
 
 Reviewers will always flag hardcoded colors, shadows, sizes that should use theme tokens or CSS variables.
 

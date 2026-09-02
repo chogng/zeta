@@ -13,7 +13,7 @@
 
 用户指定 Editor 目录或同一目录下多个文件时，首次调查直接批量取得该目录双方文件集合、imports、exports、生产调用方和测试。输出过大时按结果维度拆分，不逐文件暂停。
 
-修改前保存工作树来源基线，并对整个目标目录分类同路径、仅 Zeta、仅 VS Code 和大小写差异。仅 VS Code 项直接在对应路径建立文件，先对齐 API 名称与职责，再独立实现逻辑并把调用方 import 一次迁入；双方已有文件直接原地修改。尚无决定的仅 Zeta 项完成整批调查后一次性请求用户决定，已有决定的 Zeta 专属归属按确认职责继续使用。
+修改前保存工作树来源基线，并对整个目标目录分类同路径、仅 Zeta、仅 VS Code 和大小写差异。只有进入当前依赖闭合切片的仅 VS Code 项才在对应路径建立文件：先对齐 API 名称与职责，再独立实现逻辑并把调用方 import 一次迁入；其余缺失项只记台账。双方已有文件直接原地修改。尚无决定的仅 Zeta 项完成整批调查后一次性请求用户决定，已有决定的 Zeta 专属归属按确认职责继续使用。
 
 Editor 浏览器改动开始前必须单独写出当前 `View`/ViewPart 的状态 owner、DOM owner、滚动与输入入口、布局坐标来源和 render 生命周期。上游构造函数或 ViewPart 拆分不能反向要求 Zeta 更换这些 owner；若公开签名与本地模型冲突，先对齐其依赖的本地 owner 并用一个最小行为切片验证，禁止同时重做 DOM wrapper、滚动状态和全部调用方。
 
@@ -35,6 +35,10 @@ VS Code 有而 Zeta 缺失的文件在调用链到达时直接按同路径创建
 批量要求用于方向已证明后的调用方迁移，不用于同时探索十个 owner。一个端口的最小行为测试通过后，可以一次迁移十个以上同类调用方；若其中任何调用方暴露新的状态 owner、DOM owner 或未确认的仅 Zeta 文件，就把该分支留在台账，继续完成已闭合部分。
 
 ### Editor 端口反例
+
+`editor/common/commands/editorEditCommand.ts` 在 VS Code 没有同路径文件，因此不能为了集中 selection、history 或 edit helper 自行创建，再让标准 Editor 命令反向依赖它。除非用户明确确认它是 Zeta 专属 owner，否则应把公开契约和实现收敛到真实存在的标准命令、cursor 或 model owner，并让这个仅 Zeta 文件保持不存在。
+
+`workbench/contrib/debug/browser/debugBreakpointDecorations.ts` 同样不是 VS Code 同路径文件。即使断点装饰行为确实需要实现，也不能在 Editor 对齐批次里因为“上游附近有类似能力”而创建或改造它；先暂停并取得用户对这个仅 Zeta 路径及职责的决定，再由独立的 Workbench 调用链证明其 owner、消费者和测试。
 
 `EditorScrollbar.getDomNode()` 在上游成立，是因为对应类拥有整体 scrollable wrapper。若 Zeta 同路径类只拥有附着在 `View` 根节点上的水平、垂直轨道，返回 `View` 根节点会谎报 DOM owner，为补这个成员新造 wrapper 又会改变已经验证的布局与滚动模型；此时该成员必须留在台账，直到真实生产调用链需要它且正确 owner 已对齐。
 

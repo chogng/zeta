@@ -2,24 +2,23 @@ import './textAreaEditContext.css';
 import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../../base/browser/fastDomNode.js";
+import { type IKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
 import { type Event } from "../../../../../base/common/event.js";
-import { AbstractEditContext, type CompositionController, type EditContextCompositionEvent, type EditContextOptions, type EditContextPosition, type EditContextState } from "../editContext.js";
+import { AbstractEditContext, type CompositionController, type EditContextOptions, type EditContextPosition, type EditContextState } from "../editContext.js";
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
-import { SelectionDirection, Selection } from '../../../../common/core/selection.js';
+import { SelectionDirection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { type TextModel } from '../../../../common/model/textModel.js';
 import { type View } from '../../../view.js';
 import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
 import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type IViewModel } from '../../../../common/viewModel.js';
 import * as viewEvents from '../../../../common/viewEvents.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
-import { MappedScreenReaderStrategy, modelOffsetAtContentOffset, type MappedScreenReaderContentState } from '../screenReaderUtils.js';
-import { TextAreaInput } from "./textAreaEditContextInput.js";
+import { SimplePagedScreenReaderStrategy } from '../screenReaderUtils.js';
+import { TextAreaInput, type ICompositionData, type ICompositionStartEvent, type ITextAreaInputHost } from "./textAreaEditContextInput.js";
 import { TextAreaEditContextRegistry } from "./textAreaEditContextRegistry.js";
 import { TextAreaState, type ITextAreaWrapper } from "./textAreaEditContextState.js";
-import { CopyOptions } from '../clipboardUtils.js';
 
 /** Options accepted by the textarea-backed edit context. */
 export type TextAreaEditContextOptions = EditContextOptions;
@@ -36,18 +35,16 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	private readonly accessibilityController: TextAreaAccessibilityController;
 	private lastRenderPosition: Position | null = null;
 	private renderPosition: EditContextPosition | undefined;
-	private connected = false;
 
-	get onDidFocus(): Event<void> { return this.textAreaInput.onDidFocus; }
-	get onDidBlur(): Event<void> { return this.textAreaInput.onDidBlur; }
+	get onDidFocus(): Event<void> { return this.textAreaInput.onFocus; }
+	get onDidBlur(): Event<void> { return this.textAreaInput.onBlur; }
 	get onDidBeforeInput(): Event<InputEvent> { return this.textAreaInput.onDidBeforeInput; }
 	get onDidInput(): Event<InputEvent> { return this.textAreaInput.onDidInput; }
-	get onDidSelect(): Event<void> { return this.textAreaInput.onDidSelect; }
-	get onDidKeydown(): Event<KeyboardEvent> { return this.textAreaInput.onDidKeydown; }
-	get onDidKeyup(): Event<KeyboardEvent> { return this.textAreaInput.onDidKeyup; }
-	get onDidCompositionStart(): Event<EditContextCompositionEvent> { return this.textAreaInput.onDidCompositionStart; }
-	get onDidCompositionUpdate(): Event<EditContextCompositionEvent> { return this.textAreaInput.onDidCompositionUpdate; }
-	get onDidCompositionEnd(): Event<EditContextCompositionEvent> { return this.textAreaInput.onDidCompositionEnd; }
+	get onKeyDown(): Event<IKeyboardEvent> { return this.textAreaInput.onKeyDown; }
+	get onKeyUp(): Event<IKeyboardEvent> { return this.textAreaInput.onKeyUp; }
+	get onDidCompositionStart(): Event<ICompositionStartEvent> { return this.textAreaInput.onCompositionStart; }
+	get onDidCompositionUpdate(): Event<ICompositionData> { return this.textAreaInput.onCompositionUpdate; }
+	get onDidCompositionEnd(): Event<void> { return this.textAreaInput.onCompositionEnd; }
 
 	constructor(
 		context: ViewContext,
@@ -69,14 +66,26 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		this.textArea.setAttribute("aria-multiline", "true");
 		this.textArea.setAttribute("aria-roledescription", "code editor");
 		this.textArea.setAttribute("aria-readonly", String(this.textArea.domNode.readOnly));
-		this.textAreaInput = this._register(new TextAreaInput(this.textArea.domNode));
-		this._register(this.textAreaInput.onDidFocus(() => this._context.viewModel.setHasFocus(true)));
-		this._register(this.textAreaInput.onDidBlur(() => this._context.viewModel.setHasFocus(false)));
+		const inputHost: ITextAreaInputHost = {
+			context: this._context,
+			getScreenReaderContent: () => this.accessibilityController.getScreenReaderContent(),
+			deduceModelPosition: (viewAnchorPosition, deltaOffset, lineFeedCount) => (
+				this._context.viewModel.deduceModelPositionRelativeToViewPosition(
+					viewAnchorPosition,
+					deltaOffset,
+					lineFeedCount,
+				)
+			),
+		};
+		this.textAreaInput = this._register(new TextAreaInput(inputHost, this.textArea.domNode));
+		this._register(this.textAreaInput.onFocus(() => this._context.viewModel.setHasFocus(true)));
+		this._register(this.textAreaInput.onBlur(() => this._context.viewModel.setHasFocus(false)));
 		this._register(TextAreaEditContextRegistry.register(options.ownerId, this));
 		const compositionController = this.initializeController(options);
 		this.accessibilityController = this._register(new TextAreaAccessibilityController(this, options.viewport, this._context.viewModel, compositionController));
+		this._register(this.textAreaInput.onSelectionChangeRequest(selection => this.viewController.setSelection(selection)));
 		this.synchronizeState();
-		this.connect();
+		this.registerInputListeners();
 	}
 
 	get domNode(): FastDomNode<HTMLElement> {
@@ -87,49 +96,21 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		return this.textArea.domNode.readOnly;
 	}
 
-	/**
-	 * Installs DOM listeners after higher-level consumers have subscribed to the
-	 * edit-context events. This preserves completion and clipboard ordering.
-	 */
-	private connect(): void {
-		this.assertNotDisposed();
-		if (this.connected) return;
-		this.connected = true;
-		this._register(this.textAreaInput.onDidCopy(event => {
-			CopyOptions.electronBugWorkaroundCopyEventHasFired = true;
-			const copyEvent = this.fireWillCopy(event, false);
-			if (!copyEvent.isHandled) copyEvent.ensureClipboardGetsEditorData();
-		}));
-		this._register(this.textAreaInput.onDidCut(event => {
-			const cutEvent = this.fireWillCopy(event, true);
-			if (cutEvent.isHandled) return;
-			if (this.compositionController.composing) {
-				cutEvent.setHandled();
-				return;
-			}
-			this.textAreaInput.setIgnoreSelectionChangeTime('received cut event');
-			cutEvent.ensureClipboardGetsEditorData();
-			this.viewController.cut();
-		}));
-		this._register(this.textAreaInput.onDidPaste(event => {
-			const pasteEvent = this.fireWillPaste(event);
-			if (pasteEvent.isHandled) return;
-			if (this.compositionController.composing) {
-				pasteEvent.setHandled();
-				return;
-			}
-			this.textAreaInput.setIgnoreSelectionChangeTime('received paste event');
-			event.preventDefault();
-			if (!pasteEvent.text) return;
-			const metadata = pasteEvent.metadata;
+	private registerInputListeners(): void {
+		this._register(this.textAreaInput.onType(event => this.emitType(event)));
+		this._register(this.textAreaInput.onWillCopy(event => this._onWillCopy.fire(event)));
+		this._register(this.textAreaInput.onWillCut(event => this._onWillCut.fire(event)));
+		this._register(this.textAreaInput.onWillPaste(event => this._onWillPaste.fire(event)));
+		this._register(this.textAreaInput.onCut(() => this.viewController.cut()));
+		this._register(this.textAreaInput.onPaste(event => {
+			const metadata = event.metadata;
 			this.viewController.paste(
-				pasteEvent.text,
+				event.text,
 				this._context.configuration.options.get(EditorOption.emptySelectionClipboard) && !!metadata?.isFromEmptySelection,
 				metadata?.multicursorText ?? null,
 				metadata?.mode ?? null,
 			);
 		}));
-		this.textAreaInput.connect();
 	}
 
 	focus(): void {
@@ -166,7 +147,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	writeScreenReaderContent(reason: string): void {
-		this.accessibilityController.writeScreenReaderContent(reason);
+		this.textAreaInput.writeNativeTextAreaContent(reason);
 	}
 
 	clear(): void {
@@ -296,35 +277,24 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 const ACCESSIBILITY_LINES_PER_PAGE = 500;
 const MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS = 32 * 1_024;
 
-/** Mirrors the active editor window into the native input for assistive technology. */
+/** Produces the active editor window mirrored into the textarea for assistive technology. */
 class TextAreaAccessibilityController extends Disposable {
 	private accessibleInputSyncScheduled = false;
-	private accessibleInputState = TextAreaState.EMPTY;
-	private accessibleScreenReaderContentState: MappedScreenReaderContentState | undefined;
-	private accessibleInputStartOffset = 0;
-	private readonly screenReaderStrategy = new MappedScreenReaderStrategy();
+	private readonly screenReaderStrategy = new SimplePagedScreenReaderStrategy();
 
 	constructor(
 		private readonly input: TextAreaEditContext,
 		private readonly viewport: View,
 		private readonly viewModel: IViewModel,
-		private readonly compositionController: CompositionController,
+		compositionController: CompositionController,
 	) {
 		super();
-		this._register(input.onDidFocus(() => this.writeScreenReaderContent('focus')));
-		this._register(input.onDidBlur(() => {
-			this.accessibleInputState = TextAreaState.EMPTY;
-			this.accessibleScreenReaderContentState = undefined;
-			this.accessibleInputStartOffset = 0;
-		}));
-		this._register(input.onDidSelect(() => this.acceptAccessibleSelection()));
+		this._register(input.onDidFocus(() => this.input.writeScreenReaderContent('focus')));
 		this._register(compositionController.onDidChange(() => this.scheduleScreenReaderContent()));
 	}
 
-	writeScreenReaderContent(reason: string): void {
-		void reason;
-		const input = this.input.getTextAreaDomNode();
-		if (this.isDisposed || this.compositionController.composing || input.ownerDocument.activeElement !== input) return;
+	getScreenReaderContent(): TextAreaState {
+		if (this.isDisposed) return TextAreaState.EMPTY;
 		const model = this.viewport.textModel;
 		const selection = this.viewModel.getSelections()[0]!;
 		this.updateAccessibleSelectionDescription();
@@ -338,9 +308,7 @@ class TextAreaAccessibilityController extends Disposable {
 				model.offsetAt(selection.getPosition()),
 			);
 			const text = model.getTextInRange(Range.fromPositions(model.positionAt(window.startOffset), model.positionAt(window.endOffset)));
-			this.accessibleInputStartOffset = window.startOffset;
-			this.accessibleScreenReaderContentState = undefined;
-			this.accessibleInputState = new TextAreaState(
+			return new TextAreaState(
 				text,
 				selection.getDirection() === SelectionDirection.RTL
 					? clampOffset(selectionEndOffset - window.startOffset, text.length)
@@ -351,8 +319,6 @@ class TextAreaAccessibilityController extends Disposable {
 				selection,
 				undefined,
 			);
-			this.accessibleInputState.writeToTextArea('screenReaderContent', this.input, true);
-			return;
 		}
 		const contentState = this.screenReaderStrategy.fromEditorSelection(
 			model,
@@ -360,11 +326,7 @@ class TextAreaAccessibilityController extends Disposable {
 			ACCESSIBILITY_LINES_PER_PAGE,
 			true,
 		);
-		const state = TextAreaState.fromScreenReaderContentState(contentState);
-		this.accessibleScreenReaderContentState = contentState;
-		this.accessibleInputState = state;
-		this.accessibleInputStartOffset = contentState.startOffset;
-		state.writeToTextArea('screenReaderContent', this.input, true);
+		return TextAreaState.fromScreenReaderContentState(contentState);
 	}
 
 	private updateAccessibleSelectionDescription(): void {
@@ -385,48 +347,8 @@ class TextAreaAccessibilityController extends Disposable {
 		this.accessibleInputSyncScheduled = true;
 		queueMicrotask(() => {
 			this.accessibleInputSyncScheduled = false;
-			this.writeScreenReaderContent('composition changed');
+			this.input.writeScreenReaderContent('composition changed');
 		});
-	}
-
-	private acceptAccessibleSelection(): void {
-		const input = this.input.getTextAreaDomNode();
-		if (this.compositionController.composing || input.ownerDocument.activeElement !== input) return;
-		const model = this.viewport.textModel;
-		this.accessibleInputState = TextAreaState.readFromTextArea(this.input, this.accessibleInputState);
-		const startOffset = input.selectionStart;
-		const endOffset = input.selectionEnd;
-		const backward = input.selectionDirection === 'backward';
-		const contentState = this.accessibleScreenReaderContentState;
-		if (!contentState) {
-			const anchorOffset = this.accessibleInputStartOffset + (backward ? endOffset : startOffset);
-			const activeOffset = this.accessibleInputStartOffset + (backward ? startOffset : endOffset);
-			this.applyAccessibleSelection(model, anchorOffset, activeOffset);
-			return;
-		}
-		const anchorOffset = modelOffsetAtContentOffset(
-			contentState,
-			backward ? endOffset : startOffset,
-			backward ? 'end' : 'start',
-		);
-		const activeOffset = modelOffsetAtContentOffset(
-			contentState,
-			backward ? startOffset : endOffset,
-			backward ? 'start' : 'end',
-		);
-		this.applyAccessibleSelection(model, anchorOffset, activeOffset);
-	}
-
-	private applyAccessibleSelection(model: TextModel, anchorOffset: number, activeOffset: number): void {
-		const safeAnchorOffset = clampOffset(anchorOffset, model.length);
-		const safeActiveOffset = clampOffset(activeOffset, model.length);
-		const current = this.viewModel.getSelections()[0]!;
-		if (model.offsetAt(current.getSelectionStart()) === safeAnchorOffset && model.offsetAt(current.getPosition()) === safeActiveOffset) return;
-		this.viewModel.setSelections('accessibility', [Selection.fromPositions(
-			model.positionAt(safeAnchorOffset),
-			model.positionAt(safeActiveOffset),
-		)]);
-		this.viewport.revealPosition(this.viewModel.getSelections()[0]!.getPosition());
 	}
 }
 
