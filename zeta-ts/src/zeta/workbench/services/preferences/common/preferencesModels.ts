@@ -1,7 +1,8 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { ConfigurationsRegistry, type ConfigurationRegistry, type IConfigurationSettingSchema, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationSettingSchema, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
 
 export interface SettingState<T> {
@@ -99,7 +100,7 @@ export function configurationSettingBinding<T>(configurationService: IConfigurat
 export class DefaultSettings {
 	private readonly settings = new Map<string, ISetting>();
 
-	constructor(registry: ConfigurationRegistry = ConfigurationsRegistry) {
+	constructor(registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)) {
 		for (const configuration of registry.getRegisteredConfigurations()) {
 			if (!configuration.setting) continue;
 			this.settings.set(configuration.key, registeredSetting(configuration, configuration.setting));

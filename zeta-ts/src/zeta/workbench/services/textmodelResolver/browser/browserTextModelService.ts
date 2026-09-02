@@ -89,7 +89,7 @@ export class BrowserTextModelService implements ITextModelResourceService {
 					tokenization: {
 						languageIdCodec: this.options.languageService.languageIdCodec,
 						syntaxProviderRegistry: this.options.languageFeaturesService.syntaxProvider,
-						semanticTokensProvider: this.options.languageFeaturesService.semanticTokensProvider,
+						documentSemanticTokensProvider: this.options.languageFeaturesService.documentSemanticTokensProvider,
 						...(this.options.syntaxService ? { syntaxService: this.options.syntaxService } : {}),
 						...(this.options.onDidChangeLanguageSupport ? { onDidChangeLanguageSupport: this.options.onDidChangeLanguageSupport } : {}),
 					},

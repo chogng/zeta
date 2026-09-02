@@ -1,8 +1,11 @@
-import { ConfigurationsRegistry } from '../../configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
+import { Registry } from '../../registry/common/platform.js';
 import { KeyboardDispatchMode } from './keyboardLayout.js';
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 export const KeyboardConfiguration = Object.freeze({
-	layout: ConfigurationsRegistry.registerConfiguration<string>({
+	layout: configurationRegistry.registerConfiguration<string>({
 		key: 'keyboard.layout',
 		defaultValue: 'autodetect',
 		parse(value: unknown): string {
@@ -12,7 +15,7 @@ export const KeyboardConfiguration = Object.freeze({
 			return value;
 		},
 	}),
-	dispatch: ConfigurationsRegistry.registerConfiguration<KeyboardDispatchMode>({
+	dispatch: configurationRegistry.registerConfiguration<KeyboardDispatchMode>({
 		key: 'keyboard.dispatch',
 		defaultValue: KeyboardDispatchMode.Code,
 		parse(value: unknown): KeyboardDispatchMode {
@@ -22,7 +25,7 @@ export const KeyboardConfiguration = Object.freeze({
 			return value;
 		},
 	}),
-	mapAltGrToCtrlAlt: ConfigurationsRegistry.registerConfiguration<boolean>({
+	mapAltGrToCtrlAlt: configurationRegistry.registerConfiguration<boolean>({
 		key: 'keyboard.mapAltGrToCtrlAlt',
 		defaultValue: false,
 		parse(value: unknown): boolean {

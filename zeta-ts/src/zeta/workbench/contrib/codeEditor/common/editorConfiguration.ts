@@ -1,4 +1,5 @@
-import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Registry } from "../../../../platform/registry/common/platform.js";
 import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 import '../../../../editor/common/config/editorConfigurationSchema.js';
@@ -12,9 +13,11 @@ export type CursorBlinkingSetting = 'blink' | 'smooth' | 'phase' | 'expand' | 's
 export type CursorSmoothCaretAnimationSetting = 'off' | 'explicit' | 'on';
 export type RenderLineHighlightSetting = 'none' | 'gutter' | 'line' | 'all';
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 /** Typed user preferences owned by the Workbench code-editor integration. */
 export const CodeEditorConfiguration = Object.freeze({
-	fontFamily: ConfigurationsRegistry.registerConfiguration<string>({
+	fontFamily: configurationRegistry.registerConfiguration<string>({
 		key: "editor.fontFamily",
 		defaultValue: "",
 		parse(value: unknown): string {
@@ -23,7 +26,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		},
 		setting: textSetting("Font family", "Use a CSS font-family list, or leave this empty to use the default monospace font.", "Default monospace"),
 	}),
-	fontSize: ConfigurationsRegistry.registerConfiguration<number>({
+	fontSize: configurationRegistry.registerConfiguration<number>({
 		key: "editor.fontSize",
 		defaultValue: 13,
 		parse(value: unknown): number {
@@ -32,7 +35,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		},
 		setting: numberSetting("Font size", "Set the editor text size in pixels.", 8, 40),
 	}),
-	lineHeight: ConfigurationsRegistry.registerConfiguration<number>({
+	lineHeight: configurationRegistry.registerConfiguration<number>({
 		key: "editor.lineHeight",
 		defaultValue: 20,
 		parse(value: unknown): number {
@@ -41,13 +44,13 @@ export const CodeEditorConfiguration = Object.freeze({
 		},
 		setting: numberSetting("Line height", "Set the height of each editor line in pixels.", 12, 80),
 	}),
-	fontLigatures: ConfigurationsRegistry.registerConfiguration<boolean>({
+	fontLigatures: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.fontLigatures",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "editor.fontLigatures"),
 		setting: booleanSetting("Font ligatures", "Use programming ligatures when the selected font supports them."),
 	}),
-	experimentalGpuAcceleration: ConfigurationsRegistry.registerConfiguration<"on" | "off">({
+	experimentalGpuAcceleration: configurationRegistry.registerConfiguration<"on" | "off">({
 		key: "editor.experimentalGpuAcceleration",
 		defaultValue: "off",
 		parse(value: unknown): "on" | "off" {
@@ -59,7 +62,7 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: "on", label: "On" },
 		]),
 	}),
-	wordWrap: ConfigurationsRegistry.registerConfiguration<EditorLineWrapping>({
+	wordWrap: configurationRegistry.registerConfiguration<EditorLineWrapping>({
 		key: "editor.wordWrap",
 		defaultValue: EditorLineWrapping.Off,
 		parse(value: unknown): EditorLineWrapping {
@@ -71,7 +74,7 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: EditorLineWrapping.On, label: "On" },
 		]),
 	}),
-	wrappingIndent: ConfigurationsRegistry.registerConfiguration<WrappingIndentSetting>({
+	wrappingIndent: configurationRegistry.registerConfiguration<WrappingIndentSetting>({
 		key: "editor.wrappingIndent",
 		defaultValue: "same",
 		parse(value: unknown): WrappingIndentSetting {
@@ -85,50 +88,50 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: "deepIndent", label: "Deep indent" },
 		]),
 	}),
-	minimapEnabled: ConfigurationsRegistry.registerConfiguration<boolean>({
+	minimapEnabled: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.minimap.enabled",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.minimap.enabled"),
 		setting: booleanSetting("Enabled", "Show a compact document overview on the right side of the editor."),
 	}),
-	lineNumbers: ConfigurationsRegistry.registerConfiguration<boolean>({
+	lineNumbers: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.lineNumbers",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.lineNumbers"),
 		setting: booleanSetting("Line numbers", "Show line numbers in the editor gutter."),
 	}),
-	indentationGuides: ConfigurationsRegistry.registerConfiguration<boolean>({
+	indentationGuides: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.guides.indentation",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.guides.indentation"),
 		setting: booleanSetting("Indentation guides", "Show vertical guides aligned with indentation levels."),
 	}),
-	bracketPairGuides: ConfigurationsRegistry.registerConfiguration<boolean>({
+	bracketPairGuides: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.guides.bracketPairs',
 		defaultValue: false,
 		parse: value => parseBoolean(value, 'editor.guides.bracketPairs'),
 		setting: booleanSetting('Bracket pair guides', 'Show vertical guides between matching bracket pairs.'),
 	}),
-	bracketPairHorizontalGuides: ConfigurationsRegistry.registerConfiguration<boolean>({
+	bracketPairHorizontalGuides: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.guides.bracketPairsHorizontal',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'editor.guides.bracketPairsHorizontal'),
 		setting: booleanSetting('Horizontal bracket pair guides', 'Show a horizontal guide from the active vertical guide to its closing bracket.'),
 	}),
-	highlightActiveBracketPairGuide: ConfigurationsRegistry.registerConfiguration<boolean>({
+	highlightActiveBracketPairGuide: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.guides.highlightActiveBracketPair',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'editor.guides.highlightActiveBracketPair'),
 		setting: booleanSetting('Active bracket pair guide', 'Emphasize the bracket pair guide containing the primary cursor.'),
 	}),
-	highlightActiveIndentationGuide: ConfigurationsRegistry.registerConfiguration<boolean>({
+	highlightActiveIndentationGuide: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.guides.highlightActiveIndentation',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'editor.guides.highlightActiveIndentation'),
 		setting: booleanSetting('Active indentation guide', 'Emphasize the indentation guide containing the primary cursor.'),
 	}),
 	bracketPairColorization: 'editor.bracketPairColorization.enabled',
-	cursorStyle: ConfigurationsRegistry.registerConfiguration<CursorStyleSetting>({
+	cursorStyle: configurationRegistry.registerConfiguration<CursorStyleSetting>({
 		key: 'editor.cursorStyle',
 		defaultValue: 'line',
 		parse: value => parseEnum(value, 'editor.cursorStyle', ['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin']),
@@ -141,7 +144,7 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: 'underline-thin', label: 'Thin underline' },
 		]),
 	}),
-	cursorBlinking: ConfigurationsRegistry.registerConfiguration<CursorBlinkingSetting>({
+	cursorBlinking: configurationRegistry.registerConfiguration<CursorBlinkingSetting>({
 		key: 'editor.cursorBlinking',
 		defaultValue: 'blink',
 		parse: value => parseEnum(value, 'editor.cursorBlinking', ['blink', 'smooth', 'phase', 'expand', 'solid']),
@@ -153,7 +156,7 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: 'solid', label: 'Solid' },
 		]),
 	}),
-	cursorSmoothCaretAnimation: ConfigurationsRegistry.registerConfiguration<CursorSmoothCaretAnimationSetting>({
+	cursorSmoothCaretAnimation: configurationRegistry.registerConfiguration<CursorSmoothCaretAnimationSetting>({
 		key: 'editor.cursorSmoothCaretAnimation',
 		defaultValue: 'off',
 		parse: value => parseEnum(value, 'editor.cursorSmoothCaretAnimation', ['off', 'explicit', 'on']),
@@ -163,19 +166,19 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: 'on', label: 'On' },
 		]),
 	}),
-	cursorWidth: ConfigurationsRegistry.registerConfiguration<number>({
+	cursorWidth: configurationRegistry.registerConfiguration<number>({
 		key: 'editor.cursorWidth',
 		defaultValue: 0,
 		parse: value => parseNonNegativeInteger(value, 'editor.cursorWidth'),
 		setting: numberSetting('Cursor width', 'Set the line cursor width in pixels; zero uses the editor default.', 0, 100),
 	}),
-	cursorHeight: ConfigurationsRegistry.registerConfiguration<number>({
+	cursorHeight: configurationRegistry.registerConfiguration<number>({
 		key: 'editor.cursorHeight',
 		defaultValue: 0,
 		parse: value => parseNonNegativeInteger(value, 'editor.cursorHeight'),
 		setting: numberSetting('Cursor height', 'Set the cursor height in pixels; zero uses the full line height.', 0, 100),
 	}),
-	matchBrackets: ConfigurationsRegistry.registerConfiguration<MatchBracketsSetting>({
+	matchBrackets: configurationRegistry.registerConfiguration<MatchBracketsSetting>({
 		key: "editor.matchBrackets",
 		defaultValue: "always",
 		parse(value: unknown): MatchBracketsSetting {
@@ -188,13 +191,13 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: "always", label: "Always" },
 		]),
 	}),
-	stickyScroll: ConfigurationsRegistry.registerConfiguration<boolean>({
+	stickyScroll: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.stickyScroll.enabled",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.stickyScroll.enabled"),
 		setting: booleanSetting("Sticky scroll", "Keep enclosing scopes visible at the top while scrolling."),
 	}),
-	renderLineHighlight: ConfigurationsRegistry.registerConfiguration<RenderLineHighlightSetting>({
+	renderLineHighlight: configurationRegistry.registerConfiguration<RenderLineHighlightSetting>({
 		key: 'editor.renderLineHighlight',
 		defaultValue: 'line',
 		parse: value => parseEnum(value, 'editor.renderLineHighlight', ['none', 'gutter', 'line', 'all']),
@@ -205,19 +208,19 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: 'all', label: 'All' },
 		]),
 	}),
-	renderLineHighlightOnlyWhenFocus: ConfigurationsRegistry.registerConfiguration<boolean>({
+	renderLineHighlightOnlyWhenFocus: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.renderLineHighlightOnlyWhenFocus',
 		defaultValue: false,
 		parse: value => parseBoolean(value, 'editor.renderLineHighlightOnlyWhenFocus'),
 		setting: booleanSetting('Highlight current line only when focused', 'Hide current-line highlighting while the editor is not focused.'),
 	}),
-	unicodeHighlights: ConfigurationsRegistry.registerConfiguration<boolean>({
+	unicodeHighlights: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.unicodeHighlights",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.unicodeHighlights"),
 		setting: booleanSetting("Unicode highlights", "Call attention to invisible or easily confused Unicode characters."),
 	}),
-	indentationKind: ConfigurationsRegistry.registerConfiguration<EditorIndentationKind>({
+	indentationKind: configurationRegistry.registerConfiguration<EditorIndentationKind>({
 		key: "editor.indentation",
 		defaultValue: EditorIndentationKind.Spaces,
 		parse(value: unknown): EditorIndentationKind {
@@ -230,97 +233,97 @@ export const CodeEditorConfiguration = Object.freeze({
 		]),
 	}),
 	tabSize: 'editor.tabSize',
-	formatOnSave: ConfigurationsRegistry.registerConfiguration<boolean>({
+	formatOnSave: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.formatOnSave",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "editor.formatOnSave"),
 		setting: booleanSetting("Format on save", "Run the active language formatter before saving a file."),
 	}),
-	trimTrailingWhitespace: ConfigurationsRegistry.registerConfiguration<boolean>({
+	trimTrailingWhitespace: configurationRegistry.registerConfiguration<boolean>({
 		key: "files.trimTrailingWhitespace",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "files.trimTrailingWhitespace"),
 		setting: booleanSetting("Trim trailing whitespace", "Remove trailing whitespace when saving a file."),
 	}),
-	trimTrailingWhitespaceInRegexAndStrings: ConfigurationsRegistry.registerConfiguration<boolean>({
+	trimTrailingWhitespaceInRegexAndStrings: configurationRegistry.registerConfiguration<boolean>({
 		key: "files.trimTrailingWhitespaceInRegexAndStrings",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "files.trimTrailingWhitespaceInRegexAndStrings"),
 		setting: booleanSetting("Trim trailing whitespace in regexes and strings", "Remove trailing whitespace from multiline strings and regular expressions when saving a file."),
 	}),
-	findSeedFromSelection: ConfigurationsRegistry.registerConfiguration<boolean>({
+	findSeedFromSelection: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.find.seedSearchStringFromSelection",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.find.seedSearchStringFromSelection"),
 		setting: booleanSetting("Seed from selection", "Use a single-line selection as the initial Find query."),
 	}),
-	findAutoFindInSelection: ConfigurationsRegistry.registerConfiguration<boolean>({
+	findAutoFindInSelection: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.find.autoFindInSelection",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "editor.find.autoFindInSelection"),
 		setting: booleanSetting("Find in selection automatically", "Limit Find to the current non-empty selection when the widget opens."),
 	}),
-	findLoop: ConfigurationsRegistry.registerConfiguration<boolean>({
+	findLoop: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.find.loop",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.find.loop"),
 		setting: booleanSetting("Loop through matches", "Wrap from the final match to the first match and back again."),
 	}),
-	findMatchCase: ConfigurationsRegistry.registerConfiguration<boolean>({
+	findMatchCase: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.find.matchCase",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "editor.find.matchCase"),
 		setting: booleanSetting("Match case by default", "Open Find with case-sensitive matching enabled."),
 	}),
-	findWholeWord: ConfigurationsRegistry.registerConfiguration<boolean>({
+	findWholeWord: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.find.wholeWord",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "editor.find.wholeWord"),
 		setting: booleanSetting("Whole word by default", "Open Find with whole-word matching enabled."),
 	}),
-	findRegularExpression: ConfigurationsRegistry.registerConfiguration<boolean>({
+	findRegularExpression: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.find.useRegularExpression",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "editor.find.useRegularExpression"),
 		setting: booleanSetting("Regular expression by default", "Open Find with regular-expression matching enabled."),
 	}),
-	suggestions: ConfigurationsRegistry.registerConfiguration<boolean>({
+	suggestions: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.suggest.enabled",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.suggest.enabled"),
 		setting: booleanSetting("Suggestions", "Show completion suggestions from language providers."),
 	}),
-	inlineCompletions: ConfigurationsRegistry.registerConfiguration<boolean>({
+	inlineCompletions: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.inlineSuggest.enabled",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.inlineSuggest.enabled"),
 		setting: booleanSetting("Inline completions", "Show provider-supplied completion text directly in the editor."),
 	}),
-	parameterHints: ConfigurationsRegistry.registerConfiguration<boolean>({
+	parameterHints: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.parameterHints.enabled",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.parameterHints.enabled"),
 		setting: booleanSetting("Parameter hints", "Show signature information while entering function arguments."),
 	}),
-	inlayHints: ConfigurationsRegistry.registerConfiguration<boolean>({
+	inlayHints: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.inlayHints.enabled",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.inlayHints.enabled"),
 		setting: booleanSetting("Inlay hints", "Show inferred types, parameter names, and other inline annotations."),
 	}),
-	codeLens: ConfigurationsRegistry.registerConfiguration<boolean>({
+	codeLens: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.codeLens",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.codeLens"),
 		setting: booleanSetting("CodeLens", "Show provider actions and references near relevant code."),
 	}),
-	colorDecorators: ConfigurationsRegistry.registerConfiguration<boolean>({
+	colorDecorators: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.colorDecorators",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.colorDecorators"),
 		setting: booleanSetting("Color decorators", "Show an editable color swatch beside recognized color values."),
 	}),
-	colorDecoratorsActivatedOn: ConfigurationsRegistry.registerConfiguration<ColorDecoratorsActivatedOnSetting>({
+	colorDecoratorsActivatedOn: configurationRegistry.registerConfiguration<ColorDecoratorsActivatedOnSetting>({
 		key: "editor.colorDecoratorsActivatedOn",
 		defaultValue: "clickAndHover",
 		parse(value: unknown): ColorDecoratorsActivatedOnSetting {
@@ -333,7 +336,7 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: "hover", label: "Hover" },
 		]),
 	}),
-	colorDecoratorsLimit: ConfigurationsRegistry.registerConfiguration<number>({
+	colorDecoratorsLimit: configurationRegistry.registerConfiguration<number>({
 		key: "editor.colorDecoratorsLimit",
 		defaultValue: 500,
 		parse(value: unknown): number {
@@ -342,7 +345,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		},
 		setting: numberSetting("Color decorator limit", "Limit the number of color swatches rendered in one document.", 0, 1_000_000),
 	}),
-	defaultColorDecorators: ConfigurationsRegistry.registerConfiguration<DefaultColorDecoratorsSetting>({
+	defaultColorDecorators: configurationRegistry.registerConfiguration<DefaultColorDecoratorsSetting>({
 		key: "editor.defaultColorDecorators",
 		defaultValue: "auto",
 		parse(value: unknown): DefaultColorDecoratorsSetting {
@@ -355,31 +358,31 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: "never", label: "Never" },
 		]),
 	}),
-	diffShowLineNumbers: ConfigurationsRegistry.registerConfiguration<boolean>({
+	diffShowLineNumbers: configurationRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.showLineNumbers",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "diffEditor.showLineNumbers"),
 		setting: booleanSetting("Line numbers", "Show original and modified line numbers in diff cells."),
 	}),
-	diffShowInlineChanges: ConfigurationsRegistry.registerConfiguration<boolean>({
+	diffShowInlineChanges: configurationRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.showInlineChanges",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "diffEditor.showInlineChanges"),
 		setting: booleanSetting("Inline change highlights", "Highlight the exact changed ranges within modified lines."),
 	}),
-	diffLoopChanges: ConfigurationsRegistry.registerConfiguration<boolean>({
+	diffLoopChanges: configurationRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.loopChanges",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "diffEditor.loopChanges"),
 		setting: booleanSetting("Loop through changes", "Wrap change navigation from the final difference to the first."),
 	}),
-	diffBreadcrumbs: ConfigurationsRegistry.registerConfiguration<boolean>({
+	diffBreadcrumbs: configurationRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.breadcrumbs.enabled",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "diffEditor.breadcrumbs.enabled"),
 		setting: booleanSetting("Change breadcrumbs", "Show the current change position while navigating a diff."),
 	}),
-	insertFinalNewLine: ConfigurationsRegistry.registerConfiguration<boolean>({
+	insertFinalNewLine: configurationRegistry.registerConfiguration<boolean>({
 		key: "files.insertFinalNewline",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "files.insertFinalNewline"),

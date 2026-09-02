@@ -13,7 +13,7 @@ test("TextModel semantic-token owner publishes only current model results", asyn
 	using registration = providers.register('typescript', {
 		provideSemanticTokens: () => new Promise<LanguageTokenResult | undefined>(resolve => pending.push(resolve)),
 	});
-	using model = new TextModel("value", { languageId: 'typescript', tokenization: { semanticTokensProvider: providers } });
+	using model = new TextModel("value", { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
 	const semanticTokens = model.tokenization.semanticTokens!;
 	await waitFor(() => pending.length === 1);
 	model.setValue('value!');
@@ -32,7 +32,7 @@ test("TextModel semantic-token owner applies provider styling", async () => {
 	using registration = providers.register('typescript', {
 		provideSemanticTokens: request => ({ tokens: [{ range: new Range(1, 1, 1, request.snapshot.getText().length + 1), tokenType: "variable", modifiers: ["readonly"] }] }),
 	});
-	using model = new TextModel("value", { languageId: 'typescript', tokenization: { semanticTokensProvider: providers } });
+	using model = new TextModel("value", { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
 	const semanticTokens = model.tokenization.semanticTokens!;
 	await waitFor(() => semanticTokens.lines.length === 1);
 	const token = semanticTokens.getLineTokens(0)[0]!;

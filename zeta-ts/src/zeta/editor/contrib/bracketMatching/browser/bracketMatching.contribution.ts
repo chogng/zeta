@@ -26,8 +26,18 @@ registerTextEditorCapabilityContribution({
 	install: context => {
 		if (context.kind !== 'text') return;
 		const bracketPairs = context.getCapability(TextEditorCapability.bracketPairs);
-		context.register(new BracketMatchController(context.selectionController, bracketPairs, context.getCapability(TextEditorCapability.bracketDecorations), context.options.matchBrackets ?? 'always'));
-		context.register(new BracketNavigationController(context.view.element, context.viewport, context.selectionController, bracketPairs));
+		context.register(new BracketMatchController(
+			context.editor,
+			bracketPairs,
+			context.getCapability(TextEditorCapability.bracketDecorations),
+			context.options.matchBrackets ?? 'always',
+		));
+		context.register(new BracketNavigationController(
+			context.view.element,
+			context.viewport,
+			context.viewModel,
+			bracketPairs,
+		));
 		context.register(new BracketEditingController(context.view.element, context.viewport, context.selectionController, bracketPairs, context.executeCommand));
 	},
 });

@@ -2,6 +2,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { equals } from '../../../base/common/objects.js';
 import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
+import { Registry } from '../../registry/common/platform.js';
 import {
 	ConfigurationTarget,
 	isConfigurationOverrides,
@@ -16,7 +17,7 @@ import {
 	type IConfigurationUpdateOverrides,
 	type IConfigurationValue,
 } from './configuration.js';
-import { ConfigurationsRegistry, type ConfigurationRegistry, type IRegisteredConfiguration } from './configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from './configurationRegistry.js';
 
 interface ConfigurationState {
 	readonly values: ReadonlyMap<string, unknown>;
@@ -38,7 +39,7 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 	private readonly changeEmitter = this._register(new Emitter<IConfigurationChangeEvent>());
 	public readonly onDidChangeConfiguration = this.changeEmitter.event;
 
-	constructor(private readonly registry: ConfigurationRegistry = ConfigurationsRegistry) {
+	constructor(private readonly registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)) {
 		super();
 	}
 

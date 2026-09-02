@@ -54,6 +54,8 @@ test('Rename reports its command after applying the provider edit', async () => 
 	};
 	const errors: unknown[] = [];
 	const editor = {
+		getModel: () => model,
+		getSelections: () => selections.getSelections(),
 		pushUndoStop: () => {
 			model.pushStackElement();
 			return true;
@@ -63,7 +65,17 @@ test('Rename reports its command after applying the provider edit', async () => 
 			return true;
 		},
 	};
-	using controller = new RenameController(editorInput, editor, viewport, selections, service, 'typescript', resource, undefined, error => errors.push(error), executeCommand);
+	using controller = new RenameController(
+		editorInput,
+		editor,
+		viewport,
+		service,
+		'typescript',
+		resource,
+		undefined,
+		error => errors.push(error),
+		executeCommand,
+	);
 
 	editorInput.dispatchEvent(keydown(dom.window, 'F2'));
 	await flushPromises();

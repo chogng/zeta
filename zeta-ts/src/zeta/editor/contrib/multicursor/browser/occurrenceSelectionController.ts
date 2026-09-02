@@ -1,19 +1,20 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { addOccurrenceSelection, EditorOccurrenceDirection, selectAllOccurrences } from "../common/occurrenceSelection.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
+import { type IViewModel } from '../../../common/viewModel.js';
+import { CursorChangeReason } from '../../../common/cursorEvents.js';
 
 /** Routes VS Code-compatible occurrence-selection shortcuts through Stanza's common model. */
 export class OccurrenceSelectionController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: View,
-		private readonly selections: CursorsController,
+		private readonly viewModel: IViewModel,
 	) {
 		super();
 		try {
-			if (viewport.textModel !== selections.context.model) {
+			if (viewport.textModel !== viewModel.model) {
 				throw new TypeError("Stanza occurrence selection dependencies must share one text model");
 			}
 			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -30,19 +31,19 @@ export class OccurrenceSelectionController extends Disposable {
 			stopEvent(event);
 			this.setSelections(addOccurrenceSelection(
 				this.viewport.textModel,
-				this.selections.getSelections(),
+				this.viewModel.getSelections(),
 				EditorOccurrenceDirection.Next,
 			));
 			return;
 		}
 		if (event.shiftKey && event.key.toLowerCase() === "l") {
 			stopEvent(event);
-			this.setSelections(selectAllOccurrences(this.viewport.textModel, this.selections.getSelections()));
+			this.setSelections(selectAllOccurrences(this.viewport.textModel, this.viewModel.getSelections()));
 		}
 	}
 
 	private setSelections(next: ReturnType<typeof selectAllOccurrences>): void {
-		this.selections.setCursorSelections(next);
+		this.viewModel.setSelections('editor.action.selectHighlights', next, CursorChangeReason.Explicit);
 		this.viewport.revealPosition(next[0]!.getPosition());
 	}
 }

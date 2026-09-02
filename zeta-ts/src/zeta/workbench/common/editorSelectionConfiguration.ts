@@ -1,10 +1,13 @@
-import { ConfigurationsRegistry } from "../../platform/configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
+import { Registry } from "../../platform/registry/common/platform.js";
 
 export type DefaultNewDocumentEditor = "buildMode" | "code" | "academic";
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 /** Workbench-level editor selection preferences applied before a resource has a durable type. */
 export const EditorSelectionConfiguration = Object.freeze({
-	defaultNewDocumentEditor: ConfigurationsRegistry.registerConfiguration<DefaultNewDocumentEditor>({
+	defaultNewDocumentEditor: configurationRegistry.registerConfiguration<DefaultNewDocumentEditor>({
 		key: "workbench.editor.defaultNewDocumentEditor",
 		defaultValue: "buildMode",
 		parse(value: unknown): DefaultNewDocumentEditor {

@@ -1,18 +1,23 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
 import { type View } from "../../../browser/view.js";
+import { type IViewModel } from '../../../common/viewModel.js';
 
 /** Moves the primary selection through current-version diagnostics with F8. */
 export class DiagnosticNavigationController extends Disposable {
-	constructor(input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
+	constructor(
+		input: HTMLElement,
+		private readonly viewport: View,
+		private readonly viewModel: IViewModel,
+		private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>,
+	) {
 		super();
-		if (viewport.textModel !== selections.context.model || diagnostics.textModel !== selections.context.model) {
+		if (viewport.textModel !== viewModel.model || diagnostics.textModel !== viewModel.model) {
 			this.dispose();
 			throw new TypeError("Stanza diagnostic navigation dependencies must share one text model");
 		}
@@ -24,13 +29,15 @@ export class DiagnosticNavigationController extends Disposable {
 		const diagnostics = this.diagnostics.decorations;
 		if (diagnostics.length === 0) return;
 		stopEvent(event);
-		const active = this.selections.getSelections()[0]!.getPosition();
+		const active = this.viewModel.getSelections()[0]!.getPosition();
 		const direction = event.shiftKey ? -1 : 1;
 		const index = direction > 0
 			? diagnostics.findIndex(diagnostic => Position.compare(diagnostic.range.getStartPosition(), active) > 0)
 			: findPreviousDiagnostic(diagnostics, active);
 		const target = diagnostics[index === -1 ? (direction > 0 ? 0 : diagnostics.length - 1) : index]!;
-		this.selections.setSelections([Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition())]);
+		this.viewModel.setSelections('editor.action.marker.next', [
+			Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition()),
+		]);
 		this.viewport.revealPosition(target.range.getStartPosition());
 		this.viewport.announceAccessibilityStatus(describeDiagnostic(target.metadata));
 	}

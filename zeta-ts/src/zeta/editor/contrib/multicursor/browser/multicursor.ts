@@ -1,9 +1,8 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { type ViewController } from '../../../browser/view/viewController.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { type Range } from '../../../common/core/range.js';
 import { USUAL_WORD_SEPARATORS } from '../../../common/core/wordHelper.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
@@ -35,21 +34,19 @@ export class SelectionHighlighter extends Disposable {
 	private lastKey = '';
 
 	constructor(
-		view: ViewController,
-		private readonly selections: CursorsController,
+		private readonly editor: ICodeEditor,
 		private readonly decorations: TextDecorationCollection<boolean>,
 		options: SelectionHighlighterOptions,
 	) {
 		super();
-		validateSelectionHighlighter(view, selections, decorations, options);
+		this.model = validateSelectionHighlighter(editor, decorations, options);
 		this.enabled = options.enabled ?? true;
 		this.multiline = options.multiline ?? false;
 		this.maxLength = options.maxLength ?? 200;
 		this.occurrenceHighlights = options.occurrenceHighlights ?? true;
 		this.languageId = options.languageId;
 		this.languageFeaturesService = options.languageFeaturesService;
-		this.model = view.viewport.textModel;
-		this._register(selections.onDidChange(() => this.update()));
+		this._register(editor.onDidChangeCursorSelection(() => this.update()));
 		this._register(this.model.onDidChangeContent(() => this.update()));
 		this.update();
 	}
@@ -80,7 +77,7 @@ export class SelectionHighlighter extends Disposable {
 
 	private findRanges(): readonly Range[] {
 		if (!this.enabled) return Object.freeze([]);
-		const selected = this.selections.getSelections();
+		const selected = this.editor.getSelections() ?? [];
 		if (selected.some(selection => selection.isEmpty())) return Object.freeze([]);
 		const source = selected[0]!;
 		if (!this.multiline && source.getStartPosition().lineNumber !== source.getEndPosition().lineNumber) return Object.freeze([]);
@@ -89,7 +86,7 @@ export class SelectionHighlighter extends Disposable {
 		if (!selectionsContainSameText(this.model, selected, text)) return Object.freeze([]);
 		const word = this.model.getWordAtPosition(source.getStartPosition());
 		const wholeWord = word !== null && source.startLineNumber === source.endLineNumber && source.startColumn === word.startColumn && source.endColumn === word.endColumn;
-		const matches = this.selections.context.model.findMatches(text, true, false, true, wholeWord ? USUAL_WORD_SEPARATORS : null, false, MAX_SELECTION_HIGHLIGHTS);
+		const matches = this.model.findMatches(text, true, false, true, wholeWord ? USUAL_WORD_SEPARATORS : null, false, MAX_SELECTION_HIGHLIGHTS);
 		return Object.freeze(matches.flatMap(match => {
 			if (selected.some(selection => rangesIntersect(this.model, match.range, selection))) return [];
 			return [match.range];
@@ -97,13 +94,15 @@ export class SelectionHighlighter extends Disposable {
 	}
 }
 
-function validateSelectionHighlighter(view: ViewController, selections: CursorsController, decorations: TextDecorationCollection<boolean>, options: SelectionHighlighterOptions): void {
-	if (view.viewport.textModel !== selections.context.model || selections.context.model !== decorations.textModel) throw new TypeError('Selection highlighter dependencies must share one text model');
+function validateSelectionHighlighter(editor: ICodeEditor, decorations: TextDecorationCollection<boolean>, options: SelectionHighlighterOptions): TextModel {
+	const model = editor.getModel();
+	if (!model || model !== decorations.textModel) throw new TypeError('Selection highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.languageId || !options.languageFeaturesService) throw new TypeError('Selection highlighter requires language services');
 	if (options.enabled !== undefined && typeof options.enabled !== 'boolean') throw new TypeError('Selection highlighter enabled option must be boolean');
 	if (options.multiline !== undefined && typeof options.multiline !== 'boolean') throw new TypeError('Selection highlighter multiline option must be boolean');
 	if (options.occurrenceHighlights !== undefined && typeof options.occurrenceHighlights !== 'boolean') throw new TypeError('Selection highlighter semantic option must be boolean');
 	if (options.maxLength !== undefined && (!Number.isSafeInteger(options.maxLength) || options.maxLength < 0)) throw new RangeError('Selection highlighter maximum length must be a non-negative integer');
+	return decorations.textModel;
 }
 
 function selectionsContainSameText(model: TextModel, selections: readonly Selection[], text: string): boolean {

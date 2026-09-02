@@ -71,7 +71,7 @@ export class ModelService extends Disposable implements IModelService {
 					tokenization: {
 						languageIdCodec: this._languageService.languageIdCodec,
 						syntaxProviderRegistry: this._languageFeaturesService.syntaxProvider,
-						semanticTokensProvider: this._languageFeaturesService.semanticTokensProvider,
+						documentSemanticTokensProvider: this._languageFeaturesService.documentSemanticTokensProvider,
 						...this._tokenizationOptions,
 					},
 			} : {}),

@@ -5,7 +5,8 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import {
-	ConfigurationsRegistry,
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
 } from "../../../platform/configuration/common/configurationRegistry.js";
 import {
 	ContextKeyService,
@@ -19,6 +20,7 @@ import {
 	darkColorTheme,
 	lightColorTheme,
 } from "../../../platform/theme/common/colorTheme.js";
+import { Registry } from "../../../platform/registry/common/platform.js";
 import {
 	WorkbenchState,
 } from "../../../platform/workspace/common/workspace.js";
@@ -33,6 +35,8 @@ import {
 	WorkbenchPhase,
 } from "../../../workbench/common/contributions.js";
 import { WorkbenchConfiguration } from "../../../workbench/common/configuration.js";
+
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 import { DialogsModel } from "../../../workbench/common/dialogs.js";
 import {
 	getWorkbenchColorTheme,
@@ -153,10 +157,10 @@ test("workbench contributions start once at their declared phases", () => {
 
 test("workbench configuration resolves registered color themes", () => {
 	assert.equal(
-		ConfigurationsRegistry.owns(WorkbenchConfiguration.colorTheme),
+		configurationRegistry.owns(WorkbenchConfiguration.colorTheme),
 		true,
 	);
-	const colorTheme = ConfigurationsRegistry.getConfiguration(WorkbenchConfiguration.colorTheme);
+	const colorTheme = configurationRegistry.getConfiguration(WorkbenchConfiguration.colorTheme);
 	assert.ok(colorTheme);
 	assert.equal(
 		colorTheme.defaultValue,
@@ -181,8 +185,8 @@ test("workbench configuration resolves registered color themes", () => {
 });
 
 test("workbench configuration exposes modern and flat layout styles", () => {
-	assert.equal(ConfigurationsRegistry.owns(WorkbenchConfiguration.layoutStyle), true);
-	const layoutStyle = ConfigurationsRegistry.getConfiguration(WorkbenchConfiguration.layoutStyle);
+	assert.equal(configurationRegistry.owns(WorkbenchConfiguration.layoutStyle), true);
+	const layoutStyle = configurationRegistry.getConfiguration(WorkbenchConfiguration.layoutStyle);
 	assert.ok(layoutStyle);
 	assert.equal(layoutStyle.defaultValue, "modern");
 	assert.equal(layoutStyle.parse("modern"), "modern");

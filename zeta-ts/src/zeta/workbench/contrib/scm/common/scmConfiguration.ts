@@ -1,11 +1,14 @@
-import { ConfigurationsRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
 
 export type ScmWorkingSetDefault = 'current' | 'empty';
 export type ScmDiffDecorations = 'all' | 'gutter' | 'overview' | 'minimap' | 'none';
 export type ScmDiffDecorationsGutterAction = 'diff' | 'none';
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 export const ScmConfiguration = Object.freeze({
-	workingSetsEnabled: ConfigurationsRegistry.registerConfiguration<boolean>({
+	workingSetsEnabled: configurationRegistry.registerConfiguration<boolean>({
 		key: 'scm.workingSets.enabled',
 		defaultValue: false,
 		parse(value: unknown): boolean {
@@ -13,7 +16,7 @@ export const ScmConfiguration = Object.freeze({
 			return value;
 		},
 	}),
-	workingSetsDefault: ConfigurationsRegistry.registerConfiguration<ScmWorkingSetDefault>({
+	workingSetsDefault: configurationRegistry.registerConfiguration<ScmWorkingSetDefault>({
 		key: 'scm.workingSets.default',
 		defaultValue: 'current',
 		parse(value: unknown): ScmWorkingSetDefault {
@@ -21,7 +24,7 @@ export const ScmConfiguration = Object.freeze({
 			return value;
 		},
 	}),
-	diffDecorations: ConfigurationsRegistry.registerConfiguration<ScmDiffDecorations>({
+	diffDecorations: configurationRegistry.registerConfiguration<ScmDiffDecorations>({
 		key: 'scm.diffDecorations',
 		defaultValue: 'all',
 		parse(value: unknown): ScmDiffDecorations {
@@ -31,7 +34,7 @@ export const ScmConfiguration = Object.freeze({
 			return value;
 		},
 	}),
-	diffDecorationsGutterAction: ConfigurationsRegistry.registerConfiguration<ScmDiffDecorationsGutterAction>({
+	diffDecorationsGutterAction: configurationRegistry.registerConfiguration<ScmDiffDecorationsGutterAction>({
 		key: 'scm.diffDecorationsGutterAction',
 		defaultValue: 'diff',
 		parse(value: unknown): ScmDiffDecorationsGutterAction {

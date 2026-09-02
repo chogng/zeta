@@ -31,3 +31,7 @@ Define URI parsing, URI identity, resource collections, UUID validation, and lif
 Domain identities and lifecycle rules remain in their owning domain.
 
 Add general structures only for concrete domain-neutral consumers.
+
+## Learnings
+
+* TypeScript 长期对象的稳定服务依赖必须在 constructor 上显式可见，由 `IInstantiationService.createInstance` 统一解析；当前端实例化体系以服务标识参数装饰器作为标准入口时，使用 `@I...Service` 声明这些依赖。options 只承载每个实例的数据、配置和宿主回调，不承载可由服务容器提供的稳定服务。禁止用 `invokeWithinContext(...getOptional)` 隐藏必需依赖，也禁止叶子对象在服务缺失时自建容器或替代实现。只有作用域 owner 可以基于注入的父容器创建子作用域并注册该作用域特有的服务；accessor 查找只用于命令或 action 的单次执行。测试应注册真实依赖并经同一创建入口装配对象。

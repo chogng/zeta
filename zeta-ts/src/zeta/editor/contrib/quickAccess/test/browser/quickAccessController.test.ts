@@ -7,7 +7,6 @@ import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
-import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -29,12 +28,12 @@ test("Go to Line previews locally, accepts a line and column, and cancels withou
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
-	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	viewport.testViewModel.setSelections('test', [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	viewport.layout({ width: 200, height: 40 });
 	const editorInput = h(dom.window.document, "textarea");
 	container.append(editorInput);
-	using controller = new GotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Linux });
+	using controller = new GotoLineController(editorInput, viewport, viewport.testViewModel, { operatingSystem: OperatingSystem.Linux });
 
 	const open = keydown(dom.window, "g", { ctrlKey: true });
 	editorInput.dispatchEvent(open);
@@ -42,17 +41,17 @@ test("Go to Line previews locally, accepts a line and column, and cancels withou
 	assert.equal(controller.visible, true);
 	controller.input.value = "3:2";
 	controller.input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
 	controller.input.dispatchEvent(keydown(dom.window, "Enter"));
 	assert.equal(controller.visible, false);
-	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
 
 	editorInput.dispatchEvent(keydown(dom.window, "g", { ctrlKey: true }));
 	controller.input.value = "not a line";
 	controller.input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 	assert.equal(controller.input.classList.contains("invalid"), true);
 	controller.input.dispatchEvent(keydown(dom.window, "Escape"));
-	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
 	dom.window.close();
 });
 
@@ -60,11 +59,11 @@ test("Go to Line uses Command+G on macOS", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none");
-	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
-	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	viewport.testViewModel.setSelections('test', [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	const editorInput = h(dom.window.document, "textarea");
 	container.append(editorInput);
-	using controller = new GotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
+	using controller = new GotoLineController(editorInput, viewport, viewport.testViewModel, { operatingSystem: OperatingSystem.Macintosh });
 
 	const open = keydown(dom.window, "g", { metaKey: true });
 	editorInput.dispatchEvent(open);

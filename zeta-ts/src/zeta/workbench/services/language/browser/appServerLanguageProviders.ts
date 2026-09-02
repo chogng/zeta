@@ -80,11 +80,13 @@ export class AppServerLanguageProviders extends Disposable {
 		registrations.add(this.languageFeatures.workspaceSymbolProvider.register('*', new AppServerWorkspaceSymbolProvider(this.api, this.workspace)));
 		registrations.add(this.languageFeatures.renameProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.codeActionProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.formattingProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.parameterHintsProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.documentFormattingEditProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.documentRangeFormattingEditProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.onTypeFormattingEditProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.signatureHelpProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.inlayHintsProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.linkedEditingRangeProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.semanticTokensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.documentSemanticTokensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.documentSymbolProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.codeLensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.linkProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));

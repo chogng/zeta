@@ -15,7 +15,10 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { ILanguageService } from './language.js';
 import { registerSingleton } from '../../../platform/instantiation/common/extensions.js';
 import { LanguageBracketsConfiguration } from './supports/languageBracketsConfiguration.js';
-import { ConfigurationsRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../platform/registry/common/platform.js';
+
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 /**
  * Interface used to support insertion of mode specific comments.
@@ -136,12 +139,12 @@ function computeConfig(
 }
 
 const customizedLanguageConfigKeys = Object.freeze({
-	brackets: ConfigurationsRegistry.registerConfiguration<CharacterPair[] | null>({
+	brackets: configurationRegistry.registerConfiguration<CharacterPair[] | null>({
 		key: 'editor.language.brackets',
 		defaultValue: null,
 		parse: value => parseConfiguredBracketPairs(value, 'editor.language.brackets'),
 	}),
-	colorizedBracketPairs: ConfigurationsRegistry.registerConfiguration<CharacterPair[] | null>({
+	colorizedBracketPairs: configurationRegistry.registerConfiguration<CharacterPair[] | null>({
 		key: 'editor.language.colorizedBracketPairs',
 		defaultValue: null,
 		parse: value => parseConfiguredBracketPairs(value, 'editor.language.colorizedBracketPairs'),

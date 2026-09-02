@@ -1,4 +1,9 @@
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
+import { Registry } from '../../registry/common/platform.js';
+
+export const Extensions = {
+	Configuration: 'base.contributions.configuration',
+};
 
 export interface IConfigurationPropertySchema extends JsonSchema {
 	readonly scope?: string;
@@ -55,13 +60,21 @@ export interface IConfigurationKeyDefinition<T> {
 	readonly setting?: ConfigurationSettingSchemaFor<T>;
 }
 
+export interface IConfigurationRegistry {
+	registerConfiguration<T>(definition: IConfigurationKeyDefinition<T>): string;
+	getConfigurations(): readonly string[];
+	getRegisteredConfigurations(): readonly IRegisteredConfiguration[];
+	getConfiguration(key: string): IRegisteredConfiguration | undefined;
+	owns(key: string): boolean;
+}
+
 /**
  * Registry of statically declared Desktop configuration keys.
  *
  * Keys are registered once for the current JavaScript realm. Configuration
  * services use the registry to validate complete persisted snapshots.
  */
-export class ConfigurationRegistry {
+export class ConfigurationRegistry implements IConfigurationRegistry {
 	private readonly configurations = new Map<string, IRegisteredConfiguration>();
 
 	registerConfiguration<T>(
@@ -103,7 +116,7 @@ export class ConfigurationRegistry {
 	}
 }
 
-export const ConfigurationsRegistry = new ConfigurationRegistry();
+Registry.add(Extensions.Configuration, new ConfigurationRegistry());
 
 function isConfigurationKey(value: string): boolean {
 	return /^[A-Za-z][A-Za-z0-9.-]{0,127}$/.test(value);

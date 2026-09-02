@@ -1,14 +1,17 @@
-import { ConfigurationsRegistry } from "../../platform/configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
+import { Registry } from "../../platform/registry/common/platform.js";
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenchMode.js";
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 
 export type WorkbenchLayoutStyle = "modern" | "flat";
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
-	mode: ConfigurationsRegistry.registerConfiguration({
+	mode: configurationRegistry.registerConfiguration({
 		key: WorkbenchModeConfigurationKey,
 		defaultValue: WorkbenchModeRegistry.defaultModeId,
 		parse(value: unknown) {
@@ -16,7 +19,7 @@ export const WorkbenchConfiguration = Object.freeze({
 			return WorkbenchModeRegistry.resolveModeId(value);
 		},
 	}),
-	colorTheme: ConfigurationsRegistry.registerConfiguration<string>({
+	colorTheme: configurationRegistry.registerConfiguration<string>({
 		key: "workbench.colorTheme",
 		defaultValue: defaultWorkbenchColorThemePreference,
 		parse(value: unknown): string {
@@ -35,7 +38,7 @@ export const WorkbenchConfiguration = Object.freeze({
 			},
 		},
 	}),
-	layoutStyle: ConfigurationsRegistry.registerConfiguration<WorkbenchLayoutStyle>({
+	layoutStyle: configurationRegistry.registerConfiguration<WorkbenchLayoutStyle>({
 		key: "workbench.layoutStyle",
 		defaultValue: "modern",
 		parse(value: unknown): WorkbenchLayoutStyle {

@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageCompletionService } from '../../../../../editor/common/languages/completion/languageCompletionService.js';
 import { LanguageRequestStatus } from '../../../../../editor/common/languages/languageRequestCoordinator.js';
 import { SyntaxService } from '../../../../../editor/common/languages/syntax/syntaxService.js';
@@ -10,6 +11,7 @@ import { TestLanguageConfigurationService } from '../../../../../editor/test/com
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
+import { FormatService } from '../../../../../editor/contrib/format/common/formatCommands.js';
 import { WorkbenchLanguageFeatures } from '../../browser/workbenchLanguageFeatures.js';
 
 test('Workbench installs product languages while Editor owns provider registries', async () => {
@@ -41,4 +43,58 @@ test('Language features service atomically owns a replaceable cross-kind provide
 	registration.dispose();
 	assert.equal(await hover.provideHover('typescript', new Position((0) + 1, (1) + 1)), undefined);
 	assert.throws(() => registration.replace({}), /disposed/);
+});
+
+test('Language features service keeps document, range, and on-type formatting registries independent', async () => {
+	using languageConfigurations = new TestLanguageConfigurationService();
+	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
+	using model = new TextModel('answer', { languageId: 'typescript' });
+	using formatting = new FormatService(
+		model,
+		languageFeatures.documentFormattingEditProvider,
+		languageFeatures.documentRangeFormattingEditProvider,
+		languageFeatures.onTypeFormattingEditProvider,
+	);
+	const range = new Range(1, 1, 1, 7);
+	const registration = languageFeatures.registerProviderBatch({
+		formatting: [{
+			selector: 'typescript',
+			provider: {
+				provideDocumentFormattingEdits: () => [{ range, text: 'document' }],
+				provideRangeFormattingEdits: () => [{ range, text: 'range' }],
+				provideOnTypeFormattingEdits: () => [{ range, text: 'onType' }],
+			},
+		}],
+	});
+
+	assert.equal(
+		(await formatting.provideDocumentFormattingEdits('typescript', { tabSize: 4, insertSpaces: true }))[0]?.text,
+		'document',
+	);
+	assert.equal(
+		(await formatting.provideRangeFormattingEdits('typescript', range, { tabSize: 4, insertSpaces: true }))[0]?.text,
+		'range',
+	);
+	assert.equal(
+		(await formatting.provideOnTypeFormattingEdits('typescript', new Position(1, 7), ';', { tabSize: 4, insertSpaces: true }))[0]?.text,
+		'onType',
+	);
+
+	registration.replace({
+		formatting: [{
+			selector: 'typescript',
+			provider: {
+				provideDocumentFormattingEdits: () => [{ range, text: 'replacement' }],
+			},
+		}],
+	});
+	assert.equal(
+		(await formatting.provideDocumentFormattingEdits('typescript', { tabSize: 4, insertSpaces: true }))[0]?.text,
+		'replacement',
+	);
+	assert.deepEqual(await formatting.provideRangeFormattingEdits('typescript', range, { tabSize: 4, insertSpaces: true }), []);
+	assert.deepEqual(await formatting.provideOnTypeFormattingEdits('typescript', new Position(1, 7), ';', { tabSize: 4, insertSpaces: true }), []);
+
+	registration.dispose();
+	assert.deepEqual(await formatting.provideDocumentFormattingEdits('typescript', { tabSize: 4, insertSpaces: true }), []);
 });

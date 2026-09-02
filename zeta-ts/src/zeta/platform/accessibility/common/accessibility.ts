@@ -1,7 +1,8 @@
 import type { Event } from "../../../base/common/event.js";
 import { RawContextKey } from "../../contextkey/common/contextkey.js";
-import { ConfigurationsRegistry } from "../../configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../configuration/common/configurationRegistry.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { Registry } from "../../registry/common/platform.js";
 
 /** The resolved state of native screen-reader support. */
 export enum AccessibilitySupport {
@@ -19,6 +20,8 @@ export type AccessibilitySupportConfiguration = "auto" | "off" | "on";
 /** The user policy for motion and transparency reduction. */
 export type AccessibilityReductionConfiguration = "auto" | "off" | "on";
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 const triStateSettingOptions = [
 	{ value: "auto", label: "Auto" },
 	{ value: "on", label: "On" },
@@ -27,7 +30,7 @@ const triStateSettingOptions = [
 
 /** Configuration keys consumed by the shared accessibility service. */
 export const AccessibilityConfiguration = Object.freeze({
-	editorAccessibilitySupport: ConfigurationsRegistry.registerConfiguration<AccessibilitySupportConfiguration>({
+	editorAccessibilitySupport: configurationRegistry.registerConfiguration<AccessibilitySupportConfiguration>({
 		key: "editor.accessibilitySupport",
 		defaultValue: "auto",
 		parse: parseAccessibilitySupportConfiguration,
@@ -38,7 +41,7 @@ export const AccessibilityConfiguration = Object.freeze({
 			options: triStateSettingOptions,
 		},
 	}),
-	reduceMotion: ConfigurationsRegistry.registerConfiguration<AccessibilityReductionConfiguration>({
+	reduceMotion: configurationRegistry.registerConfiguration<AccessibilityReductionConfiguration>({
 		key: "workbench.reduceMotion",
 		defaultValue: "auto",
 		parse: parseAccessibilityReductionConfiguration,
@@ -49,7 +52,7 @@ export const AccessibilityConfiguration = Object.freeze({
 			options: triStateSettingOptions,
 		},
 	}),
-	reduceTransparency: ConfigurationsRegistry.registerConfiguration<AccessibilityReductionConfiguration>({
+	reduceTransparency: configurationRegistry.registerConfiguration<AccessibilityReductionConfiguration>({
 		key: "workbench.reduceTransparency",
 		defaultValue: "off",
 		parse: parseAccessibilityReductionConfiguration,
@@ -60,7 +63,7 @@ export const AccessibilityConfiguration = Object.freeze({
 			options: triStateSettingOptions,
 		},
 	}),
-	underlineLinks: ConfigurationsRegistry.registerConfiguration<boolean>({
+	underlineLinks: configurationRegistry.registerConfiguration<boolean>({
 		key: "accessibility.underlineLinks",
 		defaultValue: false,
 		parse(value: unknown): boolean {

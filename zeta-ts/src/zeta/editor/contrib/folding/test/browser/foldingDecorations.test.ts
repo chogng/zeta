@@ -77,11 +77,11 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 
 	const initial = model.getAllDecorations().find(decoration => decoration.options.description === 'folding-expanded');
 	assert.ok(initial);
-	const expandedMarker = editor.element.querySelector<HTMLElement>('.zeta-icon-folding-expanded');
+	const expandedMarker = editor.getDomNode().querySelector<HTMLElement>('.zeta-icon-folding-expanded');
 	assert.equal(expandedMarker?.title, 'Collapse range');
 	expandedMarker?.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }));
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-collapsed'));
-	const pointerCollapsedMarker = editor.element.querySelector<HTMLElement>('.zeta-icon-folding-collapsed');
+	const pointerCollapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.zeta-icon-folding-collapsed');
 	pointerCollapsedMarker?.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }));
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-expanded'));
 	const collapse = new dom.window.KeyboardEvent('keydown', {
@@ -94,7 +94,7 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	assert.equal(collapse.defaultPrevented, true);
 	const collapsed = model.getAllDecorations().find(decoration => decoration.options.description === 'folding-collapsed');
 	assert.equal(collapsed?.options.afterContentClassName, 'inline-folded');
-	const collapsedMarker = editor.element.querySelector<HTMLElement>('.zeta-icon-folding-collapsed');
+	const collapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.zeta-icon-folding-collapsed');
 	assert.equal(collapsedMarker?.title, 'Expand folded range');
 	dom.window.close();
 });

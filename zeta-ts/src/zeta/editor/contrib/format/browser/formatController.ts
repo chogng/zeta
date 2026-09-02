@@ -1,7 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
 import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -17,9 +16,17 @@ export class FormatController extends Disposable {
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
 
-	constructor(private readonly input: HTMLElement, private readonly editor: ICodeEditor, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: FormatService, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly languageId: string, options: FormatControllerOptions = {}) {
+	constructor(
+		private readonly input: HTMLElement,
+		private readonly editor: ICodeEditor,
+		viewport: View,
+		private readonly service: FormatService,
+		private readonly editorWorker: IVersionedEditorWorkerClient,
+		private readonly languageId: string,
+		options: FormatControllerOptions = {},
+	) {
 		super();
-		if (viewport.textModel !== selections.context.model) throw new TypeError("Stanza format dependencies must share one text model");
+		if (viewport.textModel !== editor.getModel()) throw new TypeError("Stanza format dependencies must share one text model");
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
 		this.onError = options.onError ?? (error => console.error("Stanza formatting failed", error));
 		this._register(addDisposableListener(input, "keydown", event => {
@@ -46,10 +53,24 @@ export class FormatController extends Disposable {
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.format", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.register(new FormatService(context.model, context.languageFeaturesService.formattingProvider, context.options.input.resource));
-	const controller = context.register(new FormatController(context.view.element, context.editor, context.viewport, context.selectionController, service, context.editorWorker, context.languageId, {
-		formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
-		onError: context.onLanguageError,
-	}));
+	const service = context.register(new FormatService(
+		context.model,
+		context.languageFeaturesService.documentFormattingEditProvider,
+		context.languageFeaturesService.documentRangeFormattingEditProvider,
+		context.languageFeaturesService.onTypeFormattingEditProvider,
+		context.options.input.resource,
+	));
+	const controller = context.register(new FormatController(
+		context.view.element,
+		context.editor,
+		context.viewport,
+		service,
+		context.editorWorker,
+		context.languageId,
+		{
+			formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
+			onError: context.onLanguageError,
+		},
+	));
 	if (context.options.formatOnSave && context.registerBeforeSave) context.register(context.registerBeforeSave(() => controller.formatDocument()));
 } });

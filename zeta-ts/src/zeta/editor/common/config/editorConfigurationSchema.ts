@@ -3,7 +3,10 @@ import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { EDITOR_FONT_DEFAULTS } from './fontInfo.js';
 import { diffEditorDefaultOptions } from './diffEditor.js';
 import { editorOptionsRegistry, EditorLineWrapping } from './editorOptions.js';
-import { ConfigurationsRegistry, type IConfigurationPropertySchema } from '../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../platform/registry/common/platform.js';
+
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 /** The common configuration node shape used by VS Code settings tooling. */
 export interface EditorConfigurationNode {
@@ -365,13 +368,13 @@ function schemaForDefault(value: unknown): JsonSchema {
 }
 
 // The schema owner also registers the model settings consumed by editor services.
-ConfigurationsRegistry.registerConfiguration({
+configurationRegistry.registerConfiguration({
 	key: 'editor.tabSize',
 	defaultValue: EDITOR_MODEL_DEFAULTS.tabSize,
 	parse: value => modelInteger(value, 'editor.tabSize'),
 	setting: { title: 'Tab size', description: 'Set the number of columns represented by one tab.', valueType: 'number', minimum: 1, maximum: 100 },
 });
-ConfigurationsRegistry.registerConfiguration<number | 'tabSize'>({
+configurationRegistry.registerConfiguration<number | 'tabSize'>({
 	key: 'editor.indentSize',
 	defaultValue: 'tabSize',
 	parse: value => value === 'tabSize' ? value : modelInteger(value, 'editor.indentSize'),
@@ -384,13 +387,13 @@ for (const [key, defaultValue] of [
 	['editor.bracketPairColorization.enabled', EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.enabled],
 	['editor.bracketPairColorization.independentColorPoolPerBracketType', EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.independentColorPoolPerBracketType],
 ] as const) {
-	ConfigurationsRegistry.registerConfiguration({
+	configurationRegistry.registerConfiguration({
 		key,
 		defaultValue,
 		parse: value => modelBoolean(value, key),
 	});
 }
-ConfigurationsRegistry.registerConfiguration<'auto' | '\n' | '\r\n'>({
+configurationRegistry.registerConfiguration<'auto' | '\n' | '\r\n'>({
 	key: 'files.eol',
 	defaultValue: 'auto',
 	parse(value) {
@@ -398,7 +401,7 @@ ConfigurationsRegistry.registerConfiguration<'auto' | '\n' | '\r\n'>({
 		throw new TypeError('files.eol must be auto, LF, or CRLF');
 	},
 });
-ConfigurationsRegistry.registerConfiguration({
+configurationRegistry.registerConfiguration({
 	key: 'files.restoreUndoStack',
 	defaultValue: true,
 	parse: value => modelBoolean(value, 'files.restoreUndoStack'),

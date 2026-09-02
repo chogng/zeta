@@ -64,7 +64,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	editor.layout({ width: 320, height: 80 });
 	assert.equal(observableEditor.layoutInfoWidth.get(), 320);
 	assert.equal(observableEditor.layoutInfoHeight.get(), 80);
-	assert.equal(observableEditor.domNode.get(), editor.element);
+	assert.equal(observableEditor.domNode.get(), editor.getDomNode());
 
 	dom.window.close();
 });

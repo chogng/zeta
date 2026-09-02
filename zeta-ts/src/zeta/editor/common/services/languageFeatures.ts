@@ -30,13 +30,15 @@ export interface ILanguageFeaturesService extends IDisposable {
 	readonly codeActionProvider: LanguageFeatureRegistry<LanguageCodeActionProvider>;
 	readonly codeLensProvider: LanguageFeatureRegistry<CodeLensProvider>;
 	readonly documentSymbolProvider: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>;
-	readonly formattingProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	readonly documentFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	readonly documentRangeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	readonly onTypeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
 	readonly hoverProvider: LanguageFeatureRegistry<LanguageHoverProvider>;
 	readonly inlayHintsProvider: LanguageFeatureRegistry<LanguageInlayHintsProvider>;
 	readonly inlineCompletionsProvider: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>;
 	readonly linkedEditingRangeProvider: LanguageFeatureRegistry<LinkedEditingRangeProvider>;
 	readonly linkProvider: LanguageFeatureRegistry<LanguageLinkProvider>;
-	readonly parameterHintsProvider: LanguageFeatureRegistry<LanguageParameterHintsProvider>;
+	readonly signatureHelpProvider: LanguageFeatureRegistry<LanguageParameterHintsProvider>;
 	readonly renameProvider: LanguageFeatureRegistry<LanguageRenameProvider>;
 	readonly colorProvider: LanguageFeatureRegistry<LanguageColorProvider>;
 	readonly definitionProvider: LanguageFeatureRegistry<LanguageDefinitionProvider>;
@@ -47,7 +49,7 @@ export interface ILanguageFeaturesService extends IDisposable {
 	readonly workspaceSymbolProvider: LanguageFeatureRegistry<LanguageWorkspaceSymbolProvider>;
 	readonly callHierarchyProvider: LanguageFeatureRegistry<LanguageCallHierarchyProvider>;
 	readonly typeHierarchyProvider: LanguageFeatureRegistry<LanguageTypeHierarchyProvider>;
-	readonly semanticTokensProvider: LanguageFeatureRegistry<LanguageSemanticTokensProvider>;
+	readonly documentSemanticTokensProvider: LanguageFeatureRegistry<LanguageSemanticTokensProvider>;
 	readonly foldingRangeProvider: LanguageFeatureRegistry<LanguageFoldingRangeProvider>;
 	readonly selectionRangeProvider: LanguageFeatureRegistry<LanguageSelectionRangeProvider>;
 	readonly documentHighlightProvider: LanguageFeatureRegistry<DocumentHighlightProvider>;

@@ -2,9 +2,9 @@ import "./media/gotoSymbol.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Selection } from "../../../common/core/selection.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/languageDocumentSymbolSearch.js";
 import { type View } from "../../../browser/view.js";
+import { type IViewModel } from '../../../common/viewModel.js';
 
 /** Owns editor-local document-symbol quick navigation (Ctrl/Cmd+Shift+O). */
 export class GotoSymbolController extends Disposable {
@@ -15,8 +15,16 @@ export class GotoSymbolController extends Disposable {
 	private request: AbortController | undefined;
 	private matches: readonly LanguageSymbolMatch[] = [];
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
+	constructor(
+		private readonly input: HTMLElement,
+		private readonly viewport: View,
+		private readonly viewModel: IViewModel,
+		private readonly service: GotoSymbolService,
+		private readonly languageId: string,
+		private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error),
+	) {
 		super();
+		if (viewport.textModel !== viewModel.model) throw new TypeError('Stanza goto symbol dependencies must share one text model');
 		const ownerDocument = viewport.domNode.domNode.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "stanza-editor-goto-symbol";
@@ -85,7 +93,9 @@ export class GotoSymbolController extends Disposable {
 	}
 
 	private select(match: LanguageSymbolMatch): void {
-		this.selections.setSelections([Selection.fromPositions(match.symbol.selectionRange.getStartPosition(), match.symbol.selectionRange.getEndPosition())]);
+		this.viewModel.setSelections('editor.action.gotoSymbol', [
+			Selection.fromPositions(match.symbol.selectionRange.getStartPosition(), match.symbol.selectionRange.getEndPosition()),
+		]);
 		this.viewport.revealPosition(match.position);
 		this.close();
 	}

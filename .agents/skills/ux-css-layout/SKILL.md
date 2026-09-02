@@ -22,6 +22,8 @@ Keep the surrounding Zeta TypeScript and CSS style readable even when the upstre
 
 Only modify CSS that is required by the current verified behavior slice. A missing upstream CSS file, a selector diff, or an API-alignment batch does not authorize replacing an existing stylesheet, renaming unrelated selectors, rebuilding DOM wrappers, or importing the whole upstream visual system.
 
+For an upstream-alignment task, validate the same semantic scenario in Zeta and VS Code before calling layout work complete: use the same viewport and input sequence, then compare focus ownership, scroll offsets, clipping, wrapping, hit targets, and computed geometry. A visually similar still image is insufficient, and a Zeta result that loses an upstream behavior remains pending; do not compensate by copying the upstream stylesheet or DOM nesting.
+
 ---
 
 ## 1. File Organization

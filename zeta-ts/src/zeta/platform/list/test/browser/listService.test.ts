@@ -2,18 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { InMemoryConfigurationService } from "../../../configuration/common/inMemoryConfigurationService.js";
-import { ConfigurationsRegistry } from "../../../configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../configuration/common/configurationRegistry.js";
+import { Registry } from "../../../registry/common/platform.js";
 import { WorkbenchObjectTree, type ResourceOpenEvent } from "../../browser/listService.js";
 import { ListConfiguration } from "../../common/listConfiguration.js";
 import { h } from "../../../../base/browser/dom.js";
+
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 interface TestItem {
 	readonly id: string;
 }
 
 test("Platform List owns and validates the shared open-mode configuration", () => {
-	assert.equal(ConfigurationsRegistry.owns(ListConfiguration.openMode), true);
-	const configuration = ConfigurationsRegistry.getConfiguration(ListConfiguration.openMode);
+	assert.equal(configurationRegistry.owns(ListConfiguration.openMode), true);
+	const configuration = configurationRegistry.getConfiguration(ListConfiguration.openMode);
 	assert.ok(configuration);
 	assert.equal(configuration.defaultValue, "singleClick");
 	assert.equal(configuration.parse("doubleClick"), "doubleClick");

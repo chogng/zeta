@@ -1,13 +1,16 @@
 import type { HoverDelegateSetupOptions, IHoverDelegate, IManagedHover as IBaseManagedHover } from "../../../base/browser/ui/hover/hoverDelegate.js";
-import { ConfigurationsRegistry } from "../../configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../configuration/common/configurationRegistry.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { Registry } from "../../registry/common/platform.js";
 
 export const MinimumHoverDelay = 0;
 export const MaximumHoverDelay = 2_000;
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 /** Typed configuration keys owned by the Workbench Hover service. */
 export const HoverConfiguration = Object.freeze({
-	delay: ConfigurationsRegistry.registerConfiguration<number>({
+	delay: configurationRegistry.registerConfiguration<number>({
 		key: "workbench.hover.delay",
 		defaultValue: 500,
 		parse: (value) => parseHoverDelay(value, "workbench.hover.delay"),
@@ -19,7 +22,7 @@ export const HoverConfiguration = Object.freeze({
 			maximum: MaximumHoverDelay,
 		},
 	}),
-	reducedDelay: ConfigurationsRegistry.registerConfiguration<number>({
+	reducedDelay: configurationRegistry.registerConfiguration<number>({
 		key: "workbench.hover.reducedDelay",
 		defaultValue: 30,
 		parse: (value) => parseHoverDelay(

@@ -24,6 +24,8 @@ Concrete rule: `var(--zeta-editor-background)` produced by Zeta's color registry
 
 Only theme the states required by the current verified component change. A missing upstream stylesheet, color ID, selector, or high-contrast rule does not authorize replacing a Zeta stylesheet, renaming unrelated local states, adding upstream wrappers, or recreating the full VS Code theme surface.
 
+For an upstream-alignment task, exercise the same normal, focused, disabled, selected, hover, and high-contrast states that the affected component actually supports in VS Code, then assert Zeta's owned class state and computed token values. A static screenshot or a renamed variable is not evidence of parity. If Zeta omits a state or makes focus/contrast less usable, keep the item pending and fix it through the existing Zeta theme and state owners rather than importing upstream selectors.
+
 ---
 
 ## VS Code repository reference

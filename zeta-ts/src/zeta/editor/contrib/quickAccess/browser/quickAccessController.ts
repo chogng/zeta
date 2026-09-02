@@ -4,10 +4,10 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../common/gotoLocation.js";
-import { CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
 import { type View } from "../../../browser/view.js";
+import { type IViewModel } from '../../../common/viewModel.js';
 
 export interface GotoLineControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
@@ -23,12 +23,12 @@ export class GotoLineController extends Disposable {
 	constructor(
 		private readonly editorInput: HTMLElement,
 		private readonly viewport: View,
-		private readonly selections: CursorsController,
+		private readonly viewModel: IViewModel,
 		options: GotoLineControllerOptions = {},
 	) {
 		super();
 		this.targetOperatingSystem = options.operatingSystem ?? operatingSystem;
-		if (viewport.textModel !== selections.context.model) {
+		if (viewport.textModel !== viewModel.model) {
 			this.dispose();
 			throw new TypeError("Stanza Go to Line dependencies must share one text model");
 		}
@@ -70,7 +70,7 @@ export class GotoLineController extends Disposable {
 		if (!this.visible) this.initialScrollPosition = this.viewport.viewportLayout.scrollPosition;
 		this.element.hidden = false;
 		this.element.classList.add("visible");
-		const current = this.selections.getSelections()[0]!.getPosition();
+		const current = this.viewModel.getSelections()[0]!.getPosition();
 		this.input.value = `${current.lineNumber}:${current.column}`;
 		this.position();
 		this.preview();
@@ -106,7 +106,7 @@ export class GotoLineController extends Disposable {
 		const result = this.readResult();
 		if (result.kind !== "location") return;
 		stopEvent(event);
-		this.selections.setSelections([Selection.fromPositions(result.location.position)]);
+		this.viewModel.setSelections('editor.action.gotoLine', [Selection.fromPositions(result.location.position)]);
 		this.viewport.revealPosition(result.location.position);
 		this.initialScrollPosition = undefined;
 		this.close();
@@ -138,7 +138,7 @@ registerTextEditorCapabilityContribution({
 	id: "editor.contrib.quickAccess",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new GotoLineController(context.view.element, context.viewport, context.selectionController));
+		context.register(new GotoLineController(context.view.element, context.viewport, context.viewModel));
 	},
 });
 

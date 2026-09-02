@@ -1,11 +1,12 @@
 import type { JsonSchema, JsonSchemaType } from '../../../base/common/jsonSchema.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
-import { ConfigurationsRegistry, type ConfigurationRegistry, type IConfigurationSettingSchema } from './configurationRegistry.js';
+import { Registry } from '../../registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationSettingSchema } from './configurationRegistry.js';
 
 export const ConfigurationSchemaId = 'zeta://schemas/user-configuration';
 
 /** Projects registered typed configuration keys into the generic JSON schema vocabulary. */
-export function createConfigurationSchema(registry: ConfigurationRegistry = ConfigurationsRegistry): JsonSchema {
+export function createConfigurationSchema(registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)): JsonSchema {
 	const properties: Record<string, JsonSchema> = {};
 	for (const configuration of registry.getRegisteredConfigurations()) {
 		const defaultValue = validateJsonValue(configuration.serialize(configuration.defaultValue), {

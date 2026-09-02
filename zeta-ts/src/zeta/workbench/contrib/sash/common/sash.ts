@@ -1,13 +1,16 @@
-import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Registry } from "../../../../platform/registry/common/platform.js";
 
 export const MinimumSashSize = 1;
 export const MaximumSashSize = 20;
 export const MinimumSashHoverDelay = 0;
 export const MaximumSashHoverDelay = 2_000;
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 /** Typed configuration keys owned by the Workbench Sash contribution. */
 export const SashConfiguration = Object.freeze({
-	size: ConfigurationsRegistry.registerConfiguration<number>({
+	size: configurationRegistry.registerConfiguration<number>({
 		key: "workbench.sash.size",
 		defaultValue: 4,
 		parse: (value) => parseNumberInRange(
@@ -24,7 +27,7 @@ export const SashConfiguration = Object.freeze({
 			maximum: MaximumSashSize,
 		},
 	}),
-	hoverDelay: ConfigurationsRegistry.registerConfiguration<number>({
+	hoverDelay: configurationRegistry.registerConfiguration<number>({
 		key: "workbench.sash.hoverDelay",
 		defaultValue: 300,
 		parse: (value) => parseNumberInRange(

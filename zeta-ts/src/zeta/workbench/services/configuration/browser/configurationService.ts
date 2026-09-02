@@ -4,13 +4,14 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { equals } from '../../../../base/common/objects.js';
 import { ConfigurationTarget, isConfigurationOverrides, isConfigurationUpdateOverrides, type IConfigurationChange, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationModel, type IConfigurationOverrides, type IConfigurationService, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../../platform/configuration/common/configuration.js';
 import { configurationOverrideValues, configurationValues, emptyConfigurationDocument, overrideKeyFromIdentifiers, type IConfigurationApi, type IConfigurationDocument, type IConfigurationSnapshot, validateConfigurationDocument, validateConfigurationSnapshot } from '../../../../platform/configuration/common/configurationIpc.js';
-import { ConfigurationsRegistry, type ConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationResourceRevisionConflictError, type IConfigurationResourceService, type IConfigurationResourceSnapshot } from '../../../../platform/configuration/common/configurationResourceService.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 
 export interface WorkbenchConfigurationServiceOptions {
 	readonly api?: IConfigurationApi;
-	readonly registry?: ConfigurationRegistry;
+	readonly registry?: IConfigurationRegistry;
 	readonly onError?: (error: unknown) => void;
 }
 
@@ -29,7 +30,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 	readonly _serviceBrand = undefined;
 
 	private readonly api: IConfigurationApi | undefined;
-	private readonly registry: ConfigurationRegistry;
+	private readonly registry: IConfigurationRegistry;
 	private readonly onError: (error: unknown) => void;
 	private readonly changeEmitter = this._register(new Emitter<IConfigurationChangeEvent>());
 	private readonly resourceChangeEmitter = this._register(new Emitter<IConfigurationResourceSnapshot>());
@@ -48,7 +49,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 	constructor(options: WorkbenchConfigurationServiceOptions = {}) {
 		super();
 		this.api = options.api;
-		this.registry = options.registry ?? ConfigurationsRegistry;
+		this.registry = options.registry ?? Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 		this.onError = options.onError ?? (error => console.error('Failed to apply configuration', error));
 		this.hasAuthoritativeSnapshot = this.api === undefined;
 		this.rebuildValues();
@@ -328,7 +329,7 @@ function configurationChangeEvent(
 	change: IConfigurationChange,
 	previous: ConfigurationState,
 	current: ConfigurationState,
-	registry: ConfigurationRegistry,
+	registry: IConfigurationRegistry,
 ): IConfigurationChangeEvent {
 	const affectedKeys = new Set([...change.keys, ...change.overrides.flatMap(([, keys]) => keys)]);
 	return Object.freeze({
@@ -454,7 +455,7 @@ function equalIdentifierSets(left: readonly string[], right: readonly string[]):
 
 function resolveSection(
 	state: ConfigurationState,
-	registry: ConfigurationRegistry,
+	registry: IConfigurationRegistry,
 	section: string,
 	overrideIdentifier: string | null | undefined,
 ): unknown {

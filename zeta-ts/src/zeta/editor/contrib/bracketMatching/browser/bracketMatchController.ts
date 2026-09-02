@@ -1,25 +1,25 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { type Range } from "../../../common/core/range.js";
 import { TrackedRangeStickiness } from '../../../common/model.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 
 
 /** Projects current collapsed-cursor bracket matches into caller-owned decorations. */
 export class BracketMatchController extends Disposable {
 	constructor(
-		private readonly selections: CursorsController,
+		private readonly editor: ICodeEditor,
 		private readonly bracketPairs: LanguageBracketPairs,
 		private readonly decorations: TextDecorationCollection<void>,
 		private readonly mode: "never" | "near" | "always",
 	) {
 		super();
 		try {
-			if (selections.context.model !== bracketPairs.textModel || selections.context.model !== decorations.textModel) {
+			if (editor.getModel() !== bracketPairs.textModel || editor.getModel() !== decorations.textModel) {
 				throw new TypeError("Stanza bracket matching dependencies must share one text model");
 			}
-			this._register(selections.onDidChange(() => this.update()));
+			this._register(editor.onDidChangeCursorSelection(() => this.update()));
 			this._register(bracketPairs.onDidChange(() => this.update()));
 			this.update();
 		} catch (error) {
@@ -34,7 +34,7 @@ export class BracketMatchController extends Disposable {
 			return;
 		}
 		const ranges = new Map<string, Range>();
-		for (const selection of this.selections.getSelections()) {
+		for (const selection of this.editor.getSelections()!) {
 			if (!selection.isEmpty()) continue;
 			const match = this.bracketPairs.matchBracket(selection.getPosition())
 				?? (this.mode === "always" ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);

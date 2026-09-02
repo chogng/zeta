@@ -180,11 +180,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	readonly isSimpleWidget: boolean;
 	readonly contextMenuId: MenuId;
 	readonly selections: CursorsController;
-	readonly ownerId: string;
+	private readonly ownerId: string;
 	readonly view: ViewController;
 	readonly viewport: View;
-	readonly userInputEvents: ViewController['userInputEvents'];
-	readonly contributions: CodeEditorContributions;
+	private readonly userInputEvents: ViewController['userInputEvents'];
+	private readonly contributions: CodeEditorContributions;
 	private readonly instantiationService: IInstantiationService;
 	private readonly viewModel: ViewModel;
 	private readonly configuration: EditorConfiguration;
@@ -519,7 +519,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		}
 	}
 
-	get element(): HTMLDivElement {
+	private get element(): HTMLDivElement {
 		return this.viewport.domNode.domNode;
 	}
 

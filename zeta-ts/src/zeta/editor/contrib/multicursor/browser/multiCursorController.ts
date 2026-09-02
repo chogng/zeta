@@ -2,7 +2,6 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { CursorMoveCommands } from '../../../common/cursor/cursorMoveCommands.js';
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
 import { type IViewModel } from '../../../common/viewModel.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
@@ -22,13 +21,12 @@ export class MultiCursorController extends Disposable {
 		input: HTMLElement,
 		private readonly viewport: View,
 		private readonly viewModel: IViewModel,
-		private readonly selections: CursorsController,
 		options: MultiCursorControllerOptions = {},
 	) {
 		super();
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
-			if (viewport.textModel !== viewModel.model || viewport.textModel !== selections.context.model) {
+			if (viewport.textModel !== viewModel.model) {
 				throw new TypeError("Stanza multi-cursor dependencies must share one text model");
 			}
 			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
@@ -41,11 +39,11 @@ export class MultiCursorController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if (event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "i") {
-			const current = this.selections.getSelections();
+			const current = this.viewModel.getSelections();
 			const next = addCursorsToSelectedLineEnds(this.viewport.textModel, current);
 			if (next === current) return;
 			stopEvent(event);
-			this.selections.setCursorSelections(next);
+			this.viewModel.setSelections('editor.action.insertCursorAtEndOfEachLineSelected', next, CursorChangeReason.Explicit);
 			this.viewport.revealPosition(next[0]!.getPosition());
 			return;
 		}

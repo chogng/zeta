@@ -1,9 +1,12 @@
-import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Registry } from "../../../../platform/registry/common/platform.js";
 
 export type EditorAutoSaveMode = "off" | "afterDelay" | "onFocusChange" | "onWindowChange";
 export type EditorTabsMode = "multiple" | "single" | "none";
 
-export const EditorTabsModeConfiguration = ConfigurationsRegistry.registerConfiguration<EditorTabsMode>({
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+export const EditorTabsModeConfiguration = configurationRegistry.registerConfiguration<EditorTabsMode>({
 	key: "workbench.editor.showTabs",
 	defaultValue: "multiple",
 	parse: value => value === "single" || value === "none" ? value : "multiple",
@@ -19,7 +22,7 @@ export const EditorTabsModeConfiguration = ConfigurationsRegistry.registerConfig
 	},
 });
 
-export const EditorBreadcrumbsEnabledConfiguration = ConfigurationsRegistry.registerConfiguration<boolean>({
+export const EditorBreadcrumbsEnabledConfiguration = configurationRegistry.registerConfiguration<boolean>({
 	key: "breadcrumbs.enabled",
 	defaultValue: true,
 	parse: value => typeof value === "boolean" ? value : true,
@@ -30,7 +33,7 @@ export const EditorBreadcrumbsEnabledConfiguration = ConfigurationsRegistry.regi
 	},
 });
 
-export const EditorAutoSaveConfiguration = ConfigurationsRegistry.registerConfiguration<EditorAutoSaveMode>({
+export const EditorAutoSaveConfiguration = configurationRegistry.registerConfiguration<EditorAutoSaveMode>({
 	key: "files.autoSave",
 	defaultValue: "off",
 	parse: value => value === "afterDelay" || value === "onFocusChange" || value === "onWindowChange" ? value : "off",
@@ -47,7 +50,7 @@ export const EditorAutoSaveConfiguration = ConfigurationsRegistry.registerConfig
 	},
 });
 
-export const EditorAutoSaveDelayConfiguration = ConfigurationsRegistry.registerConfiguration<number>({
+export const EditorAutoSaveDelayConfiguration = configurationRegistry.registerConfiguration<number>({
 	key: "files.autoSaveDelay",
 	defaultValue: 1_000,
 	parse: value => typeof value === "number" && Number.isFinite(value) ? Math.min(60_000, Math.max(100, Math.round(value))) : 1_000,

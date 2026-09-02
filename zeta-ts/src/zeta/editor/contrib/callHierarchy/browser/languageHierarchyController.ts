@@ -3,7 +3,6 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../base/comm
 import { type URI } from "../../../../base/common/uri.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type Position } from "../../../common/core/position.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
@@ -24,8 +23,18 @@ export class LanguageHierarchyController extends Disposable {
 	private readonly peek = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly editor: ICodeEditor, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
+	constructor(
+		private readonly input: HTMLElement,
+		private readonly editor: ICodeEditor,
+		private readonly viewport: View,
+		private readonly service: LanguageHierarchyService,
+		private readonly resource: URI,
+		private readonly languageId: string,
+		private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined,
+		private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error),
+	) {
 		super();
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('Language hierarchy dependencies must share one text model');
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		this._register(viewport.textModel.onDidChangeContent(() => this.closePeek()));
 		this._register(toDisposable(() => this.cancelRequest()));
@@ -45,7 +54,7 @@ export class LanguageHierarchyController extends Disposable {
 	private async prepare(kind: HierarchyKind): Promise<void> {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
-		const anchor = this.selections.getSelections()[0]!.getPosition();
+		const anchor = this.editor.getSelections()![0]!.getPosition();
 		try {
 			const sessions = kind === "call"
 				? (await this.service.prepareCallHierarchy(this.languageId, anchor, request.signal)).map(callSession)
@@ -136,7 +145,9 @@ export class LanguageHierarchyController extends Disposable {
 	private async open(item: LanguageHierarchyItem): Promise<void> {
 		const location = { resource: item.resource, range: item.range, selectionRange: item.selectionRange };
 		if (item.resource.toString() === this.resource.toString()) {
-			this.selections.setSelections([Selection.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition())]);
+			this.editor.setSelections([
+				Selection.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition()),
+			], 'editor.showHierarchy');
 			this.viewport.revealPosition(item.selectionRange.getStartPosition());
 			this.input.focus({ preventScroll: true });
 			return;

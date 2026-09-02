@@ -30,25 +30,37 @@ export interface LanguageFormattingProvider {
 
 /** Owns formatting provider dispatch; edit validation/application stays in TextModel and cursor. */
 export class FormatService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageFormattingProvider>, private readonly resource?: URI) {
+	constructor(
+		private readonly model: TextModel,
+		private readonly documentFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>,
+		private readonly documentRangeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>,
+		private readonly onTypeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>,
+		private readonly resource?: URI,
+	) {
 		super();
 	}
 
 	provideDocumentFormattingEdits(languageId: string, options: LanguageFormattingOptions, signal?: AbortSignal): Promise<readonly TextEdit[]> {
-		return this.provide(languageId, { options }, "provideDocumentFormattingEdits", signal);
+		return this.provide(this.documentFormattingEditProvider, languageId, { options }, "provideDocumentFormattingEdits", signal);
 	}
 
 	provideRangeFormattingEdits(languageId: string, range: Range, options: LanguageFormattingOptions, signal?: AbortSignal): Promise<readonly TextEdit[]> {
-		return this.provide(languageId, { range, options }, "provideRangeFormattingEdits", signal);
+		return this.provide(this.documentRangeFormattingEditProvider, languageId, { range, options }, "provideRangeFormattingEdits", signal);
 	}
 
 	provideOnTypeFormattingEdits(languageId: string, position: Position, ch: string, options: LanguageFormattingOptions, signal?: AbortSignal): Promise<readonly TextEdit[]> {
-		return this.provide(languageId, { position, ch, options }, "provideOnTypeFormattingEdits", signal);
+		return this.provide(this.onTypeFormattingEditProvider, languageId, { position, ch, options }, "provideOnTypeFormattingEdits", signal);
 	}
 
-	private async provide(languageId: string, fields: Partial<LanguageFormattingRequest>, method: "provideDocumentFormattingEdits" | "provideRangeFormattingEdits" | "provideOnTypeFormattingEdits", signal = new AbortController().signal): Promise<readonly TextEdit[]> {
+	private async provide(
+		providers: LanguageFeatureRegistry<LanguageFormattingProvider>,
+		languageId: string,
+		fields: Partial<LanguageFormattingRequest>,
+		method: "provideDocumentFormattingEdits" | "provideRangeFormattingEdits" | "provideOnTypeFormattingEdits",
+		signal = new AbortController().signal,
+	): Promise<readonly TextEdit[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), ...fields } as LanguageFormattingRequest;
-		for (const provider of this.providers.ordered(this.model)) {
+		for (const provider of providers.ordered(this.model)) {
 			const provide = provider[method];
 			if (!provide || !isLanguageFeatureRequestCurrent(request)) continue;
 			const edits = await provide.call(provider, request, signal);

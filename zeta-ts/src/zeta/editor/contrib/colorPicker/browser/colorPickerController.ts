@@ -5,7 +5,6 @@ import { Color, RGBA } from '../../../../base/common/color.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { MouseTargetType, type ICodeEditor, type IEditorMouseEvent } from '../../../browser/editorBrowser.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type IColor } from '../../../common/languages.js';
@@ -38,7 +37,6 @@ export class ColorPickerController extends Disposable {
 		private readonly editorInput: HTMLElement,
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly selections: CursorsController,
 		private readonly service: ColorService,
 		private readonly detector: ColorDetector,
 		private readonly languageId: string,
@@ -47,7 +45,7 @@ export class ColorPickerController extends Disposable {
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
-		if (viewport.textModel !== selections.context.model) throw new TypeError('Stanza color picker dependencies must share a text model');
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza color picker dependencies must share a text model');
 		this.widget = this._register(new EditorColorPickerDialog(
 			viewport.domNode.domNode,
 			color => this.refreshPresentations(color),
@@ -107,7 +105,7 @@ export class ColorPickerController extends Disposable {
 		}
 		if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'c') return;
 		stopEvent(event);
-		void this.showAtPosition(this.selections.getSelections()[0]!.getPosition());
+		void this.showAtPosition(this.editor.getSelections()![0]!.getPosition());
 	}
 
 	private handleEditorMouseDown(event: IEditorMouseEvent): void {
@@ -284,7 +282,6 @@ registerTextEditorCapabilityContribution({
 			context.view.element,
 			context.editor,
 			context.viewport,
-			context.selectionController,
 			capability.service,
 			detector,
 			context.languageId,

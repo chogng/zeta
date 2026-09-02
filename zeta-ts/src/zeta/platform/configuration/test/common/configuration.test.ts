@@ -10,7 +10,11 @@ import test from "node:test";
 import { URI } from "../../../../base/common/uri.js";
 import {
 	ConfigurationRegistry,
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
 } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { InMemoryConfigurationService } from "../../../../platform/configuration/common/inMemoryConfigurationService.js";
+import { Registry } from "../../../../platform/registry/common/platform.js";
 import {
 	type IConfigurationApi,
 	type IConfigurationSnapshot,
@@ -30,6 +34,27 @@ import {
 	ConfigurationResourceRevisionConflictError,
 } from "../../../../platform/configuration/common/configurationResourceService.js";
 import { ConfigurationTarget, addToValueTree, getConfigValueInTarget, getConfigurationValue, getLanguageTagSettingPlainKey, isConfigurationOverrides, isConfigurationUpdateOverrides, isConfigured, merge, removeFromValueTree, toValuesTree } from "../../../../platform/configuration/common/configuration.js";
+
+test("configuration registry is owned by the standard platform Registry entry", async () => {
+	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+	assert.equal(Registry.knows(ConfigurationExtensions.Configuration), true);
+	const enabled = registry.registerConfiguration({
+		key: "test.configuration.registry.enabled",
+		defaultValue: false,
+		parse(value): boolean {
+			if (typeof value !== "boolean") throw new TypeError("enabled must be a boolean");
+			return value;
+		},
+	});
+	using service = new InMemoryConfigurationService();
+	const changes: string[] = [];
+	using listener = service.onDidChangeConfiguration(event => changes.push(...event.change.keys));
+
+	assert.equal(service.getValue(enabled), false);
+	await service.updateValue(enabled, true);
+	assert.equal(service.getValue(enabled), true);
+	assert.deepEqual(changes, [enabled]);
+});
 
 test("configuration contracts expose target inspection and validate overrides", () => {
 	const values = { defaultValue: 12, userValue: 14, workspaceValue: 16 };

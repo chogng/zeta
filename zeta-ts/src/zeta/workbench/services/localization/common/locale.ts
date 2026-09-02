@@ -1,9 +1,10 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
+import { Registry } from "../../../../platform/registry/common/platform.js";
 
 export type LocaleId = string;
 
@@ -16,8 +17,10 @@ export interface ILocaleService {
 
 export const ILocaleService = createServiceIdentifier<ILocaleService>("localeService");
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 export const LocalizationConfiguration = Object.freeze({
-	locale: ConfigurationsRegistry.registerConfiguration<LocaleId>({
+	locale: configurationRegistry.registerConfiguration<LocaleId>({
 		key: "workbench.locale",
 		defaultValue: "en",
 		parse(value: unknown): LocaleId {

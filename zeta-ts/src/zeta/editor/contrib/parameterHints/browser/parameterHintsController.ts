@@ -3,17 +3,25 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/languageParameterHints.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
 import { EditorOptions } from '../../../common/config/editorOptions.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 
 /** Routes the signature-help shortcut and owns the accessible parameter widget. */
 export class ParameterHintsController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error)) {
+	constructor(
+		private readonly input: HTMLElement,
+		private readonly editor: ICodeEditor,
+		private readonly viewport: View,
+		private readonly service: ParameterHintsService,
+		private readonly languageId: string,
+		private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error),
+	) {
 		super();
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza parameter hints dependencies must share one text model');
 		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
 		this.element.className = "stanza-editor-parameter-hints";
 		this.element.hidden = true;
@@ -43,7 +51,7 @@ export class ParameterHintsController extends Disposable {
 				this.hide();
 			}
 		}));
-		this._register(selections.onDidChange(() => this.hide()));
+		this._register(editor.onDidChangeCursorSelection(() => this.hide()));
 		this._register(viewport.onDidChangeLayout(() => this.position()));
 	}
 
@@ -51,7 +59,7 @@ export class ParameterHintsController extends Disposable {
 		this.request?.abort();
 		const request = this.request = new AbortController();
 		try {
-			const position = this.selections.getSelections()[0]!.getPosition();
+			const position = this.editor.getSelections()![0]!.getPosition();
 			const hints = await this.service.provideParameterHints(this.languageId, position, context, request.signal);
 			if (request.signal.aborted) return;
 			if (!hints) { this.hide(); return; }
@@ -84,7 +92,7 @@ export class ParameterHintsController extends Disposable {
 
 	private position(): void {
 		if (this.element.hidden) return;
-		const position = this.selections.getSelections()[0]!.getPosition();
+		const position = this.editor.getSelections()![0]!.getPosition();
 		const coordinates = this.viewport.getPositionContentCoordinates(position);
 		const scroll = this.viewport.viewportLayout.scrollPosition;
 		this.element.style.left = `${Math.max(8, coordinates.left - scroll.left)}px`;
@@ -101,6 +109,17 @@ export class ParameterHintsController extends Disposable {
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.parameterHints", install: context => {
 	if (context.kind !== "text" || !EditorOptions.parameterHints.validate(context.options.parameterHints).enabled) return;
-	const service = context.register(new ParameterHintsService(context.model, context.languageFeaturesService.parameterHintsProvider, context.options.input.resource));
-	context.register(new ParameterHintsController(context.view.element, context.viewport, context.selectionController, service, context.languageId, context.onLanguageError));
+	const service = context.register(new ParameterHintsService(
+		context.model,
+		context.languageFeaturesService.signatureHelpProvider,
+		context.options.input.resource,
+	));
+	context.register(new ParameterHintsController(
+		context.view.element,
+		context.editor,
+		context.viewport,
+		service,
+		context.languageId,
+		context.onLanguageError,
+	));
 } });

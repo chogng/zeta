@@ -93,28 +93,28 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
 	const editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20, ariaLabel: "Code" });
-	const ownerId = editor.ownerId;
+	const ownerId = editor.getId();
 
 	editor.layout({ width: 320, height: 80 });
 	const fontTarget = dom.window.document.createElement('span');
 	editor.applyFontInfo(fontTarget);
 
-	assert.equal(editor.element.parentElement, container);
-	assert.equal(editor.element.getAttribute("aria-label"), "Code");
+	assert.equal(editor.getDomNode().parentElement, container);
+	assert.equal(editor.getDomNode().getAttribute("aria-label"), "Code");
 	assert.equal(editor.view.element.getAttribute("aria-label"), "Code");
-	const margin = requiredElement<HTMLElement>(editor.element, '.margin');
+	const margin = requiredElement<HTMLElement>(editor.getDomNode(), '.margin');
 	assert.equal(margin.getAttribute('role'), 'presentation');
 	assert.equal(margin.getAttribute('aria-hidden'), 'true');
 	assert.equal(margin.firstElementChild?.className, 'glyph-margin');
 	assert.ok(editor.view.editContext instanceof ViewPart);
-	assert.strictEqual(TextAreaEditContextRegistry.get(editor.ownerId), editor.view.editContext);
+	assert.strictEqual(TextAreaEditContextRegistry.get(editor.getId()), editor.view.editContext);
 	assert.deepEqual(editor.viewport.viewportLayout.viewportSize, { width: 320, height: 80 });
-	assert.equal(fontTarget.style.fontFamily, editor.element.style.fontFamily);
-	assert.equal(fontTarget.style.fontFeatureSettings, editor.element.style.fontFeatureSettings);
+	assert.equal(fontTarget.style.fontFamily, editor.getDomNode().style.fontFamily);
+	assert.equal(fontTarget.style.fontFeatureSettings, editor.getDomNode().style.fontFeatureSettings);
 
 	editor.dispose();
 	assert.equal(TextAreaEditContextRegistry.get(ownerId), undefined);
-	assert.equal(editor.element.isConnected, false);
+	assert.equal(editor.getDomNode().isConnected, false);
 	assert.equal(model.getText(), "alpha");
 	assert.equal(editor.selections.context.model, model);
 	assert.throws(() => editor.selections.getSelections(), /already disposed/);
@@ -339,7 +339,7 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	editor.layout({ width: 280, height: 60 });
 
 	const lineNumber = (lineIndex: number): string => requiredElement<HTMLElement>(
-		editor.element,
+		editor.getDomNode(),
 		`.margin-view-overlays .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`,
 	).textContent ?? '';
 	assert.equal(lineNumber(0), '1');
@@ -348,10 +348,10 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	assert.equal(lineNumber(2), '3');
 
 	editor.setSelection(new Selection(2, 1, 2, 5));
-	assert.equal(editor.element.querySelectorAll('.stanza-editor-selection').length, 1);
-	assert.equal(editor.element.querySelectorAll('.stanza-editor-whitespace').length, 4);
-	assert.equal(editor.element.querySelectorAll('.view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide').length, 1);
-	assert.equal(editor.element.querySelectorAll('.view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide').length, 1);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection').length, 1);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 4);
+	assert.equal(editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide').length, 1);
+	assert.equal(editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide').length, 1);
 
 	let configurationChanges = 0;
 	using configurationListener = editor.onDidChangeConfiguration(() => configurationChanges += 1);
@@ -364,11 +364,11 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	assert.equal(editor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
 	assert.equal(editor.getOptions().get(EditorOption.renderWhitespace), 'all');
 	assert.equal(editor.getRawOptions().lineNumbers, 'off');
-	assert.equal(editor.element.classList.contains('hide-line-numbers'), true);
-	assert.equal(requiredElement<HTMLElement>(editor.element, '.margin').style.getPropertyValue('--stanza-editor-line-numbers-width'), '0px');
+	assert.equal(editor.getDomNode().classList.contains('hide-line-numbers'), true);
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.margin').style.getPropertyValue('--stanza-editor-line-numbers-width'), '0px');
 	assert.deepEqual([0, 1, 2].map(lineNumber), ['', '', '']);
-	assert.equal(editor.element.querySelectorAll('.stanza-editor-whitespace').length, 5);
-	assert.equal(editor.element.querySelectorAll('.stanza-editor-indent-guide').length, 0);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 5);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide').length, 0);
 	dom.window.close();
 });
 
@@ -451,31 +451,31 @@ test('editor focus updates the view overlay presentation', () => {
 		renderLineHighlightOnlyWhenFocus: true,
 	});
 	editor.layout({ width: 120, height: 100 });
-	const overlays = requiredElement(editor.element, '.view-overlays');
+	const overlays = requiredElement(editor.getDomNode(), '.view-overlays');
 
 	assert.equal(overlays.classList.contains('focused'), false);
-	assert.equal(editor.element.querySelector('.view-overlays .current-line'), null);
-	assert.equal(editor.element.querySelector('.margin-view-overlays .current-line-margin'), null);
+	assert.equal(editor.getDomNode().querySelector('.view-overlays .current-line'), null);
+	assert.equal(editor.getDomNode().querySelector('.margin-view-overlays .current-line-margin'), null);
 	editor.focus();
 	assert.equal(overlays.classList.contains('focused'), true);
 	assert.deepEqual(
-		[...requiredElement(editor.element, '.view-overlays .current-line').classList],
+		[...requiredElement(editor.getDomNode(), '.view-overlays .current-line').classList],
 		['current-line', 'stanza-editor-current-line-highlight', 'current-line-both', 'current-line-exact'],
 	);
 	assert.deepEqual(
-		[...requiredElement(editor.element, '.margin-view-overlays .current-line-margin').classList],
+		[...requiredElement(editor.getDomNode(), '.margin-view-overlays .current-line-margin').classList],
 		['current-line', 'stanza-editor-current-line-margin-highlight', 'current-line-margin', 'current-line-margin-both', 'current-line-exact-margin'],
 	);
-	assert.ok(editor.element.querySelectorAll('.view-overlays .current-line').length > 1);
-	assert.equal(editor.element.querySelectorAll('.view-overlays .current-line-exact').length, 1);
+	assert.ok(editor.getDomNode().querySelectorAll('.view-overlays .current-line').length > 1);
+	assert.equal(editor.getDomNode().querySelectorAll('.view-overlays .current-line-exact').length, 1);
 	editor.setSelection(new Selection(1, 1, 1, 2));
-	assert.equal(editor.element.querySelector('.view-overlays .current-line'), null);
-	assert.ok(editor.element.querySelector('.margin-view-overlays .current-line-margin'));
+	assert.equal(editor.getDomNode().querySelector('.view-overlays .current-line'), null);
+	assert.ok(editor.getDomNode().querySelector('.margin-view-overlays .current-line-margin'));
 	editor.setSelection(Selection.fromPositions(new Position(1, 1)));
 	editor.view.editContext.domNode.domNode.blur();
 	assert.equal(overlays.classList.contains('focused'), false);
-	assert.equal(editor.element.querySelector('.view-overlays .current-line'), null);
-	assert.equal(editor.element.querySelector('.margin-view-overlays .current-line-margin'), null);
+	assert.equal(editor.getDomNode().querySelector('.view-overlays .current-line'), null);
+	assert.equal(editor.getDomNode().querySelector('.margin-view-overlays .current-line-margin'), null);
 
 	editor.dispose();
 	dom.window.close();
@@ -517,7 +517,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		instantiationService: services,
 		accessibilityService: enabledAccessibilityService,
 	});
-	const ownerId = editor.ownerId;
+	const ownerId = editor.getId();
 	assert.ok(editor.view.editContext instanceof NativeEditContext);
 	const editContext = editor.view.editContext as InstanceType<typeof NativeEditContext>;
 	editor.layout({ width: 320, height: 80 });
@@ -737,7 +737,7 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 		lineHeight: 20,
 	});
 	editor.layout({ width: 240, height: 40 });
-	editor.element.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON: () => ({}) });
+	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON: () => ({}) });
 	let received: Parameters<Parameters<typeof editor.onMouseMove>[0]>[0] | undefined;
 	let releasedKey: string | undefined;
 	let dropped = false;
@@ -751,9 +751,9 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 		clientX: editor.getLayoutInfo().contentLeft + 2,
 		clientY: 10,
 	});
-	requiredElement<HTMLElement>(editor.element, '.view-line .stanza-editor-line-text > span').dispatchEvent(browserEvent);
+	requiredElement<HTMLElement>(editor.getDomNode(), '.view-line .stanza-editor-line-text > span').dispatchEvent(browserEvent);
 	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
-	editor.element.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, clientX: 80, clientY: 10 }) as unknown as DragEvent);
+	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, clientX: 80, clientY: 10 }) as unknown as DragEvent);
 
 	assert.ok(received);
 	assert.ok(received.event instanceof StandardMouseEvent);
@@ -779,8 +779,8 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 		lineHeight: 20,
 	});
 	editor.layout({ width: 240, height: 60 });
-	editor.element.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 60, width: 240, height: 60, toJSON: () => ({}) });
-	editor.element.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 80, clientY: 25 }));
+	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 60, width: 240, height: 60, toJSON: () => ({}) });
+	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 80, clientY: 25 }));
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 80, clientY: 25 }));
 	assert.equal(editor.getPosition()?.lineNumber, 2);
 
@@ -831,9 +831,9 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 		lineHeight: 20,
 	});
 	editor.layout({ width: 120, height: 60 });
-	editor.element.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 120, bottom: 60, width: 120, height: 60, toJSON: () => ({}) });
+	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 120, bottom: 60, width: 120, height: 60, toJSON: () => ({}) });
 
-	editor.element.dispatchEvent(pointerEvent(dom, 'pointerdown', 17, 1, editor.getLayoutInfo().contentLeft + 8, 10));
+	editor.getDomNode().dispatchEvent(pointerEvent(dom, 'pointerdown', 17, 1, editor.getLayoutInfo().contentLeft + 8, 10));
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 17, 1, editor.getLayoutInfo().contentLeft + 8, 120));
 	await delay(dom.window, 45);
 	assert.ok(editor.getScrollTop() > 0);
@@ -1075,14 +1075,14 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 
 	editor.layout({ width: 320, height: 40 });
 
-	assert.equal(editor.element.querySelector(".view-line.active"), null);
-	assert.ok(editor.element.querySelector(".stanza-editor-caret"));
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".view-lines").style.top, "0px");
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".view-lines").style.transform, "");
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".view-line").style.top, "20px");
-	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-left"), "12px");
-	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-right"), "12px");
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text").style.top, "20px");
+	assert.equal(editor.getDomNode().querySelector(".view-line.active"), null);
+	assert.ok(editor.getDomNode().querySelector(".stanza-editor-caret"));
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-lines").style.top, "0px");
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-lines").style.transform, "");
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-line").style.top, "20px");
+	assert.equal(editor.getDomNode().style.getPropertyValue("--stanza-editor-padding-left"), "12px");
+	assert.equal(editor.getDomNode().style.getPropertyValue("--stanza-editor-padding-right"), "12px");
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".stanza-editor-placeholder-text").style.top, "20px");
 	assert.equal(editor.viewport.viewportLayout.contentSize.height, 60);
 	dom.window.close();
 });
@@ -1106,7 +1106,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	const targetPosition = editor._getViewModel().coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
 	editor.setPosition(targetPosition);
 
-	const layer = requiredElement<HTMLElement>(editor.element, '.cursors-layer');
+	const layer = requiredElement<HTMLElement>(editor.getDomNode(), '.cursors-layer');
 	const primary = requiredElement<HTMLElement>(layer, '.cursor');
 	assert.equal(layer.getAttribute('role'), 'presentation');
 	assert.equal(layer.getAttribute('aria-hidden'), 'true');
@@ -1124,7 +1124,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	assert.ok(layer.querySelector('.cursor-secondary'));
 
 	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
-	assert.equal(editor.element.classList.contains('overtype'), true);
+	assert.equal(editor.getDomNode().classList.contains('overtype'), true);
 	assert.equal(layer.classList.contains('cursor-block-style'), true);
 
 	editor._getViewModel().onCompositionStart();
@@ -1132,7 +1132,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	editor._getViewModel().onCompositionEnd();
 	assert.equal(primary.style.visibility, 'inherit');
 	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
-	assert.equal(editor.element.classList.contains('overtype'), false);
+	assert.equal(editor.getDomNode().classList.contains('overtype'), false);
 	assert.equal(layer.classList.contains('cursor-line-style'), true);
 
 	editor.dispose();
@@ -1157,7 +1157,7 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 	});
 
 	editor.layout({ width: 320, height: 80 });
-	const placeholder = requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text");
+	const placeholder = requiredElement<HTMLElement>(editor.getDomNode(), ".stanza-editor-placeholder-text");
 	const layout = editor.getLayoutInfo();
 	assert.strictEqual(PlaceholderTextContribution.get(editor), editor.getContribution(PlaceholderTextContribution.ID));
 	assert.deepEqual({
@@ -1231,7 +1231,7 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 	assert.deepEqual(saved.contributionsState, { 'test.eager': { marker: 'saved' } });
 	editor.restoreViewState({ ...saved, contributionsState: { 'test.eager': { marker: 'restored' } } });
 	assert.deepEqual(restoredState, { marker: 'restored' });
-	assert.ok(editor.contributions.get("test.lazy"));
+	assert.ok(editor.getContribution("test.lazy"));
 	assert.deepEqual(events, ["eager:create", "lazy:create"]);
 	editor.dispose();
 	assert.deepEqual(events, ["eager:create", "lazy:create", "lazy:dispose", "eager:dispose"]);
@@ -1278,7 +1278,7 @@ test("CodeEditorWidget leaves text drops available to its host", () => {
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	const drop = textDropEvent(dom.window, "dropped");
 
-	editor.element.dispatchEvent(drop);
+	editor.getDomNode().dispatchEvent(drop);
 
 	assert.equal(drop.defaultPrevented, false);
 	assert.equal(model.getText(), "alpha");
@@ -1293,10 +1293,10 @@ test('DropIntoEditorController inserts text through the canonical editor drop ev
 	using model = new TextModel('alpha');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
-	editor.element.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON: () => ({}) });
+	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON: () => ({}) });
 	const drop = textDropEvent(dom.window, ' dropped', 80, 10);
 
-	editor.element.dispatchEvent(drop);
+	editor.getDomNode().dispatchEvent(drop);
 
 	assert.equal(drop.defaultPrevented, true);
 	assert.equal(model.getText(), 'alpha dropped');
@@ -1318,22 +1318,22 @@ test('DropIntoEditorController leaves read-only and non-text drops to the host',
 		lineHeight: 20,
 	});
 	readOnlyEditor.layout({ width: 240, height: 40 });
-	readOnlyEditor.element.getBoundingClientRect = () => editorRectangle(240, 40);
+	readOnlyEditor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const textDrop = textDropEvent(dom.window, 'dropped', 80, 10);
-	readOnlyEditor.element.dispatchEvent(textDrop);
+	readOnlyEditor.getDomNode().dispatchEvent(textDrop);
 	assert.equal(textDrop.defaultPrevented, false);
 	assert.equal(readOnlyModel.getText(), 'alpha');
 
 	using model = new TextModel('beta');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
-	editor.element.getBoundingClientRect = () => editorRectangle(240, 40);
+	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const binaryDrop = transferDropEvent(dom.window, {
 		types: ['Files'],
 		files: [{ name: 'image.png', type: 'image/png', size: 16, text: async () => 'binary' } as File],
 		getData: () => '',
 	});
-	editor.element.dispatchEvent(binaryDrop);
+	editor.getDomNode().dispatchEvent(binaryDrop);
 	assert.equal(binaryDrop.defaultPrevented, false);
 	assert.equal(model.getText(), 'beta');
 	dom.window.close();
@@ -1347,14 +1347,14 @@ test('DropIntoEditorController converts an HTML-only drop to inert text', async 
 	using model = new TextModel('alpha');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
-	editor.element.getBoundingClientRect = () => editorRectangle(240, 40);
+	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const drop = transferDropEvent(dom.window, {
 		types: ['text/html'],
 		files: [],
 		getData: type => type === 'text/html' ? '<div>first</div><script>ignored()</script><div>second<br>third</div>' : '',
 	});
 
-	editor.element.dispatchEvent(drop);
+	editor.getDomNode().dispatchEvent(drop);
 
 	assert.equal(drop.defaultPrevented, true);
 	assert.equal(model.getText(), 'alphafirst\nsecond\nthird');
@@ -1369,11 +1369,11 @@ test('DropIntoEditorController inserts one decoded text file at the captured pos
 	using model = new TextModel('alpha');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
-	editor.element.getBoundingClientRect = () => editorRectangle(240, 40);
+	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const file = new DeferredTextFile('snippet.rs');
 	const drop = transferDropEvent(dom.window, { types: ['Files'], files: [file as unknown as File], getData: () => '' });
 
-	editor.element.dispatchEvent(drop);
+	editor.getDomNode().dispatchEvent(drop);
 	file.resolve(' file');
 	await waitForText(model, 'alpha file');
 

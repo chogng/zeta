@@ -24,7 +24,7 @@ export interface TokenizationTextModelPartOptions {
 	readonly languageIdCodec?: ILanguageIdCodec;
 	readonly syntaxProviderRegistry?: SyntaxProviderRegistry;
 	readonly syntaxService?: SyntaxServiceOptions;
-	readonly semanticTokensProvider?: LanguageFeatureRegistry<LanguageSemanticTokensProvider>;
+	readonly documentSemanticTokensProvider?: LanguageFeatureRegistry<LanguageSemanticTokensProvider>;
 	readonly onDidChangeLanguageSupport?: Event<void>;
 }
 
@@ -62,8 +62,8 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			getLineTokens: (lineIndex: number) => tokenization.getLanguageTokens(lineIndex),
 		});
 		this.semanticTokensStore = new SparseTokensStore(this.languageIdCodec);
-		this.semanticTokens = options.semanticTokensProvider
-			? this._register(new SemanticTokensTextModelPart(textModel, options.semanticTokensProvider))
+		this.semanticTokens = options.documentSemanticTokensProvider
+			? this._register(new SemanticTokensTextModelPart(textModel, options.documentSemanticTokensProvider))
 			: undefined;
 		if (this.semanticTokens) this._register(this.semanticTokens.onDidEncounterError(error => this.errorEmitter.fire(error)));
 		this._register(this.languageTokenLineIndex.onDidChange(() => this.changeEmitter.fire()));

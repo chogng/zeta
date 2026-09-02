@@ -7,7 +7,8 @@ import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { ConfigurationsRegistry, type IRegisteredConfiguration } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { Registry } from "../../../../platform/registry/common/platform.js";
 import {
 	EditorBreadcrumbsEnabledConfiguration,
 	EditorTabsModeConfiguration,
@@ -157,7 +158,7 @@ export class EditorTitleControl extends Disposable {
 }
 
 function configurationDefault<T>(key: string): T {
-	const configuration = ConfigurationsRegistry.getConfiguration(key) as IRegisteredConfiguration<T> | undefined;
+	const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(key) as IRegisteredConfiguration<T> | undefined;
 	if (!configuration) throw new RangeError(`Unknown configuration: ${key}`);
 	return configuration.defaultValue;
 }

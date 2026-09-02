@@ -11,6 +11,7 @@ import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
+import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -47,7 +48,7 @@ test("Bracket match controller stores standard decoration options and clears the
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using controller = new BracketMatchController(selections, bracketPairs, decorations, "always");
+	using controller = new BracketMatchController(editorFor(model, selections), bracketPairs, decorations, "always");
 	viewport.layout({ width: 240, height: 40 });
 
 	assert.deepEqual(model.getAllDecorations().map(decoration => ({
@@ -73,17 +74,18 @@ test("Bracket match controller distinguishes near, always, and never modes", () 
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
+	const editor = editorFor(model, selections);
 
 	using nearDecorations = new TextDecorationCollection<void>(model);
-	using near = new BracketMatchController(selections, bracketPairs, nearDecorations, "near");
+	using near = new BracketMatchController(editor, bracketPairs, nearDecorations, "near");
 	assert.equal(nearDecorations.size, 0);
 
 	using alwaysDecorations = new TextDecorationCollection<void>(model);
-	using always = new BracketMatchController(selections, bracketPairs, alwaysDecorations, "always");
+	using always = new BracketMatchController(editor, bracketPairs, alwaysDecorations, "always");
 	assert.equal(alwaysDecorations.size, 2);
 
 	using neverDecorations = new TextDecorationCollection<void>(model);
-	using never = new BracketMatchController(selections, bracketPairs, neverDecorations, "never");
+	using never = new BracketMatchController(editor, bracketPairs, neverDecorations, "never");
 	assert.equal(neverDecorations.size, 0);
 });
 
@@ -98,4 +100,12 @@ class FixedTextMeasurer implements TextMeasurer {
 	measureLineWidth(text: string): number {
 		return text.length * 10;
 	}
+}
+
+function editorFor(model: TextModel, selections: ReturnType<typeof createTestCursorsController>): ICodeEditor {
+	return {
+		getModel: () => model,
+		getSelections: () => selections.getSelections(),
+		onDidChangeCursorSelection: (listener: Parameters<ICodeEditor['onDidChangeCursorSelection']>[0]) => selections.onDidChange(() => listener({} as never)),
+	} as unknown as ICodeEditor;
 }

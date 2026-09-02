@@ -37,13 +37,14 @@ for (const [name, value] of Object.entries({
 const { h } = await import('../../../../../base/browser/dom.js');
 const { Event } = await import('../../../../../base/common/event.js');
 const { DisposableStore } = await import('../../../../../base/common/lifecycle.js');
-const { ConfigurationRegistry, ConfigurationsRegistry } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
+const { ConfigurationRegistry, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
 const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
 const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configuration.js');
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
 const { ServiceContainer, ServiceConstructionDescriptor } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { Registry } = await import('../../../../../platform/registry/common/platform.js');
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { HoverConfiguration } = await import('../../../../../platform/hover/common/hoverService.js');
@@ -53,6 +54,7 @@ const { WorkbenchThemesRegistry } = await import('../../../../../workbench/commo
 const { EditorSelectionConfiguration } = await import('../../../../../workbench/common/editorSelectionConfiguration.js');
 const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
 const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
+const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
 const { EditorPaneRegistry } = await import('../../../../../workbench/browser/parts/editor/editorRegistry.js');
@@ -350,7 +352,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	await copyAction.run();
 	assert.deepEqual(copied, [HoverConfiguration.delay]);
 	await resetAction.run();
-	assert.equal(configuration.getValue(HoverConfiguration.delay), ConfigurationsRegistry.getConfiguration(HoverConfiguration.delay)?.defaultValue);
+	assert.equal(configuration.getValue(HoverConfiguration.delay), configurationRegistry.getConfiguration(HoverConfiguration.delay)?.defaultValue);
 
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.zeta-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');

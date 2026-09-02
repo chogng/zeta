@@ -1,10 +1,13 @@
-import { ConfigurationsRegistry } from "../../configuration/common/configurationRegistry.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../configuration/common/configurationRegistry.js";
+import { Registry } from "../../registry/common/platform.js";
 
 export type ListOpenMode = "doubleClick" | "singleClick";
 
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 /** Typed configuration keys owned by Platform List. */
 export const ListConfiguration = Object.freeze({
-	openMode: ConfigurationsRegistry.registerConfiguration<ListOpenMode>({
+	openMode: configurationRegistry.registerConfiguration<ListOpenMode>({
 		key: "workbench.list.openMode",
 		defaultValue: "singleClick",
 		parse(value: unknown): ListOpenMode {

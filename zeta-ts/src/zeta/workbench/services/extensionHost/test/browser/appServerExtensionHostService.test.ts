@@ -80,9 +80,9 @@ test("projects supported language operations while diagnosing unsupported operat
 	service.onDidFail(failure => failures.push(failure.code));
 	await service.start();
 
-	using model = new TextModel("answer");
+	using model = new TextModel("answer", { languageId: "typescript" });
 	using hover = new LanguageHoverService(model, languages.hoverProvider);
-	using parameterHints = new ParameterHintsService(model, languages.parameterHintsProvider);
+	using parameterHints = new ParameterHintsService(model, languages.signatureHelpProvider);
 	assert.deepEqual(await hover.provideHover("typescript", new Position((0) + 1, (1) + 1)), { contents: ["Host hover"] });
 	assert.deepEqual(await parameterHints.provideParameterHints("typescript", new Position((0) + 1, (1) + 1)), { signatures: [{ label: "fn(value)", parameters: [{ label: "value" }], activeParameter: 0 }], activeSignature: 0 });
 	assert.deepEqual((api.invocations.find(request => request.operation === "hover")!.payload as { readonly position: unknown }).position, { lineIndex: 0, columnIndex: 1 });

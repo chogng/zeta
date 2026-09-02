@@ -100,7 +100,7 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using model = new TextModel("pri", { languageId: "rust", resource });
 	using hover = new LanguageHoverService(model, languages.hoverProvider, resource);
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
-	using parameterHints = new ParameterHintsService(model, languages.parameterHintsProvider, resource);
+	using parameterHints = new ParameterHintsService(model, languages.signatureHelpProvider, resource);
 	using inlayHints = new InlayHintsService(model, languages.inlayHintsProvider, resource);
 
 	const hoverResult = await hover.provideHover("rust", new Position((0) + 1, (1) + 1));
@@ -156,8 +156,14 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using model = new TextModel("value");
-	using formatting = new FormatService(model, languages.formattingProvider, URI.file("C:\\project\\main.ts"));
+	using model = new TextModel("value", { languageId: "typescript" });
+	using formatting = new FormatService(
+		model,
+		languages.documentFormattingEditProvider,
+		languages.documentRangeFormattingEditProvider,
+		languages.onTypeFormattingEditProvider,
+		URI.file("C:\\project\\main.ts"),
+	);
 
 	const documentEdits = await formatting.provideDocumentFormattingEdits("typescript", { tabSize: 2, insertSpaces: true });
 	const rangeEdits = await formatting.provideRangeFormattingEdits("typescript", Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true });

@@ -34,13 +34,15 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public readonly codeActionProvider: LanguageFeatureRegistry<LanguageCodeActionProvider>;
 	public readonly codeLensProvider: LanguageFeatureRegistry<CodeLensProvider>;
 	public readonly documentSymbolProvider: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>;
-	public readonly formattingProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	public readonly documentFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	public readonly documentRangeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	public readonly onTypeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
 	public readonly hoverProvider: LanguageFeatureRegistry<LanguageHoverProvider>;
 	public readonly inlayHintsProvider: LanguageFeatureRegistry<LanguageInlayHintsProvider>;
 	public readonly inlineCompletionsProvider: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>;
 	public readonly linkedEditingRangeProvider: LanguageFeatureRegistry<LinkedEditingRangeProvider>;
 	public readonly linkProvider: LanguageFeatureRegistry<LanguageLinkProvider>;
-	public readonly parameterHintsProvider: LanguageFeatureRegistry<LanguageParameterHintsProvider>;
+	public readonly signatureHelpProvider: LanguageFeatureRegistry<LanguageParameterHintsProvider>;
 	public readonly renameProvider: LanguageFeatureRegistry<LanguageRenameProvider>;
 	public readonly colorProvider: LanguageFeatureRegistry<LanguageColorProvider>;
 	public readonly definitionProvider: LanguageFeatureRegistry<LanguageDefinitionProvider>;
@@ -51,7 +53,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public readonly workspaceSymbolProvider: LanguageFeatureRegistry<LanguageWorkspaceSymbolProvider>;
 	public readonly callHierarchyProvider: LanguageFeatureRegistry<LanguageCallHierarchyProvider>;
 	public readonly typeHierarchyProvider: LanguageFeatureRegistry<LanguageTypeHierarchyProvider>;
-	public readonly semanticTokensProvider: LanguageFeatureRegistry<LanguageSemanticTokensProvider>;
+	public readonly documentSemanticTokensProvider: LanguageFeatureRegistry<LanguageSemanticTokensProvider>;
 	public readonly foldingRangeProvider: LanguageFeatureRegistry<LanguageFoldingRangeProvider>;
 	public readonly selectionRangeProvider: LanguageFeatureRegistry<LanguageSelectionRangeProvider>;
 	public readonly documentHighlightProvider: LanguageFeatureRegistry<DocumentHighlightProvider>;
@@ -67,13 +69,15 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 		this.codeActionProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.codeLensProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.documentSymbolProvider = new LanguageFeatureRegistry(this._score.bind(this));
-		this.formattingProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.documentFormattingEditProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.documentRangeFormattingEditProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.onTypeFormattingEditProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.hoverProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.inlayHintsProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.inlineCompletionsProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.linkedEditingRangeProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.linkProvider = new LanguageFeatureRegistry(this._score.bind(this));
-		this.parameterHintsProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.signatureHelpProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.renameProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.colorProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.definitionProvider = new LanguageFeatureRegistry(this._score.bind(this));
@@ -84,7 +88,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 		this.workspaceSymbolProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.callHierarchyProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.typeHierarchyProvider = new LanguageFeatureRegistry(this._score.bind(this));
-		this.semanticTokensProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.documentSemanticTokensProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.foldingRangeProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.selectionRangeProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.documentHighlightProvider = new LanguageFeatureRegistry(this._score.bind(this));
@@ -102,11 +106,31 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public registerProviderBatch(providers: LanguageProviderBatch): LanguageProviderBatchRegistration {
 		const completions = this.completionProvider.registerGroup([]);
 		const hovers = new LanguageFeatureBatchRegistration(this.hoverProvider);
-		const formatting = new LanguageFeatureBatchRegistration(this.formattingProvider);
+		const documentFormatting = new LanguageFeatureBatchRegistration(
+			this.documentFormattingEditProvider,
+			provider => typeof provider.provideDocumentFormattingEdits === 'function',
+		);
+		const documentRangeFormatting = new LanguageFeatureBatchRegistration(
+			this.documentRangeFormattingEditProvider,
+			provider => typeof provider.provideRangeFormattingEdits === 'function',
+		);
+		const onTypeFormatting = new LanguageFeatureBatchRegistration(
+			this.onTypeFormattingEditProvider,
+			provider => typeof provider.provideOnTypeFormattingEdits === 'function',
+		);
 		const inlayHints = new LanguageFeatureBatchRegistration(this.inlayHintsProvider);
 		const linkedEditing = new LanguageFeatureBatchRegistration(this.linkedEditingRangeProvider);
-		const parameterHints = new LanguageFeatureBatchRegistration(this.parameterHintsProvider);
-		const registrations = { completions, hovers, formatting, inlayHints, linkedEditing, parameterHints };
+		const parameterHints = new LanguageFeatureBatchRegistration(this.signatureHelpProvider);
+		const registrations = {
+			completions,
+			hovers,
+			documentFormatting,
+			documentRangeFormatting,
+			onTypeFormatting,
+			inlayHints,
+			linkedEditing,
+			parameterHints,
+		};
 		let current = emptyProviderBatch();
 		let disposed = false;
 		const replace = (replacement: LanguageProviderBatch): void => {
@@ -134,7 +158,9 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 				parameterHints.dispose();
 				linkedEditing.dispose();
 				inlayHints.dispose();
-				formatting.dispose();
+				onTypeFormatting.dispose();
+				documentRangeFormatting.dispose();
+				documentFormatting.dispose();
 				hovers.dispose();
 				completions.dispose();
 			});
@@ -147,7 +173,9 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 interface LanguageProviderRegistrations {
 	readonly completions: LanguageCompletionProviderRegistration;
 	readonly hovers: LanguageFeatureBatchRegistration<LanguageHoverProvider>;
-	readonly formatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
+	readonly documentFormatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
+	readonly documentRangeFormatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
+	readonly onTypeFormatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
 	readonly inlayHints: LanguageFeatureBatchRegistration<LanguageInlayHintsProvider>;
 	readonly linkedEditing: LanguageFeatureBatchRegistration<LinkedEditingRangeProvider>;
 	readonly parameterHints: LanguageFeatureBatchRegistration<LanguageParameterHintsProvider>;
@@ -156,12 +184,16 @@ interface LanguageProviderRegistrations {
 class LanguageFeatureBatchRegistration<TProvider> implements IDisposable {
 	private registrations: IDisposable[] = [];
 
-	constructor(private readonly registry: LanguageFeatureRegistry<TProvider>) { }
+	constructor(
+		private readonly registry: LanguageFeatureRegistry<TProvider>,
+		private readonly accepts: (provider: TProvider) => boolean = () => true,
+	) { }
 
 	replace(entries: readonly LanguageProviderBatchEntry<TProvider>[]): void {
 		const next: IDisposable[] = [];
 		try {
 			for (const entry of entries) {
+				if (!this.accepts(entry.provider)) continue;
 				next.push(this.registry.register(entry.selector, entry.provider));
 			}
 		} catch (error) {
@@ -193,7 +225,9 @@ function disposeRegistrations(registrations: readonly IDisposable[]): void {
 function replaceProviderRegistrations(registrations: LanguageProviderRegistrations, providers: Required<LanguageProviderBatch>): void {
 	registrations.completions.replace(providers.completions);
 	registrations.hovers.replace(providers.hovers);
-	registrations.formatting.replace(providers.formatting);
+	registrations.documentFormatting.replace(providers.formatting);
+	registrations.documentRangeFormatting.replace(providers.formatting);
+	registrations.onTypeFormatting.replace(providers.formatting);
 	registrations.inlayHints.replace(providers.inlayHints);
 	registrations.linkedEditing.replace(providers.linkedEditing);
 	registrations.parameterHints.replace(providers.parameterHints);
