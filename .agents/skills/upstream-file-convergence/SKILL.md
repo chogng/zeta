@@ -1,11 +1,13 @@
 ---
 name: upstream-file-convergence
-description: Refactor or retire project files by aligning local ownership, callers, tests, and documentation. Compare with VS Code or Codex only when the user explicitly asks to inspect that upstream repository. Do not use VS Code as the reference for Rust files.
+description: Explicit-only workflow for refactoring or retiring project files by aligning local ownership, callers, tests, and documentation. Use only when the user explicitly invokes $upstream-file-convergence; never activate it from task similarity or editor context.
 ---
 
 # Upstream File Convergence
 
-Use this skill when the user asks to refactor, restructure, consolidate, “重构”, “收掉”, “退场”, retire, or remove a TypeScript or Rust file or responsibility that should converge with its upstream implementation. If the prompt says “this path”, “under this directory”, or equivalent, include the supplied path and all descendants; resolve that scope for the current task instead of hardcoding a path from an earlier task.
+Run this workflow only when the current user request explicitly invokes `$upstream-file-convergence`. Do not activate it automatically because a request mentions refactoring, restructuring, consolidation, retirement, file removal, VS Code, Codex, or a path that appears related. Editor context and earlier turns do not count as invocation.
+
+After explicit invocation, use this skill when the user asks to refactor, restructure, consolidate, “重构”, “收掉”, “退场”, retire, or remove a TypeScript or Rust file or responsibility that should converge with its upstream implementation. If the prompt says “this path”, “under this directory”, or equivalent, include the supplied path and all descendants; resolve that scope for the current task instead of hardcoding a path from an earlier task.
 
 ## Reference routing
 
