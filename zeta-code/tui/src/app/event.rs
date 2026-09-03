@@ -12,6 +12,7 @@ use crate::sessions::SessionChoices;
 use crate::skills::SkillChoices;
 use crate::status::StatusLineEditorUpdate;
 use crate::status::StatusLineSettings;
+use crate::status::StatusPanel;
 use crate::theme::ThemeChoices;
 use crate::thread::ThreadRequestIdentity;
 use crate::thread::TurnActivity;
@@ -20,7 +21,6 @@ use crate::thread::interaction::approval::Approval;
 use crate::thread::interaction::query::Query;
 use crate::thread::queue::QueueId;
 use crate::thread::rewind::RewindChoices;
-use crate::widgets::detail_list::DetailList;
 #[cfg(test)]
 use crate::widgets::list_selection::ListSelectionModel;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
@@ -91,7 +91,7 @@ pub(crate) enum AppEvent {
         thread_id: ThreadId,
     },
     ThreadGoalChanged(Option<ThreadGoal>),
-    StatusOverlayOpened(DetailList),
+    StatusPanelOpened(StatusPanel),
     InputSurfaceClosed,
     #[cfg(test)]
     HelpOpened(ListSelectionModel),

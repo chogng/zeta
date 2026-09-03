@@ -1,6 +1,6 @@
 mod model;
-mod overlay;
-mod overlay_request;
+mod panel;
+mod panel_request;
 mod settings;
 mod settings_request;
 mod setup;
@@ -8,11 +8,12 @@ mod view;
 
 pub(crate) use model::StatusLineModel;
 pub(crate) use model::StatusLineRuntime;
-pub(crate) use overlay::RemainingContextWindow;
-pub(crate) use overlay::StatusViewData;
-pub(crate) use overlay::status_overlay;
-pub(crate) use overlay_request::StatusRequestScope;
-pub(crate) use overlay_request::load_status_overlay;
+pub(crate) use panel::RemainingContextWindow;
+pub(crate) use panel::StatusPanel;
+pub(crate) use panel::StatusViewData;
+pub(crate) use panel::status_panel;
+pub(crate) use panel_request::StatusRequestScope;
+pub(crate) use panel_request::load_status_panel;
 pub(crate) use settings::StatusLineItem;
 pub(crate) use settings::StatusLineSettings;
 pub(crate) use settings_request::StatusLineEdit;

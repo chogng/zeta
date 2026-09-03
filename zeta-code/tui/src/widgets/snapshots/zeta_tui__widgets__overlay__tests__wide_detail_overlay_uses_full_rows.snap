@@ -1,0 +1,12 @@
+---
+source: zeta-code/tui/src/widgets/overlay_tests.rs
+expression: terminal.backend()
+---
+"underlying text underlying text underlying text underlying text underlying text underlying text underlying text underlyi"
+"                                                                                                                        "
+"  Output──────────────────────────────────────────────────────────────────────────────────────────────────────────────  "
+"  stdout: done                                                                                                          "
+"                                                                                                                        "
+"                                                                                                                        "
+"                                                                                                                        "
+"  Esc to close                                                                                                          "

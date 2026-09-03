@@ -1,7 +1,7 @@
 use super::RemainingContextWindow;
+use super::StatusPanel;
 use super::StatusViewData;
-use super::status_overlay;
-use crate::widgets::detail_list::DetailList;
+use super::status_panel;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
@@ -16,10 +16,10 @@ pub(crate) struct StatusRequestScope<'a> {
     pub(crate) thread_id: &'a ThreadId,
 }
 
-pub(crate) fn load_status_overlay<T>(
+pub(crate) fn load_status_panel<T>(
     client: &mut AppServerClient<T>,
     scope: StatusRequestScope<'_>,
-) -> Result<DetailList, ClientError>
+) -> Result<StatusPanel, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -42,7 +42,7 @@ where
         .map(|model| format!("{}/{}", model.provider, model.model))
         .unwrap_or_else(|| "not configured".into());
 
-    Ok(status_overlay(StatusViewData {
+    Ok(status_panel(StatusViewData {
         model: &model,
         full_context_window: model_entry
             .and_then(|entry| entry.context_window)
@@ -89,5 +89,5 @@ fn remaining_context_window(
 }
 
 #[cfg(test)]
-#[path = "overlay_request_tests.rs"]
+#[path = "panel_request_tests.rs"]
 mod tests;

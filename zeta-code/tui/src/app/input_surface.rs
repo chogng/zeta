@@ -18,6 +18,7 @@ use crate::skills::SkillChoices;
 use crate::skills::SkillSelectionAction;
 use crate::status::StatusLineChoices;
 use crate::status::StatusLineSelectionAction;
+use crate::status::StatusPanel;
 use crate::theme::ThemeChoices;
 use crate::theme::ThemePicker;
 use crate::theme::ThemePickerOutcome;
@@ -35,7 +36,10 @@ use crate::widgets::list_selection::ListSelectionOutcome;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::text_prompt;
 use crate::widgets::text_prompt::TextPrompt;
+use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -67,6 +71,7 @@ pub(crate) enum InputSurface {
     Rewind(ListSelection<RewindSelectionAction>),
     Sessions(ListSelection<SessionSelectionAction>),
     Skills(ListSelection<SkillSelectionAction>),
+    Status(StatusPanel),
     StatusLine(ListSelection<StatusLineSelectionAction>),
     Theme(ThemePicker),
 }
@@ -142,6 +147,10 @@ impl InputSurface {
         Self::StatusLine(ListSelection::new(spec.model, spec.actions))
     }
 
+    pub(crate) fn status(panel: StatusPanel) -> Self {
+        Self::Status(panel)
+    }
+
     pub(crate) fn theme(spec: ThemeChoices) -> Self {
         Self::Theme(ThemePicker::new(spec))
     }
@@ -179,6 +188,7 @@ impl InputSurface {
             Self::Skills(content) => {
                 map_selection(content.handle_key(key), InputSurfaceOutcome::Skills)
             }
+            Self::Status(_) => read_only_panel_outcome(key),
             Self::StatusLine(content) => {
                 map_selection(content.handle_key(key), InputSurfaceOutcome::StatusLine)
             }
@@ -199,6 +209,7 @@ impl InputSurface {
             Self::Rewind(content) => content.handle_paste(pasted),
             Self::Sessions(content) => content.handle_paste(pasted),
             Self::Skills(content) => content.handle_paste(pasted),
+            Self::Status(_) => {}
             Self::StatusLine(content) => content.handle_paste(pasted),
             Self::Theme(content) => content.handle_paste(pasted),
         }
@@ -217,6 +228,7 @@ impl InputSurface {
             Self::Rewind(selection) => Some(selection.state()),
             Self::Sessions(selection) => Some(selection.state()),
             Self::Skills(selection) => Some(selection.state()),
+            Self::Status(_) => None,
             Self::StatusLine(selection) => Some(selection.state()),
             Self::Theme(picker) => Some(picker.selection()),
         }
@@ -235,6 +247,7 @@ impl InputSurface {
             | Self::Rewind(_)
             | Self::Sessions(_)
             | Self::Skills(_)
+            | Self::Status(_)
             | Self::StatusLine(_)
             | Self::Theme(_) => None,
         }
@@ -253,12 +266,16 @@ impl InputSurface {
             | Self::Rewind(_)
             | Self::Sessions(_)
             | Self::Skills(_)
+            | Self::Status(_)
             | Self::StatusLine(_)
             | Self::Theme(_) => None,
         }
     }
 
     pub(crate) fn desired_height(&self, width: u16) -> u16 {
+        if let Self::Status(panel) = self {
+            return panel.desired_height();
+        }
         let body_height = if let Some(selection) = self.list_selection() {
             selection.desired_height(width)
         } else if let Some(prompt) = self.text_prompt() {
@@ -279,6 +296,10 @@ impl InputSurface {
         pressed: Option<InputSurfacePointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
+        if let Self::Status(panel) = self {
+            panel.draw(frame, area, context);
+            return;
+        }
         let body = composer_body_area(area);
         let presentation_focus = self
             .list_selection()
@@ -371,6 +392,7 @@ impl InputSurface {
             Self::Rewind(content) => content.key_hints(),
             Self::Sessions(content) => content.key_hints(),
             Self::Skills(content) => content.key_hints(),
+            Self::Status(content) => content.key_hints(),
             Self::StatusLine(content) => content.key_hints(),
             Self::Theme(content) => content.key_hints(),
         }
@@ -389,6 +411,7 @@ impl InputSurface {
             Self::Rewind(content) => content.select_tab(index),
             Self::Sessions(content) => content.select_tab(index),
             Self::Skills(content) => content.select_tab(index),
+            Self::Status(_) => false,
             Self::StatusLine(content) => content.select_tab(index),
             Self::Theme(content) => content.select_tab(index),
         }
@@ -407,6 +430,7 @@ impl InputSurface {
             Self::Rewind(content) => content.focus_search(),
             Self::Sessions(content) => content.focus_search(),
             Self::Skills(content) => content.focus_search(),
+            Self::Status(_) => false,
             Self::StatusLine(content) => content.focus_search(),
             Self::Theme(content) => content.focus_search(),
         }
@@ -445,6 +469,7 @@ impl InputSurface {
             Self::Skills(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Skills)),
+            Self::Status(_) => None,
             Self::StatusLine(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, InputSurfaceOutcome::StatusLine)),
@@ -550,6 +575,17 @@ fn map_read_only(outcome: ListSelectionOutcome<()>) -> InputSurfaceOutcome {
         | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Next)
         | ListSelectionOutcome::Consumed => InputSurfaceOutcome::Consumed,
         ListSelectionOutcome::Dismiss => InputSurfaceOutcome::Dismiss,
+    }
+}
+
+fn read_only_panel_outcome(key: KeyEvent) -> InputSurfaceOutcome {
+    if key.kind == KeyEventKind::Press
+        && key.modifiers == KeyModifiers::NONE
+        && key.code == KeyCode::Esc
+    {
+        InputSurfaceOutcome::Dismiss
+    } else {
+        InputSurfaceOutcome::Consumed
     }
 }
 

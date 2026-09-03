@@ -1058,6 +1058,10 @@ impl App {
         self.open_input_surface(InputSurface::status_line(spec));
     }
 
+    fn show_status_panel(&mut self, panel: crate::status::StatusPanel) {
+        self.open_input_surface(InputSurface::status(panel));
+    }
+
     fn update_status_line_editor(&mut self, spec: StatusLineChoices) {
         if let Some(mode) = self.input_surface.as_mut() {
             mode.replace_status_line(spec);
@@ -1545,8 +1549,8 @@ impl App {
             AppEvent::ThreadGoalChanged(goal) => {
                 self.thread_presentations.active_mut().goal = goal;
             }
-            AppEvent::StatusOverlayOpened(detail) => {
-                self.show_overlay(detail);
+            AppEvent::StatusPanelOpened(panel) => {
+                self.show_status_panel(panel);
             }
             AppEvent::InputSurfaceClosed => self.close_input_surface(),
             #[cfg(test)]

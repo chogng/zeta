@@ -116,7 +116,7 @@ impl ActiveConversation {
             TuiSlashCommandAction::Status => {
                 output
                     .events
-                    .push(AppEvent::StatusOverlayOpened(status::load_status_overlay(
+                    .push(AppEvent::StatusPanelOpened(status::load_status_panel(
                         client,
                         status::StatusRequestScope {
                             session_id: self.session_id(),

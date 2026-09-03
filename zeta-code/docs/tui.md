@@ -226,8 +226,7 @@ enum AppCommand {
 
 ### 输入位置
 
-`InputSurface` 表示 Session 页面输入位置当前显示什么，而不是一个新的产品状态机。它可以承载普通
-Thread composer、Approval、Config editor、Theme picker 等互斥界面，但不能解释这些界面的内部结果。
+`InputSurface` 表示 Session 页面输入位置当前显示什么，而不是一个新的产品状态机。它可以承载普通 Thread composer、Approval、Status 面板、Config editor、Theme picker 等互斥界面，但不能解释这些界面的内部结果。Status 面板固定占用 8 行，属于普通布局而不是 Overlay。
 
 每个具体界面自己处理按键、粘贴、期望高度、绘制和命中，并产生自己的类型化 outcome。`app/` 只负责
 打开、替换和关闭输入位置内容。

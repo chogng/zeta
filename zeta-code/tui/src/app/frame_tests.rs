@@ -8,6 +8,9 @@ use crate::app::AppEvent;
 use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
 use crate::render::test_context;
+use crate::status::RemainingContextWindow;
+use crate::status::StatusViewData;
+use crate::status::status_panel;
 use crate::thread::TurnActivity;
 use crate::thread::composer::ChatComposerPointerTarget;
 use crate::thread::composer::ChatInputCatalog;
@@ -15,8 +18,6 @@ use crate::thread::composer::SkillCompletionItem;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::composer::built_in_slash_command_definitions;
 use crate::thread::composer::file_search::FileSearchManager;
-use crate::widgets::detail_list::DetailList;
-use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
@@ -24,6 +25,7 @@ use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use insta::assert_snapshot;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -102,26 +104,40 @@ fn top_tip_notice_overlays_the_row_above_chat_input_without_changing_layout() {
 }
 
 #[test]
-fn application_overlay_keeps_layout_fixed_and_blocks_covered_pointer_targets() {
+fn status_panel_uses_fixed_input_height_and_escape_restores_the_composer() {
     let mut app = App::new();
     let terminal_area = Rect::new(0, 0, 80, 20);
     app.insert_text("/");
     assert!(app.completion().is_some());
     let before = layout(&app, terminal_area).session;
 
-    app.update(AppEvent::StatusOverlayOpened(DetailList::new(
-        "Status",
-        vec![DetailListRow::new("Model", "openai/gpt")],
-    )));
+    app.update(AppEvent::StatusPanelOpened(status_panel(StatusViewData {
+        model: "openai/gpt",
+        full_context_window: Some(100_000),
+        available_context_window: Some(90_000),
+        remaining_context_window: RemainingContextWindow::Exact {
+            remaining_tokens: 80_000,
+            available_tokens: 90_000,
+        },
+        session_id: "session-1",
+        thread_id: "thread-1",
+        thread_sequence: 4,
+    })));
 
-    assert_eq!(layout(&app, terminal_area).session, before);
+    assert_eq!(layout(&app, terminal_area).session.composer.height, 8);
+    assert_ne!(layout(&app, terminal_area).session, before);
+    assert!(app.input_surface().is_some());
+    assert!(app.overlay().is_none());
     assert!(app.completion().is_none());
-    assert!(super::input_pointer_target_at(&app, terminal_area, 2, 15).is_none());
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.input(), "/");
+    assert_snapshot!("status_panel_fixed_input_height", render(&app, 80, 20));
+
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.overlay().is_none());
+    assert!(app.input_surface().is_none());
+    assert_eq!(layout(&app, terminal_area).session, before);
     assert_eq!(app.input(), "/");
+    assert_snapshot!("status_panel_after_escape", render(&app, 80, 20));
 }
 
 #[test]

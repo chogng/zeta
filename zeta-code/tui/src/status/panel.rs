@@ -1,5 +1,11 @@
+use crate::render::RenderContext;
+use crate::widgets::detail_list;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
+use ratatui::Frame;
+use ratatui::layout::Rect;
+
+const STATUS_PANEL_HEIGHT: u16 = 8;
 
 pub(crate) struct StatusViewData<'a> {
     pub(crate) model: &'a str,
@@ -24,28 +30,49 @@ pub(crate) enum RemainingContextWindow {
     Unknown,
 }
 
-pub(crate) fn status_overlay(data: StatusViewData<'_>) -> DetailList {
-    DetailList::new(
-        "Status",
-        vec![
-            detail("Model", data.model),
-            detail(
-                "Full context window",
-                format_optional_tokens(data.full_context_window),
-            ),
-            detail(
-                "Available context window",
-                format_optional_tokens(data.available_context_window),
-            ),
-            detail(
-                "Remaining context window",
-                format_remaining_context(data.remaining_context_window),
-            ),
-            detail("Session ID", data.session_id),
-            detail("Thread ID", data.thread_id),
-            detail("Thread version", data.thread_sequence.to_string()),
-        ],
-    )
+#[derive(Debug)]
+pub(crate) struct StatusPanel {
+    detail: DetailList,
+}
+
+impl StatusPanel {
+    pub(crate) const fn desired_height(&self) -> u16 {
+        STATUS_PANEL_HEIGHT
+    }
+
+    pub(crate) fn draw(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
+        detail_list::draw_scrolled(frame, area, &self.detail, 0, context);
+    }
+
+    pub(crate) const fn key_hints(&self) -> &'static str {
+        "Esc to close"
+    }
+}
+
+pub(crate) fn status_panel(data: StatusViewData<'_>) -> StatusPanel {
+    StatusPanel {
+        detail: DetailList::new(
+            "Status",
+            vec![
+                detail("Model", data.model),
+                detail(
+                    "Full context window",
+                    format_optional_tokens(data.full_context_window),
+                ),
+                detail(
+                    "Available context window",
+                    format_optional_tokens(data.available_context_window),
+                ),
+                detail(
+                    "Remaining context window",
+                    format_remaining_context(data.remaining_context_window),
+                ),
+                detail("Session ID", data.session_id),
+                detail("Thread ID", data.thread_id),
+                detail("Thread version", data.thread_sequence.to_string()),
+            ],
+        ),
+    }
 }
 
 fn detail(label: &str, value: impl Into<String>) -> DetailListRow {
@@ -101,5 +128,5 @@ fn format_tokens(tokens: u64) -> String {
 }
 
 #[cfg(test)]
-#[path = "overlay_tests.rs"]
+#[path = "panel_tests.rs"]
 mod tests;

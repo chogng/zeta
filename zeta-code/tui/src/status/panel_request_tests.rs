@@ -1,3 +1,5 @@
+//! Status panel request tests.
+
 use super::remaining_context_window;
 use crate::status::RemainingContextWindow;
 use zeta_protocol::ApprovalMode;

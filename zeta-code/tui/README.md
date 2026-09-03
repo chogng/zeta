@@ -34,7 +34,7 @@ Tool、approval policy 或 persistence。
 - `/resume`、`/rewind`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
 - 本地 slash command 在 Enter 后立即以命令正文单元回显；已提交和已结束时使用用户消息指示符 `>`，只在 `Running` 期间切换为 `●`，后续执行状态和结果更新同一单元。普通消息触发的新 Session 不额外输出 Session/Thread ID，`/new` 只显示命令与不含 ID 的结果；
 - command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入覆盖完整 Session catalog 的唯一 Session Manager，`/subagents` 聚焦常驻 `AgentThreadSwitcher`，`/queue` 管理当前 Thread 的 Queue；Manager 保留顶部 Welcome，按 Pinned、Needs input、Working、Ready for review、Failed、Stopped、Completed、Idle 分组，每行以状态图标开头并显示名称、当前操作/问题和状态时长；Approval 和 Query 仍由各自请求直接打开，不提供总括页面；
-- `/status` 使用不改变正常布局高度的 Overlay，展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
+- `/status` 在输入位置打开固定 8 行的只读面板，正文区让出对应高度，Esc 关闭后恢复原输入框；面板展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence，provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
 - `/help` 从 `ThreadPresentationStore` 保存的合并 `SlashCommandCatalog` 构造可搜索的 `ListSelection`，本地与服务端命令使用和 `/` 补全一致的名称、描述及顺序；上下键在 item、SearchBox 和 Tab 栏间移动输入焦点，Tab 栏用左右键或 Tab 切换，焦点不再额外绘制紫色状态列；Esc 关闭 Help 列表并恢复原草稿的 `ChatInput`；Help 列表打开期间替换 ChatInput 并使用自己的高度，不显示列表导航和关闭这类默认提示；Shortcuts 只列应用级操作、用户自定义绑定及非标准的 `Esc Esc` Rewind 手势，快捷键编辑仍由 `/shortcuts` 提供；
 - `/skills` 通过 typed `skills/list` 打开同一 `ListSelection`，提供
   All/Enabled/Disabled/Manage tabs、数量、搜索和 source-qualified metadata；只有 Manage
@@ -228,6 +228,7 @@ src/
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
 | `StatusLineModel` | crate-private | 把运行状态与按配置顺序启用的 preferred model、Git 分支和变更组合到上行，把权限模式单独映射到下行，并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存权限或 Turn authority、不渲染 |
 | `StatusLineSettings` | crate-private | 解释和校验 `[tui].statusLine` 的项目、开关与顺序 | 不拥有被显示的数据；写入时保留 `[tui]` 的其他键 |
+| `StatusPanel` | crate-private | 保存 `/status` 的只读详情，固定返回 8 行高度并绘制到输入位置 | 不覆盖当前帧、不拥有模型或 Thread 事实、不修改 StatusLine |
 | `config::TerminalSettings` | crate-private | 解释和校验 `[tui]` 中的终端设置，并在更新已知键时保留该表的其他键 | App Server 只做 revision 校验和完整表替换，不解释 TUI 字段 |
 | `app::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 directory 路径缩写为 `~/...`，供空会话 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
 | `app::top_tip::TopTip` | crate-private | 管理空会话导航、进入对话时的一次性权限策略提示、临时通知及各自期限，并绘制 ChatInput 顶边 | 不决定页面导航文案，不保存权限模式，不占用独立布局高度 |
@@ -532,9 +533,9 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 ## 渲染
 
-Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → AgentThreadSwitcher` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 为零或一行，`AgentThreadSwitcher` 最多四行。StatusLine/KeyHints 与存在内容的 `AgentThreadSwitcher` 之间固定保留一行；几何由 `app/layout.rs` 统一分配并优先保留正文。Manager 页面按 `Welcome → 分组 Session rows → ChatInput → KeyHints` 排列，并至少为列表保留四行。
+Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → 输入位置 → StatusLine/KeyHints → 空行 → AgentThreadSwitcher` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；输入位置默认显示 ChatInput，也可以由 Approval 或 `InputSurface` 替换，其中 `StatusPanel` 固定占用 8 行。StatusLine 最多两行，KeyHints 为零或一行，`AgentThreadSwitcher` 最多四行。StatusLine/KeyHints 与存在内容的 `AgentThreadSwitcher` 之间固定保留一行；几何由 `app/layout.rs` 统一分配并优先保留正文。Manager 页面按 `Welcome → 分组 Session rows → ChatInput → KeyHints` 排列，并至少为列表保留四行。
 
-结构只有两种：`TerminalScreen` 决定整屏内容，Overlay 覆盖当前帧且不改变高度。Session 中的普通组件直接参与高度分配，不因“占高度”获得新类型。`InputSurface` 只记录 Session 输入位置当前的互斥内容；有值时当前组件替换 ChatInput 并提供自己的 desired rows，只有非空 KeyHints 才在底栏替换 StatusLine。Config、Keymap、Theme 的多页面返回关系分别由 feature 自己保存。Overlay 与 ChatInput completion 同帧只绘制一个；completion 状态仍只归 ChatInput。`TopTip` 拥有导航、一次性权限策略提示和临时通知的显示阶段与期限；App 提供页面导航文案，在首次提交、Thread 切换、已有对话载入和 Tick 时推进这些明确状态。当前组件的标题挂在顶部分隔线上，列表第一个两字符状态列与 ChatInput 正文起点对齐。每个 Thread 的草稿、补全状态、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存，最多保留最近访问的 32 个 Thread；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
+结构只有两种：`TerminalScreen` 决定整屏内容，Overlay 覆盖当前帧且不改变高度。Session 中的普通组件直接参与高度分配，不因“占高度”获得新类型。`InputSurface` 只记录 Session 输入位置当前的互斥内容；有值时当前组件替换 ChatInput 并提供自己的 desired rows，只有非空 KeyHints 才在底栏替换 StatusLine。`StatusPanel` 是固定 8 行的 `InputSurface`，不是 Overlay。Config、Keymap、Theme 的多页面返回关系分别由 feature 自己保存。Overlay 与 ChatInput completion 同帧只绘制一个；completion 状态仍只归 ChatInput。`TopTip` 拥有导航、一次性权限策略提示和临时通知的显示阶段与期限；App 提供页面导航文案，在首次提交、Thread 切换、已有对话载入和 Tick 时推进这些明确状态。当前组件的标题挂在顶部分隔线上，列表第一个两字符状态列与 ChatInput 正文起点对齐。每个 Thread 的草稿、补全状态、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存，最多保留最近访问的 32 个 Thread；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
 
 正文由有序 `TranscriptCell` 构成，live/final 生命周期不改变单元种类。单条正文单元从 canonical entry identity 确定 `TranscriptCellId`，ExecCell 从分组中的首个 `ToolCallId` 确定，后续分组增长不改身份。ExecCell 按 `ToolCallId`
 接收调用、输出和结果，命令输出按 byte、行数和单行长度有界保留；折叠态、展开态与 Overlay

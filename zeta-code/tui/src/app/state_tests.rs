@@ -14,7 +14,9 @@ use crate::render::RenderTheme;
 use crate::status::StatusLineEditorUpdate;
 use crate::status::StatusLineItem;
 use crate::status::StatusLineSettings;
+use crate::status::StatusViewData;
 use crate::status::status_line_choices;
+use crate::status::status_panel;
 use crate::terminal::mouse::MouseMode;
 use crate::test_support::empty_config_snapshot;
 use crate::theme::ThemePickerCatalog;
@@ -39,8 +41,6 @@ use crate::thread::interaction::query::QueryQuestion;
 use crate::thread::rewind::rewind_choices;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::MessageRole;
-use crate::widgets::detail_list::DetailList;
-use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
@@ -1247,7 +1247,7 @@ fn escape_does_not_exit_the_idle_session_screen() {
 }
 
 #[test]
-fn terminal_screen_change_closes_the_input_surface_and_application_overlay() {
+fn terminal_screen_change_closes_input_surfaces_including_status() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
         "Help",
@@ -1261,16 +1261,21 @@ fn terminal_screen_change_closes_the_input_surface_and_application_overlay() {
     enter_test_session(&mut app);
     assert!(app.input_surface().is_none());
 
-    app.update(AppEvent::StatusOverlayOpened(DetailList::new(
-        "Status",
-        vec![DetailListRow::new("Model", "openai/gpt")],
-    )));
-    assert!(app.overlay().is_some());
+    app.update(AppEvent::StatusPanelOpened(status_panel(StatusViewData {
+        model: "openai/gpt",
+        full_context_window: None,
+        available_context_window: None,
+        remaining_context_window: crate::status::RemainingContextWindow::Unknown,
+        session_id: "session-1",
+        thread_id: "thread-1",
+        thread_sequence: 1,
+    })));
+    assert!(app.input_surface().is_some());
     app.update(AppEvent::ThreadContextChanged {
         session_id: SessionId::new("other-session").unwrap(),
         thread_id: ThreadId::new("other-thread").unwrap(),
     });
-    assert!(app.overlay().is_none());
+    assert!(app.input_surface().is_none());
 }
 
 #[test]

@@ -1,15 +1,14 @@
 use super::RemainingContextWindow;
 use super::StatusViewData;
-use super::status_overlay;
+use super::status_panel;
 use crate::render::test_context;
-use crate::widgets::detail_list;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Modifier;
 
 #[test]
-fn status_overlay_exposes_model_context_and_conversation_identity_without_search() {
-    let state = status_overlay(StatusViewData {
+fn status_panel_exposes_model_context_and_conversation_identity_without_search() {
+    let panel = status_panel(StatusViewData {
         model: "openai/gpt",
         full_context_window: Some(1_000_000),
         available_context_window: Some(894_880),
@@ -22,9 +21,10 @@ fn status_overlay_exposes_model_context_and_conversation_identity_without_search
         thread_sequence: 3,
     });
 
-    assert_eq!(state.title(), "Status");
+    assert_eq!(panel.detail.title(), "Status");
     assert_eq!(
-        state
+        panel
+            .detail
             .rows()
             .iter()
             .map(|row| (row.label(), row.value()))
@@ -42,8 +42,8 @@ fn status_overlay_exposes_model_context_and_conversation_identity_without_search
 }
 
 #[test]
-fn status_overlay_renders_bold_labels_with_colons_and_plain_values() {
-    let state = status_overlay(StatusViewData {
+fn status_panel_uses_fixed_height_and_renders_bold_labels_with_plain_values() {
+    let panel = status_panel(StatusViewData {
         model: "openai/gpt",
         full_context_window: Some(1_000_000),
         available_context_window: Some(894_880),
@@ -55,11 +55,12 @@ fn status_overlay_renders_bold_labels_with_colons_and_plain_values() {
         thread_id: "thread-2",
         thread_sequence: 3,
     });
-    let backend = TestBackend::new(100, 12);
+    assert_eq!(panel.desired_height(), 8);
+    let backend = TestBackend::new(100, panel.desired_height());
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| detail_list::draw_scrolled(frame, frame.area(), &state, 0, test_context()))
+        .draw(|frame| panel.draw(frame, frame.area(), test_context()))
         .unwrap();
 
     let buffer = terminal.backend().buffer();

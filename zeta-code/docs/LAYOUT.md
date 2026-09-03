@@ -94,7 +94,8 @@
 | --- | --- | --- |
 | 普通草稿输入 | 输入框（`ChatInput`） | 默认占用输入位置 |
 | 权限确认 | 审批面板（`Approval`） | 替换输入框，占用输入位置 |
-| Theme、Model、Config、Session picker 等页面 | 功能页面（`ComposerMode`） | 替换输入框，占用输入位置；描述问题时再补具体页面名 |
+| Status | Status 面板（`StatusPanel`） | 替换输入框并固定占用 8 行，正文区让出对应高度；Esc 关闭后恢复输入框 |
+| Theme、Model、Config、Session picker 等页面 | 功能页面（`InputSurface`） | 替换输入框，占用输入位置；描述问题时再补具体页面名 |
 | Agent 的结构化问题 | 提问面板（`Query`） | 不替换输入位置，而是在它上方单独占区；需要自由输入时仍使用下方输入框 |
 
 ### 输入框附近的两种提示
@@ -167,7 +168,7 @@ Idle (2)                                  ← 静态分组标题
 
 | 推荐名称 | 代码名称 | 怎么认 |
 | --- | --- | --- |
-| 详情浮层 | `DetailOverlay` | 居中、靠可用区域底部的只读详情框，通常有 `Esc to close`；打开时阻止底层操作 |
+| 详情浮层 | `DetailOverlay` | 靠可用区域底部、背景和内容都铺满整行的只读详情层，标题、详情和关闭提示遵守页面内容缩进，通常有 `Esc to close`；打开时阻止底层操作 |
 | 输入补全浮层 | `CompletionView` | 输入 `/`、`@`、`$` 时出现在输入框上方的候选列表；有详情浮层时不显示 |
 | Slash Command 补全 | `CompletionView::Slash` | 输入 `/` 时显示产品或 App Server 提供的 Slash Command 候选 |
 | Mention 补全 | `CompletionView::Mention` | 输入 `@` 时显示文件或 Plugin 上下文候选 |
@@ -206,6 +207,6 @@ Idle (2)                                  ← 静态分组标题
 - `Session 管理页面 / Working 分组 / foo Session 行 / 100×28 / 时长列被截断`
 - `Session 页面 / Mention 补全浮层 / @ 文件候选 / 80×24 / 第一项盖住输入框上边线`
 - `Session 页面 / Slash Command 补全浮层 / /skills 候选项 / 80×24 / 第一项盖住输入框上边线`
-- `Session 页面 / DetailOverlay / /status 详情 / 80×18 / 底部按键提示不可见`
+- `Session 页面 / 输入位置 / Status 面板 / 80×18 / Thread ID 被截断`
 
 如果仍不知道名称，可以说“在 A 和 B 之间的那一行”，但 A、B 尽量使用本文术语。

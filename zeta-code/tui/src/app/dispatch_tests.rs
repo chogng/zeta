@@ -1,4 +1,5 @@
 use super::ActiveConversation;
+use crate::app::input_surface::InputSurface;
 use crate::app::{App, AppCommand, AppEvent, Status};
 use crate::thread::composer::{
     ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
@@ -161,7 +162,8 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
         invocation(TuiSlashCommandAction::Status, ""),
         &mut app,
     );
-    assert_eq!(app.overlay().unwrap().title(), "Status");
+    assert!(matches!(app.input_surface(), Some(InputSurface::Status(_))));
+    assert!(app.overlay().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     conversation.execute(

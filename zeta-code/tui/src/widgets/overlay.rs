@@ -87,15 +87,7 @@ pub(crate) fn draw(
         .desired_height()
         .saturating_add(2)
         .min(available.height);
-    let width = available.width.min(100);
-    let centered = Rect {
-        x: available
-            .x
-            .saturating_add(available.width.saturating_sub(width) / 2),
-        width,
-        ..available
-    };
-    let area = bottom_anchored_area(centered, height);
+    let area = bottom_anchored_area(available, height);
     frame.render_widget(Clear, area);
     frame.render_widget(
         Block::default().style(Style::default().bg(context.overlay_background())),

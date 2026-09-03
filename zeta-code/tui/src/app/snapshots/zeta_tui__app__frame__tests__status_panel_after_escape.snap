@@ -1,0 +1,24 @@
+---
+source: zeta-code/tui/src/app/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+                                                                                
+  ┌───── Zeta Code v0.1.0 ───────────────────────────────────────────────────┐  
+  │                           │  Tips for getting started                    │  
+  │        Welcome back!      │  Use @ to mention workspace files and / to   │  
+  │                           │  discover commands.                          │  
+  │           ╭─────╮         │  ──────────────────────────────────────────  │  
+  │           │  ζ  │         │  Try asking                                  │  
+  │           ╰─┬─┬─╯         │  “Explain how this workspace is              │  
+  │                           │  structured.”                                │  
+  │     Ready when you are    │  “Implement the change and run the relevant  │  
+  /status                    show the active session, thread, and model      │  
+  /statusline                choose the items shown in the status line───────┘  
+  /skills                    browse configured skill sources                    
+  /mcp                       list configured MCP tools                          
+  /resume                    list or resume a saved session                     
+  /archive                   archive the current session and start a new chat   
+────────────────────────────────────────────────────────────────────────────────
+> /                                                                             
+────────────────────────────────────────────────────────────────────────────────
+  ⏸ ask permissions on
