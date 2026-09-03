@@ -12,12 +12,16 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence
 from urllib.parse import urlsplit
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from build.lib.zeta_build.targets import TargetSpec
+from build.lib.zeta_build.targets import target_spec
 from remote_runtime_bundle import RemoteRuntimeBundle
 from remote_runtime_bundle import validate_remote_runtime_bundle
 
 
 CommandRunner = Callable[[Sequence[str]], None]
-SUPPORTED_PLATFORMS = {"darwin", "linux", "windows"}
 
 
 @dataclass(frozen=True)
@@ -33,16 +37,6 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
-
-
-def host_platform() -> str:
-    if sys.platform == "darwin":
-        return "darwin"
-    if sys.platform.startswith("linux"):
-        return "linux"
-    if sys.platform.startswith("win"):
-        return "windows"
-    raise RuntimeError(f"unsupported signing host platform: {sys.platform}")
 
 
 def load_json(path: Path) -> Dict[str, object]:
@@ -67,8 +61,12 @@ def package_context(package_dir: Path) -> Dict[str, object]:
     metadata = load_json(metadata_path)
     signing = metadata.get("signing")
     binary = metadata.get("binary")
+    target = metadata.get("target")
     if not isinstance(signing, dict) or not isinstance(binary, dict):
         raise RuntimeError(f"invalid app package metadata: {metadata_path}")
+    if not isinstance(target, str):
+        raise RuntimeError(f"app package metadata has no target: {metadata_path}")
+    spec = target_spec(target)
 
     binary_path = binary.get("path")
     policy_name = signing.get("policy")
@@ -77,6 +75,11 @@ def package_context(package_dir: Path) -> Dict[str, object]:
         raise RuntimeError(f"invalid binary or policy path in {metadata_path}")
     if not isinstance(record_name, str):
         raise RuntimeError(f"invalid signature record path in {metadata_path}")
+    expected_binary_path = f"bin/{spec.app_name}"
+    if binary_path != expected_binary_path:
+        raise RuntimeError(
+            f"app package target {target} requires binary path {expected_binary_path}"
+        )
 
     artifact = (package_dir / binary_path).resolve()
     policy_path = (package_dir / policy_name).resolve()
@@ -117,6 +120,7 @@ def package_context(package_dir: Path) -> Dict[str, object]:
         "platforms": platforms,
         "record_path": record_path,
         "remote_runtime_catalog": remote_runtime_catalog,
+        "target_spec": spec,
     }
 
 
@@ -190,9 +194,14 @@ def authenticated_remote_runtime_catalog(
     return AuthenticatedRemoteRuntimeCatalog(expected_sha256, None, bundle)
 
 
-def platform_config(context: Dict[str, object], platform: str) -> Dict[str, object]:
-    if platform not in SUPPORTED_PLATFORMS:
-        raise RuntimeError(f"unsupported app signing platform: {platform}")
+def signing_platform(context: Dict[str, object]) -> str:
+    spec = context["target_spec"]
+    assert isinstance(spec, TargetSpec)
+    return spec.operating_system.value
+
+
+def platform_config(context: Dict[str, object]) -> Dict[str, object]:
+    platform = signing_platform(context)
     platforms = context["platforms"]
     assert isinstance(platforms, dict)
     config = platforms.get(platform)
@@ -334,11 +343,11 @@ def _metadata_digest(context: Dict[str, object]) -> str:
 
 def sign_package(
     package_dir: Path,
-    platform: str,
     runner: Optional[CommandRunner] = None,
 ) -> Dict[str, object]:
     context = package_context(package_dir)
-    config = platform_config(context, platform)
+    platform = signing_platform(context)
+    config = platform_config(context)
     metadata = context["metadata"]
     assert isinstance(metadata, dict)
     signing = metadata["signing"]
@@ -403,11 +412,11 @@ def sign_package(
 
 def verify_package(
     package_dir: Path,
-    platform: str,
     runner: Optional[CommandRunner] = None,
 ) -> Dict[str, object]:
     context = package_context(package_dir)
-    config = platform_config(context, platform)
+    platform = signing_platform(context)
+    config = platform_config(context)
     metadata = context["metadata"]
     assert isinstance(metadata, dict)
     signing = metadata["signing"]

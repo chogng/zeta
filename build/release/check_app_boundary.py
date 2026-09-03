@@ -97,9 +97,9 @@ def main() -> int:
     root_manifest_path = Path(sys.argv[1])
     app_manifest_path = Path(sys.argv[2])
     lock_path = Path(sys.argv[3])
-    root_manifest = root_manifest_path.read_text()
-    app_manifest = app_manifest_path.read_text()
-    lock_text = lock_path.read_text()
+    root_manifest = root_manifest_path.read_text(encoding="utf-8")
+    app_manifest = app_manifest_path.read_text(encoding="utf-8")
+    lock_text = lock_path.read_text(encoding="utf-8")
     repository_root = root_manifest_path.parent
 
     if "[workspace]" not in root_manifest:
@@ -111,7 +111,7 @@ def main() -> int:
     shared_keybinding_path = repository_root / "zeta-rs" / "keybinding" / "Cargo.toml"
     if not shared_keybinding_path.exists():
         fail("shared zeta-rs/keybinding crate is missing")
-    shared_keybinding_manifest = shared_keybinding_path.read_text()
+    shared_keybinding_manifest = shared_keybinding_path.read_text(encoding="utf-8")
     if package_name(shared_keybinding_manifest) != "zeta-keybinding":
         fail("zeta-rs/keybinding must provide the zeta-keybinding package")
     forbidden_keybinding_dependencies = (
@@ -125,7 +125,7 @@ def main() -> int:
         if re.search(rf"(?m)^{re.escape(dependency)}\s*=", shared_keybinding_manifest):
             fail(f"shared zeta-keybinding depends on platform/UI crate: {dependency}")
     launch_path = repository_root / "app" / "workbench" / "remote" / "launch.rs"
-    launch_text = launch_path.read_text()
+    launch_text = launch_path.read_text(encoding="utf-8")
     if 'const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";' not in launch_text:
         fail("app Remote must default to the product-neutral zeta-server host")
 
@@ -135,7 +135,7 @@ def main() -> int:
         *(repository_root / "app").rglob("*.rs"),
     ]
     for source_path in boundary_sources:
-        source_text = source_path.read_text()
+        source_text = source_path.read_text(encoding="utf-8")
         for forbidden_reference in product_host_references:
             if forbidden_reference in source_text:
                 fail(
@@ -174,7 +174,7 @@ def main() -> int:
             fail(f"app dependency still escapes through a cross-workspace path: {path}")
 
     for manifest_path in (repository_root / "zeta-rs").rglob("Cargo.toml"):
-        manifest_text = manifest_path.read_text()
+        manifest_text = manifest_path.read_text(encoding="utf-8")
         package_name_match = re.search(
             r'^name\s*=\s*"([^"]+)"\s*$', manifest_text, re.MULTILINE
         )
@@ -194,7 +194,7 @@ def main() -> int:
                 )
 
     for build_path in (repository_root / "zeta-rs").rglob("BUILD.bazel"):
-        build_text = build_path.read_text()
+        build_text = build_path.read_text(encoding="utf-8")
         for retired_package_name in RETIRED_UI_PACKAGE_NAMES:
             if re.search(rf"\b{re.escape(retired_package_name)}\b", build_text):
                 fail(

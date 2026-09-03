@@ -35,8 +35,8 @@ class AppSigningTests(unittest.TestCase):
             with patch.dict(
                 os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
             ):
-                signed = sign_package(package, "linux", fake_runner)
-                verified = verify_package(package, "linux", fake_runner)
+                signed = sign_package(package, fake_runner)
+                verified = verify_package(package, fake_runner)
 
             self.assertEqual("signed", signed["status"])
             self.assertEqual("verified", verified["status"])
@@ -46,6 +46,33 @@ class AppSigningTests(unittest.TestCase):
             record = json.loads((package / "app-signature.json").read_text())
             self.assertEqual("verified", metadata["signing"]["status"])
             self.assertEqual(metadata["binary"]["sha256"], record["verifiedSha256"])
+
+    def test_windows_target_selects_windows_signing_without_a_platform_argument(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / "app.exe"
+            binary.write_bytes(b"windows-app-signing-test")
+            package = root / "package"
+            build_package(package, binary, "x86_64-pc-windows-msvc", "release")
+            commands = []
+
+            with patch.dict(
+                os.environ, {"APP_WINDOWS_CERTIFICATE": "test-certificate"}, clear=False
+            ):
+                signed = sign_package(
+                    package, lambda command: commands.append(list(command))
+                )
+                verified = verify_package(
+                    package, lambda command: commands.append(list(command))
+                )
+
+            self.assertEqual("windows", signed["platform"])
+            self.assertEqual("verified", verified["status"])
+            self.assertEqual("signtool", commands[0][0])
+            self.assertEqual("sign", commands[0][1])
+            self.assertEqual("verify", commands[1][1])
 
     def test_sign_rejects_a_tampered_staged_binary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -61,7 +88,7 @@ class AppSigningTests(unittest.TestCase):
                 os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
             ):
                 with self.assertRaisesRegex(RuntimeError, "digest"):
-                    sign_package(package, "linux", lambda _: None)
+                    sign_package(package, lambda _: None)
 
     def test_signature_record_binds_the_compiled_remote_runtime_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -91,8 +118,8 @@ class AppSigningTests(unittest.TestCase):
             with patch.dict(
                 os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
             ):
-                signed = sign_package(package, "linux", fake_runner)
-                verified = verify_package(package, "linux", fake_runner)
+                signed = sign_package(package, fake_runner)
+                verified = verify_package(package, fake_runner)
 
             self.assertEqual(
                 bundle.catalog_sha256, signed["remoteRuntimeCatalogSha256"]
@@ -133,8 +160,8 @@ class AppSigningTests(unittest.TestCase):
             with patch.dict(
                 os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
             ):
-                signed = sign_package(package, "linux", fake_runner)
-                verified = verify_package(package, "linux", fake_runner)
+                signed = sign_package(package, fake_runner)
+                verified = verify_package(package, fake_runner)
 
             self.assertEqual(
                 release.catalog_sha256, signed["remoteRuntimeCatalogSha256"]

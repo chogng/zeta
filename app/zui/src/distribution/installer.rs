@@ -22,16 +22,16 @@ pub enum InstallerTarget {
 }
 
 impl InstallerTarget {
-    /// Returns the installer format matching the build host.
-    pub const fn current() -> Self {
+    /// Returns the installer format matching the build host when the host is supported.
+    pub const fn current() -> Option<Self> {
         #[cfg(target_os = "macos")]
-        return Self::MacOsPackage;
+        return Some(Self::MacOsPackage);
         #[cfg(target_os = "linux")]
-        return Self::LinuxAppImage;
+        return Some(Self::LinuxAppImage);
         #[cfg(target_os = "windows")]
-        return Self::WindowsMsi;
+        return Some(Self::WindowsMsi);
         #[allow(unreachable_code)]
-        Self::LinuxAppImage
+        None
     }
 }
 

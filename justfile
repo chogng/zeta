@@ -69,10 +69,9 @@ app-test:
 app-package *args:
     {{ python }} -B build/release/build_app_package.py {args}
 
-# Build, sign, and verify a app package in a platform release job.
-[unix]
+# Build, sign, and verify an app package in a platform release job.
 app-release:
-    build/release/release_app_package.sh
+    {{ python }} -B build/release/release_app_package.py
 
 # Build a canonical Zeta package; pass normal build_zeta_package.py flags.
 package *args:

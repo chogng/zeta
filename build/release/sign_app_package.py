@@ -5,17 +5,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from app_signing import host_platform, sign_package
+from app_signing import sign_package
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--package-dir", type=Path, required=True)
-    parser.add_argument(
-        "--platform", choices=["darwin", "linux", "windows"], default=host_platform()
-    )
     args = parser.parse_args()
-    record = sign_package(args.package_dir, args.platform)
+    record = sign_package(args.package_dir)
     print(f"Signed app package: {record['platform']} {record['signedSha256']}")
     return 0
 

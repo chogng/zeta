@@ -38,11 +38,10 @@ fn run(arguments: Vec<std::ffi::OsString>) -> Result<(), String> {
     }
     let manifest_path = PathBuf::from(&arguments[1]);
     let output_directory = PathBuf::from(&arguments[2]);
-    let target = arguments
-        .get(3)
-        .map(|target| parse_target(target.to_string_lossy().as_ref()))
-        .transpose()?
-        .unwrap_or_else(current_targets);
+    let target = match arguments.get(3) {
+        Some(target) => parse_target(target.to_string_lossy().as_ref())?,
+        None => current_targets()?,
+    };
     let bytes = std::fs::read(&manifest_path)
         .map_err(|error| format!("could not read {}: {error}", manifest_path.display()))?;
     let manifest_directory = manifest_path
@@ -179,6 +178,10 @@ fn parse_target(value: &str) -> Result<(BundleTarget, InstallerTarget), String> 
     }
 }
 
-fn current_targets() -> (BundleTarget, InstallerTarget) {
-    (BundleTarget::current(), InstallerTarget::current())
+fn current_targets() -> Result<(BundleTarget, InstallerTarget), String> {
+    let bundle = BundleTarget::current()
+        .ok_or_else(|| format!("unsupported build host `{}`", std::env::consts::OS))?;
+    let installer = InstallerTarget::current()
+        .ok_or_else(|| format!("unsupported build host `{}`", std::env::consts::OS))?;
+    Ok((bundle, installer))
 }

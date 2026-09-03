@@ -1,6 +1,5 @@
 {
   "formatVersion": 1,
-  "artifact": "bin/app",
   "signatureRecord": "app-signature.json",
   "releaseRequired": true,
   "authenticatedResources": {

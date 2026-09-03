@@ -199,16 +199,16 @@ pub enum BundleTarget {
 }
 
 impl BundleTarget {
-    /// Returns the layout matching the build host.
-    pub const fn current() -> Self {
+    /// Returns the layout matching the build host when the host is supported.
+    pub const fn current() -> Option<Self> {
         #[cfg(target_os = "macos")]
-        return Self::MacOsApplication;
+        return Some(Self::MacOsApplication);
         #[cfg(target_os = "linux")]
-        return Self::LinuxAppDir;
+        return Some(Self::LinuxAppDir);
         #[cfg(target_os = "windows")]
-        return Self::WindowsPortable;
+        return Some(Self::WindowsPortable);
         #[allow(unreachable_code)]
-        Self::LinuxAppDir
+        None
     }
 }
 

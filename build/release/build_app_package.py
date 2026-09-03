@@ -19,6 +19,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import TARGETS
+from build.lib.zeta_build.targets import target_spec
 from remote_runtime_bundle import RemoteRuntimeBundle
 from remote_runtime_bundle import validate_remote_runtime_bundle
 from zeta_package.cargo import cargo_environment
@@ -131,7 +132,7 @@ def resolve_binary(
         ]
     )
     command.extend(["--target", target])
-    environment = cargo_environment(TARGETS[target])
+    environment = cargo_environment(target_spec(target))
     selected_sha256 = (
         remote_runtime_release.catalog_sha256
         if remote_runtime_release is not None
@@ -183,6 +184,7 @@ def build_package(
     remote_runtime_bundle: Optional[RemoteRuntimeBundle] = None,
     remote_runtime_release: Optional[RemoteRuntimeNetworkRelease] = None,
 ) -> None:
+    spec = target_spec(target)
     if output.exists():
         raise RuntimeError(f"refusing to replace existing package directory: {output}")
     if (
@@ -224,7 +226,7 @@ def build_package(
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.", dir=output.parent))
     try:
-        staged_binary = staging / "bin" / binary.name
+        staged_binary = staging / "bin" / spec.app_name
         staged_binary.parent.mkdir(parents=True)
         shutil.copy2(binary, staged_binary)
         if os.name != "nt":
@@ -245,7 +247,7 @@ def build_package(
             "target": target,
             "profile": profile,
             "binary": {
-                "path": f"bin/{binary.name}",
+                "path": f"bin/{spec.app_name}",
                 "sha256": sha256(staged_binary),
             },
             "signing": {

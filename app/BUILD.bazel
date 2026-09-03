@@ -1,5 +1,5 @@
 load("//app:defs.bzl", "app_rust_binary")
-load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_python//python:py_test.bzl", "py_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -56,6 +56,7 @@ filegroup(
         "//build/lib/zeta_build:python_sources",
         "//build/release:build_remote_runtime_bundle.py",
         "//build/release:build_app_package.py",
+        "//build/release:release_app_package.py",
         "//build/release:remote_runtime_bundle.py",
         "//build/release:zeta_package_sources",
     ],
@@ -70,11 +71,11 @@ filegroup(
     ],
 )
 
-sh_test(
+py_test(
     name = "app_boundary_test",
-    srcs = ["//build/release:check_app_boundary.sh"],
+    srcs = ["//build/release:check_app_boundary.py"],
+    main = "//build/release:check_app_boundary.py",
     args = [
-        "$(location //build/release:check_app_boundary.py)",
         "$(location //:Cargo.toml)",
         "$(location Cargo.toml)",
         "$(location //:Cargo.lock)",
@@ -89,38 +90,42 @@ sh_test(
     size = "small",
 )
 
-sh_test(
+py_test(
     name = "app_package_test",
-    srcs = ["//build/release:test_app_package.sh"],
-    args = ["$(location //build/release:test_app_package.py)"],
-    data = [
-        "//app:app_package_contract",
+    srcs = [
+        "//build/release:app_signing.py",
         "//build/release:build_app_package.py",
+        "//build/release:release_app_package.py",
         "//build/release:remote_runtime_bundle.py",
-        "//build/release:test_remote_runtime_bundle.py",
         "//build/release:test_app_package.py",
+        "//build/release:test_remote_runtime_bundle.py",
         "//build/lib/zeta_build:python_sources",
         "//build/release:zeta_package_sources",
     ],
-    size = "small",
-)
-
-sh_test(
-    name = "remote_runtime_bundle_test",
-    srcs = ["//build/release:test_remote_runtime_bundle.sh"],
-    args = ["$(location //build/release:test_remote_runtime_bundle.py)"],
+    main = "//build/release:test_app_package.py",
     data = [
-        "//build/release:remote_runtime_bundle.py",
-        "//build/release:test_remote_runtime_bundle.py",
+        "//app:app_package_contract",
+        "Cargo.toml",
     ],
     size = "small",
 )
 
-sh_test(
+py_test(
+    name = "remote_runtime_bundle_test",
+    srcs = [
+        "//build/release:remote_runtime_bundle.py",
+        "//build/release:test_remote_runtime_bundle.py",
+        "//build/lib/zeta_build:python_sources",
+    ],
+    main = "//build/release:test_remote_runtime_bundle.py",
+    size = "small",
+)
+
+py_test(
     name = "app_release_contract_test",
-    srcs = ["//build/release:check_app_release_contract.sh"],
+    srcs = ["//build/release:check_app_release_contract.py"],
+    main = "//build/release:check_app_release_contract.py",
     args = [
-        "$(location //build/release:check_app_release_contract.py)",
         "$(location packaging/app-package-contract.json)",
         "$(location packaging/app-signing-policy.json)",
     ],
@@ -132,17 +137,21 @@ sh_test(
     size = "small",
 )
 
-sh_test(
+py_test(
     name = "app_signing_test",
-    srcs = ["//build/release:test_app_signing.sh"],
-    args = ["$(location //build/release:test_app_signing.py)"],
-    data = [
-        "//app:app_package_contract",
+    srcs = [
+        "//build/release:app_signing.py",
         "//build/release:build_app_package.py",
         "//build/release:remote_runtime_bundle.py",
-        "//build/release:test_remote_runtime_bundle.py",
         "//build/release:test_app_signing.py",
-        "//build/release:app_signing.py",
+        "//build/release:test_remote_runtime_bundle.py",
+        "//build/lib/zeta_build:python_sources",
+        "//build/release:zeta_package_sources",
+    ],
+    main = "//build/release:test_app_signing.py",
+    data = [
+        "//app:app_package_contract",
+        "Cargo.toml",
     ],
     size = "small",
 )

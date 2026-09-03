@@ -9,12 +9,17 @@ import os
 import re
 import shutil
 import stat
+import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Dict, List, Sequence, Tuple
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from build.lib.zeta_build.targets import TARGETS
 
 CATALOG_FILE = "catalog.json"
 CATALOG_FORMAT_VERSION = 1
@@ -23,14 +28,9 @@ MAX_PACKAGE_METADATA_BYTES = 64 * 1024
 MAX_RUNTIME_ARCHIVE_BYTES = 1024 * 1024 * 1024
 MAX_RUNTIME_UNPACKED_BYTES = 4 * MAX_RUNTIME_ARCHIVE_BYTES
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$")
-POSIX_TARGETS = {
-    "aarch64-apple-darwin",
-    "aarch64-unknown-linux-gnu",
-    "aarch64-unknown-linux-musl",
-    "x86_64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
-    "x86_64-unknown-linux-musl",
-}
+REMOTE_RUNTIME_TARGETS = frozenset(
+    target for target, spec in TARGETS.items() if not spec.is_windows
+)
 REQUIRED_RUNTIME_FILES = {
     "zeta-package.json",
     "bin/zeta-app-server-daemon",
@@ -160,7 +160,7 @@ def validate_remote_runtime_bundle(root: Path) -> RemoteRuntimeBundle:
         if VERSION.fullmatch(version) is None:
             raise RuntimeError(f"invalid Remote runtime version: {version}")
         target = required_string(value, "target")
-        if target not in POSIX_TARGETS:
+        if target not in REMOTE_RUNTIME_TARGETS:
             raise RuntimeError(f"unsupported Remote runtime target: {target}")
         if target in targets:
             raise RuntimeError(f"Remote runtime catalog repeats target {target}")
@@ -334,7 +334,7 @@ def validate_package_metadata(metadata: Dict[str, object]) -> Tuple[str, str]:
             raise RuntimeError(f"Remote runtime package metadata {key} is invalid")
     if VERSION.fullmatch(version) is None:
         raise RuntimeError(f"invalid Remote runtime package version: {version}")
-    if target not in POSIX_TARGETS:
+    if target not in REMOTE_RUNTIME_TARGETS:
         raise RuntimeError(f"unsupported Remote runtime package target: {target}")
     return version, target
 

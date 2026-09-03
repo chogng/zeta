@@ -34,8 +34,15 @@ def main() -> int:
     policy = load(Path(sys.argv[2]))
     if contract.get("product") != "app":
         fail("package contract product must be app")
-    if contract.get("binary") != "bin/app":
-        fail("package contract must name bin/app")
+    expected_binaries = {
+        "darwin": "bin/app",
+        "linux": "bin/app",
+        "windows": "bin/app.exe",
+    }
+    if contract.get("binaryByPlatform") != expected_binaries:
+        fail("package contract must name the executable for every platform")
+    if "artifact" in policy:
+        fail("signing policy must use the target-bound package artifact")
     if contract.get("signatureRecord") != policy.get("signatureRecord"):
         fail("package and signing contracts disagree on signature record")
     expected_invariant = (

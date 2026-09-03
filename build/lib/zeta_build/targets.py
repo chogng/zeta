@@ -2,21 +2,72 @@
 
 import platform
 from dataclasses import dataclass
-from typing import Dict
+from enum import Enum
+from typing import Dict, Optional
+
+
+class OperatingSystem(Enum):
+    MACOS = "darwin"
+    LINUX = "linux"
+    WINDOWS = "windows"
+
+
+class CpuArchitecture(Enum):
+    ARM64 = "aarch64"
+    X86_64 = "x86_64"
+
+
+class LinuxLibc(Enum):
+    GNU = "gnu"
+    MUSL = "musl"
+
+
+class WindowsAbi(Enum):
+    MSVC = "msvc"
 
 
 @dataclass(frozen=True)
 class TargetSpec:
-    target: str
-    is_windows: bool
+    operating_system: OperatingSystem
+    architecture: CpuArchitecture
+    linux_libc: Optional[LinuxLibc] = None
+    windows_abi: Optional[WindowsAbi] = None
+
+    def __post_init__(self) -> None:
+        if (self.operating_system == OperatingSystem.LINUX) != (
+            self.linux_libc is not None
+        ):
+            raise ValueError("Linux targets require exactly one libc")
+        if (self.operating_system == OperatingSystem.WINDOWS) != (
+            self.windows_abi is not None
+        ):
+            raise ValueError("Windows targets require exactly one ABI")
+
+    @property
+    def target(self) -> str:
+        if self.operating_system == OperatingSystem.MACOS:
+            return f"{self.architecture.value}-apple-darwin"
+        if self.operating_system == OperatingSystem.LINUX:
+            assert self.linux_libc is not None
+            return f"{self.architecture.value}-unknown-linux-{self.linux_libc.value}"
+        assert self.windows_abi is not None
+        return f"{self.architecture.value}-pc-windows-{self.windows_abi.value}"
+
+    @property
+    def is_windows(self) -> bool:
+        return self.operating_system == OperatingSystem.WINDOWS
 
     @property
     def is_linux(self) -> bool:
-        return "linux" in self.target
+        return self.operating_system == OperatingSystem.LINUX
 
     @property
     def executable_suffix(self) -> str:
         return ".exe" if self.is_windows else ""
+
+    @property
+    def app_name(self) -> str:
+        return "app" + self.executable_suffix
 
     @property
     def server_name(self) -> str:
@@ -39,28 +90,60 @@ class TargetSpec:
         return "node" + self.executable_suffix
 
 
-TARGETS: Dict[str, TargetSpec] = {
-    target: TargetSpec(target=target, is_windows="windows" in target)
-    for target in (
-        "aarch64-apple-darwin",
-        "aarch64-pc-windows-msvc",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-unknown-linux-musl",
-        "x86_64-apple-darwin",
-        "x86_64-pc-windows-msvc",
-        "x86_64-unknown-linux-gnu",
-        "x86_64-unknown-linux-musl",
+def _target_specs() -> tuple[TargetSpec, ...]:
+    return (
+        TargetSpec(OperatingSystem.MACOS, CpuArchitecture.ARM64),
+        TargetSpec(OperatingSystem.MACOS, CpuArchitecture.X86_64),
+        TargetSpec(
+            OperatingSystem.LINUX,
+            CpuArchitecture.ARM64,
+            linux_libc=LinuxLibc.GNU,
+        ),
+        TargetSpec(
+            OperatingSystem.LINUX,
+            CpuArchitecture.ARM64,
+            linux_libc=LinuxLibc.MUSL,
+        ),
+        TargetSpec(
+            OperatingSystem.LINUX,
+            CpuArchitecture.X86_64,
+            linux_libc=LinuxLibc.GNU,
+        ),
+        TargetSpec(
+            OperatingSystem.LINUX,
+            CpuArchitecture.X86_64,
+            linux_libc=LinuxLibc.MUSL,
+        ),
+        TargetSpec(
+            OperatingSystem.WINDOWS,
+            CpuArchitecture.ARM64,
+            windows_abi=WindowsAbi.MSVC,
+        ),
+        TargetSpec(
+            OperatingSystem.WINDOWS,
+            CpuArchitecture.X86_64,
+            windows_abi=WindowsAbi.MSVC,
+        ),
     )
-}
+
+
+TARGETS: Dict[str, TargetSpec] = {spec.target: spec for spec in _target_specs()}
 
 HOST_TARGETS = {
-    ("darwin", "aarch64"): "aarch64-apple-darwin",
-    ("darwin", "x86_64"): "x86_64-apple-darwin",
-    ("linux", "aarch64"): "aarch64-unknown-linux-gnu",
-    ("linux", "x86_64"): "x86_64-unknown-linux-gnu",
-    ("windows", "aarch64"): "aarch64-pc-windows-msvc",
-    ("windows", "x86_64"): "x86_64-pc-windows-msvc",
+    (spec.operating_system.value, spec.architecture.value): spec.target
+    for spec in TARGETS.values()
+    if spec.linux_libc != LinuxLibc.MUSL
 }
+
+
+def target_spec(target: str) -> TargetSpec:
+    spec = TARGETS.get(target)
+    if spec is None:
+        supported = ", ".join(sorted(TARGETS))
+        raise RuntimeError(
+            f"Unsupported Zeta target {target}. Supported targets: {supported}"
+        )
+    return spec
 
 
 def default_target() -> str:

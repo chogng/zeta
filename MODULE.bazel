@@ -2,8 +2,8 @@ module(name = "zeta")
 
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_rs", version = "0.0.96")
-bazel_dep(name = "rules_shell", version = "0.6.1")
 bazel_dep(name = "rules_platform", version = "0.1.0")
+bazel_dep(name = "rules_python", version = "1.9.2")
 bazel_dep(name = "apple_support", version = "2.1.0")
 bazel_dep(name = "llvm", version = "0.8.11")
 bazel_dep(name = "aws-lc", version = "5.1.0.bcr.1")
@@ -23,6 +23,10 @@ archive_override(
 )
 
 register_toolchains("@llvm//toolchain:all")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.defaults(python_version = "3.12")
+python.toolchain(python_version = "3.12")
 
 # `rules_rust` needs a macOS sysroot even for pure Rust crates. Pin the same
 # hermetic Command Line Tools SDK used by Codex so local and CI builds do not
