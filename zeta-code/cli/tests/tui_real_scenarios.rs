@@ -8,6 +8,8 @@ mod tui_process;
 use scenario_http::Gate;
 use scenario_http::HttpResponse;
 use scenario_http::ScenarioServer;
+use std::fs;
+use std::process::Command;
 use tui_process::Fixture;
 use tui_process::LARGE_SIZE;
 use tui_process::SMALL_SIZE;
@@ -74,6 +76,25 @@ fn actual_tui_runs_three_complete_conversation_turns() {
 }
 
 #[test]
+fn actual_tui_displays_git_branch_and_changes() {
+    let fixture = Fixture::new("git-status");
+    let initialized = Command::new("git")
+        .args(["init", "--quiet", "--initial-branch=main"])
+        .current_dir(fixture.workspace())
+        .status()
+        .unwrap();
+    assert!(initialized.success());
+    fs::write(fixture.workspace().join("changed.txt"), "uncommitted\n").unwrap();
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("zeta-real-scenario · main · 1 change");
+    process.assert_snapshot("real/08-git/00-branch-and-change");
+    process.quit();
+}
+
+#[test]
 fn actual_tui_navigates_config_tabs_and_temporary_pickers() {
     let fixture = Fixture::new("temporary-pages");
     let server = ScenarioServer::start([]);
@@ -101,7 +122,7 @@ fn actual_tui_navigates_config_tabs_and_temporary_pickers() {
     process.tab();
     process.back_tab();
     process.escape();
-    process.wait_for_stable_screen("openai-compatible/zeta-real-scenario");
+    process.wait_for_stable_screen("zeta-real-scenario");
 
     process.type_text("/statusline");
     process.enter();

@@ -23,14 +23,14 @@ expression: screen
 
 
 
-  /status                    show the active session, thread, and model
-  /statusline                choose the items shown in the status line
-  /skills                    browse configured skill sources
-  /mcp                       list configured MCP tools
-  /resume                    list or resume a saved session
-  /archive                   archive the current session and start a new chat
+
+
+
+
+
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯ /
+❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  zeta-real-scenario
+  zeta-real-scenario · main · 1 change                                                    ← agents
   ⏸ ask permissions on (shift+tab to cycle)

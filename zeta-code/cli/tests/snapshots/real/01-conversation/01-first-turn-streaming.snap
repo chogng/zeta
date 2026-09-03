@@ -32,5 +32,5 @@ expression: screen
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  working · openai-compatible/zeta-real-scenario                                          ← agents
+  zeta-real-scenario                                                                      ← agents
   ⏸ ask permissions on (shift+tab to cycle)

@@ -6,7 +6,7 @@ use zeta_protocol::ApprovalMode;
 use zeta_protocol::StreamInstanceId;
 
 #[test]
-fn status_line_separates_policy_from_runtime_model_branch_and_changes() {
+fn status_line_combines_counts_model_branch_and_changes() {
     let mut status_line = StatusLineModel::new();
     status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
     status_line.apply_git_status(&git_status(1));
@@ -15,11 +15,12 @@ fn status_line_separates_policy_from_runtime_model_branch_and_changes() {
         status_line.top_text_for_width(
             100,
             StatusLineRuntime {
-                state: Some("working"),
-                ..Default::default()
+                plan: Some((1, 3)),
+                queue: 2,
+                subagents: 1,
             }
         ),
-        "working · anthropic/claude-sonnet · main · 1 change"
+        "plan 1/3 · queue 2 · subagents 1 · claude-sonnet · main · 1 change"
     );
     assert_eq!(
         status_line.policy_text_for_width(100, ApprovalMode::AskPermissions),
@@ -73,7 +74,7 @@ fn configured_items_can_be_hidden_independently() {
 
     assert_eq!(
         status_line.top_text_for_width(80, StatusLineRuntime::default()),
-        "anthropic/claude-sonnet · 1 change"
+        "claude-sonnet · 1 change"
     );
     assert_eq!(
         status_line.policy_text_for_width(80, ApprovalMode::AutoReview),

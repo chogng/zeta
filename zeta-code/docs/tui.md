@@ -554,7 +554,7 @@ Git、配置或 Thread。
 
 | Item | 权威接口 | TUI 的职责 | 当前状态 |
 | --- | --- | --- | --- |
-| preferred model | `AppServerClient::read_config` | 把 `ConfigReadResult::preferred_model` 映射为长/短文案 | 已实现 |
+| preferred model | `AppServerClient::read_config` | 把 `ConfigReadResult::preferred_model` 映射为不带 provider 的模型名 | 已实现 |
 | Welcome workspace | `TuiOptions::workspace_root` | `WelcomeModel` 在 App 构造阶段把用户主目录缩写为 `~`，供空会话和 Manager 顶部 Welcome Banner 显示 | 已实现；不属于 status line |
 | Git branch | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | startup/read 与 notification 映射 branch | 已实现 |
 | Git changes | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | 映射变更数量，干净时省略 | 已实现 |
@@ -579,7 +579,7 @@ owning crate interface / typed App Server result
 
 `status_line/` 定义稳定的 item identity、用户排序、开关、separator 和 overflow policy；项目列表保存在 `config.toml` 的 `[tui].statusLine`。TUI 负责解释与校验字段，App Server 只按完整 `[tui]` 表持久化并校验 config revision。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
 
-当前实现由 `features/status_line/model.rs` 把 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序启用的模型、Git 分支和 Git 变更组合到上行；错误只在 Transcript 显示，不在 StatusLine 重复。下一次 Turn 的权限模式固定在下行，空间足够时附带 `shift+tab to cycle`。`features/status_line/view.rs` 最多绘制两行。Session Manager、当前 `ComposerMode`、SubagentPicker 或 Chord 需要明确按键时，固定一行 KeyHints 直接替换 StatusLine；`ComposerMode` 有值时保留 ChatInput 状态，当前组件替换 ChatInput 参与布局。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
+当前实现由 `features/status_line/model.rs` 把 Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序启用的模型、Git 分支和 Git 变更组合到上行；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下一次 Turn 的权限模式固定在下行，空间足够时附带 `shift+tab to cycle`。`features/status_line/view.rs` 最多绘制两行。Session Manager、当前 `ComposerMode`、SubagentPicker 或 Chord 需要明确按键时，固定一行 KeyHints 直接替换 StatusLine；`ComposerMode` 有值时保留 ChatInput 状态，当前组件替换 ChatInput 参与布局。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
 
 ## 12. `host/`：窄宿主能力
 

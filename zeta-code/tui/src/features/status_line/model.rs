@@ -12,27 +12,18 @@ const SEPARATOR: &str = " · ";
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLineRuntime {
-    pub(crate) state: Option<&'static str>,
     pub(crate) plan: Option<(usize, usize)>,
     pub(crate) queue: usize,
     pub(crate) subagents: usize,
-    pub(crate) waiting: usize,
 }
 
 impl StatusLineRuntime {
     pub(crate) fn text(self) -> String {
         let mut segments = Vec::new();
-        if let Some(state) = self.state {
-            segments.push(state.to_owned());
-        }
         if let Some((completed, total)) = self.plan {
             segments.push(format!("plan {completed}/{total}"));
         }
-        for (label, count) in [
-            ("queue", self.queue),
-            ("subagents", self.subagents),
-            ("waiting", self.waiting),
-        ] {
+        for (label, count) in [("queue", self.queue), ("subagents", self.subagents)] {
             if count > 0 {
                 segments.push(format!("{label} {count}"));
             }
@@ -101,7 +92,7 @@ impl StatusLineModel {
 
     pub(crate) fn apply_preferred_model(&mut self, model: Option<&ModelRefDto>) {
         self.preferred_model = model.map(|model| DisplayValue {
-            full: format!("{}/{}", model.provider, model.model),
+            full: model.model.clone(),
             compact: model.model.clone(),
         });
     }

@@ -332,7 +332,7 @@ fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
 }
 
 #[test]
-fn working_draft_keeps_runtime_state_in_status_line() {
+fn turn_activity_does_not_enter_status_line() {
     let mut app = App::new();
     app.insert_text("start");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -341,7 +341,7 @@ fn working_draft_keeps_runtime_state_in_status_line() {
 
     let rendered = render(&app, 80, 20);
 
-    assert!(rendered.lines().any(|line| line.trim_end() == "  working"));
+    assert!(!rendered.contains("working"));
 }
 
 #[test]
@@ -354,25 +354,17 @@ fn queued_message_is_visible_inline_and_counted_in_status_line() {
     let rendered = render(&app, 80, 20);
 
     assert!(rendered.contains("Queue 1: edit this later"));
-    assert!(
-        rendered
-            .lines()
-            .any(|line| line.trim_end() == "  working · queue 1")
-    );
+    assert!(rendered.lines().any(|line| line.trim_end() == "  queue 1"));
 }
 
 #[test]
-fn follow_up_mode_does_not_replace_runtime_status_line() {
+fn follow_up_mode_keeps_queue_count_in_status_line() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("change direction");
 
-    assert!(
-        render(&app, 80, 20)
-            .lines()
-            .any(|line| line.trim_end() == "  working")
-    );
+    assert!(!render(&app, 80, 20).contains("working"));
 
     set_follow_up_mode(&mut app, FollowUpMode::Queue);
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -381,7 +373,7 @@ fn follow_up_mode_does_not_replace_runtime_status_line() {
     assert!(
         render(&app, 80, 20)
             .lines()
-            .any(|line| line.trim_end() == "  working · queue 1")
+            .any(|line| line.trim_end() == "  queue 1")
     );
 }
 
@@ -437,7 +429,7 @@ fn path_is_only_visible_in_the_empty_welcome_banner() {
 }
 
 #[test]
-fn status_line_renders_the_configured_model() {
+fn status_line_renders_the_configured_model_without_provider() {
     let mut app = App::new();
     app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
         provider: "anthropic".into(),
@@ -452,7 +444,7 @@ fn status_line_renders_the_configured_model() {
         .map(|x| buffer[(x, 19)].symbol())
         .collect::<String>();
 
-    assert_eq!(context_line.trim_end(), "  anthropic/claude-sonnet");
+    assert_eq!(context_line.trim_end(), "  claude-sonnet");
     assert_eq!(
         policy_line.trim_end(),
         "  ⏸ ask permissions on (shift+tab to cycle)"
@@ -554,7 +546,7 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
 }
 
 #[test]
-fn working_status_line_keeps_configured_context_separate_from_runtime_text() {
+fn turn_activity_keeps_permission_status_free_of_input_hints() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
 

@@ -1291,26 +1291,10 @@ impl App {
                     .count()
             })
             .unwrap_or(0);
-        let state = match self.status {
-            Status::Ready => None,
-            Status::Working => Some("working"),
-            Status::WaitingForApproval => Some("waiting approval"),
-            Status::WaitingForUserInput => Some("waiting input"),
-            Status::WaitingForCapability => Some("waiting capability"),
-            Status::Cancelling => Some("cancelling"),
-            Status::Error => None,
-        };
         StatusLineRuntime {
-            state,
             plan,
             queue,
             subagents,
-            waiting: usize::from(matches!(
-                self.status,
-                Status::WaitingForApproval
-                    | Status::WaitingForUserInput
-                    | Status::WaitingForCapability
-            )),
         }
     }
 
