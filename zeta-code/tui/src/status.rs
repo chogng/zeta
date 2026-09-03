@@ -10,6 +10,7 @@ pub(crate) use model::StatusLineModel;
 pub(crate) use model::StatusLineRuntime;
 pub(crate) use panel::RemainingContextWindow;
 pub(crate) use panel::StatusPanel;
+pub(crate) use panel::StatusPanelOutcome;
 pub(crate) use panel::StatusViewData;
 pub(crate) use panel::status_panel;
 pub(crate) use panel_request::StatusRequestScope;

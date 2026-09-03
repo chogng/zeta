@@ -219,6 +219,7 @@ impl ModelService for StaleWriteModel {
                 }),
             })],
             usage: None,
+            billing: None,
             stop_reason: StopReason::ToolUse,
         })
     }

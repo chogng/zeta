@@ -1,5 +1,4 @@
 use super::ProviderAdapter;
-use super::api_endpoint;
 use crate::ModelProviderError;
 use zeta_api::ApiEndpoint;
 use zeta_api::ApiProtocol;
@@ -16,9 +15,13 @@ pub(crate) struct DeepSeekAdapter {
 
 impl DeepSeekAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
-        Self {
-            endpoint: api_endpoint(config.api_profile),
-        }
+        let endpoint = match config.api_profile {
+            zeta_model_provider_config::ApiProfile::OpenAiChatCompletions => {
+                ApiEndpoint::DeepSeekChatCompletions
+            }
+            profile => super::api_endpoint(profile),
+        };
+        Self { endpoint }
     }
 }
 

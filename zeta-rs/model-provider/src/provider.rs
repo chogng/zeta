@@ -780,6 +780,7 @@ impl ModelInvoker for EchoModel {
         Ok(ModelResponse {
             output: vec![OutputItem::Text(format!("Zeta: {prompt}"))],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }

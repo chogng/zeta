@@ -27,6 +27,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
         status: ThreadStatus::Active,
         sequence: 7,
         usage: ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![zeta_protocol::Turn {
             turn_id: turn_id(),
@@ -409,6 +410,7 @@ fn empty_thread() -> Thread {
         status: ThreadStatus::Active,
         sequence: 0,
         usage: ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: Vec::new(),
     }

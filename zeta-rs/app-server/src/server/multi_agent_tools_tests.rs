@@ -338,6 +338,7 @@ impl ModelService for TextModel {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(prompt)],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }

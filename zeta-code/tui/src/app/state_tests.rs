@@ -294,6 +294,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         status: ThreadStatus::Active,
         sequence: 5,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![Turn {
             turn_id: turn_id.clone(),
@@ -872,6 +873,50 @@ fn statusline_selection_emits_a_revision_bound_edit() {
 }
 
 #[test]
+fn statusline_accounting_follows_the_current_thread_context() {
+    let mut app = App::new();
+    let mut settings = StatusLineSettings::default();
+    settings.set(StatusLineItem::CacheHitRate, true);
+    settings.set(StatusLineItem::ReferenceCost, true);
+    settings.set(StatusLineItem::Permissions, false);
+    settings.set(StatusLineItem::Model, false);
+    settings.set(StatusLineItem::GitBranch, false);
+    settings.set(StatusLineItem::GitChanges, false);
+    app.update(AppEvent::StatusLineSettingsReceived(settings));
+    let mut usage = zeta_protocol::ModelUsageSummary::default();
+    usage.model_invocations = 1;
+    usage.input_tokens.reported = 2_000;
+    usage.cached_input_tokens.reported = 500;
+    app.update(AppEvent::ThreadAccountingChanged {
+        usage,
+        reference_cost: zeta_protocol::ModelReferenceCostSummary {
+            known_amounts: vec![zeta_protocol::ModelMoneyAmount {
+                currency: "USD".into(),
+                pico_units: "1250000000".into(),
+            }],
+            complete: true,
+        },
+    });
+
+    assert_eq!(
+        app.status_line()
+            .top_text_for_width(80, app.status_line_runtime()),
+        "cache hit 25.0% · cost $0.00125"
+    );
+
+    app.update(AppEvent::ThreadContextChanged {
+        session_id: zeta_protocol::SessionId::new("session-next").unwrap(),
+        thread_id: zeta_protocol::ThreadId::new("thread-next").unwrap(),
+    });
+
+    assert_eq!(
+        app.status_line()
+            .top_text_for_width(80, app.status_line_runtime()),
+        ""
+    );
+}
+
+#[test]
 fn shortcut_capture_emits_a_revision_bound_edit() {
     let mut app = App::new();
     let settings = keymap_settings_from_tui(&Default::default()).unwrap();
@@ -893,7 +938,7 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
         None
     );
     assert!(matches!(
-        app.input_surface().and_then(|mode| mode.key_capture()),
+        app.composer_slot().and_then(|slot| slot.key_capture()),
         Some(body) if body.title() == "Record shortcut"
     ));
 
@@ -1247,7 +1292,7 @@ fn escape_does_not_exit_the_idle_session_screen() {
 }
 
 #[test]
-fn terminal_screen_change_closes_input_surfaces_including_status() {
+fn terminal_screen_change_closes_composer_slots_including_status() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
         "Help",
@@ -1256,26 +1301,30 @@ fn terminal_screen_change_closes_input_surfaces_including_status() {
             vec![ListSelectionItem::new("/status")],
         )],
     )));
-    assert!(app.input_surface().is_some());
+    assert!(app.composer_slot().is_some());
 
     enter_test_session(&mut app);
-    assert!(app.input_surface().is_none());
+    assert!(app.composer_slot().is_none());
 
+    let usage = zeta_protocol::ModelUsageSummary::default();
+    let reference_cost = zeta_protocol::ModelReferenceCostSummary::default();
     app.update(AppEvent::StatusPanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
         full_context_window: None,
         available_context_window: None,
         remaining_context_window: crate::status::RemainingContextWindow::Unknown,
+        usage: &usage,
+        reference_cost: &reference_cost,
         session_id: "session-1",
         thread_id: "thread-1",
         thread_sequence: 1,
     })));
-    assert!(app.input_surface().is_some());
+    assert!(app.composer_slot().is_some());
     app.update(AppEvent::ThreadContextChanged {
         session_id: SessionId::new("other-session").unwrap(),
         thread_id: ThreadId::new("other-thread").unwrap(),
     });
-    assert!(app.input_surface().is_none());
+    assert!(app.composer_slot().is_none());
 }
 
 #[test]
@@ -1431,11 +1480,11 @@ fn enter_steers_the_working_turn_and_tracks_delivery() {
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages()[1].text, "secondthird");
-    assert!(app.input_surface().is_none());
+    assert!(app.composer_slot().is_none());
 
     app.update(AppEvent::SteerCompleted(steer_id));
 
-    assert!(app.input_surface().is_none());
+    assert!(app.composer_slot().is_none());
     assert_eq!(app.status(), &Status::Working);
 }
 
@@ -1614,7 +1663,7 @@ fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
         error: "sequence conflict".into(),
     });
 
-    assert!(app.input_surface().is_none());
+    assert!(app.composer_slot().is_none());
     assert_eq!(app.status(), &Status::Working);
     assert!(
         app.messages()

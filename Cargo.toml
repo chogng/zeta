@@ -26,6 +26,7 @@ members = [
     "zeta-rs/bwrap",
     "zeta-code/ansi-escape",
     "zeta-code/cli",
+    "zeta-code/sprite",
     "zeta-rs/config",
     "zeta-rs/connectors",
     "zeta-rs/context-engine",
@@ -71,6 +72,7 @@ members = [
     "zeta-rs/marketplace-manager",
     "zeta-rs/linux-sandbox",
     "zeta-rs/lsp",
+    "zeta-rs/model-accounting",
     "zeta-rs/model-provider",
     "zeta-rs/model-provider-config",
     "zeta-rs/models-manager",
@@ -365,6 +367,7 @@ zeta-lsp = { path = "zeta-rs/lsp" }
 zeta-markdown = { path = "app/markdown" }
 zeta-mcp = { path = "zeta-rs/mcp" }
 zeta-mcp-server = { path = "zeta-rs/mcp-server" }
+zeta-model-accounting = { path = "zeta-rs/model-accounting" }
 zeta-model-provider = { path = "zeta-rs/model-provider" }
 zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }
 zeta-models-manager = { path = "zeta-rs/models-manager" }

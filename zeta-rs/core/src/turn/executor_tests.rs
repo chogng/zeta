@@ -175,6 +175,7 @@ fn code_mode_exec_runs_javascript_through_the_durable_tool_path() {
                 arguments: json!({"source": "text('hello from JavaScript');"}),
             })],
             usage: None,
+            billing: None,
             stop_reason: StopReason::ToolUse,
         }),
         Ok(text_response("done")),
@@ -218,6 +219,7 @@ fn code_mode_only_runs_concurrent_nested_tools_through_the_durable_scheduler() {
                 }),
             })],
             usage: None,
+            billing: None,
             stop_reason: StopReason::ToolUse,
         }),
         Ok(text_response("done")),
@@ -454,8 +456,10 @@ fn manual_context_compaction_commits_a_checkpoint_and_usage_before_completing() 
             input_tokens: Some(100),
             output_tokens: Some(8),
             cached_input_tokens: Some(0),
+            cache_write_input_tokens: Some(0),
             reasoning_tokens: Some(0),
         }),
+        billing: None,
         stop_reason: StopReason::Completed,
     })]));
     let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
@@ -614,8 +618,10 @@ fn failed_manual_context_compaction_does_not_commit_a_checkpoint() {
             input_tokens: Some(10),
             output_tokens: Some(0),
             cached_input_tokens: None,
+            cache_write_input_tokens: None,
             reasoning_tokens: None,
         }),
+        billing: None,
         stop_reason: StopReason::Completed,
     };
     let model = Arc::new(ScriptedModel::new([Ok(empty_response())]));
@@ -821,6 +827,7 @@ fn first_invocation_injects_untrusted_evidence_once() {
                 arguments: json!({"city": "Paris"}),
             })],
             usage: None,
+            billing: None,
             stop_reason: StopReason::ToolUse,
         }),
         Ok(text_response("done")),
@@ -865,8 +872,10 @@ fn final_answer_may_complete_when_goal_usage_reaches_the_budget() {
             input_tokens: Some(10),
             output_tokens: Some(2),
             cached_input_tokens: Some(0),
+            cache_write_input_tokens: Some(0),
             reasoning_tokens: Some(0),
         }),
+        billing: None,
         stop_reason: StopReason::Completed,
     })]));
 
@@ -897,8 +906,10 @@ fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
                 input_tokens: Some(1),
                 output_tokens: Some(0),
                 cached_input_tokens: Some(0),
+                cache_write_input_tokens: Some(0),
                 reasoning_tokens: None,
             }),
+            billing: None,
             stop_reason: StopReason::Completed,
         }),
         Ok(ModelResponse {
@@ -907,8 +918,10 @@ fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
                 input_tokens: Some(14),
                 output_tokens: Some(0),
                 cached_input_tokens: Some(0),
+                cache_write_input_tokens: Some(0),
                 reasoning_tokens: None,
             }),
+            billing: None,
             stop_reason: StopReason::Completed,
         }),
     ]));
@@ -1004,8 +1017,10 @@ fn recovered_active_goal_resumes_a_running_hidden_turn() {
             input_tokens: Some(1),
             output_tokens: Some(0),
             cached_input_tokens: Some(0),
+            cache_write_input_tokens: Some(0),
             reasoning_tokens: None,
         }),
+        billing: None,
         stop_reason: StopReason::Completed,
     })]));
     let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
@@ -1040,6 +1055,7 @@ fn successful_tool_search_result_loads_deferred_definition_for_next_model_step()
                 arguments: json!({"query": "weather", "limit": 1}),
             })],
             usage: None,
+            billing: None,
             stop_reason: StopReason::ToolUse,
         }),
         Ok(text_response("loaded")),
@@ -1311,6 +1327,7 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
         Ok(ModelResponse {
             output: vec![ResponseItem::ToolCall(call.clone())],
             usage: None,
+            billing: None,
             stop_reason: StopReason::ToolUse,
         }),
         Ok(text_response("sunny")),
@@ -1358,6 +1375,7 @@ fn repeated_identical_tool_failures_stop_at_five_with_a_stable_turn_error() {
                     },
                 })],
                 usage: None,
+                billing: None,
                 stop_reason: StopReason::ToolUse,
             })
         })
@@ -1414,6 +1432,7 @@ fn rejects_a_model_tool_call_outside_the_invocation_capability_scope() {
             arguments: json!({}),
         })],
         usage: None,
+        billing: None,
         stop_reason: StopReason::ToolUse,
     })]));
     let executor = TurnExecutor::without_tools(threads.clone(), model);
@@ -1889,8 +1908,10 @@ fn retries_one_empty_response_and_completes_refusal_as_agent_message() {
                 input_tokens: Some(10),
                 output_tokens: Some(1),
                 cached_input_tokens: Some(2),
+                cache_write_input_tokens: Some(0),
                 reasoning_tokens: None,
             }),
+            billing: None,
             stop_reason: StopReason::Completed,
         }),
         Ok(ModelResponse {
@@ -1899,8 +1920,10 @@ fn retries_one_empty_response_and_completes_refusal_as_agent_message() {
                 input_tokens: Some(12),
                 output_tokens: Some(3),
                 cached_input_tokens: None,
+                cache_write_input_tokens: None,
                 reasoning_tokens: Some(1),
             }),
+            billing: None,
             stop_reason: StopReason::Completed,
         }),
     ]));
@@ -1977,8 +2000,10 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
             input_tokens: Some(11),
             output_tokens: Some(2),
             cached_input_tokens: None,
+            cache_write_input_tokens: None,
             reasoning_tokens: None,
         }),
+        billing: None,
         stop_reason: StopReason::Completed,
     })]));
     TurnExecutor::without_tools(original.clone(), model)
@@ -1989,6 +2014,28 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
         .context_calibration(&model_ref, crate::context::CONTEXT_ESTIMATOR_REVISION)
         .cloned()
         .expect("selected-model invocation must derive a calibration sample");
+    let invocation = store
+        .events()
+        .into_iter()
+        .find_map(|event| match event.event {
+            zeta_protocol::ThreadEvent::ModelInvocationRecorded { record, .. } => Some(record),
+            _ => None,
+        })
+        .expect("model response must commit an invocation fact");
+    assert_eq!(invocation.requested_model, Some(model_ref.clone()));
+    assert_eq!(
+        invocation
+            .usage
+            .as_ref()
+            .and_then(|usage| usage.input_tokens),
+        Some(11)
+    );
+    assert!(matches!(
+        invocation.reference_cost,
+        zeta_protocol::ModelReferenceCostRecord::Unpriced {
+            reason: zeta_protocol::ModelReferenceCostReason::MissingBillingContext
+        }
+    ));
 
     let recovered = ThreadController::with_store(store);
     let after_restart = recovered.recover_thread(&thread_id).unwrap();
@@ -2175,6 +2222,7 @@ fn interrupt_propagates_to_the_active_tool_call() {
     let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
         output: vec![ResponseItem::ToolCall(call)],
         usage: None,
+        billing: None,
         stop_reason: StopReason::ToolUse,
     })]));
     let tool = Arc::new(BlockingTool::default());
@@ -2226,6 +2274,7 @@ fn running_tool_user_input_is_durable_and_resumes_the_same_execution() {
         Ok(ModelResponse {
             output: vec![ResponseItem::ToolCall(call)],
             usage: None,
+            billing: None,
             stop_reason: StopReason::ToolUse,
         }),
         Ok(text_response("done")),
@@ -2317,6 +2366,7 @@ impl ModelService for BatchedCompactionModel {
             input_tokens: Some(100),
             output_tokens: Some(8),
             cached_input_tokens: None,
+            cache_write_input_tokens: None,
             reasoning_tokens: None,
         });
         Ok(response)
@@ -2341,8 +2391,10 @@ impl ModelService for CancellingResponseModel {
                 input_tokens: Some(9),
                 output_tokens: Some(2),
                 cached_input_tokens: None,
+                cache_write_input_tokens: None,
                 reasoning_tokens: None,
             }),
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }
@@ -2400,6 +2452,7 @@ impl ModelService for SteeringModel {
                     }),
                 ],
                 usage: None,
+                billing: None,
                 stop_reason: StopReason::ToolUse,
             })
         } else {
@@ -2688,6 +2741,7 @@ impl ModelService for CompactingModel {
             input_tokens: Some(if is_compaction { 100 } else { 50 }),
             output_tokens: Some(if is_compaction { 10 } else { 5 }),
             cached_input_tokens: None,
+            cache_write_input_tokens: None,
             reasoning_tokens: None,
         });
         Ok(response)
@@ -2777,6 +2831,7 @@ impl ModelService for InstructionRefreshingModel {
                     arguments: json!({"city": "Paris"}),
                 })],
                 usage: None,
+                billing: None,
                 stop_reason: StopReason::ToolUse,
             });
         }
@@ -2815,6 +2870,7 @@ impl ModelService for LongRunningToolModel {
                 arguments: json!({"city": "Paris"}),
             })],
             usage: None,
+            billing: None,
             stop_reason: StopReason::ToolUse,
         })
     }
@@ -3428,6 +3484,7 @@ fn text_response(text: &str) -> ModelResponse {
     ModelResponse {
         output: vec![ResponseItem::Text(text.into())],
         usage: None,
+        billing: None,
         stop_reason: StopReason::Completed,
     }
 }

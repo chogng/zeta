@@ -1,5 +1,5 @@
 use super::ActiveConversation;
-use crate::app::input_surface::InputSurface;
+use crate::app::composer_slot::ComposerSlot;
 use crate::app::{App, AppCommand, AppEvent, Status};
 use crate::thread::composer::{
     ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
@@ -162,7 +162,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
         invocation(TuiSlashCommandAction::Status, ""),
         &mut app,
     );
-    assert!(matches!(app.input_surface(), Some(InputSurface::Status(_))));
+    assert!(matches!(app.composer_slot(), Some(ComposerSlot::Status(_))));
     assert!(app.overlay().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
@@ -173,7 +173,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     );
     assert_eq!(app.list_selection().unwrap().title(), "MCP servers");
     assert!(app.list_selection().unwrap().search().is_some());
-    app.update(AppEvent::InputSurfaceClosed);
+    app.update(AppEvent::ComposerSlotClosed);
 
     conversation.execute(
         &mut client,
@@ -182,7 +182,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     );
     assert_eq!(app.list_selection().unwrap().title(), "Connectors");
     assert!(app.list_selection().unwrap().search().is_some());
-    app.update(AppEvent::InputSurfaceClosed);
+    app.update(AppEvent::ComposerSlotClosed);
 
     conversation.execute(
         &mut client,
@@ -404,7 +404,7 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
             preferred_thread_id: None,
         })
     );
-    app.update(AppEvent::InputSurfaceClosed);
+    app.update(AppEvent::ComposerSlotClosed);
 
     conversation.execute(
         &mut client,

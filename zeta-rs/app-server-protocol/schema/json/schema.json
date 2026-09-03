@@ -20385,6 +20385,58 @@
       ],
       "type": "string"
     },
+    "ModelBillingEvidence": {
+      "description": "How the backend established the model identity or service tier used for pricing.",
+      "enum": [
+        "responseField",
+        "responseHeader",
+        "acceptedRequest",
+        "fixedModelIdentity"
+      ],
+      "type": "string"
+    },
+    "ModelBillingRecord": {
+      "description": "Auditable pricing dimensions frozen for one completed provider request.",
+      "properties": {
+        "appliedServiceTier": {
+          "type": "string"
+        },
+        "billingPlatform": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "pricingVariant": {
+          "type": "string"
+        },
+        "rateCardRevision": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "requestedServiceTier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "serviceTierEvidence": {
+          "$ref": "#/$defs/ModelBillingEvidence"
+        }
+      },
+      "required": [
+        "billingPlatform",
+        "operation",
+        "appliedServiceTier",
+        "serviceTierEvidence",
+        "region",
+        "pricingVariant",
+        "rateCardRevision"
+      ],
+      "type": "object"
+    },
     "ModelCapabilities": {
       "properties": {
         "imageDetailOriginal": {
@@ -20537,6 +20589,32 @@
       ],
       "type": "string"
     },
+    "ModelCostLineItem": {
+      "description": "One reproducible token-cost contribution.",
+      "properties": {
+        "amount": {
+          "$ref": "#/$defs/ModelMoneyAmount"
+        },
+        "dimension": {
+          "type": "string"
+        },
+        "quantity": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ratePicoUnitsPerToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimension",
+        "quantity",
+        "ratePicoUnitsPerToken",
+        "amount"
+      ],
+      "type": "object"
+    },
     "ModelId": {
       "type": "string"
     },
@@ -20562,6 +20640,110 @@
       ],
       "type": "object"
     },
+    "ModelInvocationId": {
+      "description": "Stable identity for one request sent to a model provider.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "ModelInvocationOutcome": {
+      "description": "Terminal state of one provider request.",
+      "enum": [
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "ModelInvocationRecord": {
+      "description": "Durable facts for one provider request, independent from its containing Turn.",
+      "properties": {
+        "billing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelBillingRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completedAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inputEstimate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelInputEstimate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invocationId": {
+          "$ref": "#/$defs/ModelInvocationId"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ModelInvocationOutcome"
+        },
+        "referenceCost": {
+          "$ref": "#/$defs/ModelReferenceCostRecord"
+        },
+        "requestedModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolvedModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startedAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "invocationId",
+        "threadId",
+        "turnId",
+        "startedAtUnixMs",
+        "completedAtUnixMs",
+        "outcome",
+        "referenceCost"
+      ],
+      "type": "object"
+    },
     "ModelListResult": {
       "properties": {
         "models": {
@@ -20573,6 +20755,22 @@
       },
       "required": [
         "models"
+      ],
+      "type": "object"
+    },
+    "ModelMoneyAmount": {
+      "description": "Exact monetary amount encoded as a decimal integer to remain lossless in JSON clients.",
+      "properties": {
+        "currency": {
+          "type": "string"
+        },
+        "picoUnits": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "currency",
+        "picoUnits"
       ],
       "type": "object"
     },
@@ -20616,10 +20814,226 @@
       ],
       "type": "object"
     },
+    "ModelReferenceCostReason": {
+      "description": "Why a reference cost is incomplete or unavailable.",
+      "oneOf": [
+        {
+          "properties": {
+            "dimensions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "missingTokenQuantities",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "dimensions"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "dimensions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "missingTokenRates",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "dimensions"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "quantities": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "rates": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "missingQuantitiesAndRates",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "quantities",
+            "rates"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "missingRate",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "missingUsage",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "missingBillingContext",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "subscriptionPlan",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "unresolvedModelAlias",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ModelReferenceCostRecord": {
+      "description": "Lossless persisted result of reference-cost calculation.",
+      "oneOf": [
+        {
+          "properties": {
+            "cost": {
+              "$ref": "#/$defs/RatedModelCost"
+            },
+            "type": {
+              "const": "complete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "cost"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "known_minimum": {
+              "$ref": "#/$defs/RatedModelCost"
+            },
+            "reason": {
+              "$ref": "#/$defs/ModelReferenceCostReason"
+            },
+            "type": {
+              "const": "partial",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "known_minimum",
+            "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "reason": {
+              "$ref": "#/$defs/ModelReferenceCostReason"
+            },
+            "type": {
+              "const": "unpriced",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ModelReferenceCostSummary": {
+      "description": "Reference-cost totals accumulated from durable model invocation facts.\n\n`known_amounts` is sorted by currency. `complete` is false when at least one invocation could\nnot be fully priced, while the known amounts remain useful lower bounds.",
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "knownAmounts": {
+          "items": {
+            "$ref": "#/$defs/ModelMoneyAmount"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "knownAmounts",
+        "complete"
+      ],
+      "type": "object"
+    },
     "ModelUsage": {
       "properties": {
+        "cacheWriteInputTokens": {
+          "default": null,
+          "description": "Input tokens written to a provider prompt cache.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "cachedInputTokens": {
           "default": null,
+          "description": "Input tokens read from a provider prompt cache.",
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -20629,6 +21043,7 @@
         },
         "inputTokens": {
           "default": null,
+          "description": "Total provider-accounted input tokens, including cache reads and cache writes.",
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -20660,6 +21075,13 @@
     "ModelUsageSummary": {
       "description": "Provider-reported usage aggregated across every model response in a Thread or Turn.",
       "properties": {
+        "cacheWriteInputTokens": {
+          "$ref": "#/$defs/ModelUsageTotal",
+          "default": {
+            "complete": true,
+            "reported": 0
+          }
+        },
         "cachedInputTokens": {
           "$ref": "#/$defs/ModelUsageTotal"
         },
@@ -21726,6 +22148,29 @@
         "commandId",
         "expectedRevision",
         "provider"
+      ],
+      "type": "object"
+    },
+    "RatedModelCost": {
+      "description": "A complete or known-minimum reference cost from one immutable rate card.",
+      "properties": {
+        "amount": {
+          "$ref": "#/$defs/ModelMoneyAmount"
+        },
+        "lineItems": {
+          "items": {
+            "$ref": "#/$defs/ModelCostLineItem"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount",
+        "revision",
+        "lineItems"
       ],
       "type": "object"
     },
@@ -23618,6 +24063,10 @@
         "usage": {
           "$ref": "#/$defs/ModelUsageSummary",
           "default": {
+            "cacheWriteInputTokens": {
+              "complete": true,
+              "reported": 0
+            },
             "cachedInputTokens": {
               "complete": true,
               "reported": 0
@@ -25236,6 +25685,13 @@
             }
           ]
         },
+        "referenceCost": {
+          "$ref": "#/$defs/ModelReferenceCostSummary",
+          "default": {
+            "complete": true,
+            "knownAmounts": []
+          }
+        },
         "sequence": {
           "format": "uint64",
           "minimum": 0,
@@ -25262,6 +25718,10 @@
         "usage": {
           "$ref": "#/$defs/ModelUsageSummary",
           "default": {
+            "cacheWriteInputTokens": {
+              "complete": true,
+              "reported": 0
+            },
             "cachedInputTokens": {
               "complete": true,
               "reported": 0
@@ -25869,6 +26329,30 @@
             "type",
             "threadId",
             "turnId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "record": {
+              "$ref": "#/$defs/ModelInvocationRecord"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "modelInvocationRecorded",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "record"
           ],
           "type": "object"
         },
@@ -27909,6 +28393,10 @@
         "usage": {
           "$ref": "#/$defs/ModelUsageSummary",
           "default": {
+            "cacheWriteInputTokens": {
+              "complete": true,
+              "reported": 0
+            },
             "cachedInputTokens": {
               "complete": true,
               "reported": 0

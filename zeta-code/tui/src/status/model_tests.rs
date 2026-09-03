@@ -4,6 +4,9 @@ use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::ModelMoneyAmount;
+use zeta_protocol::ModelReferenceCostSummary;
+use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::StreamInstanceId;
 
 #[test]
@@ -27,6 +30,67 @@ fn status_line_combines_counts_model_branch_and_changes() {
         status_line.policy_text_for_width(100, ApprovalMode::AskPermissions),
         "⏸ ask permissions on"
     );
+}
+
+#[test]
+fn status_line_shows_thread_cache_hit_rate_and_exact_reference_cost() {
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_settings(accounting_settings());
+    let mut usage = ModelUsageSummary::default();
+    usage.model_invocations = 2;
+    usage.input_tokens.reported = 10_000;
+    usage.cached_input_tokens.reported = 7_500;
+    status_line.apply_thread_accounting(
+        &usage,
+        &ModelReferenceCostSummary {
+            known_amounts: vec![ModelMoneyAmount {
+                currency: "USD".into(),
+                pico_units: "10080000000".into(),
+            }],
+            complete: true,
+        },
+    );
+
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        "cache hit 75.0% · cost $0.01008"
+    );
+}
+
+#[test]
+fn status_line_marks_incomplete_thread_accounting_without_inventing_values() {
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_settings(accounting_settings());
+    let mut usage = ModelUsageSummary::default();
+    usage.model_invocations = 2;
+    usage.input_tokens.complete = false;
+    usage.cached_input_tokens.complete = false;
+    status_line.apply_thread_accounting(
+        &usage,
+        &ModelReferenceCostSummary {
+            known_amounts: vec![ModelMoneyAmount {
+                currency: "USD".into(),
+                pico_units: "1000000000".into(),
+            }],
+            complete: false,
+        },
+    );
+
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        "cache hit unknown · cost ≥$0.001"
+    );
+}
+
+fn accounting_settings() -> StatusLineSettings {
+    let mut settings = StatusLineSettings::default();
+    settings.set(StatusLineItem::CacheHitRate, true);
+    settings.set(StatusLineItem::ReferenceCost, true);
+    settings.set(StatusLineItem::Permissions, false);
+    settings.set(StatusLineItem::Model, false);
+    settings.set(StatusLineItem::GitBranch, false);
+    settings.set(StatusLineItem::GitChanges, false);
+    settings
 }
 
 #[test]

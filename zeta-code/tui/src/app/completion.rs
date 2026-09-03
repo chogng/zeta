@@ -167,7 +167,7 @@ pub(super) fn apply_request_completion(
         return;
     }
     match completion {
-        Completion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, app),
+        Completion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, None, app),
         Completion::ConfigRefreshed(Err(error)) => {
             app.update(AppEvent::FailureReported(error));
         }
@@ -273,12 +273,12 @@ pub(super) fn apply_request_completion(
             command,
             result: Ok(update),
         } => {
-            app.update(AppEvent::PreferredModelReceived(update.preferred_model));
+            app.update(AppEvent::ModelSummaryReceived(update.summary));
             app.update(AppEvent::CommandCompleted {
                 command,
                 result: update.notice,
             });
-            app.update(AppEvent::InputSurfaceClosed);
+            app.update(AppEvent::ComposerSlotClosed);
         }
         Completion::PreferredModelUpdated {
             result: Err(error), ..
@@ -451,7 +451,11 @@ pub(super) fn apply_request_completion(
     }
 }
 
-pub(super) fn apply_tui_config(config: ConfigReadResult, app: &mut App) {
+pub(super) fn apply_tui_config(
+    config: ConfigReadResult,
+    model_catalog: Option<&zeta_app_server_protocol::protocol::model::ModelListResult>,
+    app: &mut App,
+) {
     match config::TerminalSettings::from_tui(&config.tui) {
         Ok(settings) => app.update(AppEvent::ConfigSettingsReceived(settings)),
         Err(error) => app.update(AppEvent::FailureReported(error)),
@@ -464,7 +468,9 @@ pub(super) fn apply_tui_config(config: ConfigReadResult, app: &mut App) {
         Ok(settings) => app.update(AppEvent::StatusLineSettingsReceived(settings)),
         Err(error) => app.update(AppEvent::FailureReported(error)),
     }
-    app.update(AppEvent::PreferredModelReceived(config.preferred_model));
+    app.update(AppEvent::ModelSummaryReceived(
+        crate::models::ModelSummary::from_catalog(config.preferred_model, model_catalog),
+    ));
 }
 
 fn report_turn_start_failure(app: &mut App, error: String) {
@@ -568,6 +574,10 @@ fn apply_thread_snapshot_parts(
         session_id: snapshot.session_id.clone(),
         thread_id: snapshot.thread_id.clone(),
     });
+    app.update(AppEvent::ThreadAccountingChanged {
+        usage: snapshot.usage.clone(),
+        reference_cost: snapshot.reference_cost.clone(),
+    });
     app.update(AppEvent::ThreadGoalChanged(snapshot.goal.clone()));
     let active_turn_updates = app.sync_active_turn(&snapshot.turns);
     let active_turn = app.active_turn().cloned();
@@ -627,7 +637,7 @@ fn finish_conversation_change(
     presentation: ConversationCompletionPresentation,
 ) {
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
-        app.update(AppEvent::InputSurfaceClosed);
+        app.update(AppEvent::ComposerSlotClosed);
     }
     if matches!(change.transcript, ConversationTranscript::Clear) {
         app.update(AppEvent::TranscriptCleared);

@@ -6,8 +6,15 @@ use super::RecordToolExecutionStart;
 use super::ThreadController;
 use crate::CoreError;
 use crate::ThreadCommandResult;
+use std::sync::OnceLock;
+use zeta_model_accounting::RateCard;
 use zeta_protocol::ItemId;
+use zeta_protocol::ModelBillingScope;
 use zeta_protocol::ModelInputEstimate;
+use zeta_protocol::ModelInvocationId;
+use zeta_protocol::ModelInvocationOutcome;
+use zeta_protocol::ModelInvocationRecord;
+use zeta_protocol::ModelRef;
 use zeta_protocol::ModelUsage;
 use zeta_protocol::RequestId;
 use zeta_protocol::StreamInstanceId;
@@ -25,46 +32,81 @@ use zeta_protocol::ToolCallBinding;
 
 impl ThreadController {
     /// Durably accounts for one completed provider invocation before its output is consumed.
-    pub(crate) fn record_model_usage(
+    pub(crate) fn record_model_invocation(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
+        requested_model: Option<&ModelRef>,
+        response_billing: Option<&zeta_protocol::ModelResponseBilling>,
+        billing_scope: ModelBillingScope,
         usage: Option<ModelUsage>,
+        input_estimate: Option<ModelInputEstimate>,
+        started_at_unix_ms: u64,
+        completed_at_unix_ms: u64,
     ) -> Result<u64, CoreError> {
+        static RATE_CARD: OnceLock<Result<RateCard, String>> = OnceLock::new();
+        let rate_card = RATE_CARD
+            .get_or_init(|| {
+                RateCard::bundled_accelerated_public_prices().map_err(|error| error.to_string())
+            })
+            .as_ref()
+            .map_err(|error| CoreError::Execution(format!("model accounting failed: {error}")))?;
+        let priced = rate_card
+            .price_invocation(
+                requested_model,
+                response_billing,
+                billing_scope,
+                usage.as_ref(),
+                started_at_unix_ms,
+            )
+            .map_err(|error| CoreError::Execution(format!("model accounting failed: {error}")))?;
+        let invocation_id = ModelInvocationId::new(self.next_identifier("model-invocation"))
+            .expect("generated model invocation ID is non-empty");
+        let record = ModelInvocationRecord {
+            invocation_id,
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
+            requested_model: requested_model.cloned(),
+            resolved_model: priced.resolved_model,
+            billing: priced.billing,
+            started_at_unix_ms,
+            completed_at_unix_ms,
+            outcome: ModelInvocationOutcome::Completed,
+            usage,
+            input_estimate,
+            reference_cost: priced.reference_cost,
+        };
         self.mutate_thread(thread_id, |snapshot| {
             self.record_batch(
                 snapshot,
-                vec![ThreadEvent::ModelUsageRecorded {
+                vec![ThreadEvent::ModelInvocationRecorded {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
-                    usage,
-                    input_estimate: None,
+                    record,
                 }],
             )?;
             Ok(snapshot.sequence)
         })
     }
 
-    /// Durably accounts for one completed provider invocation and its pre-call input estimate.
-    pub(crate) fn record_model_usage_with_input_estimate(
+    #[cfg(test)]
+    pub(crate) fn record_model_usage(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
         usage: Option<ModelUsage>,
-        input_estimate: ModelInputEstimate,
     ) -> Result<u64, CoreError> {
-        self.mutate_thread(thread_id, |snapshot| {
-            self.record_batch(
-                snapshot,
-                vec![ThreadEvent::ModelUsageRecorded {
-                    thread_id: thread_id.clone(),
-                    turn_id: turn_id.clone(),
-                    usage,
-                    input_estimate: Some(input_estimate),
-                }],
-            )?;
-            Ok(snapshot.sequence)
-        })
+        self.record_model_invocation(
+            thread_id,
+            turn_id,
+            None,
+            None,
+            ModelBillingScope::Unavailable,
+            usage,
+            None,
+            0,
+            0,
+        )
     }
 
     /// Completes a Turn that intentionally produced no agent message.

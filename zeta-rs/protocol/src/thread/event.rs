@@ -12,6 +12,7 @@ use crate::FrozenSkillActivation;
 use crate::InteractionCancelReason;
 use crate::ItemId;
 use crate::ModelInputEstimate;
+use crate::ModelInvocationRecord;
 use crate::ModelRef;
 use crate::ModelUsage;
 use crate::PlanUpdate;
@@ -205,6 +206,11 @@ pub enum ThreadEvent {
         #[ts(optional = nullable)]
         input_estimate: Option<ModelInputEstimate>,
     },
+    ModelInvocationRecorded {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        record: ModelInvocationRecord,
+    },
     ItemCompleted {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -337,6 +343,7 @@ impl ThreadEvent {
             Self::TurnSteerDelivered { .. } => "turn.steer_delivered",
             Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
             Self::ModelUsageRecorded { .. } => "model.usage_recorded",
+            Self::ModelInvocationRecorded { .. } => "model.invocation_recorded",
             Self::ItemCompleted { .. } => "item.completed",
             Self::PlanUpdated { .. } => "plan.updated",
             Self::InteractionRequested { .. } => "interaction.requested",
@@ -384,6 +391,7 @@ impl ThreadEvent {
             | Self::TurnSteerDelivered { thread_id, .. }
             | Self::TurnExecutionAttempted { thread_id, .. }
             | Self::ModelUsageRecorded { thread_id, .. }
+            | Self::ModelInvocationRecorded { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }
             | Self::PlanUpdated { thread_id, .. }
             | Self::InteractionRequested { thread_id, .. }

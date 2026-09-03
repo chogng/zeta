@@ -2269,6 +2269,7 @@ impl ModelService for CountingModel {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(format!("answer: {prompt}"))],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }
@@ -2295,6 +2296,7 @@ impl ModelService for AppServerSteeringModel {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(format!("response-{call}"))],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }
@@ -2373,6 +2375,7 @@ impl ModelService for RecordingModel {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text("done".into())],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }
@@ -3708,12 +3711,14 @@ impl ModelService for AppServerInteractiveModel {
                     arguments: serde_json::json!({}),
                 })],
                 usage: None,
+                billing: None,
                 stop_reason: StopReason::ToolUse,
             });
         }
         Ok(ModelResponse {
             output: vec![ResponseItem::Text("done".into())],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }

@@ -10,7 +10,7 @@ mod event_loop;
 mod event_pump;
 mod frame;
 mod help;
-mod input_surface;
+mod composer_slot;
 mod layout;
 mod recovery;
 mod redraw;
@@ -29,6 +29,6 @@ pub(crate) use completion::apply_active_turn_snapshot;
 pub(crate) use event::AppEvent;
 pub(crate) use event_loop::run;
 #[cfg(test)]
-pub(crate) use input_surface::InputSurface;
+pub(crate) use composer_slot::ComposerSlot;
 pub(crate) use state::App;
 pub(crate) use state::Status;

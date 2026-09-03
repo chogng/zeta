@@ -261,7 +261,7 @@ impl ActiveConversation {
                         .map_err(|error| CommandExecutionError(error.to_string()))?;
                     output
                         .events
-                        .push(AppEvent::PreferredModelReceived(update.preferred_model));
+                        .push(AppEvent::ModelSummaryReceived(update.summary));
                     output.events.push(AppEvent::ProductNotice(update.notice));
                 }
             }

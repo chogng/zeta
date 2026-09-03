@@ -234,6 +234,7 @@ impl TranscriptAccumulator {
             | ThreadEvent::TurnSteerDelivered { .. }
             | ThreadEvent::TurnExecutionAttempted { .. }
             | ThreadEvent::ModelUsageRecorded { .. }
+            | ThreadEvent::ModelInvocationRecorded { .. }
             | ThreadEvent::InteractionRequested { .. }
             | ThreadEvent::InteractionResolved { .. }
             | ThreadEvent::ToolExecutionStarted { .. }

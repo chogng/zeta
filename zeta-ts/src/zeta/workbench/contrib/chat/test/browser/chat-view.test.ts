@@ -1816,6 +1816,7 @@ function emptyUsage(): Thread["usage"] {
 		inputTokens: { reported: 0, complete: true },
 		outputTokens: { reported: 0, complete: true },
 		cachedInputTokens: { reported: 0, complete: true },
+		cacheWriteInputTokens: { reported: 0, complete: true },
 		reasoningTokens: { reported: 0, complete: true },
 	};
 }

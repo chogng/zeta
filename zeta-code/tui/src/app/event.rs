@@ -7,6 +7,7 @@ use crate::keymap::KeymapEditorUpdate;
 use crate::keymap::KeymapSettings;
 use crate::mcp::McpChoices;
 use crate::models::ModelChoices;
+use crate::models::ModelSummary;
 use crate::render::RenderTheme;
 use crate::sessions::SessionChoices;
 use crate::skills::SkillChoices;
@@ -23,12 +24,13 @@ use crate::thread::queue::QueueId;
 use crate::thread::rewind::RewindChoices;
 #[cfg(test)]
 use crate::widgets::list_selection::ListSelectionModel;
-use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::skills::SkillDiagnosticDto;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use zeta_file_search::PathSearchSnapshot;
+use zeta_protocol::ModelReferenceCostSummary;
+use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::PlanUpdate;
 use zeta_protocol::RequestId;
 use zeta_protocol::Session;
@@ -60,7 +62,7 @@ pub(crate) enum AppEvent {
     },
     ConnectorPickerOpened(ConnectorChoices),
     ConnectorPickerUpdated(ConnectorChoices),
-    PreferredModelReceived(Option<ModelRefDto>),
+    ModelSummaryReceived(ModelSummary),
     FailureReported(String),
     FileSearchSnapshotReceived(PathSearchSnapshot),
     GitStatusReceived(GitStatusResult),
@@ -90,9 +92,13 @@ pub(crate) enum AppEvent {
         session_id: SessionId,
         thread_id: ThreadId,
     },
+    ThreadAccountingChanged {
+        usage: ModelUsageSummary,
+        reference_cost: ModelReferenceCostSummary,
+    },
     ThreadGoalChanged(Option<ThreadGoal>),
     StatusPanelOpened(StatusPanel),
-    InputSurfaceClosed,
+    ComposerSlotClosed,
     #[cfg(test)]
     HelpOpened(ListSelectionModel),
     SkillSettingsOpened(SkillChoices),

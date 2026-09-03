@@ -293,6 +293,7 @@ fn thread(ids: &TestIds, sequence: u64, turns: Vec<Turn>) -> Thread {
         status: ThreadStatus::Active,
         sequence,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns,
     }

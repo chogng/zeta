@@ -178,6 +178,7 @@ impl ModelService for PlanModel {
         Ok(ModelResponse {
             output,
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }

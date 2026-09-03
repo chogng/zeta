@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use crate::ImageAttachmentRef;
+use crate::ModelId;
 use crate::ReasoningEffort;
 use crate::ToolCallId;
 use crate::ToolName;
@@ -356,7 +357,21 @@ pub struct ReasoningConfig {
 pub struct ModelResponse {
     pub output: Vec<ResponseItem>,
     pub usage: Option<ModelUsage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing: Option<ModelResponseBilling>,
     pub stop_reason: StopReason,
+}
+
+/// Provider-returned facts that can change how one response is billed.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelResponseBilling {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub resolved_model: Option<ModelId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub applied_service_tier: Option<String>,
 }
 
 impl ModelResponse {
@@ -401,15 +416,21 @@ pub enum ModelStreamEvent {
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelUsage {
+    /// Total provider-accounted input tokens, including cache reads and cache writes.
     #[serde(default)]
     #[ts(type = "number | null")]
     pub input_tokens: Option<u64>,
     #[serde(default)]
     #[ts(type = "number | null")]
     pub output_tokens: Option<u64>,
+    /// Input tokens read from a provider prompt cache.
     #[serde(default)]
     #[ts(type = "number | null")]
     pub cached_input_tokens: Option<u64>,
+    /// Input tokens written to a provider prompt cache.
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub cache_write_input_tokens: Option<u64>,
     #[serde(default)]
     #[ts(type = "number | null")]
     pub reasoning_tokens: Option<u64>,
@@ -487,6 +508,8 @@ pub struct ModelUsageSummary {
     pub input_tokens: ModelUsageTotal,
     pub output_tokens: ModelUsageTotal,
     pub cached_input_tokens: ModelUsageTotal,
+    #[serde(default)]
+    pub cache_write_input_tokens: ModelUsageTotal,
     pub reasoning_tokens: ModelUsageTotal,
 }
 
@@ -504,6 +527,9 @@ impl ModelUsageSummary {
             cached_input_tokens: self
                 .cached_input_tokens
                 .checked_record(usage.and_then(|usage| usage.cached_input_tokens))?,
+            cache_write_input_tokens: self
+                .cache_write_input_tokens
+                .checked_record(usage.and_then(|usage| usage.cache_write_input_tokens))?,
             reasoning_tokens: self
                 .reasoning_tokens
                 .checked_record(usage.and_then(|usage| usage.reasoning_tokens))?,

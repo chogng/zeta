@@ -44,6 +44,8 @@ fn detail_list_wraps_long_values_instead_of_truncating_them() {
     );
     let mut terminal = Terminal::new(TestBackend::new(24, 7)).unwrap();
 
+    assert!(detail.desired_height_for_width(20) > detail.desired_height_for_width(80));
+
     terminal
         .draw(|frame| {
             draw_scrolled(frame, frame.area(), &detail, 0, test_context());

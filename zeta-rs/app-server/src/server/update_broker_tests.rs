@@ -328,6 +328,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
         status: zeta_protocol::ThreadStatus::Active,
         sequence: 0,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: Vec::new(),
     };

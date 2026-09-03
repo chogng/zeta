@@ -34,6 +34,7 @@ use zeta_protocol::ModelContextUsage;
 use zeta_protocol::ModelContextUsageSource;
 use zeta_protocol::ModelInputEstimate;
 use zeta_protocol::ModelRef;
+use zeta_protocol::ModelReferenceCostSummary;
 use zeta_protocol::ModelUsage;
 use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::PlanUpdate;
@@ -76,6 +77,7 @@ pub struct ThreadSnapshot {
     pub turn_execution_binding: Option<TurnExecutionBinding>,
     pub sequence: u64,
     pub usage: ModelUsageSummary,
+    pub reference_cost: ModelReferenceCostSummary,
     pub goal: Option<zeta_protocol::ThreadGoal>,
     /// The Turn that crossed a Goal budget. This is derived from the event log and lets the
     /// remainder of that in-flight Turn be accounted without charging later Turns.
@@ -161,6 +163,7 @@ impl ThreadSnapshot {
             status: self.status,
             sequence: self.sequence,
             usage: self.usage.clone(),
+            reference_cost: self.reference_cost.clone(),
             goal: self.goal.clone(),
             turns: self
                 .turns
@@ -364,6 +367,7 @@ pub fn reduce_thread_event(
                     turn_execution_binding: None,
                     sequence: envelope.sequence,
                     usage: ModelUsageSummary::default(),
+                    reference_cost: ModelReferenceCostSummary::default(),
                     goal: None,
                     goal_budget_limited_turn_id: None,
                     context_calibrations: Vec::new(),
@@ -553,73 +557,37 @@ pub fn reduce_thread_event(
             ..
         } => {
             require_no_command(envelope)?;
-            let next_thread_usage =
-                snapshot
-                    .usage
-                    .checked_record(usage.as_ref())
-                    .ok_or_else(|| {
-                        CoreError::Journal("Thread model usage aggregate overflowed".into())
-                    })?;
-            let turn_index = snapshot
-                .turns
-                .iter()
-                .position(|turn| &turn.turn_id == turn_id)
-                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
-            let turn = &snapshot.turns[turn_index];
-            if turn.status == TurnStatus::Created {
+            apply_model_usage(
+                &mut snapshot,
+                turn_id,
+                usage.as_ref(),
+                input_estimate.as_ref(),
+            )?;
+            snapshot.reference_cost = snapshot.reference_cost.record_unpriced();
+        }
+        ThreadEvent::ModelInvocationRecorded {
+            thread_id,
+            turn_id,
+            record,
+        } => {
+            require_no_command(envelope)?;
+            if &record.thread_id != thread_id || &record.turn_id != turn_id {
                 return Err(CoreError::Journal(
-                    "model usage requires a Turn that has started execution".into(),
+                    "model invocation identity does not match its Thread event".into(),
                 ));
             }
-            let next_turn_usage = turn.usage.checked_record(usage.as_ref()).ok_or_else(|| {
-                CoreError::Journal("Turn model usage aggregate overflowed".into())
-            })?;
-            let context_usage = model_context_usage(usage.as_ref(), input_estimate.as_ref())?;
-            let next_calibrations = match input_estimate {
-                Some(estimate) => {
-                    let model = turn.model.as_ref().ok_or_else(|| {
-                        CoreError::Journal(
-                            "context calibration requires a frozen selected model".into(),
-                        )
-                    })?;
-                    Some(
-                        next_context_calibrations(
-                            &snapshot.context_calibrations,
-                            model,
-                            estimate,
-                            usage.as_ref(),
-                        )
-                        .map_err(|error| CoreError::Journal(error.to_string()))?,
-                    )
-                }
-                None => None,
-            };
-            snapshot.turns[turn_index].usage = next_turn_usage;
-            snapshot.turns[turn_index].context_usage = context_usage;
-            snapshot.usage = next_thread_usage;
-            if let Some(goal) = snapshot.goal.as_mut() {
-                let account_usage = goal.status.allows_usage_accounting()
-                    && (goal.status != zeta_protocol::ThreadGoalStatus::BudgetLimited
-                        || snapshot.goal_budget_limited_turn_id.as_ref() == Some(turn_id));
-                if account_usage {
-                    goal.tokens_used = goal
-                        .tokens_used
-                        .checked_add(goal_token_delta(usage.as_ref()))
-                        .ok_or_else(|| {
-                            CoreError::Journal("Thread Goal token usage overflowed".into())
-                        })?;
-                    if goal
-                        .token_budget
-                        .is_some_and(|budget| goal.tokens_used >= budget)
-                    {
-                        goal.status = zeta_protocol::ThreadGoalStatus::BudgetLimited;
-                        snapshot.goal_budget_limited_turn_id = Some(turn_id.clone());
-                    }
-                }
-            }
-            if let Some(next_calibrations) = next_calibrations {
-                snapshot.context_calibrations = next_calibrations;
-            }
+            apply_model_usage(
+                &mut snapshot,
+                turn_id,
+                record.usage.as_ref(),
+                record.input_estimate.as_ref(),
+            )?;
+            snapshot.reference_cost = snapshot
+                .reference_cost
+                .checked_record(&record.reference_cost)
+                .ok_or_else(|| {
+                    CoreError::Journal("Thread reference cost aggregate is invalid".into())
+                })?;
         }
         ThreadEvent::AgentContextSeedCommitted { seed, .. } => {
             require_no_command(envelope)?;
@@ -2458,6 +2426,71 @@ fn validate_goal_identity(
         ));
     }
     goal.validate().map_err(CoreError::Journal)
+}
+
+fn apply_model_usage(
+    snapshot: &mut ThreadSnapshot,
+    turn_id: &TurnId,
+    usage: Option<&zeta_protocol::ModelUsage>,
+    input_estimate: Option<&zeta_protocol::ModelInputEstimate>,
+) -> Result<(), CoreError> {
+    let next_thread_usage = snapshot
+        .usage
+        .checked_record(usage)
+        .ok_or_else(|| CoreError::Journal("Thread model usage aggregate overflowed".into()))?;
+    let turn_index = snapshot
+        .turns
+        .iter()
+        .position(|turn| &turn.turn_id == turn_id)
+        .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+    let turn = &snapshot.turns[turn_index];
+    if turn.status == TurnStatus::Created {
+        return Err(CoreError::Journal(
+            "model usage requires a Turn that has started execution".into(),
+        ));
+    }
+    let next_turn_usage = turn
+        .usage
+        .checked_record(usage)
+        .ok_or_else(|| CoreError::Journal("Turn model usage aggregate overflowed".into()))?;
+    let context_usage = model_context_usage(usage, input_estimate)?;
+    let next_calibrations = match input_estimate {
+        Some(estimate) => {
+            let model = turn.model.as_ref().ok_or_else(|| {
+                CoreError::Journal("context calibration requires a frozen selected model".into())
+            })?;
+            Some(
+                next_context_calibrations(&snapshot.context_calibrations, model, estimate, usage)
+                    .map_err(|error| CoreError::Journal(error.to_string()))?,
+            )
+        }
+        None => None,
+    };
+    snapshot.turns[turn_index].usage = next_turn_usage;
+    snapshot.turns[turn_index].context_usage = context_usage;
+    snapshot.usage = next_thread_usage;
+    if let Some(goal) = snapshot.goal.as_mut() {
+        let account_usage = goal.status.allows_usage_accounting()
+            && (goal.status != zeta_protocol::ThreadGoalStatus::BudgetLimited
+                || snapshot.goal_budget_limited_turn_id.as_ref() == Some(turn_id));
+        if account_usage {
+            goal.tokens_used = goal
+                .tokens_used
+                .checked_add(goal_token_delta(usage))
+                .ok_or_else(|| CoreError::Journal("Thread Goal token usage overflowed".into()))?;
+            if goal
+                .token_budget
+                .is_some_and(|budget| goal.tokens_used >= budget)
+            {
+                goal.status = zeta_protocol::ThreadGoalStatus::BudgetLimited;
+                snapshot.goal_budget_limited_turn_id = Some(turn_id.clone());
+            }
+        }
+    }
+    if let Some(next_calibrations) = next_calibrations {
+        snapshot.context_calibrations = next_calibrations;
+    }
+    Ok(())
 }
 
 fn goal_token_delta(usage: Option<&zeta_protocol::ModelUsage>) -> u64 {

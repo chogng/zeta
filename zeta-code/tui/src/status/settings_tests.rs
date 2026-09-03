@@ -7,10 +7,18 @@ use super::StatusLineItem;
 use super::StatusLineSettings;
 
 #[test]
-fn missing_status_line_uses_every_item_in_default_order() {
+fn missing_status_line_keeps_accounting_items_opt_in() {
     let settings = StatusLineSettings::from_tui(&FrontendConfigDto::default()).unwrap();
 
-    assert_eq!(settings.items().collect::<Vec<_>>(), StatusLineItem::ALL);
+    assert_eq!(
+        settings.items().collect::<Vec<_>>(),
+        vec![
+            StatusLineItem::Permissions,
+            StatusLineItem::Model,
+            StatusLineItem::GitBranch,
+            StatusLineItem::GitChanges,
+        ]
+    );
 }
 
 #[test]
@@ -39,6 +47,25 @@ fn writing_status_line_preserves_other_tui_values() {
     assert_eq!(
         written.0.get("statusLine"),
         Some(&json!(["permissions", "model", "git-branch"]))
+    );
+}
+
+#[test]
+fn accounting_items_round_trip_when_enabled() {
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "statusLine".into(),
+        json!(["cache-hit-rate", "reference-cost"]),
+    )]));
+
+    let settings = StatusLineSettings::from_tui(&section).unwrap();
+
+    assert_eq!(
+        settings.items().collect::<Vec<_>>(),
+        vec![StatusLineItem::CacheHitRate, StatusLineItem::ReferenceCost]
+    );
+    assert_eq!(
+        settings.write_to_tui(&FrontendConfigDto::default()),
+        section
     );
 }
 

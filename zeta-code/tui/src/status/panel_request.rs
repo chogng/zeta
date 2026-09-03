@@ -49,6 +49,8 @@ where
             .map(u64::from),
         available_context_window: available,
         remaining_context_window: remaining,
+        usage: &thread.usage,
+        reference_cost: &thread.reference_cost,
         session_id: scope.session_id.as_str(),
         thread_id: scope.thread_id.as_str(),
         thread_sequence: thread.sequence,

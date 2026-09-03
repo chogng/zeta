@@ -793,9 +793,14 @@ fn provider_preflight_failure_falls_back_to_the_local_counter() {
 
 #[test]
 fn model_provider_resolves_runtime_from_declarative_config() {
-    let transport = Arc::new(CapturingTransport::new(completion_response(
-        "Unified runtime",
-    )));
+    let mut provider_response = completion_response("Unified runtime");
+    provider_response["usage"] = json!({
+        "prompt_tokens": 100,
+        "prompt_cache_hit_tokens": 75,
+        "prompt_cache_miss_tokens": 25,
+        "completion_tokens": 10
+    });
+    let transport = Arc::new(CapturingTransport::new(provider_response));
     let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
     let model_provider: &dyn ModelProvider = &runtime;
 
@@ -806,7 +811,9 @@ fn model_provider_resolves_runtime_from_declarative_config() {
         ))
         .unwrap();
 
-    assert_eq!(invoke_text(model.as_ref(), "hello"), "Unified runtime");
+    let response = model.invoke(&ModelRequest::text("hello")).unwrap();
+    assert_eq!(response.text(), "Unified runtime");
+    assert_eq!(response.usage.unwrap().cached_input_tokens, Some(75));
     let (endpoint, _, request) = transport.request.lock().unwrap().clone().unwrap();
     assert_eq!(endpoint, "https://example.test/v1/chat/completions");
     assert_eq!(request["model"], "deepseek-v4-pro");

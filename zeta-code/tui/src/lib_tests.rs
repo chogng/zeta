@@ -105,6 +105,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         status: ThreadStatus::Active,
         sequence: 3,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![turn.clone()],
     };

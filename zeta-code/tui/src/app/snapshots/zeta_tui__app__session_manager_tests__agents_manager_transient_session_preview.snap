@@ -2,20 +2,20 @@
 source: zeta-code/tui/src/app/session_manager_tests.rs
 expression: render(&app)
 ---
-  ┌───────── Zeta Code v0.1.0 ───────────────────────────────────────────────────────────────────┐
-  │                                   │  Tips for getting started                                │
-  │            Welcome back!          │  Use @ to mention workspace files and / to discover      │
-  │                                   │  commands.                                               │
-  │               ╭─────╮             │  ──────────────────────────────────────────────────────  │
-  │               │  ζ  │             │  Try asking                                              │
-  │               ╰─┬─┬─╯             │  “Explain how this workspace is structured.”             │
-  │                                   │  “Implement the change and run the relevant tests.”      │
-  │         Ready when you are        │                                                          │
-  │                  .                │                                                          │
-  └──────────────────────────────────────────────────────────────────────────────────────────────┘
+   ▀▙▄▄▄▟▀    Zeta Code v0.1.0
+  ▐███████▌   Automatic model · Access unknown
+   ▝█▀▀▀█▘    .
 
 Idle (1)
 > ○ Snapshot session
+
+
+
+
+
+
+
+
 
 
 

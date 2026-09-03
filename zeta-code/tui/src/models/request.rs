@@ -1,4 +1,5 @@
 use super::ModelChoices;
+use super::ModelSummary;
 use super::model_choices;
 use crate::client::new_command_id;
 use std::fmt;
@@ -10,7 +11,7 @@ use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_protocol::Patch;
 
 pub(crate) struct PreferredModelUpdate {
-    pub(crate) preferred_model: Option<ModelRefDto>,
+    pub(crate) summary: ModelSummary,
     pub(crate) notice: String,
 }
 
@@ -79,14 +80,12 @@ where
         tui: Patch::Missing,
     })?;
     let config = client.read_config()?;
+    let summary = ModelSummary::from_catalog(config.preferred_model, None);
     let notice = format!(
         "Preferred model: {}",
-        preferred_model_label(config.preferred_model.as_ref())
+        preferred_model_label(summary.preferred_model())
     );
-    Ok(PreferredModelUpdate {
-        preferred_model: config.preferred_model,
-        notice,
-    })
+    Ok(PreferredModelUpdate { summary, notice })
 }
 
 pub(crate) fn preferred_model_label(model: Option<&ModelRefDto>) -> String {

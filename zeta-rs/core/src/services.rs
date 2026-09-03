@@ -16,6 +16,7 @@ use zeta_action_policy::ReviewEvidence;
 use zeta_async_utils::CancellationToken;
 use zeta_protocol::ActionApprovalRequest;
 use zeta_protocol::InteractionCancelReason;
+use zeta_protocol::ModelBillingScope;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ModelRequest;
 use zeta_protocol::ModelResponse;
@@ -134,6 +135,11 @@ pub enum ModelSelection<'a> {
 /// Thread state or mutable product configuration. Implementations should observe `cancellation`
 /// before beginning expensive work and at every safe checkpoint supported by their transport.
 pub trait ModelService: Send + Sync {
+    /// Returns the verified billing surface for the selected immutable runtime.
+    fn billing_scope(&self, _: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
+        Ok(ModelBillingScope::Unavailable)
+    }
+
     /// Returns the immutable context budget for the selected model invocation.
     ///
     /// Implementations should return a Core-managed budget only when the model window and product

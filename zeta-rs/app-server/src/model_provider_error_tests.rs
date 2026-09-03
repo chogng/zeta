@@ -203,11 +203,13 @@ impl ModelInvoker for RecoveringOverflowProviderInvoker {
             1 => Ok(ModelResponse {
                 output: vec![ResponseItem::Text("provider checkpoint".into())],
                 usage: None,
+                billing: None,
                 stop_reason: StopReason::Completed,
             }),
             2 => Ok(ModelResponse {
                 output: vec![ResponseItem::Text("recovered answer".into())],
                 usage: None,
+                billing: None,
                 stop_reason: StopReason::Completed,
             }),
             _ => panic!("provider overflow recovery invoked the model more than three times"),

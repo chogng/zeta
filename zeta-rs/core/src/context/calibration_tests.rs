@@ -62,6 +62,7 @@ fn missing_provider_input_usage_does_not_create_calibration() {
         input_tokens: None,
         output_tokens: Some(4),
         cached_input_tokens: Some(90),
+        cache_write_input_tokens: None,
         reasoning_tokens: None,
     };
     let calibrations = next_context_calibrations(
@@ -126,6 +127,7 @@ fn usage(input_tokens: u64) -> ModelUsage {
         input_tokens: Some(input_tokens),
         output_tokens: Some(1),
         cached_input_tokens: Some(0),
+        cache_write_input_tokens: Some(0),
         reasoning_tokens: None,
     }
 }

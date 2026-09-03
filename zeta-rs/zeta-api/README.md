@@ -91,7 +91,7 @@ native `generateContentRequest`。本 crate 不把 exact/estimated 契约编码�
 `zeta-model-provider` adapter 声明。普通 Chat Completions 没有标准 count endpoint，不能把任意
 compatible provider 自动当作可计量。
 
-三套 codec 都处理 canonical messages、tools、tool choice、reasoning、usage 和 stop reason，但
+三套 codec 都处理 canonical messages、tools、tool choice、reasoning、usage、响应模型、实际服务等级和 stop reason，但
 只共享 mechanical helpers；不能因为 JSON 外形相似就合并 protocol-specific semantics。
 
 ## 流式处理解码器
@@ -139,7 +139,7 @@ end of stream
 三种 endpoint 都由 `ApiEndpoint::stream_with_client_and_cancellation` 发起原生 wire stream，经过
 `zeta-client` framing 后边解码边投递 canonical delta，并返回权威 terminal `ModelResponse`。
 
-Anthropic request builder 在 wire clone 上为最后一个 tool、system content 末尾和 `prompt_cache_prefix_end` 指定的消息末尾添加 ephemeral cache control；OpenAI Responses 映射 `prompt_cache_key`。adapter 不修改 canonical `ModelRequest`，读取到的缓存 token 统一进入 `ModelUsage.cached_input_tokens`。Core 如何选择 key 和可复用前缀见[上下文系统](../../docs/core-context.md#9-上下文窗口与供应商变更)。
+Anthropic request builder 在 wire clone 上为最后一个 tool、system content 末尾和 `prompt_cache_prefix_end` 指定的消息末尾添加 ephemeral cache control；OpenAI Responses 映射 `prompt_cache_key`。adapter 不修改 canonical `ModelRequest`。`ModelUsage.input_tokens` 统一表示包含缓存读写的总输入，缓存读取与写入分别进入 `cached_input_tokens` 和 `cache_write_input_tokens`；Anthropic 组合三类输入，DeepSeek 使用独立的 Chat usage 档案读取顶层 hit 字段。Core 如何选择 key 和可复用前缀见[上下文系统](../../docs/core-context.md#9-上下文窗口与供应商变更)。
 
 ## 错误语义
 

@@ -759,11 +759,23 @@ use zeta_protocol::InteractionCancelReason;
 use zeta_protocol::InteractionDeadline;
 use zeta_protocol::ItemDelta;
 use zeta_protocol::ModelAccess;
+use zeta_protocol::ModelBillingEvidence;
+use zeta_protocol::ModelBillingRecord;
+use zeta_protocol::ModelBillingScope;
 use zeta_protocol::ModelCapabilities;
 use zeta_protocol::ModelContextUsage;
 use zeta_protocol::ModelContextUsageSource;
+use zeta_protocol::ModelCostLineItem;
+use zeta_protocol::ModelId;
 use zeta_protocol::ModelInputEstimate;
+use zeta_protocol::ModelInvocationId;
+use zeta_protocol::ModelInvocationOutcome;
+use zeta_protocol::ModelInvocationRecord;
+use zeta_protocol::ModelMoneyAmount;
 use zeta_protocol::ModelOutputTransport;
+use zeta_protocol::ModelReferenceCostReason;
+use zeta_protocol::ModelReferenceCostRecord;
+use zeta_protocol::ModelReferenceCostSummary;
 use zeta_protocol::ModelUsage;
 use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::ModelUsageTotal;
@@ -775,6 +787,7 @@ use zeta_protocol::PlanUpdate;
 use zeta_protocol::ProcessExecutionOutput;
 use zeta_protocol::ProcessExitStatus;
 use zeta_protocol::ProjectId;
+use zeta_protocol::RatedModelCost;
 use zeta_protocol::ReasoningEffort;
 use zeta_protocol::RequestUserInput;
 use zeta_protocol::RequestUserInputResponse;
@@ -2979,6 +2992,19 @@ typescript_bindings! {
     ModelUsage,
     ModelUsageTotal,
     ModelUsageSummary,
+    ModelBillingEvidence,
+    ModelBillingRecord,
+    ModelBillingScope,
+    ModelCostLineItem,
+    ModelId,
+    ModelInvocationId,
+    ModelInvocationOutcome,
+    ModelInvocationRecord,
+    ModelMoneyAmount,
+    ModelReferenceCostReason,
+    ModelReferenceCostRecord,
+    ModelReferenceCostSummary,
+    RatedModelCost,
     ToolMode,
     ToolProfileSnapshot,
     ReviewTarget,

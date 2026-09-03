@@ -1,0 +1,21 @@
+[package]
+name = "zeta-model-accounting"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_model_accounting"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+zeta-protocol = { workspace = true }
+
+[lints]
+workspace = true

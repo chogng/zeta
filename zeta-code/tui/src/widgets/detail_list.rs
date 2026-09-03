@@ -51,6 +51,17 @@ impl DetailList {
             .sum::<usize>();
         u16::try_from(content_rows.saturating_add(3)).unwrap_or(u16::MAX)
     }
+
+    pub(crate) fn desired_height_for_width(&self, content_width: u16) -> u16 {
+        u16::try_from(self.content_height(content_width).saturating_add(3)).unwrap_or(u16::MAX)
+    }
+
+    pub(crate) fn content_height(&self, content_width: u16) -> usize {
+        crate::render::wrapped_height(
+            &detail_lines(self, Style::default(), Style::default()),
+            content_width,
+        )
+    }
 }
 
 use crate::render::RenderContext;
@@ -76,19 +87,11 @@ pub(crate) fn draw_scrolled(
     scroll: u16,
     context: RenderContext<'_>,
 ) {
-    let lines = detail
-        .rows()
-        .iter()
-        .flat_map(|row| {
-            let label = format!("{}: ", row.label());
-            let continuation = " ".repeat(label.width());
-            prefix_lines(
-                styled_text_lines(row.value(), Style::default().fg(context.muted())),
-                Span::styled(label, Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(continuation),
-            )
-        })
-        .collect::<Vec<Line<'_>>>();
+    let lines = detail_lines(
+        detail,
+        Style::default().add_modifier(Modifier::BOLD),
+        Style::default().fg(context.muted()),
+    );
     frame.render_widget(
         Paragraph::new(lines)
             .wrap(Wrap { trim: false })
@@ -101,6 +104,26 @@ pub(crate) fn draw_scrolled(
             ),
         horizontal_margin(area, 2),
     );
+}
+
+fn detail_lines<'a>(
+    detail: &'a DetailList,
+    label_style: Style,
+    value_style: Style,
+) -> Vec<Line<'a>> {
+    detail
+        .rows()
+        .iter()
+        .flat_map(|row| {
+            let label = format!("{}: ", row.label());
+            let continuation = " ".repeat(label.width());
+            prefix_lines(
+                styled_text_lines(row.value(), value_style),
+                Span::styled(label, label_style),
+                Span::raw(continuation),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

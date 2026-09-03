@@ -11299,6 +11299,7 @@ dependencies = [
  "zeta-execpolicy",
  "zeta-extension-api",
  "zeta-history",
+ "zeta-model-accounting",
  "zeta-prompts",
  "zeta-protocol",
  "zeta-sandboxing",
@@ -11827,6 +11828,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-model-accounting"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+ "zeta-protocol",
+]
+
+[[package]]
 name = "zeta-model-provider"
 version = "0.1.0"
 dependencies = [
@@ -12215,6 +12227,17 @@ dependencies = [
 [[package]]
 name = "zeta-slash-launcher"
 version = "0.1.0"
+
+[[package]]
+name = "zeta-sprite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "image",
+ "resvg",
+ "tempfile",
+]
 
 [[package]]
 name = "zeta-state"

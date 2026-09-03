@@ -64,6 +64,7 @@ impl ModelInvoker for RecordingInvoker {
                 r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
             )],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }
@@ -76,6 +77,7 @@ impl ModelInvoker for StaticResponseInvoker {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(self.0.clone())],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }

@@ -85,7 +85,7 @@ zeta-code/tui/
 │   │   ├── event_pump.rs
 │   │   ├── frame.rs
 │   │   ├── layout.rs
-│   │   ├── input_surface.rs
+│   │   ├── composer_slot.rs
 │   │   ├── recovery.rs
 │   │   ├── redraw.rs
 │   │   └── requests.rs
@@ -226,7 +226,7 @@ enum AppCommand {
 
 ### 输入位置
 
-`InputSurface` 表示 Session 页面输入位置当前显示什么，而不是一个新的产品状态机。它可以承载普通 Thread composer、Approval、Status 面板、Config editor、Theme picker 等互斥界面，但不能解释这些界面的内部结果。Status 面板固定占用 8 行，属于普通布局而不是 Overlay。
+`ComposerSlot` 表示 Session 页面输入位置当前显示什么，而不是一个新的产品状态机。它可以承载普通 Thread composer、Approval、Status 面板、Config editor、Theme picker 等互斥界面，但不能解释这些界面的内部结果。Status 面板按内容申请高度；布局在空间不足时压缩它并至少保留 4 行正文，面板在获得的视口内滚动。它属于普通布局而不是 Overlay。
 
 每个具体界面自己处理按键、粘贴、期望高度、绘制和命中，并产生自己的类型化 outcome。`app/` 只负责
 打开、替换和关闭输入位置内容。
@@ -291,16 +291,44 @@ generation 和结果安装。
 
 `thread/transcript/` 拥有正文从协议输入到可见单元的完整流程：
 
-```text
-snapshot / update
-  → ordered transcript cells
-  → cell revision
-  → bounded render cache
-  → visible rows and pointer targets
+| 用户看到的内容 | 内部单元 | 更新方式 | 输出责任 |
+| --- | --- | --- | --- |
+| 用户消息、Agent 回复、思考、Plan、提示和错误 | 内容单元（计划类型 `ContentCell`） | 根据稳定的正文条目标识插入或更新 | 输出角色标记、正文、可选的展开摘要和详情动作 |
+| 用户直接提交的本地命令 | 本地命令单元（计划类型 `LocalCommandCell`） | 在提交、运行和完成之间原位更新 | 输出命令、运行状态和结果，并保留“用户输入”身份 |
+| Agent 发起的工具或命令执行 | 执行单元 `ExecCell` | 按 Tool Call 标识聚合开始、`stdout`、`stderr` 和结果，运行到完成始终更新同一单元 | 输出执行摘要、状态、有界预览、完整详情和可点击动作 |
+
+```mermaid
+flowchart TD
+    A[App Server snapshot 或增量更新] --> B[一个有序 TranscriptCell 集合]
+    B --> C{单元类型}
+    C --> D[ContentCell]
+    C --> E[LocalCommandCell]
+    C --> F[ExecCell]
+    D --> G[同一份可缓存绘制结果]
+    E --> G
+    F --> G
+    G --> H[Transcript 计算行高和可见范围]
+    H --> I[绘制可见行]
+    H --> J[解析展开、详情等命中目标]
 ```
 
 流式 batch、正文单元、命令输出归组、Markdown 转换、滚动、分页和缓存失效必须在同一个负责人内。
 `app/` 只决定正文区获得多少空间，不理解正文内容。
+
+正文单元的输出契约固定为：
+
+- `TranscriptCell` 保留稳定身份、来源关联、内容修订和具体单元类型，但不把所有内容压成一组可选字段。
+- `ContentCell` 负责单条文本内容的角色、Markdown、折行、摘要和详情；用户、Agent、思考、Plan、提示和错误是它的明确内容类型，不需要为每种文本内容建立独立文件。
+- `LocalCommandCell` 负责用户本地命令的提交、运行、完成状态和结果；它不进入 `ExecCell` 的 Agent 工具分类或聚合规则。
+- `ExecCell` 负责一个或一组相关 Tool Call，包括参数、实时输出、完成结果、成功失败、折叠预览和完整详情；完成只改变该单元的状态和内容，不改变它在正文序列中的身份或位置。
+- 每个具体单元从宽度、主题、展开状态和交互状态产生同一份可缓存绘制结果；该结果同时提供行高、终端格内容和局部命中区域，测量、绘制和命中不能各自重新解释内容。
+- `Transcript` 只按顺序组合这些结果，负责总高度、滚动位置、可见裁剪、缓存上限和顶层命中路由；它不包含执行、Markdown 或本地命令的专属绘制分支。
+
+正文状态只保存一份：一个按正文顺序排列的 `TranscriptCell` 集合。实时内容和已完成内容不分集合；一个已完成的 `ExecCell` 仍然是原位置的同一个 `TranscriptCell`。不建立 `history_cells`、`active_cell` 或 `exec_cells` 这类并行存储，也不建立与 `ExecCell` 并列、专门表示“已完成内容”的 `HistoryCell`。Zeta 使用备用屏幕统一重绘正文，不使用 Codex 为终端回滚历史设计的“活跃单元加已提交历史”两套存储。
+
+每种正文类型、执行阶段、合并方式、截断方式和完整详情的可见输出见 [界面词典的“正文单元会输出什么”](LAYOUT.md#正文单元会输出什么)。
+
+当前实现已有统一的 `TranscriptCell`、独立的 `ExecCell`、有序单元集合、有界缓存、滚动和命中。当前限制是所有具体单元会先转成通用 `Message`，绘制时再根据 `MessageRole`、`ExecutionKind` 和多个可选字段恢复类型语义。计划设计是让 `ContentCell`、`LocalCommandCell` 和 `ExecCell` 直接生成自己的可缓存绘制结果，移除这个通用中间层。
 
 每个缓存必须有明确上限。按 Thread 保存的草稿、附件、Queue、选择和缓存也必须定义总量与淘汰规则，
 不能让访问过的 Thread 永久累积。

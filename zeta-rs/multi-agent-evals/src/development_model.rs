@@ -334,6 +334,7 @@ fn tool_response(call: ToolCall) -> ModelResponse {
     ModelResponse {
         output: vec![ResponseItem::ToolCall(call)],
         usage: deterministic_usage(),
+        billing: None,
         stop_reason: StopReason::ToolUse,
     }
 }
@@ -342,6 +343,7 @@ fn completed(message: &str) -> ModelResponse {
     ModelResponse {
         output: vec![ResponseItem::Text(message.into())],
         usage: deterministic_usage(),
+        billing: None,
         stop_reason: StopReason::Completed,
     }
 }
@@ -351,6 +353,7 @@ fn deterministic_usage() -> Option<ModelUsage> {
         input_tokens: Some(100),
         output_tokens: Some(10),
         cached_input_tokens: Some(0),
+        cache_write_input_tokens: Some(0),
         reasoning_tokens: Some(0),
     })
 }

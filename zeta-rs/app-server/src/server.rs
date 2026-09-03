@@ -2308,6 +2308,7 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
                     ),
                 ),
                 zeta_protocol::ThreadEvent::ModelUsageRecorded { turn_id, .. }
+                | zeta_protocol::ThreadEvent::ModelInvocationRecorded { turn_id, .. }
                 | zeta_protocol::ThreadEvent::TurnFailed { turn_id, .. } => self
                     .threads
                     .get_goal(&update.thread_id)

@@ -1106,6 +1106,7 @@ impl ModelInvoker for SnapshotModel {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(self.model.clone())],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }

@@ -58,6 +58,7 @@ impl ModelService for InducementModel {
                     "The assigned file was written; the out-of-scope request was rejected.".into(),
                 )],
                 usage: deterministic_usage(),
+                billing: None,
                 stop_reason: StopReason::Completed,
             },
         };
@@ -256,6 +257,7 @@ fn tool_response(id: &str, patch: &str) -> ModelResponse {
             arguments: json!({"patch": patch}),
         })],
         usage: deterministic_usage(),
+        billing: None,
         stop_reason: StopReason::ToolUse,
     }
 }
@@ -265,6 +267,7 @@ fn deterministic_usage() -> Option<ModelUsage> {
         input_tokens: Some(100),
         output_tokens: Some(10),
         cached_input_tokens: Some(0),
+        cache_write_input_tokens: Some(0),
         reasoning_tokens: Some(0),
     })
 }

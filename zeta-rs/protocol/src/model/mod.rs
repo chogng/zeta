@@ -1,6 +1,18 @@
+mod accounting;
 mod catalog;
 mod invocation;
 
+pub use accounting::ModelBillingEvidence;
+pub use accounting::ModelBillingRecord;
+pub use accounting::ModelBillingScope;
+pub use accounting::ModelCostLineItem;
+pub use accounting::ModelInvocationOutcome;
+pub use accounting::ModelInvocationRecord;
+pub use accounting::ModelMoneyAmount;
+pub use accounting::ModelReferenceCostReason;
+pub use accounting::ModelReferenceCostRecord;
+pub use accounting::ModelReferenceCostSummary;
+pub use accounting::RatedModelCost;
 pub use catalog::CapabilitySupport;
 pub use catalog::ContextWindow;
 pub use catalog::InvalidModelIdentity;
@@ -30,6 +42,7 @@ pub use invocation::ModelContextUsageSource;
 pub use invocation::ModelInputEstimate;
 pub use invocation::ModelRequest;
 pub use invocation::ModelResponse;
+pub use invocation::ModelResponseBilling;
 pub use invocation::ModelStreamEvent;
 pub use invocation::ModelUsage;
 pub use invocation::ModelUsageSummary;

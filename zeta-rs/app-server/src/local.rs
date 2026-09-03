@@ -83,6 +83,8 @@ use zeta_models_manager::ModelsManager;
 use zeta_plugins::PluginActivationAuthority;
 use zeta_plugins::PluginActivationSnapshot;
 use zeta_protocol::ContextWindow;
+use zeta_protocol::ModelAccess;
+use zeta_protocol::ModelBillingScope;
 use zeta_rollout::LocalStateRepository;
 use zeta_secrets::FileSecretStore;
 use zeta_secrets::SecretStore;
@@ -1692,6 +1694,37 @@ struct ConfigBackedModelService {
 }
 
 impl ModelService for ConfigBackedModelService {
+    fn billing_scope(&self, selection: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
+        let config = self.config_for_selection(selection)?;
+        let Some(model) = config.preferred_model.as_ref() else {
+            return Ok(ModelBillingScope::Unavailable);
+        };
+        let access = find_static_model(model)
+            .map(|definition| definition.access)
+            .unwrap_or(ModelAccess::ApiKey);
+        if access == ModelAccess::Subscription {
+            return Ok(ModelBillingScope::SubscriptionPlan);
+        }
+        if access != ModelAccess::ApiKey {
+            return Ok(ModelBillingScope::Unavailable);
+        }
+        let uses_provider_endpoint =
+            config
+                .providers
+                .get(&model.provider)
+                .is_some_and(|provider| {
+                    provider
+                        .base_url
+                        .as_deref()
+                        .is_none_or(|base_url| base_url.trim().is_empty())
+                });
+        Ok(if uses_provider_endpoint {
+            ModelBillingScope::PublicApi
+        } else {
+            ModelBillingScope::Unavailable
+        })
+    }
+
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
         context_budget_for_config(&self.config_for_selection(selection)?)
     }

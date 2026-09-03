@@ -80,6 +80,7 @@ export interface ModelUsageSummary {
 	readonly inputTokens: ModelUsageTotal;
 	readonly outputTokens: ModelUsageTotal;
 	readonly cachedInputTokens: ModelUsageTotal;
+	readonly cacheWriteInputTokens: ModelUsageTotal;
 	readonly reasoningTokens: ModelUsageTotal;
 }
 

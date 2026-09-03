@@ -1,0 +1,11 @@
+---
+source: zeta-code/tui/src/app/welcome_view_tests.rs
+assertion_line: 56
+expression: pet_pixel_map()
+---
+..BBB........BBB..
+....BBBBBBBBBB....
+.BBBKKBBBBBBKKBBB.
+.BBBKKBBBBBBKKBBB.
+...BBBBBBBBBBBB...
+....BB......BB....

@@ -817,6 +817,10 @@ impl TurnExecutor {
                 request.parallel_tool_calls = profile.parallel_tool_calls;
             }
             let model = invocation.model().as_service_selection();
+            let billing_scope = self
+                .model
+                .billing_scope(model)
+                .map_err(ExecutionFailure::service)?;
             let estimated_input = invocation.context().budget().total_input();
             let input_estimate = frozen_model.as_ref().map(|_| ModelInputEstimate {
                 estimated_input_tokens: u64::from(estimated_input.get()),
@@ -853,6 +857,7 @@ impl TurnExecutor {
             let mut invalid_response_attempt = false;
             let mut empty_attempt = false;
             let (response, mut stream) = loop {
+                let started_at_unix_ms = current_unix_ms().map_err(ExecutionFailure::model)?;
                 let mut stream = InvocationStream::new(
                     self.threads.clone(),
                     self.updates.clone(),
@@ -867,22 +872,19 @@ impl TurnExecutor {
                     .stream(model, &request, cancellation, &mut stream)
                 {
                     Ok(response) => {
-                        match &input_estimate {
-                            Some(input_estimate) => {
-                                self.threads.record_model_usage_with_input_estimate(
-                                    thread_id,
-                                    turn_id,
-                                    response.usage.clone(),
-                                    input_estimate.clone(),
-                                )
-                            }
-                            None => self.threads.record_model_usage(
+                        self.threads
+                            .record_model_invocation(
                                 thread_id,
                                 turn_id,
+                                frozen_model.as_ref(),
+                                response.billing.as_ref(),
+                                billing_scope,
                                 response.usage.clone(),
-                            ),
-                        }
-                        .map_err(ExecutionFailure::persistence)?;
+                                input_estimate.clone(),
+                                started_at_unix_ms,
+                                current_unix_ms().map_err(ExecutionFailure::model)?,
+                            )
+                            .map_err(ExecutionFailure::persistence)?;
                         check_cancellation(cancellation)?;
                         stream.finish_text();
                         let tool_calls = response.tool_calls().count();
@@ -1155,17 +1157,27 @@ impl TurnExecutor {
             })
             .transpose()
             .map_err(ExecutionFailure::model)?;
+        let model_selection = request
+            .generator_model()
+            .map_or(ModelSelection::ConfiguredDefault, ModelSelection::Session);
+        let billing_scope = self
+            .model
+            .billing_scope(model_selection)
+            .map_err(ExecutionFailure::service)?;
+        let started_at_unix_ms = current_unix_ms().map_err(ExecutionFailure::model)?;
         let result = {
             let mut record_model_usage = |usage| {
-                let recorded = match &input_estimate {
-                    Some(input_estimate) => self.threads.record_model_usage_with_input_estimate(
-                        thread_id,
-                        turn_id,
-                        usage,
-                        input_estimate.clone(),
-                    ),
-                    None => self.threads.record_model_usage(thread_id, turn_id, usage),
-                };
+                let recorded = self.threads.record_model_invocation(
+                    thread_id,
+                    turn_id,
+                    request.generator_model(),
+                    None,
+                    billing_scope,
+                    usage,
+                    input_estimate.clone(),
+                    started_at_unix_ms,
+                    current_unix_ms()?,
+                );
                 match recorded {
                     Ok(sequence) => {
                         usage_sequence = Some(sequence);
@@ -1740,6 +1752,16 @@ fn response_refusal_message(response: &zeta_protocol::ModelResponse) -> Option<S
         ResponseItem::Refusal(message) => Some(message.clone()),
         _ => None,
     })
+}
+
+fn current_unix_ms() -> Result<u64, CoreError> {
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| {
+            CoreError::Execution(format!("system clock precedes Unix epoch: {error}"))
+        })?;
+    u64::try_from(elapsed.as_millis())
+        .map_err(|_| CoreError::Execution("current Unix timestamp overflowed u64".into()))
 }
 
 fn wait_for_model_retry(

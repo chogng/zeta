@@ -1,3 +1,4 @@
+use crate::ModelReferenceCostSummary;
 use crate::ModelUsageSummary;
 use crate::SessionId;
 use crate::ThreadGoal;
@@ -27,6 +28,8 @@ pub struct Thread {
     pub sequence: u64,
     #[serde(default)]
     pub usage: ModelUsageSummary,
+    #[serde(default)]
+    pub reference_cost: ModelReferenceCostSummary,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub goal: Option<ThreadGoal>,

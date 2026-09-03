@@ -416,19 +416,44 @@ fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
     };
     Ok(ModelResponse {
         output,
-        usage: parse_usage(response.get("usage")),
+        usage: parse_usage(response.get("usage"))?,
+        billing: super::parse_response_billing(&response)?,
         stop_reason,
     })
 }
 
-fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {
-    let usage = usage?;
-    Some(ModelUsage {
-        input_tokens: usage.get("input_tokens").and_then(Value::as_u64),
+fn parse_usage(usage: Option<&Value>) -> Result<Option<ModelUsage>, ApiError> {
+    let Some(usage) = usage else {
+        return Ok(None);
+    };
+    let uncached = usage.get("input_tokens").and_then(Value::as_u64);
+    let cache_read = usage
+        .get("cache_read_input_tokens")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let cache_write = usage
+        .get("cache_creation_input_tokens")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let input_tokens = uncached
+        .map(|uncached| {
+            uncached
+                .checked_add(cache_read)
+                .and_then(|total| total.checked_add(cache_write))
+                .ok_or_else(|| {
+                    ApiError::InvalidResponse("Anthropic usage token count overflowed".into())
+                })
+        })
+        .transpose()?;
+    Ok(Some(ModelUsage {
+        input_tokens,
         output_tokens: usage.get("output_tokens").and_then(Value::as_u64),
-        cached_input_tokens: usage.get("cache_read_input_tokens").and_then(Value::as_u64),
-        reasoning_tokens: None,
-    })
+        cached_input_tokens: Some(cache_read),
+        cache_write_input_tokens: Some(cache_write),
+        reasoning_tokens: usage
+            .pointer("/output_tokens_details/thinking_tokens")
+            .and_then(Value::as_u64),
+    }))
 }
 
 fn required_string<'a>(value: &'a Value, field: &str) -> Result<&'a str, ApiError> {

@@ -134,6 +134,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut file_search = host_file_search_root.map(FileSearchManager::new);
     let mut app = App::for_dir_with_input_catalog(&display_dir_root, input_catalog);
     let initial_config = client.read_config();
+    let initial_model_catalog = client.list_models().ok();
     let theme_preference = initial_config
         .as_ref()
         .map(theme_feature::preference)
@@ -148,7 +149,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         Err(error) => app.update(AppEvent::FailureReported(error)),
     }
     match initial_config {
-        Ok(config) => apply_tui_config(config, &mut app),
+        Ok(config) => apply_tui_config(config, initial_model_catalog.as_ref(), &mut app),
         Err(error) => app.update(AppEvent::FailureReported(format!(
             "could not read server configuration: {error}"
         ))),
@@ -1301,20 +1302,20 @@ fn activate_pointer_item(
 ) -> Option<AppCommand> {
     let target = frame::input_pointer_target_at(app, area, column, row)?;
     match target {
-        InputPointerTarget::InputSurface(
-            crate::app::input_surface::InputSurfacePointerTarget::Tab(index),
+        InputPointerTarget::ComposerSlot(
+            crate::app::composer_slot::ComposerSlotPointerTarget::Tab(index),
         ) => {
             app.select_tab(index);
             None
         }
-        InputPointerTarget::InputSurface(
-            crate::app::input_surface::InputSurfacePointerTarget::Search,
+        InputPointerTarget::ComposerSlot(
+            crate::app::composer_slot::ComposerSlotPointerTarget::Search,
         ) => {
             app.focus_composer_search();
             None
         }
-        InputPointerTarget::InputSurface(
-            crate::app::input_surface::InputSurfacePointerTarget::Item(index),
+        InputPointerTarget::ComposerSlot(
+            crate::app::composer_slot::ComposerSlotPointerTarget::Item(index),
         ) => app.activate_visible_item(index),
         InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
             app.activate_input_completion(index)

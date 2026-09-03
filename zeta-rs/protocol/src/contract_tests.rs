@@ -61,16 +61,40 @@ fn durable_thread_event_serializes_without_a_runtime_message_wrapper() {
 
 #[test]
 fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
+    let legacy_usage: ModelUsage = serde_json::from_value(json!({
+        "inputTokens": 5,
+        "outputTokens": 2,
+        "cachedInputTokens": 1,
+        "reasoningTokens": null
+    }))
+    .unwrap();
+    assert_eq!(legacy_usage.cache_write_input_tokens, None);
+    let legacy_total = json!({"reported": 0, "complete": true});
+    let legacy_summary: ModelUsageSummary = serde_json::from_value(json!({
+        "modelInvocations": 0,
+        "inputTokens": legacy_total,
+        "outputTokens": legacy_total,
+        "cachedInputTokens": legacy_total,
+        "reasoningTokens": legacy_total
+    }))
+    .unwrap();
+    assert_eq!(
+        legacy_summary.cache_write_input_tokens,
+        ModelUsageTotal::default()
+    );
+
     let first = ModelUsage {
         input_tokens: Some(10),
         output_tokens: Some(3),
         cached_input_tokens: Some(2),
+        cache_write_input_tokens: Some(1),
         reasoning_tokens: None,
     };
     let second = ModelUsage {
         input_tokens: Some(7),
         output_tokens: None,
         cached_input_tokens: None,
+        cache_write_input_tokens: None,
         reasoning_tokens: Some(1),
     };
     let summary = ModelUsageSummary::default()
@@ -88,6 +112,8 @@ fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
     assert!(!summary.output_tokens.complete);
     assert_eq!(summary.cached_input_tokens.reported, 2);
     assert!(!summary.cached_input_tokens.complete);
+    assert_eq!(summary.cache_write_input_tokens.reported, 1);
+    assert!(!summary.cache_write_input_tokens.complete);
     assert_eq!(summary.reasoning_tokens.reported, 1);
     assert!(!summary.reasoning_tokens.complete);
 
@@ -107,6 +133,7 @@ fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
                 "inputTokens": 10,
                 "outputTokens": 3,
                 "cachedInputTokens": 2,
+                "cacheWriteInputTokens": 1,
                 "reasoningTokens": null
             }
         })
@@ -131,6 +158,7 @@ fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
                 "inputTokens": 7,
                 "outputTokens": null,
                 "cachedInputTokens": null,
+                "cacheWriteInputTokens": null,
                 "reasoningTokens": 1
             },
             "inputEstimate": {
@@ -139,6 +167,102 @@ fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
                 "calibrationRevision": "usage-underestimate-asymmetric-ema-v1"
             }
         })
+    );
+}
+
+#[test]
+fn model_invocation_fact_keeps_exact_cost_strings() {
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let turn_id = TurnId::new("turn_1").unwrap();
+    let event = ThreadEvent::ModelInvocationRecorded {
+        thread_id: thread_id.clone(),
+        turn_id: turn_id.clone(),
+        record: ModelInvocationRecord {
+            invocation_id: ModelInvocationId::new("model-invocation_1").unwrap(),
+            thread_id,
+            turn_id,
+            requested_model: Some(ModelRef::new(
+                ProviderId::new("kimi").unwrap(),
+                ModelId::new("kimi-k2.7-code-highspeed").unwrap(),
+            )),
+            resolved_model: Some(ModelId::new("kimi-k2.7-code-highspeed").unwrap()),
+            billing: Some(ModelBillingRecord {
+                billing_platform: "kimi_api".into(),
+                operation: "text_generation".into(),
+                requested_service_tier: None,
+                applied_service_tier: "standard".into(),
+                service_tier_evidence: ModelBillingEvidence::FixedModelIdentity,
+                region: "global".into(),
+                pricing_variant: "default".into(),
+                rate_card_revision: "accelerated-public-2026-09-04".into(),
+            }),
+            started_at_unix_ms: 100,
+            completed_at_unix_ms: 120,
+            outcome: ModelInvocationOutcome::Completed,
+            usage: None,
+            input_estimate: None,
+            reference_cost: ModelReferenceCostRecord::Complete {
+                cost: RatedModelCost {
+                    amount: ModelMoneyAmount {
+                        currency: "USD".into(),
+                        pico_units: "2548000000".into(),
+                    },
+                    revision: "accelerated-public-2026-09-04".into(),
+                    line_items: Vec::new(),
+                },
+            },
+        },
+    };
+
+    let json = serde_json::to_value(event).unwrap();
+    assert_eq!(json["type"], "modelInvocationRecorded");
+    assert_eq!(
+        json["record"]["referenceCost"]["cost"]["amount"]["picoUnits"],
+        "2548000000"
+    );
+}
+
+#[test]
+fn reference_cost_summary_adds_exact_amounts_and_preserves_unknown_work() {
+    let complete = ModelReferenceCostRecord::Complete {
+        cost: RatedModelCost {
+            amount: ModelMoneyAmount {
+                currency: "USD".into(),
+                pico_units: "10080000000".into(),
+            },
+            revision: "rates-v1".into(),
+            line_items: Vec::new(),
+        },
+    };
+    let partial = ModelReferenceCostRecord::Partial {
+        known_minimum: RatedModelCost {
+            amount: ModelMoneyAmount {
+                currency: "USD".into(),
+                pico_units: "250000000".into(),
+            },
+            revision: "rates-v1".into(),
+            line_items: Vec::new(),
+        },
+        reason: ModelReferenceCostReason::MissingTokenRates {
+            dimensions: vec!["cache_write_input".into()],
+        },
+    };
+
+    let summary = ModelReferenceCostSummary::default()
+        .checked_record(&complete)
+        .unwrap()
+        .checked_record(&partial)
+        .unwrap();
+
+    assert_eq!(
+        summary,
+        ModelReferenceCostSummary {
+            known_amounts: vec![ModelMoneyAmount {
+                currency: "USD".into(),
+                pico_units: "10330000000".into(),
+            }],
+            complete: false,
+        }
     );
 }
 

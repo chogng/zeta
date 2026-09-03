@@ -201,6 +201,7 @@ impl ModelService for RecordingModel {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text("ok".into())],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }

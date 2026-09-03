@@ -42,6 +42,7 @@ impl ModelService for EchoModel {
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(format!("Zeta: {prompt}"))],
             usage: None,
+            billing: None,
             stop_reason: StopReason::Completed,
         })
     }

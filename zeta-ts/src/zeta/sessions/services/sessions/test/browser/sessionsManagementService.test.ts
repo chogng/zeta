@@ -100,7 +100,7 @@ function session(sessionId: string, threadId: string): SessionDto {
 
 function emptyUsage(): ModelUsageSummary {
 	const total = { reported: 0, complete: true };
-	return { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, reasoningTokens: total };
+	return { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total };
 }
 
 function agentNode(): AgentTreeNodeProjection {
@@ -116,6 +116,7 @@ function agentNode(): AgentTreeNodeProjection {
 			inputTokens: total,
 			outputTokens: total,
 			cachedInputTokens: total,
+			cacheWriteInputTokens: total,
 			reasoningTokens: total,
 		},
 		children: [],
@@ -191,6 +192,7 @@ function threadProjection(sessionId: string, threadId: string): SessionThreadPro
 				inputTokens: { reported: 0, complete: true },
 				outputTokens: { reported: 0, complete: true },
 				cachedInputTokens: { reported: 0, complete: true },
+				cacheWriteInputTokens: { reported: 0, complete: true },
 				reasoningTokens: { reported: 0, complete: true },
 			},
 			turns: [],

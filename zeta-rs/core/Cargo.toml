@@ -24,6 +24,7 @@ zeta-code-mode = { workspace = true, optional = true }
 zeta-code-mode-protocol = { workspace = true, optional = true }
 zeta-extension-api = { workspace = true }
 zeta-history = { workspace = true }
+zeta-model-accounting = { workspace = true }
 zeta-action-policy = { workspace = true }
 zeta-agent-environment = { workspace = true }
 zeta-prompts = { workspace = true }

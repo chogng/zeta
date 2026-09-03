@@ -66,6 +66,7 @@ fn thread(model: ModelRef) -> Thread {
         status: ThreadStatus::Active,
         sequence: 4,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![Turn {
             turn_id: TurnId::new("turn-1").unwrap(),

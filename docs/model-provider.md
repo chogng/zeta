@@ -224,6 +224,23 @@ binding 都由 `ProviderDefinition.input_token_count` 明确声明 profile、tar
 | MiMo | [Responses API](https://mimo.mi.com/docs/en-US/api/chat/responses) | ❌ verified preflight unavailable | 当前官方文档只确认 response `usage.input_tokens` |
 | Generic OpenAI-compatible | 无统一标准 | ❌ unavailable | 必须由具体 provider definition 显式增加 count profile |
 
+### 5.3 调用完成后的 token 使用量
+
+调用完成后的统计统一进入 `ModelUsage`，但字段必须先按模型商官方定义换算，不能直接照搬同名
+JSON 字段：
+
+| 统一字段 | 含义 | 当前来源 |
+| --- | --- | --- |
+| `input_tokens` | 总输入，包含未缓存输入、缓存读取和缓存写入 | OpenAI 直接读取总输入；Anthropic 将三部分相加；DeepSeek 读取 `prompt_tokens` |
+| `cached_input_tokens` | 从缓存读取的输入 token | OpenAI `cached_tokens`；Anthropic `cache_read_input_tokens`；DeepSeek `prompt_cache_hit_tokens` |
+| `cache_write_input_tokens` | 写入缓存的输入 token | OpenAI `cache_write_tokens`；Anthropic `cache_creation_input_tokens`；DeepSeek 未报告时保持未知 |
+| `output_tokens` | 总输出 | 各模型商的总输出字段 |
+| `reasoning_tokens` | 总输出中的推理/思考明细 | 只在响应明确提供明细时记录 |
+
+缓存占比定义为 `cached_input_tokens / input_tokens`，表示 token 维度的缓存读取占比，不表示“多少次
+请求命中了缓存”。只有分子和分母都完整、且总输入大于 0 时才能给出精确百分比；否则显示未知。
+Thread 和 Turn 聚合保留每项的 `complete`，某次调用缺少字段时只展示已报告下界，不补 0。
+
 目标调用形态：
 
 ```rust
@@ -242,7 +259,7 @@ let binding = ApiBinding::OpenAiChat {
 - profile 变化必须是显式配置或 built-in definition 变化；
 - 已有配置不能静默迁移到另一正式 API。
 
-### 5.3 OpenAI 服务接口面不是 OpenAI-compatible 配置档案
+### 5.4 OpenAI 服务接口面不是 OpenAI-compatible 配置档案
 
 OpenAI Platform API 与 ChatGPT 订阅服务都可能使用 `responses` 这样的相对 path，但它们的 base URL、credential、entitlement 和可用 operation 不能由 path 推断。详见 [`zeta-api.md`](zeta-api.md#45-openai-platform-与-chatgpt-订阅服务端点清单)。
 

@@ -23,10 +23,15 @@ use zeta_protocol::AgentResponse;
 use zeta_protocol::CommandId;
 use zeta_protocol::ContextSourceRange;
 use zeta_protocol::InteractionDeadline;
+use zeta_protocol::ModelBillingScope;
+use zeta_protocol::ModelId;
+use zeta_protocol::ModelRef;
+use zeta_protocol::ModelResponseBilling;
 use zeta_protocol::ModelUsage;
 use zeta_protocol::PlanStep;
 use zeta_protocol::PlanStepStatus;
 use zeta_protocol::PlanUpdate;
+use zeta_protocol::ProviderId;
 use zeta_protocol::RequestId;
 use zeta_protocol::RequestUserInput;
 use zeta_protocol::RequestUserInputResponse;
@@ -363,6 +368,7 @@ fn thread_goal_usage_accumulates_across_turns_without_inventing_missing_input() 
             Some(ModelUsage {
                 input_tokens: Some(10),
                 cached_input_tokens: Some(2),
+                cache_write_input_tokens: Some(0),
                 output_tokens: Some(3),
                 reasoning_tokens: None,
             }),
@@ -380,6 +386,7 @@ fn thread_goal_usage_accumulates_across_turns_without_inventing_missing_input() 
             Some(ModelUsage {
                 input_tokens: Some(4),
                 cached_input_tokens: Some(0),
+                cache_write_input_tokens: Some(0),
                 output_tokens: Some(0),
                 reasoning_tokens: None,
             }),
@@ -393,6 +400,7 @@ fn thread_goal_usage_accumulates_across_turns_without_inventing_missing_input() 
             Some(ModelUsage {
                 input_tokens: Some(1),
                 cached_input_tokens: Some(0),
+                cache_write_input_tokens: Some(0),
                 output_tokens: Some(2),
                 reasoning_tokens: None,
             }),
@@ -410,6 +418,7 @@ fn thread_goal_usage_accumulates_across_turns_without_inventing_missing_input() 
             Some(ModelUsage {
                 input_tokens: Some(100),
                 cached_input_tokens: None,
+                cache_write_input_tokens: None,
                 output_tokens: Some(100),
                 reasoning_tokens: None,
             }),
@@ -425,6 +434,68 @@ fn thread_goal_usage_accumulates_across_turns_without_inventing_missing_input() 
         .recover_thread(&thread)
         .unwrap();
     assert_eq!(recovered.goal, Some(goal));
+}
+
+#[test]
+fn completed_fast_response_records_the_reported_price() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "fast accounting");
+    let requested_model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-5.6").unwrap(),
+    );
+    let mut request = start_request("fast-accounting");
+    request.model = Some(requested_model.clone());
+    let turn = threads.start_turn(&thread, request).unwrap().turn_id;
+
+    threads
+        .record_model_invocation(
+            &thread,
+            &turn,
+            Some(&requested_model),
+            Some(&ModelResponseBilling {
+                resolved_model: Some(ModelId::new("gpt-5.6-sol").unwrap()),
+                applied_service_tier: Some("priority".into()),
+            }),
+            ModelBillingScope::PublicApi,
+            Some(ModelUsage {
+                input_tokens: Some(1_100),
+                cached_input_tokens: Some(100),
+                cache_write_input_tokens: Some(0),
+                output_tokens: Some(50),
+                reasoning_tokens: None,
+            }),
+            None,
+            1_788_480_000_000,
+            1_788_480_000_100,
+        )
+        .unwrap();
+
+    let events = store.events();
+    let zeta_protocol::ThreadEvent::ModelInvocationRecorded { record, .. } =
+        &events.last().unwrap().event
+    else {
+        panic!("expected a model invocation fact");
+    };
+    let zeta_protocol::ModelReferenceCostRecord::Complete { cost } = &record.reference_cost else {
+        panic!("expected a complete reference cost");
+    };
+    assert_eq!(
+        record.resolved_model.as_ref().unwrap().as_str(),
+        "gpt-5.6-sol"
+    );
+    assert_eq!(cost.amount.pico_units, "10080000000");
+    assert_eq!(
+        threads.read_thread(&thread).unwrap().reference_cost,
+        zeta_protocol::ModelReferenceCostSummary {
+            known_amounts: vec![zeta_protocol::ModelMoneyAmount {
+                currency: "USD".into(),
+                pico_units: "10080000000".into(),
+            }],
+            complete: true,
+        }
+    );
 }
 
 #[test]

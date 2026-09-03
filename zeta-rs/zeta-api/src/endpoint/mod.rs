@@ -30,17 +30,19 @@ pub enum ApiProtocol {
     AnthropicMessages,
 }
 
-/// A provider-independent API endpoint family supported by Zeta.
+/// An exact API endpoint profile supported by Zeta.
 ///
 /// A caller supplies a resolved base URL and headers. This type then encodes a
-/// normalized request and decodes the corresponding provider response without
-/// learning which provider supplied the endpoint.
+/// normalized request and decodes the corresponding response. Profiles that
+/// share a request shape remain distinct when their response semantics differ.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ApiEndpoint {
     /// An endpoint implementing the OpenAI Responses API.
     OpenAiResponses,
     /// An endpoint implementing the OpenAI Chat Completions-compatible API.
     OpenAiChatCompletions,
+    /// DeepSeek's Chat Completions endpoint and usage schema.
+    DeepSeekChatCompletions,
     /// An endpoint implementing Anthropic's Messages API.
     AnthropicMessages,
 }
@@ -59,6 +61,7 @@ impl ApiEndpoint {
         match self {
             Self::OpenAiResponses => ApiProtocol::OpenAiResponses,
             Self::OpenAiChatCompletions => ApiProtocol::OpenAiCompletions,
+            Self::DeepSeekChatCompletions => ApiProtocol::OpenAiCompletions,
             Self::AnthropicMessages => ApiProtocol::AnthropicMessages,
         }
     }
@@ -67,6 +70,7 @@ impl ApiEndpoint {
         match self {
             Self::OpenAiResponses => "responses",
             Self::OpenAiChatCompletions => "chat/completions",
+            Self::DeepSeekChatCompletions => "chat/completions",
             Self::AnthropicMessages => "v1/messages",
         }
     }
@@ -125,14 +129,16 @@ impl ApiEndpoint {
                 client,
                 cancellation,
             ),
-            Self::OpenAiChatCompletions => requests::openai_chat_completions::complete(
-                self,
-                target,
-                model,
-                request,
-                client,
-                cancellation,
-            ),
+            Self::OpenAiChatCompletions | Self::DeepSeekChatCompletions => {
+                requests::openai_chat_completions::complete(
+                    self,
+                    target,
+                    model,
+                    request,
+                    client,
+                    cancellation,
+                )
+            }
             Self::AnthropicMessages => requests::anthropic_messages::complete(
                 self,
                 target,
@@ -169,15 +175,17 @@ impl ApiEndpoint {
                 cancellation,
                 sink,
             ),
-            Self::OpenAiChatCompletions => requests::openai_chat_completions::stream(
-                self,
-                target,
-                model,
-                request,
-                client,
-                cancellation,
-                sink,
-            ),
+            Self::OpenAiChatCompletions | Self::DeepSeekChatCompletions => {
+                requests::openai_chat_completions::stream(
+                    self,
+                    target,
+                    model,
+                    request,
+                    client,
+                    cancellation,
+                    sink,
+                )
+            }
             Self::AnthropicMessages => requests::anthropic_messages::stream(
                 self,
                 target,
@@ -235,10 +243,12 @@ impl ApiEndpoint {
                 client,
                 cancellation,
             ),
-            Self::OpenAiChatCompletions => Err(ApiError::InvalidRequest(
-                "OpenAI Chat Completions does not expose a standard input-token count endpoint"
-                    .into(),
-            )),
+            Self::OpenAiChatCompletions | Self::DeepSeekChatCompletions => {
+                Err(ApiError::InvalidRequest(
+                    "OpenAI Chat Completions does not expose a standard input-token count endpoint"
+                        .into(),
+                ))
+            }
         }
     }
 }

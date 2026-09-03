@@ -10,6 +10,42 @@ use crate::{ApiEndpoint, ApiError};
 use serde_json::Value;
 use zeta_async_utils::CancellationToken;
 use zeta_client::{ClientRequest, OperationClient, ResolvedApiTarget};
+use zeta_protocol::ModelId;
+use zeta_protocol::ModelResponseBilling;
+
+pub(crate) fn parse_response_billing(
+    response: &Value,
+) -> Result<Option<ModelResponseBilling>, ApiError> {
+    let resolved_model = response
+        .get("model")
+        .filter(|value| !value.is_null())
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or_else(|| ApiError::InvalidResponse("response model must be a string".into()))
+                .and_then(|model| {
+                    ModelId::new(model)
+                        .map_err(|error| ApiError::InvalidResponse(error.to_string()))
+                })
+        })
+        .transpose()?;
+    let applied_service_tier = response
+        .get("service_tier")
+        .filter(|value| !value.is_null())
+        .map(|value| {
+            value.as_str().map(str::to_owned).ok_or_else(|| {
+                ApiError::InvalidResponse("response service tier must be a string".into())
+            })
+        })
+        .transpose()?;
+    if resolved_model.is_none() && applied_service_tier.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(ModelResponseBilling {
+        resolved_model,
+        applied_service_tier,
+    }))
+}
 
 pub(crate) fn post_json(
     client: &dyn OperationClient,

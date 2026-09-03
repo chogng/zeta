@@ -857,6 +857,10 @@ pub(crate) fn merge_usage(
             &first.cached_input_tokens,
             &second.cached_input_tokens,
         )?,
+        cache_write_input_tokens: merge_usage_total(
+            &first.cache_write_input_tokens,
+            &second.cache_write_input_tokens,
+        )?,
         reasoning_tokens: merge_usage_total(&first.reasoning_tokens, &second.reasoning_tokens)?,
     })
 }

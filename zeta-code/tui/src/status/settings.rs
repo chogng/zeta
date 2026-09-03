@@ -7,14 +7,18 @@ const CONFIG_KEY: &str = "statusLine";
 pub(crate) enum StatusLineItem {
     Permissions,
     Model,
+    CacheHitRate,
+    ReferenceCost,
     GitBranch,
     GitChanges,
 }
 
 impl StatusLineItem {
-    pub(crate) const ALL: [Self; 4] = [
+    pub(crate) const ALL: [Self; 6] = [
         Self::Permissions,
         Self::Model,
+        Self::CacheHitRate,
+        Self::ReferenceCost,
         Self::GitBranch,
         Self::GitChanges,
     ];
@@ -23,6 +27,8 @@ impl StatusLineItem {
         match id {
             "permissions" => Some(Self::Permissions),
             "model" => Some(Self::Model),
+            "cache-hit-rate" => Some(Self::CacheHitRate),
+            "reference-cost" => Some(Self::ReferenceCost),
             "git-branch" => Some(Self::GitBranch),
             "git-changes" => Some(Self::GitChanges),
             _ => None,
@@ -33,6 +39,8 @@ impl StatusLineItem {
         match self {
             Self::Permissions => "permissions",
             Self::Model => "model",
+            Self::CacheHitRate => "cache-hit-rate",
+            Self::ReferenceCost => "reference-cost",
             Self::GitBranch => "git-branch",
             Self::GitChanges => "git-changes",
         }
@@ -42,6 +50,8 @@ impl StatusLineItem {
         match self {
             Self::Permissions => "Permissions",
             Self::Model => "Model",
+            Self::CacheHitRate => "Cache hit rate",
+            Self::ReferenceCost => "Reference cost",
             Self::GitBranch => "Git branch",
             Self::GitChanges => "Git changes",
         }
@@ -51,6 +61,8 @@ impl StatusLineItem {
         match self {
             Self::Permissions => "Current permission mode",
             Self::Model => "Configured model",
+            Self::CacheHitRate => "Cached input as a share of total input",
+            Self::ReferenceCost => "Current Thread accumulated reference cost",
             Self::GitBranch => "Current Git branch",
             Self::GitChanges => "Working tree changes",
         }
@@ -121,7 +133,12 @@ impl StatusLineSettings {
 impl Default for StatusLineSettings {
     fn default() -> Self {
         Self {
-            items: StatusLineItem::ALL.to_vec(),
+            items: vec![
+                StatusLineItem::Permissions,
+                StatusLineItem::Model,
+                StatusLineItem::GitBranch,
+                StatusLineItem::GitChanges,
+            ],
         }
     }
 }

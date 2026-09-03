@@ -5,6 +5,9 @@ use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::ModelMoneyAmount;
+use zeta_protocol::ModelReferenceCostSummary;
+use zeta_protocol::ModelUsageSummary;
 
 use super::StatusLineItem;
 use super::StatusLineSettings;
@@ -54,6 +57,8 @@ struct DisplayValue {
 pub(crate) struct StatusLineModel {
     settings: StatusLineSettings,
     preferred_model: Option<DisplayValue>,
+    cache_hit_rate: Option<DisplayValue>,
+    reference_cost: Option<DisplayValue>,
     git_branch: Option<DisplayValue>,
     git_changes: Option<DisplayValue>,
 }
@@ -72,6 +77,20 @@ impl StatusLineModel {
             full: model.model.clone(),
             compact: model.model.clone(),
         });
+    }
+
+    pub(crate) fn apply_thread_accounting(
+        &mut self,
+        usage: &ModelUsageSummary,
+        reference_cost: &ModelReferenceCostSummary,
+    ) {
+        self.cache_hit_rate = cache_hit_rate_display(usage);
+        self.reference_cost = reference_cost_display(usage.model_invocations, reference_cost);
+    }
+
+    pub(crate) fn clear_thread_accounting(&mut self) {
+        self.cache_hit_rate = None;
+        self.reference_cost = None;
     }
 
     pub(crate) fn apply_git_status(&mut self, status: &GitStatusResult) {
@@ -126,12 +145,94 @@ impl StatusLineModel {
             match item {
                 StatusLineItem::Permissions => {}
                 StatusLineItem::Model => values.extend(self.preferred_model.iter().cloned()),
+                StatusLineItem::CacheHitRate => values.extend(self.cache_hit_rate.iter().cloned()),
+                StatusLineItem::ReferenceCost => values.extend(self.reference_cost.iter().cloned()),
                 StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),
                 StatusLineItem::GitChanges => values.extend(self.git_changes.iter().cloned()),
             }
         }
         values
     }
+}
+
+fn cache_hit_rate_display(usage: &ModelUsageSummary) -> Option<DisplayValue> {
+    format_cache_hit_rate(usage).map(|percentage| DisplayValue {
+        full: format!("cache hit {percentage}"),
+        compact: if percentage == "unknown" {
+            "cache ?".into()
+        } else {
+            format!("cache {percentage}")
+        },
+    })
+}
+
+fn reference_cost_display(
+    model_invocations: u64,
+    summary: &ModelReferenceCostSummary,
+) -> Option<DisplayValue> {
+    format_reference_cost(model_invocations, summary).map(|amount| DisplayValue {
+        full: format!("cost {amount}"),
+        compact: if amount == "unknown" {
+            "cost ?".into()
+        } else {
+            amount
+        },
+    })
+}
+
+pub(super) fn format_cache_hit_rate(usage: &ModelUsageSummary) -> Option<String> {
+    if usage.model_invocations == 0 {
+        return None;
+    }
+    let input = &usage.input_tokens;
+    let cached = &usage.cached_input_tokens;
+    if !input.complete
+        || !cached.complete
+        || input.reported == 0
+        || cached.reported > input.reported
+    {
+        return Some("unknown".into());
+    }
+    let percentage_tenths = u128::from(cached.reported) * 1_000 / u128::from(input.reported);
+    Some(format!(
+        "{}.{:01}%",
+        percentage_tenths / 10,
+        percentage_tenths % 10
+    ))
+}
+
+pub(super) fn format_reference_cost(
+    model_invocations: u64,
+    summary: &ModelReferenceCostSummary,
+) -> Option<String> {
+    if model_invocations == 0 {
+        return None;
+    }
+    let [amount] = summary.known_amounts.as_slice() else {
+        return Some("unknown".into());
+    };
+    let Some(amount) = format_money(amount) else {
+        return Some("unknown".into());
+    };
+    let prefix = if summary.complete { "" } else { "≥" };
+    Some(format!("{prefix}{amount}"))
+}
+
+fn format_money(amount: &ModelMoneyAmount) -> Option<String> {
+    let pico_units = amount.pico_units.parse::<u128>().ok()?;
+    let whole = pico_units / 1_000_000_000_000;
+    let remainder = pico_units % 1_000_000_000_000;
+    let number = if remainder == 0 {
+        whole.to_string()
+    } else {
+        let fraction = format!("{remainder:012}");
+        format!("{whole}.{}", fraction.trim_end_matches('0'))
+    };
+    Some(if amount.currency == "USD" {
+        format!("${number}")
+    } else {
+        format!("{} {number}", amount.currency)
+    })
 }
 
 fn fit_values(values: &[DisplayValue], width: usize) -> String {

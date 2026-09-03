@@ -379,6 +379,8 @@ fn provider_conformance_maps_refusals_or_fails_unsupported_output_explicitly() {
 fn openai_responses_converts_tools_reasoning_and_tool_calls() {
     let transport = CapturingTransport::new(json!({
         "id": "resp_1",
+        "model": "gpt-5.6-sol",
+        "service_tier": "priority",
         "status": "completed",
         "output": [{
             "type": "function_call",
@@ -389,7 +391,7 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
         "usage": {
             "input_tokens": 20,
             "output_tokens": 5,
-            "input_tokens_details": {"cached_tokens": 3},
+            "input_tokens_details": {"cached_tokens": 3, "cache_write_tokens": 4},
             "output_tokens_details": {"reasoning_tokens": 2}
         }
     }));
@@ -407,11 +409,21 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
     assert_eq!(request["reasoning"]["effort"], "medium");
     assert_eq!(request["prompt_cache_key"], "session-cache-key");
     assert_eq!(response.stop_reason, StopReason::ToolUse);
+    let billing = response.billing.as_ref().expect("billing facts");
+    assert_eq!(
+        billing.resolved_model.as_ref().unwrap().as_str(),
+        "gpt-5.6-sol"
+    );
+    assert_eq!(billing.applied_service_tier.as_deref(), Some("priority"));
     assert_eq!(
         response.tool_calls().next().unwrap().arguments,
         json!({"city": "Paris"})
     );
-    assert_eq!(response.usage.unwrap().reasoning_tokens, Some(2));
+    let usage = response.usage.unwrap();
+    assert_eq!(usage.input_tokens, Some(20));
+    assert_eq!(usage.cached_input_tokens, Some(3));
+    assert_eq!(usage.cache_write_input_tokens, Some(4));
+    assert_eq!(usage.reasoning_tokens, Some(2));
 }
 
 #[test]
@@ -545,6 +557,40 @@ fn chat_completions_streams_wire_deltas_and_reassembles_tool_calls() {
 }
 
 #[test]
+fn deepseek_chat_completions_maps_cache_hits_and_reasoning_usage() {
+    let transport = CapturingTransport::new(json!({
+        "id": "chatcmpl_1",
+        "choices": [{
+            "message": {"content": "done"},
+            "finish_reason": "stop"
+        }],
+        "usage": {
+            "prompt_tokens": 100,
+            "prompt_cache_hit_tokens": 75,
+            "prompt_cache_miss_tokens": 25,
+            "completion_tokens": 12,
+            "completion_tokens_details": {"reasoning_tokens": 8}
+        }
+    }));
+
+    let response = ApiEndpoint::DeepSeekChatCompletions
+        .complete_with_client(
+            &target(),
+            "deepseek-test",
+            &ModelRequest::text("hello"),
+            &transport,
+        )
+        .unwrap();
+
+    let usage = response.usage.unwrap();
+    assert_eq!(usage.input_tokens, Some(100));
+    assert_eq!(usage.cached_input_tokens, Some(75));
+    assert_eq!(usage.cache_write_input_tokens, None);
+    assert_eq!(usage.output_tokens, Some(12));
+    assert_eq!(usage.reasoning_tokens, Some(8));
+}
+
+#[test]
 fn anthropic_messages_converts_tools_and_tool_use() {
     let transport = CapturingTransport::new(json!({
         "id": "msg_1",
@@ -555,7 +601,13 @@ fn anthropic_messages_converts_tools_and_tool_use() {
             "input": {"city": "Paris"}
         }],
         "stop_reason": "tool_use",
-        "usage": {"input_tokens": 10, "output_tokens": 4}
+        "usage": {
+            "input_tokens": 10,
+            "cache_creation_input_tokens": 3,
+            "cache_read_input_tokens": 7,
+            "output_tokens": 4,
+            "output_tokens_details": {"thinking_tokens": 2}
+        }
     }));
     let mut request = tool_request();
     request.reasoning = None;
@@ -584,6 +636,11 @@ fn anthropic_messages_converts_tools_and_tool_use() {
         response.tool_calls().next().unwrap().name.as_str(),
         "weather"
     );
+    let usage = response.usage.unwrap();
+    assert_eq!(usage.input_tokens, Some(20));
+    assert_eq!(usage.cached_input_tokens, Some(7));
+    assert_eq!(usage.cache_write_input_tokens, Some(3));
+    assert_eq!(usage.reasoning_tokens, Some(2));
 }
 
 #[test]
@@ -591,7 +648,7 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
     let transport = StreamingPayloadTransport::new(
         concat!(
             "event: message_start\n",
-            "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":10,\"cache_read_input_tokens\":8,\"output_tokens\":0}}}\n\n",
+            "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":10,\"cache_creation_input_tokens\":2,\"cache_read_input_tokens\":8,\"output_tokens\":0}}}\n\n",
             "event: content_block_start\n",
             "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
             "event: content_block_delta\n",
@@ -642,8 +699,10 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
     );
     assert_eq!(response.stop_reason, StopReason::ToolUse);
     let usage = response.usage.unwrap();
+    assert_eq!(usage.input_tokens, Some(20));
     assert_eq!(usage.output_tokens, Some(6));
     assert_eq!(usage.cached_input_tokens, Some(8));
+    assert_eq!(usage.cache_write_input_tokens, Some(2));
     assert_eq!(usage.reasoning_tokens, None);
     assert_eq!(
         transport.request.lock().unwrap().as_ref().unwrap()["stream"],
@@ -819,6 +878,10 @@ fn endpoint_families_report_their_underlying_protocol() {
     );
     assert_eq!(
         ApiEndpoint::OpenAiChatCompletions.protocol(),
+        ApiProtocol::OpenAiCompletions
+    );
+    assert_eq!(
+        ApiEndpoint::DeepSeekChatCompletions.protocol(),
         ApiProtocol::OpenAiCompletions
     );
 }

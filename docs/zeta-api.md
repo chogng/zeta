@@ -17,7 +17,7 @@
 > - Model catalog control plane：[`models-manager.md`](models-manager.md)
 > - Subscription runtime adapter：[`chatgpt-subscription.md`](chatgpt-subscription.md)
 
-> Provider 官方资料核对日期：2026-07-26。请求字段、事件类型、缓存语义和错误结构会持续变化；
+> Provider 官方资料核对日期：2026-09-04。请求字段、事件类型、缓存语义和错误结构会持续变化；
 > 实现必须以官方文档和脱敏 contract fixture 为准，不能仅凭 OpenAI-compatible 标签推断。
 
 ## 快速理解
@@ -111,7 +111,7 @@ zeta-client      zeta-protocol
 
 当前 crate 已实现：
 
-- provider-independent `ApiEndpoint` 和 `ApiProtocol`；
+- 精确到响应语义的 `ApiEndpoint`，以及供上层描述共同调用族的 `ApiProtocol`；
 - `endpoint/`、`requests/`、`sse/` 三个顶级 codec 模块；
 - OpenAI Responses unary codec；
 - Anthropic Messages unary codec；
@@ -463,6 +463,13 @@ Prompt cache 的 wire 语义属于 `requests/`：
 - xAI Chat header 与 Responses body key 的差异；
 - DeepSeek/Qwen/Z.AI 自动缓存 usage。
 
+统一 usage 不是对 wire 字段做同名复制：`input_tokens` 表示包含缓存读取与缓存写入的总输入，
+`cached_input_tokens` 表示缓存读取，`cache_write_input_tokens` 表示缓存写入。OpenAI Responses 的
+总输入可直接读取；Anthropic 必须把 `input_tokens + cache_creation_input_tokens +
+cache_read_input_tokens` 相加；DeepSeek 的 `prompt_tokens` 已是 hit 与 miss 之和，缓存读取来自
+`prompt_cache_hit_tokens`。DeepSeek 因未报告缓存写入量而保持该项未知。缓存占比只在总输入与缓存
+读取都完整时由上层计算，adapter 不制造请求级“命中率”。
+
 不能强行统一为一个 `cache: bool`。Canonical contract 可以表达最小 provider-independent intent，
 精确配置使用 typed profile option。
 
@@ -781,6 +788,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 
 ### OpenAI
 
+- [Responses usage](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)
 - [Responses streaming](https://developers.openai.com/api/docs/guides/streaming-responses)
 - [Responses WebSocket client/server events](https://developers.openai.com/api/reference/cli/resources/beta/subresources/responses)
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
@@ -793,6 +801,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 
 ### Anthropic
 
+- [Messages usage](https://platform.claude.com/docs/en/api/typescript/messages)
 - [Streaming Messages](https://platform.claude.com/docs/en/build-with-claude/streaming)
 - [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
 - [API errors](https://platform.claude.com/docs/en/api/errors)

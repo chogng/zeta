@@ -281,6 +281,7 @@ function toThread(thread: ThreadDto): Thread {
 			inputTokens: { ...thread.usage.inputTokens },
 			outputTokens: { ...thread.usage.outputTokens },
 			cachedInputTokens: { ...thread.usage.cachedInputTokens },
+			cacheWriteInputTokens: { ...thread.usage.cacheWriteInputTokens },
 			reasoningTokens: { ...thread.usage.reasoningTokens },
 		},
 		turns: thread.turns.map((turn) => ({
@@ -297,6 +298,7 @@ function toThread(thread: ThreadDto): Thread {
 				inputTokens: { ...turn.usage.inputTokens },
 				outputTokens: { ...turn.usage.outputTokens },
 				cachedInputTokens: { ...turn.usage.cachedInputTokens },
+				cacheWriteInputTokens: { ...turn.usage.cacheWriteInputTokens },
 				reasoningTokens: { ...turn.usage.reasoningTokens },
 			},
 			items: turn.items.map((item) => ({ ...item })),

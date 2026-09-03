@@ -90,6 +90,13 @@ fn is_data_url(url: &str) -> bool {
 }
 
 impl ModelService for AttachmentModelService {
+    fn billing_scope(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<zeta_protocol::ModelBillingScope, CoreError> {
+        self.inner.billing_scope(selection)
+    }
+
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
         self.inner.context_budget(selection)
     }

@@ -45,7 +45,7 @@ pub(crate) fn complete(
         build_request(model, request)?,
         cancellation,
     )?;
-    parse_response(response)
+    parse_response(endpoint, response)
 }
 
 pub(crate) fn stream(
@@ -95,7 +95,7 @@ pub(crate) fn stream(
         failure: _,
     } = body_sink;
     framing.finish()?;
-    parse_response(events.finish_response()?)
+    parse_response(endpoint, events.finish_response()?)
 }
 
 struct OpenAiChatCompletionsBodySink<'a> {
@@ -257,7 +257,7 @@ fn convert_completions_tool_choice(choice: &ToolChoice) -> Value {
     }
 }
 
-fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
+fn parse_response(endpoint: ApiEndpoint, response: Value) -> Result<ModelResponse, ApiError> {
     let choice = response
         .pointer("/choices/0")
         .ok_or_else(|| ApiError::InvalidResponse("missing first completion choice".into()))?;
@@ -342,19 +342,30 @@ fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
     };
     Ok(ModelResponse {
         output,
-        usage: parse_usage(response.get("usage")),
+        usage: parse_usage(endpoint, response.get("usage")),
+        billing: super::parse_response_billing(&response)?,
         stop_reason,
     })
 }
 
-fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {
+fn parse_usage(endpoint: ApiEndpoint, usage: Option<&Value>) -> Option<ModelUsage> {
     let usage = usage?;
+    let cached_input_tokens = match endpoint {
+        ApiEndpoint::DeepSeekChatCompletions => {
+            usage.get("prompt_cache_hit_tokens").and_then(Value::as_u64)
+        }
+        ApiEndpoint::OpenAiChatCompletions => usage
+            .pointer("/prompt_tokens_details/cached_tokens")
+            .and_then(Value::as_u64),
+        ApiEndpoint::OpenAiResponses | ApiEndpoint::AnthropicMessages => {
+            unreachable!("Chat Completions parser requires a Chat Completions endpoint")
+        }
+    };
     Some(ModelUsage {
         input_tokens: usage.get("prompt_tokens").and_then(Value::as_u64),
         output_tokens: usage.get("completion_tokens").and_then(Value::as_u64),
-        cached_input_tokens: usage
-            .pointer("/prompt_tokens_details/cached_tokens")
-            .and_then(Value::as_u64),
+        cached_input_tokens,
+        cache_write_input_tokens: None,
         reasoning_tokens: usage
             .pointer("/completion_tokens_details/reasoning_tokens")
             .and_then(Value::as_u64),

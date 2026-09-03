@@ -7,7 +7,7 @@ use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::frame;
 use crate::app::frame::InputPointerTarget;
-use crate::app::input_surface::InputSurfacePointerTarget;
+use crate::app::composer_slot::ComposerSlotPointerTarget;
 use crate::app::requests::RequestLane;
 use crate::app::requests::RequestTasks;
 use crate::terminal::mouse::MouseMode;
@@ -142,8 +142,8 @@ fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
     'rows: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::InputSurface(
-                    InputSurfacePointerTarget::Item(1),
+                == Some(InputPointerTarget::ComposerSlot(
+                    ComposerSlotPointerTarget::Item(1),
                 ))
             {
                 target = Some((column, row));
@@ -161,8 +161,8 @@ fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
     );
     assert_eq!(
         app.hovered_pointer_target(),
-        Some(&InputPointerTarget::InputSurface(
-            InputSurfacePointerTarget::Item(1)
+        Some(&InputPointerTarget::ComposerSlot(
+            ComposerSlotPointerTarget::Item(1)
         ))
     );
 }
@@ -184,8 +184,8 @@ fn pointer_click_switches_a_selection_tab() {
     'cells: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::InputSurface(
-                    InputSurfacePointerTarget::Tab(1),
+                == Some(InputPointerTarget::ComposerSlot(
+                    ComposerSlotPointerTarget::Tab(1),
                 ))
             {
                 target = Some((column, row));
@@ -217,8 +217,8 @@ fn pointer_click_explicitly_focuses_the_composer_search_box() {
     'cells: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::InputSurface(
-                    InputSurfacePointerTarget::Search,
+                == Some(InputPointerTarget::ComposerSlot(
+                    ComposerSlotPointerTarget::Search,
                 ))
             {
                 target = Some((column, row));

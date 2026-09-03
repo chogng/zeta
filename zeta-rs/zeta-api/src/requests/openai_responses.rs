@@ -375,6 +375,7 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
     Ok(ModelResponse {
         output,
         usage: parse_usage(response.get("usage")),
+        billing: super::parse_response_billing(&response)?,
         stop_reason,
     })
 }
@@ -386,6 +387,9 @@ fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {
         output_tokens: usage.get("output_tokens").and_then(Value::as_u64),
         cached_input_tokens: usage
             .pointer("/input_tokens_details/cached_tokens")
+            .and_then(Value::as_u64),
+        cache_write_input_tokens: usage
+            .pointer("/input_tokens_details/cache_write_tokens")
             .and_then(Value::as_u64),
         reasoning_tokens: usage
             .pointer("/output_tokens_details/reasoning_tokens")

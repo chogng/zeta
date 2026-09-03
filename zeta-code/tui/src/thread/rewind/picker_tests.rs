@@ -48,6 +48,7 @@ fn thread(messages: &[&str]) -> Thread {
         status: ThreadStatus::Active,
         sequence: 1,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: messages
             .iter()

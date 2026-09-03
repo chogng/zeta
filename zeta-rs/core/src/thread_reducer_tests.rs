@@ -388,6 +388,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
         input_tokens: Some(120),
         output_tokens: Some(8),
         cached_input_tokens: Some(0),
+        cache_write_input_tokens: Some(0),
         reasoning_tokens: None,
     };
     let invalid = ThreadEvent::ModelUsageRecorded {

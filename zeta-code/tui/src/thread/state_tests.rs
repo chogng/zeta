@@ -205,6 +205,7 @@ fn thread_snapshot() -> Thread {
         status: ThreadStatus::Active,
         sequence: 7,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        reference_cost: zeta_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![Turn {
             turn_id: turn_id.clone(),
