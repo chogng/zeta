@@ -20,6 +20,10 @@ pub(crate) use editor::keymap_choices;
 
 const CONFIG_KEY: &str = "keybindings";
 
+pub(crate) fn fixed_shortcuts() -> impl Iterator<Item = (&'static str, &'static str)> {
+    [("Esc Esc", "open rewind checkpoints when the input is empty")].into_iter()
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum KeymapCaptureMode {
     SingleKey,

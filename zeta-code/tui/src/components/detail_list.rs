@@ -55,6 +55,8 @@ impl DetailList {
 
 use crate::render::RenderContext;
 use crate::render::horizontal_margin;
+use crate::render::prefix_lines;
+use crate::render::styled_text_lines;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -64,6 +66,8 @@ use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Wrap;
+use unicode_width::UnicodeWidthStr;
 
 pub(crate) fn draw_scrolled(
     frame: &mut Frame<'_>,
@@ -75,23 +79,26 @@ pub(crate) fn draw_scrolled(
     let lines = detail
         .rows()
         .iter()
-        .map(|row| {
-            Line::from(vec![
-                Span::styled(
-                    format!("{}: ", row.label()),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(row.value(), Style::default().fg(context.muted())),
-            ])
+        .flat_map(|row| {
+            let label = format!("{}: ", row.label());
+            let continuation = " ".repeat(label.width());
+            prefix_lines(
+                styled_text_lines(row.value(), Style::default().fg(context.muted())),
+                Span::styled(label, Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(continuation),
+            )
         })
-        .collect::<Vec<_>>();
+        .collect::<Vec<Line<'_>>>();
     frame.render_widget(
-        Paragraph::new(lines).scroll((scroll, 0)).block(
-            Block::default()
-                .title(detail.title())
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(context.focus())),
-        ),
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .scroll((scroll, 0))
+            .block(
+                Block::default()
+                    .title(detail.title())
+                    .borders(Borders::TOP)
+                    .border_style(Style::default().fg(context.focus())),
+            ),
         horizontal_margin(area, 2),
     );
 }

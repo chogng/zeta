@@ -1,5 +1,6 @@
 use super::ThreadFeatureState;
 use crate::components::chat_history::CommandStatus;
+use crate::components::chat_history::ExecutionKind;
 use crate::components::chat_history::MessageRole;
 use crate::features::thread::ThreadPresentationEvent;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
@@ -151,6 +152,7 @@ fn command_completion_groups_the_command_with_its_result() {
     let message = state.messages().first().unwrap();
     assert_eq!(state.messages().len(), 1);
     assert_eq!(message.command_status, Some(CommandStatus::Succeeded));
+    assert_eq!(message.execution_kind, ExecutionKind::LocalCommand);
     assert_eq!(message.detail.as_deref(), Some("Theme set"));
 }
 

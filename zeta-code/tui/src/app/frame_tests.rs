@@ -72,10 +72,7 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
     let status_line = rendered.lines().last().unwrap();
-    assert_eq!(
-        status_line.trim_end(),
-        "  ⏸ ask permissions on (shift+tab to cycle)"
-    );
+    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
@@ -99,6 +96,7 @@ fn status_notice_overlays_the_row_above_chat_input_without_changing_layout() {
             .trim_end()
             .ends_with("Copied 246 chars to clipboard")
     );
+    assert!(!rows[notice_row].contains("shift+tab"));
     assert!(!rows.last().unwrap().contains("Copied"));
 }
 
@@ -173,20 +171,15 @@ fn empty_session_input_offers_manager_navigation() {
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[18].trim_end().ends_with("← agents"));
-    assert_eq!(
-        rows[19].trim_end(),
-        "  ⏸ ask permissions on (shift+tab to cycle)"
-    );
+    assert!(rows[18].contains("← agents"));
+    assert!(!rows[18].contains("shift+tab"));
+    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 
     app.insert_text("draft");
     let rendered = render(&app, 80, 20);
     let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(
-        status_line.trim_end(),
-        "  ⏸ ask permissions on (shift+tab to cycle)"
-    );
+    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
     assert!(!status_line.contains("← agents"));
 }
 
@@ -202,7 +195,8 @@ fn narrow_session_footer_keeps_status_and_manager_hint_on_separate_rows() {
     let rendered = render(&app, 24, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[18].trim_end().ends_with("← agents"));
+    assert!(rows[18].contains("← agents"));
+    assert!(!rows[18].contains("shift+tab"));
     assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 }
 
@@ -324,9 +318,9 @@ fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
     assert_eq!(
         [ask_permissions, auto_review, bypass_permissions],
         [
-            "  ⏸ ask permissions on (shift+tab to cycle)",
-            "  ⏩  auto review on (shift+tab to cycle)",
-            "  ▶ bypass permissions on (shift+tab to cycle)",
+            "  ⏸ ask permissions on",
+            "  ⏩  auto review on",
+            "  ▶ bypass permissions on",
         ]
     );
 }
@@ -354,7 +348,11 @@ fn queued_message_is_visible_inline_and_counted_in_status_line() {
     let rendered = render(&app, 80, 20);
 
     assert!(rendered.contains("Queue 1: edit this later"));
-    assert!(rendered.lines().any(|line| line.trim_end() == "  queue 1"));
+    assert!(
+        rendered
+            .lines()
+            .any(|line| line.trim_start().starts_with("queue 1"))
+    );
 }
 
 #[test]
@@ -373,7 +371,7 @@ fn follow_up_mode_keeps_queue_count_in_status_line() {
     assert!(
         render(&app, 80, 20)
             .lines()
-            .any(|line| line.trim_end() == "  queue 1")
+            .any(|line| line.trim_start().starts_with("queue 1"))
     );
 }
 
@@ -445,10 +443,7 @@ fn status_line_renders_the_configured_model_without_provider() {
         .collect::<String>();
 
     assert_eq!(context_line.trim_end(), "  claude-sonnet");
-    assert_eq!(
-        policy_line.trim_end(),
-        "  ⏸ ask permissions on (shift+tab to cycle)"
-    );
+    assert_eq!(policy_line.trim_end(), "  ⏸ ask permissions on");
     assert_eq!(buffer[(2, 19)].fg, test_context().warning());
 }
 
@@ -478,8 +473,32 @@ fn chat_input_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
         assert_eq!(buffer[(79, y)].fg, test_context().chat_input_chrome());
     }
     assert_eq!(buffer[(0, 17)].symbol(), "❯");
-    assert_eq!(buffer[(0, 17)].fg, test_context().chat_input_chrome());
+    assert_eq!(buffer[(0, 17)].fg, test_context().foreground());
     assert_eq!(buffer[(79, 17)].symbol(), " ");
+}
+
+#[test]
+fn approval_mode_shortcut_sits_on_the_row_above_chat_input() {
+    let mut app = App::new();
+    app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
+        provider: "anthropic".into(),
+        model: "claude-sonnet".into(),
+    })));
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let composer = layout(&app, terminal_area).session.composer;
+    let buffer = render_buffer(&app, 80, 20);
+    let hint_row = composer.y.saturating_sub(1);
+    let hint = &buffer[(60, hint_row)];
+
+    assert_eq!(hint.symbol(), "s");
+    assert_eq!(hint.fg, test_context().muted());
+    assert!(hint.modifier.contains(Modifier::ITALIC));
+    assert_eq!(buffer[(0, composer.y)].symbol(), "─");
+    assert_eq!(buffer[(79, composer.y)].symbol(), "─");
+    let status_row = (0..80)
+        .map(|x| buffer[(x, 18)].symbol())
+        .collect::<String>();
+    assert!(!status_row.contains("shift+tab"));
 }
 
 #[test]
@@ -539,24 +558,18 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[15].contains("first"));
     assert!(rows[16].contains("second"));
     assert!(rows[17].contains("third"));
-    assert_eq!(
-        rows[19].trim_end(),
-        "  ⏸ ask permissions on (shift+tab to cycle)"
-    );
+    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
-fn turn_activity_keeps_permission_status_free_of_input_hints() {
+fn turn_activity_keeps_permission_status_free_of_submission_hints() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
 
     let rendered = render(&app, 80, 20);
     let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(
-        status_line.trim_end(),
-        "  ⏸ ask permissions on (shift+tab to cycle)"
-    );
+    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
     assert!(!status_line.contains("enter queue"));
     assert!(!status_line.contains("ctrl-c interrupt"));
 }
@@ -574,7 +587,7 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn composer_selection_replaces_chat_input_and_status_line_with_its_hint_bar() {
+fn composer_selection_without_actions_hides_the_status_area() {
     let mut app = App::new();
     app.update(AppEvent::ProductNotice(
         "Conversation remains visible.".into(),
@@ -587,19 +600,14 @@ fn composer_selection_replaces_chat_input_and_status_line_with_its_hint_bar() {
     assert!(rendered.contains("Help"));
     assert!(rendered.contains("Commands"));
     assert!(rendered.contains("Keys"));
-    assert!(rendered.contains("Esc to close"));
     assert!(rendered.contains("Search commands and shortcuts"));
-    assert!(rendered.contains("←/→/Tab to switch"));
+    assert!(!rendered.contains("Esc to close"));
+    assert!(!rendered.contains("←/→/Tab to switch"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ask permissions on"));
-    let rows = rendered.lines().collect::<Vec<_>>();
-    let hint_bar_row = rows
-        .iter()
-        .position(|row| row.contains("Esc to close"))
-        .unwrap();
-    assert_eq!(hint_bar_row, rows.len() - 1);
     let layout = super::layout(&app, Rect::new(0, 0, 80, 24));
     assert!(layout.input.is_empty());
+    assert!(layout.session.status.is_empty());
     assert_eq!(layout.session.composer.bottom(), layout.session.status.y);
 }
 
@@ -688,10 +696,7 @@ fn error_detail_is_rendered_once_and_status_line_only_offers_recovery() {
     );
     assert!(rendered.contains("ask permissions on"));
     assert!(!rows.iter().any(|line| line.trim() == "error"));
-    assert_eq!(
-        rows[19].trim_end(),
-        "  ⏸ ask permissions on (shift+tab to cycle)"
-    );
+    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
     assert!(!rendered.contains("ready to retry"));
     assert!(!rendered.contains("esc esc rewind"));
     assert!(!rendered.contains("StableTurnError"));
@@ -705,7 +710,7 @@ fn submitted_slash_command_is_immediately_visible_in_the_transcript() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let rendered = render(&app, 80, 20);
-    assert!(rendered.lines().next().unwrap().contains("›  /status"));
+    assert!(rendered.lines().next().unwrap().contains("❯ /status"));
 }
 
 #[test]
@@ -719,9 +724,24 @@ fn command_completion_renders_an_adjacent_result_line() {
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[0].contains("●  /theme zeta-code-light"));
+    assert!(rows[0].contains("❯ /theme zeta-code-light"));
     assert!(rows[1].contains("└─ Theme set to Zeta Code Light"));
     assert!(rows[2].trim().is_empty());
+}
+
+#[test]
+fn transcript_and_chat_input_content_start_in_the_same_column() {
+    let mut app = App::new();
+    app.update(AppEvent::CommandCompleted {
+        command: "/theme zeta-code-light".into(),
+        result: "Theme set to Zeta Code Light".into(),
+    });
+    app.insert_text("draft");
+
+    let buffer = render_buffer(&app, 80, 20);
+
+    assert_eq!(buffer[(2, 0)].symbol(), "/");
+    assert_eq!(buffer[(2, 17)].symbol(), "d");
 }
 
 #[test]

@@ -16,7 +16,7 @@ fn catalog_and_resolution_use_the_supplied_config_preference() {
 
     let catalog = resource.catalog("system").unwrap();
     assert_eq!(catalog.choices.len(), 8);
-    assert_eq!(catalog.choices[0].label, "Auto");
+    assert_eq!(catalog.choices[0].label, "Auto (match terminal)");
     assert_eq!(catalog.choices[0].palette_label, "GitHub Dark");
     assert!(catalog.choices[0].selected);
     assert_eq!(catalog.choices[7].label, "Custom color theme");

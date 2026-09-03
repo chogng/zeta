@@ -1,0 +1,36 @@
+---
+source: zeta-code/cli/tests/support/tui_process.rs
+expression: screen
+---
+❯ 尝试在工作区外创建 sandbox-must-not-write.txt
+
+● Thought
+
+● shell-command failed
+└─ shell-command [call-sandbox]
+   {
+     "program": "/bin/sh",
+     "arguments": [
+       "-c",
+       "touch ../sandbox-must-not-write.txt 2>&- || { echo 'sandbox fixture: operation not
+permitted' >&2; exit 1; }"
+     ],
+     "working_directory": "."
+   }
+   sandbox denied the action, but the attempt may have produced side effects, so the exact call was
+  Transcript cell─────────────────────────────────────────────────────────────────────────────────
+  Content: shell-command [call-sandbox]
+           {
+             "program": "/bin/sh",
+             "arguments": [
+               "-c",
+               "touch ../sandbox-must-not-write.txt 2>&- || { echo 'sandbox fixture: operation not
+  permitted' >&2; exit 1; }"
+             ],
+             "working_directory": "."
+           }
+           sandbox denied the action, but the attempt may have produced side effects, so the exact
+  call was not retried; reason: platform sandbox denied the sandboxed process operation; output:
+  sandbox fixture: operation not permitted
+  Esc to close
+  ↑↓ select · space expand · enter details · esc input

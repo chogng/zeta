@@ -155,7 +155,7 @@ impl ChatHistoryRenderCache {
         message: &Message,
         width: u16,
         context: RenderContext<'_>,
-        render: impl FnOnce() -> Vec<Line<'a>>,
+        render: impl FnOnce() -> (Vec<Line<'a>>, usize),
     ) -> PreparedCell {
         let key = CacheKey::for_message(message, width, context);
         if let Some(key) = key.as_ref()
@@ -164,35 +164,36 @@ impl ChatHistoryRenderCache {
             return PreparedCell::Buffered(cell);
         }
 
-        let borrowed = render();
+        let (borrowed, user_input_lines) = render();
         let mut lines = Vec::with_capacity(borrowed.len());
         push_owned_lines(&borrowed, &mut lines);
         let height = wrapped_height(&lines, width);
+        let user_input_rows = wrapped_height(&lines[..user_input_lines.min(lines.len())], width);
         if let Some(key) = key.as_ref() {
             self.insert_height(key.clone(), height);
         }
         let Some(cost) = usize::from(width).checked_mul(height) else {
             return PreparedCell::Lines {
                 lines,
-                background: message_background(message, context),
-                separator_background: context.background(),
-                height,
+                background: context.background(),
+                user_input_background: context.user_message_background(),
+                user_input_rows,
             };
         };
         let Some(buffer_height) = u16::try_from(height).ok() else {
             return PreparedCell::Lines {
                 lines,
-                background: message_background(message, context),
-                separator_background: context.background(),
-                height,
+                background: context.background(),
+                user_input_background: context.user_message_background(),
+                user_input_rows,
             };
         };
         if key.is_none() || cost > MAX_CELL_CELLS {
             return PreparedCell::Lines {
                 lines,
-                background: message_background(message, context),
-                separator_background: context.background(),
-                height,
+                background: context.background(),
+                user_input_background: context.user_message_background(),
+                user_input_rows,
             };
         }
 
@@ -202,11 +203,14 @@ impl ChatHistoryRenderCache {
             area,
             Style::default()
                 .fg(context.foreground())
-                .bg(message_background(message, context)),
+                .bg(context.background()),
         );
-        buffer.set_style(
-            Rect::new(0, buffer_height.saturating_sub(1), width, 1),
-            Style::default().bg(context.background()),
+        fill_user_input_background(
+            &mut buffer,
+            area,
+            0,
+            user_input_rows,
+            context.user_message_background(),
         );
         Paragraph::new(lines)
             .wrap(Wrap { trim: false })
@@ -445,8 +449,8 @@ pub(crate) enum PreparedCell {
     Lines {
         lines: Vec<Line<'static>>,
         background: Color,
-        separator_background: Color,
-        height: usize,
+        user_input_background: Color,
+        user_input_rows: usize,
     },
 }
 
@@ -457,25 +461,18 @@ impl PreparedCell {
             Self::Lines {
                 lines,
                 background,
-                separator_background,
-                height,
+                user_input_background,
+                user_input_rows,
+                ..
             } => {
                 target.set_style(area, Style::default().bg(*background));
-                if let Some(separator_row) = height.checked_sub(1).and_then(|separator_row| {
-                    separator_row
-                        .checked_sub(source_row)
-                        .filter(|row| *row < usize::from(area.height))
-                }) {
-                    target.set_style(
-                        Rect::new(
-                            area.x,
-                            area.y.saturating_add(separator_row as u16),
-                            area.width,
-                            1,
-                        ),
-                        Style::default().bg(*separator_background),
-                    );
-                }
+                fill_user_input_background(
+                    target,
+                    area,
+                    source_row,
+                    *user_input_rows,
+                    *user_input_background,
+                );
                 let (lines, source_row) = visible_lines(lines, area.width, source_row);
                 let lines = lines.iter().map(line_to_borrowed).collect::<Vec<_>>();
                 Paragraph::new(lines)
@@ -487,12 +484,25 @@ impl PreparedCell {
     }
 }
 
-fn message_background(message: &Message, context: RenderContext<'_>) -> Color {
-    if message.role == super::MessageRole::User {
-        context.user_message_background()
-    } else {
-        context.background()
-    }
+fn fill_user_input_background(
+    target: &mut Buffer,
+    area: Rect,
+    source_row: usize,
+    user_input_rows: usize,
+    background: Color,
+) {
+    let Some(visible_rows) = user_input_rows
+        .checked_sub(source_row)
+        .map(|rows| rows.min(usize::from(area.height)))
+        .and_then(|rows| u16::try_from(rows).ok())
+        .filter(|rows| *rows > 0)
+    else {
+        return;
+    };
+    target.set_style(
+        Rect::new(area.x, area.y, area.width, visible_rows),
+        Style::default().bg(background),
+    );
 }
 
 #[derive(Debug)]

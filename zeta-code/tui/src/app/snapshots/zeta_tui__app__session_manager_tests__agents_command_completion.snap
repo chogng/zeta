@@ -29,8 +29,8 @@ expression: render(&app)
 
 
 
-  /agents                    open the Session Manager
+  /agents                    open the Session Manager                           shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯ /agents
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

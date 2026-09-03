@@ -2,15 +2,13 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-›  触发真实 HTTP 500
+❯ 触发真实 HTTP 500
 
-×  Model invocation failed
+● Model invocation failed
 
-›  错误以后继续发送
+❯ 错误以后继续发送
 
-◆  错误后仍能继续对话。
-
-
+● 错误后仍能继续对话。
 
 
 
@@ -29,8 +27,10 @@ expression: screen
 
 
 
+
+                                                                                shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

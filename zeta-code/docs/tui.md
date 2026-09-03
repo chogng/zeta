@@ -69,14 +69,13 @@ Zeta 已经在 TUI 外部拥有：
 - `zeta-ansi-escape` 中独立的 ANSI SGR → Ratatui presentation adapter；它不拥有 PTY/terminal state。
 
 主题是 Zeta Code 自有能力，不是图形界面主题的子集。`render/theme.rs` 定义完整 `ThemePalette`、内置 dark/light/colorblind 调色板和 TrueColor、ANSI-256、ANSI-16、Monochrome 转换；`features/theme` 严格读取 TUI 自己的用户主题，不引用 TypeScript token registry、`resources/design-tokens` 或 `zeta-theme`。主题选择、Mouse interactions、Follow-up messages、Input mode 和新增目录默认授权都通过 App Server Config API 保存到 `<profile>/config.toml` 的根级 `[tui]`，用户主题内容位于 `<profile>/zeta-code/themes/*.json`。无参数 `/theme` 打开由 `features/theme` 拥有、不可搜索的固定
-Zeta Code Theme picker 以挂在顶部分隔线上的反色 `Theme` 块为标题，标题与第一个候选项之间保留一行；固定选项为 Auto、Dark/Light、对应 colorblind-friendly 与 ANSI-only 模式，以及 Custom
-color theme。候选行编号展示，cursor 选择色和 syntax/diff preview 随候选主题变化；Enter 原子保存、
-即时切换并关闭整个 Theme flow 返回主界面；保存成功后 transcript 以独立的状态圆点显示实际执行的 `/theme <id>`，下一行通过 `└─` 结构连接符归属结果说明，两行正文保持同列对齐；保存失败时则保留 Theme picker 以显示错误。移动 cursor 时，Theme picker 分隔线、上方 welcome banner
+Zeta Code Theme picker 以挂在顶部分隔线上的反色 `Theme` 块为标题，标题与第一个候选项之间保留一行；固定选项为 Auto (match terminal)、Dark/Light、对应 colorblind-friendly 与 ANSI-only 模式，以及 Custom
+color theme。候选行只显示编号和名称，不追加勾选符；打开时 `❯` 直接指向当前主题，cursor 选择色和 syntax/diff preview 随候选主题变化；Enter 选择后立即关闭整个 Theme flow 返回主界面，再异步保存并切换主题；保存期间 transcript 中实际执行的 `/theme <id>` 显示 `●`，保存结束后恢复为用户消息指示符 `❯`，下一行通过 `└─` 结构连接符归属结果说明，两行正文保持同列对齐，保存失败则在 transcript 显示错误。移动 cursor 时，Theme picker 分隔线、上方 welcome banner
 框线使用候选 highlight；独立 `Diff preview` 区域不画左右边框，只用候选 muted token 绘制上下
-较高对比度的长节虚线。主题列表与 preview 间保留两行，palette 来源说明与操作提示间保留一行。preview 下方标明
+较高对比度的长节虚线。主题列表与 preview 间保留一行，palette 来源说明与 `Enter to apply` 操作提示间保留一行。preview 下方标明
 GitHub、GitHub Colorblind、ANSI 16 colors 或 User-defined 配色来源。`/theme <id>` 保留直接切换。通用 `ListSelection` 组件的搜索是独立、
 可配置的底座；启用搜索的页面用上下键在列表、SearchBox 和 Tab 栏之间移动焦点，焦点到 Tab 栏后用左右键切换，Tab/Shift-Tab 也可直接切换。Tab、SearchBox 和 item 共用同一个两格状态列并保持正文对齐。
-所有本地 command 在 Enter 后立即写入同一个“命令 + 结果”正文单元：刚提交显示 `›`，Running 显示 `◉`，Succeeded 显示 `●`；后续状态和结果原地更新，结果行使用与状态位结构相连的 `└─` 表达归属，正文与命令文字同列对齐并使用弱化色，之后才空行。普通消息触发的新 Session 不输出 Session/Thread ID；`/new` 在清空旧正文后保留命令单元，并只显示不含 ID 的结果。正文单元按稳定 `TranscriptCellId` 展开，并可在 Overlay 中查看 TUI 拿到的完整保留表示；若上游已省略内容，详情必须保留该事实。
+所有本地 command 在 Enter 后立即写入同一个“命令 + 结果”正文单元：命令首行作为用户输入，已提交和已结束时使用与用户消息一致的 `❯`，只在 Running 期间切换为警告色 `●`。指示符与正文之间保留一格，使正文和输入框内容从同一列开始。后续状态和结果原地更新，结果行使用与状态位结构相连的 `└─` 表达归属，结果内容使用弱化色，之后才空行。普通回答、思考、读取和搜索使用弱化色圆点，文件写入、编辑和补丁成功使用蓝色强调圆点；颜色只作用于圆点，正文保持正常前景。普通消息触发的新 Session 不输出 Session/Thread ID；`/new` 在清空旧正文后保留命令单元，并只显示不含 ID 的结果。正文单元按稳定 `TranscriptCellId` 展开；折叠与展开都保持同一个实心圆，展开后的 `└─` 详情表达归属，并可在 Overlay 中查看 TUI 拿到的完整保留表示；若上游已省略内容，详情必须保留该事实。
 Auto 在终端 raw mode 建立后、输入事件线程启动前发出一次 OSC 11 背景色查询，并按实际 RGB
 亮度选择 Light/Dark；120 ms 内没有有效响应时读取 `COLORFGBG`，仍无法识别才安全回退 Dark。
 检测结果在当前 TUI 会话内缓存，主题面板与再次选择 Auto 不会重复查询；显式模式不受该判断影响。
@@ -579,7 +578,7 @@ owning crate interface / typed App Server result
 
 `status_line/` 定义稳定的 item identity、用户排序、开关、separator 和 overflow policy；项目列表保存在 `config.toml` 的 `[tui].statusLine`。TUI 负责解释与校验字段，App Server 只按完整 `[tui]` 表持久化并校验 config revision。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
 
-当前实现由 `features/status_line/model.rs` 把 Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序启用的模型、Git 分支和 Git 变更组合到上行；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下一次 Turn 的权限模式固定在下行，空间足够时附带 `shift+tab to cycle`。`features/status_line/view.rs` 最多绘制两行。Session Manager、当前 `ComposerMode`、SubagentPicker 或 Chord 需要明确按键时，固定一行 KeyHints 直接替换 StatusLine；`ComposerMode` 有值时保留 ChatInput 状态，当前组件替换 ChatInput 参与布局。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
+当前实现由 `features/status_line/model.rs` 把 Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序启用的模型、Git 分支和 Git 变更组合到上行；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复；下一次 Turn 的权限模式固定在下行。`shift+tab to cycle` 右对齐显示在 ChatInput 顶边上方的独立提示行，临时 StatusNotice 出现时由通知替换。`features/status_line/view.rs` 最多绘制两行。Session Manager、含非默认操作的 `ComposerMode`、SubagentPicker 或 Chord 需要明确按键时，一行 KeyHints 直接替换 StatusLine；`ComposerMode` 有值时保留 ChatInput 状态，当前组件替换 ChatInput 参与布局，没有 KeyHints 时不占用底栏。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
 
 ## 12. `host/`：窄宿主能力
 
@@ -936,21 +935,21 @@ lib.rs + lib_tests.rs
 - `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 只调度请求并把 feature result 转成 `AppEvent`；Config 页面读取服务端配置、Provider 和当前 Session 的目录权限，主题选择、TUI 设置、API key 保存后的重读链及带版本的权限修改也由 `features/config/request.rs` 完成。`TerminalSettings` 解释 `[tui]` 中由 TUI 拥有的字段，写入时保留主题和未知键；配置后端只校验 revision 并替换完整表。Mouse interactions 决定整个 TUI 会话由 `TuiCapture` 处理拖动选择、自动复制和点击，还是由 `TerminalSelection` 把鼠标交还终端；Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，Input mode 决定 `ChatInput` 使用 Standard 或 Vim；
 - `components/tab_list.rs` 已拥有横向 tab 集合、当前项、Tab/Shift-Tab 与左右键循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并拥有 query/filter/selection state、列表/SearchBox/Tab 焦点、输入 outcome、pointer 命中与不透明 typed action 绑定；只读详情、文本输入和按键录制分别由 `DetailList`、`TextPrompt` 和 `KeyCapture` 提供机械能力；
 - `render/layout.rs` 已拥有跨 presentation surface 复用的纯 geometry；`render/theme.rs` 拥有 TUI 完整调色板和终端色彩能力转换，`features/theme/resource.rs` 负责 TUI 产品目录的读取、预览、选择和保存；`App` 持有活动主题并通过 `RenderContext` 向下传递，component 不反向依赖 frame coordinator；
-- `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、Session 界面 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/shortcuts` 可配置项；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和一行 KeyHints；当前内建表仍只声明单段组合。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；`ChatInput` 编辑、`ListSelection` 导航与 `ChatHistory` 滚动继续由局部 component 拥有；
+- `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、Session 界面空输入时的 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/shortcuts` 可配置项；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和一行 KeyHints；当前内建表仍只声明单段组合。连续两次 Esc 只在空输入时打开 Rewind picker，非空草稿不响应且不被清除。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；`ChatInput` 编辑、`ListSelection` 导航与 `ChatHistory` 滚动继续由局部 component 拥有；
 - `features/keymap` 解释 `config.toml` 的 `[tui].keybindings`，完整校验 User command/blocker、平台覆盖与 `when`；`/shortcuts` 打开 Keymap 设置界面，汇总固定操作键和可配置应用级绑定，并提供可搜索的 All/Customized/Diagnostics 列表、action 菜单和单键/两段 Chord 录制。保存要求打开界面时的 config revision 仍有效，完整编译成功后才通过 `config/update` 替换 `[tui]` 并安装新 `AppKeymap`；坏更新或保存失败保留上一份有效映射，`config/changed` 触发重读；
 - `App` 处理 presentation coordination 与 Keymap action，并明确保存当前 `TerminalScreen`、一个 `ComposerMode` 和一个 `DetailOverlay`；`app/screen_layout.rs` 只接收普通组件最终需要的行数，为 Session 页面统一分配 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval/Composer 当前内容 → StatusLine/KeyHints → 空行 → SubagentPicker`，为 Manager 页面分配 `Welcome → 分组 Session rows → ChatInput/Composer 当前内容 → KeyHints`；
 - `ChatInput`、editor、attachment、paste 和 `/`、`@`、`$` completion 位于 `components/chat_input/`；补全目录由 provider/domain 提供快照，每个 Thread 的 `ChatInput` 独立保存活动 token、popup 和 selection。Config、Keymap、Theme 的多页面返回关系由对应 feature 的 editor 或 picker 保存；`app::composer_mode` 只记录 Session 输入位置当前显示什么，App 直接保存一个只读详情 Overlay；
 - update-driven snapshot resync 先应用完整 canonical Thread，再把
   completed/waiting/failed/interrupted 映射为 presentation lifecycle；active Turn 的定时
   snapshot polling 已移除，Turn completion 不再单独追加 agent 文本；
-- `ChatComposer` 只按 Running/Queue/Steer 状态选择 caller-owned `ChatInput` 的提交目标。`ComposerMode` 存在时由 frame 隐藏 ChatInput、使用当前具体组件的 desired rows，并把它的 KeyHints 放到底栏；ChatComposer 不保存或路由这些交互。Turn 为 Running 时 Enter 按 Follow-up messages 设置把完整草稿放入 Queue 或通过 typed `SteerTurn` 发送。普通 Up 只访问输入历史；`/queue` picker 负责恢复、删除、调序、立即发送和完整内容 Overlay。当前 Turn 结束后队首才调用 `StartTurn`，请求被拒绝时保留条目，服务端接受后才移除。`ListSelection` 用上下键在 item、SearchBox 与 Tab 栏间移动焦点，支持 Tab/Shift-Tab 切页、搜索和过滤；feature 内多页面由 feature 自己处理返回。`$` Skill、`/` command 和 `@` Mention 由 `ChatInput` 的 `CompletionView` 保证同时最多显示一种；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
+- `ChatComposer` 只按 Running/Queue/Steer 状态选择 caller-owned `ChatInput` 的提交目标。`ComposerMode` 存在时由 frame 隐藏 ChatInput、使用当前具体组件的 desired rows，并只在存在非空 KeyHints 时占用底栏；ChatComposer 不保存或路由这些交互。Turn 为 Running 时 Enter 按 Follow-up messages 设置把完整草稿放入 Queue 或通过 typed `SteerTurn` 发送。普通 Up 只访问输入历史；`/queue` picker 负责恢复、删除、调序、立即发送和完整内容 Overlay。当前 Turn 结束后队首才调用 `StartTurn`，请求被拒绝时保留条目，服务端接受后才移除。`ListSelection` 用上下键在 item、SearchBox 与 Tab 栏间移动焦点，支持 Tab/Shift-Tab 切页、搜索和过滤，但不显示这些默认导航和关闭提示；feature 内多页面由 feature 自己处理返回。`$` Skill、`/` command 和 `@` Mention 由 `ChatInput` 的 `CompletionView` 保证同时最多显示一种；`/help` 只读显示 Shortcuts、Commands 和 Custom commands 三个 Tab，Shortcuts 只列应用级操作、用户自定义绑定及非标准的 `Esc Esc` Rewind 手势，`/shortcuts` 负责编辑，`/skills` 从 typed `skills/list` 提供
   All/Enabled/Disabled/Manage catalog tabs；Skill 目录诊断由 App Server 判断并脱敏，TUI 只把新出现的
   诊断写入 Notice。同一条持续存在的诊断不重复提示，消失后再出现或内容变化时重新提示；
 - `$name` 候选和 `/skills` 都只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；候选选中后保留原子 `$name` 文本并绑定 exact pinned `SkillRef`；
   Manage tab 的 `Enter` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
   `skills/changed` 也会刷新前台页面。enablement 不等于正文 activation，TUI 当前没有
   Skill context injection；
-- `app/frame.rs` 先绘制 `TerminalScreen` 的普通组件，再绘制 `DetailOverlay` 或 ChatInput completion，最后绘制字符框选，并以相反顺序命中。`ComposerMode` 存在时其具体组件替换输入位置并把 KeyHints 放进同一个底栏；Overlay 不进入 `screen_layout`，存在时阻止底层 pointer。补全弹层从输入框上沿覆盖；Query 使用输入框上方的独立区域，Approval 使用输入区域本身；
+- `app/frame.rs` 先绘制 `TerminalScreen` 的普通组件，再绘制 `DetailOverlay` 或 ChatInput completion，最后绘制字符框选，并以相反顺序命中。`ComposerMode` 存在时其具体组件替换输入位置，非空 KeyHints 才进入底栏；Overlay 不进入 `screen_layout`，存在时阻止底层 pointer。补全弹层从输入框上沿覆盖；Query 使用输入框上方的独立区域，Approval 使用输入区域本身；
 - `TerminalModeGuard` 在任一 mode 获取失败时按逆序恢复已经获取的 terminal mode，显式
   restore 和 Drop 共享幂等清理路径；
 - `StatusLineModel` 映射运行事实与 typed config/Git result，`StatusLineSettings` 解释 `[tui].statusLine` 的项目与顺序，`features/status_line/view.rs` 在最多两行内按可用宽度降级；`WelcomeModel` 在 App 构造阶段把 workspace 路径缩写为 home-relative 文案，供空会话和 Manager 顶部复用；

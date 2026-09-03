@@ -62,7 +62,7 @@ impl TuiSlashCommandAction {
             Self::Config => "show the current configuration",
             Self::AddDir => "add or manage a session directory",
             Self::Fork => "fork the current chat",
-            Self::Help => "show executable slash commands",
+            Self::Help => "show shortcuts and commands",
             Self::Shortcuts => "browse and customize terminal shortcuts",
             Self::Export => "export this conversation as Markdown",
             Self::Model => "show or set the preferred provider/model",

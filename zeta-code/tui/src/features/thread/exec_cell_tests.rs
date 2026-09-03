@@ -1,6 +1,7 @@
 use super::ExecCell;
 use super::ExecGroup;
 use crate::components::chat_history::CommandStatus;
+use crate::components::chat_history::ExecutionKind;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolName;
 use zeta_protocol::ToolOutputStream;
@@ -75,6 +76,32 @@ fn live_output_is_bounded_with_an_omission_marker() {
     let detail = cell.full_details();
     assert!(detail.len() < 70 * 1024);
     assert!(detail.contains("omitted"));
+}
+
+#[test]
+fn execution_kind_distinguishes_commands_mutations_and_neutral_tools() {
+    let command = ExecCell::start(
+        "command-entry".into(),
+        call_id("command"),
+        &tool_name("shell-command"),
+        "{}".into(),
+    );
+    let mutation = ExecCell::start(
+        "mutation-entry".into(),
+        call_id("mutation"),
+        &tool_name("write_file"),
+        "{}".into(),
+    );
+    let read = ExecCell::start(
+        "read-entry".into(),
+        call_id("read-kind"),
+        &tool_name("read_file"),
+        "{}".into(),
+    );
+
+    assert_eq!(command.view(false).execution_kind, ExecutionKind::Command);
+    assert_eq!(mutation.view(false).execution_kind, ExecutionKind::Mutation);
+    assert_eq!(read.view(false).execution_kind, ExecutionKind::Neutral);
 }
 
 fn call_id(value: &str) -> ToolCallId {

@@ -90,7 +90,7 @@ pub(crate) enum AppKeymapCondition {
     Always,
     AcceptsInput,
     EmptyChatInput,
-    PressWithInput,
+    PressWithEmptyInput,
     PressWithInputWithoutSelection,
     Expression(ContextExpression),
 }
@@ -139,7 +139,7 @@ const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
     AppKeybindingSpec {
         keybinding: "escape",
         action: AppKeymapAction::ScreenEscape,
-        condition: AppKeymapCondition::PressWithInput,
+        condition: AppKeymapCondition::PressWithEmptyInput,
     },
     AppKeybindingSpec {
         keybinding: "ctrl+v",
@@ -376,7 +376,9 @@ pub(super) fn condition_matches(
         AppKeymapCondition::Always => true,
         AppKeymapCondition::AcceptsInput => context.accepts_input,
         AppKeymapCondition::EmptyChatInput => context.chat_input_empty,
-        AppKeymapCondition::PressWithInput => context.is_press && context.accepts_input,
+        AppKeymapCondition::PressWithEmptyInput => {
+            context.is_press && context.accepts_input && context.chat_input_empty
+        }
         AppKeymapCondition::PressWithInputWithoutSelection => {
             context.is_press && context.accepts_input && !context.has_selection
         }

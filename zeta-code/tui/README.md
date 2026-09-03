@@ -31,10 +31,10 @@ Tool、approval policy 或 persistence。
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的 Tab completion、Esc dismiss、鼠标 hover 跟随选中与左键单击可见命令；
 - `$` 打开独立 Skill selector；enabled、compatible 且名称无歧义的 Skill 显示为 `$name`，Tab/Enter 或鼠标选中后作为原子文本插入。提交时保留 `$name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn 后按需加载；Skill 与 `/name` 命令不冲突，`skills/changed` 会刷新候选；
 - `/resume`、`/rewind`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
-- 本地 slash command 在 Enter 后立即以命令正文单元回显；后续执行状态和结果更新同一单元。普通消息触发的新 Session 不额外输出 Session/Thread ID，`/new` 只显示命令与不含 ID 的结果；
+- 本地 slash command 在 Enter 后立即以命令正文单元回显；已提交和已结束时使用用户消息指示符 `❯`，只在 `Running` 期间切换为 `●`，后续执行状态和结果更新同一单元。普通消息触发的新 Session 不额外输出 Session/Thread ID，`/new` 只显示命令与不含 ID 的结果；
 - command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入覆盖完整 Session catalog 的唯一 Session Manager，`/subagents` 聚焦常驻 SubagentPicker，`/queue` 管理当前 Thread 的 Queue；Manager 保留顶部 Welcome，按 Pinned、Needs input、Working、Ready for review、Failed、Stopped、Completed、Idle 分组，每行以状态图标开头并显示名称、当前操作/问题和状态时长；Approval 和 Query 仍由各自请求直接打开，不提供总括页面；
 - `/status` 使用不改变正常布局高度的 Overlay，展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
-- `/help` 从 `ThreadPresentationStore` 保存的合并 `SlashCommandCatalog` 构造可搜索的 `ListSelection`，本地与服务端命令使用和 `/` 补全一致的名称、描述及顺序；上下键在 item、SearchBox 和 Tab 栏间移动输入焦点，Tab 栏用左右键或 Tab 切换，焦点不再额外绘制紫色状态列；Esc 关闭 Help 列表并恢复原草稿的 `ChatInput`；Help 列表打开期间替换 ChatInput 并使用自己的高度，底栏只保留 `←/→/Tab to switch · Esc to close`；快捷键只由 `/shortcuts` 展示；
+- `/help` 从 `ThreadPresentationStore` 保存的合并 `SlashCommandCatalog` 构造可搜索的 `ListSelection`，本地与服务端命令使用和 `/` 补全一致的名称、描述及顺序；上下键在 item、SearchBox 和 Tab 栏间移动输入焦点，Tab 栏用左右键或 Tab 切换，焦点不再额外绘制紫色状态列；Esc 关闭 Help 列表并恢复原草稿的 `ChatInput`；Help 列表打开期间替换 ChatInput 并使用自己的高度，不显示列表导航和关闭这类默认提示；Shortcuts 只列应用级操作、用户自定义绑定及非标准的 `Esc Esc` Rewind 手势，快捷键编辑仍由 `/shortcuts` 提供；
 - `/skills` 通过 typed `skills/list` 打开同一 `ListSelection`，提供
   All/Enabled/Disabled/Manage tabs、数量、搜索和 source-qualified metadata；只有 Manage
   tab 的动作通过 revision-checked `skill/enablement/set` 修改 enablement；该页面是目录管理入口，
@@ -46,7 +46,7 @@ Tool、approval policy 或 persistence。
 - `/add-dir <path>` 通过 typed App Server RPC 把 canonical 目录加入当前 Session 的访问作用域，并使用 Config → Add-dir 中始终可见的十二项默认授权；初始默认只打开读取与修改文件。本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 随即按各自能力接受该目录中的绝对路径，下一 Turn 的 environment snapshot 只列出仍允许读取的目录。不带参数时打开可搜索列表，Enter 撤销所选目录；快照放在模型请求尾部且不写入对话历史，cwd 与相对路径均不改变；
 - 同一 profile 中的 `marketplace/changed` 与 `plugin/changed` 会触发 Skill catalog 重读，并在
   Connector picker 已打开时重读 Connector projection；TUI 当前不提供独立 Marketplace 浏览/安装界面；
-- `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的 Rewind picker；Enter
+- `/rewind` 或主界面输入为空时在 500 ms 内连续按两次 Esc 打开可搜索的 Rewind picker；非空草稿不响应这组手势，也不会被清空；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
 - `/resume` 提供 Session picker；`/archive` 通过 typed `session/request` 归档当前 Session，成功后创建并切换到新 Session，TUI 继续运行；失败时显示错误；
@@ -69,7 +69,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- StatusLine 最多两行：上行组合 Plan、Queue、当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 顺序启用的模型、Git 分支和 Git 变更；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下行只显示下一次 Turn 的权限模式，空间足够时附带 `shift+tab to cycle`。Manager、当前 `ComposerMode` 和其他需要明确操作键的交互由固定一行 KeyHints 直接替换；
+- StatusLine 最多两行：上行组合 Plan、Queue、当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 顺序启用的模型、Git 分支和 Git 变更；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下行只显示下一次 Turn 的权限模式。`shift+tab to cycle` 右对齐显示在 ChatInput 顶边上方的独立提示行，临时 StatusNotice 出现时由通知替换。Manager、含非默认操作的 `ComposerMode` 和其他需要明确操作键的交互由一行 KeyHints 直接替换；没有此类操作的 `ComposerMode` 不占用底栏；
 - `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、Session 界面 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/keymap.rs` 解释 `[tui].keybindings` 的 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、config revision 校验和完整规则校验；保存通过 App Server 替换完整 `[tui]` 表，坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各 component 拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
@@ -87,7 +87,7 @@ Tool、approval policy 或 persistence。
 - raw mode、alternate screen、bracketed paste 与 cursor cleanup；Mouse interactions 开启时在整个 TUI 会话捕获鼠标，关闭时释放捕获并把拖拽文本选择交还终端；
 - 启动时通过 App Server 从 `<profile>/config.toml` 的 `[tui]` 读取主题和终端设置，并从 `<profile>/zeta-code/themes/*.json` 读取 TUI 专用用户主题；内置调色板、语义颜色与 TrueColor、ANSI-256、ANSI-16、Monochrome 降级均由本 crate 拥有，不读取 TypeScript token registry、`resources/design-tokens`、`configuration.json` 或 `zeta-theme`；`features/theme` 拥有 `/theme` 的固定八项 Theme picker、挂在顶部分隔线上的反色 `Theme` 标题、编号、
   active 标记、候选 frame highlight、仅带上下较高对比度长节虚线的 diff preview、palette 来源说明和选择动作。Theme picker
-  不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Theme picker；成功时以状态圆点、`/theme <id>` 和以 `└─` 归属且与命令文字对齐的 `Theme set to …` transcript 记录执行结果，`/theme <id>` 保留直接切换；
+  不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Theme picker；保存期间 `/theme <id>` 显示 `●`，完成后恢复 `❯`，并以 `└─` 归属且与命令文字对齐的 `Theme set to …` 记录执行结果，`/theme <id>` 保留直接切换；
   Auto 在 terminal raw mode 建立后查询一次 OSC 11 实际背景 RGB，据此选择 Light/Dark；查询超时
   后依次回退 `COLORFGBG` 和 Dark。结果在会话内缓存，后续打开 Theme picker 不重复查询；
 - transcript 的行生成、首行/续行前缀、Ratatui 实际折行高度、scroll 与鼠标命中共用同一份派生结果；显式 transcript scroll 默认 follow-latest，逻辑偏移不受 `u16` 限制。每个 Thread 持有独立的 `ChatHistoryRenderCache`：轻量高度覆盖当前正文，Ratatui buffer 只为视口内 cell 生成并有界复用，切走 Thread 时释放重型缓存。`render::highlight` 使用 bundled syntax 定义和当前 Zeta syntax token 生成代码行，transcript fenced code block 通过 `StreamingCodeHighlighter` 只延续以换行结束的完整新增行；未知语言、解析失败或超限源码保持可见原文，Theme picker 的 Rust diff preview 使用同一入口。
@@ -498,7 +498,7 @@ transient 永远不决定 completed/failed/interrupted。
 
 下列应用级组合由 `keymap.rs` 的单一静态声明注册到共享 `zeta-keybinding` Resolver，并由同一声明生成 `/shortcuts` 的可配置项。运行时结构叫 `AppKeymap`：多段 Chord prefix 在 component 前匹配，普通单键仍先经过当前 interaction/component，只有未消费事件进入应用级 fallback。组合精确匹配修饰键，因此 `Ctrl-Shift-V` 不会触发只声明为 `Ctrl-V` 的动作。
 
-`AppKeymap` 支持一至四段 Chord，pending 后用一行 KeyHints 显示已输入前缀和 Esc cancel；1 秒超时、上下文变化、Esc 或 blocker 会清空 pending，错误后续键清空 pending 后继续作为普通输入透传。当前内建表仍只声明单段组合。`Esc Esc` rewind 是 Session 界面的独立状态，不属于通用 Chord，因此 Esc 可无歧义地取消 pending。
+`AppKeymap` 支持一至四段 Chord，pending 后用一行 KeyHints 显示已输入前缀和 Esc cancel；1 秒超时、上下文变化、Esc 或 blocker 会清空 pending，错误后续键清空 pending 后继续作为普通输入透传。当前内建表仍只声明单段组合。`Esc Esc` rewind 是 Session 界面空输入时的独立状态，不属于通用 Chord，因此 Esc 可无歧义地取消 pending，非空草稿也不会被该手势清除。
 
 用户配置不是 `GlobalKeymap`。它以 `BindingSource::User` 合并进同一个 `AppKeymap`；省略 `when` 只表示该规则在 Zeta Code 的所有上下文中适用。`/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列展示应用级绑定和少量固定操作键，内部 command ID 不进入界面；通用方向键由各 component 拥有，不作为快捷键条目；选择可配置 action 后可替换该 action 的 User 项、追加单键或两段 Chord、清除 User 项，但不会移除 default 键位或 `block = true` 规则。直接编辑 `config.toml` 仍支持一至四段 Chord、平台覆盖、`when` 和 blocker。保存先检查界面打开时的配置 revision，再完整编译临时规则并更新 `[tui]` 与运行时映射；失败不改变当前映射。完整契约见 [`docs/keybindings.md`](../../docs/keybindings.md)。
 
@@ -575,9 +575,9 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 ## 渲染
 
-Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPicker` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 固定一行，SubagentPicker 最多四行。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间固定保留一行；几何由 `app/screen_layout.rs` 统一分配并优先保留正文。Manager 页面按 `Welcome → 分组 Session rows → ChatInput → KeyHints` 排列，并至少为列表保留四行。
+Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPicker` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 为零或一行，SubagentPicker 最多四行。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间固定保留一行；几何由 `app/screen_layout.rs` 统一分配并优先保留正文。Manager 页面按 `Welcome → 分组 Session rows → ChatInput → KeyHints` 排列，并至少为列表保留四行。
 
-结构只有两种：`TerminalScreen` 决定整屏内容，Overlay 覆盖当前帧且不改变高度。Session 中的普通组件直接参与高度分配，不因“占高度”获得新类型。`ComposerMode` 只记录 Session 输入位置当前的互斥内容；有值时当前组件替换 ChatInput 并提供自己的 desired rows，KeyHints 在底栏替换 StatusLine。Config、Keymap、Theme 的多页面返回关系分别由 feature 自己保存。Overlay 与 ChatInput completion 同帧只绘制一个；completion 状态仍只归 ChatInput。当前组件的标题挂在顶部分隔线上，列表第一个两字符状态列与 ChatInput 正文起点对齐。每个 Thread 的草稿、补全状态、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
+结构只有两种：`TerminalScreen` 决定整屏内容，Overlay 覆盖当前帧且不改变高度。Session 中的普通组件直接参与高度分配，不因“占高度”获得新类型。`ComposerMode` 只记录 Session 输入位置当前的互斥内容；有值时当前组件替换 ChatInput 并提供自己的 desired rows，只有非空 KeyHints 才在底栏替换 StatusLine。Config、Keymap、Theme 的多页面返回关系分别由 feature 自己保存。Overlay 与 ChatInput completion 同帧只绘制一个；completion 状态仍只归 ChatInput。当前组件的标题挂在顶部分隔线上，列表第一个两字符状态列与 ChatInput 正文起点对齐。每个 Thread 的草稿、补全状态、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
 
 正文由有序 `TranscriptCell` 构成，live/final 生命周期不改变单元种类。单条正文单元从 canonical entry identity 确定 `TranscriptCellId`，ExecCell 从分组中的首个 `ToolCallId` 确定，后续分组增长不改身份。ExecCell 按 `ToolCallId`
 接收调用、输出和结果，命令输出按 byte、行数和单行长度有界保留；折叠态、展开态与 Overlay

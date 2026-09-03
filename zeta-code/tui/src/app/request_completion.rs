@@ -422,7 +422,6 @@ pub(super) fn apply_request_completion(
                 command,
                 result: format!("Theme set to {label}"),
             });
-            app.update(AppEvent::ThemePickerClosed);
         }
         RequestCompletion::ThemeUpdated {
             result: Err(error), ..

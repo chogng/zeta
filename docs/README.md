@@ -27,6 +27,7 @@
 
 | 你要做什么 | 看这些（按序） |
 | --- | --- |
+| 设计意图驱动的 Agent 开发流程 | [`develop.md`](develop.md) → [`slash-commands.md`](slash-commands.md) → [`core-multi-agent.md`](core-multi-agent.md) → [`multi-agent-development.md`](multi-agent-development.md) |
 | 新人理解 Zeta 全貌 | [`architecture.md`](architecture.md) → 感兴趣系统的领域文档 |
 | 改 Project / Session / Thread / Workspace / Environment 命名或多根关系 | [`domain-model.md`](domain-model.md) → [`environment-access.md`](environment-access.md) → [`multi-agent-development.md`](multi-agent-development.md) |
 | **搭 / 改 agent harness**（提示词、工具、循环） | [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md)（照着做）→ [`agent-tools-spec.md`](agent-tools-spec.md)（照着抄）→ [`agent-harness-design.md`](agent-harness-design.md)（查原因） |
@@ -61,6 +62,12 @@
 | 参考 | 运行手册、模板、外部快照 | 按需更新 |
 
 ## 3. 分类清单
+
+### 意图驱动的 Agent 开发流程
+
+| 文档 | 类型 | 一句话 |
+| --- | --- | --- |
+| [`develop.md`](develop.md) | 设计 | 从自然对话到 Intent、Spec、Plan、实施、验收和收口的统一系统设计 |
 
 ### Agent 与运行时（当前主战场）
 

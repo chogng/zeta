@@ -2,23 +2,21 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 请创建 approved-by-tui.txt
+❯ 请通过自动审查创建 auto-reviewed.txt
 
-● Ran write_file
+● write_file failed
+└─ write_file [call-auto-review]
+   {
+     "path": "auto-reviewed.txt",
+     "content": "approved by automatic review\n"
+   }
+   zeta_action_policy_feedback:{"kind":"denied","assessment_id":"<ID>
+                             ","reason":"the fixture automatic reviewer denied this file
+mutation","maximum_capabilities":[],"instruction":"Do not pursue the same outcome by workaround,
+indirect execution, or policy circumvention. Continue only with a materially safer alternative."}
+   view full
 
-● 工具已获批准并执行。文件写入完成。
-
-
-
-
-
-
-
-
-
-
-
-
+● 自动审查拒绝了工具。
 
 
 
@@ -28,9 +26,11 @@ expression: screen
 
 
 
-                                                                                shift+tab to cycle
+
+
+
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on
+  ↑↓ select · space expand · enter details · esc input

@@ -21,7 +21,7 @@ fn unchanged_cell_reuses_the_rendered_buffer() {
     let renders = Cell::new(0);
     let render = || {
         renders.set(renders.get() + 1);
-        styled_text_lines("cached text", Style::default())
+        (styled_text_lines("cached text", Style::default()), 0)
     };
 
     let first = cache.prepare(&message(1), 20, test_context(), render);
@@ -47,7 +47,7 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
             ),
             || {
                 renders.set(renders.get() + 1);
-                styled_text_lines("cached text", Style::default())
+                (styled_text_lines("cached text", Style::default()), 0)
             },
         )
     };
@@ -71,7 +71,7 @@ fn messages_without_a_content_revision_are_not_cached() {
     for _ in 0..2 {
         cache.prepare(&message, 20, test_context(), || {
             renders.set(renders.get() + 1);
-            styled_text_lines("temporary", Style::default())
+            (styled_text_lines("temporary", Style::default()), 0)
         });
     }
 
@@ -88,7 +88,7 @@ fn oversized_cells_are_rendered_without_entering_the_cache() {
         .with_render_revision(1);
 
     let prepared = cache.prepare(&message, 20, test_context(), || {
-        styled_text_lines(&text, Style::default())
+        (styled_text_lines(&text, Style::default()), 0)
     });
 
     assert!(matches!(prepared, PreparedCell::Lines { .. }));

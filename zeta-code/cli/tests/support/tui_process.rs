@@ -96,6 +96,14 @@ baseUrl = "{base_url}"
         .unwrap();
     }
 
+    pub fn append_config(&self, fragment: &str) {
+        let mut config = fs::OpenOptions::new()
+            .append(true)
+            .open(self.profile.join("config.toml"))
+            .unwrap();
+        config.write_all(fragment.as_bytes()).unwrap();
+    }
+
     pub fn workspace(&self) -> &Path {
         &self.workspace
     }
@@ -237,6 +245,10 @@ impl TuiProcess {
 
     pub fn up(&mut self) {
         self.send_input(b"\x1b[A");
+    }
+
+    pub fn control_up(&mut self) {
+        self.send_input(b"\x1b[1;5A");
     }
 
     pub fn down(&mut self) {
@@ -422,11 +434,13 @@ fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {
         screen = screen.replace(path, "<FIXTURE>");
     }
     let screen = screen
+        .replace("macOS Seatbelt", "platform sandbox")
+        .replace("Linux Bubblewrap", "platform sandbox")
         .lines()
         .map(|line| normalize_truncated_fixture_path(line, paths))
         .collect::<Vec<_>>()
         .join("\n");
-    normalize_session_thread_ids(&screen)
+    normalize_assessment_ids(&normalize_session_thread_ids(&screen))
 }
 
 fn normalize_truncated_fixture_path(line: &str, paths: &[String]) -> String {
@@ -487,6 +501,55 @@ fn normalize_session_thread_ids(screen: &str) -> String {
     normalized
 }
 
+fn normalize_assessment_ids(screen: &str) -> String {
+    const PREFIX: &str = "assessment_id\":\"";
+    const REPLACEMENT: &str = "<ID>";
+    const ID_LENGTH: usize = 64;
+
+    let mut normalized = String::with_capacity(screen.len());
+    let mut remaining = screen;
+    while let Some(start) = remaining.find(PREFIX) {
+        let value_start = start + PREFIX.len();
+        normalized.push_str(&remaining[..value_start]);
+        let candidate = &remaining[value_start..];
+        let mut digits = 0;
+        let mut end = 0;
+        for (index, byte) in candidate.bytes().enumerate() {
+            if byte.is_ascii_hexdigit() {
+                digits += 1;
+            } else if byte != b'\n' {
+                break;
+            }
+            end = index + 1;
+            if digits == ID_LENGTH {
+                break;
+            }
+        }
+        if digits != ID_LENGTH {
+            normalized.push_str(candidate);
+            return normalized;
+        }
+        let mut wrote_replacement = false;
+        let mut wrapped = false;
+        for byte in candidate[..end].bytes() {
+            if byte == b'\n' {
+                normalized.push('\n');
+                wrapped = true;
+            } else if !wrote_replacement {
+                normalized.push_str(REPLACEMENT);
+                wrote_replacement = true;
+            } else if wrapped {
+                normalized.push(' ');
+            } else {
+                continue;
+            }
+        }
+        remaining = &candidate[end..];
+    }
+    normalized.push_str(remaining);
+    normalized
+}
+
 #[test]
 fn snapshot_normalization_replaces_fixture_paths_and_generated_thread_ids() {
     let truncated = "/private/var/folders/account/T/zeta-fixt";
@@ -494,12 +557,14 @@ fn snapshot_normalization_replaces_fixture_paths_and_generated_thread_ids() {
     assert_eq!(
         normalize_snapshot(
             format!(
-                "read /private/var/folders/account/T/zeta-fixture/workspace\n{truncated}\nthread:session-42-9001\nthread:session-label"
+                "read /private/var/folders/account/T/zeta-fixture/workspace\n{truncated}\nthread:session-42-9001\nthread:session-label\nassessment_id\":\"0123456789abcdef0123456789abcdef\n0123456789abcdef0123456789abcdef\""
             ),
             &["/private/var/folders/account/T/zeta-fixture".into()],
         ),
         format!(
-            "read <FIXTURE>/workspace\n<FIXTURE…>{padding}\nthread:session-<ID>\nthread:session-label"
+            "read <FIXTURE>/workspace\n<FIXTURE…>{padding}\nthread:session-<ID>\nthread:session-label\nassessment_id\":\"<ID>{}\n{}\"",
+            "",
+            " ".repeat(32),
         )
     );
 }

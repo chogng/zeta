@@ -20,17 +20,17 @@ expression: screen
 
 
 
+
+
+
+
+
+
+
 ─ Help ─────────────────────────────────────────────────────────────────────────────────────────────
 
    Shortcuts    Commands    Custom commands
   ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
   │ Search help                                                                                  │
   └──────────────────────────────────────────────────────────────────────────────────────────────┘
-❯ shift+tab  ·  Cycle approval mode
-  ctrl+v  ·  Attach clipboard image
-  ctrl+c  ·  Interrupt or quit
-  ctrl+d  ·  Interrupt or quit
-  ctrl+o  ·  Copy last response
-  ctrl+y  ·  Copy last response · custom
-  ctrl+z  ·  Suspend Zeta
-  Esc Esc  ·  open rewind checkpoints when the input is empty
+❯ /compact  ·  Summarize conversation history to free context space

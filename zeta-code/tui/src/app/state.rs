@@ -565,8 +565,12 @@ impl App {
 
     fn handle_theme_picker_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
         match outcome {
-            ThemePickerOutcome::Select { preference } => Some(AppCommand::SetTheme { preference }),
+            ThemePickerOutcome::Select { preference } => {
+                self.close_composer_mode();
+                Some(AppCommand::SetTheme { preference })
+            }
             ThemePickerOutcome::SelectCustom { preference } => {
+                self.close_composer_mode();
                 Some(AppCommand::SetCustomTheme { preference })
             }
             ThemePickerOutcome::OpenCustomThemes => Some(AppCommand::OpenCustomThemePicker),
@@ -1548,11 +1552,6 @@ impl App {
                 self.status = Status::Error;
                 self.turn_input_mode = TurnInputMode::Start;
             }
-            AppEvent::ThemePickerClosed => {
-                if matches!(self.composer_mode, Some(ComposerMode::Theme(_))) {
-                    self.close_composer_mode();
-                }
-            }
             AppEvent::ThemePickerOpened(view) => {
                 if matches!(self.composer_mode, Some(ComposerMode::Theme(_))) {
                     self.composer_mode
@@ -2031,7 +2030,10 @@ impl App {
                 })
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Help)) => {
-                let spec = help_choices(self.thread_presentations.slash_commands());
+                let spec = help_choices(
+                    self.thread_presentations.slash_commands(),
+                    self.app_keymap.setup_actions(),
+                );
                 self.open_composer_mode(ComposerMode::help(spec));
                 None
             }

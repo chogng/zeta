@@ -2,11 +2,9 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-›  第一轮：请确认输入、流式输出和 Unicode 🚀
+❯ 第一轮：请确认输入、流式输出和 Unicode 🚀
 
-◆  第一轮正在流式回答：
-
-
+● 第一轮正在流式回答：
 
 
 
@@ -29,8 +27,10 @@ expression: screen
 
 
 
+
+                                                                                shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

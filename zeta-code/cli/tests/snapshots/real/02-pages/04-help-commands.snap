@@ -16,21 +16,21 @@ expression: screen
 ❯ /help
 
 
-
-
-
-
 ─ Help ─────────────────────────────────────────────────────────────────────────────────────────────
 
    Shortcuts    Commands    Custom commands
   ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
   │ Search help                                                                                  │
   └──────────────────────────────────────────────────────────────────────────────────────────────┘
-❯ shift+tab  ·  Cycle approval mode
-  ctrl+v  ·  Attach clipboard image
-  ctrl+c  ·  Interrupt or quit
-  ctrl+d  ·  Interrupt or quit
-  ctrl+o  ·  Copy last response
-  ctrl+y  ·  Copy last response · custom
-  ctrl+z  ·  Suspend Zeta
-  Esc Esc  ·  open rewind checkpoints when the input is empty
+❯ /status  ·  show the active session, thread, and model
+  /statusline  ·  choose the items shown in the status line
+  /skills  ·  browse configured skill sources
+  /mcp  ·  list configured MCP tools
+  /resume  ·  list or resume a saved session
+  /archive  ·  archive the current session and start a new chat
+  /connectors  ·  show external service connections
+  /rewind  ·  return to an earlier message checkpoint
+  /config  ·  show the current configuration
+  /add-dir  ·  add or manage a session directory
+  /fork  ·  fork the current chat
+  /help  ·  show shortcuts and commands

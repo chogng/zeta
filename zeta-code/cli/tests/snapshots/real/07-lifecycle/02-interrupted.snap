@@ -2,11 +2,9 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-›  请保持流式输出，直到我取消
+❯ 请保持流式输出，直到我取消
 
-•  turn interrupted取消
-
-
+● turn interrupted取消
 
 
 
@@ -29,8 +27,10 @@ expression: screen
 
 
 
+
+                                                                                shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

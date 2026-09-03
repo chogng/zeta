@@ -245,18 +245,6 @@ impl ListSelectionModel {
     pub(crate) fn key_hints(&self) -> KeyHints {
         let presentation = &self.presentation;
         let mut hints = KeyHints::new();
-        if presentation.show_tabs {
-            hints = hints.with("←/→/Tab", "to switch");
-        } else if presentation.activation_label.is_some() {
-            hints = hints.with(
-                "↑/↓",
-                if presentation.search.is_some() {
-                    "search/select"
-                } else {
-                    "select"
-                },
-            );
-        }
         if let Some(label) = &presentation.activation_label {
             let keys = match presentation.activation_mode {
                 ListSelectionActivationMode::Enter => "Enter",

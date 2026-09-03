@@ -13,13 +13,13 @@ Plan                               0..1 行
 Queue                              0..3 行
 Query                              0..1 行，位于 ChatInput 上方
 ChatInput、Approval 或 Composer 当前内容  共用输入位置，只显示一个
-StatusLine 及补充 KeyHints       1..3 行；操作 KeyHints 固定 1 行
+StatusLine 及补充 KeyHints       1..3 行；操作 KeyHints 0..1 行
 SubagentPicker                    0..4 行
 ```
 
 Query 使用自己的选择和文本编辑状态，普通输入框保持可见且草稿不变。Approval 替换普通输入区域，结束后原草稿原样恢复。Goal、Plan、Queue 不进入上下方向的焦点链。
 
-StatusLine 持续显示系统状态。当空输入下存在可用的界面导航时，补充 KeyHints 与 StatusLine 同行右对齐，宽度不足时独占一行。正文单元进入选择态、SubagentPicker 或 Composer 当前内容获得焦点时，操作 KeyHints 暂时接管底栏。
+StatusLine 持续显示系统状态。当空输入下存在可用的界面导航时，补充 KeyHints 与 StatusLine 同行右对齐，宽度不足时独占一行。正文单元进入选择态、SubagentPicker 或 Composer 当前内容具有非默认操作时，操作 KeyHints 暂时接管底栏；没有提示的 Composer 不占用底栏。
 
 ## Session Manager
 
@@ -33,7 +33,7 @@ Manager 和当前 Session 是两个 `TerminalScreen`：`Manager ←→ Session`�
 
 ## 输入位置和覆盖层
 
-- App 同时最多保存一个 `ComposerMode`。它记录 Session 输入位置当前显示的具体组件；该组件替换 ChatInput、报告自己的高度和 KeyHints。多步返回关系由 Config、Keymap、Theme 等 feature 自己保存。
+- App 同时最多保存一个 `ComposerMode`。它记录 Session 输入位置当前显示的具体组件；该组件替换 ChatInput、报告自己的高度和可选 KeyHints。多步返回关系由 Config、Keymap、Theme 等 feature 自己保存。
 - App 同时最多保存一个 `DetailOverlay`。Overlay 覆盖当前帧、不进入 `screen_layout`，并阻止底层键盘和鼠标输入；Status、Session preview、正文详情和 Queue 详情共用该入口。
 - ChatInput completion 锚定输入框上沿覆盖，由 ChatInput 保存。同一帧优先画应用级 Overlay，否则才画 completion。
 - SubagentPicker 常驻于 StatusLine/KeyHints 下方，只显示 Main 与活动 Subagent，最多四行。

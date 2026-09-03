@@ -5,6 +5,13 @@ expression: screen
 ❯ 请创建 approved-by-tui.txt
 
 ● Ran write_file
+└─ write_file [call-approve]
+   {
+     "path": "approved-by-tui.txt",
+     "content": "approved through the real TUI\n"
+   }
+   wrote approved-by-tui.txt
+   view full
 
 ● 工具已获批准并执行。文件写入完成。
 
@@ -23,14 +30,7 @@ expression: screen
 
 
 
-
-
-
-
-
-                                                                                shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on
+  ↑↓ select · space expand · enter details · esc input

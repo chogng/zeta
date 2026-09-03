@@ -2,11 +2,11 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 请创建 approved-by-tui.txt
+❯ 请通过自动审查创建 auto-reviewed.txt
 
-● Ran write_file
+● write_file failed
 
-● 工具已获批准并执行。文件写入完成。
+● 自动审查拒绝了工具。
 
 
 
@@ -33,4 +33,4 @@ expression: screen
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on
+  ⏩ current: auto review on · ▶ next: bypass permissions on

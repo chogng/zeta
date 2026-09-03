@@ -40,7 +40,7 @@ fn palette(focus: Color) -> ThemePreviewPalette {
 
 fn catalog() -> ThemePickerCatalog {
     let labels = [
-        "Auto",
+        "Auto (match terminal)",
         "Dark mode",
         "Light mode",
         "Dark mode (colorblind-friendly)",
@@ -87,8 +87,8 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     assert_eq!(state.title(), "Theme");
     assert!(!state.show_tabs());
     assert_eq!(state.visible_items().len(), 8);
-    assert_eq!(state.visible_items()[0].label(), "1. Auto");
-    assert_eq!(state.visible_items()[1].label(), "2. Dark mode ✓");
+    assert_eq!(state.visible_items()[0].label(), "1. Auto (match terminal)");
+    assert_eq!(state.visible_items()[1].label(), "2. Dark mode");
     assert_eq!(state.visible_items()[7].label(), "8. Custom color theme");
     assert_eq!(state.selected_visible_index(), Some(1));
     assert_eq!(
@@ -122,6 +122,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     assert_eq!(caption, "Syntax palette: Palette 1");
     let mode = crate::app::ComposerMode::theme(view);
     let key_hints = mode.key_hints().to_owned();
+    assert_eq!(key_hints, "Enter to apply");
     let mode_height = mode.desired_height(80);
     let height = mode_height.saturating_add(1);
     let backend = TestBackend::new(80, height);
@@ -160,7 +161,10 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         .collect::<Vec<_>>();
     let rendered = rows.join("\n");
     let title_row = rows.iter().position(|row| row.contains("Theme")).unwrap();
-    let first_choice_row = rows.iter().position(|row| row.contains("1. Auto")).unwrap();
+    let first_choice_row = rows
+        .iter()
+        .position(|row| row.contains("1. Auto (match terminal)"))
+        .unwrap();
     assert!(rendered.contains("Diff preview"));
     assert!(rendered.contains("Syntax palette: Palette 1"));
     assert!(rendered.contains('╌'));
@@ -182,9 +186,9 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         .unwrap();
     let key_hint_row = rows
         .iter()
-        .position(|row| row.contains("Enter apply"))
+        .position(|row| row.contains("Enter to apply"))
         .unwrap();
-    assert_eq!(preview_row - custom_row, 3);
+    assert_eq!(preview_row - custom_row, 2);
     assert_eq!(key_hint_row - palette_row, 1);
     assert_eq!(
         buffer[(1, 0)].fg,

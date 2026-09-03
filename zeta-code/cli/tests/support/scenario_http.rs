@@ -73,6 +73,9 @@ pub enum HttpResponse {
         events: Vec<Vec<u8>>,
         gate: Option<Gate>,
     },
+    Json {
+        body: Vec<u8>,
+    },
     Failure {
         status: u16,
         body: Vec<u8>,
@@ -136,6 +139,64 @@ impl HttpResponse {
         }
     }
 
+    pub fn reasoning_tool_call(
+        reasoning: &str,
+        id: &str,
+        name: &str,
+        arguments: serde_json::Value,
+    ) -> Self {
+        let reasoning = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {"reasoning_content": reasoning},
+                "finish_reason": null,
+            }],
+        });
+        let tool_call = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "tool_calls": [{
+                        "index": 0,
+                        "id": id,
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "arguments": arguments.to_string(),
+                        },
+                    }],
+                },
+                "finish_reason": "tool_calls",
+            }],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+        });
+        Self::Streaming {
+            events: vec![
+                format!("data: {reasoning}\n\n").into_bytes(),
+                format!("data: {tool_call}\n\n").into_bytes(),
+                b"data: [DONE]\n\n".to_vec(),
+            ],
+            gate: None,
+        }
+    }
+
+    pub fn completion(text: impl Into<String>) -> Self {
+        let body = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": text.into(),
+                },
+                "finish_reason": "stop",
+            }],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+        })
+        .to_string()
+        .into_bytes();
+        Self::Json { body }
+    }
+
     fn write_to(self, stream: &mut TcpStream) {
         match self {
             Self::Streaming { events, gate } => {
@@ -155,6 +216,16 @@ impl HttpResponse {
                         gate.reach_and_wait();
                     }
                 }
+            }
+            Self::Json { body } => {
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                )
+                .unwrap();
+                stream.write_all(&body).unwrap();
+                stream.flush().unwrap();
             }
             Self::Failure { status, body } => {
                 write!(

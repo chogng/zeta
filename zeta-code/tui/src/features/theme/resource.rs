@@ -20,7 +20,7 @@ use crate::render::RenderTheme;
 use crate::render::ThemePalette;
 
 const ZETA_CODE_THEMES: [(&str, &str); 7] = [
-    ("Auto", "system"),
+    ("Auto (match terminal)", "system"),
     ("Dark mode", "zeta-code-dark"),
     ("Light mode", "zeta-code-light"),
     (

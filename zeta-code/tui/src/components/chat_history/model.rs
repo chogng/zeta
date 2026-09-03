@@ -17,6 +17,14 @@ pub(crate) enum CommandStatus {
     Failed,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExecutionKind {
+    LocalCommand,
+    Command,
+    Mutation,
+    Neutral,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Message {
     pub(crate) cell_id: Option<String>,
@@ -25,6 +33,7 @@ pub(crate) struct Message {
     pub(crate) text: String,
     pub(crate) detail: Option<String>,
     pub(crate) command_status: Option<CommandStatus>,
+    pub(crate) execution_kind: ExecutionKind,
     pub(crate) can_expand: bool,
     pub(crate) expanded: bool,
     pub(crate) has_details: bool,
@@ -40,6 +49,7 @@ impl Message {
             text,
             detail: None,
             command_status: None,
+            execution_kind: ExecutionKind::Neutral,
             can_expand: false,
             expanded: false,
             has_details: false,
@@ -55,6 +65,7 @@ impl Message {
             text: command,
             detail,
             command_status: Some(status),
+            execution_kind: ExecutionKind::Command,
             can_expand: false,
             expanded: false,
             has_details: false,
@@ -74,6 +85,11 @@ impl Message {
 
     pub(crate) fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
+        self
+    }
+
+    pub(crate) fn with_execution_kind(mut self, kind: ExecutionKind) -> Self {
+        self.execution_kind = kind;
         self
     }
 
