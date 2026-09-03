@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 use super::AvailableTheme;
 use super::ThemeAppearance;
+use super::ThemeSurface;
 use crate::render::ThemePalette;
 use crate::render::ThemeRgb;
 
@@ -65,6 +66,7 @@ impl UserThemeDocument {
             label: self.label,
             appearance: self.appearance,
             palette,
+            surface: ThemeSurface::Palette,
             ansi_only: false,
             user_defined: true,
         })

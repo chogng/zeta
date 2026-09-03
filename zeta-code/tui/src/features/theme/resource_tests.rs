@@ -61,6 +61,24 @@ fn auto_uses_the_terminal_reported_background_scheme() {
         super::detect_system_appearance(Some(TerminalRgb::new(13, 17, 23))),
         ThemeAppearance::Dark
     );
+
+    let root = std::env::temp_dir().join(format!("zeta-tui-auto-theme-{}", std::process::id()));
+    let light =
+        ThemeResource::for_test(root.clone(), ColorLevel::TrueColor, ThemeAppearance::Light)
+            .load("system")
+            .unwrap()
+            .theme;
+    let dark = ThemeResource::for_test(root, ColorLevel::TrueColor, ThemeAppearance::Dark)
+        .load("system")
+        .unwrap()
+        .theme;
+
+    assert_eq!(light.background(), Color::Reset);
+    assert_eq!(light.foreground(), Color::Reset);
+    assert_eq!(light.action_foreground(), Color::Rgb(9, 105, 218));
+    assert_eq!(dark.background(), Color::Reset);
+    assert_eq!(dark.foreground(), Color::Reset);
+    assert_eq!(dark.action_foreground(), Color::Rgb(88, 166, 255));
 }
 
 #[test]
@@ -159,7 +177,7 @@ fn graphical_theme_tokens_are_rejected_by_the_tui_theme_reader() {
 
     let loaded = resource.load("system").unwrap();
 
-    assert_eq!(loaded.theme.background(), Color::Rgb(13, 17, 23));
+    assert_eq!(loaded.theme.background(), Color::Reset);
     assert!(
         loaded
             .diagnostics

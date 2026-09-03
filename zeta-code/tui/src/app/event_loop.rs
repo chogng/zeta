@@ -496,7 +496,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 host::clipboard::write_text(response).map(|()| char_count)
                             });
                         match result {
-                            Ok(char_count) => app.update(AppEvent::StatusNoticeShown(format!(
+                            Ok(char_count) => app.update(AppEvent::TopTipNoticeShown(format!(
                                 "Copied {char_count} chars to clipboard"
                             ))),
                             Err(error) => app.update(AppEvent::HostOperationCompleted(Err(error))),
@@ -1331,7 +1331,7 @@ fn copy_screen_range(
     };
     let char_count = text.chars().count();
     match host::clipboard::write_text(&text) {
-        Ok(()) => app.update(AppEvent::StatusNoticeShown(format!(
+        Ok(()) => app.update(AppEvent::TopTipNoticeShown(format!(
             "Copied {char_count} chars to clipboard"
         ))),
         Err(error) => app.update(AppEvent::FailureReported(error)),

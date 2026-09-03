@@ -92,3 +92,22 @@ fn built_in_palettes_keep_the_documented_semantic_colors() {
         assert_eq!(theme.user_message_background(), user_message);
     }
 }
+
+#[test]
+fn terminal_defaults_only_replace_the_base_surface_colors() {
+    let palette = ThemePalette::light();
+    let themed = RenderTheme::from_palette(palette, ColorLevel::TrueColor);
+    let terminal = themed.with_terminal_defaults();
+
+    assert_eq!(terminal.background(), Color::Reset);
+    assert_eq!(terminal.foreground(), Color::Reset);
+    assert_eq!(terminal.focus(), themed.focus());
+    assert_eq!(
+        terminal.selection_background(),
+        themed.selection_background()
+    );
+    assert_eq!(
+        terminal.user_message_background(),
+        themed.user_message_background()
+    );
+}

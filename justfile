@@ -7,12 +7,12 @@ set windows-shell := ["python", "-c", 'import os, runpy; runpy.run_path(os.envir
 python := if os_family() == "windows" { "python" } else { "python3" }
 
 # Test one Rust package. V8 inputs are configured only when its dependency graph needs them.
-test package *args:
-    {{ python }} -B build/cargo_with_v8.py test -p {{ package }} {args}
+test *args:
+    {{ python }} -B build/cargo_with_v8.py test -p {args}
 
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
-check package *args:
-    {{ python }} -B build/cargo_with_v8.py check -p {{ package }} {args}
+check *args:
+    {{ python }} -B build/cargo_with_v8.py check -p {args}
 
 # Run versioned multi-Agent evaluations. Real models require the explicit live subcommand flags.
 multi-agent-eval *args:

@@ -19,7 +19,6 @@ mod screen_layout;
 #[path = "app/session_manager_tests.rs"]
 mod session_manager_tests;
 mod state;
-mod status_notice;
 mod transcript_batch;
 
 pub(crate) use crate::features::sessions::ActiveConversation;

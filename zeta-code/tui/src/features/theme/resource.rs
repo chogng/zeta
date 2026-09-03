@@ -42,6 +42,12 @@ pub(crate) enum ThemeAppearance {
     Light,
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum ThemeSurface {
+    Palette,
+    Terminal,
+}
+
 impl ThemeAppearance {
     const fn base_palette(self) -> ThemePalette {
         match self {
@@ -64,6 +70,7 @@ pub(super) struct AvailableTheme {
     pub(super) label: String,
     pub(super) appearance: ThemeAppearance,
     pub(super) palette: ThemePalette,
+    pub(super) surface: ThemeSurface,
     pub(super) ansi_only: bool,
     pub(super) user_defined: bool,
 }
@@ -75,7 +82,11 @@ impl AvailableTheme {
         } else {
             capability
         };
-        RenderTheme::from_palette(self.palette, capability)
+        let theme = RenderTheme::from_palette(self.palette, capability);
+        match self.surface {
+            ThemeSurface::Palette => theme,
+            ThemeSurface::Terminal => theme.with_terminal_defaults(),
+        }
     }
 }
 
@@ -283,6 +294,7 @@ fn built_in(
         label: label.into(),
         appearance,
         palette,
+        surface: ThemeSurface::Palette,
         ansi_only,
         user_defined: false,
     }
@@ -294,6 +306,7 @@ fn system_theme(appearance: ThemeAppearance) -> AvailableTheme {
         label: format!("Zeta Code {}", appearance.label()),
         appearance,
         palette: appearance.base_palette(),
+        surface: ThemeSurface::Terminal,
         ansi_only: false,
         user_defined: false,
     }

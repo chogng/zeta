@@ -10,4 +10,5 @@ pub(crate) mod search_box;
 pub(crate) mod steer;
 pub(crate) mod tab_list;
 pub(crate) mod text_prompt;
+pub(crate) mod top_tip;
 pub(crate) mod welcome;

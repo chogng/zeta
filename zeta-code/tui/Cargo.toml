@@ -39,6 +39,15 @@ zeta-utils-image = { workspace = true }
 rustix = { workspace = true, features = ["fs", "process", "stdio"] }
 signal-hook = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+] }
+
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
@@ -48,5 +57,6 @@ insta = { workspace = true }
 tempfile = { workspace = true }
 zeta-client = { workspace = true }
 
-[lints]
-workspace = true
+[lints.rust]
+# Keep unsafe code denied outside the explicitly scoped Windows console adapter.
+unsafe_code = "deny"

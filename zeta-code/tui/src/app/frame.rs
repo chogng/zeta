@@ -23,10 +23,8 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
 use std::borrow::Cow;
-use unicode_width::UnicodeWidthStr;
 
-const STATUS_HINT_GAP: u16 = 3;
-const APPROVAL_MODE_HINT: &str = "shift+tab to cycle";
+const APPROVAL_MODE_TIP: &str = "shift+tab to cycle";
 
 enum StatusAreaView<'a> {
     Hidden,
@@ -34,9 +32,7 @@ enum StatusAreaView<'a> {
         text: Cow<'a, str>,
         style: StatusHintStyle,
     },
-    StatusLine {
-        supplemental_hint: Option<&'a str>,
-    },
+    StatusLine,
 }
 
 #[derive(Clone, Copy)]
@@ -177,7 +173,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             context,
         );
     }
-    draw_composer_top_hint(
+    draw_top_tip(
         frame,
         areas.session.transcript,
         areas.session.composer,
@@ -207,21 +203,18 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     app.screen_selection().draw(frame.buffer_mut(), context);
 }
 
-fn draw_composer_top_hint(
+fn draw_top_tip(
     frame: &mut Frame<'_>,
     content: Rect,
     composer: Rect,
     app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
-    let hint = app.status_notice().or_else(|| approval_mode_hint(app));
-    let Some(hint) = hint else {
-        return;
-    };
     if content.is_empty() || composer.is_empty() || composer.y <= content.y {
         return;
     }
-    key_hint::draw_right(
+    let tips = [app.screen_navigation_tip(), approval_mode_tip(app)];
+    app.top_tip().draw(
         frame,
         Rect {
             x: content.x,
@@ -229,18 +222,18 @@ fn draw_composer_top_hint(
             width: content.width,
             height: 1,
         },
-        hint,
+        &tips,
         context,
     );
 }
 
-fn approval_mode_hint(app: &App) -> Option<&'static str> {
-    let shows_status_line = matches!(status_area_view(app), StatusAreaView::StatusLine { .. });
+fn approval_mode_tip(app: &App) -> Option<&'static str> {
+    let shows_status_line = matches!(status_area_view(app), StatusAreaView::StatusLine);
     let shows_approval_mode = !app
         .status_line()
         .policy_text_for_width(usize::MAX, app.approval_mode_status())
         .is_empty();
-    (shows_status_line && shows_approval_mode).then_some(APPROVAL_MODE_HINT)
+    (shows_status_line && shows_approval_mode).then_some(APPROVAL_MODE_TIP)
 }
 
 #[cfg(test)]
@@ -417,7 +410,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         queue_rows,
         query_rows,
         composer_rows,
-        status_area.desired_rows(app, terminal_area.width),
+        status_area.desired_rows(app),
         app.subagent_picker_rows(),
     );
     let input = if approval_rows > 0 || mode_rows > 0 {
@@ -486,9 +479,7 @@ fn draw_status_area(
                 chat_input::content_area(area),
             ),
         },
-        StatusAreaView::StatusLine { supplemental_hint } => {
-            draw_status_line(frame, area, app, supplemental_hint, context)
-        }
+        StatusAreaView::StatusLine => draw_status_line(frame, area, app, context),
     }
 }
 
@@ -549,97 +540,36 @@ fn status_area_view(app: &App) -> StatusAreaView<'_> {
             style: StatusHintStyle::Muted,
         };
     }
-    StatusAreaView::StatusLine {
-        supplemental_hint: app.screen_navigation_hint(),
-    }
+    StatusAreaView::StatusLine
 }
 
 fn draw_status_line(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    supplemental_hint: Option<&str>,
     context: crate::render::RenderContext<'_>,
 ) {
-    let status_rows = status_line::desired_rows(
-        app.status_line(),
-        app.approval_mode_status(),
-        app.status_line_runtime(),
-        2,
-    );
-    let Some(hint) = supplemental_hint else {
-        status_line::draw(
-            frame,
-            chat_input::content_area(area),
-            app.status_line(),
-            app.approval_mode_status(),
-            app.status_line_runtime(),
-            context,
-        );
-        return;
-    };
-    let separate_hint_row =
-        !status_and_hint_fit(app, area.width, hint) && area.height > status_rows;
-    let status_area = chat_input::content_area(if separate_hint_row {
-        Rect {
-            y: area.y.saturating_add(1),
-            height: area.height.saturating_sub(1),
-            ..area
-        }
-    } else {
-        let hint_width = hint.width().min(usize::from(area.width)) as u16;
-        Rect {
-            width: area
-                .width
-                .saturating_sub(2)
-                .saturating_sub(hint_width)
-                .saturating_sub(STATUS_HINT_GAP),
-            ..area
-        }
-    });
     status_line::draw(
         frame,
-        status_area,
+        chat_input::content_area(area),
         app.status_line(),
         app.approval_mode_status(),
         app.status_line_runtime(),
         context,
     );
-    let hint_area = Rect { height: 1, ..area };
-    key_hint::draw_right(frame, hint_area, hint, context);
-}
-
-fn status_and_hint_fit(app: &App, width: u16, hint: &str) -> bool {
-    let status_width = usize::from(width.saturating_sub(2));
-    let top = app
-        .status_line()
-        .top_text_for_width(status_width, app.status_line_runtime());
-    !top.is_empty()
-        && top
-            .width()
-            .saturating_add(usize::from(STATUS_HINT_GAP))
-            .saturating_add(hint.width())
-            <= usize::from(width.saturating_sub(4))
 }
 
 impl StatusAreaView<'_> {
-    fn desired_rows(&self, app: &App, width: u16) -> u16 {
+    fn desired_rows(&self, app: &App) -> u16 {
         match self {
             Self::Hidden => 0,
             Self::Hint { .. } => 1,
-            Self::StatusLine { supplemental_hint } => {
-                let status_rows = status_line::desired_rows(
-                    app.status_line(),
-                    app.approval_mode_status(),
-                    app.status_line_runtime(),
-                    2,
-                );
-                status_rows
-                    + u16::from(
-                        supplemental_hint
-                            .is_some_and(|hint| !status_and_hint_fit(app, width, hint)),
-                    )
-            }
+            Self::StatusLine => status_line::desired_rows(
+                app.status_line(),
+                app.approval_mode_status(),
+                app.status_line_runtime(),
+                2,
+            ),
         }
     }
 }

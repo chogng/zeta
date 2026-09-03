@@ -50,7 +50,7 @@ fn agents_manager_simulates_navigation_and_transient_preview() {
     assert!(!app.session_manager_focused());
     assert_eq!(app.handle_key(key(KeyCode::Right)), None);
     assert!(app.session_manager_view().is_none());
-    assert_eq!(app.screen_navigation_hint(), Some("← agents"));
+    assert_eq!(app.screen_navigation_tip(), Some("← for agents"));
 }
 
 #[test]
@@ -73,9 +73,9 @@ fn resuming_selected_session_restores_manager_navigation() {
     });
 
     assert!(!app.session_manager_focused());
-    assert_eq!(app.screen_navigation_hint(), Some("← agents"));
+    assert_eq!(app.screen_navigation_tip(), Some("← for agents"));
     assert_snapshot!(
-        "agents_session_after_resume_restores_manager_hint",
+        "agents_session_after_resume_restores_manager_tip",
         render(&app)
     );
 
@@ -97,7 +97,7 @@ fn agents_command_opens_the_manager() {
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.session_manager_view().is_none());
-    assert_eq!(app.screen_navigation_hint(), Some("← agents"));
+    assert_eq!(app.screen_navigation_tip(), Some("← for agents"));
 }
 
 fn active_session_app() -> App {

@@ -7,6 +7,7 @@
 > 文档所有权：本文是 TUI 跨 crate ownership、长期不变量与产品支持边界的 canonical 文档。
 > 当前实现接口与事件循环：[`zeta-code/tui/README.md`](../tui/README.md)
 > CLI 与产品宿主边界：[`architecture.md`](architecture.md)
+> 界面部位名称与问题定位：[`LAYOUT.md`](LAYOUT.md)
 > 键盘、鼠标与颜色契约：[`tui-interaction.md`](tui-interaction.md)
 > 产品接口基线：[`zeta-app-server-api.md`](../../docs/zeta-app-server-api.md)
 > App Server 启动与连接基线：[`app-server-client.md`](../../docs/app-server-client.md)
@@ -77,8 +78,10 @@ GitHub、GitHub Colorblind、ANSI 16 colors 或 User-defined 配色来源。`/th
 可配置的底座；启用搜索的页面用上下键在列表、SearchBox 和 Tab 栏之间移动焦点，焦点到 Tab 栏后用左右键切换，Tab/Shift-Tab 也可直接切换。Tab、SearchBox 和 item 共用同一个两格状态列并保持正文对齐。
 所有本地 command 在 Enter 后立即写入同一个“命令 + 结果”正文单元：命令首行作为用户输入，已提交和已结束时使用与用户消息一致的 `❯`，只在 Running 期间切换为警告色 `●`。指示符与正文之间保留一格，使正文和输入框内容从同一列开始。后续状态和结果原地更新，结果行使用与状态位结构相连的 `└─` 表达归属，结果内容使用弱化色，之后才空行。普通回答、思考、读取和搜索使用弱化色圆点，文件写入、编辑和补丁成功使用蓝色强调圆点；颜色只作用于圆点，正文保持正常前景。普通消息触发的新 Session 不输出 Session/Thread ID；`/new` 在清空旧正文后保留命令单元，并只显示不含 ID 的结果。正文单元按稳定 `TranscriptCellId` 展开；折叠与展开都保持同一个实心圆，展开后的 `└─` 详情表达归属，并可在 Overlay 中查看 TUI 拿到的完整保留表示；若上游已省略内容，详情必须保留该事实。
 Auto 在终端 raw mode 建立后、输入事件线程启动前发出一次 OSC 11 背景色查询，并按实际 RGB
-亮度选择 Light/Dark；120 ms 内没有有效响应时读取 `COLORFGBG`，仍无法识别才安全回退 Dark。
-检测结果在当前 TUI 会话内缓存，主题面板与再次选择 Auto 不会重复查询；显式模式不受该判断影响。
+亮度选择 Light/Dark 语义颜色；Windows 同时保留探针期间的非响应输入，并在 OSC 11 不可用时读取
+Console 默认背景色。其余平台在 120 ms 内没有有效响应时读取 `COLORFGBG`，仍无法识别时选择
+Dark 语义颜色。Auto 的基础前景与背景使用终端默认色，不用 Light/Dark 调色板覆盖整屏；检测结果在
+当前 TUI 会话内缓存，主题面板与再次选择 Auto 不会重复查询，显式模式仍使用主题自己的前景和背景。
 
 因此 TUI 必须是可丢弃、可重新同步的 presentation shell，而不是第二个 Agent runtime 或
 App Server facade。产品权威状态的依赖链固定为：
@@ -578,7 +581,7 @@ owning crate interface / typed App Server result
 
 `status_line/` 定义稳定的 item identity、用户排序、开关、separator 和 overflow policy；项目列表保存在 `config.toml` 的 `[tui].statusLine`。TUI 负责解释与校验字段，App Server 只按完整 `[tui]` 表持久化并校验 config revision。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
 
-当前实现由 `features/status_line/model.rs` 把 Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序启用的模型、Git 分支和 Git 变更组合到上行；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复；下一次 Turn 的权限模式固定在下行。`shift+tab to cycle` 右对齐显示在 ChatInput 顶边上方的独立提示行，临时 StatusNotice 出现时由通知替换。`features/status_line/view.rs` 最多绘制两行。Session Manager、含非默认操作的 `ComposerMode`、SubagentPicker 或 Chord 需要明确按键时，一行 KeyHints 直接替换 StatusLine；`ComposerMode` 有值时保留 ChatInput 状态，当前组件替换 ChatInput 参与布局，没有 KeyHints 时不占用底栏。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
+当前实现由 `features/status_line/model.rs` 把 Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序启用的模型、Git 分支和 Git 变更组合到上行；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复；下一次 Turn 的权限模式固定在下行。`components/top_tip.rs` 的 `TopTip` 固定贴在 ChatInput 顶边上方，按 5 秒轮播当前可用的 `← for agents` 与 `shift+tab to cycle`；临时通知覆盖轮播内容，到期后恢复，整个过程不改变布局。`features/status_line/view.rs` 最多绘制两行。Session Manager、含非默认操作的 `ComposerMode`、SubagentPicker 或 Chord 需要明确按键时，一行 KeyHints 直接替换 StatusLine；`ComposerMode` 有值时保留 ChatInput 状态，当前组件替换 ChatInput 参与布局，没有 KeyHints 时不占用底栏。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
 
 ## 12. `host/`：窄宿主能力
 
@@ -887,7 +890,8 @@ components/
 ├── text_prompt.rs + text_prompt/
 ├── key_capture.rs + key_capture/
 ├── search_box.rs + search_box/
-└── tab_list.rs
+├── tab_list.rs
+└── top_tip.rs + top_tip_tests.rs
 features.rs + features/
 ├── sessions/                    # TerminalScreen, Manager and last viewed Thread
 ├── thread/                      # snapshot plus Thread-keyed draft/Queue/scroll

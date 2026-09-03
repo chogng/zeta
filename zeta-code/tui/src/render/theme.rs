@@ -297,6 +297,12 @@ impl RenderTheme {
         }
     }
 
+    pub(crate) const fn with_terminal_defaults(mut self) -> Self {
+        self.background = Color::Reset;
+        self.foreground = Color::Reset;
+        self
+    }
+
     pub(crate) const fn fallback() -> Self {
         Self {
             accent: hex("#69aaff"),

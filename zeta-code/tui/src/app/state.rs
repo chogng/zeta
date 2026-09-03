@@ -6,7 +6,6 @@ use super::escape::ScreenEscapeSequence;
 use super::event::AppEvent;
 use super::frame::InputPointerTarget;
 use super::help::help_choices;
-use super::status_notice::StatusNotice;
 use crate::components::chat_composer::ChatComposer;
 use crate::components::chat_composer::ChatComposerOutcome;
 use crate::components::chat_composer::ChatComposerView;
@@ -21,6 +20,7 @@ use crate::components::list_selection::ListSelectionAdjustment;
 use crate::components::list_selection::ListSelectionState;
 use crate::components::overlay::DetailOverlay;
 use crate::components::overlay::OverlayInputOutcome;
+use crate::components::top_tip::TopTip;
 use crate::components::welcome::WelcomeModel;
 use crate::features::approval::Approval;
 use crate::features::approval::ApprovalOutcome;
@@ -150,7 +150,7 @@ pub(crate) struct App {
     status: Status,
     turn_input_mode: TurnInputMode,
     status_line: StatusLineModel,
-    status_notice: StatusNotice,
+    top_tip: TopTip,
     terminal_settings: TerminalSettings,
     pointer: PointerInteraction<InputPointerTarget>,
     screen_selection: ScreenSelection,
@@ -181,7 +181,7 @@ impl App {
             status: Status::Ready,
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
-            status_notice: StatusNotice::default(),
+            top_tip: TopTip::new(Instant::now()),
             terminal_settings: TerminalSettings::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
@@ -231,7 +231,7 @@ impl App {
             status: Status::Ready,
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
-            status_notice: StatusNotice::default(),
+            top_tip: TopTip::new(Instant::now()),
             terminal_settings: TerminalSettings::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
@@ -1189,12 +1189,12 @@ impl App {
         true
     }
 
-    pub(crate) fn screen_navigation_hint(&self) -> Option<&'static str> {
+    pub(crate) fn screen_navigation_tip(&self) -> Option<&'static str> {
         if !self.chat_input_focused() || !self.input().is_empty() {
             return None;
         }
         match self.sessions.previous_screen()? {
-            TerminalScreen::Manager => Some("← agents"),
+            TerminalScreen::Manager => Some("← for agents"),
             TerminalScreen::Session(_) => None,
         }
     }
@@ -1262,8 +1262,8 @@ impl App {
         &self.status_line
     }
 
-    pub(crate) fn status_notice(&self) -> Option<&str> {
-        self.status_notice.text()
+    pub(crate) fn top_tip(&self) -> &TopTip {
+        &self.top_tip
     }
 
     pub(crate) fn status_line_runtime(&self) -> StatusLineRuntime {
@@ -1426,8 +1426,8 @@ impl App {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
             }
-            AppEvent::StatusNoticeShown(notice) => {
-                self.status_notice.show(notice, Instant::now());
+            AppEvent::TopTipNoticeShown(notice) => {
+                self.top_tip.show_notice(notice, Instant::now());
             }
             AppEvent::InterruptFailed(error) => {
                 self.thread
@@ -1917,11 +1917,11 @@ impl App {
     pub(crate) fn handle_tick(&mut self, now: Instant) -> bool {
         let context = self.app_keymap_context(true);
         let chord_expired = self.app_keymap.expire(context, now);
-        let status_notice_expired = self.status_notice.expire(now);
+        let top_tip_changed = self.top_tip.poll(now);
         let elapsed_changed = self.subagent_picker.refresh_elapsed();
         let manager_changed = matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.refresh_manager_time(now);
-        chord_expired || status_notice_expired || elapsed_changed || manager_changed
+        chord_expired || top_tip_changed || elapsed_changed || manager_changed
     }
 
     pub(crate) fn pending_key_chord_label(&self) -> Option<String> {

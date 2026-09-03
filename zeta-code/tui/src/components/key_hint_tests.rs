@@ -39,11 +39,11 @@ fn right_aligned_key_hint_keeps_the_two_character_right_inset() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw_right(frame, frame.area(), "← agents", test_context()))
+        .draw(|frame| draw_right(frame, frame.area(), "← for agents", test_context()))
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(20, 0)].symbol(), "←");
+    assert_eq!(buffer[(16, 0)].symbol(), "←");
     assert_eq!(buffer[(27, 0)].symbol(), "s");
     assert_eq!(buffer[(28, 0)].symbol(), " ");
     assert_eq!(buffer[(29, 0)].symbol(), " ");

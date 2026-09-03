@@ -76,12 +76,12 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
 }
 
 #[test]
-fn status_notice_overlays_the_row_above_chat_input_without_changing_layout() {
+fn top_tip_notice_overlays_the_row_above_chat_input_without_changing_layout() {
     let mut app = App::new();
     let terminal_area = Rect::new(0, 0, 80, 20);
     let composer_before = layout(&app, terminal_area).session.composer;
 
-    app.update(AppEvent::StatusNoticeShown(
+    app.update(AppEvent::TopTipNoticeShown(
         "Copied 246 chars to clipboard".into(),
     ));
 
@@ -124,7 +124,7 @@ fn application_overlay_keeps_layout_fixed_and_blocks_covered_pointer_targets() {
 }
 
 #[test]
-fn manager_keeps_overflow_text_left_of_the_status_notice() {
+fn manager_keeps_overflow_text_left_of_the_top_tip_notice() {
     let mut app = App::new();
     app.update(AppEvent::SessionCatalogReceived(
         (0..24)
@@ -139,7 +139,7 @@ fn manager_keeps_overflow_text_left_of_the_status_notice() {
     ));
     app.insert_text("/sessions");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::StatusNoticeShown(
+    app.update(AppEvent::TopTipNoticeShown(
         "Copied 246 chars to clipboard".into(),
     ));
 
@@ -168,23 +168,39 @@ fn empty_session_input_offers_manager_navigation() {
         vec![manager_session("current", SessionManagerStatus::Idle, None)],
     );
 
-    let rendered = render(&app, 80, 20);
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let top_tip_row = usize::from(
+        layout(&app, terminal_area)
+            .session
+            .composer
+            .y
+            .saturating_sub(1),
+    );
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[18].contains("← agents"));
-    assert!(!rows[18].contains("shift+tab"));
+    assert!(rows[top_tip_row].contains("← for agents"));
+    assert!(!rows[top_tip_row].contains("shift+tab"));
     assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 
+    assert!(app.handle_tick(Instant::now() + Duration::from_secs(10)));
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
+    let rows = rendered.lines().collect::<Vec<_>>();
+    assert!(rows[top_tip_row].contains("shift+tab to cycle"));
+    assert!(!rows[top_tip_row].contains("← for agents"));
+
     app.insert_text("draft");
-    let rendered = render(&app, 80, 20);
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
+    let rows = rendered.lines().collect::<Vec<_>>();
     let status_line = rendered.lines().last().unwrap();
 
+    assert!(rows[top_tip_row].contains("shift+tab to cycle"));
     assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
-    assert!(!status_line.contains("← agents"));
+    assert!(!status_line.contains("← for agents"));
 }
 
 #[test]
-fn narrow_session_footer_keeps_status_and_manager_hint_on_separate_rows() {
+fn narrow_session_keeps_manager_tip_above_input_and_status_below() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -192,11 +208,19 @@ fn narrow_session_footer_keeps_status_and_manager_hint_on_separate_rows() {
         vec![manager_session("current", SessionManagerStatus::Idle, None)],
     );
 
-    let rendered = render(&app, 24, 20);
+    let terminal_area = Rect::new(0, 0, 24, 20);
+    let top_tip_row = usize::from(
+        layout(&app, terminal_area)
+            .session
+            .composer
+            .y
+            .saturating_sub(1),
+    );
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[18].contains("← agents"));
-    assert!(!rows[18].contains("shift+tab"));
+    assert!(rows[top_tip_row].contains("← for agents"));
+    assert!(!rows[top_tip_row].contains("shift+tab"));
     assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 }
 
@@ -209,7 +233,7 @@ fn left_from_a_session_opens_the_manager() {
         vec![manager_session("current", SessionManagerStatus::Idle, None)],
     );
 
-    assert!(render(&app, 80, 20).contains("← agents"));
+    assert!(render(&app, 80, 20).contains("← for agents"));
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
             .is_none()
