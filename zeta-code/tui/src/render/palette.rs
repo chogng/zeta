@@ -62,6 +62,7 @@ pub(crate) struct ThemePalette {
     pub(crate) screen_selection_background: ThemeRgb,
     pub(crate) screen_selection_foreground: ThemeRgb,
     pub(crate) r#type: ThemeRgb,
+    pub(crate) transcript_jump_background: ThemeRgb,
     pub(crate) user_message_background: ThemeRgb,
     pub(crate) variable: ThemeRgb,
     pub(crate) warning: ThemeRgb,
@@ -100,6 +101,7 @@ impl ThemePalette {
             screen_selection_background: ThemeRgb::new(0x87, 0xce, 0xeb),
             screen_selection_foreground: ThemeRgb::new(0x0d, 0x11, 0x17),
             r#type: ThemeRgb::new(0xd2, 0xa8, 0xff),
+            transcript_jump_background: ThemeRgb::new(0x30, 0x30, 0x30),
             user_message_background: ThemeRgb::new(0x16, 0x1b, 0x22),
             variable: ThemeRgb::new(0xff, 0xa6, 0x57),
             warning: ThemeRgb::new(0xff, 0xa6, 0x57),
@@ -138,6 +140,7 @@ impl ThemePalette {
             screen_selection_background: ThemeRgb::new(0x87, 0xce, 0xeb),
             screen_selection_foreground: ThemeRgb::new(0x0d, 0x11, 0x17),
             r#type: ThemeRgb::new(0x82, 0x50, 0xdf),
+            transcript_jump_background: ThemeRgb::new(0xe5, 0xe5, 0xe5),
             user_message_background: ThemeRgb::new(0xf6, 0xf8, 0xfa),
             variable: ThemeRgb::new(0x95, 0x38, 0x00),
             warning: ThemeRgb::new(0x95, 0x38, 0x00),
@@ -252,6 +255,7 @@ pub(crate) struct RenderTheme {
     screen_selection_background: Color,
     screen_selection_foreground: Color,
     r#type: Color,
+    transcript_jump_background: Color,
     user_message_background: Color,
     variable: Color,
     warning: Color,
@@ -291,6 +295,7 @@ impl RenderTheme {
             screen_selection_background: projected(palette.screen_selection_background),
             screen_selection_foreground: projected(palette.screen_selection_foreground),
             r#type: projected(palette.r#type),
+            transcript_jump_background: projected(palette.transcript_jump_background),
             user_message_background: projected(palette.user_message_background),
             variable: projected(palette.variable),
             warning: projected(palette.warning),
@@ -335,6 +340,7 @@ impl RenderTheme {
             screen_selection_background: hex("#87ceeb"),
             screen_selection_foreground: hex("#0d1117"),
             r#type: hex("#d2a8ff"),
+            transcript_jump_background: hex("#303030"),
             user_message_background: hex("#161b22"),
             variable: hex("#ffa657"),
             warning: hex("#f5be50"),
@@ -430,6 +436,9 @@ impl RenderTheme {
     }
     pub(crate) const fn r#type(self) -> Color {
         self.r#type
+    }
+    pub(crate) const fn transcript_jump_background(self) -> Color {
+        self.transcript_jump_background
     }
     pub(crate) const fn user_message_background(self) -> Color {
         self.user_message_background
@@ -530,6 +539,9 @@ impl<'a> RenderContext<'a> {
     }
     pub(crate) const fn r#type(self) -> Color {
         self.theme.r#type()
+    }
+    pub(crate) const fn transcript_jump_background(self) -> Color {
+        self.theme.transcript_jump_background()
     }
     pub(crate) const fn user_message_background(self) -> Color {
         self.theme.user_message_background()

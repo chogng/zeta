@@ -105,7 +105,8 @@ pub(super) fn request_lane(command: &AppCommand) -> Option<RequestLane> {
         | AppCommand::OpenRewindPicker => Some(RequestLane::Read),
         AppCommand::CopyLastResponse
         | AppCommand::ExportTranscript { .. }
-        | AppCommand::ReadClipboardImage => Some(RequestLane::Host),
+        | AppCommand::ReadClipboardImage
+        | AppCommand::RefreshClipboardImageAvailability => Some(RequestLane::Host),
         AppCommand::Quit | AppCommand::Suspend | AppCommand::CycleNextApprovalMode => None,
         AppCommand::ExecuteProductCommand(_)
         | AppCommand::EditKeymap(_)

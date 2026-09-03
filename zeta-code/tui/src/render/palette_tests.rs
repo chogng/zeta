@@ -28,6 +28,10 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
         Color::Rgb(135, 206, 235)
     );
     assert_eq!(true_color.overlay_background(), Color::Rgb(37, 37, 38));
+    assert_eq!(
+        true_color.transcript_jump_background(),
+        Color::Rgb(48, 48, 48)
+    );
     assert!(matches!(ansi256.accent(), Color::Indexed(..)));
     assert!(!matches!(
         ansi16.accent(),
@@ -39,6 +43,10 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
     assert_eq!(light.background(), Color::Rgb(255, 255, 255));
     assert_eq!(light.foreground(), Color::Rgb(31, 35, 40));
     assert_eq!(light.overlay_background(), Color::Rgb(248, 248, 248));
+    assert_eq!(
+        light.transcript_jump_background(),
+        Color::Rgb(229, 229, 229)
+    );
 }
 
 #[test]
@@ -51,6 +59,7 @@ fn built_in_palettes_keep_the_documented_semantic_colors() {
             Color::Rgb(47, 43, 82),
             Color::Rgb(37, 35, 58),
             Color::Rgb(59, 53, 104),
+            Color::Rgb(48, 48, 48),
             Color::Rgb(22, 27, 34),
         ),
         (
@@ -60,6 +69,7 @@ fn built_in_palettes_keep_the_documented_semantic_colors() {
             Color::Rgb(233, 229, 255),
             Color::Rgb(242, 240, 255),
             Color::Rgb(216, 209, 255),
+            Color::Rgb(229, 229, 229),
             Color::Rgb(246, 248, 250),
         ),
         (
@@ -69,6 +79,7 @@ fn built_in_palettes_keep_the_documented_semantic_colors() {
             Color::Rgb(18, 41, 75),
             Color::Rgb(23, 42, 70),
             Color::Rgb(31, 79, 133),
+            Color::Rgb(48, 48, 48),
             Color::Rgb(22, 27, 34),
         ),
         (
@@ -78,17 +89,20 @@ fn built_in_palettes_keep_the_documented_semantic_colors() {
             Color::Rgb(221, 244, 255),
             Color::Rgb(238, 248, 255),
             Color::Rgb(182, 227, 255),
+            Color::Rgb(229, 229, 229),
             Color::Rgb(246, 248, 250),
         ),
     ];
 
-    for (palette, action, focus, selection, hover, pressed, user_message) in cases {
+    for (palette, action, focus, selection, hover, pressed, transcript_jump, user_message) in cases
+    {
         let theme = RenderTheme::from_palette(palette, ColorLevel::TrueColor);
         assert_eq!(theme.action_foreground(), action);
         assert_eq!(theme.focus(), focus);
         assert_eq!(theme.selection_background(), selection);
         assert_eq!(theme.hover_background(), hover);
         assert_eq!(theme.pressed_background(), pressed);
+        assert_eq!(theme.transcript_jump_background(), transcript_jump);
         assert_eq!(theme.user_message_background(), user_message);
     }
 }
@@ -109,5 +123,9 @@ fn terminal_defaults_only_replace_the_base_surface_colors() {
     assert_eq!(
         terminal.user_message_background(),
         themed.user_message_background()
+    );
+    assert_eq!(
+        terminal.transcript_jump_background(),
+        themed.transcript_jump_background()
     );
 }

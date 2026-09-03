@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::json;
 use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 
+use super::GitChangesDisplay;
 use super::StatusLineItem;
 use super::StatusLineSettings;
 
@@ -48,14 +49,40 @@ fn writing_status_line_preserves_other_tui_values() {
         written.0.get("statusLine"),
         Some(&json!(["permissions", "model", "git-branch"]))
     );
+    assert_eq!(written.0.get("gitChangesDisplay"), Some(&json!("count")));
+}
+
+#[test]
+fn git_changes_display_defaults_to_count_and_round_trips_line_totals() {
+    let defaults = StatusLineSettings::from_tui(&FrontendConfigDto::default()).unwrap();
+    assert_eq!(defaults.git_changes_display(), GitChangesDisplay::Count);
+
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "gitChangesDisplay".into(),
+        json!("addedDeletedLines"),
+    )]));
+    let settings = StatusLineSettings::from_tui(&section).unwrap();
+    assert_eq!(
+        settings.git_changes_display(),
+        GitChangesDisplay::AddedDeletedLines
+    );
+
+    let written = settings.write_to_tui(&FrontendConfigDto::default());
+    assert_eq!(
+        written.0.get("gitChangesDisplay"),
+        Some(&json!("addedDeletedLines"))
+    );
 }
 
 #[test]
 fn accounting_items_round_trip_when_enabled() {
-    let section = FrontendConfigDto(BTreeMap::from([(
-        "statusLine".into(),
-        json!(["cache-hit-rate", "reference-cost"]),
-    )]));
+    let section = FrontendConfigDto(BTreeMap::from([
+        (
+            "statusLine".into(),
+            json!(["cache-hit-rate", "reference-cost"]),
+        ),
+        ("gitChangesDisplay".into(), json!("count")),
+    ]));
 
     let settings = StatusLineSettings::from_tui(&section).unwrap();
 
@@ -75,4 +102,9 @@ fn unknown_and_duplicate_items_are_rejected() {
         let section = FrontendConfigDto(BTreeMap::from([("statusLine".into(), status_line)]));
         assert!(StatusLineSettings::from_tui(&section).is_err());
     }
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "gitChangesDisplay".into(),
+        json!("summary"),
+    )]));
+    assert!(StatusLineSettings::from_tui(&section).is_err());
 }

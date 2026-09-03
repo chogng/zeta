@@ -431,6 +431,14 @@ impl ChatPanel {
         self.top_tip.show_notice(notice, now);
     }
 
+    pub(crate) fn show_clipboard_image(&mut self) {
+        self.top_tip.show_clipboard_image();
+    }
+
+    pub(crate) fn hide_clipboard_image(&mut self) {
+        self.top_tip.hide_clipboard_image();
+    }
+
     pub(crate) fn hide_navigation(&mut self) {
         self.top_tip.hide_navigation();
     }

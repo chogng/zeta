@@ -11,11 +11,12 @@ pub(crate) use editor::ProviderApiKeyEdit;
 pub(crate) use editor::config_choices;
 pub(crate) use request::read_config_choices;
 pub(crate) use request::set_provider_api_key;
-pub(crate) use request::set_terminal_settings;
+pub(crate) use request::set_settings;
 pub(crate) use settings::FollowUpMode;
 pub(crate) use settings::TerminalSettings;
 
 pub(crate) struct ConfigEditResult {
-    pub(crate) settings: TerminalSettings,
+    pub(crate) terminal: TerminalSettings,
+    pub(crate) status_line: crate::status::StatusLineSettings,
     pub(crate) choices: ConfigChoices,
 }

@@ -1,0 +1,21 @@
+---
+source: zeta-code/tui/src/app/frame_tests.rs
+assertion_line: 897
+expression: "render(&app, 50, 16)"
+---
+● Model invocation failed 1                       
+                                                  
+● Model invocation failed 2                       
+                                                  
+● Model invocation failed 3                       
+                                                  
+● Model invocation failed 4                       
+                                                  
+● Model invocation failed 5                       
+             Jump to bottom (click) ↓             
+                                                  
+──────────────────────────────────────────────────
+>                                                 
+──────────────────────────────────────────────────
+                                                  
+  ⏸ ask permissions on

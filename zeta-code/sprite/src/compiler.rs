@@ -88,14 +88,25 @@ pub fn rust_source(name: &str, sprite: &OwnedTerminalSprite) -> String {
             output.push_str("        SpriteCell::transparent(),\n");
             continue;
         }
-        writeln!(
-            output,
-            "        SpriteCell::new({:?}, {}, {}),",
-            cell.symbol().to_string(),
-            rust_color(cell.foreground()),
-            rust_color(cell.background())
-        )
-        .expect("write to String");
+        if cell.background().is_some() {
+            output.push_str("        SpriteCell::new(\n");
+            writeln!(output, "            {:?},", cell.symbol().to_string())
+                .expect("write to String");
+            writeln!(output, "            {},", rust_color(cell.foreground()))
+                .expect("write to String");
+            writeln!(output, "            {},", rust_color(cell.background()))
+                .expect("write to String");
+            output.push_str("        ),\n");
+        } else {
+            writeln!(
+                output,
+                "        SpriteCell::new({:?}, {}, {}),",
+                cell.symbol().to_string(),
+                rust_color(cell.foreground()),
+                rust_color(cell.background())
+            )
+            .expect("write to String");
+        }
     }
     output.push_str("    ],\n);\n");
     output

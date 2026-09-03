@@ -57,6 +57,7 @@ use crate::thread::resolve_request_and_read;
 use crate::thread::rewind;
 use crate::thread::start_turn_and_read;
 use crate::thread::steer_turn_and_read;
+use crate::thread::transcript::TranscriptScrollDirection;
 use crate::thread::transcript::batch::TranscriptBatch;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
@@ -167,10 +168,18 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     if let Ok(status) = client.git_status() {
         app.update(AppEvent::GitStatusReceived(status));
     }
+    if app.request_git_text_diff()
+        && let Ok(result) = client.git_text_diff()
+    {
+        app.update(AppEvent::GitTextDiffReceived {
+            status: result.status,
+            statistics: result.statistics,
+        });
+    }
 
     let pump = EventPump::start(events)?;
     let mut requests = RequestTasks::default();
-    let mut queued_actions = VecDeque::new();
+    let mut queued_actions = VecDeque::from([AppCommand::RefreshClipboardImageAvailability]);
     let mut thread_refresh_requested = false;
     let mut config_refresh_requested = false;
     let mut skills_refresh_requested = false;
@@ -291,6 +300,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     None
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
+                    Event::FocusGained => Some(AppCommand::RefreshClipboardImageAvailability),
                     Event::Key(key) if key.kind != KeyEventKind::Release => app.handle_key(key),
                     Event::Mouse(mouse)
                         if mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
@@ -336,7 +346,19 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
                         ) =>
                     {
-                        app.scroll_session_manager(mouse.kind == MouseEventKind::ScrollUp);
+                        let terminal_area = terminal.area()?;
+                        let direction = if mouse.kind == MouseEventKind::ScrollUp {
+                            TranscriptScrollDirection::Up
+                        } else {
+                            TranscriptScrollDirection::Down
+                        };
+                        scroll_pointer_item(
+                            &mut app,
+                            terminal_area,
+                            mouse.column,
+                            mouse.row,
+                            direction,
+                        );
                         None
                     }
                     Event::Paste(text) => {
@@ -487,6 +509,20 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             &mut app,
                         );
                     }
+                    AppCommand::RefreshClipboardImageAvailability => {
+                        requests.spawn(
+                            action_lane,
+                            "zeta-tui-refresh-clipboard-image-availability",
+                            move || {
+                                Completion::Presentation(Ok(
+                                    AppEvent::ClipboardImageAvailabilityChanged(
+                                        host::clipboard::image_availability(),
+                                    ),
+                                ))
+                            },
+                            &mut app,
+                        );
+                    }
                     AppCommand::CopyLastResponse => {
                         let response = app
                             .latest_agent_response()
@@ -539,7 +575,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 "zeta-tui-set-config",
                                 move || {
                                     Completion::Presentation(
-                                        config::set_terminal_settings(&mut request_client, edit)
+                                        config::set_settings(&mut request_client, edit)
                                             .map(AppEvent::ConfigUpdated)
                                             .map_err(|error| error.to_string()),
                                     )
@@ -1281,6 +1317,25 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     connectors_refresh_requested = false;
                 }
             }
+            if requests.is_idle(Some(RequestLane::Read)) && app.request_git_text_diff() {
+                let mut request_client = client.clone();
+                requests.spawn(
+                    Some(RequestLane::Read),
+                    "zeta-tui-refresh-git-text-diff",
+                    move || {
+                        Completion::Presentation(
+                            request_client
+                                .git_text_diff()
+                                .map(|result| AppEvent::GitTextDiffReceived {
+                                    status: result.status,
+                                    statistics: result.statistics,
+                                })
+                                .map_err(|error| error.to_string()),
+                        )
+                    },
+                    &mut app,
+                );
+            }
             if redraw.take_due(Instant::now()) {
                 draw_terminal(&mut terminal, &app)?;
             }
@@ -1327,6 +1382,10 @@ fn activate_pointer_item(
             app.activate_session_manager_pointer_target(target);
             None
         }
+        InputPointerTarget::TranscriptJumpToBottom => {
+            app.follow_latest_transcript();
+            None
+        }
         InputPointerTarget::TranscriptToggle(entry_id) => {
             app.toggle_transcript_cell(&entry_id);
             None
@@ -1336,6 +1395,22 @@ fn activate_pointer_item(
             None
         }
     }
+}
+
+fn scroll_pointer_item(
+    app: &mut App,
+    area: ratatui::layout::Rect,
+    column: u16,
+    row: u16,
+    direction: TranscriptScrollDirection,
+) -> bool {
+    if app.scroll_session_manager(direction == TranscriptScrollDirection::Up) {
+        return true;
+    }
+    if !frame::transcript_contains(app, area, column, row) {
+        return false;
+    }
+    app.scroll_transcript(direction)
 }
 
 fn finish_pointer_gesture(
@@ -1415,7 +1490,12 @@ fn schedule_action(
     requests: &RequestTasks,
     queued: &mut VecDeque<AppCommand>,
 ) -> Option<AppCommand> {
-    if let Some(action) = action {
+    if let Some(action) = action
+        && (!matches!(action, AppCommand::RefreshClipboardImageAvailability)
+            || !queued
+                .iter()
+                .any(|queued| matches!(queued, AppCommand::RefreshClipboardImageAvailability)))
+    {
         queued.push_back(action);
     }
     let runnable = queued

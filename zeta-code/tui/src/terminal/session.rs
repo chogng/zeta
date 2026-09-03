@@ -5,8 +5,10 @@ use crate::terminal::screen_selection::text_in_range;
 use crate::terminal::screen_selection::token_range_at;
 use crossterm::ExecutableCommand;
 use crossterm::event::DisableBracketedPaste;
+use crossterm::event::DisableFocusChange;
 use crossterm::event::DisableMouseCapture;
 use crossterm::event::EnableBracketedPaste;
+use crossterm::event::EnableFocusChange;
 use crossterm::event::EnableMouseCapture;
 use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::LeaveAlternateScreen;
@@ -109,8 +111,10 @@ trait TerminalModeOperations {
     fn enable_raw_mode(&mut self) -> io::Result<()>;
     fn enter_alternate_screen(&mut self) -> io::Result<()>;
     fn enable_bracketed_paste(&mut self) -> io::Result<()>;
+    fn enable_focus_change(&mut self) -> io::Result<()>;
     fn enable_mouse_capture(&mut self) -> io::Result<()>;
     fn disable_mouse_capture(&mut self) -> io::Result<()>;
+    fn disable_focus_change(&mut self) -> io::Result<()>;
     fn disable_bracketed_paste(&mut self) -> io::Result<()>;
     fn leave_alternate_screen(&mut self) -> io::Result<()>;
     fn disable_raw_mode(&mut self) -> io::Result<()>;
@@ -121,6 +125,7 @@ struct TerminalModeGuard<O: TerminalModeOperations> {
     raw_mode: bool,
     alternate_screen: bool,
     bracketed_paste: bool,
+    focus_change: bool,
     mouse_mode: MouseMode,
     mouse_capture: bool,
 }
@@ -132,6 +137,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             raw_mode: false,
             alternate_screen: false,
             bracketed_paste: false,
+            focus_change: false,
             mouse_mode: MouseMode::default(),
             mouse_capture: false,
         };
@@ -148,6 +154,8 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             self.alternate_screen = true;
             self.operations.enable_bracketed_paste()?;
             self.bracketed_paste = true;
+            self.operations.enable_focus_change()?;
+            self.focus_change = true;
             if self.mouse_mode == MouseMode::TuiCapture {
                 self.operations.enable_mouse_capture()?;
                 self.mouse_capture = true;
@@ -187,6 +195,10 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             let _ = self.operations.disable_mouse_capture();
             self.mouse_capture = false;
         }
+        if self.focus_change {
+            let _ = self.operations.disable_focus_change();
+            self.focus_change = false;
+        }
         if self.bracketed_paste {
             let _ = self.operations.disable_bracketed_paste();
             self.bracketed_paste = false;
@@ -223,12 +235,20 @@ impl TerminalModeOperations for CrosstermModeOperations {
         io::stdout().execute(EnableBracketedPaste).map(|_| ())
     }
 
+    fn enable_focus_change(&mut self) -> io::Result<()> {
+        io::stdout().execute(EnableFocusChange).map(|_| ())
+    }
+
     fn enable_mouse_capture(&mut self) -> io::Result<()> {
         io::stdout().execute(EnableMouseCapture).map(|_| ())
     }
 
     fn disable_mouse_capture(&mut self) -> io::Result<()> {
         io::stdout().execute(DisableMouseCapture).map(|_| ())
+    }
+
+    fn disable_focus_change(&mut self) -> io::Result<()> {
+        io::stdout().execute(DisableFocusChange).map(|_| ())
     }
 
     fn disable_bracketed_paste(&mut self) -> io::Result<()> {

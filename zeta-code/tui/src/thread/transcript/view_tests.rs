@@ -11,6 +11,7 @@ use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::ExecutionKind;
 use crate::thread::transcript::Message;
 use crate::thread::transcript::MessageRole;
+use crate::thread::transcript::TranscriptScrollDirection;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -356,4 +357,73 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
         .collect::<String>();
 
     assert!(rendered.contains("visible tail"));
+}
+
+#[test]
+fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
+    let messages = (0..8)
+        .map(|index| Message::plain(MessageRole::Agent, format!("message {index}")))
+        .collect::<Vec<_>>();
+    let mut scroll = ChatHistoryScroll::default();
+    assert!(scroll.scroll(TranscriptScrollDirection::Up));
+    let render_cache = ChatHistoryRenderCache::default();
+    let view = ChatHistoryView {
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &render_cache,
+        pointer: ChatHistoryPointerState::default(),
+    };
+    let area = Rect::new(0, 0, 40, 6);
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+
+    terminal
+        .draw(|frame| view.render(frame, area, test_context()))
+        .unwrap();
+
+    let label = "Jump to bottom (click) ↓";
+    let start = (area.width - u16::try_from(label.chars().count()).unwrap()) / 2;
+    let buffer = terminal.backend().buffer();
+    let row = (0..area.width)
+        .map(|x| buffer[(x, area.bottom() - 1)].symbol())
+        .collect::<String>();
+    assert!(row.contains(label));
+    assert_eq!(
+        buffer[(start, area.bottom() - 1)].bg,
+        test_context().transcript_jump_background()
+    );
+    assert_eq!(
+        pointer_target_at(
+            area,
+            &messages,
+            &scroll,
+            &render_cache,
+            test_context(),
+            start,
+            area.bottom() - 1,
+        ),
+        Some(ChatHistoryPointerTarget::JumpToBottom)
+    );
+}
+
+#[test]
+fn jump_control_is_hidden_while_following_the_latest_content() {
+    let messages = (0..8)
+        .map(|index| Message::plain(MessageRole::Agent, format!("message {index}")))
+        .collect::<Vec<_>>();
+    let scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
+    let area = Rect::new(0, 0, 40, 6);
+
+    assert_eq!(
+        pointer_target_at(
+            area,
+            &messages,
+            &scroll,
+            &render_cache,
+            test_context(),
+            8,
+            area.bottom() - 1,
+        ),
+        None
+    );
 }

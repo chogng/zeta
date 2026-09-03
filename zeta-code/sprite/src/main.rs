@@ -2,6 +2,7 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use clap::Parser;
+use std::path::Path;
 use std::path::PathBuf;
 use zeta_sprite::compiler::ansi_preview;
 use zeta_sprite::compiler::rasterize;
@@ -26,6 +27,10 @@ struct Args {
     /// Write a checked-in Rust sprite constant to this path.
     #[arg(long = "rust")]
     rust_output: Option<PathBuf>,
+
+    /// Verify the checked-in Rust sprite instead of writing it.
+    #[arg(long, requires = "rust_output")]
+    check: bool,
 
     /// Rust constant name used with --rust.
     #[arg(long, default_value = "PET", value_parser = constant_name)]
@@ -55,23 +60,43 @@ fn main() -> Result<()> {
         args.alpha_threshold,
     )?;
 
-    print!("{}", ansi_preview(sprite.as_sprite()));
-    eprintln!(
-        "{}x{} source -> {}x{} logical pixels -> {}x{} terminal cells",
-        source_width, source_height, logical_width, logical_height, columns, rows
-    );
+    if !args.check {
+        print!("{}", ansi_preview(sprite.as_sprite()));
+        eprintln!(
+            "{}x{} source -> {}x{} logical pixels -> {}x{} terminal cells",
+            source_width, source_height, logical_width, logical_height, columns, rows
+        );
+    }
 
     if let Some(path) = args.rust_output {
-        if let Some(parent) = path
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("create output directory {}", parent.display()))?;
+        let source = rust_source(&args.name, &sprite);
+        if args.check {
+            check_rust_output(&path, &source)?;
+            eprintln!("checked {}", path.display());
+        } else {
+            if let Some(parent) = path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+            {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("create output directory {}", parent.display()))?;
+            }
+            std::fs::write(&path, source)
+                .with_context(|| format!("write Rust sprite {}", path.display()))?;
+            eprintln!("wrote {}", path.display());
         }
-        std::fs::write(&path, rust_source(&args.name, &sprite))
-            .with_context(|| format!("write Rust sprite {}", path.display()))?;
-        eprintln!("wrote {}", path.display());
+    }
+    Ok(())
+}
+
+fn check_rust_output(path: &Path, expected: &str) -> Result<()> {
+    let actual = std::fs::read_to_string(path)
+        .with_context(|| format!("read Rust sprite {}", path.display()))?;
+    if actual != expected {
+        bail!(
+            "Rust sprite {} is out of date; regenerate it without --check",
+            path.display()
+        );
     }
     Ok(())
 }

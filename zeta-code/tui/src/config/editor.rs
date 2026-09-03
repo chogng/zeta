@@ -1,6 +1,7 @@
 use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
 use crate::models::preferred_model_label;
+use crate::status::StatusLineSettings;
 use crate::thread::composer::ChatInputMode;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionGroup;
@@ -25,6 +26,7 @@ use zeta_app_server_protocol::protocol::provider::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ConfigEdit {
     pub(crate) terminal: TerminalSettings,
+    pub(crate) status_line: StatusLineSettings,
     pub(crate) server_config: ConfigReadResult,
     pub(crate) providers: ProviderListResult,
 }
@@ -40,6 +42,7 @@ pub(crate) enum ConfigSelectionAction {
         standard: Box<ConfigEdit>,
         vim: Box<ConfigEdit>,
     },
+    SetShowGitChangesAsDiff(ConfigEdit),
     OpenProviderApiKey {
         provider: String,
         display_name: String,
@@ -225,6 +228,7 @@ pub(crate) fn config_choices(
     config: &ConfigReadResult,
     providers: &ProviderListResult,
     terminal: TerminalSettings,
+    status_line: StatusLineSettings,
 ) -> ConfigChoices {
     let mut actions = BTreeMap::new();
     let mouse_id = ListSelectionItemId::new("terminal-mouse-interactions");
@@ -235,6 +239,7 @@ pub(crate) fn config_choices(
         mouse_id.clone(),
         ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
             terminal: toggled_terminal,
+            status_line: status_line.clone(),
             server_config: config.clone(),
             providers: providers.clone(),
         }),
@@ -249,11 +254,13 @@ pub(crate) fn config_choices(
         ConfigSelectionAction::ChooseInputMode {
             standard: Box::new(ConfigEdit {
                 terminal: standard_terminal,
+                status_line: status_line.clone(),
                 server_config: config.clone(),
                 providers: providers.clone(),
             }),
             vim: Box::new(ConfigEdit {
                 terminal: vim_terminal,
+                status_line: status_line.clone(),
                 server_config: config.clone(),
                 providers: providers.clone(),
             }),
@@ -269,15 +276,30 @@ pub(crate) fn config_choices(
         ConfigSelectionAction::ChooseFollowUpMode {
             queue: Box::new(ConfigEdit {
                 terminal: queue_terminal,
+                status_line: status_line.clone(),
                 server_config: config.clone(),
                 providers: providers.clone(),
             }),
             steer: Box::new(ConfigEdit {
                 terminal: steer_terminal,
+                status_line: status_line.clone(),
                 server_config: config.clone(),
                 providers: providers.clone(),
             }),
         },
+    );
+    let git_changes_id = ListSelectionItemId::new("show-git-changes-as-diff");
+    let show_git_changes_as_diff = status_line.show_git_changes_as_diff();
+    let mut toggled_status_line = status_line.clone();
+    toggled_status_line.set_show_git_changes_as_diff(!show_git_changes_as_diff);
+    actions.insert(
+        git_changes_id.clone(),
+        ConfigSelectionAction::SetShowGitChangesAsDiff(ConfigEdit {
+            terminal,
+            status_line: toggled_status_line,
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
     );
     let mut config_items = vec![
         ListSelectionItem::new("Mouse interactions")
@@ -306,6 +328,13 @@ pub(crate) fn config_choices(
                     ChatInputMode::Standard => "Standard",
                     ChatInputMode::Vim => "Vim",
                 },
+            ),
+        ListSelectionItem::new("Show Git changes as diff")
+            .with_id(git_changes_id)
+            .with_columns(
+                "Show Git changes as diff",
+                "Use added and deleted line counts in the status line",
+                checkbox(show_git_changes_as_diff),
             ),
     ];
     config_items.extend(overview(config));

@@ -1,6 +1,7 @@
 use super::Completion;
 use super::activate_pointer_item;
 use super::schedule_action;
+use super::scroll_pointer_item;
 use super::update_pointer_hover;
 use crate::app::App;
 use crate::app::AppCommand;
@@ -13,6 +14,7 @@ use crate::app::requests::RequestTasks;
 use crate::terminal::mouse::MouseMode;
 use crate::thread::composer::ChatComposerPointerTarget;
 use crate::thread::composer::CompletionView;
+use crate::thread::transcript::TranscriptScrollDirection;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -97,6 +99,21 @@ fn quit_bypasses_a_pending_request() {
         schedule_action(Some(AppCommand::Quit), &requests, &mut queued),
         Some(AppCommand::Quit)
     ));
+    assert!(queued.is_empty());
+}
+
+#[test]
+fn repeated_clipboard_availability_refreshes_are_coalesced() {
+    let requests = RequestTasks::default();
+    let mut queued = VecDeque::from([AppCommand::RefreshClipboardImageAvailability]);
+
+    let action = schedule_action(
+        Some(AppCommand::RefreshClipboardImageAvailability),
+        &requests,
+        &mut queued,
+    );
+
+    assert_eq!(action, Some(AppCommand::RefreshClipboardImageAvailability));
     assert!(queued.is_empty());
 }
 
@@ -292,4 +309,41 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
     assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
     assert_eq!(app.overlay().unwrap().title(), "Session preview");
     assert!(app.session_manager_view().is_some());
+}
+
+#[test]
+fn transcript_mouse_wheel_reveals_jump_control_and_click_returns_to_latest() {
+    let mut app = App::new();
+    for index in 0..12 {
+        app.update(AppEvent::FailureReported(format!("failure {index}")));
+    }
+    let area = Rect::new(0, 0, 50, 16);
+    let transcript = frame::layout(&app, area).session.transcript;
+
+    assert!(scroll_pointer_item(
+        &mut app,
+        area,
+        transcript.x,
+        transcript.y,
+        TranscriptScrollDirection::Up,
+    ));
+    let jump = (transcript.x..transcript.right())
+        .find(|column| {
+            frame::input_pointer_target_at(
+                &app,
+                area,
+                *column,
+                transcript.bottom().saturating_sub(1),
+            ) == Some(InputPointerTarget::TranscriptJumpToBottom)
+        })
+        .expect("the transcript jump control should be clickable");
+
+    assert_eq!(
+        activate_pointer_item(&mut app, area, jump, transcript.bottom().saturating_sub(1),),
+        None
+    );
+    assert!((transcript.x..transcript.right()).all(|column| {
+        frame::input_pointer_target_at(&app, area, column, transcript.bottom().saturating_sub(1))
+            != Some(InputPointerTarget::TranscriptJumpToBottom)
+    }));
 }

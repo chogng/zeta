@@ -3,6 +3,8 @@ use super::provider_api_key_prompt;
 use crate::config::ConfigSelectionAction;
 use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
+use crate::status::GitChangesDisplay;
+use crate::status::StatusLineSettings;
 use crate::test_support::empty_config_snapshot;
 use crate::thread::composer::ChatInputMode;
 use crate::widgets::list_selection::ListSelectionState;
@@ -40,7 +42,12 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     config.revision = 4;
     config.generation = 5;
     let providers = providers();
-    let view = config_choices(&config, &providers, TerminalSettings::default());
+    let view = config_choices(
+        &config,
+        &providers,
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    );
     let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Config");
@@ -76,6 +83,21 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::ChooseInputMode { standard, vim }
             if standard.terminal.input_mode() == ChatInputMode::Standard
                 && vim.terminal.input_mode() == ChatInputMode::Vim
+    ));
+    let git_changes = &state.visible_items()[3];
+    assert_eq!(git_changes.label(), "Git changes");
+    assert_eq!(
+        git_changes.description(),
+        Some("How working-tree changes appear in the status line Number of files")
+    );
+    assert!(matches!(
+        view.actions.get(git_changes.id().unwrap()).unwrap(),
+        ConfigSelectionAction::ChooseGitChangesDisplay {
+            count,
+            added_deleted_lines,
+        } if count.status_line.git_changes_display() == GitChangesDisplay::Count
+            && added_deleted_lines.status_line.git_changes_display()
+                == GitChangesDisplay::AddedDeletedLines
     ));
     let follow_up = &state.visible_items()[1];
     assert_eq!(follow_up.label(), "Follow-up messages");
@@ -115,7 +137,12 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
     let mut terminal = TerminalSettings::default();
     terminal.set_mouse_interactions(false);
 
-    let view = config_choices(&empty_config_snapshot(), &providers(), terminal);
+    let view = config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        terminal,
+        StatusLineSettings::default(),
+    );
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(

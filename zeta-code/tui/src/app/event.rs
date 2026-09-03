@@ -3,6 +3,7 @@ use crate::config::ConfigEditResult;
 use crate::config::TerminalSettings;
 use crate::connectors::ConnectorChoices;
 use crate::dirs::DirChoices;
+use crate::host::clipboard::ClipboardImageAvailability;
 use crate::keymap::KeymapEditorUpdate;
 use crate::keymap::KeymapSettings;
 use crate::mcp::McpChoices;
@@ -24,6 +25,7 @@ use crate::thread::queue::QueueId;
 use crate::thread::rewind::RewindChoices;
 #[cfg(test)]
 use crate::widgets::list_selection::ListSelectionModel;
+use zeta_app_server_protocol::protocol::git::GitDiffStatisticsDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::skills::SkillDiagnosticDto;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
@@ -48,6 +50,7 @@ pub(crate) enum AppEvent {
     },
     DirPermissionsUpdated(DirChoices),
     ClipboardImageRead(Result<Vec<u8>, String>),
+    ClipboardImageAvailabilityChanged(ClipboardImageAvailability),
     CommandStarted(String),
     CommandCompleted {
         command: String,
@@ -66,6 +69,10 @@ pub(crate) enum AppEvent {
     FailureReported(String),
     FileSearchSnapshotReceived(PathSearchSnapshot),
     GitStatusReceived(GitStatusResult),
+    GitTextDiffReceived {
+        status: GitStatusResult,
+        statistics: GitDiffStatisticsDto,
+    },
     HostOperationCompleted(Result<String, String>),
     TopTipNoticeShown(String),
     InterruptFailed(String),

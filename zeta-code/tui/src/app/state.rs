@@ -16,6 +16,7 @@ use crate::connectors::ConnectorChoices;
 use crate::connectors::ConnectorSelectionAction;
 use crate::dirs::DirChoices;
 use crate::dirs::DirSelectionAction;
+use crate::host::clipboard::ClipboardImageAvailability;
 use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
@@ -66,6 +67,7 @@ use crate::thread::rewind::RewindSelectionAction;
 use crate::thread::transcript::ChatHistoryRenderCache;
 use crate::thread::transcript::ChatHistoryScroll;
 use crate::thread::transcript::Message;
+use crate::thread::transcript::TranscriptScrollDirection;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::list_selection::ListSelectionAdjustment;
@@ -437,6 +439,9 @@ impl App {
                     crate::thread::composer::ChatInputMode::Vim => *standard,
                 },
             )),
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::SetShowGitChangesAsDiff(edit),
+            ) => Some(AppCommand::EditConfig(edit)),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::OpenProviderApiKey { .. },
             ) => None,
@@ -980,6 +985,20 @@ impl App {
         &self.thread_presentations.active().scroll
     }
 
+    pub(crate) fn scroll_transcript(&mut self, direction: TranscriptScrollDirection) -> bool {
+        self.thread_presentations
+            .active_mut()
+            .scroll
+            .scroll(direction)
+    }
+
+    pub(crate) fn follow_latest_transcript(&mut self) {
+        self.thread_presentations
+            .active_mut()
+            .scroll
+            .follow_latest();
+    }
+
     pub(crate) fn transcript_render_cache(&self) -> &ChatHistoryRenderCache {
         &self.thread_presentations.active().render_cache
     }
@@ -1147,6 +1166,10 @@ impl App {
         self.chat_panel.status_line()
     }
 
+    pub(crate) fn request_git_text_diff(&mut self) -> bool {
+        self.chat_panel.status_line_mut().request_git_text_diff()
+    }
+
     pub(crate) fn top_tip(&self) -> &TopTip {
         self.chat_panel.top_tip()
     }
@@ -1243,6 +1266,10 @@ impl App {
             AppEvent::DirPermissionsUpdated(choices) => self.update_dirs_picker(choices),
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
+            AppEvent::ClipboardImageAvailabilityChanged(availability) => match availability {
+                ClipboardImageAvailability::Available => self.chat_panel.show_clipboard_image(),
+                ClipboardImageAvailability::Unavailable => self.chat_panel.hide_clipboard_image(),
+            },
             AppEvent::ConfigSettingsReceived(settings) => {
                 self.terminal_settings = settings;
                 if !settings.mouse_interactions() {
@@ -1253,12 +1280,15 @@ impl App {
                     .set_input_mode(settings.input_mode());
             }
             AppEvent::ConfigUpdated(result) => {
-                self.terminal_settings = result.settings;
-                if !result.settings.mouse_interactions() {
+                self.terminal_settings = result.terminal;
+                self.chat_panel
+                    .status_line_mut()
+                    .apply_settings(result.status_line);
+                if !result.terminal.mouse_interactions() {
                     self.screen_selection.clear();
                 }
                 self.thread_presentations
-                    .set_input_mode(result.settings.input_mode());
+                    .set_input_mode(result.terminal.input_mode());
                 self.chat_panel.replace_config(result.choices);
             }
             AppEvent::ConfigEditorOpened(view) => {
@@ -1304,6 +1334,10 @@ impl App {
             AppEvent::GitStatusReceived(status) => {
                 self.chat_panel.status_line_mut().apply_git_status(&status)
             }
+            AppEvent::GitTextDiffReceived { status, statistics } => self
+                .chat_panel
+                .status_line_mut()
+                .apply_git_text_diff(status, statistics),
             AppEvent::HostOperationCompleted(Ok(notice)) => {
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(notice));

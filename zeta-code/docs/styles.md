@@ -45,6 +45,7 @@ Vim Insert 模式使用同一个 `> `；Normal 和 Visual 模式继续使用各�
 | `disabledForeground` | `#8B949E` | `#57606A` | `#8B949E` | `#57606A` |
 | `screenSelectionBackground` | `#87CEEB` | `#87CEEB` | `#80CCFF` | `#80CCFF` |
 | `screenSelectionForeground` | `#0D1117` | `#0D1117` | `#0D1117` | `#0D1117` |
+| `transcriptJumpBackground` | `#303030` | `#E5E5E5` | `#303030` | `#E5E5E5` |
 
 产品结果颜色与交互颜色分开：
 
@@ -70,6 +71,8 @@ Vim Insert 模式使用同一个 `> `；Normal 和 Visual 模式继续使用各�
 可展开的输出在折叠和展开时都保持同一个实心圆；展开后由下一行的 `└─` 表达详情归属。鼠标悬停和按下只临时覆盖圆点所在的交互区域，键盘仍通过正文选择样式和底栏中的 `Space` 提示表达当前操作目标。
 
 正文中的用户消息和本地命令输入行使用独立表面颜色，命令结果仍使用普通背景。该表面不复用选择、悬停或浮层状态：`userMessageBackground` 在 Dark 与 Dark Colorblind 中为 `#161B22`，在 Light 与 Light Colorblind 中为 `#F6F8FA`。
+
+正文离开最新位置时，`Jump to bottom (click) ↓` 覆盖在正文区最后一行中央，普通状态使用 `transcriptJumpBackground` 灰色表面；悬停和按下分别切换到统一的 `hover*` 与 `pressed*` 交互颜色。文案中的 `(click)` 是固定可点击线索，不能由颜色替代。
 
 ## 输入框边线
 

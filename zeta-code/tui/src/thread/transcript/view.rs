@@ -19,7 +19,10 @@ use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
+use unicode_width::UnicodeWidthStr;
 use zeta_ansi_escape::ansi_text;
+
+const JUMP_TO_BOTTOM_LABEL: &str = "Jump to bottom (click) ↓";
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) messages: &'a [Message],
@@ -30,8 +33,10 @@ pub(crate) struct ChatHistoryView<'a> {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ChatHistoryPointerState<'a> {
+    pub(crate) hovered_jump_to_bottom: bool,
     pub(crate) hovered_toggle: Option<&'a str>,
     pub(crate) hovered_details: Option<&'a str>,
+    pub(crate) pressed_jump_to_bottom: bool,
     pub(crate) pressed_toggle: Option<&'a str>,
     pub(crate) pressed_details: Option<&'a str>,
 }
@@ -46,9 +51,10 @@ impl Renderable for ChatHistoryView<'_> {
 
     fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
         let heights = measured_heights(self.messages, self.render_cache, area.width, context);
+        let (content_area, jump_area) = scroll_areas(area, &heights, self.scroll);
         render_cells(
             frame,
-            area,
+            content_area,
             self.scroll,
             self.messages,
             &heights,
@@ -56,11 +62,13 @@ impl Renderable for ChatHistoryView<'_> {
             self.pointer,
             context,
         );
+        render_jump_to_bottom(frame, jump_area, self.pointer, context);
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatHistoryPointerTarget {
+    JumpToBottom,
     Toggle(String),
     Details(String),
 }
@@ -78,10 +86,19 @@ pub(crate) fn pointer_target_at(
         return None;
     }
     let heights = measured_heights(messages, render_cache, area.width, context);
+    let (content_area, jump_area) = scroll_areas(area, &heights, scroll);
+    if jump_area.is_some_and(|button| {
+        column >= button.x && column < button.right() && row >= button.y && row < button.bottom()
+    }) {
+        return Some(ChatHistoryPointerTarget::JumpToBottom);
+    }
+    if row >= content_area.bottom() {
+        return None;
+    }
     let total_rows = heights.iter().sum::<usize>();
-    let bottom_offset = total_rows.saturating_sub(area.height as usize);
+    let bottom_offset = total_rows.saturating_sub(usize::from(content_area.height));
     let visible_offset = scroll.paragraph_offset(bottom_offset);
-    let target_row = visible_offset.saturating_add(usize::from(row - area.y));
+    let target_row = visible_offset.saturating_add(usize::from(row - content_area.y));
     let mut start = 0usize;
     for (message, rows) in messages.iter().zip(heights) {
         let Some(cell_id) = message.cell_id.as_ref() else {
@@ -100,6 +117,64 @@ pub(crate) fn pointer_target_at(
         start = start.saturating_add(rows);
     }
     None
+}
+
+fn jump_to_bottom_area(area: Rect, heights: &[usize], scroll: &ChatHistoryScroll) -> Option<Rect> {
+    if area.width == 0 || area.height == 0 {
+        return None;
+    }
+    let total_rows = heights.iter().sum::<usize>();
+    let bottom_offset = total_rows.saturating_sub(usize::from(area.height));
+    if !scroll.is_scrolled(bottom_offset) {
+        return None;
+    }
+    let label_width = u16::try_from(JUMP_TO_BOTTOM_LABEL.width()).unwrap_or(u16::MAX);
+    let width = label_width.min(area.width);
+    let x = area.x.saturating_add((area.width - width) / 2);
+    Some(Rect::new(x, area.bottom().saturating_sub(1), width, 1))
+}
+
+fn scroll_areas(area: Rect, heights: &[usize], scroll: &ChatHistoryScroll) -> (Rect, Option<Rect>) {
+    let jump_area = jump_to_bottom_area(area, heights, scroll);
+    let content_area = if jump_area.is_some() {
+        Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1))
+    } else {
+        area
+    };
+    (content_area, jump_area)
+}
+
+fn render_jump_to_bottom(
+    frame: &mut Frame<'_>,
+    area: Option<Rect>,
+    pointer: ChatHistoryPointerState<'_>,
+    context: RenderContext<'_>,
+) {
+    let Some(area) = area else {
+        return;
+    };
+    let style = if pointer.hovered_jump_to_bottom || pointer.pressed_jump_to_bottom {
+        interaction_style(
+            context,
+            InteractionState {
+                target: InteractionTarget::Rest,
+                hovered: pointer.hovered_jump_to_bottom,
+                pressed: pointer.pressed_jump_to_bottom,
+                ..Default::default()
+            },
+        )
+    } else {
+        Style::default()
+            .fg(context.foreground())
+            .bg(context.transcript_jump_background())
+    };
+    frame.buffer_mut().set_stringn(
+        area.x,
+        area.y,
+        JUMP_TO_BOTTOM_LABEL,
+        usize::from(area.width),
+        style,
+    );
 }
 
 #[cfg(test)]

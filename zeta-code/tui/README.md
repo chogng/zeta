@@ -26,8 +26,7 @@ Tool、approval policy 或 persistence。
   个 Unicode scalar value 的 paste 会显示为原子占位符，并只在提交时展开；
 - 粘贴 PNG/JPEG/GIF/WEBP 本地文件路径时立即读取最多 16 MiB 的图片，显示可原子编辑的
   `[Image #N]` 占位符，并以结构化图片项提交；
-- `Ctrl-V` 从系统剪贴板读取图片；文件列表与原始 RGBA 位图都会统一进入同一附件占位符和
-  结构化提交路径；
+- `Ctrl-V` 从系统剪贴板读取图片；启动及窗口重新获得焦点时会后台检测图片，并在顶部提示显示 `image in clipboard · ctrl+v to paste`；文件列表与原始 RGBA 位图都会统一进入同一附件占位符和结构化提交路径；
 - `@` 打开 File/Plugin 混合 Mention；File 候选由 `zeta-file-search::PathSearchHandle` 在后台增量扫描和 fuzzy 匹配，Plugin 候选来自 `plugin/list` 的 effective package。两者共用循环选择、鼠标 hover、Tab/Enter completion 和 Esc dismiss；File 以当前目录的相对路径插入，Plugin 以原子 `@plugin-id` 插入；
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的 Tab completion、Esc dismiss、鼠标 hover 跟随选中与左键单击可见命令；
 - `$` 打开独立 Skill selector；enabled、compatible 且名称无歧义的 Skill 显示为 `$name`，Tab/Enter 或鼠标选中后作为原子文本插入。提交时保留 `$name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn 后按需加载；Skill 与 `/name` 命令不冲突，`skills/changed` 会刷新候选；
@@ -71,7 +70,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- 输入位置下方固定两行。常态下两行都属于 StatusLine：上行组合 Plan、Queue、当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 顺序启用的模型、缓存命中率、累计参考费用、Git 分支和 Git 变更；缓存命中率与参考费用默认关闭，可用 `/statusline` 启用。Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下行显示下一次 Turn 的权限模式；运行中 Turn 与下一次模式不同时同时标明两者。`TopTip` 在输入位置上方固定占用一整行：空会话显示 `← for agents`；首次提交进入对话或对话中切换权限策略后显示 `shift+tab to cycle policy`，连续切换会刷新计时，距最后一次触发 5 秒后留空；临时通知出现时覆盖当前提示文字，整行高度不变。Manager、`CommandPanel` 和其他需要明确操作键的交互切换为 HitBar：底部两行首行留空，末行显示 KeyHints；没有操作提示时末行也保持为空；
+- 输入位置下方固定两行。常态下两行都属于 StatusLine：上行组合 Plan、Queue、当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 顺序启用的模型、缓存命中率、累计参考费用、Git 分支和 Git 变更；缓存命中率与参考费用默认关闭，可用 `/statusline` 启用。Git 变更默认显示改动文件数；勾选 Config 中的 `Show Git changes as diff` 后，`[tui].showGitChangesAsDiff = true`，状态行改为显示文本行增加数和删除数。Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下行显示下一次 Turn 的权限模式；运行中 Turn 与下一次模式不同时同时标明两者。`TopTip` 在输入位置上方固定占用一整行：启动及窗口每次重新获得焦点时，后台检查剪贴板；检测到图片时显示 `image in clipboard · ctrl+v to paste`，否则空会话显示 `← for agents`，首次提交进入对话或对话中切换权限策略后显示 `shift+tab to cycle policy`，连续切换会刷新计时，距最后一次触发 5 秒后留空。临时通知优先于剪贴板图片提示，剪贴板图片提示优先于导航和权限提示；提示切换不改变整行高度。Manager、`CommandPanel` 和其他需要明确操作键的交互切换为 HitBar：底部两行首行留空，末行显示 KeyHints；没有操作提示时末行也保持为空；
 - `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、Session 界面 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`keymap/settings.rs` 解释 `[tui].keybindings` 的 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、config revision 校验和完整规则校验；保存通过 App Server 替换完整 `[tui]` 表，坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各自的能力或控件拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
@@ -86,7 +85,7 @@ Tool、approval policy 或 persistence。
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
   仍执行 session shutdown 与 terminal RAII cleanup；
 - Ctrl-Z 在 Unix 上先恢复当前启用的鼠标捕获、bracketed paste、alternate screen 和 raw mode，再发送 `SIGTSTP`；`fg` 恢复后按原顺序重新获取所有 terminal mode 并清屏重绘；
-- raw mode、alternate screen、bracketed paste 与 cursor cleanup；Mouse interactions 开启时在整个 TUI 会话捕获鼠标，关闭时释放捕获并把拖拽文本选择交还终端；
+- raw mode、alternate screen、bracketed paste、窗口焦点上报与 cursor cleanup；Mouse interactions 开启时在整个 TUI 会话捕获鼠标，关闭时释放捕获并把拖拽文本选择交还终端；
 - 启动时通过 App Server 从 `<profile>/config.toml` 的 `[tui]` 读取主题和终端设置，并从 `<profile>/zeta-code/themes/*.json` 读取 TUI 专用用户主题；Auto 保留终端默认前景和背景，只按探测到的背景亮度选择语义颜色，显式主题使用自己的完整调色板；TrueColor、ANSI-256、ANSI-16、Monochrome 映射均由本 crate 拥有，不读取 TypeScript token registry、`resources/design-tokens`、`configuration.json` 或 `zeta-theme`；`theme` 拥有 `/theme` 的固定八项 Theme 面板、挂在顶部分隔线上的反色 `Theme` 标题、编号、
   active 标记、候选 frame highlight、仅带上下较高对比度长节虚线的 diff preview、palette 来源说明和选择动作。Theme 面板
   不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Theme 面板；保存期间 `/theme <id>` 显示 `●`，完成后恢复 `>`，并以 `└─` 归属且与命令文字对齐的 `Theme set to …` 记录执行结果，`/theme <id>` 保留直接切换；
@@ -105,12 +104,19 @@ TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，�
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 只消费 typed model capacity、Turn `contextUsage` 与 Thread accounting 汇总，不从 transcript 推导上下文占用、token 或费用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 编辑 `[tui].statusLine` 中有顺序的权限、模型、缓存命中率、累计参考费用、Git 分支和 Git 变更项；Config 页面展示 Config、Providers 与 Language servers。快捷键、状态栏、主题、Mouse interactions、Follow-up messages 和 Input mode 保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端保存完整键值表，字段默认值和校验由 TUI 负责。旧 `[tui].dirPermissions` 会在下一次保存 TUI 设置时删除；当前 Session 的目录授权只通过 Session RPC 修改。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity、Turn `contextUsage` 与 Thread accounting 汇总，不从 transcript 推导上下文占用、token 或费用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 编辑 `[tui].statusLine` 中有顺序的权限、模型、缓存命中率、累计参考费用、Git 分支和 Git 变更项；Config 页面还可在文件数量和文本行增加/删除统计之间切换 Git 变更格式，并展示 Config、Providers 与 Language servers。快捷键、状态栏、主题、Mouse interactions、Follow-up messages 和 Input mode 保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端保存完整键值表，字段默认值和校验由 TUI 负责。旧 `[tui].dirPermissions` 会在下一次保存 TUI 设置时删除；当前 Session 的目录授权只通过 Session RPC 修改。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
 
 从 repository root 启动当前 TUI：
 
 ```bash
 just zeta
+```
+
+调整 Welcome 区域的终端图案时，以 [`assets/welcome/pet.svg`](assets/welcome/pet.svg) 为设计源。`just pet` 会重新生成 `src/app/welcome/pet/asset.rs`，并在当前终端直接显示最终的 9×3 彩色图案；`just pet-check` 只检查设计源与生成文件是否一致。
+
+```bash
+just pet
+just pet-check
 ```
 
 等价的 Cargo 命令是：
@@ -152,6 +158,7 @@ theme = "graphite"
 mouseInteractions = true
 followUpMode = "queue"
 inputMode = "standard"
+showGitChangesAsDiff = false
 ```
 
 目录权限不属于 TUI profile 设置，只保存在对应 Session。用户主题内容保存为 `<profile>/zeta-code/themes/*.json`。每个文件最多 1 MiB；目录最多读取 128 个常规 JSON 文件；`id` 必须是小写 kebab-case，`label` 为 1–80 个已去除首尾空格的字符，`appearance` 只能是 `dark` 或 `light`，`colors` 最多覆盖 64 项且颜色必须是 `#RRGGBB`。未知字段、未知颜色名、重复/保留 ID 和不支持的版本都会使该主题文件单独失效。
@@ -165,6 +172,7 @@ inputMode = "standard"
   "colors": {
     "background": "#101010",
     "quickViewBackground": "#303030",
+    "transcriptJumpBackground": "#414141",
     "userMessageBackground": "#252525",
     "actionForeground": "#58a6ff",
     "focus": "#8b80f9",
@@ -174,7 +182,7 @@ inputMode = "standard"
 }
 ```
 
-可覆盖字段为 `accent`、`accentSurfaceBackground`、`accentSurfaceForeground`、`actionForeground`、`background`、`border`、`chatInputChrome`、`danger`、`disabledForeground`、`focus`、`foreground`、`function`、`hoverBackground`、`hoverForeground`、`insertedBackground`、`insertedMarker`、`keyword`、`muted`、`pressedBackground`、`pressedForeground`、`quickViewBackground`、`removedBackground`、`removedMarker`、`selectionBackground`、`selectionForeground`、`screenSelectionBackground`、`screenSelectionForeground`、`string`、`success`、`type`、`userMessageBackground`、`variable` 与 `warning`。未写字段继承所选 `appearance` 的内置调色板；该格式不接受图形界面 token、别名、透明色或颜色变换。
+可覆盖字段为 `accent`、`accentSurfaceBackground`、`accentSurfaceForeground`、`actionForeground`、`background`、`border`、`chatInputChrome`、`danger`、`disabledForeground`、`focus`、`foreground`、`function`、`hoverBackground`、`hoverForeground`、`insertedBackground`、`insertedMarker`、`keyword`、`muted`、`pressedBackground`、`pressedForeground`、`quickViewBackground`、`removedBackground`、`removedMarker`、`selectionBackground`、`selectionForeground`、`screenSelectionBackground`、`screenSelectionForeground`、`string`、`success`、`transcriptJumpBackground`、`type`、`userMessageBackground`、`variable` 与 `warning`。未写字段继承所选 `appearance` 的内置调色板；该格式不接受图形界面 token、别名、透明色或颜色变换。
 
 ## 文件与职责
 
@@ -228,11 +236,11 @@ src/
 | `theme::ThemeResource` | private | 从 TUI 产品目录加载用户主题、解析选择并生成预览 | 不读取或保存配置；draw path 不执行文件 I/O |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
 | `StatusLineModel` | crate-private | 把运行状态与按配置顺序启用的 preferred model、缓存命中率、累计参考费用、Git 分支和变更组合到上行，把权限模式单独映射到下行，并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存权限或 Turn authority、不渲染 |
-| `StatusLineSettings` | crate-private | 解释和校验 `[tui].statusLine` 的项目、开关与顺序 | 不拥有被显示的数据；写入时保留 `[tui]` 的其他键 |
+| `StatusLineSettings` | crate-private | 解释和校验 `[tui].statusLine` 的项目、开关与顺序，以及 `[tui].showGitChangesAsDiff` 的 Git 变更格式 | 不拥有被显示的数据；写入时保留 `[tui]` 的其他键 |
 | `StatusPanel` | crate-private | 保存 `/status` 的只读详情，按内容请求高度并在实际空间不足时滚动 | 不覆盖当前帧、不拥有模型或 Thread 事实、不修改 StatusLine |
 | `config::TerminalSettings` | crate-private | 解释和校验 `[tui]` 中的终端设置，并在更新已知键时保留该表的其他键 | App Server 只做 revision 校验和完整表替换，不解释 TUI 字段 |
 | `app::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 directory 路径缩写为 `~/...`，供空会话 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
-| `app::top_tip::TopTip` | crate-private | 管理空会话导航、进入对话时的一次性权限策略提示、临时通知及各自期限，并绘制固定顶部提示行 | 不决定页面导航文案，不保存权限模式，不决定该行的布局位置 |
+| `app::top_tip::TopTip` | crate-private | 管理剪贴板图片提示、空会话导航、进入对话时的一次性权限策略提示、临时通知及各自优先级或期限，并绘制固定顶部提示行 | 不读取剪贴板，不决定页面导航文案，不保存权限模式，不决定该行的布局位置 |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
 | `AppKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，解析应用级 action，并拥有 Chord pending/超时/取消/提示生命周期 | 不处理 `ChatInput` 编辑、`ListSelection` 导航、滚动、I/O 或命令副作用 |
@@ -263,7 +271,7 @@ src/
 | `widgets::list_selection::view` | crate-private | 用与 ChatInput 正文对齐的两列状态位绘制 search/items/preview/caption，并把 tab 区域委托给 `widgets::tab_list::draw` | 只读 `ListSelectionState`，不绘制当前交互的标题或底栏，不解释产品 action |
 | `ChatInput` | private | 草稿、多行编辑、Standard/Vim 局部模式、paste routing、附件、输入历史、原子绑定、Slash/Mention/Skill 补全和结构化提交组装 | 不发现候选数据、不修改 `CommandPanel`、不执行产品动作、不把 Vim 或补全状态提升到 App |
 | `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
-| `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 `ChatInput`、不发 RPC、不持久化临时文件 |
+| `host::clipboard::{image_availability,read_image}` | crate-private | 从本机剪贴板文件列表或 RGBA 图片读取可用性，并在粘贴时统一编码为 PNG | 不改变 `ChatInput`、不发 RPC、不持久化临时文件；可用性检查失败只表示不可用 |
 | `host::clipboard::write_text` / `host::transcript_export::write` | crate-private | response/屏幕选区文字写入系统剪贴板，以及目录边界内的 Markdown export | 不拥有 transcript 或屏幕选区状态、不覆盖文件 |
 | `FileSearchManager` | crate-private | event loop 持有的目录搜索 runtime；非阻塞 drain snapshot 并丢弃旧 query 结果 | 不进入 `App` state、不解析输入、不保存 popup state |
 | `Mentions` / `MentionPopup` | private | `@token` query/range、File/Plugin 混合结果、选择/关闭和原子补全 | 不扫描目录、不读 Plugin 文件系统、不拥有 worker |
@@ -326,6 +334,7 @@ run(session, options)
    ├─ frame deadline due → App::mouse_mode → TerminalSession::set_mouse_mode
    ├─ frame deadline due → TerminalSession::draw → app::frame::draw
    └─ terminal event
+      ├─ FocusGained → clipboard::image_availability → AppEvent → TopTip
       ├─ key → App::handle_key
       │  ├─ ChatPanel → Approval / Query / CommandPanel / ChatComposer
       │  ├─ selected TranscriptCell → select / expand / Overlay
@@ -377,7 +386,7 @@ identity 由共享 backend 接受边界执行。占位符绑定到稳定的
 展示记录保留 `[Image #N]`，App Server/Core 持久化 attachment digest、格式、长度和尺寸，而不是
 本地路径或 data URL。
 
-`Ctrl-V` 是独立的 clipboard-image intent，不依赖 terminal `Event::Paste` 是否能携带位图。
+`Ctrl-V` 是独立的 clipboard-image intent，不依赖 terminal `Event::Paste` 是否能携带位图。TUI 启动及终端窗口每次重新获得焦点时，会在后台读取一次图片可用性；可用时 `TopTip` 显示 `image in clipboard · ctrl+v to paste`，失败或没有图片时保持安静。
 adapter 优先读取 clipboard file list 中可解码的图片，否则读取 RGBA image data，并统一编码为
 PNG bytes；`App` 再把 bytes 交给 `Attachments`，因此系统剪贴板和本地路径共享大小校验、
 占位符绑定、删除和提交语义。active Turn 期间同样可把图片加入 follow-up draft。
@@ -538,7 +547,7 @@ Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → To
 正文由有序 `TranscriptCell` 构成，live/final 生命周期不改变单元种类。单条正文单元从 canonical entry identity 确定 `TranscriptCellId`，ExecCell 从分组中的首个 `ToolCallId` 确定，后续分组增长不改身份。ExecCell 按 `ToolCallId`
 接收调用、输出和结果，命令输出按 byte、行数和单行长度有界保留；折叠态、展开态与 Overlay
 详情都读取同一单元数据。Overlay 的“完整”指 TUI 可获得的完整保留表示，上游省略标记不会被隐藏。Space 切换展开，Enter 打开可滚动详情，鼠标只响应明确的展开或详情标记。
-PageUp/PageDown 按五行移动，Ctrl-Home/End 到首尾；新提交默认恢复 follow-latest。`estimated_wrapped_rows` 使用
+PageUp/PageDown 和正文区内的鼠标滚轮按五行移动，Ctrl-Home/End 到首尾；离开最新位置后，正文区底部显示可点击的 `Jump to bottom (click) ↓`，点击与 Ctrl-End 都恢复 follow-latest。新提交默认恢复 follow-latest。`estimated_wrapped_rows` 使用
 `unicode_width::UnicodeWidthStr`，把 label width 计入首行，然后计算 bottom scroll。它是估算，
 不处理完整 grapheme/reflow/Markdown layout。
 

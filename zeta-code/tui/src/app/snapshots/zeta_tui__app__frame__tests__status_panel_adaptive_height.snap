@@ -1,12 +1,12 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
-assertion_line: 155
+assertion_line: 181
 expression: rendered
 ---
                                                                                 
-   ▀▙▄▄▄▟▀    Zeta Code v0.1.0                                                  
-  ▐███████▌   Automatic model · Access unknown                                  
-   ▝█▀▀▀█▘    .                                                                 
+   ▜▙▄▄▄▟▛    Zeta Code v0.1.0                                                  
+  ▄█▖▌█▌▗█▄   Automatic model · Access unknown                                  
+   ▜█▀▀▀█▛    .                                                                 
                                                                                 
   Status──────────────────────────────────────────────────────────────────────  
   Model: openai/gpt                                                             

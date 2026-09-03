@@ -377,6 +377,40 @@ fn keybindings_and_status_line_are_persisted_in_the_tui_toml_section() {
         config.tui.0.get("statusLine"),
         Some(&serde_json::json!(["permissions", "model", "git-branch"]))
     );
+    assert_eq!(
+        config.tui.0.get("gitChangesDisplay"),
+        Some(&serde_json::json!("count"))
+    );
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn git_changes_display_is_persisted_in_the_tui_toml_section() {
+    let (mut client, state_root) = client();
+    let server_config = client.read_config().unwrap();
+    let terminal = crate::config::TerminalSettings::from_tui(&server_config.tui).unwrap();
+    let mut status_line = crate::status::StatusLineSettings::from_tui(&server_config.tui).unwrap();
+    status_line.set_git_changes_display(crate::status::GitChangesDisplay::AddedDeletedLines);
+
+    crate::config::set_settings(
+        &mut client,
+        crate::config::ConfigEdit {
+            terminal,
+            status_line,
+            server_config,
+            providers: zeta_app_server_protocol::protocol::provider::ProviderListResult {
+                providers: Vec::new(),
+            },
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        client.read_config().unwrap().tui.0.get("gitChangesDisplay"),
+        Some(&serde_json::json!("addedDeletedLines"))
+    );
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

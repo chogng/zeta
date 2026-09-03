@@ -1,7 +1,8 @@
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 
-const CONFIG_KEY: &str = "statusLine";
+const STATUS_LINE_KEY: &str = "statusLine";
+const SHOW_GIT_CHANGES_AS_DIFF_KEY: &str = "showGitChangesAsDiff";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum StatusLineItem {
@@ -72,41 +73,52 @@ impl StatusLineItem {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct StatusLineSettings {
     items: Vec<StatusLineItem>,
+    show_git_changes_as_diff: bool,
 }
 
 impl StatusLineSettings {
     pub(crate) fn from_tui(section: &FrontendConfigDto) -> Result<Self, String> {
-        let Some(value) = section.0.get(CONFIG_KEY) else {
-            return Ok(Self::default());
-        };
-        let values = value.as_array().ok_or_else(|| {
-            "invalid [tui].statusLine: expected an array of item names".to_owned()
-        })?;
-        let mut items = Vec::with_capacity(values.len());
-        for value in values {
-            let id = value.as_str().ok_or_else(|| {
-                "invalid [tui].statusLine: every item name must be a string".to_owned()
+        let mut settings = Self::default();
+        if let Some(value) = section.0.get(STATUS_LINE_KEY) {
+            let values = value.as_array().ok_or_else(|| {
+                "invalid [tui].statusLine: expected an array of item names".to_owned()
             })?;
-            let item = StatusLineItem::from_id(id)
-                .ok_or_else(|| format!("invalid [tui].statusLine item `{id}`"))?;
-            if items.contains(&item) {
-                return Err(format!("invalid [tui].statusLine: duplicate item `{id}`"));
+            let mut items = Vec::with_capacity(values.len());
+            for value in values {
+                let id = value.as_str().ok_or_else(|| {
+                    "invalid [tui].statusLine: every item name must be a string".to_owned()
+                })?;
+                let item = StatusLineItem::from_id(id)
+                    .ok_or_else(|| format!("invalid [tui].statusLine item `{id}`"))?;
+                if items.contains(&item) {
+                    return Err(format!("invalid [tui].statusLine: duplicate item `{id}`"));
+                }
+                items.push(item);
             }
-            items.push(item);
+            settings.items = items;
         }
-        Ok(Self { items })
+        if let Some(value) = section.0.get(SHOW_GIT_CHANGES_AS_DIFF_KEY) {
+            settings.show_git_changes_as_diff = value.as_bool().ok_or_else(|| {
+                "invalid [tui].showGitChangesAsDiff: expected a boolean".to_owned()
+            })?;
+        }
+        Ok(settings)
     }
 
     pub(crate) fn write_to_tui(&self, section: &FrontendConfigDto) -> FrontendConfigDto {
         let mut values = section.0.clone();
         values.insert(
-            CONFIG_KEY.into(),
+            STATUS_LINE_KEY.into(),
             Value::Array(
                 self.items
                     .iter()
                     .map(|item| Value::String(item.id().into()))
                     .collect(),
             ),
+        );
+        values.insert(
+            SHOW_GIT_CHANGES_AS_DIFF_KEY.into(),
+            Value::Bool(self.show_git_changes_as_diff),
         );
         FrontendConfigDto(values)
     }
@@ -128,6 +140,14 @@ impl StatusLineSettings {
             self.items.retain(|candidate| *candidate != item);
         }
     }
+
+    pub(crate) const fn show_git_changes_as_diff(&self) -> bool {
+        self.show_git_changes_as_diff
+    }
+
+    pub(crate) fn set_show_git_changes_as_diff(&mut self, show: bool) {
+        self.show_git_changes_as_diff = show;
+    }
 }
 
 impl Default for StatusLineSettings {
@@ -139,6 +159,7 @@ impl Default for StatusLineSettings {
                 StatusLineItem::GitBranch,
                 StatusLineItem::GitChanges,
             ],
+            show_git_changes_as_diff: false,
         }
     }
 }

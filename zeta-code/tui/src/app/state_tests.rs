@@ -690,6 +690,7 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
+        StatusLineSettings::default(),
     )));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -711,6 +712,7 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
+        StatusLineSettings::default(),
     )));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
@@ -736,6 +738,41 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::EditConfig(edit))
             if edit.terminal.follow_up_mode() == FollowUpMode::Queue
+    ));
+}
+
+#[test]
+fn config_git_changes_display_supports_arrow_selection_and_enter_toggle() {
+    let mut config = empty_config_snapshot();
+    config.revision = 7;
+    let mut app = App::new();
+    app.update(AppEvent::ConfigEditorOpened(config_choices(
+        &config,
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    for _ in 0..3 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        Some(AppCommand::EditConfig(edit))
+            if edit.status_line.git_changes_display()
+                == crate::status::GitChangesDisplay::AddedDeletedLines
+    ));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+        Some(AppCommand::EditConfig(edit))
+            if edit.status_line.git_changes_display()
+                == crate::status::GitChangesDisplay::Count
+    ));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::EditConfig(edit))
+            if edit.status_line.git_changes_display()
+                == crate::status::GitChangesDisplay::AddedDeletedLines
     ));
 }
 
@@ -782,6 +819,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         &config,
         &providers,
         TerminalSettings::default(),
+        StatusLineSettings::default(),
     )));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -803,7 +841,12 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
 
     app.update(AppEvent::ConfigApiKeySaved {
         provider: "openai".into(),
-        choices: config_choices(&config, &providers, TerminalSettings::default()),
+        choices: config_choices(
+            &config,
+            &providers,
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ),
     });
 
     assert_eq!(app.list_selection().unwrap().title(), "Config");
@@ -825,6 +868,7 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         &config,
         &providers,
         TerminalSettings::default(),
+        StatusLineSettings::default(),
     )));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));

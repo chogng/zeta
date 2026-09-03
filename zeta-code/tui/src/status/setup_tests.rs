@@ -13,6 +13,7 @@ fn setup_lists_each_item_with_a_description_checkbox_and_toggle_action() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
     let view = list_selection(&settings, 7);
+    assert_eq!(view.model.key_hints().text(), "Enter/Space to toggle");
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Status line");

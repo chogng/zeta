@@ -8,8 +8,10 @@ use std::rc::Rc;
 const ENABLE_RAW_MODE: &str = "enable raw mode";
 const ENTER_ALTERNATE_SCREEN: &str = "enter alternate screen";
 const ENABLE_BRACKETED_PASTE: &str = "enable bracketed paste";
+const ENABLE_FOCUS_CHANGE: &str = "enable focus change";
 const ENABLE_MOUSE_CAPTURE: &str = "enable mouse capture";
 const DISABLE_MOUSE_CAPTURE: &str = "disable mouse capture";
+const DISABLE_FOCUS_CHANGE: &str = "disable focus change";
 const DISABLE_BRACKETED_PASTE: &str = "disable bracketed paste";
 const LEAVE_ALTERNATE_SCREEN: &str = "leave alternate screen";
 const DISABLE_RAW_MODE: &str = "disable raw mode";
@@ -28,6 +30,8 @@ fn acquired_terminal_modes_are_restored_in_reverse_order() {
             ENABLE_RAW_MODE,
             ENTER_ALTERNATE_SCREEN,
             ENABLE_BRACKETED_PASTE,
+            ENABLE_FOCUS_CHANGE,
+            DISABLE_FOCUS_CHANGE,
             DISABLE_BRACKETED_PASTE,
             LEAVE_ALTERNATE_SCREEN,
             DISABLE_RAW_MODE,
@@ -49,6 +53,18 @@ fn acquisition_failure_restores_only_modes_that_were_acquired() {
                 ENABLE_RAW_MODE,
                 ENTER_ALTERNATE_SCREEN,
                 ENABLE_BRACKETED_PASTE,
+                LEAVE_ALTERNATE_SCREEN,
+                DISABLE_RAW_MODE,
+            ],
+        ),
+        (
+            ENABLE_FOCUS_CHANGE,
+            vec![
+                ENABLE_RAW_MODE,
+                ENTER_ALTERNATE_SCREEN,
+                ENABLE_BRACKETED_PASTE,
+                ENABLE_FOCUS_CHANGE,
+                DISABLE_BRACKETED_PASTE,
                 LEAVE_ALTERNATE_SCREEN,
                 DISABLE_RAW_MODE,
             ],
@@ -94,8 +110,10 @@ fn mouse_mode_is_applied_idempotently() {
             ENABLE_RAW_MODE,
             ENTER_ALTERNATE_SCREEN,
             ENABLE_BRACKETED_PASTE,
+            ENABLE_FOCUS_CHANGE,
             ENABLE_MOUSE_CAPTURE,
             DISABLE_MOUSE_CAPTURE,
+            DISABLE_FOCUS_CHANGE,
             DISABLE_BRACKETED_PASTE,
             LEAVE_ALTERNATE_SCREEN,
             DISABLE_RAW_MODE,
@@ -119,6 +137,8 @@ fn explicit_restore_is_idempotent() {
             ENABLE_RAW_MODE,
             ENTER_ALTERNATE_SCREEN,
             ENABLE_BRACKETED_PASTE,
+            ENABLE_FOCUS_CHANGE,
+            DISABLE_FOCUS_CHANGE,
             DISABLE_BRACKETED_PASTE,
             LEAVE_ALTERNATE_SCREEN,
             DISABLE_RAW_MODE,
@@ -145,16 +165,20 @@ fn suspend_cycle_reacquires_requested_mouse_capture() {
             ENABLE_RAW_MODE,
             ENTER_ALTERNATE_SCREEN,
             ENABLE_BRACKETED_PASTE,
+            ENABLE_FOCUS_CHANGE,
             ENABLE_MOUSE_CAPTURE,
             DISABLE_MOUSE_CAPTURE,
+            DISABLE_FOCUS_CHANGE,
             DISABLE_BRACKETED_PASTE,
             LEAVE_ALTERNATE_SCREEN,
             DISABLE_RAW_MODE,
             ENABLE_RAW_MODE,
             ENTER_ALTERNATE_SCREEN,
             ENABLE_BRACKETED_PASTE,
+            ENABLE_FOCUS_CHANGE,
             ENABLE_MOUSE_CAPTURE,
             DISABLE_MOUSE_CAPTURE,
+            DISABLE_FOCUS_CHANGE,
             DISABLE_BRACKETED_PASTE,
             LEAVE_ALTERNATE_SCREEN,
             DISABLE_RAW_MODE,
@@ -195,12 +219,20 @@ impl TerminalModeOperations for FakeOperations {
         self.call(ENABLE_BRACKETED_PASTE)
     }
 
+    fn enable_focus_change(&mut self) -> io::Result<()> {
+        self.call(ENABLE_FOCUS_CHANGE)
+    }
+
     fn enable_mouse_capture(&mut self) -> io::Result<()> {
         self.call(ENABLE_MOUSE_CAPTURE)
     }
 
     fn disable_mouse_capture(&mut self) -> io::Result<()> {
         self.call(DISABLE_MOUSE_CAPTURE)
+    }
+
+    fn disable_focus_change(&mut self) -> io::Result<()> {
+        self.call(DISABLE_FOCUS_CHANGE)
     }
 
     fn disable_bracketed_paste(&mut self) -> io::Result<()> {

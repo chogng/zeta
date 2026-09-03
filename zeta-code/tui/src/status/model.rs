@@ -2,12 +2,14 @@ use crate::thread::TurnApprovalModes;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
+use zeta_app_server_protocol::protocol::git::GitDiffStatisticsDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelMoneyAmount;
 use zeta_protocol::ModelReferenceCostSummary;
 use zeta_protocol::ModelUsageSummary;
+use zeta_protocol::StreamInstanceId;
 
 use super::StatusLineItem;
 use super::StatusLineSettings;
@@ -48,6 +50,13 @@ struct DisplayValue {
     compact: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct GitStatusCursor {
+    repository_id: String,
+    stream_instance_id: StreamInstanceId,
+    revision: u64,
+}
+
 /// Pure display model for the configured context rendered inside StatusLine.
 ///
 /// Data acquisition remains with the application and the typed interfaces that own each value.
@@ -60,7 +69,10 @@ pub(crate) struct StatusLineModel {
     cache_hit_rate: Option<DisplayValue>,
     reference_cost: Option<DisplayValue>,
     git_branch: Option<DisplayValue>,
-    git_changes: Option<DisplayValue>,
+    git_status_cursor: Option<GitStatusCursor>,
+    git_change_count: usize,
+    git_diff_statistics: Option<GitDiffStatisticsDto>,
+    git_text_diff_requested_for: Option<GitStatusCursor>,
 }
 
 impl StatusLineModel {
@@ -69,6 +81,12 @@ impl StatusLineModel {
     }
 
     pub(crate) fn apply_settings(&mut self, settings: StatusLineSettings) {
+        if self.settings.show_git_changes_as_diff() != settings.show_git_changes_as_diff()
+            || self.settings.enabled(StatusLineItem::GitChanges)
+                != settings.enabled(StatusLineItem::GitChanges)
+        {
+            self.git_text_diff_requested_for = None;
+        }
         self.settings = settings;
     }
 
@@ -94,6 +112,19 @@ impl StatusLineModel {
     }
 
     pub(crate) fn apply_git_status(&mut self, status: &GitStatusResult) {
+        let cursor = git_status_cursor(status);
+        if self
+            .git_status_cursor
+            .as_ref()
+            .is_some_and(|current| git_status_is_older(&cursor, current))
+        {
+            return;
+        }
+        if self.git_status_cursor.as_ref() != Some(&cursor) {
+            self.git_diff_statistics = None;
+            self.git_text_diff_requested_for = None;
+        }
+        self.git_status_cursor = Some(cursor);
         let identity = match &status.head {
             GitHeadDto::Branch { name, .. } | GitHeadDto::Unborn { name } => name.clone(),
             GitHeadDto::Detached { object_id } => {
@@ -104,15 +135,50 @@ impl StatusLineModel {
             full: identity.clone(),
             compact: identity,
         });
-        let change_count = status.changes.len();
-        self.git_changes = (change_count > 0).then(|| DisplayValue {
-            full: if change_count == 1 {
-                "1 change".into()
-            } else {
-                format!("{change_count} changes")
-            },
-            compact: "*".into(),
-        });
+        self.git_change_count = status.changes.len();
+    }
+
+    pub(crate) fn apply_git_text_diff(
+        &mut self,
+        status: GitStatusResult,
+        statistics: GitDiffStatisticsDto,
+    ) {
+        let cursor = git_status_cursor(&status);
+        let Some(requested) = self.git_text_diff_requested_for.take() else {
+            return;
+        };
+        if requested.repository_id != cursor.repository_id
+            || requested.stream_instance_id != cursor.stream_instance_id
+            || requested.revision > cursor.revision
+            || self.git_status_cursor.as_ref().is_some_and(|current| {
+                current.repository_id != cursor.repository_id
+                    || current.stream_instance_id != cursor.stream_instance_id
+                    || current.revision > cursor.revision
+            })
+        {
+            return;
+        }
+        self.apply_git_status(&status);
+        if self.git_status_cursor.as_ref() == Some(&cursor) {
+            self.git_diff_statistics = Some(statistics);
+        }
+    }
+
+    pub(crate) fn request_git_text_diff(&mut self) -> bool {
+        if !self.settings.show_git_changes_as_diff()
+            || !self.settings.enabled(StatusLineItem::GitChanges)
+            || self.git_change_count == 0
+            || self.git_diff_statistics.is_some()
+            || self.git_text_diff_requested_for.is_some()
+        {
+            return false;
+        }
+        self.git_text_diff_requested_for = self.git_status_cursor.clone();
+        true
+    }
+
+    pub(crate) const fn shows_git_changes_as_diff(&self) -> bool {
+        self.settings.show_git_changes_as_diff()
     }
 
     pub(crate) fn top_text_for_width(&self, width: usize, runtime: StatusLineRuntime) -> String {
@@ -148,11 +214,46 @@ impl StatusLineModel {
                 StatusLineItem::CacheHitRate => values.extend(self.cache_hit_rate.iter().cloned()),
                 StatusLineItem::ReferenceCost => values.extend(self.reference_cost.iter().cloned()),
                 StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),
-                StatusLineItem::GitChanges => values.extend(self.git_changes.iter().cloned()),
+                StatusLineItem::GitChanges => values.extend(self.git_changes_display().into_iter()),
             }
         }
         values
     }
+
+    fn git_changes_display(&self) -> Option<DisplayValue> {
+        if self.git_change_count == 0 {
+            return None;
+        }
+        if self.settings.show_git_changes_as_diff() {
+            self.git_diff_statistics.map(|statistics| DisplayValue {
+                full: format!("+{} -{}", statistics.additions, statistics.deletions),
+                compact: format!("+{} -{}", statistics.additions, statistics.deletions),
+            })
+        } else {
+            Some(DisplayValue {
+                full: if self.git_change_count == 1 {
+                    "1 change".into()
+                } else {
+                    format!("{} changes", self.git_change_count)
+                },
+                compact: "*".into(),
+            })
+        }
+    }
+}
+
+fn git_status_cursor(status: &GitStatusResult) -> GitStatusCursor {
+    GitStatusCursor {
+        repository_id: status.repository_id.clone(),
+        stream_instance_id: status.stream_instance_id.clone(),
+        revision: status.revision,
+    }
+}
+
+fn git_status_is_older(next: &GitStatusCursor, current: &GitStatusCursor) -> bool {
+    next.repository_id == current.repository_id
+        && next.stream_instance_id == current.stream_instance_id
+        && next.revision < current.revision
 }
 
 fn cache_hit_rate_display(usage: &ModelUsageSummary) -> Option<DisplayValue> {

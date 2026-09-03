@@ -235,6 +235,7 @@ pub(crate) enum InputPointerTarget {
     Approval(usize),
     Query(usize),
     SessionManager(crate::sessions::SessionManagerPointerTarget),
+    TranscriptJumpToBottom,
     TranscriptToggle(String),
     TranscriptDetails(String),
 }
@@ -244,6 +245,7 @@ fn transcript_pointer_state<'a>(
     pressed: Option<&'a InputPointerTarget>,
 ) -> ChatHistoryPointerState<'a> {
     ChatHistoryPointerState {
+        hovered_jump_to_bottom: matches!(hovered, Some(InputPointerTarget::TranscriptJumpToBottom)),
         hovered_toggle: match hovered {
             Some(InputPointerTarget::TranscriptToggle(cell_id)) => Some(cell_id.as_str()),
             _ => None,
@@ -252,6 +254,7 @@ fn transcript_pointer_state<'a>(
             Some(InputPointerTarget::TranscriptDetails(cell_id)) => Some(cell_id.as_str()),
             _ => None,
         },
+        pressed_jump_to_bottom: matches!(pressed, Some(InputPointerTarget::TranscriptJumpToBottom)),
         pressed_toggle: match pressed {
             Some(InputPointerTarget::TranscriptToggle(cell_id)) => Some(cell_id.as_str()),
             _ => None,
@@ -321,6 +324,9 @@ pub(crate) fn input_pointer_target_at(
             row,
         ) {
             return Some(match target {
+                chat_history::ChatHistoryPointerTarget::JumpToBottom => {
+                    InputPointerTarget::TranscriptJumpToBottom
+                }
                 chat_history::ChatHistoryPointerTarget::Toggle(entry_id) => {
                     InputPointerTarget::TranscriptToggle(entry_id)
                 }
@@ -331,6 +337,14 @@ pub(crate) fn input_pointer_target_at(
         }
     }
     None
+}
+
+pub(crate) fn transcript_contains(app: &App, terminal_area: Rect, column: u16, row: u16) -> bool {
+    if app.overlay().is_some() || app.session_manager_view().is_some() {
+        return false;
+    }
+    let area = layout(app, terminal_area).session.transcript;
+    column >= area.x && column < area.right() && row >= area.y && row < area.bottom()
 }
 
 pub(crate) struct FrameLayout {

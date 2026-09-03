@@ -7,6 +7,7 @@ use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
+use crate::host::clipboard::ClipboardImageAvailability;
 use crate::models::ModelSummary;
 use crate::render::test_context;
 use crate::status::RemainingContextWindow;
@@ -70,7 +71,7 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
 
     assert!(!rendered.contains("dir assistant"));
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
-    assert!(rendered.contains(" ▀▙▄▄▄▟▀"));
+    assert!(rendered.contains(" ▜▙▄▄▄▟▛"));
     assert!(rendered.contains("Automatic model · Access unknown"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
@@ -103,6 +104,31 @@ fn top_tip_notice_uses_the_fixed_row_above_chat_input_without_changing_layout() 
     );
     assert!(!rows[notice_row].contains("shift+tab"));
     assert!(!rows.last().unwrap().contains("Copied"));
+}
+
+#[test]
+fn clipboard_image_tip_uses_the_fixed_row_above_chat_input() {
+    let mut app = App::new();
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let areas_before = layout(&app, terminal_area).session;
+
+    app.update(AppEvent::ClipboardImageAvailabilityChanged(
+        ClipboardImageAvailability::Available,
+    ));
+
+    let areas_after = layout(&app, terminal_area).session;
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let tip_row = usize::from(areas_after.top_tip.y);
+
+    assert_eq!(areas_after, areas_before);
+    assert_eq!(areas_after.top_tip.height, 1);
+    assert!(
+        rows[tip_row]
+            .trim_end()
+            .ends_with("image in clipboard · ctrl+v to paste")
+    );
+    assert_snapshot!("clipboard_image_top_tip", rendered);
 }
 
 #[test]
@@ -856,6 +882,19 @@ fn submitted_slash_command_is_immediately_visible_in_the_transcript() {
 
     let rendered = render(&app, 80, 20);
     assert!(rendered.lines().next().unwrap().contains("> /status"));
+}
+
+#[test]
+fn scrolled_transcript_shows_jump_control_at_the_bottom_of_the_content_area() {
+    let mut app = App::new();
+    for index in 0..8 {
+        app.update(AppEvent::FailureReported(format!(
+            "Model invocation failed {index}"
+        )));
+    }
+    app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+
+    assert_snapshot!("transcript_jump_to_bottom", render(&app, 50, 16));
 }
 
 #[test]

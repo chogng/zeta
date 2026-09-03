@@ -66,3 +66,16 @@ fn previews_and_rust_assets_use_the_packed_cell_data() {
     assert!(source.contains("SpriteCell::new(\"█\", Some(Color::Rgb(0x40, 0x85, 0xac)), None)"));
     assert!(!source.contains("zeta_sprite"));
 }
+
+#[test]
+fn two_color_rust_cells_are_emitted_in_rustfmt_ready_form() {
+    let blue = [0x40, 0x85, 0xac, 0xff];
+    let black = [0x00, 0x00, 0x00, 0xff];
+    let sprite = pack_half_blocks_rgba(1, 2, &[blue, black], 128).unwrap();
+
+    let source = rust_source("PET", &sprite);
+
+    assert!(source.contains("        SpriteCell::new(\n"));
+    assert!(source.contains("            Some(Color::Rgb(0x40, 0x85, 0xac)),\n"));
+    assert!(source.contains("            Some(Color::Rgb(0x00, 0x00, 0x00)),\n"));
+}

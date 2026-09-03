@@ -102,6 +102,7 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
     "hoverBackground": "#223344",
     "pressedForeground": "#334455",
     "selectionBackground": "#445566",
+    "transcriptJumpBackground": "#414141",
     "userMessageBackground": "#252525",
     "quickViewBackground": "#303030",
     "screenSelectionBackground": "#80cfff",
@@ -134,6 +135,10 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
         Color::Rgb(68, 85, 102)
     );
     assert_eq!(selected.theme.overlay_background(), Color::Rgb(48, 48, 48));
+    assert_eq!(
+        selected.theme.transcript_jump_background(),
+        Color::Rgb(65, 65, 65)
+    );
     assert_eq!(
         selected.theme.user_message_background(),
         Color::Rgb(37, 37, 37)

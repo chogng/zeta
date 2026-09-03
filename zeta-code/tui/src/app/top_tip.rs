@@ -8,11 +8,13 @@ use std::time::Instant;
 const NOTICE_DURATION: Duration = Duration::from_secs(3);
 const POLICY_TIP_DURATION: Duration = Duration::from_secs(5);
 const POLICY_TIP: &str = "shift+tab to cycle policy";
+const CLIPBOARD_IMAGE_TIP: &str = "image in clipboard · ctrl+v to paste";
 
 #[derive(Debug)]
 pub(crate) struct TopTip {
     phase: TopTipPhase,
     notice: Option<Notice>,
+    clipboard_image_available: bool,
 }
 
 #[derive(Debug)]
@@ -33,6 +35,7 @@ impl TopTip {
         Self {
             phase: TopTipPhase::Navigation,
             notice: None,
+            clipboard_image_available: false,
         }
     }
 
@@ -57,6 +60,14 @@ impl TopTip {
             text,
             expires_at: now + NOTICE_DURATION,
         });
+    }
+
+    pub(crate) fn show_clipboard_image(&mut self) {
+        self.clipboard_image_available = true;
+    }
+
+    pub(crate) fn hide_clipboard_image(&mut self) {
+        self.clipboard_image_available = false;
     }
 
     pub(crate) fn draw(
@@ -92,6 +103,9 @@ impl TopTip {
     fn text<'a>(&'a self, tip: Option<&'a str>) -> Option<&'a str> {
         if let Some(notice) = self.notice.as_ref() {
             return Some(notice.text.as_str());
+        }
+        if self.clipboard_image_available {
+            return Some(CLIPBOARD_IMAGE_TIP);
         }
         match self.phase {
             TopTipPhase::Navigation => tip,

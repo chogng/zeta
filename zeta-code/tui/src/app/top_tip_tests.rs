@@ -1,3 +1,4 @@
+use super::CLIPBOARD_IMAGE_TIP;
 use super::NOTICE_DURATION;
 use super::POLICY_TIP;
 use super::POLICY_TIP_DURATION;
@@ -90,4 +91,30 @@ fn unavailable_tip_leaves_the_row_empty() {
     let top_tip = TopTip::new();
 
     assert_eq!(top_tip.text(None), None);
+}
+
+#[test]
+fn clipboard_image_tip_yields_to_notices_and_restores_the_underlying_tip() {
+    let started = Instant::now();
+    let mut top_tip = TopTip::new();
+
+    top_tip.show_policy_tip(started);
+    top_tip.show_clipboard_image();
+
+    assert_eq!(
+        top_tip.text(Some("← for agents")),
+        Some(CLIPBOARD_IMAGE_TIP)
+    );
+
+    top_tip.show_notice("Copied".into(), started);
+    assert_eq!(top_tip.text(Some("← for agents")), Some("Copied"));
+
+    assert!(top_tip.poll(started + NOTICE_DURATION));
+    assert_eq!(
+        top_tip.text(Some("← for agents")),
+        Some(CLIPBOARD_IMAGE_TIP)
+    );
+
+    top_tip.hide_clipboard_image();
+    assert_eq!(top_tip.text(Some("← for agents")), Some(POLICY_TIP));
 }

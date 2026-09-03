@@ -18,6 +18,7 @@ pub(crate) use projection::TranscriptCell;
 pub(crate) use projection::TranscriptCellId;
 pub(crate) use projection::TranscriptProjection;
 pub(crate) use state::ChatHistoryScroll;
+pub(crate) use state::TranscriptScrollDirection;
 pub(crate) use view::ChatHistoryPointerState;
 pub(crate) use view::ChatHistoryPointerTarget;
 pub(crate) use view::ChatHistoryView;

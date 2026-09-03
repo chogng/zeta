@@ -1,6 +1,7 @@
 use super::*;
 use crate::thread::TurnApprovalModes;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
+use zeta_app_server_protocol::protocol::git::GitDiffStatisticsDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_protocol::ApprovalMode;
@@ -30,6 +31,66 @@ fn status_line_combines_counts_model_branch_and_changes() {
         status_line.policy_text_for_width(100, ApprovalMode::AskPermissions),
         "⏸ ask permissions on"
     );
+}
+
+#[test]
+fn git_changes_can_show_added_and_deleted_lines() {
+    let mut settings = StatusLineSettings::default();
+    settings.set_git_changes_display(GitChangesDisplay::AddedDeletedLines);
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_settings(settings);
+    status_line.apply_git_status(&git_status(2));
+
+    assert!(status_line.request_git_text_diff());
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        "main"
+    );
+
+    status_line.apply_git_text_diff(
+        git_status(2),
+        GitDiffStatisticsDto {
+            files: 2,
+            additions: 14,
+            deletions: 3,
+        },
+    );
+
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        "main · +14 -3"
+    );
+    assert!(!status_line.request_git_text_diff());
+}
+
+#[test]
+fn stale_git_line_statistics_do_not_replace_a_newer_status() {
+    let mut settings = StatusLineSettings::default();
+    settings.set_git_changes_display(GitChangesDisplay::AddedDeletedLines);
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_settings(settings);
+    let mut stale = git_status(1);
+    stale.revision = 3;
+    status_line.apply_git_status(&stale);
+    assert!(status_line.request_git_text_diff());
+    let mut current = git_status(2);
+    current.revision = 4;
+    status_line.apply_git_status(&current);
+
+    status_line.apply_git_text_diff(
+        stale,
+        GitDiffStatisticsDto {
+            files: 1,
+            additions: 7,
+            deletions: 2,
+        },
+    );
+
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        "main"
+    );
+    assert!(status_line.request_git_text_diff());
 }
 
 #[test]

@@ -5,9 +5,12 @@ use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
 use super::config_choices;
 use crate::client::new_command_id;
+use crate::status::StatusLineSettings;
 use std::fmt;
+use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
+use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_client::ProviderApiKeySetRequest;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
 use zeta_protocol::Patch;
@@ -22,8 +25,15 @@ pub(crate) fn read_config_choices(
 ) -> Result<ConfigChoices, ConfigCommandError> {
     let server_config = client.read_config()?;
     let terminal = TerminalSettings::from_tui(&server_config.tui).map_err(ConfigCommandError)?;
+    let status_line =
+        StatusLineSettings::from_tui(&server_config.tui).map_err(ConfigCommandError)?;
     let providers = client.list_providers()?;
-    Ok(config_choices(&server_config, &providers, terminal))
+    Ok(config_choices(
+        &server_config,
+        &providers,
+        terminal,
+        status_line,
+    ))
 }
 
 pub(crate) fn set_provider_api_key(
@@ -36,14 +46,18 @@ pub(crate) fn set_provider_api_key(
     Ok(ProviderApiKeyUpdate { provider, choices })
 }
 
-pub(crate) fn set_terminal_settings(
-    client: &mut AppServerRequestHandle,
+pub(crate) fn set_settings<T>(
+    client: &mut AppServerClient<T>,
     edit: ConfigEdit,
-) -> Result<ConfigEditResult, ConfigCommandError> {
+) -> Result<ConfigEditResult, ConfigCommandError>
+where
+    T: JsonRpcTransport,
+{
     let tui = edit
         .terminal
         .write_to_tui(&edit.server_config.tui)
         .map_err(ConfigCommandError)?;
+    let tui = edit.status_line.write_to_tui(&tui);
     client.update_config(ConfigUpdateParams {
         command_id: new_command_id("tui"),
         expected_revision: edit.server_config.revision,
@@ -56,10 +70,12 @@ pub(crate) fn set_terminal_settings(
         tui: Patch::Value(tui),
     })?;
     let config = client.read_config()?;
-    let settings = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
     Ok(ConfigEditResult {
-        settings,
-        choices: config_choices(&config, &edit.providers, settings),
+        terminal,
+        status_line: status_line.clone(),
+        choices: config_choices(&config, &edit.providers, terminal, status_line),
     })
 }
 

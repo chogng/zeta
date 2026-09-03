@@ -7,6 +7,12 @@ pub(crate) struct ClipboardImage {
     pub(crate) height: u32,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ClipboardImageAvailability {
+    Available,
+    Unavailable,
+}
+
 #[cfg(not(target_os = "android"))]
 pub(crate) fn write_text(text: &str) -> Result<(), String> {
     let mut clipboard =
@@ -23,6 +29,19 @@ pub(crate) fn write_text(_text: &str) -> Result<(), String> {
 
 #[cfg(not(target_os = "android"))]
 pub(crate) fn read_image() -> Result<ClipboardImage, String> {
+    encode_dynamic_image(read_dynamic_image()?)
+}
+
+#[cfg(not(target_os = "android"))]
+pub(crate) fn image_availability() -> ClipboardImageAvailability {
+    match read_dynamic_image() {
+        Ok(_) => ClipboardImageAvailability::Available,
+        Err(_) => ClipboardImageAvailability::Unavailable,
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn read_dynamic_image() -> Result<image::DynamicImage, String> {
     let mut clipboard =
         arboard::Clipboard::new().map_err(|error| format!("clipboard unavailable: {error}"))?;
 
@@ -33,7 +52,7 @@ pub(crate) fn read_image() -> Result<ClipboardImage, String> {
         .into_iter()
         .find_map(|path| image::open(path).ok())
     {
-        return encode_dynamic_image(image);
+        return Ok(image);
     }
 
     let image = clipboard
@@ -55,12 +74,17 @@ pub(crate) fn read_image() -> Result<ClipboardImage, String> {
     let rgba = image::RgbaImage::from_raw(width, height, rgba)
         .ok_or_else(|| "clipboard image contains an invalid RGBA buffer".to_owned())?;
 
-    encode_dynamic_image(image::DynamicImage::ImageRgba8(rgba))
+    Ok(image::DynamicImage::ImageRgba8(rgba))
 }
 
 #[cfg(target_os = "android")]
 pub(crate) fn read_image() -> Result<ClipboardImage, String> {
     Err("clipboard image paste is unsupported on Android".into())
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn image_availability() -> ClipboardImageAvailability {
+    ClipboardImageAvailability::Unavailable
 }
 
 #[cfg(not(target_os = "android"))]

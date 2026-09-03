@@ -44,6 +44,7 @@ pub(crate) enum AppCommand {
     },
     LoadOlderHistory,
     ReadClipboardImage,
+    RefreshClipboardImageAvailability,
     OpenCustomThemePicker,
     OpenRewindPicker,
     RemoveDir {
