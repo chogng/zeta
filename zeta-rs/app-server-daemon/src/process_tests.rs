@@ -15,7 +15,11 @@ fn resolves_the_selected_daemon_in_its_package_directory() {
     fs::copy(std::env::current_exe().unwrap(), &daemon).unwrap();
 
     let resolved = resolve_daemon_executable(&daemon).unwrap();
+    let canonical_binary_directory = dunce::canonicalize(&binary_directory).unwrap();
 
     assert_eq!(resolved.path, dunce::canonicalize(&daemon).unwrap());
-    assert_eq!(resolved.path.parent(), Some(binary_directory.as_path()));
+    assert_eq!(
+        resolved.path.parent(),
+        Some(canonical_binary_directory.as_path())
+    );
 }

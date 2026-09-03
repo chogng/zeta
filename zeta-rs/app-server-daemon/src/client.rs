@@ -21,6 +21,7 @@ use crate::ConnectionOptions;
 use crate::LifecycleCommand;
 use crate::LifecycleOutput;
 use crate::LifecycleStatus;
+use crate::deadline_stream::DeadlineStream;
 use crate::endpoint::EndpointPaths;
 use crate::endpoint::connect_existing;
 use crate::process::ExecutableIdentity;
@@ -270,15 +271,11 @@ fn request_control(
     endpoint: &EndpointPaths,
     command: ControlCommand,
 ) -> Result<Option<ControlResponse>, String> {
-    let Some(mut stream) = connect_existing(&endpoint.socket)? else {
+    let Some(stream) = connect_existing(&endpoint.socket)? else {
         return Ok(None);
     };
-    stream
-        .set_read_timeout(Some(CONTROL_TIMEOUT))
-        .map_err(io_error)?;
-    stream
-        .set_write_timeout(Some(CONTROL_TIMEOUT))
-        .map_err(io_error)?;
+    let mut stream = DeadlineStream::new(stream, Instant::now() + CONTROL_TIMEOUT)
+        .map_err(|error| format!("Local App Server control deadline failed: {error}"))?;
     write_json_line(&mut stream, &ControlPrelude::new(command)).map_err(io_error)?;
     let mut line = String::new();
     let read = BufReader::new(stream)
@@ -298,14 +295,10 @@ fn probe_app_server(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
 ) -> Result<ProbeInfo, String> {
-    let mut stream = connect_existing(&endpoint.socket)?
+    let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon control endpoint is unavailable".to_string())?;
-    stream
-        .set_read_timeout(Some(PROBE_TIMEOUT))
-        .map_err(io_error)?;
-    stream
-        .set_write_timeout(Some(PROBE_TIMEOUT))
-        .map_err(io_error)?;
+    let mut stream = DeadlineStream::new(stream, Instant::now() + PROBE_TIMEOUT)
+        .map_err(|error| format!("App Server initialize probe deadline failed: {error}"))?;
     write_json_line(&mut stream, &ConnectionPrelude::from_options(options)).map_err(io_error)?;
     write_json_line(
         &mut stream,

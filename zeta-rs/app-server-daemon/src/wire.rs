@@ -8,10 +8,10 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
-use zeta_uds::UnixStream;
 
 use crate::ConnectionOptions;
 use crate::GrantSource;
+use crate::deadline_stream::DeadlineStream;
 
 pub(crate) const CONNECTION_PRELUDE_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(5);
@@ -159,7 +159,9 @@ impl ControlResponse {
     }
 }
 
-pub(crate) fn read_prelude(reader: &mut BufReader<UnixStream>) -> Result<IncomingPrelude, String> {
+pub(crate) fn read_prelude(
+    reader: &mut BufReader<DeadlineStream>,
+) -> Result<IncomingPrelude, String> {
     let mut line = String::new();
     let read = reader
         .by_ref()

@@ -18,6 +18,7 @@ use zeta_uds::UnixListener;
 use zeta_uds::UnixStream;
 
 use crate::ConnectionOptions;
+use crate::deadline_stream::DeadlineStream;
 use crate::endpoint::EndpointPaths;
 use crate::endpoint::SocketCleanup;
 use crate::process::ProcessRecord;
@@ -91,15 +92,26 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
 
         match listener.accept() {
             Ok((stream, _)) => {
-                stream.set_nonblocking(false).map_err(io_error)?;
-                stream
-                    .set_read_timeout(Some(CONNECTION_PRELUDE_TIMEOUT))
-                    .map_err(io_error)?;
                 idle_since = None;
                 let reader = match stream.try_clone() {
                     Ok(reader) => reader,
                     Err(error) => {
                         eprintln!("local App Server connection clone failed: {error}");
+                        continue;
+                    }
+                };
+                let deadline = Instant::now() + CONNECTION_PRELUDE_TIMEOUT;
+                let mut stream = match DeadlineStream::new(stream, deadline) {
+                    Ok(stream) => stream,
+                    Err(error) => {
+                        eprintln!("local App Server connection write deadline failed: {error}");
+                        continue;
+                    }
+                };
+                let reader = match DeadlineStream::new(reader, deadline) {
+                    Ok(reader) => reader,
+                    Err(error) => {
+                        eprintln!("local App Server connection read deadline failed: {error}");
                         continue;
                     }
                 };
@@ -111,7 +123,6 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                         continue;
                     }
                 };
-                reader.get_mut().set_read_timeout(None).map_err(io_error)?;
                 match prelude {
                     IncomingPrelude::Control(control) => {
                         let stopping = matches!(control.command, ControlCommand::Stop);
@@ -136,6 +147,18 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                         }
                     }
                     IncomingPrelude::Connection(connection) => {
+                        if let Err(error) = reader.get_mut().clear_deadline() {
+                            eprintln!(
+                                "local App Server connection read deadline cleanup failed: {error}"
+                            );
+                            continue;
+                        }
+                        if let Err(error) = stream.clear_deadline() {
+                            eprintln!(
+                                "local App Server connection write deadline cleanup failed: {error}"
+                            );
+                            continue;
+                        }
                         let server = match registry.server_for(connection) {
                             Ok(server) => server,
                             Err(error) => {
@@ -164,7 +187,7 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                         active_connections.fetch_add(1, Ordering::AcqRel);
                         let connection_counter = Arc::clone(&active_connections);
                         let connection_streams = Arc::clone(&active_streams);
-                        thread::Builder::new()
+                        if let Err(error) = thread::Builder::new()
                             .name("zeta-local-app-server-connection".into())
                             .spawn(move || {
                                 let _connection = ActiveConnection {
@@ -178,13 +201,13 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                                     eprintln!("local App Server connection failed: {error}");
                                 }
                             })
-                            .map_err(|error| {
-                                active_connections.fetch_sub(1, Ordering::AcqRel);
-                                if let Ok(mut streams) = active_streams.lock() {
-                                    streams.remove(&connection_id);
-                                }
-                                error.to_string()
-                            })?;
+                        {
+                            active_connections.fetch_sub(1, Ordering::AcqRel);
+                            if let Ok(mut streams) = active_streams.lock() {
+                                streams.remove(&connection_id);
+                            }
+                            eprintln!("local App Server connection thread failed: {error}");
+                        }
                     }
                 }
             }
@@ -202,7 +225,7 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                 }
                 thread::sleep(IDLE_POLL_INTERVAL);
             }
-            Err(error) => return Err(io_error(error)),
+            Err(error) => return Err(format!("local App Server accept failed: {error}")),
         }
     }
 }
