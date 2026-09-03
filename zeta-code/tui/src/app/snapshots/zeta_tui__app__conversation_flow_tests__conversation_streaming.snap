@@ -2,11 +2,9 @@
 source: zeta-code/tui/src/app/conversation_flow_tests.rs
 expression: render(&app)
 ---
-›  请 正 常 回 复 ， 并 展 示 多 行 输 出 。
+❯ 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
 
-◆  你 好 ！ 普 通 对 话
-
-
+● 你 好 ！ 普 通 对 话
 
 
 
@@ -29,8 +27,10 @@ expression: render(&app)
 
 
 
+
+                                                                                shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
                                                                                           ← agents
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

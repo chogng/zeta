@@ -2,13 +2,14 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-›  /config
+❯ /config
 
-•  Saved API key for openai-compatible
+● Saved API key for openai-compatible
 
-›  /statusline
+❯ /statusline
 
-›  /theme
+❯ /theme
+
 
 
 
@@ -16,7 +17,7 @@ expression: screen
 
 ─ Theme ────────────────────────────────────────────────────────────────────────────────────────────
 
-❯ 1. Auto ✓
+❯ 1. Auto (match terminal)
   2. Dark mode
   3. Light mode
   4. Dark mode (colorblind-friendly)
@@ -25,7 +26,6 @@ expression: screen
   7. Light mode (ANSI colors only)
   8. Custom color theme
 
-
   ╌╌ Diff preview ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
   1   fn greet(zeta: &str) -> String {
   2  -    format!("Hello, {}!", zeta)
@@ -33,4 +33,4 @@ expression: screen
   3   }
   ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
   Syntax palette: GitHub Dark
-  ↑/↓ select  ·  Enter apply  ·  Esc to close
+  Enter to apply

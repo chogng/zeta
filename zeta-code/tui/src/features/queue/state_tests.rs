@@ -106,6 +106,6 @@ fn queue_picker_owns_input_mapping_and_hints() {
 
     assert_eq!(
         selection.key_hints(),
-        "↑/↓ select  ·  Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send  ·  Esc to close"
+        "Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send"
     );
 }

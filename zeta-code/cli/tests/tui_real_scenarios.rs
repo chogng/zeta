@@ -99,6 +99,13 @@ fn actual_tui_navigates_config_tabs_and_temporary_pickers() {
     let fixture = Fixture::new("temporary-pages");
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
+    fixture.append_config(
+        r#"
+[[tui.keybindings]]
+key = "ctrl+y"
+command = "zetaCode.action.copyLastResponse"
+"#,
+    );
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Tips for getting started");
 
@@ -140,9 +147,14 @@ fn actual_tui_navigates_config_tabs_and_temporary_pickers() {
     process.wait_for_stable_screen("Theme set to");
 
     process.submit("/help");
-    process.wait_for_screen("Search commands");
+    process.wait_for_stable_screen("Cycle approval mode");
     process.assert_snapshot("real/02-pages/03-help-open");
-    process.down();
+    process.tab();
+    process.wait_for_stable_screen("/status");
+    process.assert_snapshot("real/02-pages/04-help-commands");
+    process.tab();
+    process.wait_for_stable_screen("/compact");
+    process.assert_snapshot("real/02-pages/05-help-custom-commands");
     process.escape();
     process.quit();
 }
@@ -292,14 +304,13 @@ fn actual_tui_navigates_the_agents_session_manager_and_preview() {
 #[test]
 fn actual_tui_approves_and_declines_real_file_tool_calls() {
     let approve_fixture = Fixture::new("approve-tool");
-    let approved_path = approve_fixture.workspace().join("approved-by-tui.txt");
     let approve_gate = Gate::new();
     let approve_server = ScenarioServer::start([
         HttpResponse::tool_call(
             "call-approve",
             "write_file",
             serde_json::json!({
-                "path": approved_path,
+                "path": "approved-by-tui.txt",
                 "content": "approved through the real TUI\n",
             }),
         ),
@@ -323,6 +334,11 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     approve_gate.release();
     approve.wait_for_stable_screen("文件写入完成");
     approve.assert_snapshot("real/03-approval/01-approved-final");
+    approve.control_up();
+    approve.up();
+    approve.space();
+    approve.wait_for_screen("approved through the real TUI");
+    approve.assert_snapshot("real/03-approval/04-ask-permissions-details");
     let approve_bodies = approve_server.request_bodies();
     assert!(
         approve_bodies[1].contains("wrote"),
@@ -337,14 +353,13 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     approve.quit();
 
     let decline_fixture = Fixture::new("decline-tool");
-    let declined_path = decline_fixture.workspace().join("declined-by-tui.txt");
     let decline_gate = Gate::new();
     let decline_server = ScenarioServer::start([
         HttpResponse::tool_call(
             "call-decline",
             "write_file",
             serde_json::json!({
-                "path": declined_path,
+                "path": "declined-by-tui.txt",
                 "content": "this must never be written\n",
             }),
         ),
@@ -369,6 +384,146 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     assert!(decline_fixture.find_file("declined-by-tui.txt").is_none());
     assert!(decline_server.request_bodies()[1].contains("declin"));
     decline.quit();
+}
+
+#[test]
+fn actual_tui_approval_modes_change_file_tool_authority() {
+    let auto_fixture = Fixture::new("auto-review-tool");
+    let auto_gate = Gate::new();
+    let auto_review = serde_json::json!({
+        "recommendation": "deny",
+        "reason": "the fixture automatic reviewer denied this file mutation",
+    });
+    let auto_server = ScenarioServer::start([
+        HttpResponse::tool_call(
+            "call-auto-review",
+            "write_file",
+            serde_json::json!({
+                "path": "auto-reviewed.txt",
+                "content": "approved by automatic review\n",
+            }),
+        ),
+        HttpResponse::completion(auto_review.to_string()),
+        HttpResponse::streaming(
+            ["自动审查拒绝了工具。", "文件没有写入。"],
+            Some(auto_gate.clone()),
+        ),
+    ]);
+    auto_fixture.write_config(&auto_server.base_url());
+    let mut auto = TuiProcess::start(&auto_fixture, &[], LARGE_SIZE);
+    auto.wait_for_screen("Tips for getting started");
+    auto.back_tab();
+    auto.wait_for_screen("auto review on");
+    auto.submit("请通过自动审查创建 auto-reviewed.txt");
+    auto.wait_for_screen("自动审查拒绝了工具");
+    auto_gate.wait_until_reached();
+    assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
+    auto.back_tab();
+    auto.wait_for_screen("current: auto review on");
+    auto.assert_snapshot("real/03-approval/05-auto-review-running");
+    auto.control_up();
+    auto.up();
+    auto.space();
+    auto.wait_for_screen("fixture automatic reviewer denied");
+    auto.assert_snapshot("real/03-approval/06-auto-review-details");
+    auto_gate.release();
+    auto.wait_for_stable_screen("文件没有写入");
+    let auto_bodies = auto_server.request_bodies();
+    assert_eq!(auto_bodies.len(), 3);
+    assert!(auto_bodies[1].contains("Return JSON matching this response schema"));
+    assert!(auto_bodies[2].contains(r#"zeta_action_policy_feedback:{\"kind\":\"denied\""#));
+    auto.quit();
+
+    let bypass_fixture = Fixture::new("bypass-tool");
+    let bypass_server = ScenarioServer::start([
+        HttpResponse::tool_call(
+            "call-bypass",
+            "write_file",
+            serde_json::json!({
+                "path": "permission-bypassed.txt",
+                "content": "written with permission bypass\n",
+            }),
+        ),
+        HttpResponse::streaming(["权限确认已绕过。", "文件直接写入完成。"], None),
+    ]);
+    bypass_fixture.write_config(&bypass_server.base_url());
+    let mut bypass = TuiProcess::start(&bypass_fixture, &[], LARGE_SIZE);
+    bypass.wait_for_screen("Tips for getting started");
+    bypass.back_tab();
+    bypass.back_tab();
+    bypass.wait_for_screen("bypass permissions on");
+    bypass.submit("请直接创建 permission-bypassed.txt");
+    bypass.wait_for_stable_screen("文件直接写入完成");
+    bypass.assert_snapshot("real/03-approval/07-bypass-final");
+    bypass.control_up();
+    bypass.up();
+    bypass.space();
+    bypass.wait_for_screen("written with permission bypass");
+    bypass.assert_snapshot("real/03-approval/08-bypass-details");
+    let bypassed_thread_path = bypass_fixture.find_file("permission-bypassed.txt").unwrap();
+    assert_eq!(
+        fs::read_to_string(bypassed_thread_path).unwrap(),
+        "written with permission bypass\n"
+    );
+    assert_eq!(bypass_server.request_count(), 2);
+    assert!(bypass_server.request_bodies()[1].contains("wrote"));
+    bypass.quit();
+}
+
+#[test]
+fn actual_tui_process_details_show_sandbox_enforcement() {
+    let fixture = Fixture::new("sandbox-process");
+    let outside_path = fixture
+        .workspace()
+        .parent()
+        .unwrap()
+        .join("sandbox-must-not-write.txt");
+    let server = ScenarioServer::start([
+        HttpResponse::reasoning_tool_call(
+            "先在受限进程中尝试写入工作区外部。\n再根据进程结果确认目录边界是否生效。",
+            "call-sandbox",
+            "shell-command",
+            serde_json::json!({
+                "program": "/bin/sh",
+                "arguments": [
+                    "-c",
+                    "touch ../sandbox-must-not-write.txt 2>&- || { echo 'sandbox fixture: operation not permitted' >&2; exit 1; }",
+                ],
+                "working_directory": ".",
+            }),
+        ),
+        HttpResponse::streaming(["沙盒拒绝了越界写入，目标文件没有生成。"], None),
+    ]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Tips for getting started");
+    process.back_tab();
+    process.back_tab();
+    process.wait_for_screen("bypass permissions on");
+    process.submit("尝试在工作区外创建 sandbox-must-not-write.txt");
+    process.wait_for_stable_screen("目标文件没有生成");
+    process.assert_snapshot("real/03-approval/09-sandbox-blocked");
+    assert!(!outside_path.exists());
+    assert_eq!(server.request_count(), 2);
+    assert!(server.request_bodies()[1].contains("sandbox"));
+
+    process.control_up();
+    process.up();
+    process.space();
+    process.wait_for_screen("shell-command [call-sandbox]");
+    process.assert_snapshot("real/03-approval/10-sandbox-process-details");
+
+    process.enter();
+    process.wait_for_screen("Transcript cell");
+    process.assert_snapshot("real/03-approval/11-sandbox-process-full-details");
+    process.escape();
+
+    process.space();
+    process.up();
+    process.space();
+    process.wait_for_screen("再根据进程结果确认目录边界是否生效");
+    process.assert_snapshot("real/03-approval/12-reasoning-details");
+    process.quit();
 }
 
 #[test]

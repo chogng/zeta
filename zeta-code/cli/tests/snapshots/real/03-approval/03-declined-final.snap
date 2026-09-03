@@ -2,13 +2,11 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-›  请尝试创建 declined-by-tui.txt
+❯ 请尝试创建 declined-by-tui.txt
 
-▸  write_file failed
+● write_file failed
 
-◆  工具调用被用户拒绝。没有写入文件。
-
-
+● 工具调用被用户拒绝。没有写入文件。
 
 
 
@@ -29,8 +27,10 @@ expression: screen
 
 
 
+
+                                                                                shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

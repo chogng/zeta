@@ -48,11 +48,13 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::style::Color;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
@@ -224,7 +226,7 @@ fn query_paste_uses_its_own_editor_without_changing_the_chat_draft() {
 }
 
 #[test]
-fn selected_theme_closes_the_theme_picker_after_success() {
+fn selected_theme_closes_the_theme_picker_immediately() {
     let mut app = App::new();
     app.update(AppEvent::ThemePickerOpened(theme_choices(&theme_catalog())));
 
@@ -236,7 +238,6 @@ fn selected_theme_closes_the_theme_picker_after_success() {
             preference: "zeta-code-dark".into(),
         })
     );
-    app.update(AppEvent::ThemePickerClosed);
     assert!(app.list_selection().is_none());
 }
 
@@ -268,7 +269,7 @@ fn pointer_activation_uses_the_feature_action_mapping() {
 }
 
 #[test]
-fn selected_custom_theme_closes_the_entire_theme_flow_after_success() {
+fn selected_custom_theme_closes_the_entire_theme_flow_immediately() {
     let catalog = theme_catalog();
     let mut app = App::new();
     app.update(AppEvent::ThemePickerOpened(theme_choices(&catalog)));
@@ -278,14 +279,13 @@ fn selected_custom_theme_closes_the_entire_theme_flow_after_success() {
         Some(AppCommand::OpenCustomThemePicker)
     );
     app.update(AppEvent::ThemePickerOpened(custom_theme_choices(&catalog)));
+    let command = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        command,
         Some(AppCommand::SetCustomTheme {
             preference: "aurora".into(),
         })
     );
-
-    app.update(AppEvent::ThemePickerClosed);
     assert!(app.list_selection().is_none());
 }
 
@@ -1014,6 +1014,15 @@ fn help_uses_the_runtime_command_catalog_and_descriptions() {
     )
     .unwrap();
     let mut app = App::for_dir_with_slash_commands(&dir, registry);
+    let settings = keymap_settings_from_tui(&FrontendConfigDto(BTreeMap::from([(
+        "keybindings".into(),
+        serde_json::json!([{
+            "key": "ctrl+y",
+            "command": "zetaCode.action.copyLastResponse"
+        }]),
+    )])))
+    .unwrap();
+    app.update(AppEvent::KeymapSettingsReceived(settings));
     app.insert_text("/help");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1021,14 +1030,31 @@ fn help_uses_the_runtime_command_catalog_and_descriptions() {
     assert_eq!(action, None);
     assert_eq!(app.status(), &Status::Ready);
     let selection = app.list_selection().unwrap();
-    assert_eq!(selection.active_tab().label(), "Commands");
-    assert_eq!(selection.tabs().len(), 1);
-    let commands = selection.visible_items();
-    let diagnose = commands
+    assert_eq!(selection.active_tab().label(), "Shortcuts");
+    assert_eq!(
+        selection
+            .tabs()
+            .iter()
+            .map(ListSelectionGroup::label)
+            .collect::<Vec<_>>(),
+        vec!["Shortcuts", "Commands", "Custom commands"]
+    );
+    let shortcuts = selection.visible_items();
+    assert!(shortcuts.iter().any(|item| item.label() == "Esc Esc"));
+    assert!(!shortcuts.iter().any(|item| matches!(
+        item.label(),
+        "Tab" | "Home / End" | "PageUp / PageDown" | "Ctrl-Home / Ctrl-End"
+    )));
+    let custom = shortcuts
         .iter()
-        .find(|item| item.label() == "/diagnose")
-        .expect("the server command is included in help");
-    assert_eq!(diagnose.description(), Some("inspect the current dir"));
+        .find(|item| item.label() == "ctrl+y")
+        .expect("the active user shortcut is included in help");
+    assert_eq!(custom.description(), Some("Copy last response · custom"));
+
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let selection = app.list_selection().unwrap();
+    assert_eq!(selection.active_tab().label(), "Commands");
+    let commands = selection.visible_items();
     let status = commands
         .iter()
         .find(|item| item.label() == "/status")
@@ -1037,6 +1063,18 @@ fn help_uses_the_runtime_command_catalog_and_descriptions() {
         status.description(),
         Some("show the active session, thread, and model")
     );
+    assert!(commands.iter().all(|item| item.label() != "/diagnose"));
+
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let selection = app.list_selection().unwrap();
+    assert_eq!(selection.active_tab().label(), "Custom commands");
+    let custom_commands = selection.visible_items();
+    let diagnose = custom_commands
+        .iter()
+        .find(|item| item.label() == "/diagnose")
+        .expect("the server command is included in custom commands");
+    assert_eq!(diagnose.description(), Some("inspect the current dir"));
+    assert!(custom_commands.iter().all(|item| item.label() != "/status"));
     let _ = fs::remove_dir_all(dir);
 }
 
@@ -1285,6 +1323,26 @@ fn two_screen_escape_presses_within_the_gesture_window_open_rewind() {
         ),
         Some(AppCommand::OpenRewindPicker)
     );
+}
+
+#[test]
+fn screen_escape_gesture_preserves_a_nonempty_draft() {
+    let mut app = App::new();
+    let started = Instant::now();
+    app.insert_text("keep this draft");
+
+    assert_eq!(
+        app.handle_key_at(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), started),
+        None
+    );
+    assert_eq!(
+        app.handle_key_at(
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            started + Duration::from_millis(200),
+        ),
+        None
+    );
+    assert_eq!(app.input(), "keep this draft");
 }
 
 #[test]

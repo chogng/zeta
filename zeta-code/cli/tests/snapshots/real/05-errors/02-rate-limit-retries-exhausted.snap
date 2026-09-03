@@ -2,11 +2,11 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-›  触发 429 限流和自动重试
+❯ 触发 429 限流和自动重试
 
-×  Model invocation failed
+● Model invocation failed
 
-×  Zeta couldn't reach the configured model. Check the model provider and credentials, then try
+● Zeta couldn't reach the configured model. Check the model provider and credentials, then try
 again.
 
 
@@ -28,9 +28,9 @@ again.
 
 
 
-
+                                                                                shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

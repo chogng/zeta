@@ -108,7 +108,6 @@ pub(crate) enum AppEvent {
         queue_id: QueueId,
         error: String,
     },
-    ThemePickerClosed,
     ThemePickerOpened(ThemeChoices),
     RenderThemeChanged(RenderTheme),
     ThreadTranscriptSnapshotReceived(ThreadTranscriptSnapshot),

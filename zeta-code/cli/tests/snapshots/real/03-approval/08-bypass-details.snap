@@ -2,20 +2,18 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 请创建 approved-by-tui.txt
+❯ 请直接创建 permission-bypassed.txt
 
 ● Ran write_file
+└─ write_file [call-bypass]
+   {
+     "path": "permission-bypassed.txt",
+     "content": "written with permission bypass\n"
+   }
+   wrote permission-bypassed.txt
+   view full
 
-● 工具已获批准并执行。文件写入完成。
-
-
-
-
-
-
-
-
-
+● 权限确认已绕过。文件直接写入完成。
 
 
 
@@ -28,9 +26,11 @@ expression: screen
 
 
 
-                                                                                shift+tab to cycle
+
+
+
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on
+  ↑↓ select · space expand · enter details · esc input

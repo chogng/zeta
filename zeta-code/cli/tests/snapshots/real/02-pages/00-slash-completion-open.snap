@@ -28,9 +28,9 @@ expression: screen
   /skills                    browse configured skill sources
   /mcp                       list configured MCP tools
   /resume                    list or resume a saved session
-  /archive                   archive the current session and start a new chat
+  /archive                   archive the current session and start a new chat   shift+tab to cycle
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯ /
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

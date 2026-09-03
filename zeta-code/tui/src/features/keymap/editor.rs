@@ -20,6 +20,7 @@ use super::KeymapCaptureMode;
 use super::KeymapEdit;
 use super::KeymapEditIntent;
 use super::KeymapEditKind;
+use super::fixed_shortcuts;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum KeymapAction {
@@ -543,21 +544,9 @@ fn non_empty(items: Vec<ListSelectionItem>, label: &str) -> Vec<ListSelectionIte
 }
 
 fn fixed_shortcut_items() -> impl Iterator<Item = ListSelectionItem> {
-    [
-        ("Esc Esc", "open rewind checkpoints from the Session screen"),
-        (
-            "Tab",
-            "complete the selected slash command or directory path",
-        ),
-        ("Home / End", "move to the start or end of the input line"),
-        ("PageUp / PageDown", "scroll the conversation"),
-        (
-            "Ctrl-Home / Ctrl-End",
-            "load older turns or return to the latest turn",
-        ),
-    ]
-    .into_iter()
-    .map(|(key, description)| ListSelectionItem::new(key).with_columns(key, description, "default"))
+    fixed_shortcuts().map(|(key, description)| {
+        ListSelectionItem::new(key).with_columns(key, description, "default")
+    })
 }
 
 fn is_cancel(key: KeyEvent) -> bool {

@@ -24,13 +24,13 @@ fn key_hint_uses_two_character_horizontal_insets() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), "↑/↓ select", test_context()))
+        .draw(|frame| draw(frame, frame.area(), "Enter apply", test_context()))
         .unwrap();
 
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(0, 0)].symbol(), " ");
     assert_eq!(buffer[(1, 0)].symbol(), " ");
-    assert_eq!(buffer[(2, 0)].symbol(), "↑");
+    assert_eq!(buffer[(2, 0)].symbol(), "E");
 }
 
 #[test]

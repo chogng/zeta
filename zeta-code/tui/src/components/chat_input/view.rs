@@ -47,7 +47,7 @@ pub(crate) fn draw(
                 Span::styled(
                     prompt,
                     Style::default()
-                        .fg(context.chat_input_chrome())
+                        .fg(context.foreground())
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(line),

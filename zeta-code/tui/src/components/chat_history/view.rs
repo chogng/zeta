@@ -1,6 +1,7 @@
 use super::ChatHistoryRenderCache;
 use super::ChatHistoryScroll;
 use super::CommandStatus;
+use super::ExecutionKind;
 use super::Message;
 use super::MessageRole;
 use crate::components::welcome;
@@ -117,6 +118,7 @@ fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec
     message_lines_with_code(messages, context, None, true)
 }
 
+#[cfg(test)]
 fn message_lines_with_code<'a>(
     messages: &'a [Message],
     context: RenderContext<'_>,
@@ -125,61 +127,65 @@ fn message_lines_with_code<'a>(
 ) -> Vec<Line<'a>> {
     let mut lines = Vec::new();
     for message in messages {
-        if message.role == MessageRole::Command {
-            let (color, status_marker) = match message.command_status {
-                Some(CommandStatus::Submitted) => (context.accent(), "›"),
-                Some(CommandStatus::Running) => (context.accent(), "◉"),
-                Some(CommandStatus::Succeeded) => (context.success(), "●"),
-                Some(CommandStatus::Failed) => (context.danger(), "×"),
-                None => (context.muted(), "●"),
-            };
-            let marker = expansion_marker(message).unwrap_or(status_marker);
-            let marker_style = if message.can_expand {
-                action_style(context)
-            } else {
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
-            };
-            let command_lines = styled_body_lines(message, context, cache, syntax_highlighting);
-            lines.extend(prefix_lines(
-                command_lines,
-                Span::styled(format!("{marker}  "), marker_style),
-                Span::raw("   "),
-            ));
-            if let Some(detail) = &message.detail {
-                push_detail_lines(&mut lines, message.role, detail, context);
-            }
-            push_details_affordance(&mut lines, message, context);
-            lines.push(Line::default());
-            continue;
-        }
+        lines.extend(cell_lines_with_code(message, context, cache, syntax_highlighting).0);
+    }
+    lines
+}
 
-        let (role_marker, color) = match message.role {
-            MessageRole::User => ("›", context.accent()),
-            MessageRole::Agent => ("◆", context.success()),
-            MessageRole::Reasoning => ("◇", context.muted()),
-            MessageRole::Plan => ("≡", context.accent()),
-            MessageRole::Notice => ("•", context.warning()),
-            MessageRole::Error => ("×", context.danger()),
-            MessageRole::Command => unreachable!("command messages render as a grouped surface"),
-        };
-        let marker = expansion_marker(message).unwrap_or(role_marker);
-        let marker_style = if message.can_expand {
-            action_style(context)
+fn cell_lines_with_code<'a>(
+    message: &'a Message,
+    context: RenderContext<'_>,
+    cache: Option<&ChatHistoryRenderCache>,
+    syntax_highlighting: bool,
+) -> (Vec<Line<'a>>, usize) {
+    let mut lines = Vec::new();
+    if message.role == MessageRole::Command {
+        let (marker, color) = command_marker(message, context);
+        let marker_style = Style::default().fg(color).add_modifier(Modifier::BOLD);
+        let command_lines = styled_body_lines(message, context, cache, syntax_highlighting);
+        let user_input_lines = if message.execution_kind == ExecutionKind::LocalCommand {
+            command_lines.len()
         } else {
-            Style::default().fg(color).add_modifier(Modifier::BOLD)
+            0
         };
         lines.extend(prefix_lines(
-            styled_body_lines(message, context, cache, syntax_highlighting),
-            Span::styled(format!("{marker}  "), marker_style),
-            Span::raw("   "),
+            command_lines,
+            Span::styled(format!("{marker} "), marker_style),
+            Span::raw("  "),
         ));
         if let Some(detail) = &message.detail {
             push_detail_lines(&mut lines, message.role, detail, context);
         }
         push_details_affordance(&mut lines, message, context);
         lines.push(Line::default());
+        return (lines, user_input_lines);
     }
-    lines
+
+    let (role_marker, color) = match message.role {
+        MessageRole::User => ("❯", context.muted()),
+        MessageRole::Agent | MessageRole::Reasoning | MessageRole::Plan => ("●", context.muted()),
+        MessageRole::Notice => ("●", context.warning()),
+        MessageRole::Error => ("●", context.danger()),
+        MessageRole::Command => unreachable!("command messages render as a grouped surface"),
+    };
+    let marker_style = Style::default().fg(color).add_modifier(Modifier::BOLD);
+    let body_lines = styled_body_lines(message, context, cache, syntax_highlighting);
+    let user_input_lines = if message.role == MessageRole::User {
+        body_lines.len()
+    } else {
+        0
+    };
+    lines.extend(prefix_lines(
+        body_lines,
+        Span::styled(format!("{role_marker} "), marker_style),
+        Span::raw("  "),
+    ));
+    if let Some(detail) = &message.detail {
+        push_detail_lines(&mut lines, message.role, detail, context);
+    }
+    push_details_affordance(&mut lines, message, context);
+    lines.push(Line::default());
+    (lines, user_input_lines)
 }
 
 fn styled_body_lines<'a>(
@@ -289,10 +295,30 @@ fn push_code_block(
     output.extend(lines);
 }
 
-fn expansion_marker(message: &Message) -> Option<&'static str> {
-    message
-        .can_expand
-        .then_some(if message.expanded { "▾" } else { "▸" })
+fn command_marker(
+    message: &Message,
+    context: RenderContext<'_>,
+) -> (&'static str, ratatui::style::Color) {
+    if message.execution_kind == ExecutionKind::LocalCommand
+        && message.command_status != Some(CommandStatus::Running)
+    {
+        return ("❯", context.muted());
+    }
+    ("●", execution_color(message, context))
+}
+
+fn execution_color(message: &Message, context: RenderContext<'_>) -> ratatui::style::Color {
+    match message.command_status {
+        Some(CommandStatus::Submitted | CommandStatus::Running) => context.warning(),
+        Some(CommandStatus::Failed) => context.danger(),
+        Some(CommandStatus::Succeeded) => match message.execution_kind {
+            ExecutionKind::LocalCommand => context.muted(),
+            ExecutionKind::Command => context.success(),
+            ExecutionKind::Mutation => context.accent(),
+            ExecutionKind::Neutral => context.muted(),
+        },
+        None => context.muted(),
+    }
 }
 
 fn selected_style(message: &Message, context: RenderContext<'_>) -> Style {
@@ -368,7 +394,7 @@ fn measured_heights(
         .iter()
         .map(|message| {
             cache.measure(message, width, context, || {
-                message_lines_with_code(std::slice::from_ref(message), context, None, false)
+                cell_lines_with_code(message, context, None, false).0
             })
         })
         .collect()
@@ -400,7 +426,7 @@ fn render_cells(
             let target_height = (visible_end - visible_start) as u16;
             let source_row = visible_start - cell_start;
             let cell = cache.prepare(message, area.width, context, || {
-                message_lines_with_code(std::slice::from_ref(message), context, Some(cache), true)
+                cell_lines_with_code(message, context, Some(cache), true)
             });
             cell.render(
                 frame.buffer_mut(),

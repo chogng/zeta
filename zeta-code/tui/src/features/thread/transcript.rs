@@ -1,5 +1,6 @@
 use super::exec_cell::ExecCell;
 use crate::components::chat_history::CommandStatus;
+use crate::components::chat_history::ExecutionKind;
 use crate::components::chat_history::Message;
 use crate::components::chat_history::MessageRole;
 use std::collections::BTreeSet;
@@ -151,6 +152,7 @@ impl TranscriptCell {
                 result,
                 status,
             } => Message::command(command.clone(), *status, result.clone())
+                .with_execution_kind(ExecutionKind::LocalCommand)
                 .with_cell_id(self.cell_id.as_str()),
         };
         message

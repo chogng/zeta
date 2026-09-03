@@ -9,6 +9,7 @@ use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
+use ratatui::widgets::Paragraph;
 
 #[test]
 fn detail_scroll_is_bounded_and_supports_first_and_last_shortcuts() {
@@ -33,9 +34,13 @@ fn overlay_fills_its_surface_with_the_overlay_background() {
     let mut terminal = Terminal::new(TestBackend::new(20, 8)).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), &overlay, test_context()))
+        .draw(|frame| {
+            frame.render_widget(Paragraph::new("underlying text"), frame.area());
+            draw(frame, frame.area(), &overlay, test_context());
+        })
         .unwrap();
 
+    assert_eq!(terminal.backend().buffer()[(0, 2)].symbol(), " ");
     assert_eq!(
         terminal.backend().buffer()[(0, 2)].bg,
         Color::Rgb(37, 37, 38)

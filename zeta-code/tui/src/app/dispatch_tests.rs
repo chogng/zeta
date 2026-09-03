@@ -296,7 +296,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
     assert_eq!(
         app.status_line()
             .top_text_for_width(80, app.status_line_runtime()),
-        "test/model-one"
+        "model-one"
     );
     assert_eq!(
         app.status_line()

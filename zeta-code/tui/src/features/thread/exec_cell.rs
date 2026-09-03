@@ -1,4 +1,5 @@
 use crate::components::chat_history::CommandStatus;
+use crate::components::chat_history::ExecutionKind;
 use crate::components::chat_history::Message;
 use crate::features::thread::transcript::TranscriptCellId;
 use std::collections::BTreeSet;
@@ -26,6 +27,7 @@ enum ExecClass {
     Search,
     List,
     Command,
+    Mutation,
     Other,
 }
 
@@ -297,7 +299,9 @@ impl ExecCell {
             CommandStatus::Succeeded
         };
         let detail = expanded.then(|| first_lines(&self.full_details(), EXPANDED_LINES));
-        Message::command(self.summary(), status, detail).with_cell_id(self.cell_id.as_str())
+        Message::command(self.summary(), status, detail)
+            .with_execution_kind(self.execution_kind())
+            .with_cell_id(self.cell_id.as_str())
     }
 
     pub(super) fn full_details(&self) -> String {
@@ -334,6 +338,15 @@ impl ExecCell {
         }
     }
 
+    fn execution_kind(&self) -> ExecutionKind {
+        match self.calls.first().map(|call| call.class) {
+            Some(ExecClass::Command) => ExecutionKind::Command,
+            Some(ExecClass::Mutation) => ExecutionKind::Mutation,
+            Some(ExecClass::Read | ExecClass::Search | ExecClass::List | ExecClass::Other)
+            | None => ExecutionKind::Neutral,
+        }
+    }
+
     fn call_mut(&mut self, tool_call_id: &ToolCallId) -> Option<&mut ExecCall> {
         self.calls
             .iter_mut()
@@ -345,16 +358,18 @@ fn group_for(class: ExecClass) -> ExecGroup {
     match class {
         ExecClass::Read | ExecClass::Search | ExecClass::List => ExecGroup::ExploreGroup,
         ExecClass::Command => ExecGroup::CompactCommandGroup,
-        ExecClass::Other => ExecGroup::SingleExec,
+        ExecClass::Mutation | ExecClass::Other => ExecGroup::SingleExec,
     }
 }
 
 fn classify(name: &str) -> ExecClass {
     match name {
         "read" | "read_file" | "read_text_file" => ExecClass::Read,
-        "search" | "search_files" | "grep" | "rg" | "find" => ExecClass::Search,
+        "search" | "search_files" | "grep" | "glob" | "rg" | "find" => ExecClass::Search,
         "list" | "list_dir" | "list_directory" => ExecClass::List,
-        "command" | "exec" | "exec_command" | "shell" | "terminal" => ExecClass::Command,
+        "command" | "exec" | "exec_command" | "shell" | "shell-command" | "shell_command"
+        | "terminal" => ExecClass::Command,
+        "apply_patch" | "edit" | "write_file" => ExecClass::Mutation,
         _ => ExecClass::Other,
     }
 }

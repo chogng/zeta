@@ -87,6 +87,16 @@ fn root_conditions_preserve_input_selection_and_press_boundaries() {
     );
     assert_eq!(
         keymap.resolve_single(
+            &escape,
+            AppKeymapContext {
+                chat_input_empty: false,
+                ..context()
+            },
+        ),
+        None
+    );
+    assert_eq!(
+        keymap.resolve_single(
             &KeyEvent::new_with_kind(KeyCode::BackTab, KeyModifiers::SHIFT, KeyEventKind::Repeat),
             AppKeymapContext {
                 is_press: false,

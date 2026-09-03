@@ -2,17 +2,15 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 请创建 approved-by-tui.txt
+❯ 尝试在工作区外创建 sandbox-must-not-write.txt
 
-● Ran write_file
+● Thought
+└─ 先在受限进程中尝试写入工作区外部。
+   再根据进程结果确认目录边界是否生效。
 
-● 工具已获批准并执行。文件写入完成。
+● shell-command failed
 
-
-
-
-
-
+● 沙盒拒绝了越界写入，目标文件没有生成。
 
 
 
@@ -28,9 +26,11 @@ expression: screen
 
 
 
-                                                                                shift+tab to cycle
+
+
+
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  zeta-real-scenario                                                                      ← agents
-  ⏸ ask permissions on
+  ↑↓ select · space expand · enter details · esc input

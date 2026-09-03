@@ -26,8 +26,10 @@ use std::borrow::Cow;
 use unicode_width::UnicodeWidthStr;
 
 const STATUS_HINT_GAP: u16 = 3;
+const APPROVAL_MODE_HINT: &str = "shift+tab to cycle";
 
 enum StatusAreaView<'a> {
+    Hidden,
     Hint {
         text: Cow<'a, str>,
         style: StatusHintStyle,
@@ -175,11 +177,11 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             context,
         );
     }
-    draw_status_notice(
+    draw_composer_top_hint(
         frame,
         areas.session.transcript,
         areas.session.composer,
-        app.status_notice(),
+        app,
         context,
     );
     if let Some(overlay) = app.overlay() {
@@ -205,14 +207,15 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     app.screen_selection().draw(frame.buffer_mut(), context);
 }
 
-fn draw_status_notice(
+fn draw_composer_top_hint(
     frame: &mut Frame<'_>,
     content: Rect,
     composer: Rect,
-    notice: Option<&str>,
+    app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
-    let Some(notice) = notice else {
+    let hint = app.status_notice().or_else(|| approval_mode_hint(app));
+    let Some(hint) = hint else {
         return;
     };
     if content.is_empty() || composer.is_empty() || composer.y <= content.y {
@@ -226,9 +229,18 @@ fn draw_status_notice(
             width: content.width,
             height: 1,
         },
-        notice,
+        hint,
         context,
     );
+}
+
+fn approval_mode_hint(app: &App) -> Option<&'static str> {
+    let shows_status_line = matches!(status_area_view(app), StatusAreaView::StatusLine { .. });
+    let shows_approval_mode = !app
+        .status_line()
+        .policy_text_for_width(usize::MAX, app.approval_mode_status())
+        .is_empty();
+    (shows_status_line && shows_approval_mode).then_some(APPROVAL_MODE_HINT)
 }
 
 #[cfg(test)]
@@ -462,6 +474,7 @@ fn draw_status_area(
     context: crate::render::RenderContext<'_>,
 ) {
     match status_area_view(app) {
+        StatusAreaView::Hidden => {}
         StatusAreaView::Hint { text, style } => match style {
             StatusHintStyle::Keys => key_hint::draw(frame, area, &text, context),
             StatusHintStyle::Warning => frame.render_widget(
@@ -481,6 +494,9 @@ fn draw_status_area(
 
 fn status_area_view(app: &App) -> StatusAreaView<'_> {
     if let Some(hints) = app.composer_key_hints() {
+        if hints.is_empty() {
+            return StatusAreaView::Hidden;
+        }
         return StatusAreaView::Hint {
             text: Cow::Borrowed(hints),
             style: StatusHintStyle::Keys,
@@ -609,6 +625,7 @@ fn status_and_hint_fit(app: &App, width: u16, hint: &str) -> bool {
 impl StatusAreaView<'_> {
     fn desired_rows(&self, app: &App, width: u16) -> u16 {
         match self {
+            Self::Hidden => 0,
             Self::Hint { .. } => 1,
             Self::StatusLine { supplemental_hint } => {
                 let status_rows = status_line::desired_rows(

@@ -13,6 +13,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
+use ratatui::widgets::Clear;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum OverlayInputOutcome {
@@ -95,6 +96,7 @@ pub(crate) fn draw(
         ..available
     };
     let area = bottom_anchored_area(centered, height);
+    frame.render_widget(Clear, area);
     frame.render_widget(
         Block::default().style(Style::default().bg(context.overlay_background())),
         area,

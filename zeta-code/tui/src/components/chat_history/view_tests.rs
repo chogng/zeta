@@ -6,6 +6,7 @@ use super::pointer_target_at;
 use crate::components::chat_history::ChatHistoryRenderCache;
 use crate::components::chat_history::ChatHistoryScroll;
 use crate::components::chat_history::CommandStatus;
+use crate::components::chat_history::ExecutionKind;
 use crate::components::chat_history::Message;
 use crate::components::chat_history::MessageRole;
 use crate::components::welcome::WelcomeModel;
@@ -71,8 +72,76 @@ fn multiline_content_uses_the_same_continuation_prefix_for_measurement_and_drawi
 
     let lines = message_lines(&messages, test_context());
 
-    assert_eq!(lines[0].to_string(), "◆  first line");
-    assert_eq!(lines[1].to_string(), "   second line");
+    assert_eq!(lines[0].to_string(), "● first line");
+    assert_eq!(lines[1].to_string(), "  second line");
+}
+
+#[test]
+fn execution_output_uses_a_solid_circle_with_semantic_color() {
+    let cases = [
+        (
+            Message::plain(MessageRole::Agent, "answer".into()),
+            test_context().muted(),
+        ),
+        (
+            Message::command("Ran shell".into(), CommandStatus::Succeeded, None),
+            test_context().success(),
+        ),
+        (
+            Message::command("write_file failed".into(), CommandStatus::Failed, None)
+                .with_execution_kind(ExecutionKind::Mutation),
+            test_context().danger(),
+        ),
+        (
+            Message::command("Ran write_file".into(), CommandStatus::Succeeded, None)
+                .with_execution_kind(ExecutionKind::Mutation),
+            test_context().accent(),
+        ),
+        (
+            Message::command("Running shell".into(), CommandStatus::Running, None),
+            test_context().warning(),
+        ),
+    ];
+
+    for (message, color) in cases {
+        let lines = message_lines(std::slice::from_ref(&message), test_context());
+        assert_eq!(lines[0].spans[0].content, "● ");
+        assert_eq!(lines[0].spans[0].style.fg, Some(color));
+    }
+}
+
+#[test]
+fn local_command_uses_the_user_marker_except_while_running() {
+    let cases = [
+        (CommandStatus::Submitted, "❯ ", test_context().muted()),
+        (CommandStatus::Running, "● ", test_context().warning()),
+        (CommandStatus::Succeeded, "❯ ", test_context().muted()),
+        (CommandStatus::Failed, "❯ ", test_context().muted()),
+    ];
+
+    for (status, marker, color) in cases {
+        let message = Message::command("/theme zeta-code-dark".into(), status, None)
+            .with_execution_kind(ExecutionKind::LocalCommand);
+        let messages = [message];
+        let lines = message_lines(&messages, test_context());
+
+        assert_eq!(lines[0].spans[0].content, marker);
+        assert_eq!(lines[0].spans[0].style.fg, Some(color));
+    }
+}
+
+#[test]
+fn expanded_output_uses_its_detail_branch_instead_of_a_disclosure_marker() {
+    let message = Message::command("Ran write_file".into(), CommandStatus::Succeeded, None)
+        .with_execution_kind(ExecutionKind::Mutation)
+        .with_detail("write_file [call]")
+        .with_cell_actions(true, true, true, false);
+
+    let messages = [message];
+    let lines = message_lines(&messages, test_context());
+
+    assert_eq!(lines[0].to_string(), "● Ran write_file");
+    assert_eq!(lines[1].to_string(), "└─ write_file [call]");
 }
 
 #[test]
@@ -99,12 +168,48 @@ fn user_message_starts_in_the_symbol_column_and_fills_the_content_row() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(0, 0)].symbol(), "›");
-    assert_eq!(buffer[(3, 0)].symbol(), "h");
+    assert_eq!(buffer[(0, 0)].symbol(), "❯");
+    assert_eq!(buffer[(0, 0)].fg, test_context().muted());
+    assert_eq!(buffer[(2, 0)].symbol(), "h");
     assert_eq!(buffer[(0, 0)].bg, test_context().user_message_background());
     assert_eq!(buffer[(11, 0)].bg, test_context().user_message_background());
     assert_eq!(buffer[(0, 1)].bg, test_context().background());
     assert_eq!(buffer[(11, 1)].bg, test_context().background());
+}
+
+#[test]
+fn local_command_fills_only_its_input_rows() {
+    let messages = vec![
+        Message::command("/config".into(), CommandStatus::Succeeded, None)
+            .with_execution_kind(ExecutionKind::LocalCommand)
+            .with_detail("done")
+            .with_cell_id("local-command")
+            .with_render_revision(1),
+    ];
+    let scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
+    let welcome = WelcomeModel::for_workspace(Path::new("."));
+    let view = ChatHistoryView {
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &render_cache,
+        welcome: &welcome,
+        pointer: ChatHistoryPointerState::default(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(12, 3)).unwrap();
+
+    terminal
+        .draw(|frame| view.render(frame, frame.area(), test_context()))
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(0, 0)].symbol(), "❯");
+    assert_eq!(buffer[(0, 0)].bg, test_context().user_message_background());
+    assert_eq!(buffer[(11, 0)].bg, test_context().user_message_background());
+    assert_eq!(buffer[(0, 1)].symbol(), "└");
+    assert_eq!(buffer[(0, 1)].bg, test_context().background());
+    assert_eq!(buffer[(11, 1)].bg, test_context().background());
+    assert_eq!(buffer[(0, 2)].bg, test_context().background());
 }
 
 #[test]

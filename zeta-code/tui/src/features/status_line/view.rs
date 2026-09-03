@@ -10,10 +10,7 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
-use unicode_width::UnicodeWidthStr;
 use zeta_protocol::ApprovalMode;
-
-const POLICY_HINT: &str = " (shift+tab to cycle)";
 
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
@@ -28,29 +25,22 @@ pub(crate) fn draw(
     }
 
     let top = status_line.top_text_for_width(usize::from(area.width), runtime);
-    let hint_width = POLICY_HINT.width();
     let policy_width = usize::from(area.width);
-    let full_policy = status_line.policy_text_for_width(usize::MAX, approval);
-    let show_hint =
-        !full_policy.is_empty() && full_policy.width().saturating_add(hint_width) <= policy_width;
-    let policy = status_line.policy_text_for_width(
-        policy_width.saturating_sub(if show_hint { hint_width } else { 0 }),
-        approval,
-    );
+    let policy = status_line.policy_text_for_width(policy_width, approval);
     let lines = if area.height == 1 {
         if policy.is_empty() {
             vec![top_line(top, context)]
         } else {
-            vec![styled_policy_line(policy, approval, show_hint, context)]
+            vec![styled_policy_line(policy, approval, context)]
         }
     } else if top.is_empty() {
-        vec![styled_policy_line(policy, approval, show_hint, context)]
+        vec![styled_policy_line(policy, approval, context)]
     } else if policy.is_empty() {
         vec![top_line(top, context)]
     } else {
         vec![
             top_line(top, context),
-            styled_policy_line(policy, approval, show_hint, context),
+            styled_policy_line(policy, approval, context),
         ]
     };
     frame.render_widget(Paragraph::new(lines), area);
@@ -79,21 +69,16 @@ fn top_line(text: String, context: RenderContext<'_>) -> Line<'static> {
 fn styled_policy_line(
     policy: String,
     approval: ApprovalModeStatus,
-    show_hint: bool,
     context: RenderContext<'_>,
 ) -> Line<'static> {
     let permission_prefix = approval_mode_text(approval);
     if policy != permission_prefix {
         return Line::styled(policy, Style::default().fg(context.chat_input_chrome()));
     }
-    let hint = show_hint.then_some(Span::styled(
-        POLICY_HINT,
-        Style::default().fg(context.muted()),
-    ));
     let next = approval_mode_display(approval.next);
     if let Some(current_mode) = approval.current.filter(|current| *current != approval.next) {
         let current = approval_mode_display(current_mode);
-        let mut spans = vec![
+        let spans = vec![
             Span::styled(
                 current.icon,
                 Style::default().fg(mode_color(current_mode, context)),
@@ -111,11 +96,10 @@ fn styled_policy_line(
                 Style::default().fg(context.chat_input_chrome()),
             ),
         ];
-        spans.extend(hint);
         return Line::from(spans);
     }
 
-    let mut spans = vec![
+    let spans = vec![
         Span::styled(
             next.icon,
             Style::default().fg(mode_color(approval.next, context)),
@@ -125,7 +109,6 @@ fn styled_policy_line(
             Style::default().fg(context.chat_input_chrome()),
         ),
     ];
-    spans.extend(hint);
     Line::from(spans)
 }
 

@@ -2,19 +2,19 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-›  第一轮：测试真实流式输出、中文和 Emoji
+❯ 第一轮：测试真实流式输出、中文和 Emoji
 
-◆  真实 TCP 流式第一段 🌊，随后完成长文本与代码 fn main() {}
+● 真实 TCP 流式第一段 🌊，随后完成长文本与代码 fn main() {}
 
-›  第二轮：在第一轮运行时排队
+❯ 第二轮：在第一轮运行时排队
 
-◆  第二轮排队消息已经执行。
-
-
+● 第二轮排队消息已经执行。
 
 
+
+                                        shift+tab to cycle
 ────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────
   zeta-real-scenario                              ← agents
-  ⏸ ask permissions on (shift+tab to cycle)
+  ⏸ ask permissions on

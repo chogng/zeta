@@ -8,6 +8,7 @@ pub(crate) use cache::ChatHistoryRenderCache;
 pub(crate) use markdown::export_markdown;
 pub(crate) use markdown::latest_agent_response;
 pub(crate) use model::CommandStatus;
+pub(crate) use model::ExecutionKind;
 pub(crate) use model::Message;
 pub(crate) use model::MessageRole;
 pub(crate) use state::ChatHistoryScroll;

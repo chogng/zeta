@@ -28,7 +28,7 @@ impl<A> ListSelection<A> {
         model: ListSelectionModel,
         actions: BTreeMap<ListSelectionItemId, A>,
     ) -> Self {
-        let key_hints = model.key_hints().with("Esc", "to close");
+        let key_hints = model.key_hints();
         Self {
             state: ListSelectionState::new(model),
             actions,
@@ -41,7 +41,7 @@ impl<A> ListSelection<A> {
         model: ListSelectionModel,
         actions: BTreeMap<ListSelectionItemId, A>,
     ) {
-        self.key_hints = model.key_hints().with("Esc", "to close");
+        self.key_hints = model.key_hints();
         self.state.replace_model(model);
         self.actions = actions;
     }

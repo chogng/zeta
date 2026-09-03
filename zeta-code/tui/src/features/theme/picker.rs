@@ -171,7 +171,7 @@ fn list_selection(
     ThemeChoices {
         model: ListSelectionModel::new(title, vec![ListSelectionGroup::new("Themes", items)])
             .with_activation_mode(ListSelectionActivationMode::Enter)
-            .with_activation_label("apply")
+            .with_activation_label("to apply")
             .without_tab_bar()
             .with_initial_selected(selected)
             .with_empty_message("No color themes available"),
@@ -198,8 +198,7 @@ fn theme_item(
         ThemePickerTarget::CustomThemes => ThemeSelectionAction::OpenCustomThemes,
     };
     actions.insert(item_id.clone(), action);
-    let current = if choice.selected { " ✓" } else { "" };
-    ListSelectionItem::new(format!("{}. {}{current}", index + 1, choice.label))
+    ListSelectionItem::new(format!("{}. {}", index + 1, choice.label))
         .with_id(item_id)
         .with_selection_foreground(choice.palette.selection_foreground)
         .with_presentation_focus(choice.palette.focus)
@@ -210,7 +209,7 @@ fn theme_item(
                     Style::default().fg(choice.palette.muted),
                 )))
                 .with_separator_color(choice.palette.muted)
-                .with_margins(2, 0),
+                .with_margins(1, 0),
         )
 }
 
