@@ -1183,6 +1183,7 @@ impl App {
             .then(|| self.sessions.manager().view(self.sessions.catalog()))
     }
 
+    #[cfg(test)]
     pub(crate) fn session_manager_focused(&self) -> bool {
         matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.manager().focused()

@@ -463,7 +463,6 @@ opt-level = "s"
 
 [profile.dev-small]
 inherits = "dev"
-opt-level = 0
 debug = "none"
 strip = "symbols"
 
