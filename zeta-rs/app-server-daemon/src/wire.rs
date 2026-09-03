@@ -8,10 +8,10 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
+use zeta_app_server_transport::DeadlineStream;
 
 use crate::ConnectionOptions;
 use crate::GrantSource;
-use crate::deadline_stream::DeadlineStream;
 
 pub(crate) const CONNECTION_PRELUDE_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(5);

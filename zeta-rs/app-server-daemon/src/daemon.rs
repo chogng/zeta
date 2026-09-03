@@ -1,24 +1,20 @@
-use std::collections::BTreeMap;
 use std::io;
 use std::io::BufReader;
 use std::io::Write;
-use std::net::Shutdown;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
 use zeta_app_server_protocol::schema_hash;
-use zeta_uds::UnixListener;
-use zeta_uds::UnixStream;
+use zeta_app_server_transport::DeadlineStream;
+use zeta_app_server_transport::LocalConnections;
+use zeta_app_server_transport::LocalSocketAccept;
+use zeta_app_server_transport::PollingLocalListener;
 
 use crate::ConnectionOptions;
-use crate::deadline_stream::DeadlineStream;
 use crate::endpoint::EndpointPaths;
 use crate::endpoint::SocketCleanup;
 use crate::process::ProcessRecord;
@@ -42,22 +38,19 @@ const STOP_CONNECTION_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
     let registry = Arc::new(ProfileAppServerRegistry::open(options)?);
-    let listener = endpoint.bind_listener()?;
+    let listener = PollingLocalListener::new(endpoint.bind_listener()?).map_err(io_error)?;
     let socket_cleanup = SocketCleanup::new(endpoint.socket.clone());
     let record = ProcessRecord::current(&endpoint)?;
     let process_record = ProcessRecordGuard::publish(&endpoint.pid, &record)?;
     let stop_requested = Arc::new(AtomicBool::new(false));
     register_shutdown_signals(&stop_requested)?;
-    listener.set_nonblocking(true).map_err(io_error)?;
     eprintln!(
         "local App Server daemon endpoint ready: {} (pid {})",
         endpoint.socket.display(),
         record.pid
     );
 
-    let active_connections = Arc::new(AtomicUsize::new(0));
-    let active_streams = Arc::new(Mutex::new(BTreeMap::new()));
-    let next_connection_id = AtomicU64::new(1);
+    let active_connections = Arc::new(LocalConnections::new());
     let idle_timeout = configured_idle_timeout()?;
     let mut idle_since = None;
     let mut stopping_since = None;
@@ -70,17 +63,17 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
         }
         if stop_requested.load(Ordering::Acquire) {
             let stopping_since = stopping_since.get_or_insert_with(Instant::now);
-            let active_connection_count = active_connections.load(Ordering::Acquire);
+            let active_connection_count = active_connections.len();
             let active_terminal_count = registry.active_terminal_count();
             if active_connection_count == 0 && active_terminal_count == 0 {
                 exit_after_stop(listener, socket_cleanup, process_record);
             }
             if stopping_since.elapsed() >= STOP_GRACE_TIMEOUT {
                 let shutdown_since = connection_shutdown_since.get_or_insert_with(|| {
-                    shutdown_active_streams(&active_streams);
+                    active_connections.shutdown_all();
                     Instant::now()
                 });
-                if active_connections.load(Ordering::Acquire) == 0
+                if active_connections.is_empty()
                     || shutdown_since.elapsed() >= STOP_CONNECTION_DRAIN_TIMEOUT
                 {
                     exit_after_stop(listener, socket_cleanup, process_record);
@@ -90,13 +83,9 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
             continue;
         }
 
-        match listener.accept() {
-            Ok((stream, _)) => {
+        match listener.poll_accept() {
+            Ok(LocalSocketAccept::Accepted(stream)) => {
                 idle_since = None;
-                if let Err(error) = stream.set_nonblocking(false) {
-                    eprintln!("local App Server connection blocking mode failed: {error}");
-                    continue;
-                }
                 let reader = match stream.try_clone() {
                     Ok(reader) => reader,
                     Err(error) => {
@@ -179,26 +168,17 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                                 continue;
                             }
                         };
-                        let connection_id = next_connection_id.fetch_add(1, Ordering::Relaxed);
-                        if active_streams
-                            .lock()
-                            .map(|mut streams| streams.insert(connection_id, shutdown_stream))
-                            .is_err()
-                        {
-                            eprintln!("local App Server active connection lock poisoned");
-                            continue;
-                        }
-                        active_connections.fetch_add(1, Ordering::AcqRel);
-                        let connection_counter = Arc::clone(&active_connections);
-                        let connection_streams = Arc::clone(&active_streams);
+                        let connection = match active_connections.register(shutdown_stream) {
+                            Ok(connection) => connection,
+                            Err(error) => {
+                                eprintln!("local App Server connection tracking failed: {error}");
+                                continue;
+                            }
+                        };
                         if let Err(error) = thread::Builder::new()
                             .name("zeta-local-app-server-connection".into())
                             .spawn(move || {
-                                let _connection = ActiveConnection {
-                                    count: connection_counter,
-                                    streams: connection_streams,
-                                    id: connection_id,
-                                };
+                                let _connection = connection;
                                 if let Err(error) = server.serve_product_host_jsonl(reader, stream)
                                     && !is_peer_disconnect(&error)
                                 {
@@ -206,19 +186,13 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                                 }
                             })
                         {
-                            active_connections.fetch_sub(1, Ordering::AcqRel);
-                            if let Ok(mut streams) = active_streams.lock() {
-                                streams.remove(&connection_id);
-                            }
                             eprintln!("local App Server connection thread failed: {error}");
                         }
                     }
                 }
             }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                if active_connections.load(Ordering::Acquire) == 0
-                    && registry.active_terminal_count() == 0
-                {
+            Ok(LocalSocketAccept::Pending) => {
+                if active_connections.is_empty() && registry.active_terminal_count() == 0 {
                     let idle_since = idle_since.get_or_insert_with(Instant::now);
                     if idle_since.elapsed() >= idle_timeout {
                         eprintln!("local App Server daemon exited after its idle timeout");
@@ -229,13 +203,16 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                 }
                 thread::sleep(IDLE_POLL_INTERVAL);
             }
+            Ok(LocalSocketAccept::Rejected(error)) => {
+                eprintln!("local App Server connection blocking mode failed: {error}");
+            }
             Err(error) => return Err(format!("local App Server accept failed: {error}")),
         }
     }
 }
 
 fn exit_after_stop(
-    listener: UnixListener,
+    listener: PollingLocalListener,
     socket_cleanup: SocketCleanup,
     process_record: ProcessRecordGuard,
 ) -> ! {
@@ -248,29 +225,6 @@ fn exit_after_stop(
     drop(socket_cleanup);
     drop(process_record);
     std::process::exit(0);
-}
-
-struct ActiveConnection {
-    count: Arc<AtomicUsize>,
-    streams: Arc<Mutex<BTreeMap<u64, UnixStream>>>,
-    id: u64,
-}
-
-impl Drop for ActiveConnection {
-    fn drop(&mut self) {
-        if let Ok(mut streams) = self.streams.lock() {
-            streams.remove(&self.id);
-        }
-        self.count.fetch_sub(1, Ordering::AcqRel);
-    }
-}
-
-fn shutdown_active_streams(streams: &Mutex<BTreeMap<u64, UnixStream>>) {
-    if let Ok(streams) = streams.lock() {
-        for stream in streams.values() {
-            let _ = stream.shutdown(Shutdown::Both);
-        }
-    }
 }
 
 fn configured_idle_timeout() -> Result<Duration, String> {

@@ -2,7 +2,6 @@
 
 mod client;
 mod daemon;
-mod deadline_stream;
 mod endpoint;
 mod process;
 mod registry;

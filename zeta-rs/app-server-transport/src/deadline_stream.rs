@@ -14,13 +14,14 @@ use rustix::event::poll;
 use zeta_uds::UnixStream;
 
 /// Applies one request deadline without Unix socket timeout options, which macOS can reject.
-pub(crate) struct DeadlineStream {
+pub struct DeadlineStream {
     stream: UnixStream,
     deadline: Option<Instant>,
 }
 
 impl DeadlineStream {
-    pub(crate) fn new(stream: UnixStream, deadline: Instant) -> io::Result<Self> {
+    /// Wraps a local connection with an absolute read and write deadline.
+    pub fn new(stream: UnixStream, deadline: Instant) -> io::Result<Self> {
         configure_deadline(&stream, deadline)?;
         Ok(Self {
             stream,
@@ -28,13 +29,15 @@ impl DeadlineStream {
         })
     }
 
-    pub(crate) fn clear_deadline(&mut self) -> io::Result<()> {
+    /// Restores ordinary blocking IO after the bounded exchange completes.
+    pub fn clear_deadline(&mut self) -> io::Result<()> {
         clear_deadline(&self.stream)?;
         self.deadline = None;
         Ok(())
     }
 
-    pub(crate) fn try_clone(&self) -> io::Result<UnixStream> {
+    /// Clones the underlying connection for independent shutdown ownership.
+    pub fn try_clone(&self) -> io::Result<UnixStream> {
         self.stream.try_clone()
     }
 

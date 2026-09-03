@@ -11,8 +11,13 @@ name = "zeta_app_server_transport"
 path = "src/lib.rs"
 
 [dependencies]
+rustix = { workspace = true, features = ["event"] }
 serde_json = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
+zeta-uds = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

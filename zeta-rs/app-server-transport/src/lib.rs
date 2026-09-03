@@ -1,4 +1,13 @@
-//! Bounded JSON-lines transport building blocks for the app server.
+//! Local connection lifecycle and bounded message transport for the App Server.
+
+mod deadline_stream;
+mod local_socket;
+
+pub use deadline_stream::DeadlineStream;
+pub use local_socket::LocalConnectionGuard;
+pub use local_socket::LocalConnections;
+pub use local_socket::LocalSocketAccept;
+pub use local_socket::PollingLocalListener;
 
 use std::io::{self, BufRead, Write};
 
@@ -103,3 +112,7 @@ impl StdioTransport {
         "stdio://"
     }
 }
+
+#[cfg(test)]
+#[path = "local_socket_tests.rs"]
+mod tests;

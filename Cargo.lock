@@ -10978,6 +10978,7 @@ dependencies = [
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-app-server-transport",
  "zeta-fast-regex-search",
  "zeta-package-store",
  "zeta-uds",
@@ -11004,8 +11005,11 @@ dependencies = [
 name = "zeta-app-server-transport"
 version = "0.1.0"
 dependencies = [
+ "rustix 1.1.4",
  "serde_json",
+ "tempfile",
  "zeta-app-server-protocol",
+ "zeta-uds",
 ]
 
 [[package]]

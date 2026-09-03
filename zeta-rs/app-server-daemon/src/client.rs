@@ -21,7 +21,6 @@ use crate::ConnectionOptions;
 use crate::LifecycleCommand;
 use crate::LifecycleOutput;
 use crate::LifecycleStatus;
-use crate::deadline_stream::DeadlineStream;
 use crate::endpoint::EndpointPaths;
 use crate::endpoint::connect_existing;
 use crate::process::ExecutableIdentity;
@@ -38,6 +37,7 @@ use crate::wire::ControlPrelude;
 use crate::wire::ControlResponse;
 use crate::wire::ControlState;
 use crate::wire::write_json_line;
+use zeta_app_server_transport::DeadlineStream;
 
 const CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(2);
