@@ -12,11 +12,19 @@ fn tui_table_defaults_missing_terminal_fields() {
     let settings = TerminalSettings::from_tui(&section).unwrap();
 
     assert!(settings.mouse_interactions());
-    assert!(
-        settings
-            .dir_permissions()
-            .contains(&zeta_app_server_protocol::protocol::environment::PermissionDto::ReadFiles)
-    );
+}
+
+#[test]
+fn terminal_settings_update_removes_legacy_directory_permissions() {
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "dirPermissions".into(),
+        serde_json::json!({"readFiles": true, "writeFiles": true}),
+    )]));
+
+    let settings = TerminalSettings::from_tui(&section).unwrap();
+    let updated = settings.write_to_tui(&section).unwrap();
+
+    assert!(!updated.0.contains_key("dirPermissions"));
 }
 
 #[test]

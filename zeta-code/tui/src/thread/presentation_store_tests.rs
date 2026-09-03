@@ -1,3 +1,4 @@
+use super::MAX_THREAD_PRESENTATIONS;
 use super::ThreadPresentationStore;
 use crate::thread::TranscriptCellId;
 use crate::thread::composer::ChatInputCatalog;
@@ -89,6 +90,24 @@ fn refreshed_completion_catalog_reaches_existing_and_future_threads() {
         };
         assert_eq!(view.commands[0].name, "diagnose");
     }
+}
+
+#[test]
+fn thread_presentations_evict_the_least_recent_inactive_thread() {
+    let first = thread_id("thread-0");
+    let retained = thread_id("thread-1");
+    let mut store = ThreadPresentationStore::new(first.clone());
+
+    for index in 1..MAX_THREAD_PRESENTATIONS {
+        store.switch(thread_id(&format!("thread-{index}")));
+    }
+    store.switch(retained.clone());
+    store.switch(thread_id(&format!("thread-{MAX_THREAD_PRESENTATIONS}")));
+
+    assert_eq!(store.len(), MAX_THREAD_PRESENTATIONS);
+    assert!(!store.contains(&first));
+    assert!(store.contains(&retained));
+    assert!(store.contains(&thread_id(&format!("thread-{MAX_THREAD_PRESENTATIONS}"))));
 }
 
 fn thread_id(value: &str) -> ThreadId {

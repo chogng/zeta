@@ -18,6 +18,17 @@ struct RecordingTransport {
     response: String,
 }
 
+#[test]
+fn request_scope_matches_only_the_session_and_thread_that_started_it() {
+    let session = SessionId::new("session-1").unwrap();
+    let thread = ThreadId::new("thread-1").unwrap();
+    let scope = ThreadRequestScope::new(&session, &thread, 7);
+
+    assert!(scope.targets(&session, &thread));
+    assert!(!scope.targets(&SessionId::new("session-2").unwrap(), &thread));
+    assert!(!scope.targets(&session, &ThreadId::new("thread-2").unwrap()));
+}
+
 impl JsonRpcTransport for RecordingTransport {
     fn round_trip(&mut self, request: &str) -> Result<String, ClientError> {
         *self.request.lock().expect("request lock is available") = Some(request.into());

@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::app::input_surface::ComposerModePointerTarget;
+use crate::app::input_surface::InputSurfacePointerTarget;
 use crate::app::welcome;
 use crate::render::Renderable;
 use crate::sessions;
@@ -114,13 +114,13 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             pressed_choice,
             context,
         );
-    } else if let Some(mode) = app.composer_mode() {
+    } else if let Some(mode) = app.input_surface() {
         let hovered_mode = match hovered {
-            Some(InputPointerTarget::ComposerMode(target)) => Some(*target),
+            Some(InputPointerTarget::InputSurface(target)) => Some(*target),
             _ => None,
         };
         let pressed_mode = match pressed {
-            Some(InputPointerTarget::ComposerMode(target)) => Some(*target),
+            Some(InputPointerTarget::InputSurface(target)) => Some(*target),
             _ => None,
         };
         mode.draw(
@@ -258,7 +258,7 @@ pub(crate) fn input_overlay_index_at(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InputPointerTarget {
     Composer(ChatComposerPointerTarget),
-    ComposerMode(ComposerModePointerTarget),
+    InputSurface(InputSurfacePointerTarget),
     Approval(usize),
     Query(usize),
     SessionManager(crate::sessions::SessionManagerPointerTarget),
@@ -321,10 +321,10 @@ pub(crate) fn input_pointer_target_at(
     {
         return Some(InputPointerTarget::Query(index));
     }
-    if let Some(mode) = app.composer_mode()
+    if let Some(mode) = app.input_surface()
         && let Some(target) = mode.pointer_target_at(areas.session.composer, column, row)
     {
-        return Some(InputPointerTarget::ComposerMode(target));
+        return Some(InputPointerTarget::InputSurface(target));
     }
     if let Some(manager) = app.session_manager_view() {
         let manager_areas = super::layout::manager_areas(
@@ -373,7 +373,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
     }
     .desired_height(terminal_area.width, app.render_context());
     let mode_rows = app
-        .composer_mode()
+        .input_surface()
         .map(|mode| mode.desired_height(terminal_area.width))
         .unwrap_or_default();
     let approval_rows = app
@@ -457,7 +457,7 @@ fn transient_area(areas: &FrameLayout) -> Rect {
 
 fn completion_visible(app: &App) -> bool {
     app.overlay().is_none()
-        && app.composer_mode().is_none()
+        && app.input_surface().is_none()
         && app.approval_view().is_none()
         && app.query_view().is_none()
         && app.completion().is_some()

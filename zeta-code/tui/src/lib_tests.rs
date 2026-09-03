@@ -67,8 +67,8 @@ fn profile_root_selects_product_scoped_theme_documents() {
 #[test]
 fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     let turn_id = turn_id();
-    let mut active_turn = Some(turn_id.clone());
     let mut app = working_app();
+    app.set_active_turn(turn_id.clone());
     let turn = Turn {
         turn_id: turn_id.clone(),
         status: TurnStatus::Completed,
@@ -114,9 +114,9 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         ),
     ));
 
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &[turn]);
+    apply_active_turn_snapshot(&mut app, &[turn]);
 
-    assert_eq!(active_turn, None);
+    assert_eq!(app.active_turn(), None);
     assert_eq!(app.status(), &Status::Ready);
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages().last().unwrap().role, MessageRole::Agent);
@@ -127,8 +127,8 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
 fn completed_turn_advances_to_the_next_queued_turn() {
     let first_id = TurnId::new("turn_1").unwrap();
     let second_id = TurnId::new("turn_2").unwrap();
-    let mut active_turn = Some(first_id.clone());
     let mut app = working_app();
+    app.set_active_turn(first_id.clone());
     let turns = vec![
         Turn {
             turn_id: first_id.clone(),
@@ -168,17 +168,17 @@ fn completed_turn_advances_to_the_next_queued_turn() {
         },
     ];
 
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &turns);
+    apply_active_turn_snapshot(&mut app, &turns);
 
-    assert_eq!(active_turn, Some(second_id));
+    assert_eq!(app.active_turn(), Some(&second_id));
     assert_eq!(app.status(), &Status::Working);
 }
 
 #[test]
 fn waiting_active_turn_remains_interruptible() {
     let turn_id = turn_id();
-    let mut active_turn = Some(turn_id.clone());
     let mut app = working_app();
+    app.set_active_turn(turn_id.clone());
     let turn = Turn {
         turn_id,
         status: TurnStatus::WaitingForUserInput,
@@ -196,9 +196,9 @@ fn waiting_active_turn_remains_interruptible() {
         error: None,
     };
 
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &[turn]);
+    apply_active_turn_snapshot(&mut app, &[turn]);
 
-    assert!(active_turn.is_some());
+    assert!(app.active_turn().is_some());
     assert_eq!(app.status(), &Status::WaitingForUserInput);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
@@ -209,8 +209,8 @@ fn waiting_active_turn_remains_interruptible() {
 #[test]
 fn resumed_active_turn_returns_from_waiting_to_working() {
     let turn_id = turn_id();
-    let mut active_turn = Some(turn_id.clone());
     let mut app = working_app();
+    app.set_active_turn(turn_id.clone());
     let waiting_turn = Turn {
         turn_id: turn_id.clone(),
         status: TurnStatus::WaitingForUserInput,
@@ -227,7 +227,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
         pending_interaction: None,
         error: None,
     };
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &[waiting_turn]);
+    apply_active_turn_snapshot(&mut app, &[waiting_turn]);
 
     let resumed_turn = Turn {
         turn_id,
@@ -245,7 +245,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
         pending_interaction: None,
         error: None,
     };
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &[resumed_turn]);
+    apply_active_turn_snapshot(&mut app, &[resumed_turn]);
 
     assert_eq!(app.status(), &Status::Working);
 }
@@ -253,8 +253,8 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
 #[test]
 fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
     let turn_id = turn_id();
-    let mut active_turn = Some(turn_id.clone());
     let mut app = working_app();
+    app.set_active_turn(turn_id.clone());
     let turn = Turn {
         turn_id,
         status: TurnStatus::Failed,
@@ -272,7 +272,7 @@ fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
         error: Some(StableTurnError::model_invocation_failed()),
     };
 
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &[turn]);
+    apply_active_turn_snapshot(&mut app, &[turn]);
 
     assert_eq!(app.status(), &Status::Error);
     let message = &app.messages().last().unwrap().text;

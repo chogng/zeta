@@ -1,7 +1,6 @@
 //! Built-in product command dispatch for the active Session and Thread.
 
 use crate::app::AppEvent;
-use crate::config;
 use crate::dirs;
 use crate::mcp;
 use crate::models;
@@ -19,7 +18,6 @@ use std::fmt;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
-use zeta_app_server_protocol::protocol::environment::PermissionDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirMutationDto;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_protocol::TurnId;
@@ -44,14 +42,13 @@ pub(crate) fn execute_product_command<T>(
     mut conversation: ActiveConversation,
     client: &mut AppServerClient<T>,
     invocation: SlashCommandInvocation,
-    dir_permissions: Vec<PermissionDto>,
 ) -> Result<ProductCommandOutput, String>
 where
     T: JsonRpcTransport,
 {
     let command = invocation.display_text();
     conversation
-        .try_execute(client, invocation, &dir_permissions)
+        .try_execute(client, invocation)
         .map(|output| ProductCommandOutput {
             conversation,
             command,
@@ -71,12 +68,7 @@ impl ActiveConversation {
     ) where
         T: JsonRpcTransport,
     {
-        match execute_product_command(
-            self.clone(),
-            client,
-            invocation,
-            config::TerminalSettings::default().dir_permissions(),
-        ) {
+        match execute_product_command(self.clone(), client, invocation) {
             Ok(output) => {
                 *self = output.conversation;
                 for event in output.events {
@@ -97,7 +89,6 @@ impl ActiveConversation {
         &mut self,
         client: &mut AppServerClient<T>,
         invocation: SlashCommandInvocation,
-        dir_permissions: &[PermissionDto],
     ) -> Result<CommandOutput, CommandExecutionError>
     where
         T: JsonRpcTransport,
@@ -219,11 +210,12 @@ impl ActiveConversation {
                         client,
                         self.session_id(),
                         std::path::PathBuf::from(&arguments),
-                        dir_permissions.to_vec(),
                     )?;
                     let result = match update.mutation {
                         SessionDirMutationDto::Added => {
-                            format!("Added directory {arguments}")
+                            format!(
+                                "Added directory {arguments} with no permissions; use /config to grant access"
+                            )
                         }
                         SessionDirMutationDto::AlreadyPresent => {
                             format!("Directory already added: {arguments}")
@@ -265,7 +257,7 @@ impl ActiveConversation {
                         .events
                         .push(AppEvent::ModelPickerOpened(models::load_selection(client)?));
                 } else {
-                    let update = config::set_preferred_model(client, &arguments)
+                    let update = models::set_preferred_model(client, &arguments)
                         .map_err(|error| CommandExecutionError(error.to_string()))?;
                     output
                         .events

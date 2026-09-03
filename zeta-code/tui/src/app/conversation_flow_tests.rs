@@ -4,7 +4,7 @@ use super::AppCommand;
 use super::AppEvent;
 use super::Status;
 use super::apply_active_turn_snapshot;
-use crate::config::set_preferred_model;
+use crate::models::set_preferred_model;
 use crate::thread::ThreadRequestScope;
 use crate::thread::submit_prompt;
 use crossterm::event::KeyCode;
@@ -105,14 +105,14 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     )
     .unwrap();
     conversation.set_thread_sequence(started.sequence);
-    let mut active_turn = Some(started.turn_id);
+    app.set_active_turn(started.turn_id);
 
     model.wait_for_first_delta();
     let streaming = read_thread(&mut client, &conversation);
     app.update(AppEvent::ThreadTranscriptSnapshotReceived(
         streaming.transcript,
     ));
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &streaming.thread.turns);
+    apply_active_turn_snapshot(&mut app, &streaming.thread.turns);
     assert!(
         app.messages()
             .iter()
@@ -132,7 +132,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     app.update(AppEvent::ThreadTranscriptSnapshotReceived(
         completed.transcript,
     ));
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &completed.thread.turns);
+    apply_active_turn_snapshot(&mut app, &completed.thread.turns);
     let completed_frame = render(&app);
     assert!(completed_frame.contains("fn main()"));
     assert_eq!(app.latest_agent_response(), Some(FIRST_RESPONSE));
@@ -148,12 +148,12 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     )
     .unwrap();
     conversation.set_thread_sequence(started.sequence);
-    active_turn = Some(started.turn_id);
+    app.set_active_turn(started.turn_id);
     let completed = wait_for_completed_thread(&mut client, &conversation, 2);
     app.update(AppEvent::ThreadTranscriptSnapshotReceived(
         completed.transcript,
     ));
-    apply_active_turn_snapshot(&mut app, &mut active_turn, &completed.thread.turns);
+    apply_active_turn_snapshot(&mut app, &completed.thread.turns);
 
     assert!(
         app.messages()

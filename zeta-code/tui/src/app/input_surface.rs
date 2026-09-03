@@ -48,14 +48,14 @@ use std::collections::BTreeMap;
 const TITLE_BAR_HEIGHT: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ComposerModePointerTarget {
+pub(crate) enum InputSurfacePointerTarget {
     Tab(usize),
     Search,
     Item(usize),
 }
 
 #[derive(Debug)]
-pub(crate) enum ComposerMode {
+pub(crate) enum InputSurface {
     Help(ListSelection<()>),
     Dirs(ListSelection<DirSelectionAction>),
     Config(ConfigEditor),
@@ -72,7 +72,7 @@ pub(crate) enum ComposerMode {
 }
 
 #[derive(Debug)]
-pub(crate) enum ComposerOutcome {
+pub(crate) enum InputSurfaceOutcome {
     Dirs(DirSelectionAction),
     Config(ConfigEditorOutcome),
     Connectors(ConnectorSelectionAction),
@@ -93,7 +93,7 @@ pub(crate) enum ComposerOutcome {
     Dismiss,
 }
 
-impl ComposerMode {
+impl InputSurface {
     pub(crate) fn help(model: crate::widgets::list_selection::ListSelectionModel) -> Self {
         Self::Help(ListSelection::new(model, BTreeMap::new()))
     }
@@ -146,37 +146,43 @@ impl ComposerMode {
         Self::Theme(ThemePicker::new(spec))
     }
 
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ComposerOutcome {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> InputSurfaceOutcome {
         if let Self::Queue(selection) = self
             && let Some(input) = crate::thread::queue::queue_input(key)
             && let Some(action) = selection.selected_action().copied()
         {
-            return ComposerOutcome::QueueInput { input, action };
+            return InputSurfaceOutcome::QueueInput { input, action };
         }
         match self {
             Self::Help(content) => map_read_only(content.handle_key(key)),
-            Self::Dirs(content) => map_selection(content.handle_key(key), ComposerOutcome::Dirs),
-            Self::Config(content) => ComposerOutcome::Config(content.handle_key(key)),
-            Self::Connectors(content) => {
-                map_selection(content.handle_key(key), ComposerOutcome::Connectors)
+            Self::Dirs(content) => {
+                map_selection(content.handle_key(key), InputSurfaceOutcome::Dirs)
             }
-            Self::Keymap(content) => ComposerOutcome::Keymap(content.handle_key(key)),
-            Self::Mcp(content) => map_selection(content.handle_key(key), ComposerOutcome::Mcp),
-            Self::Model(content) => map_selection(content.handle_key(key), ComposerOutcome::Model),
-            Self::Queue(content) => map_selection(content.handle_key(key), ComposerOutcome::Queue),
+            Self::Config(content) => InputSurfaceOutcome::Config(content.handle_key(key)),
+            Self::Connectors(content) => {
+                map_selection(content.handle_key(key), InputSurfaceOutcome::Connectors)
+            }
+            Self::Keymap(content) => InputSurfaceOutcome::Keymap(content.handle_key(key)),
+            Self::Mcp(content) => map_selection(content.handle_key(key), InputSurfaceOutcome::Mcp),
+            Self::Model(content) => {
+                map_selection(content.handle_key(key), InputSurfaceOutcome::Model)
+            }
+            Self::Queue(content) => {
+                map_selection(content.handle_key(key), InputSurfaceOutcome::Queue)
+            }
             Self::Rewind(content) => {
-                map_selection(content.handle_key(key), ComposerOutcome::Rewind)
+                map_selection(content.handle_key(key), InputSurfaceOutcome::Rewind)
             }
             Self::Sessions(content) => {
-                map_selection(content.handle_key(key), ComposerOutcome::Sessions)
+                map_selection(content.handle_key(key), InputSurfaceOutcome::Sessions)
             }
             Self::Skills(content) => {
-                map_selection(content.handle_key(key), ComposerOutcome::Skills)
+                map_selection(content.handle_key(key), InputSurfaceOutcome::Skills)
             }
             Self::StatusLine(content) => {
-                map_selection(content.handle_key(key), ComposerOutcome::StatusLine)
+                map_selection(content.handle_key(key), InputSurfaceOutcome::StatusLine)
             }
-            Self::Theme(content) => ComposerOutcome::Theme(content.handle_key(key)),
+            Self::Theme(content) => InputSurfaceOutcome::Theme(content.handle_key(key)),
         }
     }
 
@@ -269,8 +275,8 @@ impl ComposerMode {
         &self,
         frame: &mut Frame<'_>,
         area: Rect,
-        hovered: Option<ComposerModePointerTarget>,
-        pressed: Option<ComposerModePointerTarget>,
+        hovered: Option<InputSurfacePointerTarget>,
+        pressed: Option<InputSurfacePointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
         let body = composer_body_area(area);
@@ -304,8 +310,8 @@ impl ComposerMode {
                 selection,
                 tab_index(hovered),
                 tab_index(pressed),
-                hovered == Some(ComposerModePointerTarget::Search),
-                pressed == Some(ComposerModePointerTarget::Search),
+                hovered == Some(InputSurfacePointerTarget::Search),
+                pressed == Some(InputSurfacePointerTarget::Search),
                 item_index(hovered),
                 item_index(pressed),
                 context,
@@ -322,21 +328,21 @@ impl ComposerMode {
         area: Rect,
         column: u16,
         row: u16,
-    ) -> Option<ComposerModePointerTarget> {
+    ) -> Option<InputSurfacePointerTarget> {
         let selection = self.list_selection()?;
         let body = composer_body_area(area);
         selection
             .tab_index_at(body, column, row)
-            .map(ComposerModePointerTarget::Tab)
+            .map(InputSurfacePointerTarget::Tab)
             .or_else(|| {
                 selection
                     .search_contains(body, column, row)
-                    .then_some(ComposerModePointerTarget::Search)
+                    .then_some(InputSurfacePointerTarget::Search)
             })
             .or_else(|| {
                 selection
                     .item_index_at(body, column, row)
-                    .map(ComposerModePointerTarget::Item)
+                    .map(InputSurfacePointerTarget::Item)
             })
     }
 
@@ -406,45 +412,45 @@ impl ComposerMode {
         }
     }
 
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ComposerOutcome> {
+    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<InputSurfaceOutcome> {
         match self {
             Self::Help(content) => content.activate_visible_item(index).map(map_read_only),
             Self::Dirs(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::Dirs)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Dirs)),
             Self::Config(content) => content
                 .activate_visible_item(index)
-                .map(ComposerOutcome::Config),
+                .map(InputSurfaceOutcome::Config),
             Self::Connectors(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::Connectors)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Connectors)),
             Self::Keymap(content) => content
                 .activate_visible_item(index)
-                .map(ComposerOutcome::Keymap),
+                .map(InputSurfaceOutcome::Keymap),
             Self::Mcp(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::Mcp)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Mcp)),
             Self::Model(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::Model)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Model)),
             Self::Queue(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::Queue)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Queue)),
             Self::Rewind(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::Rewind)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Rewind)),
             Self::Sessions(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::Sessions)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Sessions)),
             Self::Skills(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::Skills)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::Skills)),
             Self::StatusLine(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerOutcome::StatusLine)),
+                .map(|outcome| map_selection(outcome, InputSurfaceOutcome::StatusLine)),
             Self::Theme(content) => content
                 .activate_visible_item(index)
-                .map(ComposerOutcome::Theme),
+                .map(InputSurfaceOutcome::Theme),
         }
     }
 
@@ -537,26 +543,26 @@ impl ComposerMode {
     }
 }
 
-fn map_read_only(outcome: ListSelectionOutcome<()>) -> ComposerOutcome {
+fn map_read_only(outcome: ListSelectionOutcome<()>) -> InputSurfaceOutcome {
     match outcome {
         ListSelectionOutcome::Activate(())
         | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Previous)
         | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Next)
-        | ListSelectionOutcome::Consumed => ComposerOutcome::Consumed,
-        ListSelectionOutcome::Dismiss => ComposerOutcome::Dismiss,
+        | ListSelectionOutcome::Consumed => InputSurfaceOutcome::Consumed,
+        ListSelectionOutcome::Dismiss => InputSurfaceOutcome::Dismiss,
     }
 }
 
 fn map_selection<A>(
     outcome: ListSelectionOutcome<A>,
-    activate: impl FnOnce(A) -> ComposerOutcome,
-) -> ComposerOutcome {
+    activate: impl FnOnce(A) -> InputSurfaceOutcome,
+) -> InputSurfaceOutcome {
     match outcome {
         ListSelectionOutcome::Activate(action) => activate(action),
         ListSelectionOutcome::Adjust(_, _) | ListSelectionOutcome::Consumed => {
-            ComposerOutcome::Consumed
+            InputSurfaceOutcome::Consumed
         }
-        ListSelectionOutcome::Dismiss => ComposerOutcome::Dismiss,
+        ListSelectionOutcome::Dismiss => InputSurfaceOutcome::Dismiss,
     }
 }
 
@@ -569,16 +575,16 @@ fn composer_body_area(area: Rect) -> Rect {
     }
 }
 
-fn tab_index(target: Option<ComposerModePointerTarget>) -> Option<usize> {
+fn tab_index(target: Option<InputSurfacePointerTarget>) -> Option<usize> {
     match target {
-        Some(ComposerModePointerTarget::Tab(index)) => Some(index),
-        Some(ComposerModePointerTarget::Search | ComposerModePointerTarget::Item(_)) | None => None,
+        Some(InputSurfacePointerTarget::Tab(index)) => Some(index),
+        Some(InputSurfacePointerTarget::Search | InputSurfacePointerTarget::Item(_)) | None => None,
     }
 }
 
-fn item_index(target: Option<ComposerModePointerTarget>) -> Option<usize> {
+fn item_index(target: Option<InputSurfacePointerTarget>) -> Option<usize> {
     match target {
-        Some(ComposerModePointerTarget::Item(index)) => Some(index),
-        Some(ComposerModePointerTarget::Tab(_) | ComposerModePointerTarget::Search) | None => None,
+        Some(InputSurfacePointerTarget::Item(index)) => Some(index),
+        Some(InputSurfacePointerTarget::Tab(_) | InputSurfacePointerTarget::Search) | None => None,
     }
 }

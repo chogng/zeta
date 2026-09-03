@@ -1,4 +1,5 @@
 use super::*;
+use crate::thread::TurnApprovalModes;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
@@ -53,7 +54,7 @@ fn running_turn_and_next_turn_are_both_explicit_when_the_modes_differ() {
     assert_eq!(
         status_line.policy_text_for_width(
             100,
-            ApprovalModeStatus {
+            TurnApprovalModes {
                 current: Some(ApprovalMode::AskPermissions),
                 next: ApprovalMode::AutoReview,
             },

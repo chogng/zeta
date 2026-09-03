@@ -1,6 +1,6 @@
 # `zeta code` TUI 架构
 
-> 状态：Accepted and implemented architecture baseline。
+> 状态：长期架构基准。它定义目标边界，不代表每条规则都已在当前代码中完成。
 >
 > 物理位置：`zeta-code/tui/`。
 >
@@ -546,8 +546,9 @@ CLI 负责参数、工作目录、profile、App Server connection 建立、重�
 | 根 `mouse.rs`、`screen_selection.rs` | `terminal/` |
 | 全局 `app/request_completion.rs` | Thread、Session、Skill 完成分别进入同名能力目录；`app/completion.rs` 只协调顶层安装 |
 
-相关测试、模块声明和文档已随负责人移动。旧路径已经删除，没有转发文件或两套实现。后续新增文件直接
-按第 5 节判断归属，不得重新建立 `features/` 或 `components/`。
+已经完成的迁移必须同时删除旧声明、转发文件和旧文档；尚未完成的部分以
+[`zeta-code/tui/README.md`](../tui/README.md) 记录的当前实现为准。后续新增文件直接按第 5 节判断归属，
+不得重新建立 `features/` 或 `components/`。
 
 ## 19. 测试
 

@@ -106,5 +106,5 @@ pub(crate) fn draw(
 }
 
 #[cfg(test)]
-#[path = "text_prompt/state_tests.rs"]
+#[path = "text_prompt_tests.rs"]
 mod tests;

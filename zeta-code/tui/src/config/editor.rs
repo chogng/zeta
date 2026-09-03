@@ -1,6 +1,6 @@
 use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
-use crate::config::preferred_model;
+use crate::models::preferred_model_label;
 use crate::thread::composer::ChatInputMode;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionGroup;
@@ -18,26 +18,12 @@ use zeroize::Zeroizing;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
-use zeta_app_server_protocol::protocol::environment::PermissionDto;
-use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
-use zeta_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
-use zeta_protocol::SessionId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ConfigEdit {
-    pub(crate) terminal: TerminalSettings,
-    pub(crate) server_config: ConfigReadResult,
-    pub(crate) providers: ProviderListResult,
-    pub(crate) session_id: SessionId,
-    pub(crate) dirs: SessionDirListResult,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PermissionEdit {
-    pub(crate) params: SessionDirPermissionsSetParams,
     pub(crate) terminal: TerminalSettings,
     pub(crate) server_config: ConfigReadResult,
     pub(crate) providers: ProviderListResult,
@@ -54,7 +40,6 @@ pub(crate) enum ConfigSelectionAction {
         standard: Box<ConfigEdit>,
         vim: Box<ConfigEdit>,
     },
-    SetPermissions(PermissionEdit),
     OpenProviderApiKey {
         provider: String,
         display_name: String,
@@ -240,8 +225,6 @@ pub(crate) fn config_choices(
     config: &ConfigReadResult,
     providers: &ProviderListResult,
     terminal: TerminalSettings,
-    session_id: &SessionId,
-    dirs: &SessionDirListResult,
 ) -> ConfigChoices {
     let mut actions = BTreeMap::new();
     let mouse_id = ListSelectionItemId::new("terminal-mouse-interactions");
@@ -254,8 +237,6 @@ pub(crate) fn config_choices(
             terminal: toggled_terminal,
             server_config: config.clone(),
             providers: providers.clone(),
-            session_id: session_id.clone(),
-            dirs: dirs.clone(),
         }),
     );
     let input_mode_id = ListSelectionItemId::new("terminal-input-mode");
@@ -270,15 +251,11 @@ pub(crate) fn config_choices(
                 terminal: standard_terminal,
                 server_config: config.clone(),
                 providers: providers.clone(),
-                session_id: session_id.clone(),
-                dirs: dirs.clone(),
             }),
             vim: Box::new(ConfigEdit {
                 terminal: vim_terminal,
                 server_config: config.clone(),
                 providers: providers.clone(),
-                session_id: session_id.clone(),
-                dirs: dirs.clone(),
             }),
         },
     );
@@ -294,15 +271,11 @@ pub(crate) fn config_choices(
                 terminal: queue_terminal,
                 server_config: config.clone(),
                 providers: providers.clone(),
-                session_id: session_id.clone(),
-                dirs: dirs.clone(),
             }),
             steer: Box::new(ConfigEdit {
                 terminal: steer_terminal,
                 server_config: config.clone(),
                 providers: providers.clone(),
-                session_id: session_id.clone(),
-                dirs: dirs.clone(),
             }),
         },
     );
@@ -337,15 +310,11 @@ pub(crate) fn config_choices(
     ];
     config_items.extend(overview(config));
     let provider_items = provider_items(providers, &mut actions);
-    let permission_items =
-        dir_permission_items(dirs, session_id, terminal, config, providers, &mut actions);
-
     ConfigChoices {
         model: ListSelectionModel::new(
             "Config",
             vec![
                 ListSelectionGroup::new("Config", config_items),
-                ListSelectionGroup::new("Add-dir", permission_items),
                 ListSelectionGroup::new("Providers", provider_items),
                 ListSelectionGroup::new("Language servers", language_servers(config)),
             ],
@@ -354,201 +323,6 @@ pub(crate) fn config_choices(
         .with_search(SearchBoxModel::new("Search configuration"))
         .with_empty_message("No matching configuration"),
         actions,
-    }
-}
-
-fn dir_permission_items(
-    snapshot: &SessionDirListResult,
-    session_id: &SessionId,
-    terminal: TerminalSettings,
-    config: &ConfigReadResult,
-    providers: &ProviderListResult,
-    actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
-) -> Vec<ListSelectionItem> {
-    let mut items = Vec::new();
-    let default_permissions = terminal.dir_permissions();
-    for permission in all_dir_permissions() {
-        let id = ListSelectionItemId::new(format!("dir-default-{}", permission_id(permission)));
-        let enabled = default_permissions.contains(permission);
-        let permissions = toggled_permissions(&default_permissions, *permission);
-        let mut settings = terminal;
-        settings.set_dir_permissions(&permissions);
-        actions.insert(
-            id.clone(),
-            ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
-                terminal: settings,
-                server_config: config.clone(),
-                providers: providers.clone(),
-                session_id: session_id.clone(),
-                dirs: snapshot.clone(),
-            }),
-        );
-        items.push(
-            ListSelectionItem::new(permission_title(permission))
-                .with_id(id)
-                .with_columns(permission_title(permission), "", checkbox(enabled)),
-        );
-    }
-    for (directory_index, directory) in snapshot.dirs.iter().enumerate() {
-        for permission in all_dir_permissions() {
-            let id = ListSelectionItemId::new(format!(
-                "dir-{directory_index}-{}",
-                permission_id(permission)
-            ));
-            let enabled = directory.permissions.contains(permission);
-            actions.insert(
-                id.clone(),
-                ConfigSelectionAction::SetPermissions(PermissionEdit {
-                    params: SessionDirPermissionsSetParams {
-                        session_id: session_id.clone(),
-                        path: directory.path.clone(),
-                        expected_revision: snapshot.revision,
-                        permissions: toggled_permissions(&directory.permissions, *permission),
-                    },
-                    terminal,
-                    server_config: config.clone(),
-                    providers: providers.clone(),
-                }),
-            );
-            items.push(
-                ListSelectionItem::new(format!(
-                    "{} · {}",
-                    permission_title(permission),
-                    directory.path.display()
-                ))
-                .with_id(id)
-                .with_columns(
-                    format!(
-                        "{} · {}",
-                        permission_title(permission),
-                        directory.path.display()
-                    ),
-                    permission_description(permission, directory),
-                    checkbox(enabled),
-                ),
-            );
-        }
-    }
-    items
-}
-
-fn all_dir_permissions() -> &'static [PermissionDto] {
-    use PermissionDto as Permission;
-    &[
-        Permission::ReadFiles,
-        Permission::WriteFiles,
-        Permission::ExecuteCommands,
-        Permission::WatchFiles,
-        Permission::BrowseFiles,
-        Permission::SearchFiles,
-        Permission::LoadInstructions,
-        Permission::LoadConfig,
-        Permission::DiscoverSkills,
-        Permission::DiscoverMcp,
-        Permission::UseLanguageServices,
-        Permission::DiscoverHooks,
-        Permission::DiscoverPlugins,
-        Permission::InspectRepository,
-        Permission::MutateRepository,
-    ]
-}
-
-fn toggled_permissions(current: &[PermissionDto], permission: PermissionDto) -> Vec<PermissionDto> {
-    let mut permissions = current
-        .iter()
-        .copied()
-        .collect::<std::collections::BTreeSet<_>>();
-    if permissions.contains(&permission) {
-        permissions.remove(&permission);
-    } else {
-        permissions.insert(permission);
-    }
-    permissions.into_iter().collect()
-}
-
-fn permission_id(permission: &PermissionDto) -> &'static str {
-    match permission {
-        PermissionDto::ReadFiles => "read-files",
-        PermissionDto::WriteFiles => "write-files",
-        PermissionDto::ExecuteCommands => "execute-commands",
-        PermissionDto::WatchFiles => "watch-files",
-        PermissionDto::BrowseFiles => "browse-files",
-        PermissionDto::SearchFiles => "search-files",
-        PermissionDto::LoadInstructions => "load-instructions",
-        PermissionDto::LoadConfig => "load-config",
-        PermissionDto::DiscoverSkills => "skills",
-        PermissionDto::DiscoverMcp => "mcp",
-        PermissionDto::UseLanguageServices => "lsp",
-        PermissionDto::DiscoverHooks => "hooks",
-        PermissionDto::DiscoverPlugins => "plugins",
-        PermissionDto::InspectRepository => "inspect-repository",
-        PermissionDto::MutateRepository => "mutate-repository",
-    }
-}
-
-fn permission_title(permission: &PermissionDto) -> &'static str {
-    match permission {
-        PermissionDto::ReadFiles => "Read files",
-        PermissionDto::WriteFiles => "Modify files",
-        PermissionDto::ExecuteCommands => "Run commands",
-        PermissionDto::WatchFiles => "Watch file changes",
-        PermissionDto::BrowseFiles => "Browse files",
-        PermissionDto::SearchFiles => "Search files",
-        PermissionDto::LoadInstructions => "Load instructions",
-        PermissionDto::LoadConfig => "Load config",
-        PermissionDto::DiscoverSkills => "Skills",
-        PermissionDto::DiscoverMcp => "MCP",
-        PermissionDto::UseLanguageServices => "LSP",
-        PermissionDto::DiscoverHooks => "Hooks",
-        PermissionDto::DiscoverPlugins => "Plugins",
-        PermissionDto::InspectRepository => "Inspect repository",
-        PermissionDto::MutateRepository => "Mutate repository",
-    }
-}
-
-fn permission_description(
-    permission: &PermissionDto,
-    directory: &zeta_app_server_protocol::protocol::environment::SessionDirDto,
-) -> String {
-    match permission {
-        PermissionDto::ReadFiles => "Allow read_file, grep and glob".into(),
-        PermissionDto::WriteFiles => "Allow file-writing tools and apply_patch".into(),
-        PermissionDto::ExecuteCommands => "Allow shell-command and Session terminals".into(),
-        PermissionDto::WatchFiles => "Watch this directory for file changes".into(),
-        PermissionDto::BrowseFiles => "Show this directory in file browsing surfaces".into(),
-        PermissionDto::SearchFiles => "Search file contents in this directory".into(),
-        PermissionDto::LoadInstructions => "Load .zeta/instructions and .zeta/agents".into(),
-        PermissionDto::LoadConfig => "Load configuration supplied by this directory".into(),
-        PermissionDto::DiscoverSkills => {
-            format!(
-                "Discover Skills from this directory ({} found); requires Read files",
-                directory.contributions.skills.len()
-            )
-        }
-        PermissionDto::DiscoverMcp => {
-            format!(
-                "Authorize MCP declarations ({} found); connect them separately",
-                directory.contributions.mcp_servers.len()
-            )
-        }
-        PermissionDto::UseLanguageServices => {
-            "Use language servers for this directory; starting them also requires Run commands"
-                .into()
-        }
-        PermissionDto::DiscoverHooks => {
-            format!(
-                "Discover Hooks ({} found); running them also requires Run commands",
-                directory.contributions.hooks.len()
-            )
-        }
-        PermissionDto::DiscoverPlugins => {
-            format!(
-                "Authorize Plugin requests ({} found); installation stays separate",
-                directory.contributions.plugins.len()
-            )
-        }
-        PermissionDto::InspectRepository => "Read repository metadata and status".into(),
-        PermissionDto::MutateRepository => "Change repository state".into(),
     }
 }
 
@@ -577,7 +351,7 @@ fn overview(config: &ConfigReadResult) -> Vec<ListSelectionItem> {
         detail("Generation", config.generation.to_string()),
         detail(
             "Preferred model",
-            preferred_model(config.preferred_model.as_ref()),
+            preferred_model_label(config.preferred_model.as_ref()),
         ),
         detail(
             "Approval review model",

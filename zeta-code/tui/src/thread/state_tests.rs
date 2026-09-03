@@ -1,4 +1,4 @@
-use super::ThreadFeatureState;
+use super::ThreadState;
 use crate::thread::ThreadPresentationEvent;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::ExecutionKind;
@@ -22,7 +22,7 @@ use zeta_protocol::TurnStatus;
 
 #[test]
 fn transcript_snapshot_replaces_local_rows_and_preserves_rendering() {
-    let mut state = ThreadFeatureState::default();
+    let mut state = ThreadState::default();
     state.update(ThreadPresentationEvent::UserSubmitted("optimistic".into()));
     state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
         ThreadTranscriptSnapshot::from_thread(&thread_snapshot()),
@@ -43,7 +43,7 @@ fn transcript_snapshot_replaces_local_rows_and_preserves_rendering() {
 
 #[test]
 fn history_snapshot_is_prepended_without_duplicate_entries() {
-    let mut state = ThreadFeatureState::default();
+    let mut state = ThreadState::default();
     state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
         ThreadTranscriptSnapshot::from_thread(&thread_snapshot()),
     ));
@@ -57,7 +57,7 @@ fn history_snapshot_is_prepended_without_duplicate_entries() {
 
 #[test]
 fn complete_upsert_replaces_one_stable_transcript_row() {
-    let mut state = ThreadFeatureState::default();
+    let mut state = ThreadState::default();
     state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
         empty_snapshot(),
     ));
@@ -77,7 +77,7 @@ fn complete_upsert_replaces_one_stable_transcript_row() {
 
 #[test]
 fn clear_transient_preserves_committed_and_local_rows() {
-    let mut state = ThreadFeatureState::default();
+    let mut state = ThreadState::default();
     state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
         ThreadTranscriptSnapshot::from_thread(&thread_snapshot()),
     ));
@@ -126,7 +126,7 @@ fn structured_turn_plan_is_rendered_by_the_tui() {
             },
         ],
     });
-    let mut state = ThreadFeatureState::default();
+    let mut state = ThreadState::default();
     state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
         ThreadTranscriptSnapshot::from_thread(&thread),
     ));
@@ -138,7 +138,7 @@ fn structured_turn_plan_is_rendered_by_the_tui() {
 
 #[test]
 fn command_completion_groups_the_command_with_its_result() {
-    let mut state = ThreadFeatureState::default();
+    let mut state = ThreadState::default();
     state.update(ThreadPresentationEvent::CommandSubmitted(
         "/theme light".into(),
     ));

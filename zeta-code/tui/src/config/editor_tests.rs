@@ -11,13 +11,9 @@ use crate::widgets::text_prompt::TextPromptOutcome;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use zeta_app_server_protocol::protocol::environment::PermissionDto;
-use zeta_app_server_protocol::protocol::environment::SessionDirDto;
-use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
-use zeta_protocol::SessionId;
 
 fn providers() -> ProviderListResult {
     ProviderListResult {
@@ -38,30 +34,13 @@ fn providers() -> ProviderListResult {
     }
 }
 
-fn session_id() -> SessionId {
-    SessionId::new("config-session").unwrap()
-}
-
-fn no_directories() -> SessionDirListResult {
-    SessionDirListResult {
-        revision: 0,
-        dirs: Vec::new(),
-    }
-}
-
 #[test]
 fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     let mut config = empty_config_snapshot();
     config.revision = 4;
     config.generation = 5;
     let providers = providers();
-    let view = config_choices(
-        &config,
-        &providers,
-        TerminalSettings::default(),
-        &session_id(),
-        &no_directories(),
-    );
+    let view = config_choices(&config, &providers, TerminalSettings::default());
     let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Config");
@@ -72,7 +51,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["Config", "Add-dir", "Providers", "Language servers"]
+        vec!["Config", "Providers", "Language servers"]
     );
     let mouse = &state.visible_items()[0];
     assert_eq!(mouse.label(), "Mouse interactions");
@@ -113,21 +92,6 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     ));
 
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(state.visible_items().len(), 15);
-    assert_eq!(state.visible_items()[0].label(), "Read files");
-    assert_eq!(state.visible_items()[1].label(), "Modify files");
-    assert!(matches!(
-        view.actions
-            .get(state.visible_items()[5].id().unwrap())
-            .unwrap(),
-        ConfigSelectionAction::SetTerminalSettings(edit)
-            if edit.terminal.dir_permissions() == vec![
-                PermissionDto::ReadFiles,
-                PermissionDto::WriteFiles,
-                PermissionDto::SearchFiles,
-            ]
-    ));
-    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "OpenAI");
     assert_eq!(state.visible_items()[1].label(), "Ollama");
@@ -151,81 +115,13 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
     let mut terminal = TerminalSettings::default();
     terminal.set_mouse_interactions(false);
 
-    let view = config_choices(
-        &empty_config_snapshot(),
-        &providers(),
-        terminal,
-        &session_id(),
-        &no_directories(),
-    );
+    let view = config_choices(&empty_config_snapshot(), &providers(), terminal);
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(
         state.visible_items()[0].description(),
         Some("Select and auto-copy text, click, and hover [   ]")
     );
-}
-
-#[test]
-fn add_dir_items_emit_revision_bound_complete_permission_sets() {
-    let directories = SessionDirListResult {
-        revision: 4,
-        dirs: vec![SessionDirDto {
-            contributions: Default::default(),
-            path: "/dir/shared".into(),
-            permissions: vec![PermissionDto::ReadFiles, PermissionDto::WriteFiles],
-        }],
-    };
-    let view = config_choices(
-        &empty_config_snapshot(),
-        &providers(),
-        TerminalSettings::default(),
-        &session_id(),
-        &directories,
-    );
-    let mut state = ListSelectionState::new(view.model);
-    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-
-    assert_eq!(state.visible_items().len(), 30);
-    assert_eq!(
-        state.visible_items()[15].label(),
-        "Read files · /dir/shared"
-    );
-    assert_eq!(
-        state.visible_items()[15].description(),
-        Some("Allow read_file, grep and glob [ ✔ ]")
-    );
-    let execute = &state.visible_items()[17];
-    assert_eq!(
-        execute.description(),
-        Some("Allow shell-command and Session terminals [   ]")
-    );
-    assert_eq!(
-        state.visible_items()[18].description(),
-        Some("Watch this directory for file changes [   ]")
-    );
-    assert_eq!(
-        state.visible_items()[19].description(),
-        Some("Show this directory in file browsing surfaces [   ]")
-    );
-    assert_eq!(
-        state.visible_items()[21].description(),
-        Some("Load .zeta/instructions and .zeta/agents [   ]")
-    );
-    assert_eq!(
-        state.visible_items()[24].description(),
-        Some("Authorize MCP declarations (0 found); connect them separately [   ]")
-    );
-    assert!(matches!(
-        view.actions.get(execute.id().unwrap()).unwrap(),
-        ConfigSelectionAction::SetPermissions(edit)
-            if edit.params.expected_revision == 4
-                && edit.params.permissions == vec![
-                    PermissionDto::ReadFiles,
-                    PermissionDto::WriteFiles,
-                    PermissionDto::ExecuteCommands,
-                ]
-    ));
 }
 
 #[test]

@@ -44,5 +44,5 @@ impl Steer {
 }
 
 #[cfg(test)]
-#[path = "steer/state_tests.rs"]
+#[path = "steer_tests.rs"]
 mod tests;

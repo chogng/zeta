@@ -1,3 +1,4 @@
+use crate::thread::TurnApprovalModes;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
@@ -36,30 +37,6 @@ impl StatusLineRuntime {
 pub(super) struct ApprovalModeDisplay {
     pub(super) icon: &'static str,
     pub(super) label: &'static str,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ApprovalModeStatus {
-    pub(crate) current: Option<ApprovalMode>,
-    pub(crate) next: ApprovalMode,
-}
-
-impl Default for ApprovalModeStatus {
-    fn default() -> Self {
-        Self {
-            current: None,
-            next: ApprovalMode::AskPermissions,
-        }
-    }
-}
-
-impl From<ApprovalMode> for ApprovalModeStatus {
-    fn from(next: ApprovalMode) -> Self {
-        Self {
-            current: None,
-            next,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -135,7 +112,7 @@ impl StatusLineModel {
     pub(crate) fn policy_text_for_width(
         &self,
         width: usize,
-        approval: impl Into<ApprovalModeStatus>,
+        approval: impl Into<TurnApprovalModes>,
     ) -> String {
         if !self.settings.enabled(StatusLineItem::Permissions) {
             return String::new();
@@ -198,7 +175,7 @@ fn fit_values(values: &[DisplayValue], width: usize) -> String {
     truncate_with_ellipsis(&values[0].compact, width)
 }
 
-pub(super) fn approval_mode_text(approval: ApprovalModeStatus) -> String {
+pub(super) fn approval_mode_text(approval: TurnApprovalModes) -> String {
     let next = approval_mode_display(approval.next);
     match approval.current {
         Some(current) if current != approval.next => {

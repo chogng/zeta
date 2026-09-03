@@ -120,7 +120,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         .map(|span| span.content.as_ref() as &str)
         .collect::<String>();
     assert_eq!(caption, "Syntax palette: Palette 1");
-    let mode = crate::app::ComposerMode::theme(view);
+    let mode = crate::app::InputSurface::theme(view);
     let key_hints = mode.key_hints().to_owned();
     assert_eq!(key_hints, "Enter to apply");
     let mode_height = mode.desired_height(80);

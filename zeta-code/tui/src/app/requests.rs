@@ -110,12 +110,12 @@ pub(super) fn request_lane(command: &AppCommand) -> Option<RequestLane> {
         AppCommand::ExecuteProductCommand(_)
         | AppCommand::EditKeymap(_)
         | AppCommand::EditConfig(_)
-        | AppCommand::EditPermissions(_)
         | AppCommand::SetProviderApiKey(_)
         | AppCommand::EditStatusLine(_)
         | AppCommand::ConnectConnectorDeviceOAuth { .. }
         | AppCommand::DisconnectConnector { .. }
         | AppCommand::RemoveDir { .. }
+        | AppCommand::SetDirPermissions(_)
         | AppCommand::RewindToCheckpoint { .. }
         | AppCommand::ResumeSession { .. }
         | AppCommand::ArchiveSessions { .. }

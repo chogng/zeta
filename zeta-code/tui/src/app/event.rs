@@ -44,6 +44,7 @@ pub(crate) enum AppEvent {
         path: std::path::PathBuf,
         choices: DirChoices,
     },
+    DirPermissionsUpdated(DirChoices),
     ClipboardImageRead(Result<Vec<u8>, String>),
     CommandStarted(String),
     CommandCompleted {
@@ -53,7 +54,6 @@ pub(crate) enum AppEvent {
     ConfigSettingsReceived(TerminalSettings),
     ConfigUpdated(ConfigEditResult),
     ConfigEditorOpened(ConfigChoices),
-    ConfigEditorUpdated(ConfigChoices),
     ConfigApiKeySaved {
         provider: String,
         choices: ConfigChoices,
@@ -92,7 +92,7 @@ pub(crate) enum AppEvent {
     },
     ThreadGoalChanged(Option<ThreadGoal>),
     StatusOverlayOpened(DetailList),
-    ComposerModeClosed,
+    InputSurfaceClosed,
     #[cfg(test)]
     HelpOpened(ListSelectionModel),
     SkillSettingsOpened(SkillChoices),

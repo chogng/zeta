@@ -21,6 +21,20 @@ use super::ActiveConversation;
 use crate::TuiRecoveryState;
 
 #[test]
+fn thread_sequence_never_moves_backwards() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let (mut client, state_root) = client();
+    let mut conversation = ActiveConversation::start(&mut client, "sequence".into()).unwrap();
+
+    conversation.set_thread_sequence(12);
+    conversation.set_thread_sequence(4);
+
+    assert_eq!(conversation.thread_sequence(), 12);
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
 fn recovery_reopens_the_exact_durable_conversation() {
     let _guard = crate::test_support::in_process_test_guard();
     let (mut client, state_root) = client();

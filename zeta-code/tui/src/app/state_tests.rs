@@ -121,13 +121,6 @@ fn config_session() -> SessionId {
     SessionId::new("config-state-session").unwrap()
 }
 
-fn no_directories() -> SessionDirListResult {
-    SessionDirListResult {
-        revision: 0,
-        dirs: Vec::new(),
-    }
-}
-
 fn enter_test_session(app: &mut App) {
     app.update(AppEvent::ThreadContextChanged {
         session_id: SessionId::new("test-session").unwrap(),
@@ -696,8 +689,6 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
-        &config_session(),
-        &no_directories(),
     )));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -719,8 +710,6 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
-        &config_session(),
-        &no_directories(),
     )));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
@@ -750,8 +739,7 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
 }
 
 #[test]
-fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
-    let config = empty_config_snapshot();
+fn directory_permission_selection_emits_a_revision_bound_server_edit() {
     let directories = SessionDirListResult {
         revision: 3,
         dirs: vec![SessionDirDto {
@@ -761,27 +749,19 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::ConfigEditorOpened(config_choices(
-        &config,
-        &ProviderListResult { providers: vec![] },
-        TerminalSettings::default(),
+    app.update(AppEvent::DirPickerOpened(crate::dirs::choices(
         &config_session(),
-        &directories,
+        directories,
     )));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    for _ in 0..15 {
-        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(matches!(
         action,
-        Some(AppCommand::EditPermissions(edit))
-            if edit.params.expected_revision == 3
-                && edit.params.permissions == vec![PermissionDto::WriteFiles]
+        Some(AppCommand::SetDirPermissions(params))
+            if params.expected_revision == 3
+                && params.permissions == vec![PermissionDto::WriteFiles]
     ));
 }
 
@@ -801,10 +781,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         &config,
         &providers,
         TerminalSettings::default(),
-        &config_session(),
-        &no_directories(),
     )));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -825,13 +802,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
 
     app.update(AppEvent::ConfigApiKeySaved {
         provider: "openai".into(),
-        choices: config_choices(
-            &config,
-            &providers,
-            TerminalSettings::default(),
-            &config_session(),
-            &no_directories(),
-        ),
+        choices: config_choices(&config, &providers, TerminalSettings::default()),
     });
 
     assert_eq!(app.list_selection().unwrap().title(), "Config");
@@ -853,10 +824,7 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         &config,
         &providers,
         TerminalSettings::default(),
-        &config_session(),
-        &no_directories(),
     )));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -925,7 +893,7 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
         None
     );
     assert!(matches!(
-        app.composer_mode().and_then(|mode| mode.key_capture()),
+        app.input_surface().and_then(|mode| mode.key_capture()),
         Some(body) if body.title() == "Record shortcut"
     ));
 
@@ -1279,7 +1247,7 @@ fn escape_does_not_exit_the_idle_session_screen() {
 }
 
 #[test]
-fn terminal_screen_change_closes_the_composer_mode_and_application_overlay() {
+fn terminal_screen_change_closes_the_input_surface_and_application_overlay() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
         "Help",
@@ -1288,10 +1256,10 @@ fn terminal_screen_change_closes_the_composer_mode_and_application_overlay() {
             vec![ListSelectionItem::new("/status")],
         )],
     )));
-    assert!(app.composer_mode().is_some());
+    assert!(app.input_surface().is_some());
 
     enter_test_session(&mut app);
-    assert!(app.composer_mode().is_none());
+    assert!(app.input_surface().is_none());
 
     app.update(AppEvent::StatusOverlayOpened(DetailList::new(
         "Status",
@@ -1458,11 +1426,11 @@ fn enter_steers_the_working_turn_and_tracks_delivery() {
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages()[1].text, "secondthird");
-    assert!(app.composer_mode().is_none());
+    assert!(app.input_surface().is_none());
 
     app.update(AppEvent::SteerCompleted(steer_id));
 
-    assert!(app.composer_mode().is_none());
+    assert!(app.input_surface().is_none());
     assert_eq!(app.status(), &Status::Working);
 }
 
@@ -1646,7 +1614,7 @@ fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
         error: "sequence conflict".into(),
     });
 
-    assert!(app.composer_mode().is_none());
+    assert!(app.input_surface().is_none());
     assert_eq!(app.status(), &Status::Working);
     assert!(
         app.messages()

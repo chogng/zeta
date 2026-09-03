@@ -9,8 +9,11 @@ use crate::thread::transcript::ChatHistoryRenderCache;
 use crate::thread::transcript::ChatHistoryScroll;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::VecDeque;
 use zeta_protocol::ThreadGoal;
 use zeta_protocol::ThreadId;
+
+const MAX_THREAD_PRESENTATIONS: usize = 32;
 
 #[derive(Debug)]
 pub(crate) struct ThreadPresentationState {
@@ -109,6 +112,7 @@ pub(crate) struct ThreadPresentationStore {
     input_mode: ChatInputMode,
     input_catalog: ChatInputCatalog,
     states: BTreeMap<ThreadId, ThreadPresentationState>,
+    recent: VecDeque<ThreadId>,
 }
 
 impl ThreadPresentationStore {
@@ -124,10 +128,11 @@ impl ThreadPresentationStore {
             ThreadPresentationState::with_input_catalog(input_catalog.clone()),
         );
         Self {
-            active,
+            active: active.clone(),
             input_mode: ChatInputMode::Standard,
             input_catalog,
             states,
+            recent: VecDeque::from([active]),
         }
     }
 
@@ -141,7 +146,9 @@ impl ThreadPresentationStore {
             .or_insert_with(|| ThreadPresentationState::with_input_catalog(input_catalog))
             .input
             .set_input_mode(self.input_mode);
-        self.active = thread_id;
+        self.active = thread_id.clone();
+        self.touch(thread_id);
+        self.evict_inactive();
     }
 
     pub(crate) fn replace_input_catalog(&mut self, input_catalog: ChatInputCatalog) {
@@ -172,6 +179,35 @@ impl ThreadPresentationStore {
         self.states
             .get_mut(&self.active)
             .expect("the active Thread presentation state exists")
+    }
+
+    fn touch(&mut self, thread_id: ThreadId) {
+        self.recent.retain(|recent| recent != &thread_id);
+        self.recent.push_back(thread_id);
+    }
+
+    fn evict_inactive(&mut self) {
+        while self.states.len() > MAX_THREAD_PRESENTATIONS {
+            let thread_id = self
+                .recent
+                .pop_front()
+                .expect("every Thread presentation has a recency entry");
+            if thread_id == self.active {
+                self.recent.push_back(thread_id);
+                continue;
+            }
+            self.states.remove(&thread_id);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn contains(&self, thread_id: &ThreadId) -> bool {
+        self.states.contains_key(thread_id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.states.len()
     }
 }
 

@@ -171,7 +171,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     );
     assert_eq!(app.list_selection().unwrap().title(), "MCP servers");
     assert!(app.list_selection().unwrap().search().is_some());
-    app.update(AppEvent::ComposerModeClosed);
+    app.update(AppEvent::InputSurfaceClosed);
 
     conversation.execute(
         &mut client,
@@ -180,7 +180,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     );
     assert_eq!(app.list_selection().unwrap().title(), "Connectors");
     assert!(app.list_selection().unwrap().search().is_some());
-    app.update(AppEvent::ComposerModeClosed);
+    app.update(AppEvent::InputSurfaceClosed);
 
     conversation.execute(
         &mut client,
@@ -325,10 +325,10 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
 fn theme_selection_updates_the_tui_toml_section() {
     let (mut client, state_root) = client();
 
-    crate::config::set_tui_theme(&mut client, "zeta-code-light".into()).unwrap();
+    crate::theme::set_preference(&mut client, "zeta-code-light".into()).unwrap();
 
     assert_eq!(
-        crate::config::tui_theme(&client.read_config().unwrap()),
+        crate::theme::preference(&client.read_config().unwrap()),
         "zeta-code-light"
     );
     drop(client);
@@ -402,7 +402,7 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
             preferred_thread_id: None,
         })
     );
-    app.update(AppEvent::ComposerModeClosed);
+    app.update(AppEvent::InputSurfaceClosed);
 
     conversation.execute(
         &mut client,
@@ -479,7 +479,6 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
             TuiSlashCommandAction::AddDir,
             &additional.display().to_string(),
         ),
-        vec![PermissionDto::ReadFiles, PermissionDto::ExecuteCommands],
     )
     .unwrap();
     conversation = output.conversation;
@@ -497,10 +496,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         listed.dirs[0].path.canonicalize().unwrap(),
         additional.canonicalize().unwrap()
     );
-    assert_eq!(
-        listed.dirs[0].permissions,
-        vec![PermissionDto::ReadFiles, PermissionDto::ExecuteCommands,]
-    );
+    assert_eq!(listed.dirs[0].permissions, Vec::<PermissionDto>::new());
     conversation.execute(
         &mut client,
         invocation(TuiSlashCommandAction::AddDir, ""),

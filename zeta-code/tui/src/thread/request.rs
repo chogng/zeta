@@ -63,7 +63,8 @@ impl ThreadRequestResponse {
     }
 }
 
-/// Identifies the aggregate and canonical sequence used by one typed Thread write.
+/// Identifies the aggregate and canonical sequence used by one typed Thread request.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ThreadRequestScope {
     session_id: SessionId,
     thread_id: ThreadId,
@@ -90,6 +91,38 @@ impl ThreadRequestScope {
     pub(crate) fn thread_id(&self) -> &ThreadId {
         &self.thread_id
     }
+
+    pub(crate) fn targets(&self, session_id: &SessionId, thread_id: &ThreadId) -> bool {
+        self.session_id == *session_id && self.thread_id == *thread_id
+    }
+}
+
+pub(super) fn validate_thread_scope(
+    thread: &Thread,
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+) -> Result<(), ClientError> {
+    if thread.session_id == *session_id && thread.thread_id == *thread_id {
+        return Ok(());
+    }
+    Err(ClientError::Protocol(format!(
+        "thread read returned snapshot for {}/{}; expected {session_id}/{thread_id}",
+        thread.session_id, thread.thread_id
+    )))
+}
+
+pub(super) fn validate_transcript_scope(
+    transcript: &ThreadTranscriptSnapshot,
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+) -> Result<(), ClientError> {
+    if transcript.session_id == *session_id && transcript.thread_id == *thread_id {
+        return Ok(());
+    }
+    Err(ClientError::Protocol(format!(
+        "thread read returned transcript for {}/{}; expected {session_id}/{thread_id}",
+        transcript.session_id, transcript.thread_id
+    )))
 }
 
 pub(crate) fn submit_prompt<T>(
@@ -252,13 +285,13 @@ pub(crate) fn read_thread<T>(
 where
     T: JsonRpcTransport,
 {
-    client
-        .read_session_thread(SessionThreadReadParams {
-            session_id: session_id.clone(),
-            thread_id: thread_id.clone(),
-            history: None,
-        })
-        .map(|result| result.thread)
+    let result = client.read_session_thread(SessionThreadReadParams {
+        session_id: session_id.clone(),
+        thread_id: thread_id.clone(),
+        history: None,
+    })?;
+    validate_thread_scope(&result.thread, session_id, thread_id)?;
+    Ok(result.thread)
 }
 
 pub(crate) struct LatestThreadSnapshot {
@@ -281,6 +314,8 @@ where
         thread_id: thread_id.clone(),
         history: Some(history),
     })?;
+    validate_thread_scope(&result.thread, session_id, thread_id)?;
+    validate_transcript_scope(&result.transcript, session_id, thread_id)?;
     let boundary = require_history_boundary(result.history)?;
     Ok(LatestThreadSnapshot {
         thread: result.thread,
@@ -312,6 +347,8 @@ where
             turn_limit: 50,
         }),
     })?;
+    validate_thread_scope(&result.thread, session_id, thread_id)?;
+    validate_transcript_scope(&result.transcript, session_id, thread_id)?;
     let boundary = require_history_boundary(result.history)?;
     Ok(OlderThreadHistoryPage {
         thread: result.thread,

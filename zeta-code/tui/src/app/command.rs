@@ -1,5 +1,4 @@
 use crate::config::ConfigEdit;
-use crate::config::PermissionEdit;
 use crate::config::ProviderApiKeyEdit;
 use crate::keymap::KeymapEdit;
 use crate::status::StatusLineEdit;
@@ -10,6 +9,7 @@ use crate::thread::composer::SteerId;
 use crate::thread::queue::QueueId;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_protocol::SessionId;
 use zeta_protocol::SkillId;
@@ -30,7 +30,6 @@ pub(crate) enum AppCommand {
     OpenThemePicker,
     EditKeymap(KeymapEdit),
     EditConfig(ConfigEdit),
-    EditPermissions(PermissionEdit),
     SetProviderApiKey(ProviderApiKeyEdit),
     EditStatusLine(StatusLineEdit),
     ConnectConnectorDeviceOAuth {
@@ -50,6 +49,7 @@ pub(crate) enum AppCommand {
     RemoveDir {
         path: PathBuf,
     },
+    SetDirPermissions(SessionDirPermissionsSetParams),
     RewindToCheckpoint {
         before_turn_id: TurnId,
         checkpoint_label: String,

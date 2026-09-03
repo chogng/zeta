@@ -11,9 +11,9 @@ fn turn_start_failure_preserves_an_active_turn_that_appeared_during_the_request(
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let active_turn = Some(TurnId::new("turn_1").unwrap());
+    app.set_active_turn(TurnId::new("turn_1").unwrap());
 
-    report_turn_start_failure(&mut app, &active_turn, "sequence conflict".into());
+    report_turn_start_failure(&mut app, "sequence conflict".into());
 
     assert_eq!(app.status(), &Status::Working);
     assert!(
@@ -31,7 +31,7 @@ fn initial_turn_failure_enters_error_state() {
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    report_turn_start_failure(&mut app, &None, "server unavailable".into());
+    report_turn_start_failure(&mut app, "server unavailable".into());
 
     assert_eq!(app.status(), &Status::Error);
 }

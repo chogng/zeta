@@ -1,9 +1,9 @@
 use super::StatusLineModel;
 use super::StatusLineRuntime;
-use super::model::ApprovalModeStatus;
 use super::model::approval_mode_display;
 use super::model::approval_mode_text;
 use crate::render::RenderContext;
+use crate::thread::TurnApprovalModes;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -16,7 +16,7 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     status_line: &StatusLineModel,
-    approval: ApprovalModeStatus,
+    approval: TurnApprovalModes,
     runtime: StatusLineRuntime,
     context: RenderContext<'_>,
 ) {
@@ -48,7 +48,7 @@ pub(crate) fn draw(
 
 pub(crate) fn desired_rows(
     status_line: &StatusLineModel,
-    approval: ApprovalModeStatus,
+    approval: TurnApprovalModes,
     runtime: StatusLineRuntime,
     max_rows: u16,
 ) -> u16 {
@@ -68,7 +68,7 @@ fn top_line(text: String, context: RenderContext<'_>) -> Line<'static> {
 
 fn styled_policy_line(
     policy: String,
-    approval: ApprovalModeStatus,
+    approval: TurnApprovalModes,
     context: RenderContext<'_>,
 ) -> Line<'static> {
     let permission_prefix = approval_mode_text(approval);

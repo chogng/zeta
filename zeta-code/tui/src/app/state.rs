@@ -4,8 +4,8 @@ use super::escape::ScreenEscapeSequence;
 use super::event::AppEvent;
 use super::frame::InputPointerTarget;
 use super::help::help_choices;
-use super::input_surface::ComposerMode;
-use super::input_surface::ComposerOutcome;
+use super::input_surface::InputSurface;
+use super::input_surface::InputSurfaceOutcome;
 use crate::app::top_tip::TopTip;
 use crate::app::welcome::WelcomeModel;
 use crate::config::ConfigSelectionAction;
@@ -34,7 +34,6 @@ use crate::sessions::SessionSelectionAction;
 use crate::sessions::SessionsState;
 use crate::sessions::TerminalScreen;
 use crate::skills::{SkillChoices, SkillDiagnosticWarnings, SkillSelectionAction};
-use crate::status::ApprovalModeStatus;
 use crate::status::StatusLineChoices;
 use crate::status::StatusLineModel;
 use crate::status::StatusLineRuntime;
@@ -47,12 +46,13 @@ use crate::theme::ThemeChoices;
 use crate::theme::ThemePickerOutcome;
 use crate::thread::SubagentPickerState;
 use crate::thread::SubagentPickerView;
-use crate::thread::ThreadFeatureState;
 use crate::thread::ThreadPresentationEvent;
 use crate::thread::ThreadPresentationStore;
 use crate::thread::ThreadRequestIdentity;
 use crate::thread::ThreadRequestKind;
+use crate::thread::ThreadState;
 use crate::thread::TurnActivity;
+use crate::thread::TurnApprovalModes;
 use crate::thread::composer::ChatComposer;
 use crate::thread::composer::ChatComposerOutcome;
 use crate::thread::composer::ChatComposerView;
@@ -86,6 +86,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::Turn;
+use zeta_protocol::TurnId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Status {
@@ -137,11 +139,11 @@ fn empty_input_navigation(
 pub(crate) struct App {
     chat_composer: ChatComposer,
     pub(super) app_keymap: AppKeymap,
-    thread: ThreadFeatureState,
+    thread: ThreadState,
     thread_presentations: ThreadPresentationStore,
     sessions: SessionsState,
     subagent_picker: SubagentPickerState,
-    composer_mode: Option<ComposerMode>,
+    input_surface: Option<InputSurface>,
     overlay: Option<DetailOverlay>,
     welcome: WelcomeModel,
     approval: Option<Approval>,
@@ -154,7 +156,6 @@ pub(crate) struct App {
     terminal_settings: TerminalSettings,
     pointer: PointerInteraction<InputPointerTarget>,
     screen_selection: ScreenSelection,
-    approval_mode_status: ApprovalModeStatus,
     render_theme: RenderTheme,
     render_theme_revision: u64,
     skill_diagnostic_warnings: SkillDiagnosticWarnings,
@@ -166,13 +167,13 @@ impl App {
         Self {
             chat_composer: ChatComposer::new(),
             app_keymap: AppKeymap::default(),
-            thread: ThreadFeatureState::default(),
+            thread: ThreadState::default(),
             thread_presentations: ThreadPresentationStore::new(
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
             ),
             sessions: SessionsState::default(),
             subagent_picker: SubagentPickerState::default(),
-            composer_mode: None,
+            input_surface: None,
             overlay: None,
             welcome: WelcomeModel::for_workspace(Path::new(".")),
             approval: None,
@@ -185,7 +186,6 @@ impl App {
             terminal_settings: TerminalSettings::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
-            approval_mode_status: ApprovalModeStatus::default(),
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
@@ -215,14 +215,14 @@ impl App {
         Self {
             chat_composer: ChatComposer::new(),
             app_keymap: AppKeymap::default(),
-            thread: ThreadFeatureState::default(),
+            thread: ThreadState::default(),
             thread_presentations: ThreadPresentationStore::with_input_catalog(
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
                 input_catalog,
             ),
             sessions: SessionsState::default(),
             subagent_picker: SubagentPickerState::default(),
-            composer_mode: None,
+            input_surface: None,
             overlay: None,
             welcome: WelcomeModel::for_workspace(dir_root),
             approval: None,
@@ -235,7 +235,6 @@ impl App {
             terminal_settings: TerminalSettings::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
-            approval_mode_status: ApprovalModeStatus::default(),
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
@@ -268,9 +267,9 @@ impl App {
                 return None;
             }
         }
-        if let Some(mode) = self.composer_mode.as_mut() {
+        if let Some(mode) = self.input_surface.as_mut() {
             let outcome = mode.handle_key(key);
-            return self.handle_composer_mode_outcome(outcome);
+            return self.handle_input_surface_outcome(outcome);
         }
         let temporary_interaction_active = self.completion().is_some();
         let is_screen_escape_press = key.kind == KeyEventKind::Press
@@ -433,75 +432,78 @@ impl App {
         }
     }
 
-    fn handle_composer_mode_outcome(&mut self, outcome: ComposerOutcome) -> Option<AppCommand> {
+    fn handle_input_surface_outcome(&mut self, outcome: InputSurfaceOutcome) -> Option<AppCommand> {
         match outcome {
-            ComposerOutcome::Dirs(DirSelectionAction::Remove { path }) => {
+            InputSurfaceOutcome::Dirs(DirSelectionAction::Remove { path }) => {
                 Some(AppCommand::RemoveDir { path })
             }
-            ComposerOutcome::Config(outcome) => self.handle_config_editor_outcome(outcome),
-            ComposerOutcome::Connectors(ConnectorSelectionAction::ConnectDeviceOAuth {
+            InputSurfaceOutcome::Dirs(DirSelectionAction::SetPermissions(params)) => {
+                Some(AppCommand::SetDirPermissions(params))
+            }
+            InputSurfaceOutcome::Config(outcome) => self.handle_config_editor_outcome(outcome),
+            InputSurfaceOutcome::Connectors(ConnectorSelectionAction::ConnectDeviceOAuth {
                 connector_id,
                 connection_generation,
             }) => Some(AppCommand::ConnectConnectorDeviceOAuth {
                 connector_id,
                 connection_generation,
             }),
-            ComposerOutcome::Connectors(ConnectorSelectionAction::Disconnect { connector_id }) => {
-                Some(AppCommand::DisconnectConnector { connector_id })
-            }
-            ComposerOutcome::Keymap(KeymapEditorOutcome::Edit(edit)) => {
+            InputSurfaceOutcome::Connectors(ConnectorSelectionAction::Disconnect {
+                connector_id,
+            }) => Some(AppCommand::DisconnectConnector { connector_id }),
+            InputSurfaceOutcome::Keymap(KeymapEditorOutcome::Edit(edit)) => {
                 Some(AppCommand::EditKeymap(edit))
             }
-            ComposerOutcome::Keymap(KeymapEditorOutcome::Consumed) => None,
-            ComposerOutcome::Keymap(KeymapEditorOutcome::Dismiss) => {
-                self.close_composer_mode();
+            InputSurfaceOutcome::Keymap(KeymapEditorOutcome::Consumed) => None,
+            InputSurfaceOutcome::Keymap(KeymapEditorOutcome::Dismiss) => {
+                self.close_input_surface();
                 None
             }
-            ComposerOutcome::Mcp(McpSelectionAction::SetEnablement {
+            InputSurfaceOutcome::Mcp(McpSelectionAction::SetEnablement {
                 server_id,
                 enablement,
             }) => Some(AppCommand::SetMcpEnablement {
                 server_id,
                 enablement,
             }),
-            ComposerOutcome::Model(ModelSelectionAction::Select { preference }) => {
+            InputSurfaceOutcome::Model(ModelSelectionAction::Select { preference }) => {
                 Some(AppCommand::SetPreferredModel { preference })
             }
-            ComposerOutcome::Queue(QueueSelectionAction::Select(queue_id)) => {
+            InputSurfaceOutcome::Queue(QueueSelectionAction::Select(queue_id)) => {
                 self.open_queue_detail(queue_id);
                 None
             }
-            ComposerOutcome::QueueInput {
+            InputSurfaceOutcome::QueueInput {
                 input,
                 action: QueueSelectionAction::Select(queue_id),
             } => self.handle_queue_input(input, queue_id),
-            ComposerOutcome::Rewind(RewindSelectionAction::Rewind {
+            InputSurfaceOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
                 checkpoint_label,
             }) => Some(AppCommand::RewindToCheckpoint {
                 before_turn_id,
                 checkpoint_label,
             }),
-            ComposerOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => {
+            InputSurfaceOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => {
                 Some(AppCommand::ResumeSession {
                     session_id,
                     preferred_thread_id: None,
                 })
             }
-            ComposerOutcome::Skills(SkillSelectionAction::SetEnablement {
+            InputSurfaceOutcome::Skills(SkillSelectionAction::SetEnablement {
                 skill_id,
                 enablement,
             }) => Some(AppCommand::SetSkillEnablement {
                 skill_id,
                 enablement,
             }),
-            ComposerOutcome::StatusLine(StatusLineSelectionAction::SetEnabled(edit)) => {
+            InputSurfaceOutcome::StatusLine(StatusLineSelectionAction::SetEnabled(edit)) => {
                 Some(AppCommand::EditStatusLine(edit))
             }
-            ComposerOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
-            ComposerOutcome::Consumed => None,
-            ComposerOutcome::Dismiss => {
-                self.close_composer_mode();
+            InputSurfaceOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
+            InputSurfaceOutcome::Consumed => None,
+            InputSurfaceOutcome::Dismiss => {
+                self.close_input_surface();
                 None
             }
         }
@@ -531,9 +533,6 @@ impl App {
                     crate::thread::composer::ChatInputMode::Vim => *standard,
                 },
             )),
-            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetPermissions(
-                edit,
-            )) => Some(AppCommand::EditPermissions(edit)),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::OpenProviderApiKey { .. },
             ) => None,
@@ -557,7 +556,7 @@ impl App {
             }
             crate::config::ConfigEditorOutcome::Consumed => None,
             crate::config::ConfigEditorOutcome::Dismiss => {
-                self.close_composer_mode();
+                self.close_input_surface();
                 None
             }
         }
@@ -566,17 +565,17 @@ impl App {
     fn handle_theme_picker_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
         match outcome {
             ThemePickerOutcome::Select { preference } => {
-                self.close_composer_mode();
+                self.close_input_surface();
                 Some(AppCommand::SetTheme { preference })
             }
             ThemePickerOutcome::SelectCustom { preference } => {
-                self.close_composer_mode();
+                self.close_input_surface();
                 Some(AppCommand::SetCustomTheme { preference })
             }
             ThemePickerOutcome::OpenCustomThemes => Some(AppCommand::OpenCustomThemePicker),
             ThemePickerOutcome::Consumed => None,
             ThemePickerOutcome::Dismiss => {
-                self.close_composer_mode();
+                self.close_input_surface();
                 None
             }
         }
@@ -669,7 +668,7 @@ impl App {
                 return;
             }
         }
-        if let Some(mode) = self.composer_mode.as_mut() {
+        if let Some(mode) = self.input_surface.as_mut() {
             mode.handle_paste(pasted);
             return;
         }
@@ -713,11 +712,11 @@ impl App {
     }
 
     pub(crate) fn composer_key_hints(&self) -> Option<&str> {
-        self.composer_mode.as_ref().map(ComposerMode::key_hints)
+        self.input_surface.as_ref().map(InputSurface::key_hints)
     }
 
-    pub(crate) fn composer_mode(&self) -> Option<&ComposerMode> {
-        self.composer_mode.as_ref()
+    pub(crate) fn input_surface(&self) -> Option<&InputSurface> {
+        self.input_surface.as_ref()
     }
 
     pub(crate) fn overlay(&self) -> Option<&DetailOverlay> {
@@ -725,7 +724,7 @@ impl App {
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
-        if self.composer_mode.is_some() || self.overlay.is_some() {
+        if self.input_surface.is_some() || self.overlay.is_some() {
             return None;
         }
         self.thread_presentations.active().input.completion()
@@ -738,7 +737,7 @@ impl App {
             && !self.sessions.manager().focused()
             && !self.subagent_picker.focused()
             && self.thread_presentations.active().selected_cell.is_none()
-            && self.composer_mode.is_none()
+            && self.input_surface.is_none()
             && self.completion().is_none()
     }
 
@@ -748,10 +747,6 @@ impl App {
         } else {
             MouseMode::TerminalSelection
         }
-    }
-
-    pub(crate) const fn terminal_settings(&self) -> TerminalSettings {
-        self.terminal_settings
     }
 
     pub(crate) fn update_pointer_hover(&mut self, target: Option<InputPointerTarget>) {
@@ -807,7 +802,7 @@ impl App {
 
     #[cfg(test)]
     fn show_help(&mut self, model: crate::widgets::list_selection::ListSelectionModel) {
-        self.open_composer_mode(ComposerMode::help(model));
+        self.open_input_surface(InputSurface::help(model));
     }
 
     pub(crate) fn approval_view(
@@ -829,16 +824,16 @@ impl App {
             && self.thread_presentations.active().selected_cell.is_some()
     }
 
-    fn open_composer_mode(&mut self, mode: ComposerMode) {
+    fn open_input_surface(&mut self, mode: InputSurface) {
         self.screen_escape_sequence.reset();
         self.overlay = None;
-        self.composer_mode = Some(mode);
+        self.input_surface = Some(mode);
         self.pointer.clear();
     }
 
-    fn close_composer_mode(&mut self) {
+    fn close_input_surface(&mut self) {
         self.screen_escape_sequence.reset();
-        self.composer_mode = None;
+        self.input_surface = None;
         self.pointer.clear();
     }
 
@@ -856,22 +851,22 @@ impl App {
 
     fn close_transient_surfaces(&mut self) {
         self.screen_escape_sequence.reset();
-        self.composer_mode = None;
+        self.input_surface = None;
         self.overlay = None;
         self.pointer.clear();
     }
 
     fn show_dirs_picker(&mut self, spec: DirChoices) {
-        self.open_composer_mode(ComposerMode::dirs(spec));
+        self.open_input_surface(InputSurface::dirs(spec));
     }
 
     fn show_queue_picker(&mut self, spec: QueueChoices) {
-        self.open_composer_mode(ComposerMode::queue(spec));
+        self.open_input_surface(InputSurface::queue(spec));
     }
 
     fn update_queue_picker(&mut self) {
         let spec = crate::thread::queue::choices(&self.queue_view());
-        if let Some(mode) = self.composer_mode.as_mut() {
+        if let Some(mode) = self.input_surface.as_mut() {
             mode.replace_queue(spec);
         }
     }
@@ -901,7 +896,7 @@ impl App {
             QueueInput::Restore => {
                 let state = self.thread_presentations.active_mut();
                 match state.queue.restore(queue_id, &mut state.input) {
-                    Ok(()) => self.close_composer_mode(),
+                    Ok(()) => self.close_input_surface(),
                     Err(error) => self
                         .thread
                         .update(ThreadPresentationEvent::FailureReported(error)),
@@ -945,7 +940,7 @@ impl App {
                     .active_mut()
                     .queue
                     .begin_send(queue_id)?;
-                self.close_composer_mode();
+                self.close_input_surface();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
                 ));
@@ -960,7 +955,7 @@ impl App {
     }
 
     fn update_dirs_picker(&mut self, spec: DirChoices) {
-        if let Some(mode) = self.composer_mode.as_mut() {
+        if let Some(mode) = self.input_surface.as_mut() {
             mode.replace_dirs(spec);
         }
     }
@@ -972,7 +967,7 @@ impl App {
             diagnostics,
         } = choices;
         self.report_skill_diagnostics(&diagnostics);
-        self.open_composer_mode(ComposerMode::skills(SkillChoices {
+        self.open_input_surface(InputSurface::skills(SkillChoices {
             model,
             actions,
             diagnostics: Vec::new(),
@@ -980,41 +975,41 @@ impl App {
     }
 
     fn show_mcp_settings(&mut self, spec: McpChoices) {
-        self.open_composer_mode(ComposerMode::mcp(spec));
+        self.open_input_surface(InputSurface::mcp(spec));
     }
 
     fn show_connector_picker(&mut self, spec: ConnectorChoices) {
-        self.open_composer_mode(ComposerMode::connectors(spec));
+        self.open_input_surface(InputSurface::connectors(spec));
     }
 
     fn update_connector_picker(&mut self, spec: ConnectorChoices) {
-        if let Some(mode) = self.composer_mode.as_mut() {
+        if let Some(mode) = self.input_surface.as_mut() {
             mode.replace_connectors(spec);
         }
     }
 
     pub(crate) fn connector_picker_open(&self) -> bool {
-        self.composer_mode
+        self.input_surface
             .as_ref()
-            .is_some_and(ComposerMode::is_connectors)
+            .is_some_and(InputSurface::is_connectors)
     }
 
     fn update_mcp_settings(&mut self, spec: McpChoices) {
-        if let Some(mode) = self.composer_mode.as_mut() {
+        if let Some(mode) = self.input_surface.as_mut() {
             mode.replace_mcp(spec);
         }
     }
 
     fn show_model_picker(&mut self, spec: ModelChoices) {
-        self.open_composer_mode(ComposerMode::model(spec));
+        self.open_input_surface(InputSurface::model(spec));
     }
 
     fn show_rewind_picker(&mut self, spec: RewindChoices) {
-        self.open_composer_mode(ComposerMode::rewind(spec));
+        self.open_input_surface(InputSurface::rewind(spec));
     }
 
     fn show_session_picker(&mut self, spec: SessionChoices) {
-        self.open_composer_mode(ComposerMode::sessions(spec));
+        self.open_input_surface(InputSurface::sessions(spec));
     }
 
     fn update_skill_settings(&mut self, choices: SkillChoices) {
@@ -1024,7 +1019,7 @@ impl App {
             diagnostics,
         } = choices;
         self.report_skill_diagnostics(&diagnostics);
-        if let Some(mode) = self.composer_mode.as_mut() {
+        if let Some(mode) = self.input_surface.as_mut() {
             mode.replace_skills(SkillChoices {
                 model,
                 actions,
@@ -1044,54 +1039,54 @@ impl App {
     }
 
     fn show_theme_picker(&mut self, spec: ThemeChoices) {
-        self.open_composer_mode(ComposerMode::theme(spec));
+        self.open_input_surface(InputSurface::theme(spec));
     }
 
     fn show_keymap_editor(&mut self, spec: KeymapChoices) {
-        self.open_composer_mode(ComposerMode::keymap(spec));
+        self.open_input_surface(InputSurface::keymap(spec));
     }
 
     fn show_status_line_editor(&mut self, spec: StatusLineChoices) {
-        self.open_composer_mode(ComposerMode::status_line(spec));
+        self.open_input_surface(InputSurface::status_line(spec));
     }
 
     fn update_status_line_editor(&mut self, spec: StatusLineChoices) {
-        if let Some(mode) = self.composer_mode.as_mut() {
+        if let Some(mode) = self.input_surface.as_mut() {
             mode.replace_status_line(spec);
         }
     }
 
     pub(crate) fn skills_view_is_active(&self) -> bool {
-        self.composer_mode
+        self.input_surface
             .as_ref()
-            .is_some_and(ComposerMode::is_skills)
+            .is_some_and(InputSurface::is_skills)
     }
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
-        self.composer_mode
+        self.input_surface
             .as_ref()
-            .and_then(ComposerMode::list_selection)
+            .and_then(InputSurface::list_selection)
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.composer_mode
+        self.input_surface
             .as_mut()
             .is_some_and(|mode| mode.select_tab(index))
     }
 
     pub(crate) fn focus_composer_search(&mut self) -> bool {
-        self.composer_mode
+        self.input_surface
             .as_mut()
-            .is_some_and(ComposerMode::focus_search)
+            .is_some_and(InputSurface::focus_search)
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<AppCommand> {
-        let outcome = self.composer_mode.as_mut()?.activate_visible_item(index)?;
-        self.handle_composer_mode_outcome(outcome)
+        let outcome = self.input_surface.as_mut()?.activate_visible_item(index)?;
+        self.handle_input_surface_outcome(outcome)
     }
 
     pub(crate) fn mention_query(&self) -> Option<&str> {
-        if self.composer_mode.is_some() {
+        if self.input_surface.is_some() {
             return None;
         }
         self.thread_presentations.active().input.mention_query()
@@ -1130,6 +1125,29 @@ impl App {
 
     pub(crate) fn status(&self) -> &Status {
         &self.status
+    }
+
+    pub(crate) fn active_turn(&self) -> Option<&TurnId> {
+        self.thread.active_turn()
+    }
+
+    pub(crate) fn set_active_turn(&mut self, turn_id: TurnId) {
+        self.thread.set_active_turn(turn_id);
+    }
+
+    pub(crate) fn set_active_turn_if_idle(&mut self, turn_id: TurnId) {
+        self.thread.set_active_turn_if_idle(turn_id);
+    }
+
+    pub(crate) fn clear_active_turn(&mut self) {
+        self.thread.clear_active_turn();
+    }
+
+    pub(crate) fn sync_active_turn(
+        &mut self,
+        turns: &[Turn],
+    ) -> Vec<crate::thread::ActiveTurnUpdate> {
+        self.thread.sync_active_turn(turns)
     }
 
     pub(crate) fn steers_active_turn(&self) -> bool {
@@ -1235,29 +1253,25 @@ impl App {
         })
     }
 
-    pub(crate) fn approval_mode_status(&self) -> ApprovalModeStatus {
-        self.approval_mode_status
+    pub(crate) fn approval_mode_status(&self) -> TurnApprovalModes {
+        self.thread.approval_modes()
     }
 
     pub(crate) fn approval_mode(&self) -> ApprovalMode {
-        self.approval_mode_status.next
+        self.thread.approval_mode()
     }
 
     pub(crate) fn cycle_next_approval_mode(&mut self) {
-        self.approval_mode_status.next = match self.approval_mode_status.next {
-            ApprovalMode::AskPermissions => ApprovalMode::AutoReview,
-            ApprovalMode::AutoReview => ApprovalMode::BypassPermissions,
-            ApprovalMode::BypassPermissions => ApprovalMode::AskPermissions,
-        };
+        self.thread.cycle_approval_mode();
     }
 
     #[cfg(test)]
     pub(crate) fn set_next_approval_mode(&mut self, approval_mode: ApprovalMode) {
-        self.approval_mode_status.next = approval_mode;
+        self.thread.set_next_approval_mode(approval_mode);
     }
 
     pub(crate) fn set_current_approval_mode(&mut self, approval_mode: Option<ApprovalMode>) {
-        self.approval_mode_status.current = approval_mode;
+        self.thread.set_current_approval_mode(approval_mode);
     }
 
     pub(crate) fn status_line(&self) -> &StatusLineModel {
@@ -1353,6 +1367,7 @@ impl App {
                 self.status = Status::Ready;
                 self.turn_input_mode = TurnInputMode::Start;
             }
+            AppEvent::DirPermissionsUpdated(choices) => self.update_dirs_picker(choices),
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
             AppEvent::ConfigSettingsReceived(settings) => {
@@ -1371,20 +1386,15 @@ impl App {
                 }
                 self.thread_presentations
                     .set_input_mode(result.settings.input_mode());
-                if let Some(mode) = self.composer_mode.as_mut() {
+                if let Some(mode) = self.input_surface.as_mut() {
                     mode.replace_config(result.choices);
                 }
             }
             AppEvent::ConfigEditorOpened(view) => {
-                self.open_composer_mode(ComposerMode::config(view))
-            }
-            AppEvent::ConfigEditorUpdated(view) => {
-                if let Some(mode) = self.composer_mode.as_mut() {
-                    mode.replace_config(view);
-                }
+                self.open_input_surface(InputSurface::config(view))
             }
             AppEvent::ConfigApiKeySaved { provider, choices } => {
-                if let Some(mode) = self.composer_mode.as_mut() {
+                if let Some(mode) = self.input_surface.as_mut() {
                     mode.finish_config_prompt(choices);
                 }
                 self.thread
@@ -1472,8 +1482,8 @@ impl App {
                     self.thread
                         .update(ThreadPresentationEvent::NoticeReceived(notice));
                 }
-                if matches!(self.composer_mode, Some(ComposerMode::Keymap(_))) {
-                    self.composer_mode
+                if matches!(self.input_surface, Some(InputSurface::Keymap(_))) {
+                    self.input_surface
                         .as_mut()
                         .expect("the keymap editor is active")
                         .replace_keymap_catalog(update.choices);
@@ -1518,7 +1528,7 @@ impl App {
             AppEvent::StatusOverlayOpened(detail) => {
                 self.show_overlay(detail);
             }
-            AppEvent::ComposerModeClosed => self.close_composer_mode(),
+            AppEvent::InputSurfaceClosed => self.close_input_surface(),
             #[cfg(test)]
             AppEvent::HelpOpened(model) => self.show_help(model),
             AppEvent::SkillSettingsOpened(view) => self.show_skill_settings(view),
@@ -1555,8 +1565,8 @@ impl App {
                 self.turn_input_mode = TurnInputMode::Start;
             }
             AppEvent::ThemePickerOpened(view) => {
-                if matches!(self.composer_mode, Some(ComposerMode::Theme(_))) {
-                    self.composer_mode
+                if matches!(self.input_surface, Some(InputSurface::Theme(_))) {
+                    self.input_surface
                         .as_mut()
                         .expect("the theme picker is active")
                         .push_custom_theme(view);
@@ -1825,7 +1835,7 @@ impl App {
     fn handle_transcript_selection_key(&mut self, key: KeyEvent) -> bool {
         if key.kind != KeyEventKind::Press
             || !matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            || self.composer_mode.is_some()
+            || self.input_surface.is_some()
             || self.completion().is_some()
             || !self.input().is_empty()
         {
@@ -2036,7 +2046,7 @@ impl App {
                     self.thread_presentations.slash_commands(),
                     self.app_keymap.setup_actions(),
                 );
-                self.open_composer_mode(ComposerMode::help(spec));
+                self.open_input_surface(InputSurface::help(spec));
                 None
             }
             (SlashCommandOrigin::Server, _) => {

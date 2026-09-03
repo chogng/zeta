@@ -1,4 +1,6 @@
 use super::request::require_history_boundary;
+use super::request::validate_thread_scope;
+use super::request::validate_transcript_scope;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
@@ -75,7 +77,7 @@ impl ThreadSubscription {
                 turn_limit: HISTORY_PAGE_TURNS,
             }),
         })?;
-        validate_snapshot_scope(&result.thread, session_id, thread_id)?;
+        validate_thread_scope(&result.thread, session_id, thread_id)?;
         validate_transcript_scope(&result.transcript, session_id, thread_id)?;
         validate_update_scopes(&result.updates, session_id, thread_id)?;
 
@@ -98,7 +100,7 @@ impl ThreadSubscription {
             let boundary = require_history_boundary(result.history)?;
             (result.thread, result.transcript, boundary)
         };
-        validate_snapshot_scope(&snapshot, session_id, thread_id)?;
+        validate_thread_scope(&snapshot, session_id, thread_id)?;
 
         let mut subscription =
             Self::from_snapshot_with_boundary(&snapshot, HISTORY_PAGE_TURNS, Some(boundary));
@@ -125,7 +127,7 @@ impl ThreadSubscription {
             let transcript = result.transcript;
             validate_transcript_scope(&transcript, session_id, thread_id)?;
             let boundary = require_history_boundary(result.history)?;
-            validate_snapshot_scope(&snapshot, session_id, thread_id)?;
+            validate_thread_scope(&snapshot, session_id, thread_id)?;
             *self = Self::from_snapshot_with_boundary(
                 &snapshot,
                 self.history_turn_limit,
@@ -286,34 +288,6 @@ impl ThreadSubscription {
             has_older_turns: boundary.is_some_and(|history| history.has_older_turns),
         }
     }
-}
-
-fn validate_snapshot_scope(
-    snapshot: &Thread,
-    session_id: &SessionId,
-    thread_id: &ThreadId,
-) -> Result<(), ClientError> {
-    if snapshot.session_id == *session_id && snapshot.thread_id == *thread_id {
-        return Ok(());
-    }
-    Err(ClientError::Protocol(format!(
-        "thread subscription returned snapshot for {}/{}; expected {session_id}/{thread_id}",
-        snapshot.session_id, snapshot.thread_id
-    )))
-}
-
-fn validate_transcript_scope(
-    transcript: &ThreadTranscriptSnapshot,
-    session_id: &SessionId,
-    thread_id: &ThreadId,
-) -> Result<(), ClientError> {
-    if transcript.session_id == *session_id && transcript.thread_id == *thread_id {
-        return Ok(());
-    }
-    Err(ClientError::Protocol(format!(
-        "thread subscription returned transcript for {}/{}; expected {session_id}/{thread_id}",
-        transcript.session_id, transcript.thread_id
-    )))
 }
 
 fn validate_update_scopes(

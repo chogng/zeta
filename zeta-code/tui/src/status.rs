@@ -6,7 +6,6 @@ mod settings_request;
 mod setup;
 mod view;
 
-pub(crate) use model::ApprovalModeStatus;
 pub(crate) use model::StatusLineModel;
 pub(crate) use model::StatusLineRuntime;
 pub(crate) use overlay::RemainingContextWindow;

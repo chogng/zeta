@@ -110,7 +110,7 @@ impl ActiveConversation {
     }
 
     pub(crate) fn set_thread_sequence(&mut self, sequence: u64) {
-        self.thread_sequence = sequence;
+        self.thread_sequence = self.thread_sequence.max(sequence);
     }
 
     pub(crate) fn select_thread<T>(

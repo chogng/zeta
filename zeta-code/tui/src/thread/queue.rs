@@ -300,5 +300,5 @@ pub(crate) fn draw(
 }
 
 #[cfg(test)]
-#[path = "queue/state_tests.rs"]
+#[path = "queue_tests.rs"]
 mod tests;
