@@ -1,6 +1,8 @@
 set working-directory := "."
-set positional-arguments
+set positional-arguments := true
+
 export JUST_SHELL := justfile_directory() / "scripts/just-shell.py"
+
 set shell := ["python3", "-c", 'import os, runpy; runpy.run_path(os.environ["JUST_SHELL"], run_name="__main__")']
 set windows-shell := ["python", "-c", 'import os, runpy; runpy.run_path(os.environ["JUST_SHELL"], run_name="__main__")']
 
@@ -14,9 +16,9 @@ fmt:
 fmt-check:
     {{ python }} -B scripts/format.py --check
 
-# Run the repository-owned Python build and release tests.
-test-python:
-    {{ python }} -B scripts/test-python.py
+# Run repository-owned Python tests, optionally selecting zeta-code, build, or release.
+test-python *args:
+    {{ python }} -B scripts/test-python.py {args}
 
 # Build all three product lines from the repository root.
 build: build-desktop build-rust
@@ -47,7 +49,7 @@ check-config-migrations:
 
 # Launch the zeta code TUI product from the current source tree.
 zeta *args:
-    {{ python }} -B scripts/zeta.py {args}
+    {{ python }} -B scripts/zeta-code/run.py {args}
 
 # Assemble the complete immutable development package shared by Zeta products.
 zeta-package *args:
@@ -55,7 +57,7 @@ zeta-package *args:
 
 # Assemble the complete development package and launch Zeta Code against it.
 zeta-package-run *args:
-    {{ python }} -B scripts/zeta_package.py {args}
+    {{ python }} -B scripts/zeta-code/run_package.py {args}
 
 # Launch the zeta Electron Desktop product.
 zeta-desktop:

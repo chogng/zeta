@@ -16,7 +16,8 @@ class CargoPathsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "workspace" / "zeta"
             self.assertEqual(
-                resolve_cargo_target_directory(root, {}), root / ".build" / "cargo"
+                resolve_cargo_target_directory(root, {}),
+                (root / ".build" / "cargo").resolve(),
             )
 
     def test_resolves_relative_override_from_workspace(self) -> None:
@@ -26,16 +27,16 @@ class CargoPathsTests(unittest.TestCase):
                 resolve_cargo_target_directory(
                     root, {"CARGO_TARGET_DIR": "build/cargo"}
                 ),
-                root / "build" / "cargo",
+                (root / "build" / "cargo").resolve(),
             )
 
-    def test_preserves_absolute_override(self) -> None:
+    def test_canonicalizes_absolute_override(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "workspace" / "zeta"
             target = Path(temporary) / "cache" / "zeta"
             self.assertEqual(
                 resolve_cargo_target_directory(root, {"CARGO_TARGET_DIR": str(target)}),
-                target,
+                target.resolve(),
             )
 
     def test_maps_only_the_builtin_dev_profile_directory(self) -> None:

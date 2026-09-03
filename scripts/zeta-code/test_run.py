@@ -5,32 +5,32 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import zeta
+import run
 
 
-class ZetaLauncherTests(unittest.TestCase):
+class SourceRunnerTests(unittest.TestCase):
     def test_main_builds_once_and_runs_the_staged_zeta(self) -> None:
         staged = self._executables(Path("C:/staged"))
         built = self._executables(Path("C:/built"))
         rg = Path("C:/tools/rg.exe")
         with (
-            patch.dict(zeta.os.environ, {"PATH": "tools"}, clear=True),
-            patch.object(zeta, "build_binaries", return_value=(0, built)) as build,
-            patch.object(zeta, "stage_runtime", return_value=staged),
-            patch.object(zeta, "host_ripgrep", return_value=rg),
-            patch.object(zeta.subprocess, "run") as run,
+            patch.dict(run.os.environ, {"PATH": "tools"}, clear=True),
+            patch.object(run, "build_binaries", return_value=(0, built)) as build,
+            patch.object(run, "stage_runtime", return_value=staged),
+            patch.object(run, "host_ripgrep", return_value=rg),
+            patch.object(run.subprocess, "run") as subprocess_run,
         ):
-            run.return_value = zeta.subprocess.CompletedProcess([], 0)
+            subprocess_run.return_value = run.subprocess.CompletedProcess([], 0)
 
-            self.assertEqual(zeta.main(["--help"]), 0)
+            self.assertEqual(run.main(["--help"]), 0)
 
         build.assert_called_once_with(
-            zeta.development_binaries(code_mode=None), {"PATH": "tools"}
+            run.development_binaries(code_mode=None), {"PATH": "tools"}
         )
-        runtime = zeta.runtime_environment({"PATH": "tools"}, staged, rg)
-        run.assert_called_once_with(
+        runtime = run.runtime_environment({"PATH": "tools"}, staged, rg)
+        subprocess_run.assert_called_once_with(
             [str(staged["zeta"]), "--help"],
-            cwd=zeta.REPOSITORY_ROOT,
+            cwd=run.REPOSITORY_ROOT,
             env=runtime,
             check=False,
         )
@@ -39,36 +39,36 @@ class ZetaLauncherTests(unittest.TestCase):
         binaries = ["zeta", "zeta-app-server-daemon"]
         with (
             tempfile.TemporaryDirectory() as temporary,
-            patch.object(zeta, "built_executable") as built_executable,
-            patch.object(zeta.subprocess, "run") as run,
+            patch.object(run, "built_executable") as built_executable,
+            patch.object(run.subprocess, "run") as subprocess_run,
         ):
             first = Path(temporary) / "zeta"
             second = Path(temporary) / "zeta-app-server-daemon"
             first.touch()
             second.touch()
             built_executable.side_effect = [first, second]
-            run.return_value = zeta.subprocess.CompletedProcess([], 0)
+            subprocess_run.return_value = run.subprocess.CompletedProcess([], 0)
 
             self.assertEqual(
-                zeta.build_binaries(binaries, {"CARGO_BUILD_JOBS": "4"}),
+                run.build_binaries(binaries, {"CARGO_BUILD_JOBS": "4"}),
                 (0, {"zeta": first, "zeta-app-server-daemon": second}),
             )
 
-        run.assert_called_once_with(
+        subprocess_run.assert_called_once_with(
             [
-                zeta.sys.executable,
+                run.sys.executable,
                 "-B",
                 "scripts/cargo.py",
                 "build",
                 "--workspace",
                 "--profile",
-                zeta.DEVELOPMENT_PROFILE,
+                run.DEVELOPMENT_PROFILE,
                 "--bin",
                 "zeta",
                 "--bin",
                 "zeta-app-server-daemon",
             ],
-            cwd=zeta.REPOSITORY_ROOT,
+            cwd=run.REPOSITORY_ROOT,
             env={"CARGO_BUILD_JOBS": "4"},
             check=False,
         )
@@ -76,15 +76,15 @@ class ZetaLauncherTests(unittest.TestCase):
     def test_development_binaries_include_platform_children(self) -> None:
         self.assertIn(
             "zeta-command-runner",
-            zeta.development_binaries(platform_name="win32"),
+            run.development_binaries(platform_name="win32"),
         )
         self.assertIn(
             "bwrap",
-            zeta.development_binaries(platform_name="linux"),
+            run.development_binaries(platform_name="linux"),
         )
         self.assertIn(
             "zeta-code-mode-host",
-            zeta.development_binaries(platform_name="darwin", code_mode="host"),
+            run.development_binaries(platform_name="darwin", code_mode="host"),
         )
 
     def test_stage_runtime_reuses_one_content_generation(self) -> None:
@@ -95,9 +95,9 @@ class ZetaLauncherTests(unittest.TestCase):
             first.parent.mkdir()
             first.write_bytes(b"zeta")
             second.write_bytes(b"daemon")
-            with patch.object(zeta, "DEVELOPMENT_RUNTIME_ROOT", root / "runtime"):
-                staged = zeta.stage_runtime({"zeta": first, "daemon": second})
-                repeated = zeta.stage_runtime({"zeta": first, "daemon": second})
+            with patch.object(run, "DEVELOPMENT_RUNTIME_ROOT", root / "runtime"):
+                staged = run.stage_runtime({"zeta": first, "daemon": second})
+                repeated = run.stage_runtime({"zeta": first, "daemon": second})
 
             self.assertEqual(staged, repeated)
             self.assertEqual(staged["zeta"].read_bytes(), b"zeta")

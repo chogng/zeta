@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const desktopDirectory = resolve(import.meta.dirname, '../../zeta-ts');
+const desktopDirectory = resolve(import.meta.dirname, '../../../zeta-ts');
 const result = spawnSync(process.execPath, [
 	'--import',
-	'../scripts/test/ignore-css-imports.ts',
+	'../scripts/zeta-ts/test/ignore-css-imports.ts',
 	'--test',
 	'--test-concurrency=1',
 	...process.argv.slice(2),

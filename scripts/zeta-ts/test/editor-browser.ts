@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const desktopDirectory = resolve(import.meta.dirname, '../../zeta-ts');
+const desktopDirectory = resolve(import.meta.dirname, '../../../zeta-ts');
 const serverUrl = 'http://127.0.0.1:5185/textModel.html';
 const server = spawn(process.execPath, [
 	'node_modules/vite/bin/vite.js',

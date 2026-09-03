@@ -5,14 +5,14 @@ import test from "node:test";
 import { findDesktopRoot } from "./testPaths.js";
 
 const desktopRoot = findDesktopRoot(import.meta.dirname);
-const scriptsRoot = resolve(desktopRoot, "../scripts");
+const desktopScriptsRoot = resolve(desktopRoot, "../scripts/zeta-ts");
 const editorRoot = join(desktopRoot, "src/zeta/editor");
 const browserIntegrationRoot = join(desktopRoot, "test/editor/browser");
 const desktopPackage = JSON.parse(readFileSync(join(desktopRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
 
 test("Stanza unit tests follow the flat editor common, browser, and contrib layout", () => {
 	assert.equal(exists(join(desktopRoot, "test/monaco")), false);
-	assert.equal(exists(join(scriptsRoot, "test/editor-unit.ts")), true);
+	assert.equal(exists(join(desktopScriptsRoot, "test/editor-unit.ts")), true);
 	assert.equal(exists(join(editorRoot, "test/common/textModel.test.ts")), true);
 	assert.equal(exists(join(desktopRoot, "src/zeta/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts")), true);
 	assert.equal(exists(join(editorRoot, "contrib/find/test/browser/findController.test.ts")), true);
@@ -47,7 +47,9 @@ test("browser integrations import the stable API and only their mode bundle", ()
 });
 
 test("desktop exposes one editor browser test entrypoint", () => {
-	assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/editor/browser/tsconfig.json && node ../scripts/test/editor-browser.ts");
+	assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/editor/browser/tsconfig.json && node ../scripts/zeta-ts/test/editor-browser.ts");
+	assert.equal(exists(join(desktopScriptsRoot, "test-editor.ts")), false);
+	assert.equal(exists(join(desktopScriptsRoot, "test/pnpm-script.ts")), false);
 });
 
 function exists(file: string): boolean {

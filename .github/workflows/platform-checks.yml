@@ -96,6 +96,14 @@ jobs:
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py test -p zui --lib distribution::tests --target "${{ matrix.target }}"
 
-      - name: Test build and release tooling
+      - name: Test Zeta Code tooling
         shell: bash
-        run: ${{ matrix.python }} -B scripts/test-python.py
+        run: ${{ matrix.python }} -B scripts/test-python.py zeta-code
+
+      - name: Test build tooling
+        shell: bash
+        run: ${{ matrix.python }} -B scripts/test-python.py build
+
+      - name: Test release tooling
+        shell: bash
+        run: ${{ matrix.python }} -B scripts/test-python.py release

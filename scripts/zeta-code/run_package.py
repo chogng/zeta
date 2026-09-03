@@ -1,4 +1,4 @@
-"""Build a complete development package and launch Zeta Code against it."""
+"""Build a complete development package and launch the Code TUI against it."""
 
 from __future__ import annotations
 
@@ -10,7 +10,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-import zeta
+
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+import run  # noqa: E402
 
 
 MANIFEST_PATTERN = re.compile(r"\d{20}\.json")
@@ -33,14 +37,14 @@ def development_root() -> Path:
     if target is None:
         raise RuntimeError(f"unsupported Zeta development host: {host[0]}/{host[1]}")
     return (
-        zeta.REPOSITORY_ROOT
+        run.REPOSITORY_ROOT
         / ".build"
         / "zeta-package"
         / "dev"
         / "store-v1"
         / target
         / "host-provided-node"
-        / zeta.DEVELOPMENT_PROFILE
+        / run.DEVELOPMENT_PROFILE
     )
 
 
@@ -79,7 +83,7 @@ def main(arguments: list[str] | None = None) -> int:
     environment = os.environ.copy()
     prepared = subprocess.run(
         ["node", "build/zeta-package/prepareDevPackage.ts"],
-        cwd=zeta.REPOSITORY_ROOT,
+        cwd=run.REPOSITORY_ROOT,
         env=environment,
         check=False,
     )
@@ -97,16 +101,16 @@ def main(arguments: list[str] | None = None) -> int:
     if not product_services.is_file():
         raise RuntimeError(f"Zeta product services are missing: {product_services}")
 
-    returncode, built = zeta.build_binaries(["zeta"], environment)
+    returncode, built = run.build_binaries(["zeta"], environment)
     if returncode != 0:
         return returncode
-    executable = zeta.stage_runtime(built)["zeta"]
+    executable = run.stage_runtime(built)["zeta"]
     environment = environment.copy()
     environment["ZETA_APP_SERVER_DAEMON_PATH"] = str(daemon.resolve())
     environment["ZETA_PRODUCT_SERVICES_PATH"] = str(product_services.resolve())
     return subprocess.run(
         [str(executable), *(arguments or [])],
-        cwd=zeta.REPOSITORY_ROOT,
+        cwd=run.REPOSITORY_ROOT,
         env=environment,
         check=False,
     ).returncode

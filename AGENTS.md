@@ -28,6 +28,5 @@ Before modifying this repository:
 
 ## Learnings
 
-* 命名先判断作用域和歧义：公开领域类型与跨模块接口使用准确全称；局部变量、私有函数和命令使用最短且不歧义的词。仅在多个独立单词组合时使用 `_`，不要把已经由上下文表达的限定词重复进名字；例如领域已是目录时用 `dirs`、`add_dir`，不用 `additional_directories`、`add_additional_directory`。
-
+* 命名先判断作用域和歧义：公开领域类型与跨模块接口使用准确全称；局部变量、私有函数、命令和脚本使用最短且不歧义的词。目录已经表达产品或领域 owner 时，文件名只表达具体操作，例如 `zeta-code/run.py`、`zeta-code/run_package.py`，不用 `zeta-code/zeta.py`、`zeta-code/zeta_package.py` 重复限定；只有文件脱离目录独立发布或跨 owner 引用确实会歧义时才保留前缀。仅在多个独立单词组合时使用 `_`，不要把已经由上下文表达的限定词重复进名字；例如领域已是目录时用 `dirs`、`add_dir`，不用 `additional_directories`、`add_additional_directory`。
 

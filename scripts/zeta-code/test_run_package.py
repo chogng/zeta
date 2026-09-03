@@ -7,14 +7,14 @@ from pathlib import Path
 from unittest.mock import call
 from unittest.mock import patch
 
-import zeta_package
+import run_package
 
 
-class ZetaPackageLauncherTests(unittest.TestCase):
+class PackageRunnerTests(unittest.TestCase):
     def test_main_packages_then_runs_the_staged_cli_against_that_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package = Path(temporary) / "package"
-            suffix = ".exe" if zeta_package.os.name == "nt" else ""
+            suffix = ".exe" if run_package.os.name == "nt" else ""
             daemon = package / "bin" / f"zeta-app-server-daemon{suffix}"
             product_services = (
                 package / "zeta-resources/product-services/product-services.json"
@@ -27,41 +27,41 @@ class ZetaPackageLauncherTests(unittest.TestCase):
             staged = Path(temporary) / "staged-zeta"
             environment = {"PATH": "tools"}
             with (
-                patch.dict(zeta_package.os.environ, environment, clear=True),
-                patch.object(zeta_package, "current_package", return_value=package),
+                patch.dict(run_package.os.environ, environment, clear=True),
+                patch.object(run_package, "current_package", return_value=package),
                 patch.object(
-                    zeta_package.zeta,
+                    run_package.run,
                     "build_binaries",
                     return_value=(0, {"zeta": built}),
                 ) as build,
                 patch.object(
-                    zeta_package.zeta,
+                    run_package.run,
                     "stage_runtime",
                     return_value={"zeta": staged},
                 ),
-                patch.object(zeta_package.subprocess, "run") as run,
+                patch.object(run_package.subprocess, "run") as subprocess_run,
             ):
-                run.side_effect = [
-                    zeta_package.subprocess.CompletedProcess([], 0),
-                    zeta_package.subprocess.CompletedProcess([], 0),
+                subprocess_run.side_effect = [
+                    run_package.subprocess.CompletedProcess([], 0),
+                    run_package.subprocess.CompletedProcess([], 0),
                 ]
 
                 self.assertEqual(
-                    zeta_package.main(["app-server", "daemon", "version"]), 0
+                    run_package.main(["app-server", "daemon", "version"]), 0
                 )
 
             build.assert_called_once_with(["zeta"], environment)
-            run.assert_has_calls(
+            subprocess_run.assert_has_calls(
                 [
                     call(
                         ["node", "build/zeta-package/prepareDevPackage.ts"],
-                        cwd=zeta_package.zeta.REPOSITORY_ROOT,
+                        cwd=run_package.run.REPOSITORY_ROOT,
                         env=environment,
                         check=False,
                     ),
                     call(
                         [str(staged), "app-server", "daemon", "version"],
-                        cwd=zeta_package.zeta.REPOSITORY_ROOT,
+                        cwd=run_package.run.REPOSITORY_ROOT,
                         env={
                             **environment,
                             "ZETA_APP_SERVER_DAEMON_PATH": str(daemon.resolve()),
@@ -94,9 +94,9 @@ class ZetaPackageLauncherTests(unittest.TestCase):
             )
 
             with patch.object(
-                zeta_package, "development_root", return_value=development_root
+                run_package, "development_root", return_value=development_root
             ):
-                self.assertEqual(zeta_package.current_package(), package_root)
+                self.assertEqual(run_package.current_package(), package_root)
 
     def test_current_package_rejects_a_path_outside_the_package_store(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -111,12 +111,12 @@ class ZetaPackageLauncherTests(unittest.TestCase):
             )
 
             with patch.object(
-                zeta_package, "development_root", return_value=development_root
+                run_package, "development_root", return_value=development_root
             ):
                 with self.assertRaisesRegex(
                     RuntimeError, "invalid Zeta development package manifest"
                 ):
-                    zeta_package.current_package()
+                    run_package.current_package()
 
 
 if __name__ == "__main__":

@@ -5,8 +5,8 @@ import subprocess
 from pathlib import Path
 
 
-CRATE_DIRECTORY = Path(__file__).resolve().parents[1]
-REPOSITORY_DIRECTORY = CRATE_DIRECTORY.parents[1]
+REPOSITORY_DIRECTORY = Path(__file__).resolve().parents[3]
+CRATE_DIRECTORY = REPOSITORY_DIRECTORY / "zeta-rs" / "app-server-protocol"
 
 
 def generate(artifact: str, output_directory: Path) -> None:

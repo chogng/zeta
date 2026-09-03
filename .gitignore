@@ -39,3 +39,4 @@ third_party/.cache/
 .DS_Store
 .tmp-editor-file-audit.txt
 .tmp-typecheck-editor.txt
+scripts/.venv

@@ -294,9 +294,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     if metadata.get("files") != files:
         raise RuntimeError("Package file manifest does not match its contents")
     identity = {
-        key: value
-        for key, value in metadata.items()
-        if key not in ("buildId", "files")
+        key: value for key, value in metadata.items() if key not in ("buildId", "files")
     }
     expected_build_id = package_build_id(identity, files)
     if metadata.get("buildId") != expected_build_id:
@@ -544,7 +542,9 @@ def package_files(package: Path) -> Dict[str, str]:
                 if relative not in (METADATA_FILE, ".lease"):
                     files[relative] = file_sha256(path)
             else:
-                raise RuntimeError("Package contains an unsupported file: {}".format(path))
+                raise RuntimeError(
+                    "Package contains an unsupported file: {}".format(path)
+                )
 
     visit(package)
     return files

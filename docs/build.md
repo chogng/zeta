@@ -29,14 +29,14 @@ Zeta 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` �
 | `just zeta-package` | 组装并发布 Desktop、Web 与 Code TUI 共用的完整不可变开发包 |
 | `just zeta-package-run` | 组装完整开发包，并让 Code TUI 连接该包中的 daemon 与产品服务 |
 | `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
-| `just test-python` | 运行共享构建能力与发布构建器的 Python 单元测试 |
+| `just test-python [zeta-code|build|release]` | 运行全部 Python 单元测试，或只运行指定 owner 的测试 |
 | `corepack pnpm build` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
 | `corepack pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
 | `corepack pnpm test:build` | 运行构建工具自身的单元测试 |
-| `corepack pnpm test` | 通过 `scripts/test.ts` 运行构建工具检查和 Desktop 单元测试 |
-| `corepack pnpm test:integration` | 通过 `scripts/test-integration.ts` 运行 Editor 浏览器集成测试 |
-| `corepack pnpm test:web-integration` | 通过 `scripts/test-web-integration.ts` 运行带 App Server 的完整 Web 集成测试 |
-| `corepack pnpm test:desktop:smoke` | 通过 `scripts/test-smoke.ts` 运行 Electron Desktop smoke tests |
+| `corepack pnpm test` | 直接运行构建工具检查和 Desktop 单元测试 |
+| `corepack pnpm test:integration` | 直接运行 Editor 浏览器集成测试 |
+| `corepack pnpm test:web-integration` | 直接运行带 App Server 的完整 Web 集成测试 |
+| `corepack pnpm test:desktop:smoke` | 直接运行 Electron Desktop smoke tests |
 | `corepack pnpm typecheck:build` | 严格检查整个 `build/` 中的 TypeScript 构建代码 |
 | `corepack pnpm typecheck:scripts` | 严格检查整个 `scripts/` 中的 TypeScript 仓库脚本 |
 | `corepack pnpm clean` | 删除 `.build/` 和已知旧输出，不删除依赖、目录状态或源码生成物 |
@@ -89,7 +89,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 | `build/package.json` | 构建工具自身的依赖、测试和类型检查入口 |
 | `build/tsconfig.json` | 构建工具 TypeScript 边界 |
 
-`scripts/` 使用面向操作的命名。`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为日常 Cargo 命令准备锁定的构建输入，`zeta.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/zeta-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码，`rg` 从开发者的 `PATH` 解析为固定路径。`zeta_package.py` 只服务于显式的完整开发包运行。`format.py` 统一已有格式化器，`test-python.py` 运行仓库拥有的 Python 测试。Node、Electron 和 Playwright 测试入口继续使用 TypeScript，具体 runner 和 loader 放在 `scripts/test/`。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
+`scripts/` 根目录只保存仓库级工具和四个代码 owner 依赖的脚本环境：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `zeta-code`、`build`、`release` 分别运行 Python 测试并在不指定范围时聚合执行。其余操作按代码 owner 分开：`scripts/zeta-ts/` 保存 Electron Desktop 真正的 Node、Electron 和 Playwright 测试运行器与 loader，根 `package.json` 直接调用 `zeta-ts` 中的公开测试命令，不增加只转发一层的脚本；`scripts/zeta-code/` 保存 Code TUI 的源码运行和完整开发包运行入口；`scripts/zeta-rs/` 保存共享 Rust 后端的协议生成等操作；`scripts/app/` 只保存 Rust GUI 的独立仓库操作。`app` 当前没有独立脚本，因此不创建空占位文件。`scripts/zeta-code/run.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/zeta-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码，`rg` 从开发者的 `PATH` 解析为固定路径。`scripts/zeta-code/run_package.py` 只服务于显式的完整开发包运行。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
 
 完整开发包仍由 `build/zeta-package/prepareDevPackage.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。日常 `just zeta` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just zeta-package` 或 `just zeta-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
 

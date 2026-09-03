@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
@@ -10,14 +11,24 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-TEST_ROOTS = (
-    "scripts",
-    "build/lib/zeta_build",
-    "build/release",
-)
+TEST_SUITES = {
+    "zeta-code": "scripts/zeta-code",
+    "build": "build/lib/zeta_build",
+    "release": "build/release",
+}
 
 
-def main() -> int:
+def main(arguments: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("suites", nargs="*", metavar="SUITE")
+    args = parser.parse_args(arguments)
+    unknown = [suite for suite in args.suites if suite not in TEST_SUITES]
+    if unknown:
+        parser.error(
+            f"unknown suite {unknown[0]!r}; choose from {', '.join(TEST_SUITES)}"
+        )
+    suites = args.suites or tuple(TEST_SUITES)
+
     environment = os.environ.copy()
     python_paths = [
         str(REPOSITORY_ROOT),
@@ -27,7 +38,8 @@ def main() -> int:
         python_paths.append(existing)
     environment["PYTHONPATH"] = os.pathsep.join(python_paths)
 
-    for test_root in TEST_ROOTS:
+    for suite in suites:
+        test_root = TEST_SUITES[suite]
         result = subprocess.run(
             [
                 sys.executable,

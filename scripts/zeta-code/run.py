@@ -1,4 +1,4 @@
-"""Build one source-tree runtime generation and launch the Zeta Code TUI."""
+"""Build one source-tree runtime generation and launch the Code TUI."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEVELOPMENT_PROFILE = "dev-small"
 DEVELOPMENT_RUNTIME_ROOT = REPOSITORY_ROOT / ".build" / "zeta-development"
 

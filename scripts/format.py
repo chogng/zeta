@@ -41,7 +41,6 @@ def commands(check: bool) -> tuple[Command, ...]:
         (
             "build",
             "scripts",
-            "zeta-rs/app-server-protocol/scripts",
         )
     )
     return (
