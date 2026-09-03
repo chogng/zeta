@@ -25,8 +25,8 @@ use windows_sys::Win32::System::Console::WriteConsoleInputW;
 use windows_sys::Win32::System::Threading::WaitForSingleObject;
 use zeta_terminal_detection::TerminalRgb;
 
-use super::windows_replay::background;
-use super::windows_replay::response_ranges;
+use super::osc_11_background;
+use super::osc_11_response_ranges;
 
 const MAX_RECORDS: usize = 64 * 1_024;
 const READ_RECORDS: usize = 64;
@@ -88,7 +88,7 @@ impl BufferedConsoleInput {
 
     fn preserved_records(&self) -> Vec<INPUT_RECORD> {
         let mut omitted = vec![false; self.records.len()];
-        for response in response_ranges(&self.bytes) {
+        for response in osc_11_response_ranges(&self.bytes) {
             for byte_index in response {
                 omitted[self.byte_record_indices[byte_index]] = true;
             }
@@ -119,7 +119,7 @@ impl ConsoleInputReplay {
 
     fn read_until(&mut self, deadline: Instant) -> io::Result<Option<TerminalRgb>> {
         loop {
-            if let Some(color) = background(&self.input.bytes) {
+            if let Some(color) = osc_11_background(&self.input.bytes) {
                 return Ok(Some(color));
             }
             if self.input.records.len() >= MAX_RECORDS {
