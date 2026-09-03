@@ -26,7 +26,7 @@ impl Drop for Daemon {
 }
 
 #[test]
-fn daemon_answers_initialize_for_a_directory() {
+fn daemon_keeps_a_directory_connection_open_after_initialize() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("p");
     let dir = root.path().join("dir");
@@ -61,13 +61,29 @@ fn daemon_answers_initialize_for_a_directory() {
     .unwrap();
     stream.flush().unwrap();
 
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
     let mut response = String::new();
-    BufReader::new(stream).read_line(&mut response).unwrap();
+    reader.read_line(&mut response).unwrap();
     let response: Value = serde_json::from_str(&response).unwrap();
 
     assert_eq!(response["id"], 1);
     assert_eq!(response["result"]["serverInfo"]["name"], "zeta-app-server");
     assert!(response["result"]["schemaHash"].as_str().is_some());
+
+    std::thread::sleep(Duration::from_millis(100));
+    writeln!(
+        stream,
+        "{}",
+        json!({"jsonrpc":"2.0","id":2,"method":"session/list","params":{}})
+    )
+    .unwrap();
+    stream.flush().unwrap();
+
+    let mut response = String::new();
+    reader.read_line(&mut response).unwrap();
+    let response: Value = serde_json::from_str(&response).unwrap();
+    assert_eq!(response["id"], 2);
+    assert!(response["result"].is_object());
 }
 
 fn connect_when_ready(endpoint: &std::path::Path) -> UnixStream {

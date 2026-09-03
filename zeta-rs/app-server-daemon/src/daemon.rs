@@ -93,6 +93,10 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
         match listener.accept() {
             Ok((stream, _)) => {
                 idle_since = None;
+                if let Err(error) = stream.set_nonblocking(false) {
+                    eprintln!("local App Server connection blocking mode failed: {error}");
+                    continue;
+                }
                 let reader = match stream.try_clone() {
                     Ok(reader) => reader,
                     Err(error) => {
