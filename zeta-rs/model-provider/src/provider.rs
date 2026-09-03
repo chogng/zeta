@@ -1,3 +1,4 @@
+use crate::ModelCatalogBinding;
 use crate::ModelProviderError;
 use crate::ProviderCredentialService;
 use crate::lazy_client::LazyOperationClient;
@@ -356,6 +357,30 @@ impl ModelProviderRuntime {
     /// Returns the shared catalog manager used by this runtime for model resolution.
     pub fn models_manager(&self) -> ModelsManager {
         self.models.clone()
+    }
+
+    /// Resolves a dynamic model catalog source for one immutable provider configuration.
+    pub fn catalog_binding(
+        &self,
+        config: &ModelProviderConfig,
+    ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
+        let normalized = self.configs.normalize(config)?;
+        let definition = self
+            .configs
+            .get(&normalized.provider)
+            .expect("normalization only succeeds for registered providers");
+        match definition.adapter {
+            zeta_model_provider_config::ProviderAdapter::Ollama => {
+                crate::catalog::ollama_catalog_binding(
+                    normalized.provider,
+                    &normalized.base_url,
+                    Arc::clone(&self.client),
+                )
+                .map(Some)
+                .map_err(|error| ModelProviderError::Unavailable(error.to_string()))
+            }
+            _ => Ok(None),
+        }
     }
 
     pub fn instantiate(

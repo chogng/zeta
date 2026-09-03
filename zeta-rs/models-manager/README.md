@@ -137,4 +137,4 @@ Unknown merge、fresh/stale/expired、304 generation 稳定和 per-scope singlef
 scope 或 resolution 时必须同步相应 table test、本文和系统文档；新增 protocol-visible 字段还要同步
 App Server DTO/schema fixture。
 
-当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动、用户 trust/policy override 或 provider 动态 adapter。App Server 的 `model/list` DTO 投影静态 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/refresh` / `model/updated` wire method；这些是系统文档后续阶段，不应被描述为当前行为。
+当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama 已通过 provider runtime 接入 `/api/tags` 与 `/api/show`；其他 provider 动态目录仍未实现。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/refresh` / `model/updated` wire method；这些是系统文档后续阶段，不应被描述为当前行为。

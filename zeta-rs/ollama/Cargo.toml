@@ -1,0 +1,23 @@
+[package]
+name = "zeta-ollama"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_ollama"
+path = "src/lib.rs"
+
+[dependencies]
+semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-client = { workspace = true }
+zeta-http-client = { workspace = true }
+
+[lints]
+workspace = true

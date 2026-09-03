@@ -77,6 +77,7 @@ use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_model_provider_config::StaticModelRuntime;
 use zeta_model_provider_config::find_static_model;
 use zeta_models_manager::CatalogQuery;
+use zeta_models_manager::CatalogScopeKey;
 use zeta_models_manager::ModelRequirements;
 use zeta_models_manager::ModelsManager;
 use zeta_plugins::PluginActivationAuthority;
@@ -1090,11 +1091,20 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_kimi_oauth(Arc::clone(&kimi_oauth));
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
+    let catalog_runtime = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .thread_name("zeta-model-catalog")
+            .build()
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
+    );
     let configured_model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
         dir_config: dir_config.clone(),
         provider_configs: provider_configs.clone(),
         models_manager,
+        catalog_provider: model_provider.clone(),
+        catalog_runtime,
         resolver: Arc::new(ModelProviderSnapshotResolver {
             model_provider: model_provider.clone(),
         }),
@@ -1676,6 +1686,8 @@ struct ConfigBackedModelService {
     dir_config: Option<Arc<DirConfigTracker>>,
     provider_configs: ProviderConfigRegistry,
     models_manager: ModelsManager,
+    catalog_provider: Arc<ModelProviderRuntime>,
+    catalog_runtime: Arc<tokio::runtime::Runtime>,
     resolver: Arc<dyn ModelSnapshotResolver>,
 }
 
@@ -1754,14 +1766,44 @@ impl ModelCatalog for ConfigBackedModelService {
         &self,
     ) -> Result<Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         let config = self.resolved_config()?;
-        let providers = self
+        let mut scopes = self
             .provider_configs
             .providers()
-            .map(|provider| provider.id.clone())
+            .map(|provider| CatalogScopeKey::provider_seed(provider.id.clone()))
             .collect::<Vec<_>>();
+        for provider in config.providers.values() {
+            let binding = match self.catalog_provider.catalog_binding(provider) {
+                Ok(Some(binding)) => binding,
+                Ok(None) => continue,
+                Err(error) => {
+                    log::warn!(
+                        "could not bind dynamic model catalog for {}: {error}",
+                        provider.provider
+                    );
+                    continue;
+                }
+            };
+            let scope = binding.scope().clone();
+            if let Err(error) = self.catalog_runtime.block_on(self.models_manager.read(
+                scope.clone(),
+                zeta_models_manager::CatalogReadPolicy::CachePreferred,
+                zeta_models_manager::CatalogReadSource::dynamic(binding.source()),
+            )) {
+                log::warn!(
+                    "could not refresh dynamic model catalog for {}: {error}",
+                    provider.provider
+                );
+            }
+            if let Some(seed) = scopes
+                .iter_mut()
+                .find(|candidate| candidate.provider() == &provider.provider)
+            {
+                *seed = scope;
+            }
+        }
         let mut models = self
             .models_manager
-            .list_static(&providers, &CatalogQuery::all())
+            .list(&scopes, &CatalogQuery::all())
             .map_err(|error| CoreError::Model(error.to_string()))?
             .into_iter()
             .map(|entry| {

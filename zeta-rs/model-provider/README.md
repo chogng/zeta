@@ -162,8 +162,9 @@ ChatGPT subscription 通过 `zeta-chatgpt` 提供的 fresh authenticated target 
 新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/catalog/codec/operation/network 分层。
 
-当前 runtime 尚未实现 provider-specific `ModelCatalogSource`；动态 discovery endpoint/DTO 和 credential
-binding 属于下一阶段 adapter 工作。静态 invocation resolution 已统一进入 manager。
+当前 runtime 已为 Ollama 实现 `ModelCatalogSource`，通过独立的 `zeta-ollama` 调用 `/api/tags` 与
+`/api/show`，并与模型调用共享 operation client。其他 provider 的动态 discovery endpoint/DTO 和
+credential binding 属于下一阶段 adapter 工作。静态 invocation resolution 已统一进入 manager。
 
 当前 input-token preflight 已贯穿 `ModelInvoker → ProviderAdapter → zeta-api → OperationClient` 的
 caller-owned cancellation。所有 estimated endpoint 使用额外 1%/至少 32 tokens 的保守记账余量；这

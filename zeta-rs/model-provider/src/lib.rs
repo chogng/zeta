@@ -1,6 +1,7 @@
 //! Model-provider instantiation, transport configuration, and API adaptation.
 
 mod auth;
+mod catalog;
 mod error;
 mod lazy_client;
 mod provider;
@@ -8,6 +9,7 @@ mod providers;
 mod semantic_models;
 mod semantic_runtime;
 
+pub use catalog::ModelCatalogBinding;
 pub use error::ModelProviderError;
 pub use provider::EchoModel;
 pub use provider::ModelEventSink;

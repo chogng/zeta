@@ -75,6 +75,7 @@ members = [
     "zeta-rs/models-manager",
     "zeta-rs/model-tokenizer",
     "zeta-rs/multi-agent-evals",
+    "zeta-rs/ollama",
     "zeta-rs/mcp",
     "zeta-rs/mcp-server",
     "zeta-rs/action-policy",
@@ -366,6 +367,7 @@ zeta-model-provider = { path = "zeta-rs/model-provider" }
 zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }
 zeta-models-manager = { path = "zeta-rs/models-manager" }
 zeta-model-tokenizer = { path = "zeta-rs/model-tokenizer" }
+zeta-ollama = { path = "zeta-rs/ollama" }
 zeta-action-policy = { path = "zeta-rs/action-policy" }
 zeta-plugins = { path = "zeta-rs/plugins" }
 zeta-prompts = { path = "zeta-rs/prompts" }

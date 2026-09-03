@@ -10,6 +10,10 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use zeta_async_utils::CancellationSource;
+use zeta_client::ClientError;
+use zeta_client::ClientRequest;
+use zeta_client::ClientResponse;
+use zeta_client::OperationClient;
 use zeta_config::ConfigCommandRequest;
 use zeta_config::ConfigRevision;
 use zeta_config::DirConfigScope;
@@ -1115,11 +1119,14 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
     let before_update = select_model(&config, "select-before", configured, "before-update");
     let gate = Arc::new(ResponseGate::default());
     let provider_configs = test_provider_registry();
+    let catalog_provider = Arc::new(ModelProviderRuntime::new(provider_configs.clone()));
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
         dir_config: None,
         provider_configs: provider_configs.clone(),
         models_manager: ModelsManager::new(provider_configs),
+        catalog_provider,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
         resolver: Arc::new(RecordingSnapshotResolver { gate: gate.clone() }),
     });
     let in_flight_model = model.clone();
@@ -1155,11 +1162,14 @@ model = "dir-model"
         DirConfigScope::new(Dir::open_local(path.parent().unwrap()).unwrap().id()),
     )));
     let provider_configs = test_provider_registry();
+    let catalog_provider = Arc::new(ModelProviderRuntime::new(provider_configs.clone()));
     let model = ConfigBackedModelService {
         config: config.clone(),
         dir_config: Some(dir.clone()),
         provider_configs: provider_configs.clone(),
         models_manager: ModelsManager::new(provider_configs),
+        catalog_provider,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
         resolver: Arc::new(RecordingSnapshotResolver {
             gate: Arc::new(ResponseGate::default()),
         }),
@@ -1192,11 +1202,14 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
     let configured = configure_test_provider(&config, ConfigRevision::INITIAL);
     select_model(&config, "select-custom", configured, "custom-model");
     let provider_configs = test_provider_registry();
+    let catalog_provider = Arc::new(ModelProviderRuntime::new(provider_configs.clone()));
     let model = ConfigBackedModelService {
         config,
         dir_config: None,
         provider_configs: provider_configs.clone(),
         models_manager: ModelsManager::new(provider_configs),
+        catalog_provider,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
         resolver: Arc::new(RecordingSnapshotResolver {
             gate: Arc::new(ResponseGate::default()),
         }),
@@ -1227,6 +1240,60 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
         openai.capabilities.image_detail_original,
         zeta_protocol::CapabilitySupport::Supported
     );
+    remove_config_files(&path);
+}
+
+struct OllamaCatalogClient;
+
+impl OperationClient for OllamaCatalogClient {
+    fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        let body = match request.url() {
+            "http://localhost:11434/api/tags" => br#"{"models":[{"name":"qwen3:8b"}]}"#.to_vec(),
+            "http://localhost:11434/api/show" => {
+                br#"{"capabilities":["completion","tools"]}"#.to_vec()
+            }
+            endpoint => panic!("unexpected Ollama endpoint: {endpoint}"),
+        };
+        Ok(ClientResponse::new(200, Vec::new(), body))
+    }
+}
+
+#[test]
+fn local_catalog_includes_models_installed_in_configured_ollama() {
+    let path = config_path("ollama-model-catalog");
+    let config = Arc::new(ConfigStore::open(&path).unwrap());
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-ollama").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureProvider {
+                provider: ProviderId::new("ollama").unwrap(),
+                config: ModelProviderConfig::new(ProviderId::new("ollama").unwrap()),
+            },
+        })
+        .unwrap();
+    let provider_configs = ProviderConfigRegistry::builtin();
+    let catalog_provider = Arc::new(ModelProviderRuntime::with_client(
+        provider_configs.clone(),
+        Arc::new(OllamaCatalogClient),
+    ));
+    let model = ConfigBackedModelService {
+        config,
+        dir_config: None,
+        provider_configs,
+        models_manager: catalog_provider.models_manager(),
+        catalog_provider,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(RecordingSnapshotResolver {
+            gate: Arc::new(ResponseGate::default()),
+        }),
+    };
+
+    let models = model.list().unwrap();
+
+    assert!(models.iter().any(|entry| {
+        entry.model.provider.as_str() == "ollama" && entry.model.model.as_str() == "qwen3:8b"
+    }));
     remove_config_files(&path);
 }
 

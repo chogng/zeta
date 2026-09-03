@@ -11,6 +11,8 @@ name = "zeta_model_provider"
 path = "src/lib.rs"
 
 [dependencies]
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
 url = { workspace = true }
 zeta-api = { workspace = true }
 zeta-async-utils = { workspace = true }
@@ -23,6 +25,7 @@ zeta-model-provider-config = { workspace = true }
 zeta-models-manager = { workspace = true }
 zeta-model-tokenizer = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-ollama = { workspace = true }
 zeta-secrets = { workspace = true }
 
 [dev-dependencies]

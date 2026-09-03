@@ -11826,6 +11826,8 @@ name = "zeta-model-provider"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "sha2 0.10.9",
+ "tokio",
  "url",
  "zeta-api",
  "zeta-async-utils",
@@ -11837,6 +11839,7 @@ dependencies = [
  "zeta-model-provider-config",
  "zeta-model-tokenizer",
  "zeta-models-manager",
+ "zeta-ollama",
  "zeta-protocol",
  "zeta-secrets",
 ]
@@ -11888,6 +11891,19 @@ dependencies = [
  "zeta-core",
  "zeta-protocol",
  "zeta-work-coordination",
+]
+
+[[package]]
+name = "zeta-ollama"
+version = "0.1.0"
+dependencies = [
+ "semver",
+ "serde",
+ "serde_json",
+ "url",
+ "zeta-async-utils",
+ "zeta-client",
+ "zeta-http-client",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@
 
 > 物理位置：`zeta-rs/models-manager/`
 > Rust crate：`zeta_models_manager`
-> 当前状态：Phase 1 core 已实现；动态 provider adapters、持久缓存和完整 App Server snapshot API 尚未实现
+> 当前状态：Phase 1 core 与 Ollama 动态目录已实现；其他动态 provider adapters、持久缓存和完整 App Server snapshot API 尚未实现
 > Crate 实现说明：[`zeta-models-manager` README](../zeta-rs/models-manager/README.md)
 > Canonical model contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
 > Provider wire adapter：[`zeta-api.md`](zeta-api.md)
@@ -92,7 +92,7 @@ model provider 负责“如何用已选模型执行一次调用”
 | per-scope memory cache、freshness、singleflight | ✅ | `ManagedScope`、`ScopeState`、`ModelsManager::{read,refresh}` |
 | 字段 provenance 与 Unknown 保留 | ✅ | `CatalogRecord`、`ModelMetadataProvenance` |
 | model-provider/App Server 静态目录统一 | ✅ | `ModelProviderRuntime::models_manager`、`ConfigBackedModelService` |
-| 真实 provider discovery adapters | 尚未完成 | Phase 2 |
+| 真实 provider discovery adapters | 部分具备 | Ollama `/api/tags` + `/api/show` 已接入；其他 provider 留在 Phase 2 |
 | persisted observation cache、backoff/jitter、并发总闸 | 尚未完成 | Phase 4 / 后续 core hardening |
 | `model/refresh`、`model/updated`、完整 snapshot DTO | 尚未完成 | Phase 3 |
 
@@ -942,7 +942,7 @@ model/list(stale)
 
 1. OpenAI、Anthropic；
 2. Gemini、DeepSeek；
-3. Ollama；
+3. ✅ Ollama；
 4. xAI、Hugging Face；
 5. Kimi、MiniMax、Qwen、Z.AI、MiMo 等先使用 curated/static source，在有官方、可验证
    authenticated endpoint 后再接动态 discovery。
