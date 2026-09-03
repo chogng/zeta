@@ -1,4 +1,4 @@
-//! Design-time SVG/PNG rasterization and terminal sprite source generation.
+//! Design-time image/grid rasterization and terminal sprite source generation.
 
 use crate::OwnedTerminalSprite;
 use crate::Rgb;
@@ -35,7 +35,11 @@ pub fn source_dimensions(path: &Path) -> Result<(u32, u32)> {
         }
         "png" => image::image_dimensions(path)
             .with_context(|| format!("read PNG dimensions {}", path.display())),
-        value => bail!("unsupported image extension '.{value}'; expected .svg or .png"),
+        "sprite" => {
+            let source = parse_sprite_grid(path)?;
+            Ok((source.width, source.height))
+        }
+        value => bail!("unsupported image extension '.{value}'; expected .svg, .png, or .sprite"),
     }
 }
 
@@ -47,7 +51,8 @@ pub fn rasterize(path: &Path, width: u32, height: u32) -> Result<RasterizedImage
     let pixels = match extension.as_str() {
         "svg" => rasterize_svg(path, width, height)?,
         "png" => rasterize_png(path, width, height)?,
-        value => bail!("unsupported image extension '.{value}'; expected .svg or .png"),
+        "sprite" => rasterize_sprite_grid(path, width, height)?,
+        value => bail!("unsupported image extension '.{value}'; expected .svg, .png, or .sprite"),
     };
     Ok(RasterizedImage {
         width,
@@ -155,6 +160,131 @@ fn rasterize_png(path: &Path, width: u32, height: u32) -> Result<Vec<[u8; 4]>> {
         .with_context(|| format!("decode PNG source {}", path.display()))?
         .into_rgba8();
     let image = resize_pixel_art(&source, width, height);
+    Ok(image.pixels().map(|pixel| pixel.0).collect())
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct SpriteGrid {
+    width: u32,
+    height: u32,
+    pixels: Vec<[u8; 4]>,
+}
+
+fn parse_sprite_grid(path: &Path) -> Result<SpriteGrid> {
+    let contents = std::fs::read_to_string(path)
+        .with_context(|| format!("read sprite grid {}", path.display()))?;
+    let mut colors = BTreeMap::new();
+    let mut rows = Vec::new();
+    let mut reading_grid = false;
+
+    for (index, line) in contents.lines().enumerate() {
+        let line_number = index + 1;
+        if !reading_grid {
+            if line == "---" {
+                reading_grid = true;
+                continue;
+            }
+            if line.is_empty() {
+                continue;
+            }
+            let (symbol, color) = parse_palette_entry(line)
+                .with_context(|| format!("parse {} line {line_number}", path.display()))?;
+            if colors.insert(symbol, color).is_some() {
+                bail!(
+                    "sprite grid {} line {line_number} defines '{symbol}' more than once",
+                    path.display()
+                );
+            }
+        } else {
+            if line.is_empty() {
+                bail!(
+                    "sprite grid {} line {line_number} must not be empty",
+                    path.display()
+                );
+            }
+            rows.push((line_number, line));
+        }
+    }
+
+    if !reading_grid {
+        bail!(
+            "sprite grid {} is missing the --- separator",
+            path.display()
+        );
+    }
+    let Some((_, first_row)) = rows.first() else {
+        bail!("sprite grid {} has no pixel rows", path.display());
+    };
+    let width = first_row.chars().count();
+    if width == 0 {
+        bail!("sprite grid {} has an empty first row", path.display());
+    }
+    let width = u32::try_from(width).context("sprite grid width exceeds u32")?;
+    let height = u32::try_from(rows.len()).context("sprite grid height exceeds u32")?;
+    if width > 4096 || height > 4096 {
+        bail!("sprite grid dimensions {width}x{height} exceed the 4096-pixel compiler limit");
+    }
+    let mut pixels = Vec::with_capacity(width as usize * height as usize);
+    for (line_number, row) in rows.iter().copied() {
+        let row_width = row.chars().count();
+        if row_width != width as usize {
+            bail!(
+                "sprite grid {} line {line_number} has width {row_width}; expected {width}",
+                path.display()
+            );
+        }
+        for symbol in row.chars() {
+            if symbol == '.' {
+                pixels.push([0, 0, 0, 0]);
+            } else if let Some(color) = colors.get(&symbol) {
+                pixels.push(*color);
+            } else {
+                bail!(
+                    "sprite grid {} line {line_number} uses undefined symbol '{symbol}'",
+                    path.display()
+                );
+            }
+        }
+    }
+    Ok(SpriteGrid {
+        width,
+        height,
+        pixels,
+    })
+}
+
+fn parse_palette_entry(line: &str) -> Result<(char, [u8; 4])> {
+    let (symbol, color) = line
+        .split_once('=')
+        .context("palette entry must use SYMBOL=#RRGGBB")?;
+    let mut symbols = symbol.chars();
+    let Some(symbol) = symbols.next() else {
+        bail!("palette symbol must not be empty");
+    };
+    if symbols.next().is_some() || symbol == '.' || symbol.is_whitespace() {
+        bail!("palette symbol must be one non-whitespace character other than '.'");
+    }
+    let hex = color
+        .strip_prefix('#')
+        .context("palette color must use #RRGGBB")?;
+    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!("palette color must use #RRGGBB");
+    }
+    let red = u8::from_str_radix(&hex[0..2], 16).context("parse red color component")?;
+    let green = u8::from_str_radix(&hex[2..4], 16).context("parse green color component")?;
+    let blue = u8::from_str_radix(&hex[4..6], 16).context("parse blue color component")?;
+    Ok((symbol, [red, green, blue, 0xff]))
+}
+
+fn rasterize_sprite_grid(path: &Path, width: u32, height: u32) -> Result<Vec<[u8; 4]>> {
+    let source = parse_sprite_grid(path)?;
+    let image = image::RgbaImage::from_raw(
+        source.width,
+        source.height,
+        source.pixels.into_iter().flatten().collect(),
+    )
+    .context("sprite grid pixel count did not match its dimensions")?;
+    let image = resize_pixel_art(&image, width, height);
     Ok(image.pixels().map(|pixel| pixel.0).collect())
 }
 

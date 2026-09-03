@@ -4,6 +4,7 @@ use crate::models::preferred_model_label;
 use crate::status::StatusLineSettings;
 use crate::thread::composer::ChatInputMode;
 use crate::widgets::list_selection::ListSelection;
+use crate::widgets::list_selection::ListSelectionActivationMode;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -333,7 +334,7 @@ pub(crate) fn config_choices(
             .with_id(git_changes_id)
             .with_columns(
                 "Show Git changes as diff",
-                "Use added and deleted line counts in the status line",
+                "Show added and deleted lines instead of changed files",
                 checkbox(show_git_changes_as_diff),
             ),
     ];
@@ -348,7 +349,8 @@ pub(crate) fn config_choices(
                 ListSelectionGroup::new("Language servers", language_servers(config)),
             ],
         )
-        .with_activation_label("change")
+        .with_activation_mode(ListSelectionActivationMode::EnterOrSpace)
+        .with_activation_label("to change")
         .with_search(SearchBoxModel::new("Search configuration"))
         .with_empty_message("No matching configuration"),
         actions,

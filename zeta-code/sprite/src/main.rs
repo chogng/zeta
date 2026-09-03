@@ -11,9 +11,9 @@ use zeta_sprite::compiler::source_dimensions;
 use zeta_sprite::pack_quadrants_rgba;
 
 #[derive(Debug, Parser)]
-#[command(about = "Convert an SVG or PNG into a terminal-native Unicode sprite")]
+#[command(about = "Convert an SVG, PNG, or pixel grid into a terminal Unicode sprite")]
 struct Args {
-    /// SVG or PNG design source.
+    /// SVG, PNG, or .sprite pixel-grid design source.
     input: PathBuf,
 
     /// Output width in terminal cells.

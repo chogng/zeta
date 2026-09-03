@@ -3,7 +3,6 @@ use std::collections::BTreeMap;
 use serde_json::json;
 use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 
-use super::GitChangesDisplay;
 use super::StatusLineItem;
 use super::StatusLineSettings;
 
@@ -49,29 +48,23 @@ fn writing_status_line_preserves_other_tui_values() {
         written.0.get("statusLine"),
         Some(&json!(["permissions", "model", "git-branch"]))
     );
-    assert_eq!(written.0.get("gitChangesDisplay"), Some(&json!("count")));
+    assert_eq!(written.0.get("showGitChangesAsDiff"), Some(&json!(false)));
 }
 
 #[test]
-fn git_changes_display_defaults_to_count_and_round_trips_line_totals() {
+fn showing_git_changes_as_diff_defaults_off_and_round_trips() {
     let defaults = StatusLineSettings::from_tui(&FrontendConfigDto::default()).unwrap();
-    assert_eq!(defaults.git_changes_display(), GitChangesDisplay::Count);
+    assert!(!defaults.show_git_changes_as_diff());
 
     let section = FrontendConfigDto(BTreeMap::from([(
-        "gitChangesDisplay".into(),
-        json!("addedDeletedLines"),
+        "showGitChangesAsDiff".into(),
+        json!(true),
     )]));
     let settings = StatusLineSettings::from_tui(&section).unwrap();
-    assert_eq!(
-        settings.git_changes_display(),
-        GitChangesDisplay::AddedDeletedLines
-    );
+    assert!(settings.show_git_changes_as_diff());
 
     let written = settings.write_to_tui(&FrontendConfigDto::default());
-    assert_eq!(
-        written.0.get("gitChangesDisplay"),
-        Some(&json!("addedDeletedLines"))
-    );
+    assert_eq!(written.0.get("showGitChangesAsDiff"), Some(&json!(true)));
 }
 
 #[test]
@@ -81,7 +74,7 @@ fn accounting_items_round_trip_when_enabled() {
             "statusLine".into(),
             json!(["cache-hit-rate", "reference-cost"]),
         ),
-        ("gitChangesDisplay".into(), json!("count")),
+        ("showGitChangesAsDiff".into(), json!(false)),
     ]));
 
     let settings = StatusLineSettings::from_tui(&section).unwrap();
@@ -103,8 +96,8 @@ fn unknown_and_duplicate_items_are_rejected() {
         assert!(StatusLineSettings::from_tui(&section).is_err());
     }
     let section = FrontendConfigDto(BTreeMap::from([(
-        "gitChangesDisplay".into(),
-        json!("summary"),
+        "showGitChangesAsDiff".into(),
+        json!("yes"),
     )]));
     assert!(StatusLineSettings::from_tui(&section).is_err());
 }

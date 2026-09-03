@@ -112,7 +112,7 @@ TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，�
 just zeta
 ```
 
-调整 Welcome 区域的终端图案时，以 [`assets/welcome/pet.svg`](assets/welcome/pet.svg) 为设计源。`just pet` 会重新生成 `src/app/welcome/pet/asset.rs`，并在当前终端直接显示最终的 9×3 彩色图案；`just pet-check` 只检查设计源与生成文件是否一致。
+调整 Welcome 区域的终端图案时，直接编辑 [`assets/welcome/pet.sprite`](assets/welcome/pet.sprite) 中的像素网格：`B` 是蓝色、`K` 是黑色、`.` 是透明。顶部调色板使用 `字符=#RRGGBB`，`---` 后每两列、两行像素生成一个终端字符。`just pet` 会重新生成 `src/app/welcome/pet/asset.rs`，并在当前终端直接显示最终的 9×3 彩色图案；`just pet-check` 只检查网格与生成文件是否一致。
 
 ```bash
 just pet

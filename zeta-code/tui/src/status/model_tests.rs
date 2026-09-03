@@ -36,7 +36,7 @@ fn status_line_combines_counts_model_branch_and_changes() {
 #[test]
 fn git_changes_can_show_added_and_deleted_lines() {
     let mut settings = StatusLineSettings::default();
-    settings.set_git_changes_display(GitChangesDisplay::AddedDeletedLines);
+    settings.set_show_git_changes_as_diff(true);
     let mut status_line = StatusLineModel::new();
     status_line.apply_settings(settings);
     status_line.apply_git_status(&git_status(2));
@@ -66,7 +66,7 @@ fn git_changes_can_show_added_and_deleted_lines() {
 #[test]
 fn stale_git_line_statistics_do_not_replace_a_newer_status() {
     let mut settings = StatusLineSettings::default();
-    settings.set_git_changes_display(GitChangesDisplay::AddedDeletedLines);
+    settings.set_show_git_changes_as_diff(true);
     let mut status_line = StatusLineModel::new();
     status_line.apply_settings(settings);
     let mut stale = git_status(1);

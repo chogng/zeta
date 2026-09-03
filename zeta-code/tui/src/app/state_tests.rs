@@ -742,7 +742,7 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
 }
 
 #[test]
-fn config_git_changes_display_supports_arrow_selection_and_enter_toggle() {
+fn config_show_git_changes_as_diff_toggles_on_enter() {
     let mut config = empty_config_snapshot();
     config.revision = 7;
     let mut app = App::new();
@@ -757,22 +757,9 @@ fn config_git_changes_display_supports_arrow_selection_and_enter_toggle() {
     }
 
     assert!(matches!(
-        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
-        Some(AppCommand::EditConfig(edit))
-            if edit.status_line.git_changes_display()
-                == crate::status::GitChangesDisplay::AddedDeletedLines
-    ));
-    assert!(matches!(
-        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
-        Some(AppCommand::EditConfig(edit))
-            if edit.status_line.git_changes_display()
-                == crate::status::GitChangesDisplay::Count
-    ));
-    assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::EditConfig(edit))
-            if edit.status_line.git_changes_display()
-                == crate::status::GitChangesDisplay::AddedDeletedLines
+            if edit.status_line.show_git_changes_as_diff()
     ));
 }
 

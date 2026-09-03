@@ -3,7 +3,6 @@ use super::provider_api_key_prompt;
 use crate::config::ConfigSelectionAction;
 use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
-use crate::status::GitChangesDisplay;
 use crate::status::StatusLineSettings;
 use crate::test_support::empty_config_snapshot;
 use crate::thread::composer::ChatInputMode;
@@ -48,6 +47,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     );
+    assert_eq!(view.model.key_hints().text(), "Enter/Space to change");
     let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Config");
@@ -85,19 +85,15 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
                 && vim.terminal.input_mode() == ChatInputMode::Vim
     ));
     let git_changes = &state.visible_items()[3];
-    assert_eq!(git_changes.label(), "Git changes");
+    assert_eq!(git_changes.label(), "Show Git changes as diff");
     assert_eq!(
         git_changes.description(),
-        Some("How working-tree changes appear in the status line Number of files")
+        Some("Show added and deleted lines instead of changed files [   ]")
     );
     assert!(matches!(
         view.actions.get(git_changes.id().unwrap()).unwrap(),
-        ConfigSelectionAction::ChooseGitChangesDisplay {
-            count,
-            added_deleted_lines,
-        } if count.status_line.git_changes_display() == GitChangesDisplay::Count
-            && added_deleted_lines.status_line.git_changes_display()
-                == GitChangesDisplay::AddedDeletedLines
+        ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
+            if edit.status_line.show_git_changes_as_diff()
     ));
     let follow_up = &state.visible_items()[1];
     assert_eq!(follow_up.label(), "Follow-up messages");

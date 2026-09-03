@@ -177,10 +177,6 @@ impl StatusLineModel {
         true
     }
 
-    pub(crate) const fn shows_git_changes_as_diff(&self) -> bool {
-        self.settings.show_git_changes_as_diff()
-    }
-
     pub(crate) fn top_text_for_width(&self, width: usize, runtime: StatusLineRuntime) -> String {
         let runtime = runtime.text();
         let mut values = Vec::new();

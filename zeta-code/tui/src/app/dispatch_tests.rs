@@ -378,8 +378,8 @@ fn keybindings_and_status_line_are_persisted_in_the_tui_toml_section() {
         Some(&serde_json::json!(["permissions", "model", "git-branch"]))
     );
     assert_eq!(
-        config.tui.0.get("gitChangesDisplay"),
-        Some(&serde_json::json!("count"))
+        config.tui.0.get("showGitChangesAsDiff"),
+        Some(&serde_json::json!(false))
     );
 
     drop(client);
@@ -387,12 +387,12 @@ fn keybindings_and_status_line_are_persisted_in_the_tui_toml_section() {
 }
 
 #[test]
-fn git_changes_display_is_persisted_in_the_tui_toml_section() {
+fn show_git_changes_as_diff_is_persisted_in_the_tui_toml_section() {
     let (mut client, state_root) = client();
     let server_config = client.read_config().unwrap();
     let terminal = crate::config::TerminalSettings::from_tui(&server_config.tui).unwrap();
     let mut status_line = crate::status::StatusLineSettings::from_tui(&server_config.tui).unwrap();
-    status_line.set_git_changes_display(crate::status::GitChangesDisplay::AddedDeletedLines);
+    status_line.set_show_git_changes_as_diff(true);
 
     crate::config::set_settings(
         &mut client,
@@ -408,8 +408,13 @@ fn git_changes_display_is_persisted_in_the_tui_toml_section() {
     .unwrap();
 
     assert_eq!(
-        client.read_config().unwrap().tui.0.get("gitChangesDisplay"),
-        Some(&serde_json::json!("addedDeletedLines"))
+        client
+            .read_config()
+            .unwrap()
+            .tui
+            .0
+            .get("showGitChangesAsDiff"),
+        Some(&serde_json::json!(true))
     );
 
     drop(client);
