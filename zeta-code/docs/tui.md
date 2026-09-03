@@ -78,6 +78,7 @@ zeta-code/tui/
 ├── src/
 │   ├── lib.rs
 │   ├── app.rs / app/
+│   │   ├── chat_panel.rs
 │   │   ├── command.rs
 │   │   ├── completion.rs
 │   │   ├── event.rs
@@ -85,7 +86,7 @@ zeta-code/tui/
 │   │   ├── event_pump.rs
 │   │   ├── frame.rs
 │   │   ├── layout.rs
-│   │   ├── composer_slot.rs
+│   │   ├── command_panel.rs
 │   │   ├── recovery.rs
 │   │   ├── redraw.rs
 │   │   └── requests.rs
@@ -195,7 +196,7 @@ attachments.rs
 它不负责：
 
 - Thread 输入、Queue、Approval、Query 或正文更新规则；
-- Session picker、主题 picker、配置 editor 的内部流程；
+- Session、Theme、Config 等命令面板的内部流程；
 - 解释所有 App Server 响应；
 - 保存每个功能的请求 generation；
 - 读文件、写配置、访问剪贴板或直接执行 RPC；
@@ -226,10 +227,14 @@ enum AppCommand {
 
 ### 输入位置
 
-`ComposerSlot` 表示 Session 页面输入位置当前显示什么，而不是一个新的产品状态机。它可以承载普通 Thread composer、Approval、Status 面板、Config editor、Theme picker 等互斥界面，但不能解释这些界面的内部结果。Status 面板按内容申请高度；布局在空间不足时压缩它并至少保留 4 行正文，面板在获得的视口内滚动。它属于普通布局而不是 Overlay。
+`ChatPanel` 是 Session 页面底部聊天交互区的状态与输入负责人。它持有 `ChatComposer`、当前
+`CommandPanel`、Approval、Query、输入目标、`TopTip` 和 `StatusLineModel`；固定与临时只表示
+这些内容的显示周期，不形成两套抽象。`CommandPanel` 只记录当前打开的命令面板，与普通输入框和
+审批面板互斥，但不解释具体面板的内部结果。产品文档统一使用“命令面板”，代码可以根据内部职责
+使用 `Picker`、`Editor` 或 `Panel` 等后缀；完整命名规则由[布局与部位名称](LAYOUT.md#输入位置里可能出现什么)定义。Status 面板按内容申请高度；布局在空间不足时压缩它并至少保留 4 行正文，面板在获得的视口内滚动。它属于普通布局而不是浮层。
 
-每个具体界面自己处理按键、粘贴、期望高度、绘制和命中，并产生自己的类型化 outcome。`app/` 只负责
-打开、替换和关闭输入位置内容。
+每个具体界面自己处理按键、粘贴、期望高度、绘制和命中，并产生自己的类型化 outcome。
+`ChatPanel` 负责打开、替换、关闭和路由聊天区内容；`App` 只协调页面、Thread 与外部命令。
 
 ## 6. `thread/`：当前 Thread 的完整终端能力
 
@@ -260,7 +265,7 @@ enum AppCommand {
 | 状态 | 例子 | 规则 |
 | --- | --- | --- |
 | 权威事实的界面副本 | 当前 Turn 状态、Goal、Plan、等待交互 | 只由 snapshot 或有效 notification 更新 |
-| 局部交互状态 | draft、cursor、selection、scroll、picker | 由 `thread/` 内对应子职责拥有 |
+| 局部交互状态 | 草稿、光标、选择和滚动 | 由 `thread/` 内对应子职责拥有 |
 | 局部操作状态 | 主题保存、配置修改、导出结果 | 不得改变 Turn 阶段或 Submit/Queue/Steer 选择 |
 
 `active_turn`、Turn 展示阶段和输入目标不能分别散落在事件循环局部变量与 `App` 中，再依赖多次手工
@@ -444,7 +449,7 @@ UI state，不解释产品能力结果，也不建立覆盖所有 RPC 的第二�
 | 类别 | 示例 | 负责人 |
 | --- | --- | --- |
 | 可重建界面状态 | active Thread snapshot、Turn phase、连接错误 | 对应产品能力 |
-| 局部交互状态 | draft、cursor、selection、scroll、picker | 对应控件或能力 |
+| 局部交互状态 | 草稿、光标、选择和滚动 | 对应控件或能力 |
 | 运行资源 | terminal handle、client、channel、task、clock、cache | event loop、driver 或资源模块 |
 | 权威产品状态 | Turn reducer、writer lease、approval policy | TUI 外的事实负责人 |
 

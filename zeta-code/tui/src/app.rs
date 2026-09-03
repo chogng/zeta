@@ -1,4 +1,9 @@
+mod chat_panel;
+#[cfg(test)]
+#[path = "app/chat_panel_tests.rs"]
+mod chat_panel_tests;
 mod command;
+mod command_panel;
 mod completion;
 #[cfg(test)]
 #[path = "app/conversation_flow_tests.rs"]
@@ -10,7 +15,6 @@ mod event_loop;
 mod event_pump;
 mod frame;
 mod help;
-mod composer_slot;
 mod layout;
 mod recovery;
 mod redraw;
@@ -25,10 +29,10 @@ mod welcome;
 pub(crate) use crate::sessions::ActiveConversation;
 pub(crate) use command::AppCommand;
 #[cfg(test)]
+pub(crate) use command_panel::CommandPanel;
+#[cfg(test)]
 pub(crate) use completion::apply_active_turn_snapshot;
 pub(crate) use event::AppEvent;
 pub(crate) use event_loop::run;
-#[cfg(test)]
-pub(crate) use composer_slot::ComposerSlot;
 pub(crate) use state::App;
 pub(crate) use state::Status;

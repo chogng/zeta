@@ -1302,20 +1302,20 @@ fn activate_pointer_item(
 ) -> Option<AppCommand> {
     let target = frame::input_pointer_target_at(app, area, column, row)?;
     match target {
-        InputPointerTarget::ComposerSlot(
-            crate::app::composer_slot::ComposerSlotPointerTarget::Tab(index),
+        InputPointerTarget::CommandPanel(
+            crate::app::command_panel::CommandPanelPointerTarget::Tab(index),
         ) => {
             app.select_tab(index);
             None
         }
-        InputPointerTarget::ComposerSlot(
-            crate::app::composer_slot::ComposerSlotPointerTarget::Search,
+        InputPointerTarget::CommandPanel(
+            crate::app::command_panel::CommandPanelPointerTarget::Search,
         ) => {
             app.focus_composer_search();
             None
         }
-        InputPointerTarget::ComposerSlot(
-            crate::app::composer_slot::ComposerSlotPointerTarget::Item(index),
+        InputPointerTarget::CommandPanel(
+            crate::app::command_panel::CommandPanelPointerTarget::Item(index),
         ) => app.activate_visible_item(index),
         InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
             app.activate_input_completion(index)

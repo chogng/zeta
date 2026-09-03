@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::app::composer_slot::ComposerSlotPointerTarget;
+use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::app::welcome;
 use crate::render::Renderable;
 use crate::sessions;
@@ -24,7 +24,7 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
 use std::borrow::Cow;
 
-enum StatusAreaView<'a> {
+enum BottomContent<'a> {
     HitBar {
         text: Cow<'a, str>,
         style: HitBarStyle,
@@ -39,7 +39,7 @@ enum HitBarStyle {
     Muted,
 }
 
-const STATUS_AREA_ROWS: u16 = 2;
+const BOTTOM_ROWS: u16 = 2;
 
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let context = app.render_context();
@@ -113,20 +113,20 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             pressed_choice,
             context,
         );
-    } else if let Some(slot) = app.composer_slot() {
-        let hovered_slot = match hovered {
-            Some(InputPointerTarget::ComposerSlot(target)) => Some(*target),
+    } else if let Some(panel) = app.command_panel() {
+        let hovered_panel = match hovered {
+            Some(InputPointerTarget::CommandPanel(target)) => Some(*target),
             _ => None,
         };
-        let pressed_slot = match pressed {
-            Some(InputPointerTarget::ComposerSlot(target)) => Some(*target),
+        let pressed_panel = match pressed {
+            Some(InputPointerTarget::CommandPanel(target)) => Some(*target),
             _ => None,
         };
-        slot.draw(
+        panel.draw(
             frame,
             areas.session.composer,
-            hovered_slot,
-            pressed_slot,
+            hovered_panel,
+            pressed_panel,
             context,
         );
     } else {
@@ -166,7 +166,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             context,
         );
     }
-    draw_status_area(frame, areas.session.status, app, context);
+    draw_bottom(frame, areas.session.bottom, app, context);
     if let Some(agent_thread_switcher) = app.agent_thread_switcher_view() {
         crate::thread::draw_agent_thread_switcher(
             frame,
@@ -231,7 +231,7 @@ pub(crate) fn input_overlay_index_at(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InputPointerTarget {
     Composer(ChatComposerPointerTarget),
-    ComposerSlot(ComposerSlotPointerTarget),
+    CommandPanel(CommandPanelPointerTarget),
     Approval(usize),
     Query(usize),
     SessionManager(crate::sessions::SessionManagerPointerTarget),
@@ -294,10 +294,10 @@ pub(crate) fn input_pointer_target_at(
     {
         return Some(InputPointerTarget::Query(index));
     }
-    if let Some(slot) = app.composer_slot()
-        && let Some(target) = slot.pointer_target_at(areas.session.composer, column, row)
+    if let Some(panel) = app.command_panel()
+        && let Some(target) = panel.pointer_target_at(areas.session.composer, column, row)
     {
-        return Some(InputPointerTarget::ComposerSlot(target));
+        return Some(InputPointerTarget::CommandPanel(target));
     }
     if let Some(manager) = app.session_manager_view() {
         let manager_areas = super::layout::manager_areas(
@@ -345,9 +345,9 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         cursor: chat_input::ChatInputCursor::Hidden,
     }
     .desired_height(terminal_area.width, app.render_context());
-    let mode_rows = app
-        .composer_slot()
-        .map(|slot| slot.desired_height(terminal_area.width))
+    let command_panel_rows = app
+        .command_panel()
+        .map(|panel| panel.desired_height(terminal_area.width))
         .unwrap_or_default();
     let approval_rows = app
         .approval_view()
@@ -359,8 +359,8 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         .unwrap_or_default();
     let composer_rows = if approval_rows > 0 {
         approval_rows
-    } else if mode_rows > 0 {
-        mode_rows
+    } else if command_panel_rows > 0 {
+        command_panel_rows
     } else {
         input_rows
     };
@@ -370,7 +370,6 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         let queue_view = app.queue_view();
         queue::desired_height(&queue_view, queue::DEFAULT_MAX_VISIBLE_ITEMS)
     };
-    let status_area = status_area_view(app);
     let session = super::layout::session_areas(
         terminal_area,
         if app.session_manager_view().is_some() {
@@ -386,10 +385,10 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         queue_rows,
         query_rows,
         composer_rows,
-        status_area.desired_rows(),
+        BOTTOM_ROWS,
         app.agent_thread_switcher_rows(),
     );
-    let input = if approval_rows > 0 || mode_rows > 0 {
+    let input = if approval_rows > 0 || command_panel_rows > 0 {
         Rect {
             y: session.composer.bottom(),
             height: 0,
@@ -422,7 +421,7 @@ fn transient_area(areas: &FrameLayout) -> Rect {
         width: areas.session.transcript.width,
         height: areas
             .session
-            .status
+            .bottom
             .y
             .saturating_sub(areas.session.transcript.y),
     }
@@ -430,20 +429,20 @@ fn transient_area(areas: &FrameLayout) -> Rect {
 
 fn completion_visible(app: &App) -> bool {
     app.overlay().is_none()
-        && app.composer_slot().is_none()
+        && app.command_panel().is_none()
         && app.approval_view().is_none()
         && app.query_view().is_none()
         && app.completion().is_some()
 }
 
-fn draw_status_area(
+fn draw_bottom(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
-    match status_area_view(app) {
-        StatusAreaView::HitBar { text, style } => match style {
+    match bottom_content(app) {
+        BottomContent::HitBar { text, style } => match style {
             HitBarStyle::Keys => key_hint::draw(frame, bottom_row(area), &text, context),
             HitBarStyle::Warning => frame.render_widget(
                 Paragraph::new(text.as_ref() as &str).style(Style::default().fg(context.warning())),
@@ -454,60 +453,60 @@ fn draw_status_area(
                 chat_input::content_area(bottom_row(area)),
             ),
         },
-        StatusAreaView::StatusLine => draw_status_line(frame, area, app, context),
+        BottomContent::StatusLine => draw_status_line(frame, area, app, context),
     }
 }
 
-fn status_area_view(app: &App) -> StatusAreaView<'_> {
-    if let Some(hints) = app.composer_key_hints() {
-        return StatusAreaView::HitBar {
+fn bottom_content(app: &App) -> BottomContent<'_> {
+    if let Some(hints) = app.command_panel_key_hints() {
+        return BottomContent::HitBar {
             text: Cow::Borrowed(hints),
             style: HitBarStyle::Keys,
         };
     }
     if app.session_manager_view().is_some() {
-        return StatusAreaView::HitBar {
+        return BottomContent::HitBar {
             text: Cow::Borrowed(app.session_manager_hint()),
             style: HitBarStyle::Keys,
         };
     }
     if app.approval_view().is_some() {
-        return StatusAreaView::HitBar {
+        return BottomContent::HitBar {
             text: Cow::Borrowed("↑↓ choose · enter confirm"),
             style: HitBarStyle::Keys,
         };
     }
     if app.query_view().is_some() {
-        return StatusAreaView::HitBar {
+        return BottomContent::HitBar {
             text: Cow::Borrowed("↑↓ choose · enter answer · esc cancel custom input"),
             style: HitBarStyle::Keys,
         };
     }
     if app.transcript_selection_active() {
-        return StatusAreaView::HitBar {
+        return BottomContent::HitBar {
             text: Cow::Borrowed("↑↓ select · space expand · enter details · esc input"),
             style: HitBarStyle::Keys,
         };
     }
     if app.agent_thread_switcher_focused() {
-        return StatusAreaView::HitBar {
+        return BottomContent::HitBar {
             text: Cow::Borrowed("↑↓ select · enter switch · esc input"),
             style: HitBarStyle::Keys,
         };
     }
     if let Some(prefix) = app.pending_key_chord_label() {
-        return StatusAreaView::HitBar {
+        return BottomContent::HitBar {
             text: Cow::Owned(format!("{prefix} … waiting for next key · esc cancel")),
             style: HitBarStyle::Warning,
         };
     }
     if app.viewed_thread_completed() {
-        return StatusAreaView::HitBar {
+        return BottomContent::HitBar {
             text: Cow::Borrowed("completed · choose Main or another Subagent"),
             style: HitBarStyle::Muted,
         };
     }
-    StatusAreaView::StatusLine
+    BottomContent::StatusLine
 }
 
 fn draw_status_line(
@@ -524,12 +523,6 @@ fn draw_status_line(
         app.status_line_runtime(),
         context,
     );
-}
-
-impl StatusAreaView<'_> {
-    const fn desired_rows(&self) -> u16 {
-        STATUS_AREA_ROWS
-    }
 }
 
 fn bottom_row(area: Rect) -> Rect {

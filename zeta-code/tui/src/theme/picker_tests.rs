@@ -120,19 +120,19 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         .map(|span| span.content.as_ref() as &str)
         .collect::<String>();
     assert_eq!(caption, "Syntax palette: Palette 1");
-    let slot = crate::app::ComposerSlot::theme(view);
-    let key_hints = slot.key_hints().to_owned();
+    let panel = crate::app::CommandPanel::theme(view);
+    let key_hints = panel.key_hints().to_owned();
     assert_eq!(key_hints, "Enter to apply");
-    let slot_height = slot.desired_height(80);
-    let height = slot_height.saturating_add(1);
+    let panel_height = panel.desired_height(80);
+    let height = panel_height.saturating_add(1);
     let backend = TestBackend::new(80, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
-            slot.draw(
+            panel.draw(
                 frame,
                 ratatui::layout::Rect {
-                    height: slot_height,
+                    height: panel_height,
                     ..frame.area()
                 },
                 None,
@@ -142,7 +142,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
             crate::widgets::key_hint::draw(
                 frame,
                 ratatui::layout::Rect {
-                    y: slot_height,
+                    y: panel_height,
                     height: 1,
                     ..frame.area()
                 },

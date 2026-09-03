@@ -1,11 +1,12 @@
+use super::chat_panel::ChatPanel;
 use super::command::AppCommand;
+use super::command_panel::CommandPanel;
+use super::command_panel::CommandPanelOutcome;
 use super::escape::ScreenEscapeOutcome;
 use super::escape::ScreenEscapeSequence;
 use super::event::AppEvent;
 use super::frame::InputPointerTarget;
 use super::help::help_choices;
-use super::composer_slot::ComposerSlot;
-use super::composer_slot::ComposerSlotOutcome;
 use crate::app::top_tip::TopTip;
 use crate::app::welcome::WelcomeModel;
 use crate::config::ConfigSelectionAction;
@@ -49,19 +50,13 @@ use crate::thread::AgentThreadSwitcherView;
 use crate::thread::ThreadPresentationEvent;
 use crate::thread::ThreadPresentationStore;
 use crate::thread::ThreadRequestIdentity;
-use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadState;
 use crate::thread::TurnActivity;
 use crate::thread::TurnApprovalModes;
-use crate::thread::composer::ChatComposer;
 use crate::thread::composer::ChatComposerOutcome;
 use crate::thread::composer::ChatComposerView;
 use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::ChatInputItem;
-use crate::thread::interaction::approval::Approval;
-use crate::thread::interaction::approval::ApprovalOutcome;
-use crate::thread::interaction::query::Query;
-use crate::thread::interaction::query::QueryOutcome;
 use crate::thread::queue::QueueChoices;
 use crate::thread::queue::QueueInput;
 use crate::thread::queue::QueueSelectionAction;
@@ -101,13 +96,6 @@ pub(crate) enum Status {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TurnInputMode {
-    Start,
-    Queue,
-    Steer,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EmptyInputNavigation {
     PreviousScreen,
     NextScreen,
@@ -137,22 +125,16 @@ fn empty_input_navigation(
 
 #[derive(Debug)]
 pub(crate) struct App {
-    chat_composer: ChatComposer,
+    chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
     thread: ThreadState,
     thread_presentations: ThreadPresentationStore,
     sessions: SessionsState,
     agent_thread_switcher: AgentThreadSwitcher,
-    composer_slot: Option<ComposerSlot>,
     overlay: Option<DetailOverlay>,
     welcome: WelcomeModel,
-    approval: Option<Approval>,
-    query: Option<Query>,
     screen_escape_sequence: ScreenEscapeSequence,
     status: Status,
-    turn_input_mode: TurnInputMode,
-    status_line: StatusLineModel,
-    top_tip: TopTip,
     terminal_settings: TerminalSettings,
     pointer: PointerInteraction<InputPointerTarget>,
     screen_selection: ScreenSelection,
@@ -165,7 +147,7 @@ impl App {
     #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self {
-            chat_composer: ChatComposer::new(),
+            chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
             thread_presentations: ThreadPresentationStore::new(
@@ -173,16 +155,10 @@ impl App {
             ),
             sessions: SessionsState::default(),
             agent_thread_switcher: AgentThreadSwitcher::default(),
-            composer_slot: None,
             overlay: None,
             welcome: WelcomeModel::for_workspace(Path::new(".")),
-            approval: None,
-            query: None,
             screen_escape_sequence: ScreenEscapeSequence::default(),
             status: Status::Ready,
-            turn_input_mode: TurnInputMode::Start,
-            status_line: StatusLineModel::new(),
-            top_tip: TopTip::new(),
             terminal_settings: TerminalSettings::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
@@ -213,7 +189,7 @@ impl App {
         input_catalog: ChatInputCatalog,
     ) -> Self {
         Self {
-            chat_composer: ChatComposer::new(),
+            chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
             thread_presentations: ThreadPresentationStore::with_input_catalog(
@@ -222,16 +198,10 @@ impl App {
             ),
             sessions: SessionsState::default(),
             agent_thread_switcher: AgentThreadSwitcher::default(),
-            composer_slot: None,
             overlay: None,
             welcome: WelcomeModel::for_workspace(dir_root),
-            approval: None,
-            query: None,
             screen_escape_sequence: ScreenEscapeSequence::default(),
             status: Status::Ready,
-            turn_input_mode: TurnInputMode::Start,
-            status_line: StatusLineModel::new(),
-            top_tip: TopTip::new(),
             terminal_settings: TerminalSettings::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
@@ -263,13 +233,12 @@ impl App {
             if let Some(command) = self.handle_thread_request_key(key) {
                 return command;
             }
-            if self.approval.is_some() || self.query.is_some() {
+            if self.chat_panel.request_active() {
                 return None;
             }
         }
-        if let Some(slot) = self.composer_slot.as_mut() {
-            let outcome = slot.handle_key(key);
-            return self.handle_composer_slot_outcome(outcome);
+        if let Some(outcome) = self.chat_panel.handle_command_key(key) {
+            return self.handle_command_panel_outcome(outcome);
         }
         let temporary_interaction_active = self.completion().is_some();
         let is_screen_escape_press = key.kind == KeyEventKind::Press
@@ -298,22 +267,11 @@ impl App {
             return self.handle_app_key(key, now);
         }
 
-        let outcome = match self.turn_input_mode {
-            TurnInputMode::Start => self
-                .chat_composer
-                .handle_key(&mut self.thread_presentations.active_mut().input, key),
-            TurnInputMode::Queue => self
-                .chat_composer
-                .handle_queued_turn_key(&mut self.thread_presentations.active_mut().input, key),
-            TurnInputMode::Steer => match self.terminal_settings.follow_up_mode() {
-                FollowUpMode::Queue => self
-                    .chat_composer
-                    .handle_queued_turn_key(&mut self.thread_presentations.active_mut().input, key),
-                FollowUpMode::Steer => self
-                    .chat_composer
-                    .handle_active_turn_key(&mut self.thread_presentations.active_mut().input, key),
-            },
-        };
+        let outcome = self.chat_panel.handle_composer_key(
+            &mut self.thread_presentations.active_mut().input,
+            key,
+            self.terminal_settings.follow_up_mode(),
+        );
         if matches!(outcome, ChatComposerOutcome::Unhandled) {
             return self.handle_app_key(key, now);
         }
@@ -346,19 +304,17 @@ impl App {
                     submission.display_text.clone(),
                 ));
                 if starts_conversation {
-                    self.top_tip.show_policy_tip(now);
+                    self.chat_panel.show_policy_tip(now);
                 }
-                if self.turn_input_mode == TurnInputMode::Steer {
-                    let steer_id = self
-                        .chat_composer
-                        .begin_steer(submission.display_text.clone());
+                if self.chat_panel.is_steering() {
+                    let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
                     return Some(AppCommand::SteerTurn {
                         steer_id,
                         submission,
                     });
                 }
                 self.status = Status::Working;
-                self.turn_input_mode = TurnInputMode::Queue;
+                self.chat_panel.queue_input();
                 Some(AppCommand::SubmitTurn { submission })
             }
             ChatComposerOutcome::Consumed => None,
@@ -367,151 +323,91 @@ impl App {
     }
 
     fn handle_thread_request_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
-        if let Some(approval) = self.approval.as_mut() {
-            let outcome = approval.handle_key(key);
-            return Some(match outcome {
-                ApprovalOutcome::Respond(decision) => {
-                    let response = self
-                        .approval
-                        .as_ref()
-                        .expect("the Approval request remains open while submitting")
-                        .response(decision);
-                    Some(AppCommand::ResolveThreadRequest(response))
-                }
-                ApprovalOutcome::Consumed | ApprovalOutcome::Unhandled => None,
-            });
-        }
-        if let Some(query) = self.query.as_mut() {
-            let outcome = query.handle_key(key);
-            return Some(match outcome {
-                QueryOutcome::Completed(answers) => {
-                    let response = self
-                        .query
-                        .as_ref()
-                        .expect("the Query request remains open while submitting")
-                        .response(answers);
-                    Some(AppCommand::ResolveThreadRequest(response))
-                }
-                QueryOutcome::Consumed | QueryOutcome::Unhandled => None,
-            });
-        }
-        None
+        self.chat_panel
+            .handle_request_key(key)
+            .map(|response| response.map(AppCommand::ResolveThreadRequest))
     }
 
     fn close_thread_request(&mut self, request: &ThreadRequestIdentity) {
-        match request.kind {
-            ThreadRequestKind::Approval => {
-                if self
-                    .approval
-                    .as_ref()
-                    .is_some_and(|approval| approval.request_id() == &request.request_id)
-                {
-                    self.approval = None;
-                }
-            }
-            ThreadRequestKind::Query => {
-                if self
-                    .query
-                    .as_ref()
-                    .is_some_and(|query| query.request_id() == &request.request_id)
-                {
-                    self.query = None;
-                }
-            }
-        }
+        self.chat_panel.close_request(request);
     }
 
     fn fail_thread_request(&mut self, request: &ThreadRequestIdentity, error: String) {
-        match request.kind {
-            ThreadRequestKind::Approval => {
-                if let Some(approval) = self.approval.as_mut()
-                    && approval.request_id() == &request.request_id
-                {
-                    approval.submission_failed(error);
-                }
-            }
-            ThreadRequestKind::Query => {
-                if let Some(query) = self.query.as_mut()
-                    && query.request_id() == &request.request_id
-                {
-                    query.submission_failed(error);
-                }
-            }
-        }
+        self.chat_panel.fail_request(request, error);
     }
 
-    fn handle_composer_slot_outcome(&mut self, outcome: ComposerSlotOutcome) -> Option<AppCommand> {
+    fn handle_command_panel_outcome(&mut self, outcome: CommandPanelOutcome) -> Option<AppCommand> {
         match outcome {
-            ComposerSlotOutcome::Dirs(DirSelectionAction::Remove { path }) => {
+            CommandPanelOutcome::Dirs(DirSelectionAction::Remove { path }) => {
                 Some(AppCommand::RemoveDir { path })
             }
-            ComposerSlotOutcome::Dirs(DirSelectionAction::SetPermissions(params)) => {
+            CommandPanelOutcome::Dirs(DirSelectionAction::SetPermissions(params)) => {
                 Some(AppCommand::SetDirPermissions(params))
             }
-            ComposerSlotOutcome::Config(outcome) => self.handle_config_editor_outcome(outcome),
-            ComposerSlotOutcome::Connectors(ConnectorSelectionAction::ConnectDeviceOAuth {
+            CommandPanelOutcome::Config(outcome) => self.handle_config_editor_outcome(outcome),
+            CommandPanelOutcome::Connectors(ConnectorSelectionAction::ConnectDeviceOAuth {
                 connector_id,
                 connection_generation,
             }) => Some(AppCommand::ConnectConnectorDeviceOAuth {
                 connector_id,
                 connection_generation,
             }),
-            ComposerSlotOutcome::Connectors(ConnectorSelectionAction::Disconnect {
+            CommandPanelOutcome::Connectors(ConnectorSelectionAction::Disconnect {
                 connector_id,
             }) => Some(AppCommand::DisconnectConnector { connector_id }),
-            ComposerSlotOutcome::Keymap(KeymapEditorOutcome::Edit(edit)) => {
+            CommandPanelOutcome::Keymap(KeymapEditorOutcome::Edit(edit)) => {
                 Some(AppCommand::EditKeymap(edit))
             }
-            ComposerSlotOutcome::Keymap(KeymapEditorOutcome::Consumed) => None,
-            ComposerSlotOutcome::Keymap(KeymapEditorOutcome::Dismiss) => {
-                self.close_composer_slot();
+            CommandPanelOutcome::Keymap(KeymapEditorOutcome::Consumed) => None,
+            CommandPanelOutcome::Keymap(KeymapEditorOutcome::Dismiss) => {
+                self.close_command_panel();
                 None
             }
-            ComposerSlotOutcome::Mcp(McpSelectionAction::SetEnablement {
+            CommandPanelOutcome::Mcp(McpSelectionAction::SetEnablement {
                 server_id,
                 enablement,
             }) => Some(AppCommand::SetMcpEnablement {
                 server_id,
                 enablement,
             }),
-            ComposerSlotOutcome::Model(ModelSelectionAction::Select { preference }) => {
+            CommandPanelOutcome::Model(ModelSelectionAction::Select { preference }) => {
                 Some(AppCommand::SetPreferredModel { preference })
             }
-            ComposerSlotOutcome::Queue(QueueSelectionAction::Select(queue_id)) => {
+            CommandPanelOutcome::Queue(QueueSelectionAction::Select(queue_id)) => {
                 self.open_queue_detail(queue_id);
                 None
             }
-            ComposerSlotOutcome::QueueInput {
+            CommandPanelOutcome::QueueInput {
                 input,
                 action: QueueSelectionAction::Select(queue_id),
             } => self.handle_queue_input(input, queue_id),
-            ComposerSlotOutcome::Rewind(RewindSelectionAction::Rewind {
+            CommandPanelOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
                 checkpoint_label,
             }) => Some(AppCommand::RewindToCheckpoint {
                 before_turn_id,
                 checkpoint_label,
             }),
-            ComposerSlotOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => {
+            CommandPanelOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => {
                 Some(AppCommand::ResumeSession {
                     session_id,
                     preferred_thread_id: None,
                 })
             }
-            ComposerSlotOutcome::Skills(SkillSelectionAction::SetEnablement {
+            CommandPanelOutcome::Skills(SkillSelectionAction::SetEnablement {
                 skill_id,
                 enablement,
             }) => Some(AppCommand::SetSkillEnablement {
                 skill_id,
                 enablement,
             }),
-            ComposerSlotOutcome::StatusLine(StatusLineSelectionAction::SetEnabled(edit)) => {
+            CommandPanelOutcome::StatusLine(StatusLineSelectionAction::SetEnabled(edit)) => {
                 Some(AppCommand::EditStatusLine(edit))
             }
-            ComposerSlotOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
-            ComposerSlotOutcome::Consumed => None,
-            ComposerSlotOutcome::Dismiss => {
-                self.close_composer_slot();
+            CommandPanelOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
+            CommandPanelOutcome::Consumed => None,
+            CommandPanelOutcome::Dismiss => {
+                self.close_command_panel();
                 None
             }
         }
@@ -564,7 +460,7 @@ impl App {
             }
             crate::config::ConfigEditorOutcome::Consumed => None,
             crate::config::ConfigEditorOutcome::Dismiss => {
-                self.close_composer_slot();
+                self.close_command_panel();
                 None
             }
         }
@@ -573,17 +469,17 @@ impl App {
     fn handle_theme_picker_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
         match outcome {
             ThemePickerOutcome::Select { preference } => {
-                self.close_composer_slot();
+                self.close_command_panel();
                 Some(AppCommand::SetTheme { preference })
             }
             ThemePickerOutcome::SelectCustom { preference } => {
-                self.close_composer_slot();
+                self.close_command_panel();
                 Some(AppCommand::SetCustomTheme { preference })
             }
             ThemePickerOutcome::OpenCustomThemes => Some(AppCommand::OpenCustomThemePicker),
             ThemePickerOutcome::Consumed => None,
             ThemePickerOutcome::Dismiss => {
-                self.close_composer_slot();
+                self.close_command_panel();
                 None
             }
         }
@@ -594,33 +490,15 @@ impl App {
             return None;
         }
         let outcome = self
-            .chat_composer
+            .chat_panel
             .activate_completion(&mut self.thread_presentations.active_mut().input, index)?;
         self.handle_chat_composer_outcome(outcome, Instant::now())
     }
 
     pub(crate) fn activate_thread_request_choice(&mut self, index: usize) -> Option<AppCommand> {
-        if let Some(approval) = self.approval.as_mut() {
-            let ApprovalOutcome::Respond(decision) = approval.activate(index)? else {
-                return None;
-            };
-            let response = self
-                .approval
-                .as_ref()
-                .expect("the Approval request remains open while submitting")
-                .response(decision);
-            return Some(AppCommand::ResolveThreadRequest(response));
-        }
-        let query = self.query.as_mut()?;
-        let QueryOutcome::Completed(answers) = query.activate(index)? else {
-            return None;
-        };
-        let response = self
-            .query
-            .as_ref()
-            .expect("the Query request remains open while submitting")
-            .response(answers);
-        Some(AppCommand::ResolveThreadRequest(response))
+        self.chat_panel
+            .activate_request_choice(index)
+            .map(AppCommand::ResolveThreadRequest)
     }
 
     pub(crate) fn toggle_transcript_cell(&mut self, render_key: &str) -> bool {
@@ -657,7 +535,7 @@ impl App {
     #[cfg(test)]
     pub(crate) fn insert_text(&mut self, text: &str) {
         if self.accepts_input() {
-            self.chat_composer
+            self.chat_panel
                 .insert_text(&mut self.thread_presentations.active_mut().input, text);
         }
     }
@@ -667,23 +545,20 @@ impl App {
         if self.overlay.is_some() {
             return;
         }
-        if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
-            if self.approval.is_some() {
-                return;
-            }
-            if let Some(query) = self.query.as_mut() {
-                query.handle_paste(pasted);
-                return;
-            }
+        if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
+            && self.chat_panel.request_active()
+        {
+            self.chat_panel.handle_request_paste(pasted);
+            return;
         }
-        if let Some(slot) = self.composer_slot.as_mut() {
-            slot.handle_paste(pasted);
+        if self.chat_panel.command_active() {
+            self.chat_panel.handle_command_paste(pasted);
             return;
         }
         if self.accepts_input()
             && let Err(error) = self
-                .chat_composer
-                .handle_paste(&mut self.thread_presentations.active_mut().input, pasted)
+                .chat_panel
+                .handle_input_paste(&mut self.thread_presentations.active_mut().input, pasted)
         {
             self.thread
                 .update(ThreadPresentationEvent::FailureReported(error));
@@ -693,7 +568,7 @@ impl App {
     fn attach_image_bytes(&mut self, bytes: Vec<u8>) {
         if self.accepts_input()
             && let Err(error) = self
-                .chat_composer
+                .chat_panel
                 .attach_image_bytes(&mut self.thread_presentations.active_mut().input, bytes)
         {
             self.thread
@@ -715,16 +590,16 @@ impl App {
     }
 
     pub(crate) fn chat_composer_view(&self) -> ChatComposerView<'_> {
-        self.chat_composer
-            .view(&self.thread_presentations.active().input)
+        self.chat_panel
+            .composer_view(&self.thread_presentations.active().input)
     }
 
-    pub(crate) fn composer_key_hints(&self) -> Option<&str> {
-        self.composer_slot.as_ref().map(ComposerSlot::key_hints)
+    pub(crate) fn command_panel_key_hints(&self) -> Option<&str> {
+        self.chat_panel.command_key_hints()
     }
 
-    pub(crate) fn composer_slot(&self) -> Option<&ComposerSlot> {
-        self.composer_slot.as_ref()
+    pub(crate) fn command_panel(&self) -> Option<&CommandPanel> {
+        self.chat_panel.command()
     }
 
     pub(crate) fn overlay(&self) -> Option<&DetailOverlay> {
@@ -732,7 +607,7 @@ impl App {
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
-        if self.composer_slot.is_some() || self.overlay.is_some() {
+        if self.chat_panel.command_active() || self.overlay.is_some() {
             return None;
         }
         self.thread_presentations.active().input.completion()
@@ -745,7 +620,7 @@ impl App {
             && !self.sessions.manager().focused()
             && !self.agent_thread_switcher.focused()
             && self.thread_presentations.active().selected_cell.is_none()
-            && self.composer_slot.is_none()
+            && !self.chat_panel.command_active()
             && self.completion().is_none()
     }
 
@@ -810,20 +685,20 @@ impl App {
 
     #[cfg(test)]
     fn show_help(&mut self, model: crate::widgets::list_selection::ListSelectionModel) {
-        self.open_composer_slot(ComposerSlot::help(model));
+        self.open_command_panel(CommandPanel::help(model));
     }
 
     pub(crate) fn approval_view(
         &self,
     ) -> Option<crate::thread::interaction::approval::ApprovalView<'_>> {
         matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            .then(|| self.approval.as_ref().map(Approval::view))
+            .then(|| self.chat_panel.approval_view())
             .flatten()
     }
 
     pub(crate) fn query_view(&self) -> Option<crate::thread::interaction::query::QueryView<'_>> {
         matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            .then(|| self.query.as_ref().map(Query::view))
+            .then(|| self.chat_panel.query_view())
             .flatten()
     }
 
@@ -832,16 +707,16 @@ impl App {
             && self.thread_presentations.active().selected_cell.is_some()
     }
 
-    fn open_composer_slot(&mut self, slot: ComposerSlot) {
+    fn open_command_panel(&mut self, panel: CommandPanel) {
         self.screen_escape_sequence.reset();
         self.overlay = None;
-        self.composer_slot = Some(slot);
+        self.chat_panel.open_command(panel);
         self.pointer.clear();
     }
 
-    fn close_composer_slot(&mut self) {
+    fn close_command_panel(&mut self) {
         self.screen_escape_sequence.reset();
-        self.composer_slot = None;
+        self.chat_panel.close_command();
         self.pointer.clear();
     }
 
@@ -859,24 +734,22 @@ impl App {
 
     fn close_transient_surfaces(&mut self) {
         self.screen_escape_sequence.reset();
-        self.composer_slot = None;
+        self.chat_panel.close_command();
         self.overlay = None;
         self.pointer.clear();
     }
 
     fn show_dirs_picker(&mut self, spec: DirChoices) {
-        self.open_composer_slot(ComposerSlot::dirs(spec));
+        self.open_command_panel(CommandPanel::dirs(spec));
     }
 
     fn show_queue_picker(&mut self, spec: QueueChoices) {
-        self.open_composer_slot(ComposerSlot::queue(spec));
+        self.open_command_panel(CommandPanel::queue(spec));
     }
 
     fn update_queue_picker(&mut self) {
         let spec = crate::thread::queue::choices(&self.queue_view());
-        if let Some(slot) = self.composer_slot.as_mut() {
-            slot.replace_queue(spec);
-        }
+        self.chat_panel.replace_queue(spec);
     }
 
     fn open_queue_detail(&mut self, queue_id: crate::thread::queue::QueueId) {
@@ -904,7 +777,7 @@ impl App {
             QueueInput::Restore => {
                 let state = self.thread_presentations.active_mut();
                 match state.queue.restore(queue_id, &mut state.input) {
-                    Ok(()) => self.close_composer_slot(),
+                    Ok(()) => self.close_command_panel(),
                     Err(error) => self
                         .thread
                         .update(ThreadPresentationEvent::FailureReported(error)),
@@ -948,12 +821,12 @@ impl App {
                     .active_mut()
                     .queue
                     .begin_send(queue_id)?;
-                self.close_composer_slot();
+                self.close_command_panel();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
                 ));
                 self.status = Status::Working;
-                self.turn_input_mode = TurnInputMode::Queue;
+                self.chat_panel.queue_input();
                 Some(AppCommand::SubmitQueuedTurn {
                     queue_id,
                     submission,
@@ -963,9 +836,7 @@ impl App {
     }
 
     fn update_dirs_picker(&mut self, spec: DirChoices) {
-        if let Some(slot) = self.composer_slot.as_mut() {
-            slot.replace_dirs(spec);
-        }
+        self.chat_panel.replace_dirs(spec);
     }
 
     fn show_skill_settings(&mut self, choices: SkillChoices) {
@@ -975,7 +846,7 @@ impl App {
             diagnostics,
         } = choices;
         self.report_skill_diagnostics(&diagnostics);
-        self.open_composer_slot(ComposerSlot::skills(SkillChoices {
+        self.open_command_panel(CommandPanel::skills(SkillChoices {
             model,
             actions,
             diagnostics: Vec::new(),
@@ -983,41 +854,35 @@ impl App {
     }
 
     fn show_mcp_settings(&mut self, spec: McpChoices) {
-        self.open_composer_slot(ComposerSlot::mcp(spec));
+        self.open_command_panel(CommandPanel::mcp(spec));
     }
 
     fn show_connector_picker(&mut self, spec: ConnectorChoices) {
-        self.open_composer_slot(ComposerSlot::connectors(spec));
+        self.open_command_panel(CommandPanel::connectors(spec));
     }
 
     fn update_connector_picker(&mut self, spec: ConnectorChoices) {
-        if let Some(slot) = self.composer_slot.as_mut() {
-            slot.replace_connectors(spec);
-        }
+        self.chat_panel.replace_connectors(spec);
     }
 
     pub(crate) fn connector_picker_open(&self) -> bool {
-        self.composer_slot
-            .as_ref()
-            .is_some_and(ComposerSlot::is_connectors)
+        self.chat_panel.command_is_connectors()
     }
 
     fn update_mcp_settings(&mut self, spec: McpChoices) {
-        if let Some(slot) = self.composer_slot.as_mut() {
-            slot.replace_mcp(spec);
-        }
+        self.chat_panel.replace_mcp(spec);
     }
 
     fn show_model_picker(&mut self, spec: ModelChoices) {
-        self.open_composer_slot(ComposerSlot::model(spec));
+        self.open_command_panel(CommandPanel::model(spec));
     }
 
     fn show_rewind_picker(&mut self, spec: RewindChoices) {
-        self.open_composer_slot(ComposerSlot::rewind(spec));
+        self.open_command_panel(CommandPanel::rewind(spec));
     }
 
     fn show_session_picker(&mut self, spec: SessionChoices) {
-        self.open_composer_slot(ComposerSlot::sessions(spec));
+        self.open_command_panel(CommandPanel::sessions(spec));
     }
 
     fn update_skill_settings(&mut self, choices: SkillChoices) {
@@ -1027,13 +892,11 @@ impl App {
             diagnostics,
         } = choices;
         self.report_skill_diagnostics(&diagnostics);
-        if let Some(slot) = self.composer_slot.as_mut() {
-            slot.replace_skills(SkillChoices {
-                model,
-                actions,
-                diagnostics: Vec::new(),
-            });
-        }
+        self.chat_panel.replace_skills(SkillChoices {
+            model,
+            actions,
+            diagnostics: Vec::new(),
+        });
     }
 
     fn report_skill_diagnostics(
@@ -1047,58 +910,48 @@ impl App {
     }
 
     fn show_theme_picker(&mut self, spec: ThemeChoices) {
-        self.open_composer_slot(ComposerSlot::theme(spec));
+        self.open_command_panel(CommandPanel::theme(spec));
     }
 
     fn show_keymap_editor(&mut self, spec: KeymapChoices) {
-        self.open_composer_slot(ComposerSlot::keymap(spec));
+        self.open_command_panel(CommandPanel::keymap(spec));
     }
 
     fn show_status_line_editor(&mut self, spec: StatusLineChoices) {
-        self.open_composer_slot(ComposerSlot::status_line(spec));
+        self.open_command_panel(CommandPanel::status_line(spec));
     }
 
     fn show_status_panel(&mut self, panel: crate::status::StatusPanel) {
-        self.open_composer_slot(ComposerSlot::status(panel));
+        self.open_command_panel(CommandPanel::status(panel));
     }
 
     fn update_status_line_editor(&mut self, spec: StatusLineChoices) {
-        if let Some(slot) = self.composer_slot.as_mut() {
-            slot.replace_status_line(spec);
-        }
+        self.chat_panel.replace_status_line(spec);
     }
 
     pub(crate) fn skills_view_is_active(&self) -> bool {
-        self.composer_slot
-            .as_ref()
-            .is_some_and(ComposerSlot::is_skills)
+        self.chat_panel.command_is_skills()
     }
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
-        self.composer_slot
-            .as_ref()
-            .and_then(ComposerSlot::list_selection)
+        self.chat_panel.command_list_selection()
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.composer_slot
-            .as_mut()
-            .is_some_and(|slot| slot.select_tab(index))
+        self.chat_panel.select_command_tab(index)
     }
 
     pub(crate) fn focus_composer_search(&mut self) -> bool {
-        self.composer_slot
-            .as_mut()
-            .is_some_and(ComposerSlot::focus_search)
+        self.chat_panel.focus_command_search()
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<AppCommand> {
-        let outcome = self.composer_slot.as_mut()?.activate_visible_item(index)?;
-        self.handle_composer_slot_outcome(outcome)
+        let outcome = self.chat_panel.activate_command_item(index)?;
+        self.handle_command_panel_outcome(outcome)
     }
 
     pub(crate) fn mention_query(&self) -> Option<&str> {
-        if self.composer_slot.is_some() {
+        if self.chat_panel.command_active() {
             return None;
         }
         self.thread_presentations.active().input.mention_query()
@@ -1163,7 +1016,7 @@ impl App {
     }
 
     pub(crate) fn steers_active_turn(&self) -> bool {
-        self.turn_input_mode == TurnInputMode::Steer
+        self.chat_panel.is_steering()
     }
 
     pub(crate) fn queue_view(&self) -> QueueView<'_> {
@@ -1259,7 +1112,7 @@ impl App {
             submission.display_text.clone(),
         ));
         self.status = Status::Working;
-        self.turn_input_mode = TurnInputMode::Queue;
+        self.chat_panel.queue_input();
         Some(AppCommand::SubmitQueuedTurn {
             queue_id,
             submission,
@@ -1277,7 +1130,7 @@ impl App {
     pub(crate) fn cycle_next_approval_mode(&mut self, now: Instant) {
         self.thread.cycle_approval_mode();
         if self.thread.has_user_message() {
-            self.top_tip.show_policy_tip(now);
+            self.chat_panel.show_policy_tip(now);
         }
     }
 
@@ -1291,15 +1144,15 @@ impl App {
     }
 
     pub(crate) fn status_line(&self) -> &StatusLineModel {
-        &self.status_line
+        self.chat_panel.status_line()
     }
 
     pub(crate) fn top_tip(&self) -> &TopTip {
-        &self.top_tip
+        self.chat_panel.top_tip()
     }
 
     pub(crate) fn show_policy_tip(&mut self, now: Instant) {
-        self.top_tip.show_policy_tip(now);
+        self.chat_panel.show_policy_tip(now);
     }
 
     pub(crate) fn status_line_runtime(&self) -> StatusLineRuntime {
@@ -1385,7 +1238,7 @@ impl App {
                         path.display()
                     )));
                 self.status = Status::Ready;
-                self.turn_input_mode = TurnInputMode::Start;
+                self.chat_panel.start_input();
             }
             AppEvent::DirPermissionsUpdated(choices) => self.update_dirs_picker(choices),
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
@@ -1406,26 +1259,23 @@ impl App {
                 }
                 self.thread_presentations
                     .set_input_mode(result.settings.input_mode());
-                if let Some(slot) = self.composer_slot.as_mut() {
-                    slot.replace_config(result.choices);
-                }
+                self.chat_panel.replace_config(result.choices);
             }
             AppEvent::ConfigEditorOpened(view) => {
-                self.open_composer_slot(ComposerSlot::config(view))
+                self.open_command_panel(CommandPanel::config(view))
             }
             AppEvent::ConfigApiKeySaved { provider, choices } => {
-                if let Some(slot) = self.composer_slot.as_mut() {
-                    slot.finish_config_prompt(choices);
-                }
+                self.chat_panel.finish_config_prompt(choices);
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
                         "Saved API key for {provider}"
                     )));
                 self.status = Status::Ready;
-                self.turn_input_mode = TurnInputMode::Start;
+                self.chat_panel.start_input();
             }
             AppEvent::ModelSummaryReceived(summary) => {
-                self.status_line
+                self.chat_panel
+                    .status_line_mut()
                     .apply_preferred_model(summary.preferred_model());
                 self.welcome.apply_model_summary(&summary);
             }
@@ -1437,13 +1287,13 @@ impl App {
                 self.thread
                     .update(ThreadPresentationEvent::CommandCompleted { command, result });
                 self.status = Status::Ready;
-                self.turn_input_mode = TurnInputMode::Start;
+                self.chat_panel.start_input();
             }
             AppEvent::FailureReported(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
                 self.status = Status::Error;
-                self.turn_input_mode = TurnInputMode::Start;
+                self.chat_panel.start_input();
             }
             AppEvent::FileSearchSnapshotReceived(snapshot) => {
                 self.thread_presentations
@@ -1451,7 +1301,9 @@ impl App {
                     .input
                     .apply_file_search_snapshot(snapshot);
             }
-            AppEvent::GitStatusReceived(status) => self.status_line.apply_git_status(&status),
+            AppEvent::GitStatusReceived(status) => {
+                self.chat_panel.status_line_mut().apply_git_status(&status)
+            }
             AppEvent::HostOperationCompleted(Ok(notice)) => {
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(notice));
@@ -1461,7 +1313,7 @@ impl App {
                     .update(ThreadPresentationEvent::FailureReported(error));
             }
             AppEvent::TopTipNoticeShown(notice) => {
-                self.top_tip.show_notice(notice, Instant::now());
+                self.chat_panel.show_notice(notice, Instant::now());
             }
             AppEvent::InterruptFailed(error) => {
                 self.thread
@@ -1469,22 +1321,16 @@ impl App {
                         "could not interrupt turn: {error}"
                     )));
                 self.status = Status::Working;
-                self.turn_input_mode = TurnInputMode::Steer;
+                self.chat_panel.steer_input();
             }
             AppEvent::ProductNotice(notice) => {
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(notice));
                 self.status = Status::Ready;
-                self.turn_input_mode = TurnInputMode::Start;
+                self.chat_panel.start_input();
             }
-            AppEvent::ApprovalRequested(approval) => {
-                self.query = None;
-                self.approval = Some(approval);
-            }
-            AppEvent::QueryRequested(query) => {
-                self.approval = None;
-                self.query = Some(query);
-            }
+            AppEvent::ApprovalRequested(approval) => self.chat_panel.show_approval(approval),
+            AppEvent::QueryRequested(query) => self.chat_panel.show_query(query),
             AppEvent::ThreadRequestResolved(request) => self.close_thread_request(&request),
             AppEvent::ThreadRequestSubmissionFailed { request, error } => {
                 self.fail_thread_request(&request, error)
@@ -1504,24 +1350,25 @@ impl App {
                     self.thread
                         .update(ThreadPresentationEvent::NoticeReceived(notice));
                 }
-                if matches!(self.composer_slot, Some(ComposerSlot::Keymap(_))) {
-                    self.composer_slot
-                        .as_mut()
-                        .expect("the keymap editor is active")
-                        .replace_keymap_catalog(update.choices);
+                if self.chat_panel.command_is_keymap() {
+                    self.chat_panel.replace_keymap(update.choices);
                 } else {
                     self.show_keymap_editor(update.choices);
                 }
             }
             AppEvent::StatusLineSettingsReceived(settings) => {
-                self.status_line.apply_settings(settings)
+                self.chat_panel.status_line_mut().apply_settings(settings)
             }
             AppEvent::StatusLineEditorOpened(update) => {
-                self.status_line.apply_settings(update.settings);
+                self.chat_panel
+                    .status_line_mut()
+                    .apply_settings(update.settings);
                 self.show_status_line_editor(update.choices);
             }
             AppEvent::StatusLineEditorUpdated(update) => {
-                self.status_line.apply_settings(update.settings);
+                self.chat_panel
+                    .status_line_mut()
+                    .apply_settings(update.settings);
                 self.update_status_line_editor(update.choices);
             }
             AppEvent::ConnectorPickerOpened(view) => self.show_connector_picker(view),
@@ -1544,9 +1391,9 @@ impl App {
                 self.close_transient_surfaces();
                 self.thread_presentations.switch(thread_id.clone());
                 self.sessions.activate_context(session_id, thread_id);
-                self.status_line.clear_thread_accounting();
+                self.chat_panel.status_line_mut().clear_thread_accounting();
                 if context_changed {
-                    self.top_tip.reset();
+                    self.chat_panel.reset_top_tip();
                 }
                 self.reconcile_agent_thread_switcher();
             }
@@ -1554,7 +1401,8 @@ impl App {
                 usage,
                 reference_cost,
             } => self
-                .status_line
+                .chat_panel
+                .status_line_mut()
                 .apply_thread_accounting(&usage, &reference_cost),
             AppEvent::ThreadGoalChanged(goal) => {
                 self.thread_presentations.active_mut().goal = goal;
@@ -1562,7 +1410,7 @@ impl App {
             AppEvent::StatusPanelOpened(panel) => {
                 self.show_status_panel(panel);
             }
-            AppEvent::ComposerSlotClosed => self.close_composer_slot(),
+            AppEvent::CommandPanelClosed => self.close_command_panel(),
             #[cfg(test)]
             AppEvent::HelpOpened(model) => self.show_help(model),
             AppEvent::SkillSettingsOpened(view) => self.show_skill_settings(view),
@@ -1571,10 +1419,10 @@ impl App {
                 self.report_skill_diagnostics(&diagnostics)
             }
             AppEvent::SteerCompleted(steer_id) => {
-                self.chat_composer.finish_steer(steer_id);
+                self.chat_panel.finish_steer(steer_id);
             }
             AppEvent::SteerSubmissionFailed { steer_id, error } => {
-                self.chat_composer.finish_steer(steer_id);
+                self.chat_panel.finish_steer(steer_id);
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(format!(
                         "could not steer the active Turn: {error}"
@@ -1596,14 +1444,11 @@ impl App {
                         "could not send the queued Turn: {error}"
                     )));
                 self.status = Status::Error;
-                self.turn_input_mode = TurnInputMode::Start;
+                self.chat_panel.start_input();
             }
             AppEvent::ThemePickerOpened(view) => {
-                if matches!(self.composer_slot, Some(ComposerSlot::Theme(_))) {
-                    self.composer_slot
-                        .as_mut()
-                        .expect("the theme picker is active")
-                        .push_custom_theme(view);
+                if self.chat_panel.command_is_theme() {
+                    self.chat_panel.push_custom_theme(view);
                 } else {
                     self.show_theme_picker(view);
                 }
@@ -1633,16 +1478,16 @@ impl App {
             }
             AppEvent::TranscriptCleared => {
                 self.thread.update(ThreadPresentationEvent::Cleared);
-                self.top_tip.reset();
+                self.chat_panel.reset_top_tip();
                 self.skill_diagnostic_warnings.clear();
                 self.thread_presentations
                     .active_mut()
                     .scroll
                     .follow_latest();
-                self.chat_composer.clear_steers();
+                self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().queue.clear();
                 self.status = Status::Ready;
-                self.turn_input_mode = TurnInputMode::Start;
+                self.chat_panel.start_input();
             }
             AppEvent::TurnActivityChanged(activity) => {
                 self.status = match activity {
@@ -1653,47 +1498,25 @@ impl App {
                     TurnActivity::WaitingForCapability => Status::WaitingForCapability,
                     TurnActivity::Cancelling => Status::Cancelling,
                 };
-                self.turn_input_mode = match activity {
-                    TurnActivity::Working => TurnInputMode::Steer,
-                    TurnActivity::Starting
-                    | TurnActivity::WaitingForApproval
-                    | TurnActivity::WaitingForUserInput
-                    | TurnActivity::WaitingForCapability
-                    | TurnActivity::Cancelling => TurnInputMode::Queue,
-                };
+                self.chat_panel.apply_turn_activity(activity);
             }
             AppEvent::TurnPlanChanged(plan) => {
                 self.thread_presentations.active_mut().plan.replace(plan)
             }
             AppEvent::PendingInteractionChanged(pending) => {
-                let approval_is_current = self.approval.as_ref().is_some_and(|approval| {
-                    pending.as_ref().is_some_and(|(turn_id, request_id)| {
-                        approval.matches_request(turn_id, request_id)
-                    })
-                });
-                let query_is_current = self.query.as_ref().is_some_and(|query| {
-                    pending.as_ref().is_some_and(|(turn_id, request_id)| {
-                        query.matches_request(turn_id, request_id)
-                    })
-                });
-                if !approval_is_current {
-                    self.approval = None;
-                }
-                if !query_is_current {
-                    self.query = None;
-                }
+                self.chat_panel.reconcile_request(pending.as_ref());
             }
             AppEvent::TurnCompleted => {
                 self.status = Status::Ready;
-                self.turn_input_mode = TurnInputMode::Start;
-                self.chat_composer.clear_steers();
+                self.chat_panel.start_input();
+                self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().plan.replace(None);
             }
             AppEvent::TurnInterrupted => {
                 self.thread.update(ThreadPresentationEvent::Interrupted);
                 self.status = Status::Ready;
-                self.turn_input_mode = TurnInputMode::Start;
-                self.chat_composer.clear_steers();
+                self.chat_panel.start_input();
+                self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().plan.replace(None);
             }
         }
@@ -1874,7 +1697,7 @@ impl App {
     fn handle_transcript_selection_key(&mut self, key: KeyEvent) -> bool {
         if key.kind != KeyEventKind::Press
             || !matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            || self.composer_slot.is_some()
+            || self.chat_panel.command_active()
             || self.completion().is_some()
             || !self.input().is_empty()
         {
@@ -1968,7 +1791,7 @@ impl App {
     pub(crate) fn handle_tick(&mut self, now: Instant) -> bool {
         let context = self.app_keymap_context(true);
         let chord_expired = self.app_keymap.expire(context, now);
-        let top_tip_changed = self.top_tip.poll(now);
+        let top_tip_changed = self.chat_panel.poll_top_tip(now);
         let elapsed_changed = self.agent_thread_switcher.refresh_elapsed();
         let manager_changed = matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.refresh_manager_time(now);
@@ -1977,7 +1800,7 @@ impl App {
 
     fn hide_navigation_for_existing_conversation(&mut self) {
         if self.thread.has_user_message() {
-            self.top_tip.hide_navigation();
+            self.chat_panel.hide_navigation();
         }
     }
 
@@ -2091,7 +1914,7 @@ impl App {
                     self.thread_presentations.slash_commands(),
                     self.app_keymap.setup_actions(),
                 );
-                self.open_composer_slot(ComposerSlot::help(spec));
+                self.open_command_panel(CommandPanel::help(spec));
                 None
             }
             (SlashCommandOrigin::Server, _) => {
@@ -2099,17 +1922,15 @@ impl App {
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
                 ));
-                if self.turn_input_mode == TurnInputMode::Steer {
-                    let steer_id = self
-                        .chat_composer
-                        .begin_steer(submission.display_text.clone());
+                if self.chat_panel.is_steering() {
+                    let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
                     return Some(AppCommand::SteerTurn {
                         steer_id,
                         submission,
                     });
                 }
                 self.status = Status::Working;
-                self.turn_input_mode = TurnInputMode::Queue;
+                self.chat_panel.queue_input();
                 Some(AppCommand::SubmitTurn { submission })
             }
             (SlashCommandOrigin::Local, Some(_)) => {

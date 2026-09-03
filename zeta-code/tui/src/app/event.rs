@@ -98,7 +98,7 @@ pub(crate) enum AppEvent {
     },
     ThreadGoalChanged(Option<ThreadGoal>),
     StatusPanelOpened(StatusPanel),
-    ComposerSlotClosed,
+    CommandPanelClosed,
     #[cfg(test)]
     HelpOpened(ListSelectionModel),
     SkillSettingsOpened(SkillChoices),

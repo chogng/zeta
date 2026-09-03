@@ -278,7 +278,7 @@ pub(super) fn apply_request_completion(
                 command,
                 result: update.notice,
             });
-            app.update(AppEvent::ComposerSlotClosed);
+            app.update(AppEvent::CommandPanelClosed);
         }
         Completion::PreferredModelUpdated {
             result: Err(error), ..
@@ -637,7 +637,7 @@ fn finish_conversation_change(
     presentation: ConversationCompletionPresentation,
 ) {
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
-        app.update(AppEvent::ComposerSlotClosed);
+        app.update(AppEvent::CommandPanelClosed);
     }
     if matches!(change.transcript, ConversationTranscript::Clear) {
         app.update(AppEvent::TranscriptCleared);

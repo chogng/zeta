@@ -50,14 +50,14 @@ use std::collections::BTreeMap;
 const TITLE_BAR_HEIGHT: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ComposerSlotPointerTarget {
+pub(crate) enum CommandPanelPointerTarget {
     Tab(usize),
     Search,
     Item(usize),
 }
 
 #[derive(Debug)]
-pub(crate) enum ComposerSlot {
+pub(crate) enum CommandPanel {
     Help(ListSelection<()>),
     Dirs(ListSelection<DirSelectionAction>),
     Config(ConfigEditor),
@@ -75,7 +75,7 @@ pub(crate) enum ComposerSlot {
 }
 
 #[derive(Debug)]
-pub(crate) enum ComposerSlotOutcome {
+pub(crate) enum CommandPanelOutcome {
     Dirs(DirSelectionAction),
     Config(ConfigEditorOutcome),
     Connectors(ConnectorSelectionAction),
@@ -96,7 +96,7 @@ pub(crate) enum ComposerSlotOutcome {
     Dismiss,
 }
 
-impl ComposerSlot {
+impl CommandPanel {
     pub(crate) fn help(model: crate::widgets::list_selection::ListSelectionModel) -> Self {
         Self::Help(ListSelection::new(model, BTreeMap::new()))
     }
@@ -153,47 +153,47 @@ impl ComposerSlot {
         Self::Theme(ThemePicker::new(spec))
     }
 
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ComposerSlotOutcome {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> CommandPanelOutcome {
         if let Self::Queue(selection) = self
             && let Some(input) = crate::thread::queue::queue_input(key)
             && let Some(action) = selection.selected_action().copied()
         {
-            return ComposerSlotOutcome::QueueInput { input, action };
+            return CommandPanelOutcome::QueueInput { input, action };
         }
         match self {
             Self::Help(content) => map_read_only(content.handle_key(key)),
             Self::Dirs(content) => {
-                map_selection(content.handle_key(key), ComposerSlotOutcome::Dirs)
+                map_selection(content.handle_key(key), CommandPanelOutcome::Dirs)
             }
-            Self::Config(content) => ComposerSlotOutcome::Config(content.handle_key(key)),
+            Self::Config(content) => CommandPanelOutcome::Config(content.handle_key(key)),
             Self::Connectors(content) => {
-                map_selection(content.handle_key(key), ComposerSlotOutcome::Connectors)
+                map_selection(content.handle_key(key), CommandPanelOutcome::Connectors)
             }
-            Self::Keymap(content) => ComposerSlotOutcome::Keymap(content.handle_key(key)),
-            Self::Mcp(content) => map_selection(content.handle_key(key), ComposerSlotOutcome::Mcp),
+            Self::Keymap(content) => CommandPanelOutcome::Keymap(content.handle_key(key)),
+            Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
             Self::Model(content) => {
-                map_selection(content.handle_key(key), ComposerSlotOutcome::Model)
+                map_selection(content.handle_key(key), CommandPanelOutcome::Model)
             }
             Self::Queue(content) => {
-                map_selection(content.handle_key(key), ComposerSlotOutcome::Queue)
+                map_selection(content.handle_key(key), CommandPanelOutcome::Queue)
             }
             Self::Rewind(content) => {
-                map_selection(content.handle_key(key), ComposerSlotOutcome::Rewind)
+                map_selection(content.handle_key(key), CommandPanelOutcome::Rewind)
             }
             Self::Sessions(content) => {
-                map_selection(content.handle_key(key), ComposerSlotOutcome::Sessions)
+                map_selection(content.handle_key(key), CommandPanelOutcome::Sessions)
             }
             Self::Skills(content) => {
-                map_selection(content.handle_key(key), ComposerSlotOutcome::Skills)
+                map_selection(content.handle_key(key), CommandPanelOutcome::Skills)
             }
             Self::Status(content) => match content.handle_key(key) {
-                StatusPanelOutcome::Consumed => ComposerSlotOutcome::Consumed,
-                StatusPanelOutcome::Dismiss => ComposerSlotOutcome::Dismiss,
+                StatusPanelOutcome::Consumed => CommandPanelOutcome::Consumed,
+                StatusPanelOutcome::Dismiss => CommandPanelOutcome::Dismiss,
             },
             Self::StatusLine(content) => {
-                map_selection(content.handle_key(key), ComposerSlotOutcome::StatusLine)
+                map_selection(content.handle_key(key), CommandPanelOutcome::StatusLine)
             }
-            Self::Theme(content) => ComposerSlotOutcome::Theme(content.handle_key(key)),
+            Self::Theme(content) => CommandPanelOutcome::Theme(content.handle_key(key)),
         }
     }
 
@@ -293,8 +293,8 @@ impl ComposerSlot {
         &self,
         frame: &mut Frame<'_>,
         area: Rect,
-        hovered: Option<ComposerSlotPointerTarget>,
-        pressed: Option<ComposerSlotPointerTarget>,
+        hovered: Option<CommandPanelPointerTarget>,
+        pressed: Option<CommandPanelPointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
         if let Self::Status(panel) = self {
@@ -332,8 +332,8 @@ impl ComposerSlot {
                 selection,
                 tab_index(hovered),
                 tab_index(pressed),
-                hovered == Some(ComposerSlotPointerTarget::Search),
-                pressed == Some(ComposerSlotPointerTarget::Search),
+                hovered == Some(CommandPanelPointerTarget::Search),
+                pressed == Some(CommandPanelPointerTarget::Search),
                 item_index(hovered),
                 item_index(pressed),
                 context,
@@ -350,21 +350,21 @@ impl ComposerSlot {
         area: Rect,
         column: u16,
         row: u16,
-    ) -> Option<ComposerSlotPointerTarget> {
+    ) -> Option<CommandPanelPointerTarget> {
         let selection = self.list_selection()?;
         let body = composer_body_area(area);
         selection
             .tab_index_at(body, column, row)
-            .map(ComposerSlotPointerTarget::Tab)
+            .map(CommandPanelPointerTarget::Tab)
             .or_else(|| {
                 selection
                     .search_contains(body, column, row)
-                    .then_some(ComposerSlotPointerTarget::Search)
+                    .then_some(CommandPanelPointerTarget::Search)
             })
             .or_else(|| {
                 selection
                     .item_index_at(body, column, row)
-                    .map(ComposerSlotPointerTarget::Item)
+                    .map(CommandPanelPointerTarget::Item)
             })
     }
 
@@ -437,46 +437,46 @@ impl ComposerSlot {
         }
     }
 
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ComposerSlotOutcome> {
+    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<CommandPanelOutcome> {
         match self {
             Self::Help(content) => content.activate_visible_item(index).map(map_read_only),
             Self::Dirs(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::Dirs)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Dirs)),
             Self::Config(content) => content
                 .activate_visible_item(index)
-                .map(ComposerSlotOutcome::Config),
+                .map(CommandPanelOutcome::Config),
             Self::Connectors(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::Connectors)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Connectors)),
             Self::Keymap(content) => content
                 .activate_visible_item(index)
-                .map(ComposerSlotOutcome::Keymap),
+                .map(CommandPanelOutcome::Keymap),
             Self::Mcp(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::Mcp)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Mcp)),
             Self::Model(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::Model)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Model)),
             Self::Queue(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::Queue)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Queue)),
             Self::Rewind(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::Rewind)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Rewind)),
             Self::Sessions(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::Sessions)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Sessions)),
             Self::Skills(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::Skills)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Skills)),
             Self::Status(_) => None,
             Self::StatusLine(content) => content
                 .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, ComposerSlotOutcome::StatusLine)),
+                .map(|outcome| map_selection(outcome, CommandPanelOutcome::StatusLine)),
             Self::Theme(content) => content
                 .activate_visible_item(index)
-                .map(ComposerSlotOutcome::Theme),
+                .map(CommandPanelOutcome::Theme),
         }
     }
 
@@ -569,26 +569,26 @@ impl ComposerSlot {
     }
 }
 
-fn map_read_only(outcome: ListSelectionOutcome<()>) -> ComposerSlotOutcome {
+fn map_read_only(outcome: ListSelectionOutcome<()>) -> CommandPanelOutcome {
     match outcome {
         ListSelectionOutcome::Activate(())
         | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Previous)
         | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Next)
-        | ListSelectionOutcome::Consumed => ComposerSlotOutcome::Consumed,
-        ListSelectionOutcome::Dismiss => ComposerSlotOutcome::Dismiss,
+        | ListSelectionOutcome::Consumed => CommandPanelOutcome::Consumed,
+        ListSelectionOutcome::Dismiss => CommandPanelOutcome::Dismiss,
     }
 }
 
 fn map_selection<A>(
     outcome: ListSelectionOutcome<A>,
-    activate: impl FnOnce(A) -> ComposerSlotOutcome,
-) -> ComposerSlotOutcome {
+    activate: impl FnOnce(A) -> CommandPanelOutcome,
+) -> CommandPanelOutcome {
     match outcome {
         ListSelectionOutcome::Activate(action) => activate(action),
         ListSelectionOutcome::Adjust(_, _) | ListSelectionOutcome::Consumed => {
-            ComposerSlotOutcome::Consumed
+            CommandPanelOutcome::Consumed
         }
-        ListSelectionOutcome::Dismiss => ComposerSlotOutcome::Dismiss,
+        ListSelectionOutcome::Dismiss => CommandPanelOutcome::Dismiss,
     }
 }
 
@@ -601,16 +601,16 @@ fn composer_body_area(area: Rect) -> Rect {
     }
 }
 
-fn tab_index(target: Option<ComposerSlotPointerTarget>) -> Option<usize> {
+fn tab_index(target: Option<CommandPanelPointerTarget>) -> Option<usize> {
     match target {
-        Some(ComposerSlotPointerTarget::Tab(index)) => Some(index),
-        Some(ComposerSlotPointerTarget::Search | ComposerSlotPointerTarget::Item(_)) | None => None,
+        Some(CommandPanelPointerTarget::Tab(index)) => Some(index),
+        Some(CommandPanelPointerTarget::Search | CommandPanelPointerTarget::Item(_)) | None => None,
     }
 }
 
-fn item_index(target: Option<ComposerSlotPointerTarget>) -> Option<usize> {
+fn item_index(target: Option<CommandPanelPointerTarget>) -> Option<usize> {
     match target {
-        Some(ComposerSlotPointerTarget::Item(index)) => Some(index),
-        Some(ComposerSlotPointerTarget::Tab(_) | ComposerSlotPointerTarget::Search) | None => None,
+        Some(CommandPanelPointerTarget::Item(index)) => Some(index),
+        Some(CommandPanelPointerTarget::Tab(_) | CommandPanelPointerTarget::Search) | None => None,
     }
 }

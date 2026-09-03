@@ -938,7 +938,7 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
         None
     );
     assert!(matches!(
-        app.composer_slot().and_then(|slot| slot.key_capture()),
+        app.command_panel().and_then(|panel| panel.key_capture()),
         Some(body) if body.title() == "Record shortcut"
     ));
 
@@ -1292,7 +1292,7 @@ fn escape_does_not_exit_the_idle_session_screen() {
 }
 
 #[test]
-fn terminal_screen_change_closes_composer_slots_including_status() {
+fn terminal_screen_change_closes_command_panels_including_status() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
         "Help",
@@ -1301,10 +1301,10 @@ fn terminal_screen_change_closes_composer_slots_including_status() {
             vec![ListSelectionItem::new("/status")],
         )],
     )));
-    assert!(app.composer_slot().is_some());
+    assert!(app.command_panel().is_some());
 
     enter_test_session(&mut app);
-    assert!(app.composer_slot().is_none());
+    assert!(app.command_panel().is_none());
 
     let usage = zeta_protocol::ModelUsageSummary::default();
     let reference_cost = zeta_protocol::ModelReferenceCostSummary::default();
@@ -1319,12 +1319,12 @@ fn terminal_screen_change_closes_composer_slots_including_status() {
         thread_id: "thread-1",
         thread_sequence: 1,
     })));
-    assert!(app.composer_slot().is_some());
+    assert!(app.command_panel().is_some());
     app.update(AppEvent::ThreadContextChanged {
         session_id: SessionId::new("other-session").unwrap(),
         thread_id: ThreadId::new("other-thread").unwrap(),
     });
-    assert!(app.composer_slot().is_none());
+    assert!(app.command_panel().is_none());
 }
 
 #[test]
@@ -1366,7 +1366,7 @@ fn screen_escape_gesture_preserves_a_nonempty_draft() {
 }
 
 #[test]
-fn escape_from_composer_content_does_not_count_toward_the_screen_rewind_sequence() {
+fn escape_from_command_panel_does_not_count_toward_the_screen_rewind_sequence() {
     let mut app = App::new();
     let started = Instant::now();
     assert_eq!(
@@ -1480,11 +1480,11 @@ fn enter_steers_the_working_turn_and_tracks_delivery() {
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages()[1].text, "secondthird");
-    assert!(app.composer_slot().is_none());
+    assert!(app.command_panel().is_none());
 
     app.update(AppEvent::SteerCompleted(steer_id));
 
-    assert!(app.composer_slot().is_none());
+    assert!(app.command_panel().is_none());
     assert_eq!(app.status(), &Status::Working);
 }
 
@@ -1663,7 +1663,7 @@ fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
         error: "sequence conflict".into(),
     });
 
-    assert!(app.composer_slot().is_none());
+    assert!(app.command_panel().is_none());
     assert_eq!(app.status(), &Status::Working);
     assert!(
         app.messages()

@@ -106,7 +106,7 @@ fn top_tip_notice_uses_the_fixed_row_above_chat_input_without_changing_layout() 
 }
 
 #[test]
-fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_the_composer() {
+fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_chat_input() {
     let mut app = App::new();
     let terminal_area = Rect::new(0, 0, 80, 20);
     app.insert_text("/");
@@ -138,9 +138,9 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_the
         18
     );
     assert_eq!(layout(&app, terminal_area).session.composer.height, 13);
-    assert_eq!(layout(&app, terminal_area).session.status.height, 2);
+    assert_eq!(layout(&app, terminal_area).session.bottom.height, 2);
     assert_ne!(layout(&app, terminal_area).session, before);
-    assert!(app.composer_slot().is_some());
+    assert!(app.command_panel().is_some());
     assert!(app.overlay().is_none());
     assert!(app.completion().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
@@ -155,7 +155,7 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_the
     assert_snapshot!("status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.composer_slot().is_none());
+    assert!(app.command_panel().is_none());
     assert_eq!(layout(&app, terminal_area).session, before);
     assert_eq!(app.input(), "/");
 }
@@ -573,7 +573,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     ));
 
     let buffer = render_buffer(&app, 80, 20);
-    let status_row = layout(&app, terminal_area).session.status.bottom() - 1;
+    let bottom_row = layout(&app, terminal_area).session.bottom.bottom() - 1;
     let hint_column = 78 - "shift+tab to cycle policy".width() as u16;
     let hint = &buffer[(hint_column, top_tip_row)];
 
@@ -582,7 +582,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     assert!(hint.modifier.contains(Modifier::ITALIC));
     assert_eq!(
         (0..80)
-            .map(|x| buffer[(x, status_row)].symbol())
+            .map(|x| buffer[(x, bottom_row)].symbol())
             .collect::<String>()
             .trim_end(),
         "  ⏸ ask permissions on"
@@ -729,7 +729,7 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn composer_selection_without_actions_keeps_the_two_status_rows_empty() {
+fn command_panel_without_actions_keeps_the_two_bottom_rows_empty() {
     let mut app = App::new();
     app.update(AppEvent::ProductNotice(
         "Conversation remains visible.".into(),
@@ -749,15 +749,15 @@ fn composer_selection_without_actions_keeps_the_two_status_rows_empty() {
     assert!(!rendered.contains("ask permissions on"));
     let layout = super::layout(&app, Rect::new(0, 0, 80, 24));
     assert!(layout.input.is_empty());
-    assert_eq!(layout.session.status.height, 2);
+    assert_eq!(layout.session.bottom.height, 2);
     let rows = rendered.lines().collect::<Vec<_>>();
     assert!(rows[22].trim().is_empty());
     assert!(rows[23].trim().is_empty());
-    assert_eq!(layout.session.composer.bottom(), layout.session.status.y);
+    assert_eq!(layout.session.composer.bottom(), layout.session.bottom.y);
 }
 
 #[test]
-fn composer_selection_supports_keyboard_tab_switching_and_search() {
+fn command_panel_supports_keyboard_tab_switching_and_search() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(help_view()));
 
@@ -776,7 +776,7 @@ fn composer_selection_supports_keyboard_tab_switching_and_search() {
 }
 
 #[test]
-fn theme_candidate_focus_repaints_only_the_composer_focus_border() {
+fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
         "Theme",

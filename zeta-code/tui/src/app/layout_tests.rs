@@ -12,7 +12,7 @@ fn session_layout_bounds_queue_and_preserves_transcript() {
     assert_eq!(areas.queue.height, 5);
     assert_eq!(areas.top_tip.height, 1);
     assert_eq!(areas.composer.height, 3);
-    assert_eq!(areas.status.height, 2);
+    assert_eq!(areas.bottom.height, 2);
     assert_eq!(areas.agent_thread_switcher.height, 4);
 }
 
@@ -34,25 +34,25 @@ fn session_layout_places_goal_plan_and_queue_above_input() {
     assert_eq!(areas.queue.y, areas.plan.y + areas.plan.height);
     assert_eq!(areas.top_tip.y, areas.queue.y + areas.queue.height);
     assert_eq!(areas.composer.y, areas.top_tip.y + areas.top_tip.height);
-    assert_eq!(areas.status.y, areas.composer.y + areas.composer.height);
+    assert_eq!(areas.bottom.y, areas.composer.y + areas.composer.height);
     assert_eq!(
         areas.agent_thread_switcher.y,
-        areas.status.y + areas.status.height + 1
+        areas.bottom.y + areas.bottom.height + 1
     );
 }
 
 #[test]
 fn session_layout_does_not_reserve_an_agent_thread_gap_without_both_surfaces() {
     let without_switcher = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 1, 0);
-    let without_status = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 0, 2);
+    let without_bottom = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 0, 2);
 
     assert_eq!(
         without_switcher.agent_thread_switcher.y,
-        without_switcher.status.y + without_switcher.status.height
+        without_switcher.bottom.y + without_switcher.bottom.height
     );
     assert_eq!(
-        without_status.agent_thread_switcher.y,
-        without_status.status.y + without_status.status.height
+        without_bottom.agent_thread_switcher.y,
+        without_bottom.bottom.y + without_bottom.bottom.height
     );
 }
 
