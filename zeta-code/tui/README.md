@@ -7,7 +7,7 @@
 > 当前能力。
 > 三条产品线与宿主边界见 [`docs/product-lines.md`](../../docs/product-lines.md)。
 > 三端快捷键语义与端侧输入边界见 [`docs/keybindings.md`](../../docs/keybindings.md)。
-> 源码分层入口见 [`src/README.md`](src/README.md)，当前界面区域见 [`src/layout.md`](src/layout.md)。
+> 目标目录、所有权和界面布局见 [`zeta-code/docs/tui.md`](../docs/tui.md)。
 
 `zeta-tui` 是 `zeta code` 产品线的 TUI 实现。它当前是 `AppServerSession` 上的 presentation
 shell：从 owned session 取得 cloneable typed request handle 与独立 `AppServerEvents`，创建或切换
@@ -178,8 +178,6 @@ inputMode = "standard"
 
 ```text
 src/
-├── README.md                       # source ownership and dependency direction
-├── layout.md                       # current frame, height-entry and overlay geometry
 ├── lib.rs                         # narrow public startup API; delegates to app::run
 ├── keymap.rs                      # runtime owner and module entry
 ├── keymap/
@@ -653,7 +651,7 @@ directory directory/preview 和 interaction deadline。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，并覆盖 transcript 折行高度、prefix、scroll、pointer hit test、cell revision、cache key 失效与资源上限、完整源码和逐个完整新增行高亮的一致性，以及 batch deadline 不后移、输入提前 deadline、到期帧只消费一次、transient latest-value、identity 顺序、cursor/scope/barrier 和批量容量边界。命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
 event-loop integration 可以继续加强当前 brokered-local 路径；连接恢复验证属于 CLI，不进入 TUI transport 测试。桌面端 Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与
-owner 判断以 [`zeta-code/docs/tui.md`](../docs/tui.md#16-当前实现与产品支持边界) 和
+owner 判断以 [`zeta-code/docs/tui.md`](../docs/tui.md#1-结论) 和
 [`docs/product-lines.md`](../../docs/product-lines.md) 为准。
 
 渲染测试遵守以下边界；这里的测试快照只指渲染基线，与运行时的权威 Thread 快照无关：
