@@ -16,16 +16,6 @@ DEVELOPMENT_PROFILE = "dev-small"
 DEVELOPMENT_RUNTIME_ROOT = REPOSITORY_ROOT / ".build" / "zeta-development"
 
 
-def development_environment() -> dict[str, str]:
-    environment = os.environ.copy()
-    if "CARGO_BUILD_JOBS" not in environment:
-        logical_cpu_count = os.cpu_count()
-        if logical_cpu_count is None:
-            raise RuntimeError("could not determine the Cargo development job limit")
-        environment["CARGO_BUILD_JOBS"] = str(max(1, logical_cpu_count // 2))
-    return environment
-
-
 def development_binaries(
     *, platform_name: str | None = None, code_mode: str | None = None
 ) -> list[str]:
@@ -141,7 +131,7 @@ def runtime_environment(
 
 
 def main(arguments: list[str] | None = None) -> int:
-    environment = development_environment()
+    environment = os.environ.copy()
     ripgrep = host_ripgrep(environment)
     binaries = development_binaries(code_mode=environment.get("ZETA_CODE_MODE_RUNTIME"))
     returncode, built = build_binaries(binaries, environment)

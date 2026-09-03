@@ -76,7 +76,7 @@ def current_package() -> Path:
 
 
 def main(arguments: list[str] | None = None) -> int:
-    environment = zeta.development_environment()
+    environment = os.environ.copy()
     prepared = subprocess.run(
         ["node", "build/zeta-package/prepareDevPackage.ts"],
         cwd=zeta.REPOSITORY_ROOT,

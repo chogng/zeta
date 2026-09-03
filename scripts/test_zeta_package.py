@@ -25,13 +25,9 @@ class ZetaPackageLauncherTests(unittest.TestCase):
             product_services.touch()
             built = Path(temporary) / "built-zeta"
             staged = Path(temporary) / "staged-zeta"
-            environment = {"CARGO_BUILD_JOBS": "2"}
+            environment = {"PATH": "tools"}
             with (
-                patch.object(
-                    zeta_package.zeta,
-                    "development_environment",
-                    return_value=environment,
-                ),
+                patch.dict(zeta_package.os.environ, environment, clear=True),
                 patch.object(zeta_package, "current_package", return_value=package),
                 patch.object(
                     zeta_package.zeta,

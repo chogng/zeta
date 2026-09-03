@@ -10,7 +10,6 @@ import { cargoTargetDirectory } from "../lib/cargo.ts";
 import {
   assemblePackage,
   copyBuiltinExtensions,
-  developmentCargoEnvironment,
   hostTarget,
   parseJavaScriptRuntime,
   parsePackageOptions,
@@ -18,12 +17,6 @@ import {
   selectRipgrepArtifact,
   selectV8ArtifactPair,
 } from "./prepareDevPackage.ts";
-
-test("limits package Cargo concurrency unless the developer chose a limit", () => {
-  assert.equal(developmentCargoEnvironment({}, 16).CARGO_BUILD_JOBS, "8");
-  assert.equal(developmentCargoEnvironment({ CARGO_BUILD_JOBS: "3" }, 16).CARGO_BUILD_JOBS, "3");
-  assert.equal(developmentCargoEnvironment({}, 1).CARGO_BUILD_JOBS, "1");
-});
 
 test("resolves one shared Cargo target directory for host development builds", () => {
   const workspace = resolve("/workspace/zeta");

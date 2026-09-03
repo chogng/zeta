@@ -14,9 +14,7 @@ class ZetaLauncherTests(unittest.TestCase):
         built = self._executables(Path("C:/built"))
         rg = Path("C:/tools/rg.exe")
         with (
-            patch.object(
-                zeta, "development_environment", return_value={"PATH": "tools"}
-            ),
+            patch.dict(zeta.os.environ, {"PATH": "tools"}, clear=True),
             patch.object(zeta, "build_binaries", return_value=(0, built)) as build,
             patch.object(zeta, "stage_runtime", return_value=staged),
             patch.object(zeta, "host_ripgrep", return_value=rg),
@@ -105,23 +103,6 @@ class ZetaLauncherTests(unittest.TestCase):
             self.assertEqual(staged["zeta"].read_bytes(), b"zeta")
             self.assertEqual(staged["daemon"].read_bytes(), b"daemon")
             self.assertEqual(len(list((root / "runtime").iterdir())), 1)
-
-    def test_development_environment_preserves_an_explicit_cargo_limit(self) -> None:
-        with patch.dict(zeta.os.environ, {"CARGO_BUILD_JOBS": "3"}, clear=True):
-            self.assertEqual(
-                zeta.development_environment(),
-                {"CARGO_BUILD_JOBS": "3"},
-            )
-
-    def test_development_environment_requires_a_detectable_cpu_count(self) -> None:
-        with (
-            patch.dict(zeta.os.environ, {}, clear=True),
-            patch.object(zeta.os, "cpu_count", return_value=None),
-        ):
-            with self.assertRaisesRegex(
-                RuntimeError, "could not determine the Cargo development job limit"
-            ):
-                zeta.development_environment()
 
     @staticmethod
     def _executables(root: Path) -> dict[str, Path]:

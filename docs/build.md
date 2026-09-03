@@ -91,7 +91,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 `scripts/` 使用面向操作的命名。`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为日常 Cargo 命令准备锁定的构建输入，`zeta.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/zeta-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码，`rg` 从开发者的 `PATH` 解析为固定路径。`zeta_package.py` 只服务于显式的完整开发包运行。`format.py` 统一已有格式化器，`test-python.py` 运行仓库拥有的 Python 测试。Node、Electron 和 Playwright 测试入口继续使用 TypeScript，具体 runner 和 loader 放在 `scripts/test/`。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
 
-完整开发包仍由 `build/zeta-package/prepareDevPackage.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。`just zeta` 和完整开发包构建都保留开发者显式设置的 `CARGO_BUILD_JOBS`；未设置时默认使用一半逻辑处理器。日常 `just zeta` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just zeta-package` 或 `just zeta-package-run`。
+完整开发包仍由 `build/zeta-package/prepareDevPackage.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。日常 `just zeta` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just zeta-package` 或 `just zeta-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
 
 `scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。普通构建和仓库命令不得依赖 `build/release/` 的包实现；共享目标识别和 V8 输入解析由 `build/lib/zeta_build/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
 

@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { constants, createReadStream } from "node:fs";
 import { chmod, copyFile, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -467,17 +466,6 @@ async function v8CargoEnvironment(target: string, environment: NodeJS.ProcessEnv
   };
 }
 
-export function developmentCargoEnvironment(
-  environment: NodeJS.ProcessEnv = process.env,
-  logicalCpuCount = availableParallelism(),
-): NodeJS.ProcessEnv {
-  if (environment.CARGO_BUILD_JOBS !== undefined) return { ...environment };
-  return {
-    ...environment,
-    CARGO_BUILD_JOBS: String(Math.max(1, Math.floor(logicalCpuCount / 2))),
-  };
-}
-
 function cargoBuild(binaryArgs: readonly string[], expectedTargets: readonly string[], environment: NodeJS.ProcessEnv = process.env): Map<string, string> {
   const result = spawnSync("cargo", [
     "build",
@@ -519,7 +507,7 @@ function cargoBuild(binaryArgs: readonly string[], expectedTargets: readonly str
 }
 
 async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<FirstPartyExecutables> {
-  const cargoEnvironment = await v8CargoEnvironment(hostTarget(platform), developmentCargoEnvironment());
+  const cargoEnvironment = await v8CargoEnvironment(hostTarget(platform));
   const binaryArgs = [
     "--bin", "zeta-package-store",
     "--bin", "zeta-server",
