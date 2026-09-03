@@ -74,8 +74,9 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(rendered.contains("Try asking"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
-    let status_line = rendered.lines().last().unwrap();
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+    let rows = rendered.lines().collect::<Vec<_>>();
+    assert!(rows[18].trim().is_empty());
+    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
@@ -125,13 +126,18 @@ fn status_panel_uses_fixed_input_height_and_escape_restores_the_composer() {
     })));
 
     assert_eq!(layout(&app, terminal_area).session.composer.height, 8);
+    assert_eq!(layout(&app, terminal_area).session.status.height, 2);
     assert_ne!(layout(&app, terminal_area).session, before);
     assert!(app.input_surface().is_some());
     assert!(app.overlay().is_none());
     assert!(app.completion().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.input(), "/");
-    assert_snapshot!("status_panel_fixed_input_height", render(&app, 80, 20));
+    let rendered = render(&app, 80, 20);
+    let rows = rendered.lines().collect::<Vec<_>>();
+    assert!(rows[18].trim().is_empty());
+    assert_eq!(rows[19].trim_end(), "  Esc to close");
+    assert_snapshot!("status_panel_fixed_input_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.input_surface().is_none());
@@ -506,17 +512,21 @@ fn narrow_status_line_keeps_the_first_configured_item() {
 
 #[test]
 fn chat_input_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
-    let buffer = render_buffer(&App::new(), 80, 20);
+    let app = App::new();
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let input = layout(&app, terminal_area).input;
+    let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
 
-    for y in [16, 18] {
+    for y in [input.y, input.bottom() - 1] {
         assert_eq!(buffer[(0, y)].symbol(), "─");
         assert_eq!(buffer[(0, y)].fg, test_context().chat_input_chrome());
         assert_eq!(buffer[(79, y)].symbol(), "─");
         assert_eq!(buffer[(79, y)].fg, test_context().chat_input_chrome());
     }
-    assert_eq!(buffer[(0, 17)].symbol(), ">");
-    assert_eq!(buffer[(0, 17)].fg, test_context().foreground());
-    assert_eq!(buffer[(79, 17)].symbol(), " ");
+    let content_row = input.y + 1;
+    assert_eq!(buffer[(0, content_row)].symbol(), ">");
+    assert_eq!(buffer[(0, content_row)].fg, test_context().foreground());
+    assert_eq!(buffer[(79, content_row)].symbol(), " ");
 }
 
 #[test]
@@ -668,12 +678,14 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     let mut app = App::new();
     app.insert_text("first\nsecond\nthird");
 
-    let rendered = render(&app, 80, 20);
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let input = layout(&app, terminal_area).input;
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[15].contains("first"));
-    assert!(rows[16].contains("second"));
-    assert!(rows[17].contains("third"));
+    assert!(rows[usize::from(input.y + 1)].contains("first"));
+    assert!(rows[usize::from(input.y + 2)].contains("second"));
+    assert!(rows[usize::from(input.y + 3)].contains("third"));
     assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 }
 
@@ -695,15 +707,17 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
     let mut app = App::new();
     app.insert_text("abcdefghij");
 
-    let rendered = render(&app, 8, 20);
+    let terminal_area = Rect::new(0, 0, 8, 20);
+    let input = layout(&app, terminal_area).input;
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[16].contains("abcdef"));
-    assert!(rows[17].contains("ghij"));
+    assert!(rows[usize::from(input.y + 1)].contains("abcdef"));
+    assert!(rows[usize::from(input.y + 2)].contains("ghij"));
 }
 
 #[test]
-fn composer_selection_without_actions_hides_the_status_area() {
+fn composer_selection_without_actions_keeps_the_two_status_rows_empty() {
     let mut app = App::new();
     app.update(AppEvent::ProductNotice(
         "Conversation remains visible.".into(),
@@ -723,7 +737,10 @@ fn composer_selection_without_actions_hides_the_status_area() {
     assert!(!rendered.contains("ask permissions on"));
     let layout = super::layout(&app, Rect::new(0, 0, 80, 24));
     assert!(layout.input.is_empty());
-    assert!(layout.session.status.is_empty());
+    assert_eq!(layout.session.status.height, 2);
+    let rows = rendered.lines().collect::<Vec<_>>();
+    assert!(rows[22].trim().is_empty());
+    assert!(rows[23].trim().is_empty());
     assert_eq!(layout.session.composer.bottom(), layout.session.status.y);
 }
 
@@ -854,10 +871,12 @@ fn transcript_and_chat_input_content_start_in_the_same_column() {
     });
     app.insert_text("draft");
 
-    let buffer = render_buffer(&app, 80, 20);
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let input = layout(&app, terminal_area).input;
+    let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
 
     assert_eq!(buffer[(2, 0)].symbol(), "/");
-    assert_eq!(buffer[(2, 17)].symbol(), "d");
+    assert_eq!(buffer[(2, input.y + 1)].symbol(), "d");
 }
 
 #[test]
@@ -885,9 +904,11 @@ fn slash_popup_uses_focus_colored_text_without_a_selection_surface() {
     let mut app = App::new();
     app.insert_text("/");
 
-    let buffer = render_buffer(&app, 80, 20);
-    let selected = &buffer[(2, 10)];
-    let unselected = &buffer[(2, 11)];
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let popup_top = layout(&app, terminal_area).input.y - 6;
+    let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
+    let selected = &buffer[(2, popup_top)];
+    let unselected = &buffer[(2, popup_top + 1)];
     let surface_background = buffer[(0, 0)].bg;
 
     assert_eq!(selected.fg, test_context().focus());
@@ -902,8 +923,8 @@ fn slash_popup_uses_focus_colored_text_without_a_selection_surface() {
     app.update_pointer_hover(Some(InputPointerTarget::Composer(
         ChatComposerPointerTarget::CompletionItem(2),
     )));
-    let hovered_buffer = render_buffer(&app, 80, 20);
-    let hovered = &hovered_buffer[(2, 12)];
+    let hovered_buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
+    let hovered = &hovered_buffer[(2, popup_top + 2)];
     assert_eq!(hovered.fg, test_context().focus());
     assert_eq!(hovered.bg, surface_background);
     assert!(!hovered.modifier.contains(Modifier::BOLD));
@@ -914,17 +935,37 @@ fn slash_popup_hit_testing_maps_visible_rows_and_rejects_outside_clicks() {
     let mut app = App::new();
     app.insert_text("/");
     let terminal_area = Rect::new(0, 0, 80, 20);
+    let popup_bottom = layout(&app, terminal_area).input.y;
+    let popup_top = popup_bottom - 6;
 
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 10), Some(0));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 77, 15), Some(5));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 1, 10), None);
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 16), None);
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_top),
+        Some(0)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 77, popup_bottom - 1),
+        Some(5)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 1, popup_top),
+        None
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_bottom),
+        None
+    );
 
     for _ in 0..7 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 10), Some(2));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(7));
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_top),
+        Some(2)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_bottom - 1),
+        Some(7)
+    );
 }
 
 #[test]
@@ -941,16 +982,27 @@ fn slash_popup_wraps_descriptions_to_two_clickable_lines_and_truncates_the_rest(
     let mut app = App::for_dir_with_slash_commands(Path::new("."), slash_commands);
     app.insert_text("/diagnose");
     let terminal_area = Rect::new(0, 0, 50, 20);
+    let popup_bottom = layout(&app, terminal_area).input.y;
+    let popup_top = popup_bottom - 2;
 
     let rendered = render(&app, 50, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[14].contains("one two three four"));
-    assert!(rows[15].contains("five six seven"));
+    assert!(rows[usize::from(popup_top)].contains("one two three four"));
+    assert!(rows[usize::from(popup_top + 1)].contains("five six seven"));
     assert!(!rendered.contains("eight"));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 29, 14), Some(0));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 29, 15), Some(0));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 29, 13), None);
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 29, popup_top),
+        Some(0)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 29, popup_top + 1),
+        Some(0)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 29, popup_top - 1),
+        None
+    );
 }
 
 #[test]
@@ -979,16 +1031,27 @@ fn skill_popup_wraps_descriptions_to_two_clickable_lines_and_truncates_the_rest(
     ));
     app.insert_text("$diagnose");
     let terminal_area = Rect::new(0, 0, 36, 20);
+    let popup_bottom = layout(&app, terminal_area).input.y;
+    let popup_top = popup_bottom - 2;
 
     let rendered = render(&app, 36, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[14].contains("one two three four"));
-    assert!(rows[15].contains("five six seven eight"));
+    assert!(rows[usize::from(popup_top)].contains("one two three four"));
+    assert!(rows[usize::from(popup_top + 1)].contains("five six seven eight"));
     assert!(!rendered.contains("nine"));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 14), Some(0));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(0));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 13), None);
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_top),
+        Some(0)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_top + 1),
+        Some(0)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_top - 1),
+        None
+    );
 }
 
 #[test]
@@ -1059,42 +1122,59 @@ fn mention_popup_aligns_markers_with_the_query_and_highlights_fuzzy_matches() {
     let Some(crate::thread::composer::CompletionView::Mention(popup)) = app.completion() else {
         panic!("expected mention suggestions");
     };
+    let popup_top = layout(&app, terminal_area)
+        .input
+        .y
+        .saturating_sub(popup.matches.len().min(2) as u16);
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
-        assert_eq!(buffer[(2, row as u16 + 14)].symbol(), "+");
+        let screen_row = popup_top + row as u16;
+        assert_eq!(buffer[(2, screen_row)].symbol(), "+");
         for (column, character) in matched.label.chars().enumerate() {
             assert_eq!(
-                buffer[(column as u16 + 4, row as u16 + 14)].symbol(),
+                buffer[(column as u16 + 4, screen_row)].symbol(),
                 character.to_string()
             );
         }
     }
-    assert_eq!(buffer[(2, 17)].symbol(), "@");
+    assert_eq!(
+        buffer[(2, layout(&app, terminal_area).input.y + 1)].symbol(),
+        "@"
+    );
     let second = &popup.matches[1];
     let matched_index = second.indices[0];
     let unmatched_index = (0..second.label.chars().count())
         .find(|index| !second.indices.contains(index))
         .unwrap();
     assert!(
-        buffer[(matched_index as u16 + 4, 15)]
+        buffer[(matched_index as u16 + 4, popup_top + 1)]
             .modifier
             .contains(Modifier::BOLD)
     );
     assert_eq!(
-        buffer[(matched_index as u16 + 4, 15)].fg,
+        buffer[(matched_index as u16 + 4, popup_top + 1)].fg,
         test_context().foreground()
     );
     assert!(
-        !buffer[(unmatched_index as u16 + 4, 15)]
+        !buffer[(unmatched_index as u16 + 4, popup_top + 1)]
             .modifier
             .contains(Modifier::BOLD)
     );
     assert_eq!(
-        buffer[(unmatched_index as u16 + 4, 15)].fg,
+        buffer[(unmatched_index as u16 + 4, popup_top + 1)].fg,
         test_context().muted()
     );
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 14), Some(0));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(1));
-    assert_eq!(input_overlay_index_at(&app, terminal_area, 1, 15), None);
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_top),
+        Some(0)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 2, popup_top + 1),
+        Some(1)
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 1, popup_top + 1),
+        None
+    );
     let _ = fs::remove_dir_all(dir);
 }
 

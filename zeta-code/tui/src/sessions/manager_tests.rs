@@ -161,7 +161,10 @@ fn group_headings_are_static_and_all_sessions_remain_visible() {
         "Session preview"
     );
     assert_eq!(manager_rows(&sessions, &state.pinned).len(), 5);
-    assert!(state.selection_hint().contains("space to preview"));
+    assert_eq!(
+        state.selection_hint(),
+        "space to preview · ctrl+x to archive"
+    );
 }
 
 #[test]

@@ -24,5 +24,4 @@ pub(crate) use setup::StatusLineChoices;
 pub(crate) use setup::StatusLineSelectionAction;
 #[cfg(test)]
 pub(crate) use setup::list_selection as status_line_choices;
-pub(crate) use view::desired_rows;
 pub(crate) use view::draw;

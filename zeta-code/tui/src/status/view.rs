@@ -33,10 +33,6 @@ pub(crate) fn draw(
         } else {
             vec![styled_policy_line(policy, approval, context)]
         }
-    } else if top.is_empty() {
-        vec![styled_policy_line(policy, approval, context)]
-    } else if policy.is_empty() {
-        vec![top_line(top, context)]
     } else {
         vec![
             top_line(top, context),
@@ -44,22 +40,6 @@ pub(crate) fn draw(
         ]
     };
     frame.render_widget(Paragraph::new(lines), area);
-}
-
-pub(crate) fn desired_rows(
-    status_line: &StatusLineModel,
-    approval: TurnApprovalModes,
-    runtime: StatusLineRuntime,
-    max_rows: u16,
-) -> u16 {
-    let top = status_line.top_text_for_width(usize::MAX, runtime);
-    let policy = status_line.policy_text_for_width(usize::MAX, approval);
-    let desired = if top.is_empty() || policy.is_empty() {
-        1
-    } else {
-        2
-    };
-    desired.min(max_rows.max(1))
 }
 
 fn top_line(text: String, context: RenderContext<'_>) -> Line<'static> {

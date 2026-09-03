@@ -11,9 +11,8 @@ expression: "render(&app, 80, 20)"
   │           │  ζ  │         │  Try asking                                  │  
   │           ╰─┬─┬─╯         │  “Explain how this workspace is              │  
   │                           │  structured.”                                │  
-  │     Ready when you are    │  “Implement the change and run the relevant  │  
-  /status                    show the active session, thread, and model      │  
-  /statusline                choose the items shown in the status line───────┘  
+  /status                    show the active session, thread, and model         
+  /statusline                choose the items shown in the status line          
   /skills                    browse configured skill sources                    
   /mcp                       list configured MCP tools                          
   /resume                    list or resume a saved session                     
@@ -21,4 +20,5 @@ expression: "render(&app, 80, 20)"
 ────────────────────────────────────────────────────────────────────────────────
 > /                                                                             
 ────────────────────────────────────────────────────────────────────────────────
+                                                                                
   ⏸ ask permissions on

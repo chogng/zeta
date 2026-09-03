@@ -11,7 +11,6 @@ expression: "render(&app, 80, 20)"
   │           ╰─┬─┬─╯         │  “Explain how this workspace is              │  
   │                           │  structured.”                                │  
   │     Ready when you are    │  “Implement the change and run the relevant  │  
-  │              .            │  tests.”                                     │  
   └──────────────────────────────────────────────────────────────────────────┘  
   Status──────────────────────────────────────────────────────────────────────  
   Model: openai/gpt                                                             
@@ -21,4 +20,5 @@ expression: "render(&app, 80, 20)"
   Session ID: session-1                                                         
   Thread ID: thread-1                                                           
   Thread version: 4                                                             
+                                                                                
   Esc to close

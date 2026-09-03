@@ -1504,7 +1504,10 @@ fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
 
-    assert!(app.session_manager_hint().contains("space to preview"));
+    assert_eq!(
+        app.session_manager_hint(),
+        "space to preview · ctrl+x to archive"
+    );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
         Some(AppCommand::ArchiveSessions {
@@ -1520,7 +1523,10 @@ fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.overlay().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert!(app.session_manager_hint().contains("space to preview"));
+    assert_eq!(
+        app.session_manager_hint(),
+        "space to preview · ctrl+x to archive"
+    );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::ResumeSession {

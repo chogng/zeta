@@ -25,20 +25,21 @@ use ratatui::widgets::Paragraph;
 use std::borrow::Cow;
 
 enum StatusAreaView<'a> {
-    Hidden,
-    Hint {
+    HitBar {
         text: Cow<'a, str>,
-        style: StatusHintStyle,
+        style: HitBarStyle,
     },
     StatusLine,
 }
 
 #[derive(Clone, Copy)]
-enum StatusHintStyle {
+enum HitBarStyle {
     Keys,
     Warning,
     Muted,
 }
+
+const STATUS_AREA_ROWS: u16 = 2;
 
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let context = app.render_context();
@@ -401,7 +402,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         queue_rows,
         query_rows,
         composer_rows,
-        status_area.desired_rows(app),
+        status_area.desired_rows(),
         app.agent_thread_switcher_rows(),
     );
     let input = if approval_rows > 0 || mode_rows > 0 {
@@ -458,16 +459,15 @@ fn draw_status_area(
     context: crate::render::RenderContext<'_>,
 ) {
     match status_area_view(app) {
-        StatusAreaView::Hidden => {}
-        StatusAreaView::Hint { text, style } => match style {
-            StatusHintStyle::Keys => key_hint::draw(frame, area, &text, context),
-            StatusHintStyle::Warning => frame.render_widget(
+        StatusAreaView::HitBar { text, style } => match style {
+            HitBarStyle::Keys => key_hint::draw(frame, bottom_row(area), &text, context),
+            HitBarStyle::Warning => frame.render_widget(
                 Paragraph::new(text.as_ref() as &str).style(Style::default().fg(context.warning())),
-                chat_input::content_area(area),
+                chat_input::content_area(bottom_row(area)),
             ),
-            StatusHintStyle::Muted => frame.render_widget(
+            HitBarStyle::Muted => frame.render_widget(
                 Paragraph::new(text.as_ref() as &str).style(Style::default().fg(context.muted())),
-                chat_input::content_area(area),
+                chat_input::content_area(bottom_row(area)),
             ),
         },
         StatusAreaView::StatusLine => draw_status_line(frame, area, app, context),
@@ -476,54 +476,51 @@ fn draw_status_area(
 
 fn status_area_view(app: &App) -> StatusAreaView<'_> {
     if let Some(hints) = app.composer_key_hints() {
-        if hints.is_empty() {
-            return StatusAreaView::Hidden;
-        }
-        return StatusAreaView::Hint {
+        return StatusAreaView::HitBar {
             text: Cow::Borrowed(hints),
-            style: StatusHintStyle::Keys,
+            style: HitBarStyle::Keys,
         };
     }
     if app.session_manager_view().is_some() {
-        return StatusAreaView::Hint {
+        return StatusAreaView::HitBar {
             text: Cow::Borrowed(app.session_manager_hint()),
-            style: StatusHintStyle::Keys,
+            style: HitBarStyle::Keys,
         };
     }
     if app.approval_view().is_some() {
-        return StatusAreaView::Hint {
+        return StatusAreaView::HitBar {
             text: Cow::Borrowed("↑↓ choose · enter confirm"),
-            style: StatusHintStyle::Keys,
+            style: HitBarStyle::Keys,
         };
     }
     if app.query_view().is_some() {
-        return StatusAreaView::Hint {
+        return StatusAreaView::HitBar {
             text: Cow::Borrowed("↑↓ choose · enter answer · esc cancel custom input"),
-            style: StatusHintStyle::Keys,
+            style: HitBarStyle::Keys,
         };
     }
     if app.transcript_selection_active() {
-        return StatusAreaView::Hint {
+        return StatusAreaView::HitBar {
             text: Cow::Borrowed("↑↓ select · space expand · enter details · esc input"),
-            style: StatusHintStyle::Keys,
+            style: HitBarStyle::Keys,
         };
     }
     if app.agent_thread_switcher_focused() {
-        return StatusAreaView::Hint {
+        return StatusAreaView::HitBar {
             text: Cow::Borrowed("↑↓ select · enter switch · esc input"),
-            style: StatusHintStyle::Keys,
+            style: HitBarStyle::Keys,
         };
     }
     if let Some(prefix) = app.pending_key_chord_label() {
-        return StatusAreaView::Hint {
+        return StatusAreaView::HitBar {
             text: Cow::Owned(format!("{prefix} … waiting for next key · esc cancel")),
-            style: StatusHintStyle::Warning,
+            style: HitBarStyle::Warning,
         };
     }
     if app.viewed_thread_completed() {
-        return StatusAreaView::Hint {
+        return StatusAreaView::HitBar {
             text: Cow::Borrowed("completed · choose Main or another Subagent"),
-            style: StatusHintStyle::Muted,
+            style: HitBarStyle::Muted,
         };
     }
     StatusAreaView::StatusLine
@@ -546,17 +543,16 @@ fn draw_status_line(
 }
 
 impl StatusAreaView<'_> {
-    fn desired_rows(&self, app: &App) -> u16 {
-        match self {
-            Self::Hidden => 0,
-            Self::Hint { .. } => 1,
-            Self::StatusLine => status_line::desired_rows(
-                app.status_line(),
-                app.approval_mode_status(),
-                app.status_line_runtime(),
-                2,
-            ),
-        }
+    const fn desired_rows(&self) -> u16 {
+        STATUS_AREA_ROWS
+    }
+}
+
+fn bottom_row(area: Rect) -> Rect {
+    Rect {
+        y: area.bottom().saturating_sub(1),
+        height: area.height.min(1),
+        ..area
     }
 }
 

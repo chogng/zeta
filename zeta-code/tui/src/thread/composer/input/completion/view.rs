@@ -10,7 +10,6 @@ mod mention {
     use ratatui::style::Style;
     use ratatui::text::Line;
     use ratatui::text::Span;
-    use ratatui::widgets::Clear;
     use ratatui::widgets::Paragraph;
 
     #[derive(Clone, Copy)]
@@ -75,7 +74,7 @@ mod mention {
                 })
                 .collect()
         };
-        frame.render_widget(Clear, layout.area);
+        super::clear_popup(frame, layout.area, context);
         frame.render_widget(Paragraph::new(lines), layout.area);
     }
 
@@ -130,7 +129,6 @@ mod skill {
     use ratatui::style::Style;
     use ratatui::text::Line;
     use ratatui::text::Span;
-    use ratatui::widgets::Clear;
     use ratatui::widgets::Paragraph;
     use ratatui::widgets::Wrap;
     use unicode_width::UnicodeWidthStr;
@@ -165,7 +163,7 @@ mod skill {
         let Some(layout) = description_popup_layout(area, popup.selected, &item_heights) else {
             return;
         };
-        frame.render_widget(Clear, layout.area);
+        super::clear_popup(frame, layout.area, context);
         if popup.items.is_empty() {
             frame.render_widget(
                 Paragraph::new(Line::from(Span::styled(
@@ -279,6 +277,7 @@ mod slash {
         let Some(layout) = description_popup_layout(area, popup.selected, &item_heights) else {
             return;
         };
+        super::clear_popup(frame, layout.area, context);
         if popup.commands.is_empty() {
             frame.render_widget(
                 Paragraph::new(Line::from(Span::styled(
@@ -353,11 +352,22 @@ use crate::render::bottom_anchored_area;
 use crate::render::horizontal_margin;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
+use ratatui::widgets::Clear;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 
 const MAX_VISIBLE_DESCRIPTION_ITEMS: usize = 6;
 const MAX_DESCRIPTION_LINES: usize = 2;
+
+fn clear_popup(frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Block::default().style(Style::default().bg(context.background())),
+        area,
+    );
+}
 
 struct DescriptionPopupLayout {
     area: Rect,

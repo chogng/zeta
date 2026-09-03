@@ -105,8 +105,9 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
     let mut app = App::new();
     app.insert_text("/");
     let area = Rect::new(0, 0, 80, 20);
+    let third_completion_row = frame::layout(&app, area).input.y - 4;
 
-    update_pointer_hover(&mut app, area, 2, 12);
+    update_pointer_hover(&mut app, area, 2, third_completion_row);
     assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
     assert!(matches!(
         app.hovered_pointer_target(),
@@ -115,7 +116,7 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
         ))
     ));
 
-    update_pointer_hover(&mut app, area, 1, 12);
+    update_pointer_hover(&mut app, area, 1, third_completion_row);
     assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
     assert!(app.hovered_pointer_target().is_none());
 }

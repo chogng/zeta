@@ -20,7 +20,6 @@ Idle (1)
 
 
 
-
   Session preview─────────────────────────────────────────────────────────────────────────────────
   Session: Snapshot session
   ID: current
@@ -33,4 +32,5 @@ Idle (1)
 
 
   Esc to close
-  ↑↓ select · space to preview · ctrl+x to archive
+
+  space to preview · ctrl+x to archive

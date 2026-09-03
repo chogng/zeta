@@ -130,7 +130,7 @@ impl SessionManagerState {
 
     pub(crate) fn selection_hint(&self) -> &'static str {
         if self.selected.is_some() {
-            "↑↓ select · space to preview · ctrl+x to archive"
+            "space to preview · ctrl+x to archive"
         } else {
             "esc to input"
         }
