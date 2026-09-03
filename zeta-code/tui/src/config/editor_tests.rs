@@ -72,17 +72,16 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             if edit.server_config.revision == 4
                 && !edit.terminal.mouse_interactions()
     ));
-    let input_mode = &state.visible_items()[2];
-    assert_eq!(input_mode.label(), "Input mode");
+    let vim_mode = &state.visible_items()[2];
+    assert_eq!(vim_mode.label(), "Vim mode");
     assert_eq!(
-        input_mode.description(),
-        Some("Standard or Vim editing inside ChatInput Standard")
+        vim_mode.description(),
+        Some("Use Vim editing in ChatInput [   ]")
     );
     assert!(matches!(
-        view.actions.get(input_mode.id().unwrap()).unwrap(),
-        ConfigSelectionAction::ChooseInputMode { standard, vim }
-            if standard.terminal.input_mode() == ChatInputMode::Standard
-                && vim.terminal.input_mode() == ChatInputMode::Vim
+        view.actions.get(vim_mode.id().unwrap()).unwrap(),
+        ConfigSelectionAction::SetVimMode(edit)
+            if edit.terminal.input_mode() == ChatInputMode::Vim
     ));
     let git_changes = &state.visible_items()[3];
     assert_eq!(git_changes.label(), "Show Git changes as diff");
@@ -144,6 +143,25 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
     assert_eq!(
         state.visible_items()[0].description(),
         Some("Select and auto-copy text, click, and hover [   ]")
+    );
+}
+
+#[test]
+fn config_editor_shows_a_checked_vim_mode_when_enabled() {
+    let mut terminal = TerminalSettings::default();
+    terminal.set_input_mode(ChatInputMode::Vim);
+
+    let view = config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        terminal,
+        StatusLineSettings::default(),
+    );
+    let state = ListSelectionState::new(view.model);
+
+    assert_eq!(
+        state.visible_items()[2].description(),
+        Some("Use Vim editing in ChatInput [ ✔ ]")
     );
 }
 

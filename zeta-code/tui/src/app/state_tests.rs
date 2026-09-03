@@ -742,6 +742,29 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
 }
 
 #[test]
+fn config_vim_mode_toggles_on_enter() {
+    let mut config = empty_config_snapshot();
+    config.revision = 7;
+    let mut app = App::new();
+    app.update(AppEvent::ConfigEditorOpened(config_choices(
+        &config,
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    for _ in 0..2 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::EditConfig(edit))
+            if edit.server_config.revision == 7
+                && edit.terminal.input_mode() == ChatInputMode::Vim
+    ));
+}
+
+#[test]
 fn config_show_git_changes_as_diff_toggles_on_enter() {
     let mut config = empty_config_snapshot();
     config.revision = 7;

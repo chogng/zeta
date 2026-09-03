@@ -22,7 +22,7 @@ Tool、approval policy 或 persistence。
 
 - 启动时创建一个 product Session 和 root Thread；
 - 最多显示六行正文的多行 `ChatInput`，支持 typing、Unicode-safe cursor/editing、Shift/Alt-Enter
-  换行、按行 Home/End/Up/Down、Unicode display-cell 软换行与 bracketed paste；Config 的 Input mode 可在 Standard 与局部 Vim 编辑间切换，Vim 状态只存在于每个 Thread 的 ChatInput 草稿，补全弹层优先消费按键；超过 1000
+  换行、按行 Home/End/Up/Down、Unicode display-cell 软换行与 bracketed paste；Config 的 Vim mode 可开启局部 Vim 编辑，关闭时使用 Standard 编辑；Vim 状态只存在于每个 Thread 的 ChatInput 草稿，补全弹层优先消费按键；超过 1000
   个 Unicode scalar value 的 paste 会显示为原子占位符，并只在提交时展开；
 - 粘贴 PNG/JPEG/GIF/WEBP 本地文件路径时立即读取最多 16 MiB 的图片，显示可原子编辑的
   `[Image #N]` 占位符，并以结构化图片项提交；
@@ -50,7 +50,7 @@ Tool、approval policy 或 persistence。
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
 - `/resume` 提供 Session 面板；`/archive` 通过 typed `session/request` 归档当前 Session，成功后创建并切换到新 Session，TUI 继续运行；失败时显示错误；
-- `/config` 异步读取 TUI 设置和供应商目录；Config 标签页包含 Mouse interactions、Follow-up messages 与 Input mode，后两项分别选择 Queue/Steer 和 Standard/Vim。Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore。目录权限由 `/add-dir` 界面负责；`/model` 使用 expected revision 更新 preferred model；
+- `/config` 异步读取 TUI 设置和供应商目录；Config 标签页包含 Mouse interactions、Follow-up messages 与 Vim mode，后两项分别选择 Queue/Steer 和开关 Vim 编辑。Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore。目录权限由 `/add-dir` 界面负责；`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过 [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn input 提交；slash popup 不清空或铺设独立背景，透明继承当前 TUI 主题 surface，键盘选中、鼠标 hover 和按下态仅使用主题 focus 色文字，不加粗且不添加行首标记；
 - Enter 按 `ChatInput` 草稿顺序提交由 text/image items 组成的 Turn；active Turn 执行期间仍可编辑并提交
   follow-up，Core 的 per-Thread mailbox 按接受顺序串行执行这些 Turn；
@@ -104,7 +104,7 @@ TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，�
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 只消费 typed model capacity、Turn `contextUsage` 与 Thread accounting 汇总，不从 transcript 推导上下文占用、token 或费用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 编辑 `[tui].statusLine` 中有顺序的权限、模型、缓存命中率、累计参考费用、Git 分支和 Git 变更项；Config 页面还可在文件数量和文本行增加/删除统计之间切换 Git 变更格式，并展示 Config、Providers 与 Language servers。快捷键、状态栏、主题、Mouse interactions、Follow-up messages 和 Input mode 保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端保存完整键值表，字段默认值和校验由 TUI 负责。旧 `[tui].dirPermissions` 会在下一次保存 TUI 设置时删除；当前 Session 的目录授权只通过 Session RPC 修改。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity、Turn `contextUsage` 与 Thread accounting 汇总，不从 transcript 推导上下文占用、token 或费用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 编辑 `[tui].statusLine` 中有顺序的权限、模型、缓存命中率、累计参考费用、Git 分支和 Git 变更项；Config 页面还提供 Vim mode 与 Show Git changes as diff 开关，并展示 Config、Providers 与 Language servers。快捷键、状态栏、主题、Mouse interactions、Follow-up messages 和 Vim mode 的选择保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端保存完整键值表，字段默认值和校验由 TUI 负责。旧 `[tui].dirPermissions` 会在下一次保存 TUI 设置时删除；当前 Session 的目录授权只通过 Session RPC 修改。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
 
 从 repository root 启动当前 TUI：
 

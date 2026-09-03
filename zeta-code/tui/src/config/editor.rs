@@ -39,10 +39,7 @@ pub(crate) enum ConfigSelectionAction {
         queue: Box<ConfigEdit>,
         steer: Box<ConfigEdit>,
     },
-    ChooseInputMode {
-        standard: Box<ConfigEdit>,
-        vim: Box<ConfigEdit>,
-    },
+    SetVimMode(ConfigEdit),
     SetShowGitChangesAsDiff(ConfigEdit),
     OpenProviderApiKey {
         provider: String,
@@ -245,27 +242,22 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
-    let input_mode_id = ListSelectionItemId::new("terminal-input-mode");
-    let mut standard_terminal = terminal;
-    standard_terminal.set_input_mode(ChatInputMode::Standard);
-    let mut vim_terminal = terminal;
-    vim_terminal.set_input_mode(ChatInputMode::Vim);
+    let vim_mode_id = ListSelectionItemId::new("terminal-vim-mode");
+    let vim_mode = terminal.input_mode() == ChatInputMode::Vim;
+    let mut toggled_terminal = terminal;
+    toggled_terminal.set_input_mode(if vim_mode {
+        ChatInputMode::Standard
+    } else {
+        ChatInputMode::Vim
+    });
     actions.insert(
-        input_mode_id.clone(),
-        ConfigSelectionAction::ChooseInputMode {
-            standard: Box::new(ConfigEdit {
-                terminal: standard_terminal,
-                status_line: status_line.clone(),
-                server_config: config.clone(),
-                providers: providers.clone(),
-            }),
-            vim: Box::new(ConfigEdit {
-                terminal: vim_terminal,
-                status_line: status_line.clone(),
-                server_config: config.clone(),
-                providers: providers.clone(),
-            }),
-        },
+        vim_mode_id.clone(),
+        ConfigSelectionAction::SetVimMode(ConfigEdit {
+            terminal: toggled_terminal,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
     );
     let follow_up_id = ListSelectionItemId::new("terminal-follow-up-mode");
     let mut queue_terminal = terminal;
@@ -320,15 +312,12 @@ pub(crate) fn config_choices(
                     FollowUpMode::Steer => "Steer",
                 },
             ),
-        ListSelectionItem::new("Input mode")
-            .with_id(input_mode_id)
+        ListSelectionItem::new("Vim mode")
+            .with_id(vim_mode_id)
             .with_columns(
-                "Input mode",
-                "Standard or Vim editing inside ChatInput",
-                match terminal.input_mode() {
-                    ChatInputMode::Standard => "Standard",
-                    ChatInputMode::Vim => "Vim",
-                },
+                "Vim mode",
+                "Use Vim editing in ChatInput",
+                checkbox(vim_mode),
             ),
         ListSelectionItem::new("Show Git changes as diff")
             .with_id(git_changes_id)

@@ -431,14 +431,9 @@ impl App {
                     FollowUpMode::Steer => *queue,
                 },
             )),
-            crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::ChooseInputMode { standard, vim },
-            ) => Some(AppCommand::EditConfig(
-                match self.terminal_settings.input_mode() {
-                    crate::thread::composer::ChatInputMode::Standard => *vim,
-                    crate::thread::composer::ChatInputMode::Vim => *standard,
-                },
-            )),
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetVimMode(edit)) => {
+                Some(AppCommand::EditConfig(edit))
+            }
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetShowGitChangesAsDiff(edit),
             ) => Some(AppCommand::EditConfig(edit)),
@@ -453,10 +448,6 @@ impl App {
                             ListSelectionAdjustment::Next => *steer,
                         }
                     }
-                    ConfigSelectionAction::ChooseInputMode { standard, vim } => match adjustment {
-                        ListSelectionAdjustment::Previous => *standard,
-                        ListSelectionAdjustment::Next => *vim,
-                    },
                     _ => return None,
                 }))
             }
