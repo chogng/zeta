@@ -73,13 +73,15 @@ def workspace_members(manifest_text: str) -> set[str]:
         if workspace_section
         else None
     )
-    return set(re.findall(r'"([^"]+)"', member_values.group(1))) if member_values else set()
+    return (
+        set(re.findall(r'"([^"]+)"', member_values.group(1)))
+        if member_values
+        else set()
+    )
 
 
 def package_name(manifest_text: str) -> str | None:
-    package_section = re.search(
-        r"(?ms)^\[package\]\s*(.*?)(?=^\[|\Z)", manifest_text
-    )
+    package_section = re.search(r"(?ms)^\[package\]\s*(.*?)(?=^\[|\Z)", manifest_text)
     match = (
         re.search(r'^name\s*=\s*"([^"]+)"\s*$', package_section.group(1), re.MULTILINE)
         if package_section
@@ -122,13 +124,7 @@ def main() -> int:
     for dependency in forbidden_keybinding_dependencies:
         if re.search(rf"(?m)^{re.escape(dependency)}\s*=", shared_keybinding_manifest):
             fail(f"shared zeta-keybinding depends on platform/UI crate: {dependency}")
-    launch_path = (
-        repository_root
-        / "app"
-        / "workbench"
-        / "remote"
-        / "launch.rs"
-    )
+    launch_path = repository_root / "app" / "workbench" / "remote" / "launch.rs"
     launch_text = launch_path.read_text()
     if 'const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";' not in launch_text:
         fail("app Remote must default to the product-neutral zeta-server host")
@@ -179,18 +175,31 @@ def main() -> int:
 
     for manifest_path in (repository_root / "zeta-rs").rglob("Cargo.toml"):
         manifest_text = manifest_path.read_text()
-        package_name_match = re.search(r'^name\s*=\s*"([^"]+)"\s*$', manifest_text, re.MULTILINE)
-        if package_name_match and package_name_match.group(1) in RETIRED_UI_PACKAGE_NAMES:
+        package_name_match = re.search(
+            r'^name\s*=\s*"([^"]+)"\s*$', manifest_text, re.MULTILINE
+        )
+        if (
+            package_name_match
+            and package_name_match.group(1) in RETIRED_UI_PACKAGE_NAMES
+        ):
             fail(f"retired Native UI package remains under zeta-rs: {manifest_path}")
         for retired_package_name in RETIRED_UI_PACKAGE_NAMES:
-            if re.search(rf'^\s*{re.escape(retired_package_name)}\s*=', manifest_text, re.MULTILINE):
-                fail(f"shared backend manifest depends on retired Native UI package: {manifest_path}")
+            if re.search(
+                rf"^\s*{re.escape(retired_package_name)}\s*=",
+                manifest_text,
+                re.MULTILINE,
+            ):
+                fail(
+                    f"shared backend manifest depends on retired Native UI package: {manifest_path}"
+                )
 
     for build_path in (repository_root / "zeta-rs").rglob("BUILD.bazel"):
         build_text = build_path.read_text()
         for retired_package_name in RETIRED_UI_PACKAGE_NAMES:
-            if re.search(rf'\b{re.escape(retired_package_name)}\b', build_text):
-                fail(f"shared backend BUILD file references retired Native UI package: {build_path}")
+            if re.search(rf"\b{re.escape(retired_package_name)}\b", build_text):
+                fail(
+                    f"shared backend BUILD file references retired Native UI package: {build_path}"
+                )
 
     if (repository_root / "zeta-rs" / "Cargo.toml").exists():
         fail("zeta-rs/Cargo.toml still exists as a nested workspace manifest")

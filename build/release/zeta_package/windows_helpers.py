@@ -9,7 +9,7 @@ from typing import Optional
 from .cargo import validate_input_binary
 from .cargo_paths import cargo_profile_directory
 from .cargo_paths import resolve_cargo_target_directory
-from .targets import TargetSpec
+from build.lib.zeta_build.targets import TargetSpec
 
 
 COMMAND_RUNNER_NAME = "zeta-command-runner.exe"

@@ -53,9 +53,11 @@ filegroup(
 filegroup(
     name = "app_package_tool",
     srcs = [
+        "//build/lib/zeta_build:python_sources",
         "//build/release:build_remote_runtime_bundle.py",
         "//build/release:build_app_package.py",
         "//build/release:remote_runtime_bundle.py",
+        "//build/release:zeta_package_sources",
     ],
 )
 
@@ -97,6 +99,8 @@ sh_test(
         "//build/release:remote_runtime_bundle.py",
         "//build/release:test_remote_runtime_bundle.py",
         "//build/release:test_app_package.py",
+        "//build/lib/zeta_build:python_sources",
+        "//build/release:zeta_package_sources",
     ],
     size = "small",
 )

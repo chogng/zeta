@@ -23,7 +23,9 @@ class CargoPathsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "workspace" / "zeta"
             self.assertEqual(
-                resolve_cargo_target_directory(root, {"CARGO_TARGET_DIR": "build/cargo"}),
+                resolve_cargo_target_directory(
+                    root, {"CARGO_TARGET_DIR": "build/cargo"}
+                ),
                 root / "build" / "cargo",
             )
 

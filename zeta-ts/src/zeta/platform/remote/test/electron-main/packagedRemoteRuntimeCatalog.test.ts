@@ -122,10 +122,31 @@ test("packaged catalog rejects symbolic artifact paths", { skip: process.platfor
 	}
 });
 
-test("bundle location follows the canonical development and packaged roots", () => {
-	assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: "/repo/zeta-ts", isPackaged: false, resourcesPath: "/ignored" }), resolve("/repo/.build/desktop/dev/zeta-package/zeta-remote-runtimes"));
-	assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: "/ignored", isPackaged: true, resourcesPath: "/Applications/Zeta.app/Contents/Resources" }), join("/Applications/Zeta.app/Contents/Resources", "zeta-remote-runtimes"));
+test("bundle location follows the canonical development and packaged roots", async () => {
+	const workspace = join(tmpdir(), `zeta-remote-workspace-${process.pid}`);
+	const build = "b".repeat(64);
+	const developmentRoot = join(workspace, ".build", "zeta-package", "dev", "store-v1", developmentTarget(), "host-provided-node", "dev-small");
+	await mkdir(join(developmentRoot, "manifests"), { recursive: true });
+	await writeFile(join(developmentRoot, "manifests", "00000000000000000001.json"), JSON.stringify({ formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${build}` }));
+	try {
+		assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: join(workspace, "zeta-ts"), isPackaged: false, resourcesPath: "/ignored" }), join(developmentRoot, "packages", "0.1.0", build, "zeta-remote-runtimes"));
+		assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: "/ignored", isPackaged: true, resourcesPath: "/Applications/Zeta.app/Contents/Resources" }), join("/Applications/Zeta.app/Contents/Resources", "zeta-remote-runtimes"));
+	} finally {
+		await rm(workspace, { force: true, recursive: true });
+	}
 });
+
+function developmentTarget(): string {
+	const targets: Readonly<Record<string, string>> = {
+		'darwin-arm64': 'aarch64-apple-darwin',
+		'darwin-x64': 'x86_64-apple-darwin',
+		'linux-arm64': 'aarch64-unknown-linux-gnu',
+		'linux-x64': 'x86_64-unknown-linux-gnu',
+		'win32-arm64': 'aarch64-pc-windows-msvc',
+		'win32-x64': 'x86_64-pc-windows-msvc',
+	};
+	return targets[`${process.platform}-${process.arch}`];
+}
 
 async function writeCatalog(root: string, archive: Buffer): Promise<void> {
 	await mkdir(join(root, "artifacts"));

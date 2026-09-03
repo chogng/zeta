@@ -10979,6 +10979,7 @@ dependencies = [
  "zeta-app-server-client",
  "zeta-app-server-protocol",
  "zeta-fast-regex-search",
+ "zeta-package-store",
  "zeta-uds",
 ]
 
@@ -11138,6 +11139,7 @@ dependencies = [
  "serde_json",
  "zeta-code-mode-protocol",
  "zeta-code-mode-runtime",
+ "zeta-package-store",
 ]
 
 [[package]]
@@ -11611,6 +11613,9 @@ dependencies = [
 [[package]]
 name = "zeta-install-context"
 version = "0.1.0"
+dependencies = [
+ "dunce",
+]
 
 [[package]]
 name = "zeta-instructions"
@@ -11919,6 +11924,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-package-store"
+version = "0.1.0"
+dependencies = [
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "zeta-pdf"
 version = "0.1.0"
 dependencies = [
@@ -12093,6 +12110,7 @@ dependencies = [
  "zeta-app-server-daemon",
  "zeta-app-server-protocol",
  "zeta-fast-regex-search",
+ "zeta-package-store",
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-server",

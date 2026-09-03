@@ -12,7 +12,7 @@ if (mode !== 'disconnected' && mode !== 'full') {
 
 if (mode === 'full') {
 	const preparation = await run(process.execPath, [
-		'../build/desktop/prepareDevPackage.ts',
+		'../build/zeta-package/prepareDevPackage.ts',
 		'--javascript-runtime',
 		'packaged-node',
 	], process.env);

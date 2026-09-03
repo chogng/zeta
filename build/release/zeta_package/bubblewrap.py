@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from .cargo import validate_input_binary
 from .cargo_paths import cargo_profile_directory
 from .cargo_paths import resolve_cargo_target_directory
-from .targets import TargetSpec
+from build.lib.zeta_build.targets import TargetSpec
 
 
 REQUIRED_SOURCE_FILES = (
@@ -57,9 +57,7 @@ def resolve_bubblewrap(
             raise RuntimeError("--bwrap-bin is only supported for Linux packages")
         return None
 
-    source = load_vendored_source(
-        repository_root / "zeta-rs" / "vendor" / "bubblewrap"
-    )
+    source = load_vendored_source(repository_root / "zeta-rs" / "vendor" / "bubblewrap")
     if explicit_binary is not None:
         executable = validate_input_binary(
             explicit_binary, "Bubblewrap executable", "--bwrap-bin", False
@@ -111,7 +109,9 @@ def load_vendored_source(source_directory: Path) -> VendoredSource:
     required_string(value, "release")
 
     missing = [
-        name for name in REQUIRED_SOURCE_FILES if not (source_directory / name).is_file()
+        name
+        for name in REQUIRED_SOURCE_FILES
+        if not (source_directory / name).is_file()
     ]
     if missing:
         raise RuntimeError(

@@ -117,6 +117,7 @@ fn start_replaces_a_daemon_from_a_different_executable_identity() {
     drop(cleanup);
 }
 
+#[cfg(unix)]
 #[test]
 fn source_executable_can_be_replaced_while_daemon_is_running() {
     let root = tempfile::tempdir().unwrap();

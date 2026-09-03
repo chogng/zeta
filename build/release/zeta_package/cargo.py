@@ -8,8 +8,8 @@ from typing import Optional
 
 from .cargo_paths import cargo_profile_directory
 from .cargo_paths import resolve_cargo_target_directory
-from .targets import TargetSpec
-from .v8 import resolve_v8_cargo_env
+from build.lib.zeta_build.targets import TargetSpec
+from build.lib.zeta_build.v8 import resolve_v8_cargo_env
 
 
 def cargo_environment(spec: TargetSpec) -> dict[str, str]:
@@ -56,7 +56,9 @@ def resolve_server_binary(
         / profile_directory
         / ("zeta-server" + spec.executable_suffix)
     )
-    return validate_input_binary(binary, "built Zeta server executable", cargo, spec.is_windows)
+    return validate_input_binary(
+        binary, "built Zeta server executable", cargo, spec.is_windows
+    )
 
 
 def resolve_app_server_daemon_binary(
@@ -94,10 +96,7 @@ def resolve_app_server_daemon_binary(
     subprocess.run(command, check=True, env=cargo_environment(spec))
     profile_directory = cargo_profile_directory(cargo_profile)
     binary = (
-        target_directory
-        / spec.target
-        / profile_directory
-        / spec.app_server_daemon_name
+        target_directory / spec.target / profile_directory / spec.app_server_daemon_name
     )
     return validate_input_binary(
         binary,

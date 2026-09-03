@@ -118,6 +118,8 @@ fn pending_key(cell_id: &zeta_code_mode_protocol::CellId, runtime_call_id: &str)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _package_lease =
+        zeta_package_store::acquire_package_lease_for_executable(std::env::current_exe()?)?;
     let stdout = Arc::new(Mutex::new(BufWriter::new(io::stdout())));
     let invoker = Arc::new(StdioToolInvoker {
         writer: Arc::clone(&stdout),

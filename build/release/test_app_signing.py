@@ -32,7 +32,9 @@ class AppSigningTests(unittest.TestCase):
                     output = Path(command[command.index("--output-signature") + 1])
                     output.write_bytes(b"detached-signature")
 
-            with patch.dict(os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False):
+            with patch.dict(
+                os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
+            ):
                 signed = sign_package(package, "linux", fake_runner)
                 verified = verify_package(package, "linux", fake_runner)
 
@@ -55,7 +57,9 @@ class AppSigningTests(unittest.TestCase):
             build_package(package, binary, "x86_64-unknown-linux-gnu", "release")
             (package / "bin" / "app").write_bytes(b"tampered")
 
-            with patch.dict(os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False):
+            with patch.dict(
+                os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
+            ):
                 with self.assertRaisesRegex(RuntimeError, "digest"):
                     sign_package(package, "linux", lambda _: None)
 
@@ -84,12 +88,18 @@ class AppSigningTests(unittest.TestCase):
                         b"detached-signature"
                     )
 
-            with patch.dict(os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False):
+            with patch.dict(
+                os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
+            ):
                 signed = sign_package(package, "linux", fake_runner)
                 verified = verify_package(package, "linux", fake_runner)
 
-            self.assertEqual(bundle.catalog_sha256, signed["remoteRuntimeCatalogSha256"])
-            self.assertEqual(bundle.catalog_sha256, verified["remoteRuntimeCatalogSha256"])
+            self.assertEqual(
+                bundle.catalog_sha256, signed["remoteRuntimeCatalogSha256"]
+            )
+            self.assertEqual(
+                bundle.catalog_sha256, verified["remoteRuntimeCatalogSha256"]
+            )
 
     def test_signature_record_binds_a_network_remote_runtime_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -120,12 +130,18 @@ class AppSigningTests(unittest.TestCase):
                         b"detached-signature"
                     )
 
-            with patch.dict(os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False):
+            with patch.dict(
+                os.environ, {"APP_COSIGN_IDENTITY": "test-key"}, clear=False
+            ):
                 signed = sign_package(package, "linux", fake_runner)
                 verified = verify_package(package, "linux", fake_runner)
 
-            self.assertEqual(release.catalog_sha256, signed["remoteRuntimeCatalogSha256"])
-            self.assertEqual(release.catalog_sha256, verified["remoteRuntimeCatalogSha256"])
+            self.assertEqual(
+                release.catalog_sha256, signed["remoteRuntimeCatalogSha256"]
+            )
+            self.assertEqual(
+                release.catalog_sha256, verified["remoteRuntimeCatalogSha256"]
+            )
 
 
 if __name__ == "__main__":

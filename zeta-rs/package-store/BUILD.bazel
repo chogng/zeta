@@ -1,0 +1,13 @@
+load("//:defs.bzl", "zeta_rust_binary", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "package-store",
+    crate_name = "zeta_package_store",
+)
+
+zeta_rust_binary(
+    name = "zeta-package-store",
+    crate_name = "zeta_package_store_cli",
+    crate_root = "src/main.rs",
+    deps = [":package-store"],
+)

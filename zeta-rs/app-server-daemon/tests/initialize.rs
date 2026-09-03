@@ -26,17 +26,14 @@ impl Drop for Daemon {
 }
 
 #[test]
-fn daemon_answers_initialize_for_the_repository_dir() {
+fn daemon_answers_initialize_for_a_directory() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("p");
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(std::path::Path::parent)
-        .unwrap()
-        .to_path_buf();
+    let dir = root.path().join("dir");
     let product_services = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/product-services.json");
     fs::create_dir(&profile).unwrap();
+    fs::create_dir(&dir).unwrap();
     let endpoint = daemon_endpoint_path(&profile).unwrap();
     let daemon = Command::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"))
         .env("ZETA_PROFILE_ROOT", &profile)

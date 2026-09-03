@@ -192,10 +192,10 @@ boundary CI 均已通过。
 阶段一完成后至少通过：
 
 ```text
-python3 -B build/cargo_with_v8.py check --workspace
-python3 -B build/cargo_with_v8.py check -p app
-python3 -B build/cargo_with_v8.py test -p app
-python3 -B build/cargo_with_v8.py test --workspace
+python3 -B scripts/cargo.py check --workspace
+python3 -B scripts/cargo.py check -p app
+python3 -B scripts/cargo.py test -p app
+python3 -B scripts/cargo.py test --workspace
 just --dry-run app
 ```
 

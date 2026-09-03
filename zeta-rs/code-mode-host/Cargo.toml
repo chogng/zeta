@@ -13,6 +13,7 @@ path = "src/main.rs"
 serde_json = { workspace = true }
 zeta-code-mode-protocol = { workspace = true }
 zeta-code-mode-runtime = { workspace = true }
+zeta-package-store = { workspace = true }
 
 [lints]
 workspace = true

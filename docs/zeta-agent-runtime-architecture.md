@@ -28,12 +28,12 @@
 
 | 审计问题 | 当前结论 | 深入阅读 |
 | --- | --- | --- |
-| 哪些已经落地，哪些还是纸面设计？ | 单 Agent、durable policy binding、上下文、主力 Provider 原生流式和多 Agent 纵向切片已实现；完整运行时快照仍为部分设计 | [组件状态总账](#2-组件状态总账) |
+| 哪些已经落地，哪些还是纸面设计？ | 单 Agent、durable policy binding、上下文、主力 Provider 流式和多 Agent 纵向切片已实现；完整运行时快照仍为部分设计 | [组件状态总账](#2-组件状态总账) |
 | Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化 | [分层与执行链](#3-分层与执行链) |
 | 执行内核会异步化（tokio）吗？ | 不承诺；保留同步端口 + per-Thread OS 线程，流式经 sink 达成 | [R2](#42-r2同步执行内核流式经-sink) |
 | Turn 中途策略会漂移吗？ | 模型选择与 policy revision 都在 `TurnAccepted` 冻结；恢复遇到 revision 变化会 fail closed | [R1](#41-r1策略冻结-durable-化) |
 | 上下文溢出怎么办？ | 已由纯 planner 返回显式 overflow/compaction outcome；checkpoint durable commit 后才重规划 | [R3](#43-r3上下文系统裁剪落地) |
-| 多 Agent 什么时候做？ | 阶段 D 契约和阶段 E 的 Fresh spawn/delivery 纵向切片已落地；join、取消树和 UI projection 继续按 gate 演进 | [R4](#44-r4多-agent-契约冻结先行) |
+| 多 Agent 什么时候做？ | 阶段 D 契约与阶段 E 的上下文模式、委托、消息、等待、取消树、恢复和 UI 投影已落地；内置专化角色仍按独立定义契约推进 | [R4](#44-r4多-agent-契约冻结先行)、[`subagents.md`](subagents.md) |
 
 ## 1. 重审结论
 
@@ -95,7 +95,7 @@
 | Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
 | 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
 | `ContextAssembler`（`ContextPlan` → `ModelRequest`） | 已实现 | `core/src/context/assembler.rs` |
-| `ModelService` / `ModelStreamSink` 契约 | 已实现；声明 native streaming 的主力 Provider 逐 chunk 产出，显式 unary Provider 使用 final-response bridge | `core/src/services.rs`、`model-provider/src/providers/` |
+| `ModelService` / `ModelStreamSink` 契约 | 已实现；声明真实流式的主力 Provider 逐 chunk 产出，显式 unary Provider 使用 final-response bridge | `core/src/services.rs`、`model-provider/src/providers/` |
 | 取消链路 session/request InterruptTurn → mailbox cancel → token → model/tool | 已实现 | [`core.md`](core.md) §7.3 |
 | App Server 可唤醒 outbound 通知源与独立 writer | 已实现 | `app-server/src/server.rs` |
 
@@ -335,7 +335,7 @@ durable history 重新构造 context 并创建新的 invocation snapshot；运�
 
 范围：[§4.2](#42-r2同步执行内核流式经-sink) 的 provider SSE decoder、App Server
 reader/writer 拆分、Desktop gap/resync。OpenAI Responses、OpenAI-compatible Chat、Google 与
-Anthropic 已声明 native streaming；其余内置 Provider 显式声明 unary。
+Anthropic 已声明真实流式；其余内置 Provider 显式声明 unary。
 
 完成条件：
 
@@ -358,8 +358,7 @@ serialize / deserialize / 拒绝非法值；不引入任何 Core 运行时依赖
 
 当前已完成 Fresh/Selected/ForkedPrefix spawn saga、outbox/inbox delivery、durable join、向下
 cancellation tree、结构性 Agent tree budget、恢复、Desktop tree projection 与目录 Grant
-的模型工具接线。后续范围是 Agent definition 自动选择、跨产品 projection 与更完整的故障注入
-矩阵；gate 条件见 §4.4。
+的模型工具接线，以及目录 Agent definition 的显式/唯一 metadata 自动选择。后续范围是内置与自定义定义的统一身份和调用范围、带作用范围的执行能力上限、跨产品 projection 与更完整的故障注入矩阵；角色定义边界见 [`subagents.md`](subagents.md)，运行时 gate 条件见 §4.4。
 
 完成条件：[`core-multi-agent.md`](core-multi-agent.md) §17 验证矩阵全量通过，其中 spawn
 的每个 durable boundary crash、duplicate delegation 拒绝、parent/child/sibling 隔离为必过

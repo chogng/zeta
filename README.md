@@ -93,7 +93,7 @@ corepack pnpm dev:stanza
 ```bash
 just app
 # or:
-python3 -B build/cargo_with_v8.py run -p app
+python3 -B scripts/cargo.py run -p app
 ```
 
 ## Repository map

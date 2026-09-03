@@ -47,13 +47,13 @@ distance；Files pane rows consume `FILES` for branches and `FILE_TEXT` for leaf
 新增、删除或重命名 SVG 后运行：
 
 ```bash
-node build/app/syncRustIcons.ts
-node build/app/syncRustIcons.ts --check
+corepack pnpm icons:generate
+corepack pnpm icons:check
 cargo test --manifest-path Cargo.toml -p zeta-icons
 ```
 
 `src/generated.rs` 是 checked-in build input，Cargo 和 Bazel 构建都不在 compile action 中运行
-generator。`syncRustIcons` 拒绝不规范的 filename、多 SVG root、active/external content，并根据
+generator。图标生成器拒绝不规范的 filename、多 SVG root、active/external content，并根据
 固定 paint 判断 rendering mode；`--check` 在 checked-in output 过期时失败。
 
 新增产品语义时更新 `src/library.rs`、`src/icon_tests.rs`，并确认 Desktop

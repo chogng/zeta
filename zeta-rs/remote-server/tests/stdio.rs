@@ -10,6 +10,7 @@ use zeta_app_server_client::ConnectionCloseReason;
 use zeta_app_server_client::StdioAppServerCommand;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
+#[cfg(unix)]
 use zeta_app_server_protocol::protocol::terminal::TerminalAttachParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalCloseParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalCreateParams;

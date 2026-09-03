@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import test from "node:test";
 
@@ -10,23 +10,37 @@ test("repository build orchestration and developer scripts have separate root ow
     const path = join(repositoryRoot, directory);
     assert.equal(existsSync(path), false, `${directory} must not own repository tooling`);
   }
-  for (const category of ["desktop", "download", "lib", "pnpm", "release", "vite", "app"]) {
+  for (const category of ["desktop", "download", "lib", "pnpm", "release", "resources", "vite", "zeta-package"]) {
     assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
   }
-  for (const entry of ["test.ts", "test-editor.ts", "test-extensions.ts", "test-integration.ts", "test-smoke.ts", "test-web-integration.ts", "test"]) {
+  for (const entry of ["cargo.py", "format.py", "just-shell.py", "test-python.py", "test.ts", "test-editor.ts", "test-extensions.ts", "test-integration.ts", "test-smoke.ts", "test-web-integration.ts", "test", "zeta.py"]) {
     assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), true, entry);
+  }
+  for (const retiredEntry of ["cargo_with_v8.py", "lib/just_shell.py"]) {
+    assert.equal(existsSync(join(import.meta.dirname, retiredEntry)), false, retiredEntry);
   }
 });
 
-test("Node build and developer script sources use TypeScript", () => {
+test("Node build and repository command sources do not use runtime JavaScript", () => {
   const javaScriptExtensions = new Set([".cjs", ".js", ".mjs", ".mts"]);
   const files = [...walk(import.meta.dirname), ...walk(join(repositoryRoot, "scripts"))];
   assert.deepEqual(files.filter((path) => javaScriptExtensions.has(extname(path))), []);
 });
 
+test("general repository commands do not depend on release package internals", () => {
+  const files = [
+    ...walk(join(repositoryRoot, "scripts")),
+    ...walk(import.meta.dirname).filter((path) => !path.startsWith(join(import.meta.dirname, "release"))),
+  ].filter((path) => extname(path) === ".py");
+
+  for (const path of files) {
+    assert.doesNotMatch(readFileSync(path, "utf8"), /zeta_package\./, path);
+  }
+});
+
 function walk(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === "node_modules") return [];
+    if (entry.name === "node_modules" || entry.name === ".venv") return [];
     const path = join(directory, entry.name);
     return entry.isDirectory() ? walk(path) : [path];
   });

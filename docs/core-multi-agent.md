@@ -6,7 +6,7 @@
 > `send_agent_message`、`wait_agent` 工具已落地。`Selected/ForkedPrefix` 在 spawn 时物化并进入
 > immutable seed；All/Any/Quorum join、向下 cancellation tree 与 canonical Agent-tree projection
 > 均使用 durable Thread/Session facts。Directory Agent definition 的显式/唯一 metadata 自动选择会
-> 冻结 generation、digest、reason 与 capability ceiling；Desktop 只消费 canonical tree 并可精确
+> 冻结 generation、digest、reason 与工具/Skill 上限；Desktop 只消费 canonical tree 并可精确
 > 中断单个节点。S6 的 child failure、parent cancel、join timeout、any/quorum、恢复、预算耗尽与
 > mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。原落地顺序分为契约冻结
 > （[阶段 D](zeta-agent-runtime-architecture.md#阶段-d多-agent-契约冻结已完成)）与运行时
@@ -18,6 +18,7 @@
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
 > 外部 MCP Host 调用 Zeta 与 remote Agent bridge：[`mcp-server.md`](mcp-server.md)
 > 多个 Agent 共同修改代码时的工作契约、范围冲突、验证和集成：[`multi-agent-development.md`](multi-agent-development.md)
+> 内置专化角色、自定义定义归一化、模型/上下文继承、工具与执行能力边界：[`subagents.md`](subagents.md)
 
 ## 快速理解
 
@@ -33,6 +34,7 @@
 | 子 Agent 如何回传结果？ | 结果通过可持久化消息和委托终态回到调用方，不靠进程内引用 | [结果与汇合](#8-结果与汇合) |
 | 取消父 Agent 会发生什么？ | App Server 的 Turn interrupt/Session stop 会向所有 live descendants 传播；child 取消不反向影响 parent/sibling | [取消与终态语义](#9-取消与终态语义) |
 | 多个 Agent 的代码结果如何避免互相破坏？ | 本文只保证 Agent 生命周期和通信；工作范围、跨 Agent 冲突、验证与集成由可靠开发系统单独负责 | [`multi-agent-development.md`](multi-agent-development.md) |
+| 专化角色的提示词、模型、工具和调用范围在哪里定义？ | 内置角色由产品资源维护，自定义角色来自 `.zeta/agents`；两者在委托前归一化 | [`subagents.md`](subagents.md) |
 | Team 模式属于哪一种？ | Team 是同一 Session Agent 树的产品形态，根 Thread 协调多个子 Thread | [`multi-agent-development.md`](multi-agent-development.md#32-两种协作拓扑与-team) |
 | 多个独立 Session 如何协作？ | 使用显式跨 Session 工作关系；不继承上下文、取消域、预算或授权 | [`multi-agent-development.md`](multi-agent-development.md#32-两种协作拓扑与-team) |
 
@@ -195,11 +197,12 @@ Spawn 时必须创建不可变、可验证的 seed：
 struct AgentContextSeed {
     delegation_id: DelegationId,
     parent_thread_id: ThreadId,
+    parent_turn_id: TurnId,
     parent_sequence: u64,
     task: DelegatedTask,
     role: AgentRoleSnapshot,
     inheritance: AgentContextMode,
-    selected_sources: Vec<ContextSourceRef>,
+    materialized_context: Vec<AgentMaterializedContext>,
     policy_ceiling: DelegatedPolicyCeiling,
     capability_scope: DelegatedCapabilityScope,
     digest: ContextSeedDigest,
@@ -213,13 +216,13 @@ struct AgentContextSeed {
 ```rust
 enum AgentContextMode {
     Fresh,
-    Selected(SelectedContext),
-    ForkedPrefix(ForkedContext),
+    Selected { sources: Vec<AgentContextSource> },
+    ForkedPrefix { selection: ForkedAgentContext },
 }
 
-enum ForkedContext {
+enum ForkedAgentContext {
     Full,
-    LastTurns(NonZeroU32),
+    LastTurns { count: u32 },
     CheckpointAndTail,
 }
 ```
@@ -248,6 +251,8 @@ effective child policy
 ```
 
 Child 可以被进一步收紧，不能静默获得 parent 没有的 capability 或放宽 approval。
+
+**当前限制。** `DelegatedCapabilityScope` 目前只冻结工具名与 Skill，尚未携带带作用范围的 `Capability` 集合。因此“只读审查”“只允许构建目录写入”等角色限制目前不能只靠该结构强制执行；内置专化角色接线前必须按 [`subagents.md`](subagents.md#8-当前实现与缺口) 补齐定义身份、调用范围和执行能力上限。
 
 ### 5.3 种子持久化
 

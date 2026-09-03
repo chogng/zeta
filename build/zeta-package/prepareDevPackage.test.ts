@@ -7,7 +7,16 @@ import test from "node:test";
 
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../zeta-ts/generated/app-server/types.ts";
 import { cargoTargetDirectory } from "../lib/cargo.ts";
-import { assemblePackage, copyBuiltinExtensions, hostTarget, parseJavaScriptRuntime, parsePackageOptions, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact, selectV8ArtifactPair } from "./prepareDevPackage.ts";
+import {
+  assemblePackage,
+  copyBuiltinExtensions,
+  hostTarget,
+  parseJavaScriptRuntime,
+  parsePackageOptions,
+  selectNodeArtifact,
+  selectRipgrepArtifact,
+  selectV8ArtifactPair,
+} from "./prepareDevPackage.ts";
 
 test("resolves one shared Cargo target directory for host development builds", () => {
   const workspace = resolve("/workspace/zeta");
@@ -133,43 +142,6 @@ test("selects a checksum-locked sandbox-enabled rusty_v8 pair", () => {
   assert.equal(pair.binding.sha256, "b".repeat(64));
 });
 
-test("replaces a complete development package atomically", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-dev-package-test-"));
-  const output = join(root, "zeta-package");
-  try {
-    await mkdir(output);
-    await writeFile(join(output, "generation"), "old");
-    await replaceDirectoryAtomically(output, async (staging) => {
-      await mkdir(staging);
-      await writeFile(join(staging, "generation"), "new");
-    });
-    assert.equal(await readFile(join(output, "generation"), "utf8"), "new");
-    assert.deepEqual(await readdir(root), ["zeta-package"]);
-  } finally {
-    await rm(root, { force: true, recursive: true });
-  }
-});
-
-test("preserves the previous package when preparation fails", async () => {
-  const root = await mkdtemp(join(tmpdir(), "zeta-dev-package-test-"));
-  const output = join(root, "zeta-package");
-  try {
-    await mkdir(output);
-    await writeFile(join(output, "generation"), "old");
-    await assert.rejects(
-      replaceDirectoryAtomically(output, async (staging) => {
-        await mkdir(staging);
-        throw new Error("build failed");
-      }),
-      /build failed/,
-    );
-    assert.equal(await readFile(join(output, "generation"), "utf8"), "old");
-    assert.deepEqual(await readdir(root), ["zeta-package"]);
-  } finally {
-    await rm(root, { force: true, recursive: true });
-  }
-});
-
 test("assembles and validates the canonical Windows development layout", async () => {
   const root = await mkdtemp(join(tmpdir(), "zeta-dev-package-test-"));
   const staging = join(root, "package");
@@ -224,6 +196,8 @@ test("assembles and validates the canonical Windows development layout", async (
     );
     const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
     assert.equal(metadata.layoutVersion, 2);
+    assert.equal(metadata.buildProfile, "dev-small");
+    assert.equal(metadata.files["bin/zeta-server.exe"], createHash("sha256").update("zeta-server").digest("hex"));
     assert.deepEqual(metadata.javascriptRuntime, { kind: "packagedNode" });
     assert.equal(metadata.entrypoint, "bin/zeta-server.exe");
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
@@ -330,6 +304,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
     );
     const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
     assert.equal(metadata.layoutVersion, 2);
+    assert.equal(metadata.buildProfile, "dev-small");
     assert.deepEqual(metadata.javascriptRuntime, { kind: "hostProvidedNode" });
     assert.equal(metadata.components.node, undefined);
     assert.deepEqual(metadata.remoteRuntimeCatalog, {

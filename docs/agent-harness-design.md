@@ -138,7 +138,7 @@ user-role context 放在 durable Thread history 之后，因此目录变化只�
 ### 4.3 Directory Instruction 发现与注入
 
 - 发现：只读取已授权目录的 `.zeta/instructions/*.md` 文件；`AGENTS.md` 和其他生态
-  格式必须经 `zeta-agent-import`，native loader 不兼容扫描；
+  格式必须经 `zeta-agent-import`，原生 loader 不兼容扫描；
 - 注入：当前只把 `load: global` 条目渲染为 `input[0]` user message，并标注其优先级低于
   system 与安全策略；
 - 大小：每个文件最多 32 KiB、直接条目最多 128，非法条目产生隔离 diagnostic；
@@ -461,9 +461,17 @@ authoring 规则以最严格交集为准：
 
 默认 PR 不依赖网络或真实模型凭据。真实模型和真实任务 benchmark 只记录明确允许的去内容化指标；目录内容、日志和任务输出不得进入聚合。
 
-## 15. 落地顺序
+### 14.5 运行时观测与发布门
 
-M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺序。后续工作项、依赖、优先级和验收门由 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) 的 S1–S7 唯一拥有。
+> 状态：尚未完成。
+
+运行时观测应覆盖模型调用、重试、压缩、usage、批准等待、工具终态、编辑工具选择、验证结果和委托恢复。事件只能包含去内容化类别、计数、耗时、稳定错误码和不可逆关联 ID；不得包含 prompt、敏感输入、工具参数、diff、文件路径或文件正文。用户级聚合必须明确启用，Thread/Turn 关联也不能用于恢复用户内容。
+
+发布检查表只在产品发布范围确定后生成，并汇总当前能力矩阵、已知限制、迁移和回滚条件。发布前必须满足：没有 P0 缺口；协议、schema、生成物和文档同步；主力路径通过故障注入；未支持能力在产品中隐藏或明确解释；所有持久化副作用在崩溃恢复测试中保持只发生一次或明确为结果未知，绝不静默重放。
+
+## 15. 实现状态
+
+M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划。ChatGPT 订阅剩余兼容工作由 [`chatgpt-subscription.md`](chatgpt-subscription.md#当前状态与待完成项) 维护；内置专化子代理由 [`subagents.md`](subagents.md) 维护；运行时观测与发布门由 [§14.5](#145-运行时观测与发布门) 维护。
 
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
@@ -475,7 +483,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | M5（完成）MCP 策略 | registry snapshot、≤15/≤5k 平铺阈值、超阈值整体 `search_tools`/`call_mcp_tool` 与 catalog/definition digest binding 已实现 | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
 | M6（完成）Skills/commands | `$name` 显式 SkillRef、slash commands、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通 | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
 
-当前已经具备“接入已配置模型即可 coding”的最小闭环；后续目标是将该闭环收口为可观测、可恢复、跨 Provider 一致的产品能力。真实模型 benchmark 属于后置的产品度量工作，不阻塞本地闭环。实施时必须按 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) 的工作项 ID 和完成纪律更新状态。
+当前已经具备“接入已配置模型即可 coding”的最小闭环；真实模型 benchmark 属于有明确产品目标、版本化任务集和受控预算后才启动的产品度量，不阻塞本地闭环。后续实现直接更新上述长期 owner 的状态和完成门，不再维护一份重复的总计划。
 
 ## 16. 参考
 

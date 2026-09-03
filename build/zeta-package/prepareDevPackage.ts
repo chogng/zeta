@@ -1,18 +1,17 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { constants } from "node:fs";
+import { constants, createReadStream } from "node:fs";
 import { chmod, copyFile, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
-import { desktopBuildPath } from "../lib/paths.ts";
+import { developmentHostTarget, zetaPackageBuildPath } from "../lib/paths.ts";
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../zeta-ts/generated/app-server/types.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
 const cargoWorkspace = repositoryRoot;
 const sharedRustSource = join(repositoryRoot, "zeta-rs");
-const outputDirectory = desktopBuildPath(repositoryRoot, "dev", "zeta-package");
 const ripgrepLockPath = join(repositoryRoot, "third_party", "ripgrep", "runtime-lock.json");
 const ripgrepCacheRoot = join(repositoryRoot, "third_party", ".cache", "ripgrep");
 const nodeLockPath = join(repositoryRoot, "third_party", "node", "runtime-lock.json");
@@ -23,6 +22,7 @@ const v8LockPath = join(repositoryRoot, "third_party", "v8", "runtime-lock.json"
 const v8CacheRoot = join(repositoryRoot, "third_party", ".cache", "v8");
 const archiveBufferLimit = 256 * 1024 * 1024;
 const javascriptRuntimeKinds = new Set<JavaScriptRuntimeKind>(["host-provided-node", "packaged-node"]);
+const developmentBuildProfile = "dev-small";
 
 type JavaScriptRuntimeKind = "host-provided-node" | "packaged-node";
 
@@ -120,18 +120,23 @@ interface FirstPartyExecutables {
   readonly codeModeHost: string;
 }
 
-interface PackageMetadata {
-  readonly buildId: string;
+interface PackageIdentityMetadata {
+  readonly buildProfile: string;
   readonly components: Record<string, unknown> & { node?: unknown };
   readonly entrypoint: string;
   readonly javascriptRuntime: { readonly kind: string };
   readonly layoutVersion: number;
   readonly pathDir: string;
   readonly protocol: { readonly major: number; readonly revision: number; readonly schemaHash: string };
-  remoteRuntimeCatalog?: { readonly path?: string; readonly sha256: string; readonly trustBinding: string; readonly url?: string };
+  readonly remoteRuntimeCatalog?: { readonly path?: string; readonly sha256: string; readonly trustBinding: string; readonly url?: string };
   readonly resourcesDir: string;
   readonly target: string;
   readonly version: string;
+}
+
+interface PackageMetadata extends PackageIdentityMetadata {
+  readonly buildId: string;
+  readonly files: Readonly<Record<string, string>>;
 }
 
 export function parseJavaScriptRuntime(cliArguments: readonly string[]): JavaScriptRuntimeKind {
@@ -170,7 +175,7 @@ export function parsePackageOptions(cliArguments: readonly string[]): PackageOpt
 }
 
 function packageUsage(): Error {
-  return new Error("Usage: node build/desktop/prepareDevPackage.ts [--javascript-runtime host-provided-node|packaged-node] [--remote-runtime-bundle <bundle-directory>] [--remote-runtime-catalog-url <https-catalog.json> --remote-runtime-catalog-sha256 <digest>]");
+  return new Error("Usage: node build/zeta-package/prepareDevPackage.ts [--javascript-runtime host-provided-node|packaged-node] [--remote-runtime-bundle <bundle-directory>] [--remote-runtime-catalog-url <https-catalog.json> --remote-runtime-catalog-sha256 <digest>]");
 }
 
 function validateRemoteRuntimeCatalogUrl(value: string): void {
@@ -186,19 +191,7 @@ function validateRemoteRuntimeCatalogUrl(value: string): void {
 }
 
 export function hostTarget(platform: NodeJS.Platform = process.platform, architecture: string = process.arch): string {
-  const targets: Readonly<Record<string, string>> = {
-    "darwin-arm64": "aarch64-apple-darwin",
-    "darwin-x64": "x86_64-apple-darwin",
-    "linux-arm64": "aarch64-unknown-linux-gnu",
-    "linux-x64": "x86_64-unknown-linux-gnu",
-    "win32-arm64": "aarch64-pc-windows-msvc",
-    "win32-x64": "x86_64-pc-windows-msvc",
-  };
-  const target = targets[`${platform}-${architecture}`];
-  if (!target) {
-    throw new Error(`Unsupported Zeta development host: ${platform}/${architecture}`);
-  }
-  return target;
+  return developmentHostTarget(platform, architecture);
 }
 
 export function selectV8ArtifactPair(lock: V8RuntimeLock, target: string): ResolvedV8ArtifactPair {
@@ -785,29 +778,30 @@ export async function assemblePackage(
     revision: APP_SERVER_PROTOCOL_REVISION,
     schemaHash: APP_SERVER_SCHEMA_HASH,
   };
-  const appServerDaemonSha256 = (components.appServerDaemon as { readonly binarySha256: string }).binarySha256;
-  const codeModeHostSha256 = (components.codeModeHost as { readonly binarySha256: string }).binarySha256;
-  const serverHostSha256 = (components.serverHost as { readonly binarySha256: string }).binarySha256;
-  const buildId = packageBuildId({ appServerDaemonSha256, codeModeHostSha256, protocol, serverHostSha256, target, version });
-  const metadata: PackageMetadata = {
-    buildId,
+  const runtimeKind = node ? "packagedNode" : "hostProvidedNode";
+  let remoteRuntimeCatalog: PackageIdentityMetadata["remoteRuntimeCatalog"];
+  if (remoteRuntimeBundle || remoteRuntimeRelease) {
+    const packagedCatalogSha256 = remoteRuntimeBundle ? await sha256(join(staging, "zeta-remote-runtimes", "catalog.json")) : undefined;
+    if (remoteRuntimeRelease && packagedCatalogSha256 && remoteRuntimeRelease.sha256 !== packagedCatalogSha256) throw new Error("Network Remote runtime catalog SHA-256 does not match the packaged catalog");
+    remoteRuntimeCatalog = remoteRuntimeRelease
+      ? { url: remoteRuntimeRelease.url, sha256: remoteRuntimeRelease.sha256, trustBinding: "signedProductPackage" }
+      : { path: "zeta-remote-runtimes/catalog.json", sha256: packagedCatalogSha256 as string, trustBinding: "signedProductPackage" };
+  }
+  const identity: PackageIdentityMetadata = {
+    buildProfile: developmentBuildProfile,
     components,
     entrypoint: `bin/${serverHostName}`,
-    javascriptRuntime: { kind: node ? "packagedNode" : "hostProvidedNode" },
+    javascriptRuntime: { kind: runtimeKind },
     layoutVersion: 2,
     pathDir: "zeta-path",
     protocol,
+    ...(remoteRuntimeCatalog ? { remoteRuntimeCatalog } : {}),
     resourcesDir: "zeta-resources",
     target,
     version,
   };
-  if (remoteRuntimeBundle || remoteRuntimeRelease) {
-    const packagedCatalogSha256 = remoteRuntimeBundle ? await sha256(join(staging, "zeta-remote-runtimes", "catalog.json")) : undefined;
-    if (remoteRuntimeRelease && packagedCatalogSha256 && remoteRuntimeRelease.sha256 !== packagedCatalogSha256) throw new Error("Network Remote runtime catalog SHA-256 does not match the packaged catalog");
-    metadata.remoteRuntimeCatalog = remoteRuntimeRelease
-      ? { url: remoteRuntimeRelease.url, sha256: remoteRuntimeRelease.sha256, trustBinding: "signedProductPackage" }
-      : { path: "zeta-remote-runtimes/catalog.json", sha256: packagedCatalogSha256 as string, trustBinding: "signedProductPackage" };
-  }
+  const files = await packageFiles(staging);
+  const metadata: PackageMetadata = { ...identity, buildId: packageBuildId(identity, files), files };
   await writeFile(join(staging, "zeta-package.json"), `${JSON.stringify(metadata, null, 2)}\n`);
   await validatePackage(staging, platform);
 }
@@ -848,11 +842,13 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   await requireComponentDigest(metadata, "serverHost", join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
   await requireComponentDigest(metadata, "appServerDaemon", join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
   await requireComponentDigest(metadata, "codeModeHost", join(packageRoot, "bin", isWindows ? "zeta-code-mode-host.exe" : "zeta-code-mode-host"));
-  const appServerDaemonSha256 = (metadata.components.appServerDaemon as { readonly binarySha256: string }).binarySha256;
-  const codeModeHostSha256 = (metadata.components.codeModeHost as { readonly binarySha256: string }).binarySha256;
-  const serverHostSha256 = (metadata.components.serverHost as { readonly binarySha256: string }).binarySha256;
-  if (metadata.buildId !== packageBuildId({ appServerDaemonSha256, codeModeHostSha256, protocol: metadata.protocol, serverHostSha256, target: metadata.target, version: metadata.version })) {
-    throw new Error("Package build identity does not match its first-party artifacts");
+  const files = await packageFiles(packageRoot);
+  if (JSON.stringify(metadata.files) !== JSON.stringify(files)) {
+    throw new Error("Package file manifest does not match its contents");
+  }
+  const { buildId: _buildId, files: _files, ...identity } = metadata;
+  if (metadata.buildId !== packageBuildId(identity, files)) {
+    throw new Error("Package build identity does not match its complete file manifest");
   }
   await requireFile(join(packageRoot, "zeta-path", isWindows ? "rg.exe" : "rg"));
   if (metadata.javascriptRuntime?.kind === "packagedNode") {
@@ -916,45 +912,53 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   }
 }
 
-export async function replaceDirectoryAtomically(output: string, build: (staging: string) => Promise<void>): Promise<void> {
-  await mkdir(dirname(output), { recursive: true });
-  const generation = randomUUID();
-  const staging = join(dirname(output), `.${basename(output)}.next-${generation}`);
-  const previous = join(dirname(output), `.${basename(output)}.previous-${generation}`);
-  let movedPrevious = false;
+async function publishDevelopmentPackage(output: string, publisher: string, build: (staging: string) => Promise<void>): Promise<string> {
+  await mkdir(output, { recursive: true });
+  const staging = join(output, `.next-${randomUUID()}`);
   await rm(staging, { force: true, recursive: true });
   try {
     await build(staging);
-    try {
-      await rename(output, previous);
-      movedPrevious = true;
-    } catch (error: unknown) {
-      if (!isErrorCode(error, "ENOENT")) {
-        throw error;
-      }
-    }
-    try {
-      await rename(staging, output);
-    } catch (error) {
-      if (movedPrevious) {
-        await rename(previous, output);
-        movedPrevious = false;
-      }
-      throw error;
-    }
-    if (movedPrevious) {
-      await rm(previous, { force: true, recursive: true }).catch(() => {});
-    }
+    const result = spawnSync(publisher, ["publish", "--root", output, "--staging", staging], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    if (result.stderr) process.stderr.write(result.stderr);
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`zeta-package-store exited with status ${result.status}`);
+    const published: unknown = JSON.parse(result.stdout);
+    if (!isPublishedPackage(published)) throw new Error("zeta-package-store returned an invalid publication result");
+    return resolve(published.packageRoot);
   } finally {
     await rm(staging, { force: true, recursive: true }).catch(() => {});
-    if (movedPrevious) {
-      try {
-        await stat(output);
-      } catch {
-        await rename(previous, output);
-      }
-    }
   }
+}
+
+async function regularFiles(directory: string): Promise<string[]> {
+  const files: string[] = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isSymbolicLink()) throw new Error(`Development package contains a symbolic path: ${path}`);
+    if (entry.isDirectory()) files.push(...await regularFiles(path));
+    else if (entry.isFile()) files.push(path);
+    else throw new Error(`Development package contains an unsupported file type: ${path}`);
+  }
+  return files.sort();
+}
+
+async function packageFiles(packageRoot: string): Promise<Readonly<Record<string, string>>> {
+  const files: Record<string, string> = {};
+  for (const path of await regularFiles(packageRoot)) {
+    const relative = path.slice(packageRoot.length + 1).replaceAll("\\", "/");
+    if (relative !== "zeta-package.json" && relative !== ".lease") files[relative] = await sha256(path);
+  }
+  return files;
+}
+
+function isPublishedPackage(value: unknown): value is { readonly packageRoot: string; readonly sequence: number } {
+  return typeof value === "object" && value !== null
+    && "packageRoot" in value && typeof value.packageRoot === "string"
+    && "sequence" in value && Number.isSafeInteger(value.sequence) && value.sequence > 0;
 }
 
 export async function prepareDevelopmentPackage(
@@ -967,10 +971,12 @@ export async function prepareDevelopmentPackage(
   }
   const target = hostTarget();
   const isWindows = process.platform === "win32";
+  const outputDirectory = zetaPackageBuildPath(repositoryRoot, "dev", "store-v1", target, javascriptRuntime, developmentBuildProfile);
+  const publisher = requiredExecutable(cargoBuild("zeta-package-store", ["--bin", "zeta-package-store"], ["zeta-package-store"]), "zeta-package-store");
   const executables = await buildFirstPartyExecutables(process.platform);
   const ripgrep = await resolveRipgrep(target, isWindows);
   const node = javascriptRuntime === "packaged-node" ? await resolveNode(target, isWindows) : undefined;
-  await replaceDirectoryAtomically(outputDirectory, (staging) => assemblePackage(
+  const packageRoot = await publishDevelopmentPackage(outputDirectory, publisher, (staging) => assemblePackage(
     staging,
     target,
     process.platform,
@@ -980,7 +986,7 @@ export async function prepareDevelopmentPackage(
     remoteRuntimeBundle,
     remoteRuntimeRelease,
   ));
-  console.log(`Prepared Zeta development package (${javascriptRuntime}) at ${outputDirectory}`);
+  console.log(`Prepared Zeta development package (${javascriptRuntime}) at ${packageRoot}`);
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -1003,15 +1009,25 @@ async function requireComponentDigest(metadata: PackageMetadata, name: string, p
   }
 }
 
-function packageBuildId(identity: {
-  readonly appServerDaemonSha256: string;
-  readonly codeModeHostSha256: string;
-  readonly protocol: PackageMetadata["protocol"];
-  readonly serverHostSha256: string;
-  readonly target: string;
-  readonly version: string;
-}): string {
-  return `sha256:${createHash("sha256").update(JSON.stringify(identity)).digest("hex")}`;
+function packageBuildId(identity: PackageIdentityMetadata, files: Readonly<Record<string, string>>): string {
+  const digest = createHash("sha256");
+  digest.update("zeta-package-build-v2\0");
+  digest.update(canonicalJson(identity));
+  digest.update("\0");
+  for (const [path, fileDigest] of Object.entries(files).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)) {
+    digest.update(path);
+    digest.update("\0");
+    digest.update(fileDigest);
+    digest.update("\0");
+  }
+  return `sha256:${digest.digest("hex")}`;
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value !== "object") throw new Error("Package identity metadata contains a non-JSON value");
+  return `{${Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(",")}}`;
 }
 
 function isErrorCode(error: unknown, code: string): boolean {

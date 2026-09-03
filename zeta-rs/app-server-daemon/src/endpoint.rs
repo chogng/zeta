@@ -53,7 +53,6 @@ pub(crate) struct EndpointPaths {
     pub(crate) operation_lock: PathBuf,
     pub(crate) log: PathBuf,
     pub(crate) pid: PathBuf,
-    pub(crate) executables: PathBuf,
 }
 
 impl EndpointPaths {
@@ -68,7 +67,6 @@ impl EndpointPaths {
             operation_lock: runtime_root.join(format!("{identity}.operation")),
             log: runtime_root.join(format!("{identity}.log")),
             pid: runtime_root.join(format!("{identity}.pid.json")),
-            executables: runtime_root.join(format!("{identity}.executables")),
         })
     }
 

@@ -129,7 +129,9 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                             schema_hash(),
                         );
                         let mut stream = stream;
-                        if let Err(error) = write_json_line(&mut stream, &response) {
+                        if let Err(error) = write_json_line(&mut stream, &response)
+                            && !is_peer_disconnect(&error)
+                        {
                             eprintln!("local App Server control response failed: {error}");
                         }
                     }
@@ -171,6 +173,7 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                                     id: connection_id,
                                 };
                                 if let Err(error) = server.serve_product_host_jsonl(reader, stream)
+                                    && !is_peer_disconnect(&error)
                                 {
                                     eprintln!("local App Server connection failed: {error}");
                                 }
@@ -277,3 +280,16 @@ fn register_shutdown_signals(_stop_requested: &Arc<AtomicBool>) -> Result<(), St
 fn io_error(error: io::Error) -> String {
     error.to_string()
 }
+
+fn is_peer_disconnect(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::BrokenPipe
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::ConnectionReset
+    )
+}
+
+#[cfg(test)]
+#[path = "daemon_tests.rs"]
+mod tests;

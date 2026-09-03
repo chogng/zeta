@@ -35,9 +35,7 @@ class AppPackageTests(unittest.TestCase):
             patch(
                 "build_app_package.cargo_environment", return_value=environment
             ) as cargo_environment,
-            patch(
-                "build_app_package.subprocess.run", return_value=completed
-            ) as run,
+            patch("build_app_package.subprocess.run", return_value=completed) as run,
         ):
             resolved = resolve_binary(
                 "cargo",
@@ -49,9 +47,7 @@ class AppPackageTests(unittest.TestCase):
             )
 
         command = run.call_args.args[0]
-        self.assertEqual(
-            command[command.index("--target") + 1], "aarch64-apple-darwin"
-        )
+        self.assertEqual(command[command.index("--target") + 1], "aarch64-apple-darwin")
         self.assertIn("--target-dir", command)
         self.assertEqual(environment, run.call_args.kwargs["env"])
         self.assertEqual(

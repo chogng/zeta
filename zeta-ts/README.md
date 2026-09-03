@@ -62,12 +62,12 @@ corepack pnpm dev:web:full
 TUI、app 连接同一 profile-scoped local App Server。Browser 命令同样通过设置或 URL 参数选择内置模式；`ZETA_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
-`.build/desktop/dev/zeta-package`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
-ripgrep 与平台 sandbox helper。Electron 默认生成 `hostProvidedNode` variant，
+`.build/zeta-package/dev/store-v1/<target>/<javascript-runtime>/dev-small/packages/<version>/<build-id>`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
+ripgrep 与平台 sandbox helper。编号清单选择当前包，进程租约保护正在运行的包，存储固定保留当前与回滚包。Electron 默认生成 `hostProvidedNode` variant，
 不再下载或复制 standalone Node；`dev:web:full` 显式生成 `packagedNode` variant，因为 Browser bridge
 没有 Electron runtime。开发态和发布态 Electron 都从相同的
 `<package>/bin/zeta-server[.exe]` 入口启动 App Server，区别仅在编译 profile 和 package root。
-准备流程只使用 Desktop 已要求的 Node、Rust 和 host archive utility，不安装或调用
+准备流程只使用仓库已要求的 Node、Rust 和 host archive utility，不安装或调用
 Python。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
 Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
 

@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 from urllib.request import Request, urlopen
 
 from .cargo import validate_input_binary
-from .targets import TargetSpec
+from build.lib.zeta_build.targets import TargetSpec
 
 
 DOWNLOAD_TIMEOUT_SECONDS = 60
@@ -49,7 +49,9 @@ def resolve_node(
     explicit_binary: Optional[Path] = None,
 ) -> NodeResolution:
     lock = load_node_lock(lock_path)
-    artifact = artifact_for_target(lock, spec.target, license_only=explicit_binary is not None)
+    artifact = artifact_for_target(
+        lock, spec.target, license_only=explicit_binary is not None
+    )
     version = required_string(lock, "version")
     artifact_cache = cache_root / version / artifact.key
     archive_path = artifact_cache / artifact.archive
@@ -69,7 +71,9 @@ def resolve_node(
         )
         source = "local-override"
     if not spec.is_windows:
-        executable.chmod(executable.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        executable.chmod(
+            executable.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+        )
     return NodeResolution(
         executable=executable,
         license_file=license_file,
@@ -85,9 +89,13 @@ def load_node_lock(lock_path: Path) -> Dict[str, Any]:
     try:
         lock = json.loads(lock_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError("Could not read Node.js runtime lock {}: {}".format(lock_path, error)) from error
+        raise RuntimeError(
+            "Could not read Node.js runtime lock {}: {}".format(lock_path, error)
+        ) from error
     if lock.get("schemaVersion") != 1 or lock.get("runtime") != "node":
-        raise RuntimeError("Unsupported Node.js runtime lock schema in {}".format(lock_path))
+        raise RuntimeError(
+            "Unsupported Node.js runtime lock schema in {}".format(lock_path)
+        )
     return lock
 
 
@@ -97,25 +105,43 @@ def artifact_for_target(
     target_map = lock.get("packageTargets")
     license_targets = lock.get("licenseTargets", {})
     artifacts = lock.get("artifacts")
-    if not isinstance(target_map, dict) or not isinstance(license_targets, dict) or not isinstance(artifacts, dict):
-        raise RuntimeError("Node.js lock is missing packageTargets, licenseTargets, or artifacts")
+    if (
+        not isinstance(target_map, dict)
+        or not isinstance(license_targets, dict)
+        or not isinstance(artifacts, dict)
+    ):
+        raise RuntimeError(
+            "Node.js lock is missing packageTargets, licenseTargets, or artifacts"
+        )
     artifact_key = target_map.get(target)
     if artifact_key is None and license_only:
         artifact_key = license_targets.get(target)
     if not isinstance(artifact_key, str):
         if target.endswith("-musl"):
-            raise RuntimeError("Node.js has no official musl binary for {}; pass --node-bin".format(target))
+            raise RuntimeError(
+                "Node.js has no official musl binary for {}; pass --node-bin".format(
+                    target
+                )
+            )
         raise RuntimeError("No Node.js artifact is locked for {}".format(target))
     value = artifacts.get(artifact_key)
     if not isinstance(value, dict):
-        raise RuntimeError("Node.js artifact {!r} for {} is missing".format(artifact_key, target))
+        raise RuntimeError(
+            "Node.js artifact {!r} for {} is missing".format(artifact_key, target)
+        )
     archive = required_string(value, "archive")
     digest = required_string(value, "sha256")
-    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
-        raise RuntimeError("Invalid SHA-256 for Node.js artifact {!r}".format(artifact_key))
+    if len(digest) != 64 or any(
+        character not in "0123456789abcdef" for character in digest
+    ):
+        raise RuntimeError(
+            "Invalid SHA-256 for Node.js artifact {!r}".format(artifact_key)
+        )
     archive_format = required_string(value, "format")
     if archive_format not in ("tar.xz", "zip"):
-        raise RuntimeError("Unsupported Node.js archive format {!r}".format(archive_format))
+        raise RuntimeError(
+            "Unsupported Node.js archive format {!r}".format(archive_format)
+        )
     base_url = required_string(lock.get("source"), "baseUrl")
     return LockedNodeArtifact(
         key=artifact_key,
@@ -158,7 +184,9 @@ def download_and_verify(artifact: LockedNodeArtifact, destination: Path) -> None
 
 def verify_archive(path: Path, artifact: LockedNodeArtifact) -> None:
     if path.stat().st_size != artifact.size or sha256(path) != artifact.sha256:
-        raise RuntimeError("Node.js archive failed locked size or SHA-256 validation: {}".format(path))
+        raise RuntimeError(
+            "Node.js archive failed locked size or SHA-256 validation: {}".format(path)
+        )
 
 
 def extract_member(
@@ -175,10 +203,16 @@ def extract_member(
             with tarfile.open(str(archive_path), "r:xz") as archive:
                 member = archive.getmember(member_name)
                 if not member.isfile():
-                    raise RuntimeError("Node.js archive member {!r} is not a regular file".format(member_name))
+                    raise RuntimeError(
+                        "Node.js archive member {!r} is not a regular file".format(
+                            member_name
+                        )
+                    )
                 extracted = archive.extractfile(member)
                 if extracted is None:
-                    raise RuntimeError("Could not read Node.js archive member {!r}".format(member_name))
+                    raise RuntimeError(
+                        "Could not read Node.js archive member {!r}".format(member_name)
+                    )
                 with extracted, open(temporary, "wb") as output:
                     shutil.copyfileobj(extracted, output)
         else:
@@ -186,7 +220,11 @@ def extract_member(
                 member = archive.getinfo(member_name)
                 file_type = (member.external_attr >> 16) & 0o170000
                 if member.is_dir() or file_type == stat.S_IFLNK:
-                    raise RuntimeError("Node.js archive member {!r} is not a regular file".format(member_name))
+                    raise RuntimeError(
+                        "Node.js archive member {!r} is not a regular file".format(
+                            member_name
+                        )
+                    )
                 with archive.open(member) as extracted, open(temporary, "wb") as output:
                     shutil.copyfileobj(extracted, output)
         os.replace(str(temporary), str(destination))
@@ -203,12 +241,20 @@ def sha256(path: Path) -> str:
 
 
 def required_string(value: Any, key: str) -> str:
-    if not isinstance(value, dict) or not isinstance(value.get(key), str) or not value[key]:
+    if (
+        not isinstance(value, dict)
+        or not isinstance(value.get(key), str)
+        or not value[key]
+    ):
         raise RuntimeError("Node.js lock is missing {!r}".format(key))
     return value[key]
 
 
 def required_integer(value: Any, key: str) -> int:
-    if not isinstance(value, dict) or not isinstance(value.get(key), int) or value[key] <= 0:
+    if (
+        not isinstance(value, dict)
+        or not isinstance(value.get(key), int)
+        or value[key] <= 0
+    ):
         raise RuntimeError("Node.js lock has invalid {!r}".format(key))
     return value[key]

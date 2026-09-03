@@ -4,12 +4,12 @@
 
 ## 快速理解
 
-Zeta 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保存构建系统实现，使用 `scripts/` 保存开发者和 CI 直接调用的稳定操作入口，使用根 `.build/` 保存常规本地产物。日常构建、测试和开发不再向 `zeta-ts/` 或仓库根散落 `dist`、`output`、`target` 和 Bazel 便捷链接。文档站由独立的 `zeta-docs` 仓库构建和清理。
+Zeta 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保存产物构建、生成、下载和发布机制，使用 `scripts/` 保存作用于仓库和开发环境的命令，使用根 `.build/` 保存常规本地产物。文件是否能被直接执行不决定归属；判断标准是它构建产品产物，还是操作、检查或运行仓库。日常构建、测试和开发不再向 `zeta-ts/` 或仓库根散落 `dist`、`output`、`target` 和 Bazel 便捷链接。文档站由独立的 `zeta-docs` 仓库构建和清理。
 
 | 看到的路径 | 它是什么 | 是否受版本控制 | 能否整体删除 |
 | --- | --- | --- | --- |
-| `build/` | 按机制分类的构建配置、监听器和清理入口 | 是 | 否 |
-| `scripts/` | 测试、诊断和维护等稳定仓库操作入口 | 是 | 否 |
+| `build/` | 产物构建、生成、下载、监听、打包、签名及其共享实现 | 是 | 否 |
+| `scripts/` | Cargo 环境、格式化、测试、诊断和维护等仓库操作 | 是 | 否 |
 | `.build/` | Cargo、Desktop、测试和 Bazel 本地产物 | 否 | 是，运行 `corepack pnpm clean` |
 | `zeta-ts/generated/` | 协议和图标生成后参与编译的源码 | 部分文件按生成规则管理 | 否，必须由对应同步命令更新 |
 | `zeta-ts/docs/`、`zeta-ts/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
@@ -25,6 +25,8 @@ Zeta 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` �
 | `just build` | 构建 Electron Desktop 和根 Cargo workspace |
 | `just build-desktop` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
 | `just build-rust` | 通过统一 Cargo 执行器构建根 Rust workspace |
+| `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
+| `just test-python` | 运行共享构建能力与发布构建器的 Python 单元测试 |
 | `corepack pnpm build` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
 | `corepack pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
 | `corepack pnpm test:build` | 运行构建工具自身的单元测试 |
@@ -52,9 +54,11 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 │   ├── editor-browser/          # editor browser-test bundle
 │   ├── playwright/              # Playwright results and reports
 │   └── dev/
-│       ├── zeta-package/        # validated development App Server package
 │       ├── server-host/         # hot-reload generations
 │       └── web-profile/         # full Web development profile
+├── zeta-package/dev/store-v1/<target>/<javascript-runtime>/<build-profile>/
+│   ├── manifests/<sequence>.json # immutable package selection history
+│   └── packages/<version>/<build-id>/ # immutable complete Zeta packages and process leases
 └── bazel-*                      # Bazel convenience links
 ```
 
@@ -69,26 +73,27 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 | 路径 | 单一职责 |
 | --- | --- |
 | `build/lib/` | 构建输出路径、Desktop 输出准备等共享基础设施 |
+| `build/lib/zeta_build/` | Cargo 依赖选择、目标识别和校验下载 V8 输入等共享 Python 构建能力 |
 | `build/lib/watch/` | Electron TypeScript 与 Rust Server Host 的增量监听和重启协调 |
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
-| `build/desktop/` | Desktop 开发包、资源生成、Electron 启动和打包校验 |
+| `build/desktop/` | Desktop 资源生成、Electron 启动和打包校验 |
+| `build/zeta-package/` | Desktop、Web 与 Code TUI 共用的完整开发包组装和代发布 |
 | `build/vite/` | Renderer 入口、Vite 配置、开发桥接与热重载插件 |
 | `build/download/` | 受锁文件约束的第三方构建运行时下载器 |
-| `build/app/` | app 生成器 |
 | `build/release/` | Python/Shell 发布打包、签名、验证以及 Bazel 入口 |
 | `build/clean.ts` | 根清理入口 |
 | `build/package.json` | 构建工具自身的依赖、测试和类型检查入口 |
 | `build/tsconfig.json` | 构建工具 TypeScript 边界 |
 
-`scripts/` 使用 VS Code 式的面向操作命名，顶层文件是开发者和 CI 可直接调用的稳定入口；具体测试运行器和 Node loader 放在 `scripts/test/`。当前入口包括 `test.ts`、`test-editor.ts`、`test-extensions.ts`、`test-integration.ts`、`test-web-integration.ts` 和 `test-smoke.ts`。只有形成真实、可运行的仓库操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空的 `test-remote-integration.ts`。
+`scripts/` 使用面向操作的命名。`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为日常 Cargo 命令准备锁定的构建输入，`zeta.py` 生成完整开发包并让 Code TUI 选择该包，`format.py` 统一已有格式化器，`test-python.py` 运行仓库拥有的 Python 测试。Node、Electron 和 Playwright 测试入口继续使用 TypeScript，具体 runner 和 loader 放在 `scripts/test/`。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
 
-`scripts/` 可以调用 `build/` 的构建准备能力，`build/` 不得依赖或调用 `scripts/`。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责稳定入口、进程编排和临时测试输出生命周期。
+`scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。普通构建和仓库命令不得依赖 `build/release/` 的包实现；共享目标识别和 V8 输入解析由 `build/lib/zeta_build/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
 
 根 `Justfile` 只声明稳定命令并委托到 `build/`、`scripts/` 或产品自身的构建入口，不保存构建机制。根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行 Node 命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`scripts` 和 `zeta-ts` 共用根锁文件与 TypeScript 版本，pnpm 内容寻址 store 使用用户级默认缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。文档站框架配置、内容生成、打包和验收全部归独立的 `zeta-docs` 仓库。
 
-Node 构建工具和仓库脚本统一使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成一份中间 JavaScript 副本；`build/tsconfig.json` 和 `scripts/tsconfig.json` 分别通过 `erasableSyntaxOnly` 和严格类型检查保证两个源码边界同时满足 Node 运行时约束。`build/lib/just_shell.py` 是 Just 在执行 recipe 前选择平台 shell 的引导适配器；`build/release/` 保留已有 Python/Shell 发布契约，因为它们由 Cargo、Bazel 和平台签名流程直接调用，不伪装成 Node 工具。
+Node 构建工具和测试编排使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成中间 JavaScript。跨语言仓库命令、归档和下载流程可以使用 Python；平台发布工具要求 Shell 时保留 Shell。语言由操作依赖决定，不由所在目录强制统一。`build/tsconfig.json` 和 `scripts/tsconfig.json` 分别严格检查两个目录中的 TypeScript；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具，`just install` 通过 uv 准备它们。
 
 平台专属构建流程只有在出现实际实现时才新增 `build/win32/` 或 `build/linux/`，不创建空分类。`zeta-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
 

@@ -13,7 +13,7 @@ from typing import Dict, Optional
 from .bubblewrap import BubblewrapResolution
 from .node import NodeResolution
 from .ripgrep import RipgrepResolution
-from .targets import TargetSpec
+from build.lib.zeta_build.targets import TargetSpec
 from .windows_helpers import (
     COMMAND_RUNNER_NAME,
     SANDBOX_SETUP_NAME,
@@ -39,10 +39,13 @@ def build_package_directory(
     bubblewrap: Optional[BubblewrapResolution] = None,
     windows_helpers: Optional[WindowsSandboxHelpers] = None,
     protocol_metadata: Optional[Dict[str, object]] = None,
+    build_profile: str = "release",
 ) -> None:
     output = output.expanduser().resolve()
     if output.exists():
-        raise RuntimeError("Refusing to replace existing package output: {}".format(output))
+        raise RuntimeError(
+            "Refusing to replace existing package output: {}".format(output)
+        )
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(
         tempfile.mkdtemp(prefix="." + output.name + ".partial-", dir=str(output.parent))
@@ -202,21 +205,10 @@ def build_package_directory(
             if protocol_metadata is not None
             else load_protocol_metadata(repository_root)
         )
-        build_identity = {
-            "appServerDaemonSha256": components["appServerDaemon"]["binarySha256"],
-            "codeModeHostSha256": components["codeModeHost"]["binarySha256"],
-            "protocol": protocol,
-            "serverHostSha256": components["serverHost"]["binarySha256"],
-            "target": spec.target,
-            "version": version,
-        }
-        metadata = {
-            "buildId": "sha256:"
-            + hashlib.sha256(
-                json.dumps(
-                    build_identity, separators=(",", ":"), sort_keys=True
-                ).encode("utf-8")
-            ).hexdigest(),
+        files = package_files(staging)
+        runtime_kind = "packagedNode" if node is not None else "hostProvidedNode"
+        identity = {
+            "buildProfile": build_profile,
             "layoutVersion": LAYOUT_VERSION,
             "version": version,
             "target": spec.target,
@@ -224,10 +216,15 @@ def build_package_directory(
             "pathDir": "zeta-path",
             "resourcesDir": "zeta-resources",
             "javascriptRuntime": {
-                "kind": "packagedNode" if node is not None else "hostProvidedNode",
+                "kind": runtime_kind,
             },
             "components": components,
             "protocol": protocol,
+        }
+        metadata = {
+            **identity,
+            "buildId": package_build_id(identity, files),
+            "files": files,
         }
         write_json(staging / METADATA_FILE, metadata)
         validate_package_directory(staging, spec)
@@ -293,35 +290,31 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             raise RuntimeError(
                 "Package component digest does not match: {}".format(component_name)
             )
-    build_identity = {
-        "appServerDaemonSha256": components["appServerDaemon"]["binarySha256"],
-        "codeModeHostSha256": components["codeModeHost"]["binarySha256"],
-        "protocol": metadata.get("protocol"),
-        "serverHostSha256": components["serverHost"]["binarySha256"],
-        "target": metadata.get("target"),
-        "version": metadata.get("version"),
+    files = package_files(package)
+    if metadata.get("files") != files:
+        raise RuntimeError("Package file manifest does not match its contents")
+    identity = {
+        key: value
+        for key, value in metadata.items()
+        if key not in ("buildId", "files")
     }
-    expected_build_id = "sha256:" + hashlib.sha256(
-        json.dumps(build_identity, separators=(",", ":"), sort_keys=True).encode(
-            "utf-8"
-        )
-    ).hexdigest()
+    expected_build_id = package_build_id(identity, files)
     if metadata.get("buildId") != expected_build_id:
         raise RuntimeError(
-            "Package build identity does not match its first-party artifacts"
+            "Package build identity does not match its complete file manifest"
         )
     javascript_runtime = metadata.get("javascriptRuntime")
     if javascript_runtime == {"kind": "packagedNode"}:
         if not isinstance(components.get("node"), dict):
             raise RuntimeError("Packaged Node runtime metadata is missing")
-        executables.append(
-            package / "zeta-resources" / "node" / "bin" / spec.node_name
-        )
+        executables.append(package / "zeta-resources" / "node" / "bin" / spec.node_name)
     elif javascript_runtime == {"kind": "hostProvidedNode"}:
         if "node" in components:
             raise RuntimeError("Host-provided runtime package contains Node metadata")
         if (package / "zeta-resources" / "node").exists():
-            raise RuntimeError("Host-provided runtime package contains a Node executable")
+            raise RuntimeError(
+                "Host-provided runtime package contains a Node executable"
+            )
         if (package / "zeta-resources" / "licenses" / "node").exists():
             raise RuntimeError("Host-provided runtime package contains a Node license")
     else:
@@ -333,23 +326,15 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             raise RuntimeError("Package file is not executable: {}".format(executable))
     for license_name in ("LICENSE-MIT", "UNLICENSE"):
         license_path = (
-            package
-            / "zeta-resources"
-            / "licenses"
-            / "ripgrep"
-            / license_name
+            package / "zeta-resources" / "licenses" / "ripgrep" / license_name
         )
         if not license_path.is_file():
             raise RuntimeError("Missing ripgrep license: {}".format(license_path))
-    vscode_license = (
-        package
-        / "zeta-resources"
-        / "licenses"
-        / "vscode"
-        / "LICENSE.txt"
-    )
+    vscode_license = package / "zeta-resources" / "licenses" / "vscode" / "LICENSE.txt"
     if vscode_license.is_symlink() or not vscode_license.is_file():
-        raise RuntimeError("Missing VS Code extension license: {}".format(vscode_license))
+        raise RuntimeError(
+            "Missing VS Code extension license: {}".format(vscode_license)
+        )
     if javascript_runtime == {"kind": "packagedNode"}:
         node_license = package / "zeta-resources" / "licenses" / "node" / "LICENSE"
         if node_license.is_symlink() or not node_license.is_file():
@@ -365,11 +350,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             )
         for license_name in ("COPYING",):
             license_path = (
-                package
-                / "zeta-resources"
-                / "licenses"
-                / "bubblewrap"
-                / license_name
+                package / "zeta-resources" / "licenses" / "bubblewrap" / license_name
             )
             if not license_path.is_file():
                 raise RuntimeError(
@@ -386,7 +367,9 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
 
 def copy_builtin_skills(source: Path, destination: Path) -> None:
     if source.is_symlink() or not source.is_dir():
-        raise RuntimeError("Built-in Skill source is not a real directory: {}".format(source))
+        raise RuntimeError(
+            "Built-in Skill source is not a real directory: {}".format(source)
+        )
     skill_directories = [
         child
         for child in sorted(source.iterdir(), key=lambda path: path.name)
@@ -482,9 +465,7 @@ def validate_builtin_skills(skills_directory: Path) -> None:
             or not (skill_directory / "SKILL.md").is_file()
         ):
             raise RuntimeError(
-                "Package contains an invalid built-in Skill: {}".format(
-                    skill_directory
-                )
+                "Package contains an invalid built-in Skill: {}".format(skill_directory)
             )
 
 
@@ -510,19 +491,26 @@ def validate_builtin_extensions(extensions_directory: Path) -> None:
 
 
 def validate_product_services(product_services_directory: Path) -> None:
-    if product_services_directory.is_symlink() or not product_services_directory.is_dir():
+    if (
+        product_services_directory.is_symlink()
+        or not product_services_directory.is_dir()
+    ):
         raise RuntimeError("Package is missing product services")
     config_path = product_services_directory / "product-services.json"
     root_path = product_services_directory / "marketplace-root.json"
     for path in (config_path, root_path):
         if path.is_symlink() or not path.is_file():
-            raise RuntimeError("Package is missing product service file: {}".format(path))
+            raise RuntimeError(
+                "Package is missing product service file: {}".format(path)
+            )
     document = json.loads(config_path.read_text(encoding="utf-8"))
     marketplace_manager = document.get("marketplaceManager")
     if document.get("schemaVersion") != 1 or not isinstance(marketplace_manager, dict):
         raise RuntimeError("Package product services configuration is invalid")
     if marketplace_manager.get("trustedRoot") != "marketplace-root.json":
-        raise RuntimeError("Package product services does not pin the Zeta Marketplace root")
+        raise RuntimeError(
+            "Package product services does not pin the Zeta Marketplace root"
+        )
 
 
 def copy_executable(source: Path, destination: Path, is_windows: bool) -> None:
@@ -542,8 +530,52 @@ def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
+def package_files(package: Path) -> Dict[str, str]:
+    files = {}
+
+    def visit(directory: Path) -> None:
+        for path in sorted(directory.iterdir(), key=lambda candidate: candidate.name):
+            if path.is_symlink():
+                raise RuntimeError("Package contains a symbolic path: {}".format(path))
+            if path.is_dir():
+                visit(path)
+            elif path.is_file():
+                relative = path.relative_to(package).as_posix()
+                if relative not in (METADATA_FILE, ".lease"):
+                    files[relative] = file_sha256(path)
+            else:
+                raise RuntimeError("Package contains an unsupported file: {}".format(path))
+
+    visit(package)
+    return files
+
+
+def package_build_id(identity: Dict[str, object], files: Dict[str, str]) -> str:
+    digest = hashlib.sha256()
+    digest.update(b"zeta-package-build-v2\0")
+    digest.update(
+        json.dumps(
+            identity,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+    digest.update(b"\0")
+    for path, file_digest in sorted(files.items()):
+        digest.update(path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(file_digest.encode("ascii"))
+        digest.update(b"\0")
+    return "sha256:" + digest.hexdigest()
+
+
 def file_sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(64 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def load_protocol_metadata(

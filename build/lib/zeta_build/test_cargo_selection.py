@@ -1,10 +1,16 @@
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from zeta_package.cargo_selection import cargo_command_uses_v8
-from zeta_package.cargo_selection import cargo_tree_selection_arguments
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from build.lib.zeta_build.cargo_selection import cargo_command_uses_v8  # noqa: E402
+from build.lib.zeta_build.cargo_selection import (  # noqa: E402
+    cargo_tree_selection_arguments,
+)
 
 
 class CargoSelectionTests(unittest.TestCase):
@@ -34,7 +40,7 @@ class CargoSelectionTests(unittest.TestCase):
             ),
         )
 
-    @patch("zeta_package.cargo_selection.subprocess.run")
+    @patch("build.lib.zeta_build.cargo_selection.subprocess.run")
     def test_skips_v8_for_an_unrelated_selected_package(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="zeta-protocol v0.0.0\nserde v1.0.0\n"
@@ -48,7 +54,7 @@ class CargoSelectionTests(unittest.TestCase):
         self.assertIn("normal,build,dev", run.call_args.args[0])
         self.assertEqual(Path("/repository"), run.call_args.kwargs["cwd"])
 
-    @patch("zeta_package.cargo_selection.subprocess.run")
+    @patch("build.lib.zeta_build.cargo_selection.subprocess.run")
     def test_configures_v8_for_a_transitive_dependency(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(
             args=[],
@@ -62,7 +68,7 @@ class CargoSelectionTests(unittest.TestCase):
             )
         )
 
-    @patch("zeta_package.cargo_selection.subprocess.run")
+    @patch("build.lib.zeta_build.cargo_selection.subprocess.run")
     def test_non_dependency_command_does_not_inspect_the_graph(self, run) -> None:
         self.assertFalse(
             cargo_command_uses_v8(

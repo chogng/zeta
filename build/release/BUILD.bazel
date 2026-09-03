@@ -1,5 +1,10 @@
 package(default_visibility = ["//visibility:public"])
 
+filegroup(
+    name = "zeta_package_sources",
+    srcs = glob(["zeta_package/*.py"]),
+)
+
 exports_files([
     "build_remote_runtime_bundle.py",
     "build_app_package.py",

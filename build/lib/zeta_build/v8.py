@@ -210,8 +210,10 @@ def locked_file(
     digest = value.get("sha256")
     if name != expected_name:
         raise RuntimeError(f"rusty_v8 {kind} name is invalid for {target}: {name}")
-    if not isinstance(digest, str) or len(digest) != 64 or any(
-        character not in "0123456789abcdef" for character in digest
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
     ):
         raise RuntimeError(f"rusty_v8 {kind} SHA-256 is invalid for {target}")
     return LockedFile(name=name, sha256=digest, url=f"{base_url}/{name}")

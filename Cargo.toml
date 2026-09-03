@@ -49,6 +49,7 @@ members = [
     "zeta-rs/file-search",
     "zeta-rs/fast-regex-search",
     "zeta-rs/immutable-generation-store",
+    "zeta-rs/package-store",
     "zeta-rs/file-system",
     "zeta-rs/file-system-tool",
     "zeta-rs/file-watcher",
@@ -339,6 +340,7 @@ zeta-file-system = { path = "zeta-rs/file-system" }
 zeta-file-system-tool = { path = "zeta-rs/file-system-tool" }
 zeta-fast-regex-search = { path = "zeta-rs/fast-regex-search" }
 zeta-immutable-generation-store = { path = "zeta-rs/immutable-generation-store" }
+zeta-package-store = { path = "zeta-rs/package-store" }
 zeta-file-watcher = { path = "zeta-rs/file-watcher" }
 zeta-files = { path = "app/files" }
 zeta-git = { path = "zeta-rs/git" }

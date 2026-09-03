@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -7,24 +7,34 @@ import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCH
 import { appServerDaemonExecutablePath, packagedServerHostSha256, serverHostExecutablePath } from "../../../../platform/server-host/electron-main/serverHostPackage.js";
 
 test("development and production resolve the same canonical package entrypoint", () => {
-	assert.equal(
-		appServerDaemonExecutablePath({
-			appPath: "/workspace/zeta-ts",
-			isPackaged: false,
-			platform: "linux",
-			resourcesPath: "/installed/resources",
-		}),
-		join(resolve("/workspace/.build/desktop/dev/zeta-package"), "bin", "zeta-app-server-daemon"),
-	);
-	assert.equal(
-		serverHostExecutablePath({
-			appPath: "/workspace/zeta-ts",
-			isPackaged: false,
-			platform: "linux",
-			resourcesPath: "/installed/resources",
-		}),
-		join(resolve("/workspace/.build/desktop/dev/zeta-package"), "bin", "zeta-server"),
-	);
+	const workspace = mkdtempSync(join(tmpdir(), "zeta-workspace-"));
+	const appPath = join(workspace, "zeta-ts");
+	const build = "a".repeat(64);
+	const developmentRoot = join(workspace, ".build", "zeta-package", "dev", "store-v1", developmentTarget(), "host-provided-node", "dev-small");
+	mkdirSync(join(developmentRoot, "manifests"), { recursive: true });
+	writeFileSync(join(developmentRoot, "manifests", "00000000000000000001.json"), JSON.stringify({ formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${build}` }));
+	try {
+		assert.equal(
+			appServerDaemonExecutablePath({
+				appPath,
+				isPackaged: false,
+				platform: "linux",
+				resourcesPath: "/installed/resources",
+			}),
+			join(developmentRoot, "packages", "0.1.0", build, "bin", "zeta-app-server-daemon"),
+		);
+		assert.equal(
+			serverHostExecutablePath({
+				appPath,
+				isPackaged: false,
+				platform: "linux",
+				resourcesPath: "/installed/resources",
+			}),
+			join(developmentRoot, "packages", "0.1.0", build, "bin", "zeta-server"),
+		);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
 	assert.equal(
 		serverHostExecutablePath({
 			appPath: "/workspace/zeta-ts",
@@ -44,6 +54,18 @@ test("development and production resolve the same canonical package entrypoint",
 		join(resolve("/installed/resources"), "bin", "zeta-app-server-daemon.exe"),
 	);
 });
+
+function developmentTarget(): string {
+	const targets: Readonly<Record<string, string>> = {
+		'darwin-arm64': 'aarch64-apple-darwin',
+		'darwin-x64': 'x86_64-apple-darwin',
+		'linux-arm64': 'aarch64-unknown-linux-gnu',
+		'linux-x64': 'x86_64-unknown-linux-gnu',
+		'win32-arm64': 'aarch64-pc-windows-msvc',
+		'win32-x64': 'x86_64-pc-windows-msvc',
+	};
+	return targets[`${process.platform}-${process.arch}`];
+}
 
 test("packaged server host digest is bound to the canonical package entrypoint", () => {
 	const resourcesPath = mkdtempSync(join(tmpdir(), "zeta-package-"));

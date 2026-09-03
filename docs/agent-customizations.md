@@ -11,7 +11,7 @@
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
 > [`zeta-agent-import` README](../zeta-rs/agent-import/README.md)；配置与事务边界见
-> [`config.md`](config.md)；最终模型输入由 [`core-context.md`](core-context.md) 定义。
+> [`config.md`](config.md)；内置专化子代理及统一定义契约见 [`subagents.md`](subagents.md)；最终模型输入由 [`core-context.md`](core-context.md) 定义。
 
 ## 快速理解
 
@@ -19,6 +19,8 @@ Zeta 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 信息形式，Slash Command 是调用入口；两者都不是第四种可持久化自定义对象。目录级 Zeta 对象统一
 位于小写 `.zeta/`，其他产品的目录和格式必须经过 `zeta-agent-import`，不能由原生 loader
 顺便扫描。
+
+内置专化子代理不是 `.zeta` 自定义对象。它们随产品发布、不会进入设置或被同名自定义定义覆盖，但与自定义 Agent 一样必须在委托前转换为统一的冻结定义契约。
 
 | 用户想表达什么 | Zeta 对象 | 何时进入运行时 | 典型入口 |
 | --- | --- | --- | --- |
@@ -58,7 +60,7 @@ Zeta 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 | --- | --- | --- |
 | Artifact kind | Instructions / Skills / Agents | 对象结构、authority 与 runtime contribution |
 | Scope/source | Built-in / User / Directory / Plugin | 生命周期、优先级、可写位置与失效方式 |
-| Provenance | Zeta native / imported from external ecosystem | 审计、冲突解释和重新导入来源 |
+| Provenance | Zeta 原生格式 / 从外部生态导入 | 审计、冲突解释和重新导入来源 |
 | Activation policy | 按对象类型定义的 named enum | 自动加载、上下文匹配、用户调用或模型选择 |
 
 “Imported”不是 User/Directory 的替代 scope。导入后的对象仍属于明确的 User 或 Directory
@@ -111,14 +113,14 @@ pub enum SkillInvocationPolicy {
 ├── config.toml       # Current：严格只读 Directory intent
 ├── instructions/     # Current：有界发现；Global 自动注入
 ├── skills/           # Current：metadata-only Directory Skill source
-└── agents/           # Current：有界 definition catalog；尚不执行
+└── agents/           # Current：有界 definition catalog；委托时可选择并执行
 ```
 
 三个 artifact root 都使用固定原生布局：Instructions 和 Agents 是直接 `.md` 文件，Skills 是
 `<name>/SKILL.md` 目录。目录加入 Environment 且具备相应 Grant 时，App Server 才把 root 交给对应 runtime；
 `zeta-skills-extension` 拥有 Skill catalog 与 watcher refresh。模型调用不在 Core context assembly
 中扫描 catalog：Global Instructions 使用冻结的 `HarnessInstructions` snapshot；已激活 Skill 由
-extension 按 durable digest 精确加载正文。读取 catalog 本身仍不会激活 Skill 或执行 Agent definition。
+extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不会执行定义；只有 `spawn_agent` 在委托安全点完成选择、引用解析与冻结后才会创建子 Thread。
 
 | Scope/source | 物理 owner | 是否经过 `zeta-agent-import` |
 | --- | --- | --- |

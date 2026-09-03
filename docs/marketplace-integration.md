@@ -272,7 +272,7 @@ runtime contract 不应改变。
 ```bash
 cargo test -p zeta-marketplace-client -p zeta-marketplace-manager -p zeta-app-server
 cargo clippy -p zeta-marketplace-client -p zeta-marketplace-manager --all-targets -- -D warnings
-node --test build/desktop/prepareDevPackage.test.ts
+node --test build/zeta-package/prepareDevPackage.test.ts
 
 cd ../marketplace
 cargo test --locked --workspace

@@ -309,5 +309,5 @@ cargo check -p zui --no-default-features --features native --bins
 cargo check -p zui --no-default-features --features native --target x86_64-pc-windows-gnu --lib --bins
 bazel test //app/zui:zui-unit-tests
 cargo test -p zeta-ui-components
-python3 -B build/cargo_with_v8.py test -p app
+python3 -B scripts/cargo.py test -p app
 ```

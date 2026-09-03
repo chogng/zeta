@@ -188,7 +188,23 @@ zeta-rs/keyring-store/
 
 文件 backend 的跨平台实现位于 `zeta-secrets/src/file.rs` 和 `file_windows.rs`。OS keyring adapter 位于独立的 `zeta-keyring-store`，避免基础 value/port crate 强制引入平台 credential 依赖。
 
-## 8. 依赖方向
+## 8. 交互式敏感输入
+
+> 状态：Proposed。持久凭据存储已经实现；模型或工具运行中由用户临时提供的敏感回答尚未形成完整端到端契约。
+
+交互式敏感输入不是 `SecretStore` 的另一个写入口。产生请求的业务领域拥有问题和用途，App Server 把请求发送给准确的 renderer，用户界面使用受保护输入控件收集回答，并把值一次性交给等待中的调用；除非用户明确选择保存为某个领域凭据，否则不得持久化。
+
+该路径必须保证：
+
+- 普通 transcript、Thread Item、rollout、Debug、错误、观测数据和剪贴板历史不包含原值；
+- 请求绑定准确的 connection、Thread、Turn 和交互 ID，只能回复一次，取消、超时、窗口关闭和重连都有明确终态；
+- 领域调用方只在内存中持有完成当前动作所需的最短时间，使用后清理；
+- “敏感”只改变传输、展示和记录规则，不自动授予工具、网络、账户或外部修改权限；
+- 只有明确的“保存凭据”流程才能把值交给对应领域的凭据 owner，再由该 owner 写入 `SecretStore`。
+
+ChatGPT 订阅的 `isSecret` 请求是首个明确消费者，完成门见 [`chatgpt-subscription.md`](chatgpt-subscription.md#当前状态与待完成项)。
+
+## 9. 依赖方向
 
 允许：
 
@@ -212,7 +228,7 @@ zeta-config ───▶ secret value
 Desktop renderer ──▶ SecretStore
 ```
 
-## 9. 测试门
+## 10. 测试门
 
 - load/store/replace/delete/not-found contract；
 - `SecretValue` 的 `Debug` 和 error negative logging；
@@ -225,7 +241,7 @@ Desktop renderer ──▶ SecretStore
 - logout/delete 后 exact value file 不可读取；
 - schema、App Server DTO、Thread event 和 rollout 中无 secret-bearing field。
 
-## 10. 固定决策
+## 11. 固定决策
 
 1. 长期保留独立 `zeta-secrets` crate。
 2. 删除 `zeta-credentials`；不建立同义的统一 credential/OAuth authority。

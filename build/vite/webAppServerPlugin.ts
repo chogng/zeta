@@ -5,7 +5,7 @@ import type { IncomingMessage } from "node:http";
 import { join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 import type { Plugin, WebSocket, WebSocketClient } from "vite";
-import { desktopBuildPath } from "../lib/paths.ts";
+import { desktopBuildPath, developmentZetaPackagePath } from "../lib/paths.ts";
 
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
 export const WEB_APP_SERVER_CONNECT_EVENT = "zeta:app-server:connect";
@@ -44,15 +44,15 @@ export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}):
   const repositoryRoot = resolve(options.repositoryRoot ?? resolve(desktopRoot, ".."));
   const workspaceRoot = resolve(options.workspaceRoot ?? process.env.ZETA_WORKSPACE_ROOT ?? repositoryRoot);
   const profileRoot = resolve(options.profileRoot ?? process.env.ZETA_WEB_APP_SERVER_PROFILE ?? desktopBuildPath(repositoryRoot, "dev", "web-profile"));
+  let packageRoot: string | undefined;
+  const developmentPackage = () => packageRoot ??= developmentZetaPackagePath(repositoryRoot, "packaged-node");
   const executable = resolve(options.executable ?? join(
-    desktopBuildPath(repositoryRoot, "dev"),
-    "zeta-package",
+    developmentPackage(),
     "bin",
     process.platform === "win32" ? "zeta-server.exe" : "zeta-server",
   ));
   const ripgrep = resolve(options.ripgrep ?? process.env.ZETA_RG_PATH ?? join(
-    desktopBuildPath(repositoryRoot, "dev"),
-    "zeta-package",
+    developmentPackage(),
     "zeta-path",
     process.platform === "win32" ? "rg.exe" : "rg",
   ));

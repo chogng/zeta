@@ -75,8 +75,8 @@ just app-test
 只验证当前 package 时可直接执行：
 
 ```bash
-python3 -B build/cargo_with_v8.py check -p app --all-targets
-python3 -B build/cargo_with_v8.py test -p app --all-targets
+python3 -B scripts/cargo.py check -p app --all-targets
+python3 -B scripts/cargo.py test -p app --all-targets
 ```
 
 Bazel 的产品入口是 `//app:app`，发布边界检查是：

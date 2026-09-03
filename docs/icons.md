@@ -72,8 +72,8 @@ Native shell 从 `zeta-icons::icons` 选择语义 icon，再交给 component；t
 ## 5. 修改路径
 
 ```bash
-node build/app/syncRustIcons.ts
-node build/app/syncRustIcons.ts --check
+corepack pnpm icons:generate
+corepack pnpm icons:check
 cargo test --manifest-path Cargo.toml -p zeta-icons -p zeta-ui-components
 ```
 

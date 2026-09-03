@@ -1,4 +1,4 @@
-"""Supported Zeta package targets and host target detection."""
+"""Supported Zeta build targets and host target detection."""
 
 import platform
 from dataclasses import dataclass
@@ -71,7 +71,9 @@ def default_target() -> str:
         supported = ", ".join(sorted(TARGETS))
         raise RuntimeError(
             "Unsupported host platform {}/{}. Pass --target explicitly. "
-            "Supported targets: {}".format(platform.system(), platform.machine(), supported)
+            "Supported targets: {}".format(
+                platform.system(), platform.machine(), supported
+            )
         )
     return target
 

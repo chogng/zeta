@@ -81,11 +81,17 @@ def package_context(package_dir: Path) -> Dict[str, object]:
     artifact = (package_dir / binary_path).resolve()
     policy_path = (package_dir / policy_name).resolve()
     record_path = (package_dir / record_name).resolve()
-    for path, label in ((artifact, "binary"), (policy_path, "policy"), (record_path, "signature record")):
+    for path, label in (
+        (artifact, "binary"),
+        (policy_path, "policy"),
+        (record_path, "signature record"),
+    ):
         try:
             path.relative_to(package_dir)
         except ValueError as error:
-            raise RuntimeError(f"{label} path escapes package directory: {path}") from error
+            raise RuntimeError(
+                f"{label} path escapes package directory: {path}"
+            ) from error
 
     if not artifact.is_file():
         raise RuntimeError(f"app executable does not exist: {artifact}")
@@ -97,7 +103,9 @@ def package_context(package_dir: Path) -> Dict[str, object]:
     if not isinstance(platforms, dict):
         raise RuntimeError(f"signing policy has no platform map: {policy_path}")
 
-    remote_runtime_catalog = authenticated_remote_runtime_catalog(package_dir, metadata, artifact)
+    remote_runtime_catalog = authenticated_remote_runtime_catalog(
+        package_dir, metadata, artifact
+    )
 
     return {
         "package_dir": package_dir,
@@ -135,7 +143,9 @@ def authenticated_remote_runtime_catalog(
     if value.get("trustBinding") != "compiledIntoSignedBinary":
         raise RuntimeError("unsupported Remote runtime catalog trust binding")
     if expected_sha256.encode() not in artifact.read_bytes():
-        raise RuntimeError("signed app binary does not contain the Remote runtime catalog digest")
+        raise RuntimeError(
+            "signed app binary does not contain the Remote runtime catalog digest"
+        )
     url = value.get("url")
     if isinstance(url, str):
         try:
@@ -156,7 +166,9 @@ def authenticated_remote_runtime_catalog(
         ):
             raise RuntimeError("invalid network Remote runtime catalog URL")
         if url.encode() not in artifact.read_bytes():
-            raise RuntimeError("signed app binary does not contain the Remote runtime catalog URL")
+            raise RuntimeError(
+                "signed app binary does not contain the Remote runtime catalog URL"
+            )
         return AuthenticatedRemoteRuntimeCatalog(expected_sha256, url, None)
     path = value.get("path")
     if not isinstance(path, str):
@@ -165,12 +177,16 @@ def authenticated_remote_runtime_catalog(
     try:
         catalog.relative_to(package_dir)
     except ValueError as error:
-        raise RuntimeError(f"Remote runtime catalog path escapes package: {catalog}") from error
+        raise RuntimeError(
+            f"Remote runtime catalog path escapes package: {catalog}"
+        ) from error
     if catalog.name != "catalog.json":
         raise RuntimeError("Remote runtime catalog binding must name catalog.json")
     bundle = validate_remote_runtime_bundle(catalog.parent)
     if bundle.catalog_sha256 != expected_sha256:
-        raise RuntimeError("bundled Remote runtime catalog digest does not match package metadata")
+        raise RuntimeError(
+            "bundled Remote runtime catalog digest does not match package metadata"
+        )
     return AuthenticatedRemoteRuntimeCatalog(expected_sha256, None, bundle)
 
 
@@ -189,12 +205,16 @@ def platform_config(context: Dict[str, object], platform: str) -> Dict[str, obje
         raise RuntimeError(f"incomplete {platform} signing policy")
     if signature_mode not in {"embedded", "detached"}:
         raise RuntimeError(f"invalid {platform} signature mode: {signature_mode}")
-    if signature_mode == "detached" and not isinstance(config.get("signatureFile"), str):
+    if signature_mode == "detached" and not isinstance(
+        config.get("signatureFile"), str
+    ):
         raise RuntimeError(f"detached {platform} signing requires signatureFile")
     return config
 
 
-def signature_path(context: Dict[str, object], config: Dict[str, object]) -> Optional[Path]:
+def signature_path(
+    context: Dict[str, object], config: Dict[str, object]
+) -> Optional[Path]:
     if config.get("signatureMode") != "detached":
         return None
     package_dir = context["package_dir"]
@@ -205,7 +225,9 @@ def signature_path(context: Dict[str, object], config: Dict[str, object]) -> Opt
     try:
         path.relative_to(package_dir)
     except ValueError as error:
-        raise RuntimeError(f"signature path escapes package directory: {path}") from error
+        raise RuntimeError(
+            f"signature path escapes package directory: {path}"
+        ) from error
     return path
 
 
@@ -214,7 +236,9 @@ def identity_for(config: Dict[str, object]) -> str:
     assert isinstance(environment, str)
     identity = os.environ.get(environment)
     if not identity:
-        raise RuntimeError(f"release signing requires environment variable {environment}")
+        raise RuntimeError(
+            f"release signing requires environment variable {environment}"
+        )
     return identity
 
 
@@ -228,7 +252,9 @@ def run_command(command: Sequence[str], runner: Optional[CommandRunner]) -> None
         raise RuntimeError(f"signing tool is not installed: {command[0]}") from error
     except subprocess.CalledProcessError as error:
         rendered = " ".join(command)
-        raise RuntimeError(f"signing command failed with exit code {error.returncode}: {rendered}") from error
+        raise RuntimeError(
+            f"signing command failed with exit code {error.returncode}: {rendered}"
+        ) from error
 
 
 def sign_command(
@@ -242,11 +268,29 @@ def sign_command(
     artifact = context["artifact"]
     assert isinstance(artifact, Path)
     if platform == "darwin":
-        return [tool, "--force", "--sign", identity, "--timestamp", "--options", "runtime", str(artifact)]
+        return [
+            tool,
+            "--force",
+            "--sign",
+            identity,
+            "--timestamp",
+            "--options",
+            "runtime",
+            str(artifact),
+        ]
     if platform == "linux":
         signature = signature_path(context, config)
         assert signature is not None
-        return [tool, "sign-blob", "--yes", "--key", identity, "--output-signature", str(signature), str(artifact)]
+        return [
+            tool,
+            "sign-blob",
+            "--yes",
+            "--key",
+            identity,
+            "--output-signature",
+            str(signature),
+            str(artifact),
+        ]
 
     command = [tool, "sign", "/fd", "SHA256", "/f", identity]
     command.append(str(artifact))
@@ -267,7 +311,15 @@ def verify_command(
     if platform == "linux":
         signature = signature_path(context, config)
         assert signature is not None
-        return [tool, "verify-blob", "--key", identity_for(config), "--signature", str(signature), str(artifact)]
+        return [
+            tool,
+            "verify-blob",
+            "--key",
+            identity_for(config),
+            "--signature",
+            str(signature),
+            str(artifact),
+        ]
     return [tool, "verify", "/pa", str(artifact)]
 
 
@@ -292,7 +344,9 @@ def sign_package(
     signing = metadata["signing"]
     assert isinstance(signing, dict)
     if signing.get("status") != "unsigned":
-        raise RuntimeError(f"package is not unsigned; refusing to sign status={signing.get('status')}")
+        raise RuntimeError(
+            f"package is not unsigned; refusing to sign status={signing.get('status')}"
+        )
 
     artifact = context["artifact"]
     assert isinstance(artifact, Path)
@@ -303,11 +357,15 @@ def sign_package(
 
     detached_signature = signature_path(context, config)
     if detached_signature is not None and detached_signature.exists():
-        raise RuntimeError(f"refusing to replace existing signature: {detached_signature}")
+        raise RuntimeError(
+            f"refusing to replace existing signature: {detached_signature}"
+        )
 
     run_command(sign_command(context, config, platform, identity_for(config)), runner)
     if detached_signature is not None and not detached_signature.is_file():
-        raise RuntimeError(f"signing tool did not create signature: {detached_signature}")
+        raise RuntimeError(
+            f"signing tool did not create signature: {detached_signature}"
+        )
 
     signed_digest = sha256(artifact)
     record = {
@@ -325,7 +383,9 @@ def sign_package(
         assert isinstance(remote_runtime_catalog, AuthenticatedRemoteRuntimeCatalog)
         record["remoteRuntimeCatalogSha256"] = remote_runtime_catalog.sha256
     if detached_signature is not None:
-        record["signatureFile"] = str(detached_signature.relative_to(context["package_dir"]))
+        record["signatureFile"] = str(
+            detached_signature.relative_to(context["package_dir"])
+        )
 
     binary = metadata["binary"]
     assert isinstance(binary, dict)
@@ -333,7 +393,9 @@ def sign_package(
     signing["status"] = "signed"
     signing["unsignedSha256"] = unsigned_digest
     signing["signedSha256"] = signed_digest
-    signing["signatureRecord"] = str(context["record_path"].relative_to(context["package_dir"]))
+    signing["signatureRecord"] = str(
+        context["record_path"].relative_to(context["package_dir"])
+    )
     write_json(context["record_path"], record)
     write_json(context["metadata_path"], metadata)
     return record
@@ -362,15 +424,22 @@ def verify_package(
     if not record_path.is_file():
         raise RuntimeError(f"signature record does not exist: {record_path}")
     record = load_json(record_path)
-    if record.get("platform") != platform or record.get("status") not in {"signed", "verified"}:
-        raise RuntimeError("signature record does not match the requested platform or state")
+    if record.get("platform") != platform or record.get("status") not in {
+        "signed",
+        "verified",
+    }:
+        raise RuntimeError(
+            "signature record does not match the requested platform or state"
+        )
     if record.get("signedSha256") != digest:
         raise RuntimeError("signature record digest does not match the staged binary")
     remote_runtime_catalog = context["remote_runtime_catalog"]
     if remote_runtime_catalog is not None:
         assert isinstance(remote_runtime_catalog, AuthenticatedRemoteRuntimeCatalog)
         if record.get("remoteRuntimeCatalogSha256") != remote_runtime_catalog.sha256:
-            raise RuntimeError("signature record does not bind the Remote runtime catalog")
+            raise RuntimeError(
+                "signature record does not bind the Remote runtime catalog"
+            )
 
     detached_signature = signature_path(context, config)
     if detached_signature is not None and not detached_signature.is_file():

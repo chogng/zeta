@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 from urllib.request import Request, urlopen
 
 from .cargo import validate_input_binary
-from .targets import TargetSpec
+from build.lib.zeta_build.targets import TargetSpec
 
 
 DOWNLOAD_TIMEOUT_SECONDS = 60
@@ -117,8 +117,12 @@ def artifact_for_target(lock: Dict[str, Any], target: str) -> LockedArtifact:
             repository.rstrip("/"), release, archive
         )
     digest = required_string(value, "sha256")
-    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
-        raise RuntimeError("Invalid SHA-256 for ripgrep artifact {!r}".format(artifact_key))
+    if len(digest) != 64 or any(
+        character not in "0123456789abcdef" for character in digest
+    ):
+        raise RuntimeError(
+            "Invalid SHA-256 for ripgrep artifact {!r}".format(artifact_key)
+        )
     archive_format = required_string(value, "format")
     if archive_format not in ("tar.gz", "zip"):
         raise RuntimeError(
@@ -187,13 +191,9 @@ def extract_executable(
     temporary.unlink(missing_ok=True)
     try:
         if artifact.archive_format == "tar.gz":
-            extract_tar_member(
-                archive_path, artifact.executable_member, temporary
-            )
+            extract_tar_member(archive_path, artifact.executable_member, temporary)
         elif artifact.archive_format == "zip":
-            extract_zip_member(
-                archive_path, artifact.executable_member, temporary
-            )
+            extract_zip_member(archive_path, artifact.executable_member, temporary)
         else:
             raise RuntimeError(
                 "Unsupported ripgrep archive format {!r}".format(
@@ -211,15 +211,11 @@ def extract_tar_member(archive_path: Path, member_name: str, destination: Path) 
             member = archive.getmember(member_name)
         except KeyError as error:
             raise RuntimeError(
-                "ripgrep archive {} is missing {!r}".format(
-                    archive_path, member_name
-                )
+                "ripgrep archive {} is missing {!r}".format(archive_path, member_name)
             ) from error
         if not member.isfile():
             raise RuntimeError(
-                "ripgrep archive member {!r} is not a regular file".format(
-                    member_name
-                )
+                "ripgrep archive member {!r} is not a regular file".format(member_name)
             )
         extracted = archive.extractfile(member)
         if extracted is None:
@@ -236,16 +232,12 @@ def extract_zip_member(archive_path: Path, member_name: str, destination: Path) 
             member = archive.getinfo(member_name)
         except KeyError as error:
             raise RuntimeError(
-                "ripgrep archive {} is missing {!r}".format(
-                    archive_path, member_name
-                )
+                "ripgrep archive {} is missing {!r}".format(archive_path, member_name)
             ) from error
         file_type = (member.external_attr >> 16) & 0o170000
         if member.is_dir() or file_type == stat.S_IFLNK:
             raise RuntimeError(
-                "ripgrep archive member {!r} is not a regular file".format(
-                    member_name
-                )
+                "ripgrep archive member {!r} is not a regular file".format(member_name)
             )
         with archive.open(member) as extracted, open(destination, "wb") as output:
             shutil.copyfileobj(extracted, output)

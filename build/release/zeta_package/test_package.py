@@ -3,6 +3,7 @@ import io
 import json
 import os
 import stat
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -10,6 +11,10 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from build.lib.zeta_build.targets import TARGETS
 from zeta_package.cli import generate_protocol_metadata
 from zeta_package.bubblewrap import load_vendored_source, resolve_bubblewrap
 from zeta_package.layout import (
@@ -18,19 +23,20 @@ from zeta_package.layout import (
     copy_builtin_skills,
     load_protocol_metadata,
 )
-from zeta_package.node import NodeResolution, artifact_for_target, load_node_lock, resolve_node
+from zeta_package.node import (
+    NodeResolution,
+    artifact_for_target,
+    load_node_lock,
+    resolve_node,
+)
 from zeta_package.ripgrep import load_lock, resolve_ripgrep
-from zeta_package.targets import TARGETS
 from zeta_package.version import read_workspace_version
 from zeta_package.windows_helpers import resolve_windows_sandbox_helpers
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 PRODUCTION_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
 PRODUCTION_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
-PRODUCTION_BUBBLEWRAP_SOURCE = (
-    REPOSITORY_ROOT / "zeta-rs" / "vendor" / "bubblewrap"
-)
+PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "zeta-rs" / "vendor" / "bubblewrap"
 
 
 class PackageTests(unittest.TestCase):
@@ -126,7 +132,9 @@ class PackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             server_binary = executable_file(root / "zeta-source", b"zeta-server")
-            daemon_binary = executable_file(root / "daemon-source", b"zeta-app-server-daemon")
+            daemon_binary = executable_file(
+                root / "daemon-source", b"zeta-app-server-daemon"
+            )
             code_mode_host_binary = executable_file(
                 root / "code-mode-host-source", b"zeta-code-mode-host"
             )
@@ -153,7 +161,9 @@ class PackageTests(unittest.TestCase):
                 node,
             )
 
-            self.assertEqual(b"zeta-server", (output / "bin" / "zeta-server").read_bytes())
+            self.assertEqual(
+                b"zeta-server", (output / "bin" / "zeta-server").read_bytes()
+            )
             self.assertEqual(
                 b"zeta-app-server-daemon",
                 (output / "bin" / "zeta-app-server-daemon").read_bytes(),
@@ -171,21 +181,15 @@ class PackageTests(unittest.TestCase):
             self.assertTrue(os.access(str(output / "zeta-path" / "rg"), os.X_OK))
             self.assertTrue(
                 (
-                    output
-                    / "zeta-resources"
-                    / "licenses"
-                    / "ripgrep"
-                    / "LICENSE-MIT"
+                    output / "zeta-resources" / "licenses" / "ripgrep" / "LICENSE-MIT"
                 ).is_file()
             )
             self.assertEqual(
-                (REPOSITORY_ROOT / "third_party" / "vscode" / "LICENSE.txt").read_text(encoding="utf-8"),
+                (REPOSITORY_ROOT / "third_party" / "vscode" / "LICENSE.txt").read_text(
+                    encoding="utf-8"
+                ),
                 (
-                    output
-                    / "zeta-resources"
-                    / "licenses"
-                    / "vscode"
-                    / "LICENSE.txt"
+                    output / "zeta-resources" / "licenses" / "vscode" / "LICENSE.txt"
                 ).read_text(encoding="utf-8"),
             )
             self.assertEqual(
@@ -198,16 +202,10 @@ class PackageTests(unittest.TestCase):
                     / "SKILL.md"
                 ).read_text(encoding="utf-8"),
                 (
-                    output
-                    / "zeta-resources"
-                    / "skills"
-                    / "skill-creator"
-                    / "SKILL.md"
+                    output / "zeta-resources" / "skills" / "skill-creator" / "SKILL.md"
                 ).read_text(encoding="utf-8"),
             )
-            self.assertTrue(
-                (output / "zeta-resources" / "extensions").is_dir()
-            )
+            self.assertTrue((output / "zeta-resources" / "extensions").is_dir())
             product_services = json.loads(
                 (
                     output
@@ -247,11 +245,7 @@ class PackageTests(unittest.TestCase):
             self.assertIn(
                 '"name": "json"',
                 (
-                    output
-                    / "zeta-resources"
-                    / "extensions"
-                    / "json"
-                    / "package.json"
+                    output / "zeta-resources" / "extensions" / "json" / "package.json"
                 ).read_text(encoding="utf-8"),
             )
 
@@ -260,9 +254,16 @@ class PackageTests(unittest.TestCase):
                 (output / "zeta-package.json").read_text(encoding="utf-8")
             )
             self.assertEqual(2, metadata["layoutVersion"])
+            self.assertEqual("release", metadata["buildProfile"])
+            self.assertEqual(
+                hashlib.sha256(b"zeta-server").hexdigest(),
+                metadata["files"]["bin/zeta-server"],
+            )
             self.assertEqual({"kind": "packagedNode"}, metadata["javascriptRuntime"])
             self.assertEqual("aarch64-apple-darwin", metadata["target"])
-            self.assertEqual("local-override", metadata["components"]["ripgrep"]["source"])
+            self.assertEqual(
+                "local-override", metadata["components"]["ripgrep"]["source"]
+            )
             self.assertEqual("local-override", metadata["components"]["node"]["source"])
             self.assertRegex(metadata["buildId"], r"^sha256:[a-f0-9]{64}$")
             self.assertEqual(1, metadata["protocol"]["major"])
@@ -329,9 +330,7 @@ class PackageTests(unittest.TestCase):
             )
             self.assertNotIn("node", metadata["components"])
             self.assertFalse((output / "zeta-resources" / "node").exists())
-            self.assertFalse(
-                (output / "zeta-resources" / "licenses" / "node").exists()
-            )
+            self.assertFalse((output / "zeta-resources" / "licenses" / "node").exists())
 
     def assert_extension_resources(self, extensions: Path) -> None:
         self.assertEqual(
@@ -342,7 +341,9 @@ class PackageTests(unittest.TestCase):
         file_templates = []
         for package_name in self.BUILT_IN_EXTENSIONS:
             package = extensions / package_name
-            manifest = json.loads((package / "package.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (package / "package.json").read_text(encoding="utf-8")
+            )
             extension_id = "{}.{}".format(manifest["publisher"], manifest["name"])
             self.assertNotIn(extension_id, seen_ids)
             seen_ids.add(extension_id)
@@ -387,7 +388,9 @@ class PackageTests(unittest.TestCase):
         self.assertNotIn("\\", normalized)
         self.assertNotIn("..", Path(normalized).parts)
         resource = package.joinpath(*normalized.split("/"))
-        self.assertTrue(resource.is_file(), "missing extension resource: {}".format(resource))
+        self.assertTrue(
+            resource.is_file(), "missing extension resource: {}".format(resource)
+        )
 
     def test_repository_builtin_extension_contract(self) -> None:
         self.assert_extension_resources(REPOSITORY_ROOT / "extensions")
@@ -396,7 +399,9 @@ class PackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             server_binary = executable_file(root / "zeta-source", b"zeta-server")
-            daemon_binary = executable_file(root / "daemon-source", b"zeta-app-server-daemon")
+            daemon_binary = executable_file(
+                root / "daemon-source", b"zeta-app-server-daemon"
+            )
             code_mode_host_binary = executable_file(
                 root / "code-mode-host-source", b"zeta-code-mode-host"
             )
@@ -439,11 +444,7 @@ class PackageTests(unittest.TestCase):
             )
             self.assertTrue(
                 (
-                    output
-                    / "zeta-resources"
-                    / "licenses"
-                    / "bubblewrap"
-                    / "COPYING"
+                    output / "zeta-resources" / "licenses" / "bubblewrap" / "COPYING"
                 ).is_file()
             )
             metadata = json.loads(
@@ -543,7 +544,9 @@ class PackageTests(unittest.TestCase):
                     cargo_profile="release",
                 )
 
-    @unittest.skipIf(os.name == "nt", "creating symbolic links may require Windows privilege")
+    @unittest.skipIf(
+        os.name == "nt", "creating symbolic links may require Windows privilege"
+    )
     def test_builtin_skill_copy_rejects_symbolic_links(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -577,7 +580,9 @@ class PackageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "missing package.json"):
                 copy_builtin_extensions(source, root / "destination")
 
-    @unittest.skipIf(os.name == "nt", "creating symbolic links may require Windows privilege")
+    @unittest.skipIf(
+        os.name == "nt", "creating symbolic links may require Windows privilege"
+    )
     def test_builtin_extension_copy_rejects_a_symbolic_source_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -589,7 +594,9 @@ class PackageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "source is not a real directory"):
                 copy_builtin_extensions(source, root / "destination")
 
-    @unittest.skipIf(os.name == "nt", "creating symbolic links may require Windows privilege")
+    @unittest.skipIf(
+        os.name == "nt", "creating symbolic links may require Windows privilege"
+    )
     def test_builtin_extension_copy_rejects_a_symbolic_package_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -603,7 +610,9 @@ class PackageTests(unittest.TestCase):
             )
             (source / "demo").symlink_to(extension, target_is_directory=True)
 
-            with self.assertRaisesRegex(RuntimeError, "Invalid built-in extension package"):
+            with self.assertRaisesRegex(
+                RuntimeError, "Invalid built-in extension package"
+            ):
                 copy_builtin_extensions(source, root / "destination")
 
     def test_bubblewrap_metadata_rejects_invalid_source_digest(self) -> None:
@@ -745,12 +754,7 @@ class PackageTests(unittest.TestCase):
                 )
 
             self.assertFalse(
-                (
-                    cache
-                    / "test"
-                    / "x86_64-unknown-linux-musl"
-                    / archive.name
-                ).exists()
+                (cache / "test" / "x86_64-unknown-linux-musl" / archive.name).exists()
             )
 
 
@@ -768,7 +772,9 @@ def write_tar_archive(path: Path, member_name: str, contents: bytes) -> None:
         archive.addfile(member, io.BytesIO(contents))
 
 
-def write_node_tar_archive(path: Path, executable_member: str, license_member: str) -> None:
+def write_node_tar_archive(
+    path: Path, executable_member: str, license_member: str
+) -> None:
     with tarfile.open(str(path), "w:xz") as archive:
         for member_name, contents, mode in (
             (executable_member, b"node-runtime", 0o755),

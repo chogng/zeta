@@ -76,13 +76,13 @@ package layout version 2 under `javascriptRuntime.kind`; validators reject a
 payload whose files and declared runtime kind disagree.
 
 Desktop development uses the same locks and canonical layout through the Node
-assembler at `build/desktop/prepareDevPackage.ts`. It defaults to the
+assembler at `build/zeta-package/prepareDevPackage.ts`. It defaults to the
 host-provided runtime variant for Electron; Browser full mode passes
 `--javascript-runtime packaged-node`. The assembler builds first-party
 executables with Cargo's compact `dev-small` profile, verifies and extracts the required
 target-specific runtime archives, stages the result beside
-`.build/desktop/dev/zeta-package`, and replaces the previous development package only
-after validation. Host executables honor `CARGO_TARGET_DIR`, and the assembler
+`.build/zeta-package/dev/store-v1/<target>/<javascript-runtime>/dev-small/packages/<version>/<build-id>`, then publishes an immutable numbered manifest only
+after full-file validation. The package store retains the selected and rollback packages and removes older packages only when no process lease is held. Host executables honor `CARGO_TARGET_DIR`, and the assembler
 reads the exact executable path from Cargo's JSON artifact messages instead of
 guessing a `target` layout. Normal compact host builds, the development
 assembler, and the Rust watcher therefore reuse one compilation cache without
@@ -108,7 +108,7 @@ python3 -B build/release/build_zeta_package.py \
 Release jobs that already built or signed binaries should use `--server-bin` and
 `--app-server-daemon-bin`, and
 optionally `--rg-bin` or, for the `packaged-node` variant, `--node-bin`; those overrides are copied verbatim and their binary
-digest is recorded in `zeta-package.json`. Linux jobs can likewise pass
+digest is recorded in `zeta-package.json`. `buildId` covers the sorted digest manifest of every package file together with all identity metadata except `buildId` and the file manifest itself; it is not a mutable release selector. Linux jobs can likewise pass
 `--bwrap-bin`. Signing and archive serialization must happen after this staging
 step. Windows jobs can supply `--windows-command-runner-bin` and
 `--windows-sandbox-setup-bin`; omitting either causes the missing first-party
@@ -144,12 +144,12 @@ Windows helper layouts, executable permissions, refusal to overwrite, and
 digest failure cleanup:
 
 ```sh
-python3 -B -m unittest discover -s build/release -p 'test_*.py'
+python3 -B scripts/test-python.py
 ```
 
 The Node development assembler's target selection, locked ripgrep/Node selection,
 and atomic replacement behavior are covered by:
 
 ```sh
-node --test build/desktop/prepareDevPackage.test.ts
+node --test build/zeta-package/prepareDevPackage.test.ts
 ```

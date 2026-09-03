@@ -45,6 +45,7 @@ impl RemoteServerOptions {
         self
     }
 
+    #[cfg(unix)]
     pub(crate) fn product_services_path(&self) -> Option<&std::path::Path> {
         self.product_services_path.as_deref()
     }
@@ -171,6 +172,7 @@ impl RemoteServerError {
         }
     }
 
+    #[cfg(unix)]
     pub(crate) fn from_io(error: std::io::Error) -> Self {
         Self::new(error.to_string())
     }

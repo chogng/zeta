@@ -27,7 +27,9 @@ def load(path: Path):
 
 def main() -> int:
     if len(sys.argv) != 3:
-        fail("usage: check_app_release_contract.py package-contract.json signing-policy.json")
+        fail(
+            "usage: check_app_release_contract.py package-contract.json signing-policy.json"
+        )
     contract = load(Path(sys.argv[1]))
     policy = load(Path(sys.argv[2]))
     if contract.get("product") != "app":
@@ -41,13 +43,20 @@ def main() -> int:
         "must be verified before publication."
     )
     if contract.get("releaseInvariant") != expected_invariant:
-        fail("release invariant does not require signed binary and catalog verification")
-    if contract.get("optionalRemoteRuntimeCatalog") != "zeta-remote-runtimes/catalog.json":
+        fail(
+            "release invariant does not require signed binary and catalog verification"
+        )
+    if (
+        contract.get("optionalRemoteRuntimeCatalog")
+        != "zeta-remote-runtimes/catalog.json"
+    ):
         fail("package contract does not name the optional Remote runtime catalog")
     if contract.get("optionalNetworkRemoteRuntimeCatalog") != (
         "credential-free HTTPS catalog.json URL plus SHA-256 compiled into the signed binary"
     ):
-        fail("package contract does not define the optional network Remote catalog binding")
+        fail(
+            "package contract does not define the optional network Remote catalog binding"
+        )
     if "compiled into the signed app binary" not in contract.get(
         "remoteRuntimeTrustBinding", ""
     ):
@@ -55,7 +64,9 @@ def main() -> int:
     if policy.get("releaseRequired") is not True:
         fail("signing policy must require release signing")
     authenticated_resources = policy.get("authenticatedResources")
-    if not isinstance(authenticated_resources, dict) or set(authenticated_resources) != {
+    if not isinstance(authenticated_resources, dict) or set(
+        authenticated_resources
+    ) != {
         "remoteRuntimeCatalog",
         "remoteRuntimeArtifacts",
     }:
@@ -68,10 +79,18 @@ def main() -> int:
         config = platforms.get(platform)
         if not isinstance(config, dict):
             fail(f"missing {platform} signing config")
-        if (config.get("tool"), config.get("signatureMode"), config.get("identityEnvironment")) != (tool, mode, environment):
+        if (
+            config.get("tool"),
+            config.get("signatureMode"),
+            config.get("identityEnvironment"),
+        ) != (tool, mode, environment):
             fail(f"invalid {platform} signing config")
         verification = config.get("verification")
-        if not isinstance(verification, list) or not verification or verification[0] != tool:
+        if (
+            not isinstance(verification, list)
+            or not verification
+            or verification[0] != tool
+        ):
             fail(f"{platform} verification must invoke {tool}")
         if mode == "detached" and not config.get("signatureFile"):
             fail(f"{platform} detached signing requires signatureFile")

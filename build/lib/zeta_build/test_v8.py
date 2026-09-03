@@ -8,16 +8,16 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPOSITORY_ROOT / "build" / "release"))
+sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from zeta_package.targets import TARGETS  # noqa: E402
-from zeta_package.v8 import (  # noqa: E402
+from build.lib.zeta_build.targets import TARGETS  # noqa: E402
+from build.lib.zeta_build.v8 import (  # noqa: E402
     DEFAULT_LOCK,
     LockedFile,
     load_v8_lock,
     materialize,
 )
-from zeta_package.v8 import resolve_v8_cargo_env  # noqa: E402
+from build.lib.zeta_build.v8 import resolve_v8_cargo_env  # noqa: E402
 
 
 class V8ArtifactTests(unittest.TestCase):
@@ -27,9 +27,7 @@ class V8ArtifactTests(unittest.TestCase):
 
         cargo_lock = (REPOSITORY_ROOT / "Cargo.lock").read_text()
         versions = set(
-            re.findall(
-                r'\[\[package\]\]\nname = "v8"\nversion = "([^"]+)"', cargo_lock
-            )
+            re.findall(r'\[\[package\]\]\nname = "v8"\nversion = "([^"]+)"', cargo_lock)
         )
         self.assertEqual({next(iter(pairs.values())).version}, versions)
 

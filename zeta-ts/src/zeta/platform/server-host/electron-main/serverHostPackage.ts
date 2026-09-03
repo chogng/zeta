@@ -1,7 +1,7 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../../../../generated/app-server/types.js";
-import { developmentArtifactsPath } from "../../environment/node/developmentArtifacts.js";
+import { developmentArtifactsPath, developmentZetaPackagePath } from "../../environment/node/developmentArtifacts.js";
 
 export interface ServerHostPackageLocation {
 	readonly appPath: string;
@@ -62,7 +62,7 @@ export function appServerDaemonExecutablePath(location: ServerHostPackageLocatio
 function serverHostPackageRoot(location: ServerHostPackageLocation): string {
 	const packageRoot = location.isPackaged
 		? location.resourcesPath
-		: developmentArtifactsPath(location.appPath, "dev", "zeta-package");
+		: developmentZetaPackagePath(location.appPath);
 	return packageRoot;
 }
 

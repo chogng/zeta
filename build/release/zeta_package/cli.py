@@ -6,6 +6,8 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Sequence
 
+from build.lib.zeta_build.targets import TARGETS, default_target
+
 from .bubblewrap import resolve_bubblewrap
 from .cargo import (
     resolve_app_server_daemon_binary,
@@ -15,7 +17,6 @@ from .cargo import (
 from .layout import build_package_directory, load_protocol_metadata
 from .node import resolve_node
 from .ripgrep import resolve_ripgrep
-from .targets import TARGETS, default_target
 from .version import read_workspace_version
 from .windows_helpers import resolve_windows_sandbox_helpers
 
@@ -201,7 +202,9 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         explicit_binary=args.rg_bin,
     )
     if args.javascript_runtime == "host-provided-node" and args.node_bin is not None:
-        raise RuntimeError("--node-bin cannot be used with --javascript-runtime host-provided-node")
+        raise RuntimeError(
+            "--node-bin cannot be used with --javascript-runtime host-provided-node"
+        )
     node = (
         resolve_node(
             spec,
@@ -242,6 +245,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         bubblewrap,
         windows_helpers,
         protocol_metadata=protocol_metadata,
+        build_profile=args.cargo_profile,
     )
     print("Built Zeta {} package at {}".format(target, output))
     return 0

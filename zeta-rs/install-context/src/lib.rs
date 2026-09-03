@@ -8,6 +8,7 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::Component;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 const PACKAGE_BIN_DIRECTORY: &str = "bin";
 const PACKAGE_PATH_DIRECTORY: &str = "zeta-path";
@@ -146,14 +147,22 @@ pub struct InstallContext {
 impl InstallContext {
     /// Detects the current executable, package layout, and relevant environment overrides once.
     pub fn current() -> Self {
-        Self::detect(
-            env::current_exe().ok().as_deref(),
-            env::var_os(RIPGREP_OVERRIDE),
-            env::var_os(BUBBLEWRAP_OVERRIDE),
-            env::var_os(WINDOWS_COMMAND_RUNNER_OVERRIDE),
-            env::var_os(WINDOWS_SANDBOX_SETUP_OVERRIDE),
-            env::var_os("PATH"),
-        )
+        static CURRENT: OnceLock<InstallContext> = OnceLock::new();
+        CURRENT
+            .get_or_init(|| {
+                let executable = env::current_exe()
+                    .ok()
+                    .and_then(|path| dunce::canonicalize(path).ok());
+                Self::detect(
+                    executable.as_deref(),
+                    env::var_os(RIPGREP_OVERRIDE),
+                    env::var_os(BUBBLEWRAP_OVERRIDE),
+                    env::var_os(WINDOWS_COMMAND_RUNNER_OVERRIDE),
+                    env::var_os(WINDOWS_SANDBOX_SETUP_OVERRIDE),
+                    env::var_os("PATH"),
+                )
+            })
+            .clone()
     }
 
     pub fn method(&self) -> InstallMethod {

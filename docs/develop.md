@@ -1,7 +1,7 @@
 # Zeta 意图驱动的 Agent 开发系统
 
-> 状态：Proposed（2026-09-02）。本文是该系统唯一的开发设计文档。
-> 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 的关系。Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，可靠多 Agent 开发见 [`multi-agent-development.md`](multi-agent-development.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
+> 状态：Proposed（2026-09-02）。本文是 `/develop` 流程、产物和状态机的唯一开发设计文档；内置角色定义由 `subagents.md` 维护。
+> 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 的关系。内置阶段 Agent 与私有 Agent 的 ID、提示词、工具、能力和调用范围由 [`subagents.md`](subagents.md#52-develop-阶段角色) 维护；Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，可靠多 Agent 开发见 [`multi-agent-development.md`](multi-agent-development.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
 
 本文正在设计一个系统。`zeta.md`、`intent.md`、`spec.md` 和 `plan.md` 是该系统未来读取或产生的开发产物，不用于把当前系统设计拆成四份自我描述的文档。
 
@@ -163,17 +163,19 @@ Intent Agent 必须回答：
 
 以下 Agent 只注册到 Intent Agent 的私有能力面，不进入普通 Agent、Spec Agent、Plan Agent 或用户可直接选择的公共目录：
 
+它们对应 `intent-project-investigator`、`intent-researcher` 与 `intent-conflict-reviewer`。本节拥有其工作流输入、输出和使用时机；准确提示词、工具上限、上下文策略和允许父角色由 [`subagents.md`](subagents.md#53-intent-私有角色) 统一维护。
+
 | 私有 Agent | 输入 | 工具 | 输出 | 禁止行为 |
 | --- | --- | --- | --- | --- |
 | 项目调查 Agent | 一个明确的本地事实问题和选择后的项目上下文 | 文件读取、搜索、Git 查询、只读构建与测试 | 事实、来源、代码基线和不确定性 | 修改代码、决定产品方向、写 `intent.md` |
-| 研究 Agent | 一个明确的外部事实问题和允许访问的来源范围 | Web、外部文档和已授权连接器 | 来源、事实、适用范围和不确定性 | 把外部做法直接写成用户需求 |
+| 研究 Agent | 一个明确的外部事实问题和允许访问的来源范围 | Web 与外部文档读取 | 来源、事实、适用范围和不确定性 | 把外部做法直接写成用户需求 |
 | 冲突审查 Agent | 指定的对话片段、产物和证据 | 只读比较与来源检查 | 冲突双方、来源、影响和可确定的优先级 | 自行处理产品取舍、改写任一来源 |
 
 Intent Agent 根据具体缺口决定是否调用这些 Agent，不为每次开发机械启动完整集合。每次委托只回答一个可验证问题，并绑定选择后的上下文、工具范围、时间和预算。私有 Agent 只返回有来源的证据，不能直接修改阶段产物。
 
 ### 5.2 用户判断
 
-缺少产品判断时不存在能够替代用户的私有 Agent。Intent Agent 必须把问题压缩成用户能够判断的选项、影响和未决信息，再等待用户决定。用户的新决定进入新的 Intent 候选版本，不作为自然语言旁注绕过版本关系。
+缺少产品判断时不存在能够替代用户的私有 Agent。Intent Agent 必须返回结构化的 `NeedsUserDecision`，包含用户能够判断的选项、影响和未决信息，然后停止本次阶段执行；确定性工作流负责向用户提问、等待回答并创建下一次 Intent 候选。用户的新决定进入新的候选版本，不作为自然语言旁注绕过版本关系。
 
 ### 5.3 完成条件
 
@@ -188,6 +190,8 @@ Intent 候选只有满足以下条件才能请求接受：
 ## 6. 其他阶段 Agent
 
 阶段 Agent 是按需创建的短生命周期工作者，不是长期保存整个开发历史的角色。每个阶段从已接受的上游产物和选择后的项目上下文开始，完成后返回候选产物或证据。
+
+本流程分别使用 `develop-intent`、`develop-spec`、`develop-plan`、`develop-implementer` 与 `develop-acceptance`。本文拥有阶段顺序、产物和完成门；角色自身的提示词、工具、能力、模型继承和调用范围由 [`subagents.md`](subagents.md#52-develop-阶段角色) 统一维护。
 
 | Agent | 主要职责 | 主要工具 | 不能做什么 |
 | --- | --- | --- | --- |
@@ -274,7 +278,9 @@ Team 只消费固定的 Intent、Spec、Plan、工作契约和代码基线，不
 
 专业化必须同时体现在任务、上下文和工具上，不能只靠角色提示词。工具能力遵循最小范围并逐层收窄：
 
-- Intent Agent 能读取对话和私有 Agent 证据、提出用户问题并写 Intent 候选，不能修改产品代码；
+具体工具清单和父子调用限制由 [`subagents.md`](subagents.md#5-内置专化子代理清单) 维护；本节只规定 `/develop` 工作流施加的进一步收窄。
+
+- Intent Agent 能读取对话和私有 Agent 证据、形成 `NeedsUserDecision` 并写 Intent 候选，不能直接持有用户交互端口或修改产品代码；
 - 私有调查和研究 Agent 只有各自来源所需的只读工具，不能写阶段产物；
 - Spec Agent 和 Plan Agent 只能写各自候选产物，不能修改上层产物；
 - 实施 Agent 只获得工作契约允许的写入与执行能力；

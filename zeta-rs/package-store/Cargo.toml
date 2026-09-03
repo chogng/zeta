@@ -1,0 +1,30 @@
+[package]
+name = "zeta-package-store"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "zeta-package-store"
+path = "src/main.rs"
+
+[lib]
+doctest = false
+name = "zeta_package_store"
+path = "src/lib.rs"
+
+[dependencies]
+fs2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

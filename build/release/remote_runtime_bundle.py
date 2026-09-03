@@ -70,10 +70,14 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def build_remote_runtime_bundle(output: Path, package_directories: Sequence[Path]) -> RemoteRuntimeBundle:
+def build_remote_runtime_bundle(
+    output: Path, package_directories: Sequence[Path]
+) -> RemoteRuntimeBundle:
     output = output.expanduser().resolve()
     if output.exists():
-        raise RuntimeError(f"refusing to replace existing Remote runtime bundle: {output}")
+        raise RuntimeError(
+            f"refusing to replace existing Remote runtime bundle: {output}"
+        )
     if not package_directories:
         raise RuntimeError("at least one canonical Zeta package directory is required")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -123,7 +127,9 @@ def build_remote_runtime_bundle(output: Path, package_directories: Sequence[Path
 def validate_remote_runtime_bundle(root: Path) -> RemoteRuntimeBundle:
     requested_root = root.expanduser()
     if requested_root.is_symlink() or not requested_root.is_dir():
-        raise RuntimeError(f"Remote runtime bundle is not a real directory: {requested_root}")
+        raise RuntimeError(
+            f"Remote runtime bundle is not a real directory: {requested_root}"
+        )
     root = requested_root.resolve()
     catalog = root / CATALOG_FILE
     if catalog.is_symlink() or not catalog.is_file():
@@ -132,7 +138,9 @@ def validate_remote_runtime_bundle(root: Path) -> RemoteRuntimeBundle:
     if size <= 0 or size > MAX_CATALOG_BYTES:
         raise RuntimeError("Remote runtime catalog has an invalid size")
     document = load_json(catalog)
-    require_exact_keys(document, {"formatVersion", "artifacts"}, "Remote runtime catalog")
+    require_exact_keys(
+        document, {"formatVersion", "artifacts"}, "Remote runtime catalog"
+    )
     if document["formatVersion"] != CATALOG_FORMAT_VERSION:
         raise RuntimeError("unsupported Remote runtime catalog format version")
     records = document["artifacts"]
@@ -161,7 +169,9 @@ def validate_remote_runtime_bundle(root: Path) -> RemoteRuntimeBundle:
         referenced.add(relative_archive)
         archive = root / Path(*PurePosixPath(relative_archive).parts)
         if archive.is_symlink() or not archive.is_file():
-            raise RuntimeError(f"Remote runtime archive is not a regular file: {archive}")
+            raise RuntimeError(
+                f"Remote runtime archive is not a regular file: {archive}"
+            )
         expected_archive_size = positive_integer(value, "archiveSize")
         expected_unpacked_size = positive_integer(value, "unpackedSize")
         if expected_archive_size > MAX_RUNTIME_ARCHIVE_BYTES:
@@ -183,7 +193,9 @@ def validate_remote_runtime_bundle(root: Path) -> RemoteRuntimeBundle:
         if inspected.version != version or inspected.target != target:
             raise RuntimeError(f"Remote runtime archive metadata mismatch for {target}")
         if inspected.unpacked_size != expected_unpacked_size:
-            raise RuntimeError(f"Remote runtime archive unpacked size mismatch for {target}")
+            raise RuntimeError(
+                f"Remote runtime archive unpacked size mismatch for {target}"
+            )
     for path in regular_tree_paths(root):
         if path.is_file() and path.relative_to(root).as_posix() not in referenced:
             raise RuntimeError(f"unreferenced file in Remote runtime bundle: {path}")
@@ -193,10 +205,14 @@ def validate_remote_runtime_bundle(root: Path) -> RemoteRuntimeBundle:
 def validate_package_directory(package: Path) -> Tuple[str, str]:
     requested_package = package.expanduser()
     if requested_package.is_symlink() or not requested_package.is_dir():
-        raise RuntimeError(f"Remote runtime package is not a real directory: {requested_package}")
+        raise RuntimeError(
+            f"Remote runtime package is not a real directory: {requested_package}"
+        )
     package = requested_package.resolve()
     paths = regular_tree_paths(package)
-    files = {path.relative_to(package).as_posix(): path for path in paths if path.is_file()}
+    files = {
+        path.relative_to(package).as_posix(): path for path in paths if path.is_file()
+    }
     missing = REQUIRED_RUNTIME_FILES.difference(files)
     if missing:
         raise RuntimeError(f"Remote runtime package is missing {sorted(missing)}")
@@ -204,7 +220,9 @@ def validate_package_directory(package: Path) -> Tuple[str, str]:
     version, target = validate_package_metadata(metadata)
     for relative in EXECUTABLE_RUNTIME_FILES:
         if os.name != "nt" and files[relative].stat().st_mode & 0o111 == 0:
-            raise RuntimeError(f"Remote runtime executable has no execute bit: {relative}")
+            raise RuntimeError(
+                f"Remote runtime executable has no execute bit: {relative}"
+            )
     return version, target
 
 
@@ -216,8 +234,12 @@ def archive_package_directory(package: Path, output: Path) -> int:
             f"Remote runtime package exceeds {MAX_RUNTIME_UNPACKED_BYTES} unpacked bytes"
         )
     with output.open("wb") as raw:
-        with gzip.GzipFile(filename="", mode="wb", fileobj=raw, compresslevel=9, mtime=0) as compressed:
-            with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as archive:
+        with gzip.GzipFile(
+            filename="", mode="wb", fileobj=raw, compresslevel=9, mtime=0
+        ) as compressed:
+            with tarfile.open(
+                fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT
+            ) as archive:
                 for path in paths:
                     relative = path.relative_to(package).as_posix()
                     info = tarfile.TarInfo(relative)
@@ -232,7 +254,9 @@ def archive_package_directory(package: Path, output: Path) -> int:
                         archive.addfile(info)
                     else:
                         info.type = tarfile.REGTYPE
-                        info.mode = 0o755 if relative in EXECUTABLE_RUNTIME_FILES else 0o644
+                        info.mode = (
+                            0o755 if relative in EXECUTABLE_RUNTIME_FILES else 0o644
+                        )
                         info.size = path.stat().st_size
                         with path.open("rb") as source:
                             archive.addfile(info, source)
@@ -251,7 +275,9 @@ def inspect_runtime_archive(path: Path) -> RuntimeArchive:
                     raise RuntimeError(f"Remote runtime archive repeats path {name}")
                 names.add(name)
                 if not (member.isfile() or member.isdir()):
-                    raise RuntimeError(f"Remote runtime archive contains linked or special entry {name}")
+                    raise RuntimeError(
+                        f"Remote runtime archive contains linked or special entry {name}"
+                    )
                 if member.isfile():
                     unpacked_size += member.size
                     if unpacked_size > MAX_RUNTIME_UNPACKED_BYTES:
@@ -259,16 +285,24 @@ def inspect_runtime_archive(path: Path) -> RuntimeArchive:
                             f"Remote runtime archive exceeds {MAX_RUNTIME_UNPACKED_BYTES} unpacked bytes"
                         )
                 if name in EXECUTABLE_RUNTIME_FILES and member.mode & 0o111 == 0:
-                    raise RuntimeError(f"Remote runtime archive executable has no execute bit: {name}")
+                    raise RuntimeError(
+                        f"Remote runtime archive executable has no execute bit: {name}"
+                    )
                 if name == "zeta-package.json":
                     if not member.isfile() or member.size > MAX_PACKAGE_METADATA_BYTES:
-                        raise RuntimeError("Remote runtime package metadata is not bounded")
+                        raise RuntimeError(
+                            "Remote runtime package metadata is not bounded"
+                        )
                     source = archive.extractfile(member)
                     if source is None:
-                        raise RuntimeError("Remote runtime package metadata is unreadable")
+                        raise RuntimeError(
+                            "Remote runtime package metadata is unreadable"
+                        )
                     metadata = json.loads(source.read())
     except (tarfile.TarError, json.JSONDecodeError, OSError) as error:
-        raise RuntimeError(f"could not inspect Remote runtime archive {path}: {error}") from error
+        raise RuntimeError(
+            f"could not inspect Remote runtime archive {path}: {error}"
+        ) from error
     missing = REQUIRED_RUNTIME_FILES.difference(names)
     if missing:
         raise RuntimeError(f"Remote runtime archive is missing {sorted(missing)}")
@@ -314,10 +348,14 @@ def regular_tree_paths(root: Path) -> List[Path]:
         for name in directories + files:
             path = current_path / name
             if path.is_symlink():
-                raise RuntimeError(f"linked path is not allowed in Remote runtime content: {path}")
+                raise RuntimeError(
+                    f"linked path is not allowed in Remote runtime content: {path}"
+                )
             mode = path.stat().st_mode
             if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
-                raise RuntimeError(f"special path is not allowed in Remote runtime content: {path}")
+                raise RuntimeError(
+                    f"special path is not allowed in Remote runtime content: {path}"
+                )
             paths.append(path)
     return sorted(paths, key=lambda path: path.relative_to(root).as_posix())
 
@@ -374,4 +412,6 @@ def require_exact_keys(value: Dict[str, object], keys: set[str], label: str) -> 
 
 
 def is_sha256(value: str) -> bool:
-    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+    return len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )

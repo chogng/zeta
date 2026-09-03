@@ -20,10 +20,10 @@
 首次准备缺失的 V8 文件或需要校验缓存时使用：
 
 ```sh
-python3 -B build/cargo_with_v8.py test -p zeta-code-mode-runtime
+python3 -B scripts/cargo.py test -p zeta-code-mode-runtime
 ```
 
-包装脚本会读取 Cargo 参数中的 `--target`；没有指定时使用当前主机目标。它把锁定文件写入 `rusty_v8` 自己识别的本地镜像布局。缓存存在后，普通 `cargo test`、`cargo check` 和 `cargo build` 会通过 `.cargo/config.toml` 直接读取同一份文件，不需要包装脚本或手工环境变量。`just app`、`just app-check`、`just app-test`、Desktop 的 `prepareDevPackage.ts` 和发布构建负责在缓存缺失时下载并校验文件。
+包装脚本会读取 Cargo 参数中的 `--target`；没有指定时使用当前主机目标。它把锁定文件写入 `rusty_v8` 自己识别的本地镜像布局。缓存存在后，普通 `cargo test`、`cargo check` 和 `cargo build` 会通过 `.cargo/config.toml` 直接读取同一份文件，不需要包装脚本或手工环境变量。`just app`、`just app-check`、`just app-test`、共享开发包的 `prepareDevPackage.ts` 和发布构建负责在缓存缺失时下载并校验文件。
 
 ## 更新约束
 
@@ -33,7 +33,7 @@ python3 -B build/cargo_with_v8.py test -p zeta-code-mode-runtime
 
 ```sh
 python3 -B -m unittest build.release.zeta_package.test_v8
-node --test build/desktop/prepareDevPackage.test.ts
-python3 -B build/cargo_with_v8.py test -p zeta-v8-poc --features sandbox
+node --test build/zeta-package/prepareDevPackage.test.ts
+python3 -B scripts/cargo.py test -p zeta-v8-poc --features sandbox
 bazel test //zeta-rs/v8-poc:v8-poc-unit-tests
 ```

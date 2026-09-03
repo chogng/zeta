@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlsplit
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from build.lib.zeta_build.targets import TARGETS
 from remote_runtime_bundle import RemoteRuntimeBundle
 from remote_runtime_bundle import validate_remote_runtime_bundle
 from zeta_package.cargo import cargo_environment
@@ -22,10 +26,7 @@ from zeta_package.cargo_paths import cargo_artifact_executable
 from zeta_package.cargo_paths import cargo_rendered_diagnostic
 from zeta_package.cargo_paths import parse_cargo_message
 from zeta_package.cargo_paths import resolve_cargo_target_directory
-from zeta_package.targets import TARGETS
 
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = REPOSITORY_ROOT / "app"
 
 
@@ -60,7 +61,9 @@ def remote_runtime_network_release(
     if len(catalog_sha256) != 64 or any(
         character not in "0123456789abcdef" for character in catalog_sha256
     ):
-        raise RuntimeError("Remote runtime catalog SHA-256 must be lowercase hexadecimal")
+        raise RuntimeError(
+            "Remote runtime catalog SHA-256 must be lowercase hexadecimal"
+        )
     return RemoteRuntimeNetworkRelease(url, catalog_sha256)
 
 
@@ -201,12 +204,20 @@ def build_package(
     if remote_runtime_bundle is not None:
         verified_bundle = validate_remote_runtime_bundle(remote_runtime_bundle.root)
         if verified_bundle.catalog_sha256 != remote_runtime_bundle.catalog_sha256:
-            raise RuntimeError("Remote runtime catalog changed after product build selection")
-    if selected_sha256 is not None and selected_sha256.encode() not in binary.read_bytes():
+            raise RuntimeError(
+                "Remote runtime catalog changed after product build selection"
+            )
+    if (
+        selected_sha256 is not None
+        and selected_sha256.encode() not in binary.read_bytes()
+    ):
         raise RuntimeError(
             "app binary does not contain the selected Remote runtime catalog digest"
         )
-    if remote_runtime_release is not None and remote_runtime_release.url.encode() not in binary.read_bytes():
+    if (
+        remote_runtime_release is not None
+        and remote_runtime_release.url.encode() not in binary.read_bytes()
+    ):
         raise RuntimeError(
             "app binary does not contain the selected Remote runtime catalog URL"
         )
@@ -255,9 +266,7 @@ def build_package(
                 "sha256": remote_runtime_bundle.catalog_sha256,
                 "trustBinding": "compiledIntoSignedBinary",
             }
-        (staging / "app-package.json").write_text(
-            json.dumps(metadata, indent=2) + "\n"
-        )
+        (staging / "app-package.json").write_text(json.dumps(metadata, indent=2) + "\n")
         staging.rename(output)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)

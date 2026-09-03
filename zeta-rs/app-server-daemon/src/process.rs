@@ -26,6 +26,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
+use zeta_package_store::PackageLease;
+use zeta_package_store::acquire_package_lease_for_executable;
 
 use crate::ConnectionOptions;
 use crate::DAEMON_PROCESS_ARGUMENT;
@@ -64,15 +66,12 @@ impl ExecutableIdentity {
     pub(crate) fn same_contents(&self, other: &Self) -> bool {
         !self.sha256.is_empty() && self.sha256 == other.sha256
     }
-
-    fn generation(&self) -> &str {
-        &self.sha256
-    }
 }
 
-pub(crate) struct StagedExecutable {
+pub(crate) struct DaemonExecutable {
     pub(crate) path: PathBuf,
     pub(crate) identity: ExecutableIdentity,
+    _package_lease: Option<PackageLease>,
 }
 
 impl ProcessRecord {
@@ -118,94 +117,24 @@ pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, Str
     })
 }
 
-pub(crate) fn stage_daemon(
-    endpoint: &EndpointPaths,
+pub(crate) fn resolve_daemon_executable(
     daemon_executable: &Path,
-) -> Result<StagedExecutable, String> {
-    let source_metadata = fs::symlink_metadata(daemon_executable).map_err(io_error)?;
-    if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
+) -> Result<DaemonExecutable, String> {
+    let metadata = fs::symlink_metadata(daemon_executable).map_err(io_error)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(format!(
             "Local App Server daemon is not a regular executable: {}",
             daemon_executable.display()
         ));
     }
-    let identity = executable_identity(daemon_executable)?;
-    fs::create_dir_all(&endpoint.executables).map_err(io_error)?;
-    let directory_metadata = fs::symlink_metadata(&endpoint.executables).map_err(io_error)?;
-    if directory_metadata.file_type().is_symlink() || !directory_metadata.is_dir() {
-        return Err(format!(
-            "Local App Server executable directory is invalid: {}",
-            endpoint.executables.display()
-        ));
-    }
-
-    let file_name = if cfg!(windows) {
-        format!("zeta-app-server-daemon-{}.exe", identity.generation())
-    } else {
-        format!("zeta-app-server-daemon-{}", identity.generation())
-    };
-    let path = endpoint.executables.join(&file_name);
-    match fs::symlink_metadata(&path) {
-        Ok(metadata) => {
-            if metadata.file_type().is_symlink() || !metadata.is_file() {
-                return Err(format!(
-                    "Local App Server staged executable is invalid: {}",
-                    path.display()
-                ));
-            }
-            if !executable_identity(&path)?.same_contents(&identity) {
-                return Err(format!(
-                    "Local App Server staged executable content does not match its generation: {}",
-                    path.display()
-                ));
-            }
-            return Ok(StagedExecutable { path, identity });
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(io_error(error)),
-    }
-
-    let temp = endpoint
-        .executables
-        .join(format!(".{file_name}.{}.tmp", std::process::id()));
-    match fs::remove_file(&temp) {
-        Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(io_error(error)),
-    }
-    if let Err(error) = fs::copy(daemon_executable, &temp) {
-        let _ = fs::remove_file(&temp);
-        return Err(io_error(error));
-    }
-    let staged_identity = executable_identity(&temp)?;
-    if !staged_identity.same_contents(&identity) {
-        let _ = fs::remove_file(&temp);
-        return Err("Local App Server daemon changed while its generation was staged".into());
-    }
-    if let Err(error) = fs::rename(&temp, &path) {
-        let _ = fs::remove_file(&temp);
-        return Err(io_error(error));
-    }
-    Ok(StagedExecutable { path, identity })
-}
-
-pub(crate) fn prune_staged_daemons(endpoint: &EndpointPaths, current: &Path) -> Result<(), String> {
-    for entry in fs::read_dir(&endpoint.executables).map_err(io_error)? {
-        let entry = entry.map_err(io_error)?;
-        let path = entry.path();
-        if path == current {
-            continue;
-        }
-        let metadata = fs::symlink_metadata(&path).map_err(io_error)?;
-        if metadata.file_type().is_symlink() || !metadata.is_file() {
-            return Err(format!(
-                "Local App Server executable generation is invalid: {}",
-                path.display()
-            ));
-        }
-        fs::remove_file(path).map_err(io_error)?;
-    }
-    Ok(())
+    let path = dunce::canonicalize(daemon_executable).map_err(io_error)?;
+    let package_lease = acquire_package_lease_for_executable(&path).map_err(io_error)?;
+    let identity = executable_identity(&path)?;
+    Ok(DaemonExecutable {
+        path,
+        identity,
+        _package_lease: package_lease,
+    })
 }
 
 pub(crate) struct ProcessRecordGuard {
@@ -399,3 +328,7 @@ fn open_private_record(path: &Path) -> Result<File, String> {
 fn io_error(error: io::Error) -> String {
     error.to_string()
 }
+
+#[cfg(test)]
+#[path = "process_tests.rs"]
+mod tests;
