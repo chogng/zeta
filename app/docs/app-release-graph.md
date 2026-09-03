@@ -23,7 +23,7 @@ backend 不得依赖 app/UI。workspace 是统一构建图，不替代产品架�
 | Package/signing input contract | `app/packaging/*.json` | `//app:app_release_inputs` | ✅ |
 | Unsigned package staging | `build/release/build_app_package.py` | `just app-package` | ✅ |
 | Workspace boundary CI | Bazel | `bazel test //app:app_ci` | ✅ |
-| Platform signing and verification | `build/release/release_app_package.sh` | policy file中的 native tool | ✅ 已接入 provider-neutral job |
+| 平台签名和验证 | `build/release/release_app_package.py` | 包内 target 选择对应签名工具 | ✅ 平台不能由调用者另行指定 |
 | Hermetic Bazel Rust compile graph | `rules_rs` + single `@crates` hub | `//app:app` | ✅ 完整 app binary build 已通过 |
 
 ### 根级 Bazel 基础设施
@@ -75,7 +75,7 @@ just app-package \
 
 ```text
 app-package/
-├── bin/app
+├── bin/app[.exe]
 ├── app-package.json
 └── app-signing-policy.json
 ```
@@ -90,7 +90,7 @@ canonical packaged-node Zeta package directory，再给 staging 追加
 
 ```text
 app-package/
-├── bin/app
+├── bin/app[.exe]
 ├── zeta-remote-runtimes/
 │   ├── catalog.json
 │   └── artifacts/zeta-<target>.tar.gz
@@ -135,10 +135,9 @@ provider-neutral job 入口是：
 
 ```bash
 APP_PACKAGE_DIR=/absolute/path/to/app-package \
-APP_PLATFORM=darwin \
 APP_REMOTE_RUNTIME_BUNDLE=/absolute/path/to/remote-runtimes \
 APP_MACOS_SIGNING_IDENTITY="Developer ID Application: ..." \
-build/release/release_app_package.sh
+python -B build/release/release_app_package.py
 ```
 
 网络包改用 `APP_REMOTE_RUNTIME_CATALOG_URL` 与
@@ -161,5 +160,6 @@ bazel test //app:app_ci
 `//app:app_ci` 同时运行 workspace boundary、package staging、release contract 和 signing state
 transition tests。
 
-具体 CI provider 只需要把上面的 Build → Stage → Sign → Verify → Publish 节点接入 secret store；
-不要把密钥逻辑写入 `app/workbench`、`zui` 或通用 Bazel Rust macro。
+`.github/workflows/platform-checks.yml` 在 macOS、Linux 和 Windows 的 arm64/x64 机器上检查各自的 app target，并运行平台打包契约与 Python 发布工具测试。`//app:app_ci` 继续负责不需要签名环境的结构检查。
+
+具体 CI provider 只需要把 Build → Stage → Sign → Verify → Publish 节点接入 secret store；平台由 `app-package.json` 的 target 唯一决定，调用者不能另外传一个平台。不要把密钥逻辑写入 `app/workbench`、`zui` 或通用 Bazel Rust macro。

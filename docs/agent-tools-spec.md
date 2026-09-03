@@ -513,20 +513,20 @@ digest 缺失/伪造或 catalog 已刷新时拒绝并要求重新 `search_tools`
 绑定。参数校验错误透传 MCP server 的 schema 错误；执行、审批与结果转换沿用
 [`tools.md`](tools.md) §10 的 MCP 适配器。
 
-## 11. 内建子代理工具
+## 11. Agent 委托工具
 
 | | |
 | --- | --- |
 | 状态 | 已接入具备有效目录 Grant 的 App Server Tool composition |
-| 执行 | `MultiAgentCoordinator` + 独立 child Thread；不经 MCP 自调用 |
-| 权限 | child 只获得 spawn 时冻结的 tool name ceiling 与 active Skill digest |
+| 执行 | `MultiAgentCoordinator` + 独立委托 Thread；不经 MCP 自调用 |
+| 权限 | 被委托运行只获得 spawn 时冻结的 tool name ceiling 与 active Skill digest |
 
 ### 11.1 spawn_agent
 
-创建一个独立历史的 child Agent Thread，立即返回 `delegation_id`、`child_thread_id`、
+创建一个独立历史的 Agent 委托运行，立即返回 `delegation_id`、`child_thread_id`、
 `child_turn_id` 和冻结的 Agent definition reference。参数为完整 `task: string`、可空短标签
 `name`、可空 `agent` 和可空 `context`。`agent` 可显式指定 Directory definition；省略时只在
-metadata 产生唯一匹配时自动选择，否则使用内置 general role。`context`
+metadata 产生唯一匹配时自动选择，否则使用当前硬编码的 general role。`context`
 支持 `fresh`、`full`、`lastTurns`、`checkpointAndTail`、`selected`；选中内容在 spawn 时固定
 source sequence、物化内容与 digest，再随 immutable seed 注入。definition 的 catalog generation、
 content digest、选择原因、role/model、引用 Instructions、active Skill 子集与 Tool ceiling 同样冻结；
@@ -544,8 +544,8 @@ delegation；`policy` 支持 `all`、`any`、`quorum`，最长等待 30000 ms。
 再从 exact-once delegation results 求值；超时返回 waiting join，满足时返回 `satisfiedBy` 与
 bounded results。进程恢复会重新求值 waiting join。
 
-App Server 的 parent Turn interrupt 与 Session stop 会提交 cancellation facts，并向 live child
-descendants 递归传播。`session/subscribe.agentTree` 是从同一 durable Session/Thread read set 生成的
+App Server 的调用方 Turn interrupt 与 Session stop 会提交 cancellation facts，并向仍在运行的委托后代
+递归传播。`session/subscribe.agentTree` 是从同一 durable Session/Thread read set 生成的
 canonical nested projection，包含 execution status、等待原因、Goal budget/usage、role、join 和
 delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thread/update` 只触发
 重新读取 canonical projection，旧 Thread sequence 通知会被忽略。中断使用节点的 exact

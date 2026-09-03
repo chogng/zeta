@@ -1,4 +1,4 @@
-# Agent 树与子 Agent 协作系统
+# Agent 委托与运行树
 
 > 状态：同一 Session 内的 Agent 树核心纵向切片已实现（2026-08-12）。`DelegationId`、`AgentMessageId`、`AgentJoinId`、`AgentContextSeed`、
 > `ThreadOrigin::AgentSpawn`、durable delegation/message/result events、Fresh child Thread spawn、
@@ -18,23 +18,24 @@
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
 > 外部 MCP Host 调用 Zeta 与 remote Agent bridge：[`mcp-server.md`](mcp-server.md)
 > 多个 Agent 共同修改代码时的工作契约、范围冲突、验证和集成：[`multi-agent-development.md`](multi-agent-development.md)
-> 内置专化角色、自定义定义归一化、模型/上下文继承、工具与执行能力边界：[`subagents.md`](subagents.md)
+> 内置与自定义 Agent 的统一定义、专化职责、启动范围、模型和工具边界：[`agents.md`](agents.md)
 
 ## 快速理解
 
-本文的 Agent 树不是多个任务共享一份可变上下文，而是同一 Session 中多个相互关联、可独立恢复的 Thread。执行中的主 Agent 和子 Agent 都由 Thread 表达；子 Agent 由 `ThreadOrigin::AgentSpawn + DelegationId` 区分，Session 只是整棵 Thread 树的只读分组视图。
+本文只处理 Agent 运行之间的委托关系，不定义“主 Agent”与“子 Agent”两种类型。每个运行实例都由独立 Thread 表达；会话入口位于树根，被委托运行由 `ThreadOrigin::AgentSpawn + DelegationId` 关联到调用方。界面可以把后者简称为“子 Agent”，但同一份 `AgentDefinition` 可以在其启动策略允许时用于任一位置。
 
 多个独立 Session 的根 Thread 之间不存在父子关系，不属于本文协调器。它们之间的观察、等待、另开方向、移交和共同验证由 [`multi-agent-development.md`](multi-agent-development.md#32-两种协作拓扑与-team) 定义。
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
-| 子 Agent 在系统中是什么？ | 一个拥有独立 `ThreadId`、Turn、上下文和取消域的 Thread | [身份与聚合边界](#2-身份与聚合边界) |
-| 父子 Agent 共享历史或模型状态吗？ | 不共享可变状态；只通过明确的种子、消息和结果传递信息 | [上下文隔离](#11-上下文隔离) |
+| “主 Agent”和“子 Agent”是不同类型吗？ | 不是；它们只是会话入口运行和委托运行在树中的相对位置 | [`agents.md`](agents.md) |
+| 被委托 Agent 在系统中是什么？ | 一个拥有独立 `ThreadId`、Turn、上下文和取消域的 Thread | [身份与聚合边界](#2-身份与聚合边界) |
+| 调用方与被委托方共享历史或模型状态吗？ | 不共享可变状态；只通过明确的种子、消息和结果传递信息 | [上下文隔离](#11-上下文隔离) |
 | 创建、分叉和生成有什么区别？ | 创建建立新 Thread，分叉固定已有序列点，生成额外记录委托关系 | [创建、分叉与生成](#4-创建create分叉fork与生成spawn) |
-| 子 Agent 如何回传结果？ | 结果通过可持久化消息和委托终态回到调用方，不靠进程内引用 | [结果与汇合](#8-结果与汇合) |
+| 被委托 Agent 如何回传结果？ | 结果通过可持久化消息和委托终态回到调用方，不靠进程内引用 | [结果与汇合](#8-结果与汇合) |
 | 取消父 Agent 会发生什么？ | App Server 的 Turn interrupt/Session stop 会向所有 live descendants 传播；child 取消不反向影响 parent/sibling | [取消与终态语义](#9-取消与终态语义) |
 | 多个 Agent 的代码结果如何避免互相破坏？ | 本文只保证 Agent 生命周期和通信；工作范围、跨 Agent 冲突、验证与集成由可靠开发系统单独负责 | [`multi-agent-development.md`](multi-agent-development.md) |
-| 专化角色的提示词、模型、工具和调用范围在哪里定义？ | 内置角色由产品资源维护，自定义角色来自 `.zeta/agents`；两者在委托前归一化 | [`subagents.md`](subagents.md) |
+| 专化职责的提示词、模型、工具和启动范围在哪里定义？ | 内置定义由产品资源维护，自定义定义来自 `.zeta/agents`；会话、委托和工作流共用一种契约 | [`agents.md`](agents.md) |
 | Team 模式属于哪一种？ | Team 是同一 Session Agent 树的产品形态，根 Thread 协调多个子 Thread | [`multi-agent-development.md`](multi-agent-development.md#32-两种协作拓扑与-team) |
 | 多个独立 Session 如何协作？ | 使用显式跨 Session 工作关系；不继承上下文、取消域、预算或授权 | [`multi-agent-development.md`](multi-agent-development.md#32-两种协作拓扑与-team) |
 
@@ -44,9 +45,9 @@ Zeta 当前实现的 Agent 树使用同一 Session 下的独立 Thread：
 
 ```text
 Session
-└─ parent Thread / Agent
-   ├─ child Thread / Agent A
-   └─ child Thread / Agent B
+└─ entry Thread / Agent
+   ├─ delegated Thread / Agent A
+   └─ delegated Thread / Agent B
 ```
 
 每个 Thread 独立拥有：
@@ -63,17 +64,18 @@ Session
 多 Agent 不是多个执行 task 共享一份 `SessionHistory`。父子和 sibling 不共享 mutable context、
 projection、provider conversation ID 或 Tool state。
 
-同进程 child Agent 由本架构定义的 `MultiAgentCoordinator` 创建，不通过 `zeta-mcp-server`
+同进程 Agent 委托运行由本架构定义的 `MultiAgentCoordinator` 创建，不通过 `zeta-mcp-server`
 自调用。跨 runtime Zeta 可以使用 MCP transport，但调用方仍必须在本地拥有 delegation、budget、
 cancellation 和 result delivery；MCP 只承担远端执行通信。
 
-长期必须把三种关系分开：
+长期必须把定义和三种运行关系分开：
 
-1. **Thread lineage**：产品里的 root/fork/spawn 拓扑；
-2. **Agent delegation**：谁委派了什么工作以及结果状态；
-3. **Context inheritance**：child 首次 invocation 能看到 parent 的哪些内容。
+1. **Agent definition**：职责、提示词、模型策略、工具、能力和允许的启动来源；
+2. **Thread lineage**：产品里的 root/fork/spawn 拓扑；
+3. **Agent delegation**：谁委派了什么工作以及结果状态；
+4. **Context inheritance**：被委托运行首次调用能看到调用方的哪些内容。
 
-只记录 `parentThreadId` 不能表达后两者。
+只记录 `parentThreadId` 不能表达 Agent 定义、委托任务与上下文交付。
 
 ## 2. 身份与聚合边界
 
@@ -85,7 +87,7 @@ lifecycle，不串行 child Thread 执行。
 ### 2.2 ThreadId
 
 标识一条独立 Agent execution branch。当前阶段一个活跃 Agent 对应一个 Thread，因此可以用
-`ThreadId` 作为 Agent execution identity。
+`ThreadId` 作为 Agent execution identity。Thread 位于树根还是通过委托产生，不改变它使用的 Agent 定义类型。
 
 暂不增加与 Thread 一一对应的 `AgentId`。只有出现下列真实需求时才引入：
 
@@ -161,10 +163,10 @@ child 和等待 delivery receipt 都在 Thread writer 之外。
 | --- | --- | --- | --- |
 | Create | 新建独立 Thread | 无 | fresh |
 | Fork | 创建产品历史分支 | immutable lineage anchor | 明确 fork selection |
-| Spawn | 委派 child Agent | delegation + parent anchor | 明确 AgentContextSeed |
+| Spawn | 创建一次 Agent 委托运行 | delegation + parent anchor | 明确 AgentContextSeed |
 
-Fork 不自动等于 sub-agent。用户可以 fork side conversation；Agent 也可以在 fresh context 下
-spawn child。
+Fork 不自动产生委托关系。用户可以 fork side conversation；Agent 也可以在 fresh context 下
+创建委托运行。
 
 目标 `ThreadOrigin` 至少能区分：
 
@@ -252,7 +254,7 @@ effective child policy
 
 Child 可以被进一步收紧，不能静默获得 parent 没有的 capability 或放宽 approval。
 
-**当前限制。** `DelegatedCapabilityScope` 目前只冻结工具名与 Skill，尚未携带带作用范围的 `Capability` 集合。因此“只读审查”“只允许构建目录写入”等角色限制目前不能只靠该结构强制执行；内置专化角色接线前必须按 [`subagents.md`](subagents.md#8-当前实现与缺口) 补齐定义身份、调用范围和执行能力上限。
+**当前限制。** `DelegatedCapabilityScope` 目前只冻结工具名与 Skill，尚未携带带作用范围的 `Capability` 集合。因此“只读审查”“只允许构建目录写入”等角色限制目前不能只靠该结构强制执行；内置专化角色接线前必须按 [`agents.md`](agents.md#8-当前实现与缺口) 补齐定义身份、启动范围和执行能力上限。
 
 ### 5.3 种子持久化
 
@@ -391,11 +393,11 @@ Join 等待必须 durable；它不能靠一个进程内 `join_all` future 表达
 Cancellation tree：
 
 ```text
-parent Agent source
-├─ child A source
-│  └─ child A operations
-└─ child B source
-   └─ child B operations
+caller Agent source
+├─ delegated A source
+│  └─ delegated A operations
+└─ delegated B source
+   └─ delegated B operations
 ```
 
 规则：
@@ -485,7 +487,7 @@ delegation provenance。
 
 默认规则：
 
-- parent Agent 不是安全 authority；
+- 调用方 Agent 不是安全 authority；
 - parent 不能替用户批准超出 delegated ceiling 的 action；
 - UI 可以聚合显示同一 Agent tree 的 requests；
 - resolve 必须命中精确 RequestId；
@@ -623,7 +625,7 @@ projection，不公开 coordinator 内部状态机。
 - 相同 DelegationId 幂等恢复；
 - fork 与 spawn 语义不混淆；
 - Fresh/Selected/ForkedPrefix 的可见内容；
-- parent anchor 后新增内容对子 Agent 不可见；
+- 调用方 anchor 后新增内容对被委托 Agent 不可见；
 - parent/child/sibling ContextManager 隔离；
 - message at-least-once transport + exactly-once apply；
 - duplicate/late/out-of-order result；
@@ -638,10 +640,11 @@ projection，不公开 coordinator 内部状态机。
 ## 18. 固定决策
 
 - 一个活跃 Agent 当前绑定一个独立 Thread；
+- Agent 定义不区分主或子；会话入口和委托只是运行关系；
 - ThreadId 暂时足够表达 Agent execution identity；
 - DelegationId 与 AgentMessageId 是独立稳定身份；
 - fork lineage、Agent delegation 与 context inheritance 分离；
-- child Agent 不共享 parent/sibling mutable context；
+- 被委托 Agent 不共享调用方或同级 Agent 的 mutable context；
 - context seed 在 spawn 时固定 parent sequence；
 - MultiAgentCoordinator 协调拓扑和 delivery，但不拥有 context；
 - parent/child 只通过 durable message/result 通信；

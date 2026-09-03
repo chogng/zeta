@@ -13,7 +13,7 @@
 
 本文是“外部 MCP Host 如何调用 Zeta Agent”的 canonical 系统文档。MCP client session、
 外部 capability catalog 和 tool/resource/prompt adapter 由 [`mcp.md`](mcp.md) 拥有；本地
-parent/child delegation、context inheritance、join、budget 和 recovery 由
+Agent 委托关系、context inheritance、join、budget 和 recovery 由
 [`core-multi-agent.md`](core-multi-agent.md) 拥有。
 
 ## 快速理解
@@ -35,21 +35,21 @@ App Server composition root
 Session / Thread / TurnExecutor
 ```
 
-同进程 Zeta Agent 创建 child Agent 时不经过 MCP server。该路径仍由
+同进程 Zeta Agent 创建委托运行时不经过 MCP server。该路径仍由
 `MultiAgentCoordinator` 直接建立 durable delegation：
 
 ```text
-local parent Agent ──► MultiAgentCoordinator ──► child Thread
+caller Agent ──► MultiAgentCoordinator ──► delegated Thread
 ```
 
-另一个进程或机器上的 Zeta 可以通过 MCP 被调用；若调用方希望把它视为正式 child Agent，
+另一个进程或机器上的 Zeta 可以通过 MCP 被调用；若调用方希望把它纳入正式委托关系，
 调用方必须在本地先建立 delegation，再由 remote Agent adapter 将执行映射到 MCP。MCP
 transport 本身不创造 parent/child 语义。
 
 | 调用者想做什么 | 应使用的入口 | 是否建立 Zeta 内部父子关系 |
 | --- | --- | --- |
 | 外部 MCP Host 调用 Zeta | MCP Server | ❌ |
-| 本地 Agent 创建子 Agent | 多 Agent 协调系统 | ✅ |
+| 本地 Agent 创建委托运行 | 多 Agent 协调系统 | ✅ |
 | 另一台机器上的 Zeta 执行任务 | MCP 或未来远程适配器 | 默认不建立 |
 | 把远端 Zeta 纳入本地 Agent 树 | 先建立本地委托，再映射远端执行 | ✅ |
 
@@ -58,7 +58,7 @@ transport 本身不创造 parent/child 语义。
 | 场景 | 首选入口 | 语义 |
 | --- | --- | --- |
 | Zeta Desktop、CLI 或 TUI 控制本地 Zeta | App Server | 完整产品控制面 |
-| 本地 Agent 创建 child Agent | `MultiAgentCoordinator` | 原生 delegation 和 Agent tree |
+| 本地 Agent 创建委托运行 | `MultiAgentCoordinator` | 原生 delegation 和 Agent tree |
 | Codex、Claude 或其他 MCP Host 调用 Zeta | `zeta-mcp-server` | Zeta 作为外部 Agent tool |
 | Zeta A 调用独立的 Zeta B | `zeta-mcp` → `zeta-mcp-server` | 跨 runtime Agent 调用 |
 | Zeta A 将 Zeta B 纳入自己的 Agent tree | remote Agent adapter + MCP | 本地 delegation，远端 execution |
@@ -276,9 +276,9 @@ HTTP disconnect 不自动证明 Turn cancelled：
   cancel active work；
 - 已开始 Tool 的副作用继续遵循 Zeta UnknownOutcome/reconciliation 语义。
 
-## 8. 与内建子代理的关系
+## 8. 与同进程 Agent 委托的关系
 
-| 维度 | 内建 child Agent | MCP 调用 Zeta |
+| 维度 | 同进程 Agent 委托 | MCP 调用 Zeta |
 | --- | --- | --- |
 | identity | `DelegationId` + child `ThreadId` | invocation identity + 独立 Session/Thread |
 | topology | 同一 Session 的 Agent tree | 默认无 parent lineage |
@@ -467,9 +467,9 @@ reference 尚未完成。
 
 - App Server/Core 始终是 Session/Thread/Turn authority；
 - `zeta-mcp-server` 始终是 adapter，不建立第二套 Agent runtime；
-- 同进程子代理始终走 `MultiAgentCoordinator`，不经 MCP 自调用；
+- 同进程 Agent 委托始终走 `MultiAgentCoordinator`，不经 MCP 自调用；
 - MCP request ID 不等于 Session、Thread、Turn、Delegation 或 invocation identity；
-- 外部调用默认创建独立 root task，不伪装成 child Agent；
+- 外部调用默认创建独立会话入口，不伪装成本地 Agent 委托运行；
 - retry 不得静默重复启动可能产生副作用的 Agent Turn；
 - 调用方不能通过 MCP 参数扩大 host policy、workspace、credential 或 sandbox 权限；
 - transport 断开不等于 durable operation 已取消；

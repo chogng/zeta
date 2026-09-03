@@ -1,7 +1,7 @@
 # Zeta 意图驱动的 Agent 开发系统
 
-> 状态：Proposed（2026-09-02）。本文是 `/develop` 流程、产物和状态机的唯一开发设计文档；内置角色定义由 `subagents.md` 维护。
-> 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 的关系。内置阶段 Agent 与私有 Agent 的 ID、提示词、工具、能力和调用范围由 [`subagents.md`](subagents.md#52-develop-阶段角色) 维护；Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，可靠多 Agent 开发见 [`multi-agent-development.md`](multi-agent-development.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
+> 状态：Proposed（2026-09-02）。本文是 `/develop` 流程、产物和状态机的唯一开发设计文档；内置角色定义由 `agents.md` 维护。
+> 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 的关系。内置阶段 Agent 与私有 Agent 的 ID、提示词、工具、能力和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 维护；Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，可靠多 Agent 开发见 [`multi-agent-development.md`](multi-agent-development.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
 
 本文正在设计一个系统。`zeta.md`、`intent.md`、`spec.md` 和 `plan.md` 是该系统未来读取或产生的开发产物，不用于把当前系统设计拆成四份自我描述的文档。
 
@@ -57,7 +57,7 @@ flowchart TD
 
 ## 1. 要解决的问题
 
-Agent 显著提高了实现速度，但长期开发仍依赖人和主 Agent 记住最初方向、关键取舍以及计划为什么这样安排。开发持续时间变长、对话增多或多个 Agent 并行后，局部实现容易覆盖原始目标，被否定的方案也可能重新进入当前上下文。
+Agent 显著提高了实现速度，但长期开发仍依赖人和当前执行 Agent 记住最初方向、关键取舍以及计划为什么这样安排。开发持续时间变长、对话增多或多个 Agent 并行后，局部实现容易覆盖原始目标，被否定的方案也可能重新进入当前上下文。
 
 传统做法要求用户先填写需求文档，再把文档交给不同角色。这里采用相反入口：自然对话是意图的原始来源，Agent 负责把已经表达的痛点和期望结果提炼成后续阶段能够执行的产物。文件是阶段结果，不是要求用户预先准备的输入表格。
 
@@ -80,7 +80,7 @@ Agent 显著提高了实现速度，但长期开发仍依赖人和主 Agent 记�
 - 不为了使用 Team 而拆分不可独立的工作；
 - 不让多个 Agent 共同编辑同一份阶段产物；
 - 不让实施 Agent 修改验收标准后批准自己的结果；
-- 不预先建立没有真实任务需要的 Agent 类型、工具档案或任意 Agent 图；
+- 不预先建立没有真实任务需要的 Agent 职责、工具档案或任意 Agent 图；
 - 不从 Zeta 当前的 Session、Thread 或其他实现结构反向定义开发方法。
 
 ## 2. 决策摘要
@@ -88,7 +88,7 @@ Agent 显著提高了实现速度，但长期开发仍依赖人和主 Agent 记�
 1. 整个系统由本文统一设计，不拆成分别描述 intent、spec 和 plan 的系统设计文档。
 2. 对话是意图输入，`intent.md` 是 Intent Agent 从已确认对话和证据中形成的阶段产物。
 3. `/develop` 是进入受管理开发流程的显式命令，可以在自然讨论之后调用；它不垄断意图输入。
-4. 流程状态、产物版本、依赖和恢复点由确定性的协调内核保存，不能由某个根 Agent 靠上下文记忆。
+4. 流程状态、产物版本、依赖和恢复点由确定性的协调内核保存，不能由某个 Agent 靠上下文记忆。
 5. Intent、Spec、Plan、实施和验收使用阶段专属 Agent；每个 Agent 只拥有完成本阶段需要的上下文和工具。
 6. 项目调查、外部研究和冲突审查是 Intent Agent 的私有 Agent，只能由 Intent Agent 按明确缺口调用。
 7. 用户是产品意图与关键取舍的最终决定者；Agent 可以归纳、调查、提出选项和指出冲突。
@@ -163,7 +163,7 @@ Intent Agent 必须回答：
 
 以下 Agent 只注册到 Intent Agent 的私有能力面，不进入普通 Agent、Spec Agent、Plan Agent 或用户可直接选择的公共目录：
 
-它们对应 `intent-project-investigator`、`intent-researcher` 与 `intent-conflict-reviewer`。本节拥有其工作流输入、输出和使用时机；准确提示词、工具上限、上下文策略和允许父角色由 [`subagents.md`](subagents.md#53-intent-私有角色) 统一维护。
+它们对应 `intent-project-investigator`、`intent-researcher` 与 `intent-conflict-reviewer`。本节拥有其工作流输入、输出和使用时机；准确提示词、工具上限、上下文策略和允许调用方由 [`agents.md`](agents.md#53-intent-私有角色) 统一维护。
 
 | 私有 Agent | 输入 | 工具 | 输出 | 禁止行为 |
 | --- | --- | --- | --- | --- |
@@ -191,7 +191,7 @@ Intent 候选只有满足以下条件才能请求接受：
 
 阶段 Agent 是按需创建的短生命周期工作者，不是长期保存整个开发历史的角色。每个阶段从已接受的上游产物和选择后的项目上下文开始，完成后返回候选产物或证据。
 
-本流程分别使用 `develop-intent`、`develop-spec`、`develop-plan`、`develop-implementer` 与 `develop-acceptance`。本文拥有阶段顺序、产物和完成门；角色自身的提示词、工具、能力、模型继承和调用范围由 [`subagents.md`](subagents.md#52-develop-阶段角色) 统一维护。
+本流程分别使用 `develop-intent`、`develop-spec`、`develop-plan`、`develop-implementer` 与 `develop-acceptance`。本文拥有阶段顺序、产物和完成门；角色自身的提示词、工具、能力、模型策略和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 统一维护。
 
 | Agent | 主要职责 | 主要工具 | 不能做什么 |
 | --- | --- | --- | --- |
@@ -278,14 +278,14 @@ Team 只消费固定的 Intent、Spec、Plan、工作契约和代码基线，不
 
 专业化必须同时体现在任务、上下文和工具上，不能只靠角色提示词。工具能力遵循最小范围并逐层收窄：
 
-具体工具清单和父子调用限制由 [`subagents.md`](subagents.md#5-内置专化子代理清单) 维护；本节只规定 `/develop` 工作流施加的进一步收窄。
+具体工具清单和启动限制由 [`agents.md`](agents.md#5-内置-agent-清单) 维护；本节只规定 `/develop` 工作流施加的进一步收窄。
 
 - Intent Agent 能读取对话和私有 Agent 证据、形成 `NeedsUserDecision` 并写 Intent 候选，不能直接持有用户交互端口或修改产品代码；
 - 私有调查和研究 Agent 只有各自来源所需的只读工具，不能写阶段产物；
 - Spec Agent 和 Plan Agent 只能写各自候选产物，不能修改上层产物；
 - 实施 Agent 只获得工作契约允许的写入与执行能力；
 - 验收 Agent 默认不能写产品代码、测试、项目指令、权限或验证配置；
-- 子 Agent 的实际能力是系统上限、父工作契约、子任务范围和当前策略的交集。
+- 被委托 Agent 的实际能力是系统上限、调用方工作契约、委托任务范围和当前策略的交集。
 
 阶段产物、测试、项目指令、权限和验证程序都属于控制资源。修改控制资源的 Agent 不能使用修改后的规则批准自己。
 

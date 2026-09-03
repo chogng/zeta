@@ -11,7 +11,7 @@
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
 > [`zeta-agent-import` README](../zeta-rs/agent-import/README.md)；配置与事务边界见
-> [`config.md`](config.md)；内置专化子代理及统一定义契约见 [`subagents.md`](subagents.md)；最终模型输入由 [`core-context.md`](core-context.md) 定义。
+> [`config.md`](config.md)；内置与自定义 Agent 的统一定义契约、专化职责和启动范围见 [`agents.md`](agents.md)；最终模型输入由 [`core-context.md`](core-context.md) 定义。
 
 ## 快速理解
 
@@ -20,13 +20,13 @@ Zeta 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 位于小写 `.zeta/`，其他产品的目录和格式必须经过 `zeta-agent-import`，不能由原生 loader
 顺便扫描。
 
-内置专化子代理不是 `.zeta` 自定义对象。它们随产品发布、不会进入设置或被同名自定义定义覆盖，但与自定义 Agent 一样必须在委托前转换为统一的冻结定义契约。
+内置 Agent 不是 `.zeta` 自定义对象。它们随产品发布、不会进入设置或被同名自定义定义覆盖，但与自定义 Agent 使用同一种定义契约；会话入口、委托和工作流只表示本次运行的启动来源，不产生“主 Agent 定义”或“子 Agent 定义”。
 
 | 用户想表达什么 | Zeta 对象 | 何时进入运行时 | 典型入口 |
 | --- | --- | --- | --- |
 | “在这个环境里应长期遵循什么” | Instructions | 全局、上下文匹配或显式按需加载 | 自动解析或用户选择 |
 | “这类工作应该怎样完成” | Skills | 被用户选择或模型匹配后渐进加载 | picker、Slash Command 或模型选择 |
-| “由哪种执行配置来工作” | Agents | 启动主执行者或委托执行者时冻结配置引用 | Agent picker 或 delegation |
+| “由哪种执行配置来工作” | Agents | 启动会话入口、委托执行或工作流阶段时冻结配置引用 | Agent 选择器、委托或工作流 |
 | “现在请完成这件事” | 当前 Turn 的用户输入 | 构造本次 `ModelRequest` 时 | 普通消息 |
 | “快速调用某个能力” | 不是新对象 | `$name` 选择已有 Skill，`/name` 调用产品命令 | `$review`、`/status` |
 | “把别的 Agent 配置带进来” | Import workflow | 用户确认并由目标 authority 发布后 | Desktop import |
@@ -120,7 +120,7 @@ pub enum SkillInvocationPolicy {
 `<name>/SKILL.md` 目录。目录加入 Environment 且具备相应 Grant 时，App Server 才把 root 交给对应 runtime；
 `zeta-skills-extension` 拥有 Skill catalog 与 watcher refresh。模型调用不在 Core context assembly
 中扫描 catalog：Global Instructions 使用冻结的 `HarnessInstructions` snapshot；已激活 Skill 由
-extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不会执行定义；只有 `spawn_agent` 在委托安全点完成选择、引用解析与冻结后才会创建子 Thread。
+extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不会执行定义。当前只有 `spawn_agent` 在委托安全点完成目录定义的选择、引用解析与冻结；让会话入口和工作流使用同一契约属于 [`agents.md`](agents.md) 的计划设计。
 
 | Scope/source | 物理 owner | 是否经过 `zeta-agent-import` |
 | --- | --- | --- |
@@ -247,3 +247,4 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 - Preview 不是 authorization；apply 前必须重读并验证 source identity/digest。
 - 原生 loader、Import、source registration 与 `add-dir` 保持四条不同生命周期路径。
 - ContextAssembler 只消费冻结 snapshot 并产生 `ModelRequest`，不拥有 artifact discovery。
+- Agent 定义只有一种；内置与自定义是来源差异，会话、委托与工作流是运行时启动来源。

@@ -3,7 +3,7 @@
 > 本 README 拥有 Zeta 原生 Agent definition artifact 的当前实现契约。跨系统对象划分、`.zeta`
 > 命名空间与运行时边界由
 > [`docs/agent-customizations.md`](../../docs/agent-customizations.md) 维护；Thread execution identity
-> 与 multi-agent gate 由 [`docs/core-multi-agent.md`](../../docs/core-multi-agent.md) 维护；内置专化角色和统一定义契约由 [`docs/subagents.md`](../../docs/subagents.md) 维护。
+> 与 multi-agent gate 由 [`docs/core-multi-agent.md`](../../docs/core-multi-agent.md) 维护；内置与自定义 Agent 的统一定义、专化职责和启动范围由 [`docs/agents.md`](../../docs/agents.md) 维护。
 
 `zeta-agents` 对一个目录的 `.zeta/agents/*.md` 执行有界、非递归发现，校验 definition
 frontmatter 和 role instructions，并发布不可变 catalog snapshot。它不创建 Thread、不调用模型、
@@ -77,4 +77,4 @@ invalidation。`spawn_agent` 可以显式按 name 选择，或在 task 与 metad
 和 Skill 只能缩小 parent 当前可见集合，引用的 directory instructions 正文会进入 frozen role，
 缺失或越权引用 fail closed。
 
-当前限制是尚无 App Server definition list/picker API，也不支持跨 authority Agent definition 引用；自动选择只使用当前 directory catalog metadata，不运行模型或读取其他产品格式。当前 `AgentDefinition` 仍是目录文件对应的扁平结构；在内置 catalog 接入前，本 crate 必须把自定义定义转换为 `zeta-subagents` 拥有的统一定义契约，App Server 只能消费归一化后的类型，不能长期维护两套选择路径。
+当前限制是尚无 App Server definition list/picker API，也不支持跨 authority Agent definition 引用；自动选择只使用当前 directory catalog metadata，不运行模型或读取其他产品格式。当前 `AgentDefinition` 仍是目录文件对应的扁平结构，而且只有 `spawn_agent` 会选择并冻结它；后续由本 crate 扩展同一类型并加载内置资源，让会话入口、委托和工作流使用同一解析契约，不能增加第二套定义类型或 `zeta-subagents` crate。
