@@ -17,7 +17,7 @@ expression: screen
 
 ─ Theme ────────────────────────────────────────────────────────────────────────────────────────────
 
-❯ 1. Auto (match terminal)
+> 1. Auto (match terminal)
   2. Dark mode
   3. Light mode
   4. Dark mode (colorblind-friendly)

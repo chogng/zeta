@@ -2,6 +2,7 @@ use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::interaction_style;
+use crate::render::selection_marker;
 use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadRequestResponse;
 use crossterm::event::KeyCode;
@@ -396,7 +397,7 @@ fn choice_line<'a>(
     state: InteractionState,
     context: RenderContext<'_>,
 ) -> Line<'a> {
-    let marker = if state.selected { "❯ " } else { "  " };
+    let marker = selection_marker(state.selected);
     let style = interaction_style(context, state);
     Line::from(vec![
         Span::styled(marker, style),

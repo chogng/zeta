@@ -264,8 +264,6 @@ fn actual_tui_navigates_the_agents_session_manager_and_preview() {
     process.left();
     process.wait_for_screen("enter create");
     process.up();
-    process.wait_for_screen("space to collapse");
-    process.down();
     process.wait_for_screen("space to preview");
     process.space();
     process.wait_for_screen("Session preview");

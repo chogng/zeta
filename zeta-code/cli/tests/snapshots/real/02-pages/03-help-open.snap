@@ -26,7 +26,7 @@ expression: screen
   ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
   │ Search help                                                                                  │
   └──────────────────────────────────────────────────────────────────────────────────────────────┘
-❯ shift+tab  ·  Cycle approval mode
+> shift+tab  ·  Cycle approval mode
   ctrl+v  ·  Attach clipboard image
   ctrl+c  ·  Interrupt or quit
   ctrl+d  ·  Interrupt or quit

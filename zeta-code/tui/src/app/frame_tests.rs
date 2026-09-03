@@ -295,7 +295,7 @@ fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
     assert!(completed.starts_with("  ● done"));
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
-        "  ↑ sessions · enter create · esc back"
+        "  enter to return"
     );
 }
 

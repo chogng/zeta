@@ -31,9 +31,6 @@ fn agents_manager_simulates_navigation_and_transient_preview() {
 
     assert_eq!(app.handle_key(key(KeyCode::Up)), None);
     assert!(app.session_manager_focused());
-    assert!(app.session_manager_hint().contains("space to collapse"));
-
-    assert_eq!(app.handle_key(key(KeyCode::Down)), None);
     assert!(app.session_manager_hint().contains("space to preview"));
 
     assert_eq!(app.handle_key(key(KeyCode::Char(' '))), None);
@@ -58,7 +55,6 @@ fn resuming_selected_session_restores_manager_navigation() {
     let mut app = active_session_app();
     assert_eq!(app.handle_key(key(KeyCode::Left)), None);
     assert_eq!(app.handle_key(key(KeyCode::Up)), None);
-    assert_eq!(app.handle_key(key(KeyCode::Down)), None);
 
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),

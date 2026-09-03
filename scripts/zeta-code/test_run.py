@@ -12,12 +12,10 @@ class SourceRunnerTests(unittest.TestCase):
     def test_main_builds_once_and_runs_the_staged_zeta(self) -> None:
         staged = self._executables(Path("C:/staged"))
         built = self._executables(Path("C:/built"))
-        rg = Path("C:/tools/rg.exe")
         with (
             patch.dict(run.os.environ, {"PATH": "tools"}, clear=True),
             patch.object(run, "build_binaries", return_value=(0, built)) as build,
             patch.object(run, "stage_runtime", return_value=staged),
-            patch.object(run, "host_ripgrep", return_value=rg),
             patch.object(run.subprocess, "run") as subprocess_run,
         ):
             subprocess_run.return_value = run.subprocess.CompletedProcess([], 0)
@@ -27,7 +25,8 @@ class SourceRunnerTests(unittest.TestCase):
         build.assert_called_once_with(
             run.development_binaries(code_mode=None), {"PATH": "tools"}
         )
-        runtime = run.runtime_environment({"PATH": "tools"}, staged, rg)
+        runtime = run.runtime_environment({"PATH": "tools"}, staged)
+        self.assertNotIn("ZETA_RG_PATH", runtime)
         subprocess_run.assert_called_once_with(
             [str(staged["zeta"]), "--help"],
             cwd=run.REPOSITORY_ROOT,

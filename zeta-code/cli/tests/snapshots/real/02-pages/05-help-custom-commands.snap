@@ -33,4 +33,4 @@ expression: screen
   ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
   │ Search help                                                                                  │
   └──────────────────────────────────────────────────────────────────────────────────────────────┘
-❯ /compact  ·  Summarize conversation history to free context space
+> /compact  ·  Summarize conversation history to free context space

@@ -1,6 +1,7 @@
 use super::InteractionState;
 use super::InteractionTarget;
 use super::interaction_style;
+use super::selection_marker;
 use crate::render::RenderContext;
 use crate::render::RenderTheme;
 use crate::render::ThemePalette;
@@ -8,6 +9,12 @@ use crate::render::test_context;
 use ratatui::style::Color;
 use ratatui::style::Modifier;
 use zeta_terminal_detection::ColorLevel;
+
+#[test]
+fn selected_items_use_the_standard_input_marker() {
+    assert_eq!(selection_marker(true), "> ");
+    assert_eq!(selection_marker(false), "  ");
+}
 
 #[test]
 fn interaction_states_use_distinct_theme_pairs() {

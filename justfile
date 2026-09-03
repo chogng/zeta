@@ -1,5 +1,5 @@
 set working-directory := "."
-set positional-arguments := true
+set positional-arguments
 
 export JUST_SHELL := justfile_directory() / "scripts/just-shell.py"
 
@@ -49,7 +49,7 @@ check-config-migrations:
 
 # Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
 generate-protocol:
-    {{ python }} -B scripts/zeta-rs/app-server-protocol/write_schema_fixtures.py
+    cargo run --quiet -p zeta-app-server-protocol --bin generate_protocol -- fixtures
     corepack pnpm --dir zeta-ts run protocol:generate
 
 # Launch the zeta code TUI product from the current source tree.

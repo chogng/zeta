@@ -269,7 +269,7 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
         for column in area.x..area.right() {
             if matches!(
                 frame::input_pointer_target_at(&app, area, column, row),
-                Some(InputPointerTarget::SessionManager(ref target)) if target.is_session()
+                Some(InputPointerTarget::SessionManager(_))
             ) {
                 update_pointer_hover(&mut app, area, column, row);
                 session_cell = Some((column, row));

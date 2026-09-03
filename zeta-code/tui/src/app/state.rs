@@ -1185,7 +1185,7 @@ impl App {
     }
 
     pub(crate) fn session_manager_hint(&self) -> &'static str {
-        self.sessions.manager().selection_hint()
+        self.sessions.manager().status_hint()
     }
 
     pub(crate) fn activate_session_manager_pointer_target(
@@ -1730,7 +1730,7 @@ impl App {
                     },
                 )),
                 KeyCode::Char(' ') => {
-                    let preview = self.sessions.manager_mut().toggle_or_preview(&catalog);
+                    let preview = self.sessions.manager().preview_selected(&catalog);
                     if let Some(preview) = preview {
                         self.show_overlay(preview);
                     }

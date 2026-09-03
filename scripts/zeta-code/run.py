@@ -98,18 +98,8 @@ def stage_runtime(executables: dict[str, Path]) -> dict[str, Path]:
     return staged
 
 
-def host_ripgrep(environment: dict[str, str]) -> Path:
-    executable = shutil.which("rg", path=environment.get("PATH"))
-    if executable is None:
-        raise RuntimeError("just zeta requires rg on PATH")
-    path = Path(executable).resolve()
-    if not path.is_file():
-        raise RuntimeError(f"rg on PATH is not a file: {path}")
-    return path
-
-
 def runtime_environment(
-    environment: dict[str, str], executables: dict[str, Path], ripgrep: Path
+    environment: dict[str, str], executables: dict[str, Path]
 ) -> dict[str, str]:
     runtime = environment.copy()
     runtime["ZETA_APP_SERVER_DAEMON_PATH"] = str(
@@ -118,7 +108,6 @@ def runtime_environment(
     runtime["ZETA_PRODUCT_SERVICES_PATH"] = str(
         (REPOSITORY_ROOT / "resources/product-services/product-services.json").resolve()
     )
-    runtime["ZETA_RG_PATH"] = str(ripgrep.resolve())
     if command_runner := executables.get("zeta-command-runner"):
         runtime["ZETA_WINDOWS_COMMAND_RUNNER_PATH"] = str(command_runner.resolve())
     if sandbox_setup := executables.get("zeta-windows-sandbox-setup"):
@@ -132,13 +121,12 @@ def runtime_environment(
 
 def main(arguments: list[str] | None = None) -> int:
     environment = os.environ.copy()
-    ripgrep = host_ripgrep(environment)
     binaries = development_binaries(code_mode=environment.get("ZETA_CODE_MODE_RUNTIME"))
     returncode, built = build_binaries(binaries, environment)
     if returncode != 0:
         return returncode
     executables = stage_runtime(built)
-    environment = runtime_environment(environment, executables, ripgrep)
+    environment = runtime_environment(environment, executables)
     return subprocess.run(
         [str(executables["zeta"]), *(arguments or [])],
         cwd=REPOSITORY_ROOT,

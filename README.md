@@ -15,7 +15,13 @@ Zeta is a Rust-first agent workspace with three product lines sharing one App Se
 
 ## Quick start
 
-Install Rust and, for the Rust workspace's input classifier, Protocol Buffers:
+On Windows, initialize the Rust development environment with the repository setup script. It installs the toolchain declared by `rust-toolchain.toml` together with MSVC, the Windows SDK, Git, ripgrep, just, CMake, LLVM, Protocol Buffers, Python 3.12, and cargo-insta:
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File scripts/zeta-rs/setup-windows.ps1
+~~~
+
+On macOS or Linux, install Rust and, for the Rust workspace's input classifier, Protocol Buffers:
 
 ```bash
 # macOS

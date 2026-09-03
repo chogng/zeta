@@ -20,6 +20,10 @@ pub(crate) struct InteractionState {
     pub(crate) pressed: bool,
 }
 
+pub(crate) fn selection_marker(selected: bool) -> &'static str {
+    if selected { "> " } else { "  " }
+}
+
 pub(crate) fn interaction_style(context: RenderContext<'_>, state: InteractionState) -> Style {
     if state.target == InteractionTarget::Disabled {
         return Style::default()

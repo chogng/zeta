@@ -26,12 +26,10 @@ fn groups_sessions_by_management_status_and_keeps_pinned_first() {
     ];
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
-    state.selected = Some(ManagerSelection::Session(
-        SessionId::new("completed").unwrap(),
-    ));
+    state.selected = Some(SessionId::new("completed").unwrap());
     assert!(state.toggle_selected_pin());
 
-    let labels = manager_rows(&sessions, &state.pinned, &state.collapsed)
+    let labels = manager_rows(&sessions, &state.pinned)
         .into_iter()
         .map(|row| match row {
             ManagerRow::Heading { group, .. } => group.label().to_owned(),
@@ -62,13 +60,11 @@ fn navigation_follows_the_visible_group_order() {
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
 
-    assert_eq!(state.selected_session(), None);
-    assert!(state.select_next(&sessions));
     assert_eq!(state.selected_session().unwrap().as_str(), "question");
     assert!(state.select_next(&sessions));
-    assert_eq!(state.selected_session(), None);
-    assert!(state.select_next(&sessions));
     assert_eq!(state.selected_session().unwrap().as_str(), "working");
+    assert!(state.select_next(&sessions));
+    assert_eq!(state.selected_session().unwrap().as_str(), "completed");
 }
 
 #[test]
@@ -140,31 +136,32 @@ fn pointer_activation_does_not_take_keyboard_focus_or_selection() {
     let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
+    assert!(pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 0).is_none());
     let target = pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 1)
         .expect("the first session row is interactive");
 
     let detail = state.activate_pointer_target(target, &sessions).unwrap();
 
     assert!(!state.focused());
-    assert!(state.selected_session().is_none());
+    assert_eq!(state.selected_session().unwrap().as_str(), "idle");
     assert_eq!(detail.title(), "Session preview");
 }
 
 #[test]
-fn group_selection_collapses_children_and_archives_all_active_children() {
+fn group_headings_are_static_and_all_sessions_remain_visible() {
     let sessions = (0..4)
         .map(|index| session(&format!("idle-{index}"), SessionManagerStatus::Idle, None))
         .collect::<Vec<_>>();
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
 
-    assert_eq!(state.selected_archive_ids(&sessions).len(), 4);
-    assert_eq!(state.toggle_or_preview(&sessions), None);
+    assert_eq!(state.selected_archive_ids(&sessions).len(), 1);
     assert_eq!(
-        manager_rows(&sessions, &state.pinned, &state.collapsed).len(),
-        1
+        state.preview_selected(&sessions).unwrap().title(),
+        "Session preview"
     );
-    assert!(state.selection_hint().contains("space to expand"));
+    assert_eq!(manager_rows(&sessions, &state.pinned).len(), 5);
+    assert!(state.selection_hint().contains("space to preview"));
 }
 
 #[test]
@@ -188,7 +185,7 @@ fn session_preview_is_read_only_manager_detail() {
     state.reconcile(&sessions);
     state.select_next(&sessions);
 
-    let detail = state.toggle_or_preview(&sessions).unwrap();
+    let detail = state.preview_selected(&sessions).unwrap();
 
     assert_eq!(detail.title(), "Session preview");
     assert!(
@@ -243,12 +240,13 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
         .collect::<Vec<_>>()
         .join("\n");
 
-    assert!(rendered.contains("▾ Idle (8)"));
+    assert!(rendered.contains("Idle (8)"));
     assert!(rendered.contains("more below"));
     let context = crate::render::test_context();
-    assert_eq!(buffer[(0, 0)].fg, context.selection_foreground());
-    assert_eq!(buffer[(0, 0)].bg, context.selection_background());
-    assert_eq!(buffer[(2, 1)].fg, context.muted());
+    assert_eq!(buffer[(0, 0)].fg, context.muted());
+    assert_eq!(buffer[(0, 1)].symbol(), ">");
+    assert_eq!(buffer[(0, 1)].fg, context.selection_foreground());
+    assert_eq!(buffer[(0, 1)].bg, context.selection_background());
 
     for _ in 0..5 {
         state.select_next(&sessions);
@@ -316,7 +314,7 @@ fn blurred_manager_keeps_its_cursor_without_rendering_keyboard_selection() {
         })
         .unwrap();
     assert_eq!(
-        terminal.backend().buffer()[(0, 0)].bg,
+        terminal.backend().buffer()[(0, 1)].bg,
         crate::render::test_context().selection_background()
     );
 }

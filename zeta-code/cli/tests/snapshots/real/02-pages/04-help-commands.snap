@@ -22,7 +22,7 @@ expression: screen
   ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
   │ Search help                                                                                  │
   └──────────────────────────────────────────────────────────────────────────────────────────────┘
-❯ /status  ·  show the active session, thread, and model
+> /status  ·  show the active session, thread, and model
   /statusline  ·  choose the items shown in the status line
   /skills  ·  browse configured skill sources
   /mcp  ·  list configured MCP tools

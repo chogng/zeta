@@ -1489,7 +1489,7 @@ fn sessions_and_agents_commands_open_the_manager_screen() {
 }
 
 #[test]
-fn manager_group_and_session_keys_use_the_selected_node_semantics() {
+fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
     let mut app = App::new();
     app.update(AppEvent::SessionCatalogReceived(vec![
         manager_state_session("one"),
@@ -1499,14 +1499,11 @@ fn manager_group_and_session_keys_use_the_selected_node_semantics() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
 
-    assert!(app.session_manager_hint().contains("space to collapse"));
+    assert!(app.session_manager_hint().contains("space to preview"));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
         Some(AppCommand::ArchiveSessions {
-            session_ids: vec![
-                SessionId::new("one").unwrap(),
-                SessionId::new("two").unwrap()
-            ],
+            session_ids: vec![SessionId::new("one").unwrap()],
         })
     );
 
@@ -1514,30 +1511,22 @@ fn manager_group_and_session_keys_use_the_selected_node_semantics() {
         app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
         None
     );
-    assert!(app.session_manager_hint().contains("space to expand"));
-    app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+    assert_eq!(app.overlay().unwrap().title(), "Session preview");
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.overlay().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(app.session_manager_hint().contains("space to preview"));
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
-        None
-    );
-    assert_eq!(app.overlay().unwrap().title(), "Session preview");
-    assert!(app.session_manager_view().is_some());
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.overlay().is_none());
-    assert!(app.session_manager_view().is_some());
-    assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::ResumeSession {
-            session_id: "one".into(),
+            session_id: "two".into(),
             preferred_thread_id: None,
         })
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
         Some(AppCommand::ArchiveSessions {
-            session_ids: vec![SessionId::new("one").unwrap()],
+            session_ids: vec![SessionId::new("two").unwrap()],
         })
     );
 }

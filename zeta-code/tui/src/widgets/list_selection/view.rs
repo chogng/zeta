@@ -4,6 +4,7 @@ use crate::render::Insets;
 use crate::render::RectExt;
 use crate::render::RenderContext;
 use crate::render::line_to_borrowed;
+use crate::render::selection_marker;
 use crate::widgets::search_box;
 use crate::widgets::search_box::SEARCH_BOX_HEIGHT;
 use crate::widgets::tab_list;
@@ -337,7 +338,7 @@ fn draw_item(
     } else {
         row_style
     };
-    let marker = if selected { "❯ " } else { "  " };
+    let marker = selection_marker(selected);
     let marker_style = if selected {
         Style::default()
             .fg(context.foreground())

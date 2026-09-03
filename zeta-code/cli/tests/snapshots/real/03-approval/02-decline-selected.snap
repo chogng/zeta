@@ -30,7 +30,7 @@ expression: screen
 │File read  ·  <FIXTURE…>                                                                          │
 │File write  ·  <FIXTURE…>                                                                         │
 │  Approve once                                                                                    │
-│❯ Decline                                                                                         │
+│> Decline                                                                                         │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
   ↑↓ choose · enter confirm

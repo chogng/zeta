@@ -29,7 +29,7 @@ expression: screen
 │the action requires user approval                                                                 │
 │File read  ·  <FIXTURE…>                                                                          │
 │File write  ·  <FIXTURE…>                                                                         │
-│❯ Approve once                                                                                    │
+│> Approve once                                                                                    │
 │  Decline                                                                                         │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

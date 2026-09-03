@@ -1,9 +1,11 @@
 use std::path::Path;
 use std::path::PathBuf;
+use zeta_app_server_protocol::JSON_SCHEMA_FIXTURE;
+use zeta_app_server_protocol::TYPESCRIPT_FIXTURE;
 use zeta_app_server_protocol::json_schema;
 use zeta_app_server_protocol::typescript;
 
-const USAGE: &str = "usage: generate_protocol <json|typescript> --out <directory>";
+const USAGE: &str = "usage: generate_protocol <json|typescript> --out <directory>\n       generate_protocol fixtures";
 
 enum Artifact {
     JsonSchema,
@@ -34,18 +36,27 @@ impl Artifact {
     }
 }
 
-struct Command {
-    artifact: Artifact,
-    output_directory: PathBuf,
+enum Command {
+    Generate {
+        artifact: Artifact,
+        output_directory: PathBuf,
+    },
+    WriteFixtures,
 }
 
 impl Command {
     fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Self, String> {
         let mut arguments = arguments.into_iter();
-        let artifact = arguments
-            .next()
-            .ok_or_else(|| USAGE.to_owned())
-            .and_then(|argument| Artifact::parse(&argument))?;
+        let operation = arguments.next().ok_or_else(|| USAGE.to_owned())?;
+        if operation == "fixtures" {
+            return if arguments.next().is_none() {
+                Ok(Self::WriteFixtures)
+            } else {
+                Err(USAGE.into())
+            };
+        }
+
+        let artifact = Artifact::parse(&operation)?;
         if arguments.next().as_deref() != Some("--out") {
             return Err(USAGE.into());
         }
@@ -58,18 +69,20 @@ impl Command {
             return Err(USAGE.into());
         }
 
-        Ok(Self {
+        Ok(Self::Generate {
             artifact,
             output_directory,
         })
     }
 
     fn write(self) -> std::io::Result<()> {
-        write_artifact(
-            &self.output_directory,
-            self.artifact.file_name(),
-            self.artifact.contents(),
-        )
+        match self {
+            Self::Generate {
+                artifact,
+                output_directory,
+            } => write_artifact(&output_directory, artifact.file_name(), artifact.contents()),
+            Self::WriteFixtures => write_fixtures(),
+        }
     }
 }
 
@@ -93,6 +106,19 @@ fn write_artifact(directory: &Path, file_name: &str, contents: String) -> std::i
     std::fs::write(directory.join(file_name), contents)
 }
 
+fn write_fixtures() -> std::io::Result<()> {
+    let crate_directory = Path::new(env!("CARGO_MANIFEST_DIR"));
+    write_fixture(crate_directory.join(JSON_SCHEMA_FIXTURE), json_schema())?;
+    write_fixture(crate_directory.join(TYPESCRIPT_FIXTURE), typescript())
+}
+
+fn write_fixture(path: PathBuf, contents: String) -> std::io::Result<()> {
+    if let Some(directory) = path.parent() {
+        std::fs::create_dir_all(directory)?;
+    }
+    std::fs::write(path, contents)
+}
+
 #[cfg(test)]
 mod tests {
     use super::Artifact;
@@ -108,11 +134,23 @@ mod tests {
         ])
         .unwrap();
 
-        assert!(matches!(command.artifact, Artifact::TypeScript));
-        assert_eq!(
-            command.output_directory,
-            PathBuf::from("generated/app-server")
-        );
+        let Command::Generate {
+            artifact,
+            output_directory,
+        } = command
+        else {
+            panic!("expected an artifact generation command");
+        };
+        assert!(matches!(artifact, Artifact::TypeScript));
+        assert_eq!(output_directory, PathBuf::from("generated/app-server"));
+    }
+
+    #[test]
+    fn parses_the_checked_in_fixture_command() {
+        assert!(matches!(
+            Command::parse(["fixtures".to_owned()]),
+            Ok(Command::WriteFixtures)
+        ));
     }
 
     #[test]
@@ -127,5 +165,6 @@ mod tests {
             ])
             .is_err()
         );
+        assert!(Command::parse(["fixtures".to_owned(), "unexpected".to_owned()]).is_err());
     }
 }
