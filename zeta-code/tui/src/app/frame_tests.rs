@@ -504,7 +504,7 @@ fn chat_input_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
 }
 
 #[test]
-fn policy_tip_replaces_manager_navigation_after_first_submission_then_disappears() {
+fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -552,11 +552,53 @@ fn policy_tip_replaces_manager_navigation_after_first_submission_then_disappears
     assert_eq!(buffer[(0, composer.y)].symbol(), "─");
     assert_eq!(buffer[(79, composer.y)].symbol(), "─");
 
-    assert!(app.handle_tick(Instant::now() + Duration::from_secs(6)));
+    let first_tip_expired = Instant::now() + Duration::from_secs(6);
+    assert!(app.handle_tick(first_tip_expired));
     let after = render(&app, 80, 20);
     let after_tip = after.lines().nth(usize::from(top_tip_row)).unwrap();
     assert!(!after_tip.contains("← for agents"));
     assert!(!after_tip.contains("shift+tab"));
+
+    let policy_changed = first_tip_expired + Duration::from_secs(1);
+    app.cycle_next_approval_mode(policy_changed);
+    assert_eq!(app.approval_mode(), zeta_protocol::ApprovalMode::AutoReview);
+    let after_change = render(&app, 80, 20);
+    assert!(
+        after_change
+            .lines()
+            .nth(usize::from(top_tip_row))
+            .unwrap()
+            .contains("shift+tab to cycle policy")
+    );
+
+    assert!(!app.handle_tick(policy_changed + Duration::from_secs(4)));
+    app.cycle_next_approval_mode(policy_changed + Duration::from_secs(4));
+    assert!(!app.handle_tick(policy_changed + Duration::from_secs(5)));
+    assert!(app.handle_tick(policy_changed + Duration::from_secs(9)));
+    let after_refreshed_tip = render(&app, 80, 20);
+    assert!(
+        !after_refreshed_tip
+            .lines()
+            .nth(usize::from(top_tip_row))
+            .unwrap()
+            .contains("shift+tab")
+    );
+}
+
+#[test]
+fn policy_tip_does_not_replace_navigation_before_the_conversation_starts() {
+    let mut app = App::new();
+    enter_session(
+        &mut app,
+        "current",
+        vec![manager_session("current", SessionManagerStatus::Idle, None)],
+    );
+
+    app.cycle_next_approval_mode(Instant::now());
+
+    let rendered = render(&app, 80, 20);
+    assert!(rendered.contains("← for agents"));
+    assert!(!rendered.contains("shift+tab to cycle policy"));
 }
 
 #[test]

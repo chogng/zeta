@@ -29,6 +29,21 @@ fn policy_tip_replaces_navigation_then_disappears() {
 }
 
 #[test]
+fn showing_policy_tip_again_restarts_its_lifetime() {
+    let started = Instant::now();
+    let shown_again = started + Duration::from_secs(4);
+    let mut top_tip = TopTip::new();
+
+    top_tip.show_policy_tip(started);
+    top_tip.show_policy_tip(shown_again);
+
+    assert!(!top_tip.poll(started + POLICY_TIP_DURATION));
+    assert_eq!(top_tip.text(Some("← for agents")), Some(POLICY_TIP));
+    assert!(top_tip.poll(shown_again + POLICY_TIP_DURATION));
+    assert_eq!(top_tip.text(Some("← for agents")), None);
+}
+
+#[test]
 fn existing_conversation_hides_navigation_without_showing_policy_tip() {
     let mut top_tip = TopTip::new();
 

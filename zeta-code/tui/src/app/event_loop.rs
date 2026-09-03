@@ -1085,7 +1085,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::CycleNextApprovalMode => {
-                        app.cycle_next_approval_mode();
+                        app.cycle_next_approval_mode(Instant::now());
                     }
                     AppCommand::SubmitTurn { submission } => {
                         if requests.is_idle(action_lane) {

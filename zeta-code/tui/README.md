@@ -71,7 +71,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- StatusLine 最多两行：上行组合 Plan、Queue、当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 顺序启用的模型、Git 分支和 Git 变更；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下行显示下一次 Turn 的权限模式；运行中 Turn 与下一次模式不同时同时标明两者。`TopTip` 固定贴在 ChatInput 顶边上方：空会话显示 `← for agents`，首次提交进入对话后显示 `shift+tab to cycle policy` 5 秒，随后留空；临时通知出现时覆盖当前提示且不改变布局。Manager、含非默认操作的 `InputSurface` 和其他需要明确操作键的交互由一行 KeyHints 直接替换；没有此类操作的 `InputSurface` 不占用底栏；
+- StatusLine 最多两行：上行组合 Plan、Queue、当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 顺序启用的模型、Git 分支和 Git 变更；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下行显示下一次 Turn 的权限模式；运行中 Turn 与下一次模式不同时同时标明两者。`TopTip` 固定贴在 ChatInput 顶边上方：空会话显示 `← for agents`；首次提交进入对话或对话中切换权限策略后显示 `shift+tab to cycle policy`，连续切换会刷新计时，距最后一次触发 5 秒后留空；临时通知出现时覆盖当前提示且不改变布局。Manager、含非默认操作的 `InputSurface` 和其他需要明确操作键的交互由一行 KeyHints 直接替换；没有此类操作的 `InputSurface` 不占用底栏；
 - `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、Session 界面 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`keymap/settings.rs` 解释 `[tui].keybindings` 的 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、config revision 校验和完整规则校验；保存通过 App Server 替换完整 `[tui]` 表，坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各自的能力或控件拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home

@@ -1269,8 +1269,11 @@ impl App {
         self.thread.approval_mode()
     }
 
-    pub(crate) fn cycle_next_approval_mode(&mut self) {
+    pub(crate) fn cycle_next_approval_mode(&mut self, now: Instant) {
         self.thread.cycle_approval_mode();
+        if self.thread.has_user_message() {
+            self.top_tip.show_policy_tip(now);
+        }
     }
 
     #[cfg(test)]
