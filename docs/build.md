@@ -25,6 +25,9 @@ Zeta 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` �
 | `just build` | 构建 Electron Desktop 和根 Cargo workspace |
 | `just build-desktop` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
 | `just build-rust` | 通过统一 Cargo 执行器构建根 Rust workspace |
+| `just zeta` | 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，然后直接从源码开发运行目录启动 |
+| `just zeta-package` | 组装并发布 Desktop、Web 与 Code TUI 共用的完整不可变开发包 |
+| `just zeta-package-run` | 组装完整开发包，并让 Code TUI 连接该包中的 daemon 与产品服务 |
 | `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
 | `just test-python` | 运行共享构建能力与发布构建器的 Python 单元测试 |
 | `corepack pnpm build` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
@@ -45,6 +48,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 ```text
 .build/
 ├── cargo/                       # Cargo target-dir
+├── zeta-development/<digest>/   # 源码开发所需的少量可执行文件；不含资源副本和包清单
 ├── desktop/
 │   ├── main/                    # Electron Main TypeScript
 │   ├── preload/                 # sandbox Preload TypeScript
@@ -85,7 +89,9 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 | `build/package.json` | 构建工具自身的依赖、测试和类型检查入口 |
 | `build/tsconfig.json` | 构建工具 TypeScript 边界 |
 
-`scripts/` 使用面向操作的命名。`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为日常 Cargo 命令准备锁定的构建输入，`zeta.py` 生成完整开发包并让 Code TUI 选择该包，`format.py` 统一已有格式化器，`test-python.py` 运行仓库拥有的 Python 测试。Node、Electron 和 Playwright 测试入口继续使用 TypeScript，具体 runner 和 loader 放在 `scripts/test/`。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
+`scripts/` 使用面向操作的命名。`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为日常 Cargo 命令准备锁定的构建输入，`zeta.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/zeta-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码，`rg` 从开发者的 `PATH` 解析为固定路径。`zeta_package.py` 只服务于显式的完整开发包运行。`format.py` 统一已有格式化器，`test-python.py` 运行仓库拥有的 Python 测试。Node、Electron 和 Playwright 测试入口继续使用 TypeScript，具体 runner 和 loader 放在 `scripts/test/`。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
+
+完整开发包仍由 `build/zeta-package/prepareDevPackage.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。`just zeta` 和完整开发包构建都保留开发者显式设置的 `CARGO_BUILD_JOBS`；未设置时默认使用一半逻辑处理器。日常 `just zeta` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just zeta-package` 或 `just zeta-package-run`。
 
 `scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。普通构建和仓库命令不得依赖 `build/release/` 的包实现；共享目标识别和 V8 输入解析由 `build/lib/zeta_build/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
 

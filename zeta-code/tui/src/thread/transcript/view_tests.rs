@@ -109,10 +109,10 @@ fn execution_output_uses_a_solid_circle_with_semantic_color() {
 #[test]
 fn local_command_uses_the_user_marker_except_while_running() {
     let cases = [
-        (CommandStatus::Submitted, "❯ ", test_context().muted()),
+        (CommandStatus::Submitted, "> ", test_context().muted()),
         (CommandStatus::Running, "● ", test_context().warning()),
-        (CommandStatus::Succeeded, "❯ ", test_context().muted()),
-        (CommandStatus::Failed, "❯ ", test_context().muted()),
+        (CommandStatus::Succeeded, "> ", test_context().muted()),
+        (CommandStatus::Failed, "> ", test_context().muted()),
     ];
 
     for (status, marker, color) in cases {
@@ -162,7 +162,7 @@ fn user_message_starts_in_the_symbol_column_and_fills_the_content_row() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(0, 0)].symbol(), "❯");
+    assert_eq!(buffer[(0, 0)].symbol(), ">");
     assert_eq!(buffer[(0, 0)].fg, test_context().muted());
     assert_eq!(buffer[(2, 0)].symbol(), "h");
     assert_eq!(buffer[(0, 0)].bg, test_context().user_message_background());
@@ -195,7 +195,7 @@ fn local_command_fills_only_its_input_rows() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(0, 0)].symbol(), "❯");
+    assert_eq!(buffer[(0, 0)].symbol(), ">");
     assert_eq!(buffer[(0, 0)].bg, test_context().user_message_background());
     assert_eq!(buffer[(11, 0)].bg, test_context().user_message_background());
     assert_eq!(buffer[(0, 1)].symbol(), "└");

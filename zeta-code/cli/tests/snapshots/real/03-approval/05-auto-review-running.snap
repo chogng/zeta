@@ -2,7 +2,7 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 请通过自动审查创建 auto-reviewed.txt
+> 请通过自动审查创建 auto-reviewed.txt
 
 ● write_file failed
 
@@ -28,9 +28,9 @@ expression: screen
 
 
 
-                                                                                shift+tab to cycle
+                                                                         shift+tab to cycle policy
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
   ⏩ current: auto review on · ▶ next: bypass permissions on

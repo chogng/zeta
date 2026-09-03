@@ -24,8 +24,6 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
 use std::borrow::Cow;
 
-const APPROVAL_MODE_TIP: &str = "shift+tab to cycle";
-
 enum StatusAreaView<'a> {
     Hidden,
     Hint {
@@ -168,11 +166,11 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         );
     }
     draw_status_area(frame, areas.session.status, app, context);
-    if let Some(subagent_picker) = app.subagent_picker_view() {
-        crate::thread::draw_subagent_picker(
+    if let Some(agent_thread_switcher) = app.agent_thread_switcher_view() {
+        crate::thread::draw_agent_thread_switcher(
             frame,
-            chat_input::content_area(areas.session.subagent_picker),
-            subagent_picker,
+            chat_input::content_area(areas.session.agent_thread_switcher),
+            agent_thread_switcher,
             context,
         );
     }
@@ -216,7 +214,6 @@ fn draw_top_tip(
     if content.is_empty() || composer.is_empty() || composer.y <= content.y {
         return;
     }
-    let tips = [app.screen_navigation_tip(), approval_mode_tip(app)];
     app.top_tip().draw(
         frame,
         Rect {
@@ -225,18 +222,9 @@ fn draw_top_tip(
             width: content.width,
             height: 1,
         },
-        &tips,
+        app.screen_navigation_tip(),
         context,
     );
-}
-
-fn approval_mode_tip(app: &App) -> Option<&'static str> {
-    let shows_status_line = matches!(status_area_view(app), StatusAreaView::StatusLine);
-    let shows_approval_mode = !app
-        .status_line()
-        .policy_text_for_width(usize::MAX, app.approval_mode_status())
-        .is_empty();
-    (shows_status_line && shows_approval_mode).then_some(APPROVAL_MODE_TIP)
 }
 
 #[cfg(test)]
@@ -414,7 +402,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         query_rows,
         composer_rows,
         status_area.desired_rows(app),
-        app.subagent_picker_rows(),
+        app.agent_thread_switcher_rows(),
     );
     let input = if approval_rows > 0 || mode_rows > 0 {
         Rect {
@@ -525,7 +513,7 @@ fn status_area_view(app: &App) -> StatusAreaView<'_> {
             style: StatusHintStyle::Keys,
         };
     }
-    if app.subagent_picker_focused() {
+    if app.agent_thread_switcher_focused() {
         return StatusAreaView::Hint {
             text: Cow::Borrowed("↑↓ select · enter switch · esc input"),
             style: StatusHintStyle::Keys,

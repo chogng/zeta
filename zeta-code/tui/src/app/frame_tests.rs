@@ -3,6 +3,7 @@ use super::draw;
 use super::input_overlay_index_at;
 use super::layout;
 use crate::app::App;
+use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
@@ -183,18 +184,19 @@ fn empty_session_input_offers_manager_navigation() {
     assert!(!rows[top_tip_row].contains("shift+tab"));
     assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 
-    assert!(app.handle_tick(Instant::now() + Duration::from_secs(10)));
+    assert!(!app.handle_tick(Instant::now() + Duration::from_secs(10)));
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
-    assert!(rows[top_tip_row].contains("shift+tab to cycle"));
-    assert!(!rows[top_tip_row].contains("← for agents"));
+    assert!(rows[top_tip_row].contains("← for agents"));
+    assert!(!rows[top_tip_row].contains("shift+tab"));
 
     app.insert_text("draft");
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
     let status_line = rendered.lines().last().unwrap();
 
-    assert!(rows[top_tip_row].contains("shift+tab to cycle"));
+    assert!(!rows[top_tip_row].contains("← for agents"));
+    assert!(!rows[top_tip_row].contains("shift+tab"));
     assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
     assert!(!status_line.contains("← for agents"));
 }
@@ -496,37 +498,69 @@ fn chat_input_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
         assert_eq!(buffer[(79, y)].symbol(), "─");
         assert_eq!(buffer[(79, y)].fg, test_context().chat_input_chrome());
     }
-    assert_eq!(buffer[(0, 17)].symbol(), "❯");
+    assert_eq!(buffer[(0, 17)].symbol(), ">");
     assert_eq!(buffer[(0, 17)].fg, test_context().foreground());
     assert_eq!(buffer[(79, 17)].symbol(), " ");
 }
 
 #[test]
-fn approval_mode_shortcut_sits_on_the_row_above_chat_input() {
+fn policy_tip_replaces_manager_navigation_after_first_submission_then_disappears() {
     let mut app = App::new();
+    enter_session(
+        &mut app,
+        "current",
+        vec![manager_session("current", SessionManagerStatus::Idle, None)],
+    );
     app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
         provider: "anthropic".into(),
         model: "claude-sonnet".into(),
     })));
     let terminal_area = Rect::new(0, 0, 80, 20);
     let composer = layout(&app, terminal_area).session.composer;
+    let top_tip_row = composer.y.saturating_sub(1);
+
+    let before = render(&app, 80, 20);
+    assert!(
+        before
+            .lines()
+            .nth(usize::from(top_tip_row))
+            .unwrap()
+            .contains("← for agents")
+    );
+
+    app.insert_text("hello");
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::SubmitTurn { .. })
+    ));
+
     let buffer = render_buffer(&app, 80, 20);
-    let hint_row = composer.y.saturating_sub(1);
-    let hint = &buffer[(60, hint_row)];
+    let status_row = layout(&app, terminal_area).session.status.bottom() - 1;
+    let hint_column = 78 - "shift+tab to cycle policy".width() as u16;
+    let hint = &buffer[(hint_column, top_tip_row)];
 
     assert_eq!(hint.symbol(), "s");
     assert_eq!(hint.fg, test_context().muted());
     assert!(hint.modifier.contains(Modifier::ITALIC));
+    assert_eq!(
+        (0..80)
+            .map(|x| buffer[(x, status_row)].symbol())
+            .collect::<String>()
+            .trim_end(),
+        "  ⏸ ask permissions on"
+    );
     assert_eq!(buffer[(0, composer.y)].symbol(), "─");
     assert_eq!(buffer[(79, composer.y)].symbol(), "─");
-    let status_row = (0..80)
-        .map(|x| buffer[(x, 18)].symbol())
-        .collect::<String>();
-    assert!(!status_row.contains("shift+tab"));
+
+    assert!(app.handle_tick(Instant::now() + Duration::from_secs(6)));
+    let after = render(&app, 80, 20);
+    let after_tip = after.lines().nth(usize::from(top_tip_row)).unwrap();
+    assert!(!after_tip.contains("← for agents"));
+    assert!(!after_tip.contains("shift+tab"));
 }
 
 #[test]
-fn subagent_picker_starts_at_the_empty_input_cursor_column() {
+fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
     let mut app = App::new();
     let session_id = SessionId::new("root").unwrap();
     let root_id = ThreadId::new("root").unwrap();
@@ -734,7 +768,7 @@ fn submitted_slash_command_is_immediately_visible_in_the_transcript() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let rendered = render(&app, 80, 20);
-    assert!(rendered.lines().next().unwrap().contains("❯ /status"));
+    assert!(rendered.lines().next().unwrap().contains("> /status"));
 }
 
 #[test]
@@ -748,7 +782,7 @@ fn command_completion_renders_an_adjacent_result_line() {
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[0].contains("❯ /theme zeta-code-light"));
+    assert!(rows[0].contains("> /theme zeta-code-light"));
     assert!(rows[1].contains("└─ Theme set to Zeta Code Light"));
     assert!(rows[2].trim().is_empty());
 }

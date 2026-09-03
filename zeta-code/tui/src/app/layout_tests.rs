@@ -12,7 +12,7 @@ fn session_layout_bounds_queue_and_preserves_transcript() {
     assert_eq!(areas.queue.height, 6);
     assert_eq!(areas.composer.height, 3);
     assert_eq!(areas.status.height, 2);
-    assert_eq!(areas.subagent_picker.height, 4);
+    assert_eq!(areas.agent_thread_switcher.height, 4);
 }
 
 #[test]
@@ -33,22 +33,22 @@ fn session_layout_places_goal_plan_and_queue_above_input() {
     assert_eq!(areas.composer.y, areas.queue.y + areas.queue.height);
     assert_eq!(areas.status.y, areas.composer.y + areas.composer.height);
     assert_eq!(
-        areas.subagent_picker.y,
+        areas.agent_thread_switcher.y,
         areas.status.y + areas.status.height + 1
     );
 }
 
 #[test]
-fn session_layout_does_not_reserve_a_subagent_gap_without_both_surfaces() {
-    let without_subagents = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 1, 0);
+fn session_layout_does_not_reserve_an_agent_thread_gap_without_both_surfaces() {
+    let without_switcher = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 1, 0);
     let without_status = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 0, 2);
 
     assert_eq!(
-        without_subagents.subagent_picker.y,
-        without_subagents.status.y + without_subagents.status.height
+        without_switcher.agent_thread_switcher.y,
+        without_switcher.status.y + without_switcher.status.height
     );
     assert_eq!(
-        without_status.subagent_picker.y,
+        without_status.agent_thread_switcher.y,
         without_status.status.y + without_status.status.height
     );
 }

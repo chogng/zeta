@@ -7,7 +7,7 @@
 
 `zeta-agents` 对一个目录的 `.zeta/agents/*.md` 执行有界、非递归发现，校验 definition
 frontmatter 和 role instructions，并发布不可变 catalog snapshot。它不创建 Thread、不调用模型、
-不解析外部 Agent 格式，也不把 tool/model references 解释成权限或可用性保证。
+不解析外部 Agent 格式，也不把 tool/model references 解释成权限或可用性保证。模型目录、兼容候选选择和替换警告属于 `zeta-models-manager`；本 crate 长期只拥有 Agent 的模型策略声明。
 
 ## 快速理解
 
@@ -77,4 +77,4 @@ invalidation。`spawn_agent` 可以显式按 name 选择，或在 task 与 metad
 和 Skill 只能缩小 parent 当前可见集合，引用的 directory instructions 正文会进入 frozen role，
 缺失或越权引用 fail closed。
 
-当前限制是尚无 App Server definition list/picker API，也不支持跨 authority Agent definition 引用；自动选择只使用当前 directory catalog metadata，不运行模型或读取其他产品格式。当前 `AgentDefinition` 仍是目录文件对应的扁平结构，而且只有 `spawn_agent` 会选择并冻结它；后续由本 crate 扩展同一类型并加载内置资源，让会话入口、委托和工作流使用同一解析契约，不能增加第二套定义类型或 `zeta-subagents` crate。
+当前限制是尚无 App Server definition list/picker API，也不支持跨 authority Agent definition 引用；自动选择只使用当前 directory catalog metadata，不运行模型或读取其他产品格式。当前 `AgentDefinition` 仍是目录文件对应的扁平结构，`model` 只能声明一个准确引用，而且只有 `spawn_agent` 会选择并冻结它；Session 基线、启动覆盖权限、同 provider 优先的兼容替换和替换警告尚未实现。后续由本 crate 扩展同一类型并加载内置资源，让会话入口、委托和工作流使用同一解析契约；App Server 把声明交给 `zeta-models-manager` 解析，不能增加第二套定义类型、`zeta-subagents` crate 或模型路由 crate。

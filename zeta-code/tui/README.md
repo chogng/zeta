@@ -8,6 +8,7 @@
 > 三条产品线与宿主边界见 [`docs/product-lines.md`](../../docs/product-lines.md)。
 > 三端快捷键语义与端侧输入边界见 [`docs/keybindings.md`](../../docs/keybindings.md)。
 > 目标目录、所有权和界面布局见 [`zeta-code/docs/tui.md`](../docs/tui.md)。
+> 输入提示、状态字符、边线和颜色规则见 [`zeta-code/docs/styles.md`](../docs/styles.md)。
 
 `zeta-tui` 是 `zeta code` 产品线的 TUI 实现。它当前是 `AppServerSession` 上的 presentation
 shell：从 owned session 取得 cloneable typed request handle 与独立 `AppServerEvents`，创建或切换
@@ -31,8 +32,8 @@ Tool、approval policy 或 persistence。
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的 Tab completion、Esc dismiss、鼠标 hover 跟随选中与左键单击可见命令；
 - `$` 打开独立 Skill selector；enabled、compatible 且名称无歧义的 Skill 显示为 `$name`，Tab/Enter 或鼠标选中后作为原子文本插入。提交时保留 `$name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn 后按需加载；Skill 与 `/name` 命令不冲突，`skills/changed` 会刷新候选；
 - `/resume`、`/rewind`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
-- 本地 slash command 在 Enter 后立即以命令正文单元回显；已提交和已结束时使用用户消息指示符 `❯`，只在 `Running` 期间切换为 `●`，后续执行状态和结果更新同一单元。普通消息触发的新 Session 不额外输出 Session/Thread ID，`/new` 只显示命令与不含 ID 的结果；
-- command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入覆盖完整 Session catalog 的唯一 Session Manager，`/subagents` 聚焦常驻 SubagentPicker，`/queue` 管理当前 Thread 的 Queue；Manager 保留顶部 Welcome，按 Pinned、Needs input、Working、Ready for review、Failed、Stopped、Completed、Idle 分组，每行以状态图标开头并显示名称、当前操作/问题和状态时长；Approval 和 Query 仍由各自请求直接打开，不提供总括页面；
+- 本地 slash command 在 Enter 后立即以命令正文单元回显；已提交和已结束时使用用户消息指示符 `>`，只在 `Running` 期间切换为 `●`，后续执行状态和结果更新同一单元。普通消息触发的新 Session 不额外输出 Session/Thread ID，`/new` 只显示命令与不含 ID 的结果；
+- command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入覆盖完整 Session catalog 的唯一 Session Manager，`/subagents` 聚焦常驻 `AgentThreadSwitcher`，`/queue` 管理当前 Thread 的 Queue；Manager 保留顶部 Welcome，按 Pinned、Needs input、Working、Ready for review、Failed、Stopped、Completed、Idle 分组，每行以状态图标开头并显示名称、当前操作/问题和状态时长；Approval 和 Query 仍由各自请求直接打开，不提供总括页面；
 - `/status` 使用不改变正常布局高度的 Overlay，展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
 - `/help` 从 `ThreadPresentationStore` 保存的合并 `SlashCommandCatalog` 构造可搜索的 `ListSelection`，本地与服务端命令使用和 `/` 补全一致的名称、描述及顺序；上下键在 item、SearchBox 和 Tab 栏间移动输入焦点，Tab 栏用左右键或 Tab 切换，焦点不再额外绘制紫色状态列；Esc 关闭 Help 列表并恢复原草稿的 `ChatInput`；Help 列表打开期间替换 ChatInput 并使用自己的高度，不显示列表导航和关闭这类默认提示；Shortcuts 只列应用级操作、用户自定义绑定及非标准的 `Esc Esc` Rewind 手势，快捷键编辑仍由 `/shortcuts` 提供；
 - `/skills` 通过 typed `skills/list` 打开同一 `ListSelection`，提供
@@ -70,7 +71,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- StatusLine 最多两行：上行组合 Plan、Queue、当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 顺序启用的模型、Git 分支和 Git 变更；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下行显示下一次 Turn 的权限模式；运行中 Turn 与下一次模式不同时同时标明两者。`TopTip` 固定贴在 ChatInput 顶边上方，按 5 秒轮播当前可用的 `← for agents` 与 `shift+tab to cycle`，临时通知出现时覆盖轮播内容且不改变布局。Manager、含非默认操作的 `InputSurface` 和其他需要明确操作键的交互由一行 KeyHints 直接替换；没有此类操作的 `InputSurface` 不占用底栏；
+- StatusLine 最多两行：上行组合 Plan、Queue、当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 顺序启用的模型、Git 分支和 Git 变更；Turn 过程状态和错误只在 Transcript 显示，不在 StatusLine 重复。下行显示下一次 Turn 的权限模式；运行中 Turn 与下一次模式不同时同时标明两者。`TopTip` 固定贴在 ChatInput 顶边上方：空会话显示 `← for agents`，首次提交进入对话后显示 `shift+tab to cycle policy` 5 秒，随后留空；临时通知出现时覆盖当前提示且不改变布局。Manager、含非默认操作的 `InputSurface` 和其他需要明确操作键的交互由一行 KeyHints 直接替换；没有此类操作的 `InputSurface` 不占用底栏；
 - `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、Session 界面 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`keymap/settings.rs` 解释 `[tui].keybindings` 的 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、config revision 校验和完整规则校验；保存通过 App Server 替换完整 `[tui]` 表，坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各自的能力或控件拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
@@ -88,7 +89,7 @@ Tool、approval policy 或 persistence。
 - raw mode、alternate screen、bracketed paste 与 cursor cleanup；Mouse interactions 开启时在整个 TUI 会话捕获鼠标，关闭时释放捕获并把拖拽文本选择交还终端；
 - 启动时通过 App Server 从 `<profile>/config.toml` 的 `[tui]` 读取主题和终端设置，并从 `<profile>/zeta-code/themes/*.json` 读取 TUI 专用用户主题；Auto 保留终端默认前景和背景，只按探测到的背景亮度选择语义颜色，显式主题使用自己的完整调色板；TrueColor、ANSI-256、ANSI-16、Monochrome 映射均由本 crate 拥有，不读取 TypeScript token registry、`resources/design-tokens`、`configuration.json` 或 `zeta-theme`；`theme` 拥有 `/theme` 的固定八项 Theme picker、挂在顶部分隔线上的反色 `Theme` 标题、编号、
   active 标记、候选 frame highlight、仅带上下较高对比度长节虚线的 diff preview、palette 来源说明和选择动作。Theme picker
-  不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Theme picker；保存期间 `/theme <id>` 显示 `●`，完成后恢复 `❯`，并以 `└─` 归属且与命令文字对齐的 `Theme set to …` 记录执行结果，`/theme <id>` 保留直接切换；
+  不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Theme picker；保存期间 `/theme <id>` 显示 `●`，完成后恢复 `>`，并以 `└─` 归属且与命令文字对齐的 `Theme set to …` 记录执行结果，`/theme <id>` 保留直接切换；
   Auto 在 terminal raw mode 建立后查询一次 OSC 11 实际背景 RGB，据此选择 Light/Dark 语义颜色；
   Windows 会保留探针期间的其他输入，并在 OSC 11 不可用时读取 Console 默认背景色，其他平台继续读取
   `COLORFGBG`，没有可用信号时选择 Dark 语义颜色。结果在会话内缓存，后续打开 Theme picker 不重复查询；
@@ -181,7 +182,7 @@ inputMode = "standard"
 src/
 ├── lib.rs                          # CLI 使用的最小启动接口
 ├── app.rs / app/                   # 启动、事件循环、页面组装、布局和跨能力路由
-├── thread.rs / thread/             # 输入、正文、Queue、交互、Goal、Plan、Rewind 和 Subagent
+├── thread.rs / thread/             # 输入、正文、Queue、交互、Goal、Plan、Rewind 和 Agent Thread 切换
 │   ├── composer.rs / composer/     # 编辑、附件、补全、文件搜索、Vim、Submit 和 Steer
 │   ├── transcript.rs / transcript/ # 单元、命令执行、流式批处理、缓存、滚动和绘制
 │   └── interaction/                # Approval 与 Query
@@ -229,7 +230,7 @@ src/
 | `StatusLineSettings` | crate-private | 解释和校验 `[tui].statusLine` 的项目、开关与顺序 | 不拥有被显示的数据；写入时保留 `[tui]` 的其他键 |
 | `config::TerminalSettings` | crate-private | 解释和校验 `[tui]` 中的终端设置，并在更新已知键时保留该表的其他键 | App Server 只做 revision 校验和完整表替换，不解释 TUI 字段 |
 | `app::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 directory 路径缩写为 `~/...`，供空会话 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
-| `app::top_tip::TopTip` | crate-private | 轮播当前可用提示、管理临时通知期限并绘制 ChatInput 顶边提示 | 不决定哪些提示在当前 App 状态下可用，不占用独立布局高度 |
+| `app::top_tip::TopTip` | crate-private | 管理空会话导航、进入对话时的一次性权限策略提示、临时通知及各自期限，并绘制 ChatInput 顶边 | 不决定页面导航文案，不保存权限模式，不占用独立布局高度 |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
 | `AppKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，解析应用级 action，并拥有 Chord pending/超时/取消/提示生命周期 | 不处理 `ChatInput` 编辑、`ListSelection` 导航、滚动、I/O 或命令副作用 |
@@ -531,9 +532,9 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 ## 渲染
 
-Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPicker` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 为零或一行，SubagentPicker 最多四行。StatusLine/KeyHints 与存在内容的 SubagentPicker 之间固定保留一行；几何由 `app/layout.rs` 统一分配并优先保留正文。Manager 页面按 `Welcome → 分组 Session rows → ChatInput → KeyHints` 排列，并至少为列表保留四行。
+Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → AgentThreadSwitcher` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 为零或一行，`AgentThreadSwitcher` 最多四行。StatusLine/KeyHints 与存在内容的 `AgentThreadSwitcher` 之间固定保留一行；几何由 `app/layout.rs` 统一分配并优先保留正文。Manager 页面按 `Welcome → 分组 Session rows → ChatInput → KeyHints` 排列，并至少为列表保留四行。
 
-结构只有两种：`TerminalScreen` 决定整屏内容，Overlay 覆盖当前帧且不改变高度。Session 中的普通组件直接参与高度分配，不因“占高度”获得新类型。`InputSurface` 只记录 Session 输入位置当前的互斥内容；有值时当前组件替换 ChatInput 并提供自己的 desired rows，只有非空 KeyHints 才在底栏替换 StatusLine。Config、Keymap、Theme 的多页面返回关系分别由 feature 自己保存。Overlay 与 ChatInput completion 同帧只绘制一个；completion 状态仍只归 ChatInput。`TopTip` 拥有轮播位置、临时通知期限和顶边绘制，App 只提供当前可用内容并在 Tick 时调用 poll。当前组件的标题挂在顶部分隔线上，列表第一个两字符状态列与 ChatInput 正文起点对齐。每个 Thread 的草稿、补全状态、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存，最多保留最近访问的 32 个 Thread；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
+结构只有两种：`TerminalScreen` 决定整屏内容，Overlay 覆盖当前帧且不改变高度。Session 中的普通组件直接参与高度分配，不因“占高度”获得新类型。`InputSurface` 只记录 Session 输入位置当前的互斥内容；有值时当前组件替换 ChatInput 并提供自己的 desired rows，只有非空 KeyHints 才在底栏替换 StatusLine。Config、Keymap、Theme 的多页面返回关系分别由 feature 自己保存。Overlay 与 ChatInput completion 同帧只绘制一个；completion 状态仍只归 ChatInput。`TopTip` 拥有导航、一次性权限策略提示和临时通知的显示阶段与期限；App 提供页面导航文案，在首次提交、Thread 切换、已有对话载入和 Tick 时推进这些明确状态。当前组件的标题挂在顶部分隔线上，列表第一个两字符状态列与 ChatInput 正文起点对齐。每个 Thread 的草稿、补全状态、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存，最多保留最近访问的 32 个 Thread；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
 
 正文由有序 `TranscriptCell` 构成，live/final 生命周期不改变单元种类。单条正文单元从 canonical entry identity 确定 `TranscriptCellId`，ExecCell 从分组中的首个 `ToolCallId` 确定，后续分组增长不改身份。ExecCell 按 `ToolCallId`
 接收调用、输出和结果，命令输出按 byte、行数和单行长度有界保留；折叠态、展开态与 Overlay
@@ -542,7 +543,7 @@ PageUp/PageDown 按五行移动，Ctrl-Home/End 到首尾；新提交默认恢�
 `unicode_width::UnicodeWidthStr`，把 label width 计入首行，然后计算 bottom scroll。它是估算，
 不处理完整 grapheme/reflow/Markdown layout。
 
-`SessionThread` 提供标题和创建时间；SubagentPicker 将 Main 与子代理名称统一为小写，以实心圆表示当前项、空心圆表示其他项，在右侧按 Codex 状态时长格式展示从 Thread 创建至今的时间，并隐藏 Thread ID。`SessionManagerInfo` 由 App Server 从完整 Thread snapshot 推导明确的 Idle、Needs input、Working、Ready for review、Completed、Failed、Stopped 状态、状态变更时间与当前操作/问题/失败；TUI 不从正文猜状态。Manager 的 Working 图标只由 Tick 推进动画；Completed 显示完成至今的 `… ago`，其他行显示进入当前状态后的时长。`summary` 目前保持空值，等独立配置的摘要模型与请求生命周期存在后再填充，不会暗用当前聊天模型。协议也没有为每次工具执行提供可持久恢复的最终时长与退出码；ExecCell 不会从输出文字猜这些字段。
+`SessionThread` 提供标题和创建时间；`AgentThreadSwitcher` 将 Main 与子代理名称统一为小写，以实心圆表示当前项、空心圆表示其他项，在右侧按 Codex 状态时长格式展示从 Thread 创建至今的时间，并隐藏 Thread ID。`SessionManagerInfo` 由 App Server 从完整 Thread snapshot 推导明确的 Idle、Needs input、Working、Ready for review、Completed、Failed、Stopped 状态、状态变更时间与当前操作/问题/失败；TUI 不从正文猜状态。Manager 的 Working 图标只由 Tick 推进动画；Completed 显示完成至今的 `… ago`，其他行显示进入当前状态后的时长。`summary` 目前保持空值，等独立配置的摘要模型与请求生命周期存在后再填充，不会暗用当前聊天模型。协议也没有为每次工具执行提供可持久恢复的最终时长与退出码；ExecCell 不会从输出文字猜这些字段。
 
 v15 接受 `inline_visualization` 的终端 fallback，但当前 protocol 没有 visualization artifact、结构化 fallback 或安全引用。TUI 因此不会解析任意 HTML；上游契约到位后，它进入普通 TranscriptCell/Expansion/Overlay 路径，而不是新增一套覆盖层。
 

@@ -151,7 +151,7 @@ fn cell_lines_with_code<'a>(
     }
 
     let (role_marker, color) = match message.role {
-        MessageRole::User => ("❯", context.muted()),
+        MessageRole::User => (">", context.muted()),
         MessageRole::Agent | MessageRole::Reasoning | MessageRole::Plan => ("●", context.muted()),
         MessageRole::Notice => ("●", context.warning()),
         MessageRole::Error => ("●", context.danger()),
@@ -291,7 +291,7 @@ fn command_marker(
     if message.execution_kind == ExecutionKind::LocalCommand
         && message.command_status != Some(CommandStatus::Running)
     {
-        return ("❯", context.muted());
+        return (">", context.muted());
     }
     ("●", execution_color(message, context))
 }

@@ -107,6 +107,12 @@ impl ThreadState {
         &self.messages
     }
 
+    pub(crate) fn has_user_message(&self) -> bool {
+        self.messages
+            .iter()
+            .any(|message| message.role == MessageRole::User)
+    }
+
     pub(crate) fn views(
         &self,
         expanded: &BTreeSet<TranscriptCellId>,

@@ -2,9 +2,9 @@
 
 > 物理位置：`zeta-rs/models-manager/`
 > Rust crate：`zeta_models_manager`
-> 当前状态：Phase 1 core 与 Ollama 动态目录已实现；其他动态 provider adapters、持久缓存和完整 App Server snapshot API 尚未实现
+> 当前状态：Phase 1 core 与 Ollama 动态目录已实现；跨 provider 的 Agent 模型选择、其他动态 provider adapters、持久缓存和完整 App Server snapshot API 尚未实现
 > Crate 实现说明：[`zeta-models-manager` README](../zeta-rs/models-manager/README.md)
-> Canonical model contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
+> Canonical model contract：[`zeta-protocol` model catalog](../zeta-rs/protocol/src/model/catalog.rs)
 > Provider wire adapter：[`zeta-api.md`](zeta-api.md)
 > Provider runtime：[`model-provider.md`](model-provider.md)
 > Operation client：[`zeta-client.md`](zeta-client.md)
@@ -26,6 +26,7 @@
 | 为什么某个模型没有出现？ | 可能是供应商不支持发现、缓存尚未刷新、生命周期过滤或能力不匹配 | [供应商发现策略](#6-供应商发现策略) |
 | 什么时候访问供应商？ | 依据新鲜度、显式刷新和缓存状态决定，并使用 singleflight 合并并发刷新 | [何时请求](#7-何时请求) |
 | 模型目录能否证明模型支持某项能力？ | 不能；缺失字段表示未知，不能被解释为明确不支持 | [发现能力不是模型能力](#63-发现能力不是模型能力) |
+| Agent 请求的模型不可用时怎么办？ | 计划由同一个控制面按明确策略先选择同 provider 兼容模型，再选择其他允许 provider，并把替换警告随运行冻结；当前尚未实现 | [模型选择与替换](#103-模型选择与替换) |
 | 谁真正调用模型？ | 已选模型交给模型运行时，目录系统不拥有请求、重试或传输 | [职责与非职责](#3-职责与非职责) |
 
 ## 1. 结论
@@ -37,13 +38,14 @@
 - 如何把 provider 动态结果、内置 metadata、用户配置和本地模型状态合并；
 - 如何在“不知道”与“明确不支持”之间保持区别；
 - 如何按 Agent 所需能力、生命周期和用户策略筛选模型；
+- 如何在启动前按准确模型、同 provider、其他允许 provider 的顺序生成确定性的模型选择结果；
 - 如何向 App Server、Desktop、CLI、TUI 和 Agent runtime 暴露一致的模型信息。
 
 它不是新的模型调用 client，也不是第二个 provider registry。边界固定为：
 
 ```text
 provider adapter 负责“如何向某家服务取回原始模型目录”
-models manager 负责“何时取、如何缓存、如何合并、如何解释和如何发布”
+models manager 负责“何时取、如何缓存、如何合并、如何解释、如何选择和如何发布”
 model provider 负责“如何用已选模型执行一次调用”
 ```
 
@@ -69,7 +71,7 @@ model provider 负责“如何用已选模型执行一次调用”
 | --- | --- | --- |
 | `zeta-protocol::model::catalog` | identity、`ModelInfo`、capability、availability/freshness/lifecycle/quality value | 请求调度、缓存、provider DTO、refresh state |
 | `zeta-model-provider-config` | provider definition、endpoint/default、静态 seed models、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
-| `zeta-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、snapshot generation | provider DTO、secret、调用、Config persistence、UI |
+| `zeta-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、snapshot generation；长期拥有 provider 无关的模型候选选择 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
 | `zeta-model-provider` | provider runtime、adapter 选择、模型调用、manager static resolution consumer | catalog policy、跨 provider merge、UI 查询 |
 | `zeta-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
 | `zeta-http-client` | HTTP execution 与共享 proxy/TLS/target policy | Provider DTO、catalog policy、模型选择 |
@@ -93,6 +95,7 @@ model provider 负责“如何用已选模型执行一次调用”
 | 字段 provenance 与 Unknown 保留 | ✅ | `CatalogRecord`、`ModelMetadataProvenance` |
 | model-provider/App Server 静态目录统一 | ✅ | `ModelProviderRuntime::models_manager`、`ConfigBackedModelService` |
 | 真实 provider discovery adapters | 部分具备 | Ollama `/api/tags` + `/api/show` 已接入；其他 provider 留在 Phase 2 |
+| Agent 启动时的继承、覆盖和跨 provider 替换 | 尚未完成 | 当前 `resolve` 只校验一个准确 `ModelRef`；尚无统一候选选择、替换记录和客户端警告 |
 | persisted observation cache、backoff/jitter、并发总闸 | 尚未完成 | Phase 4 / 后续 core hardening |
 | `model/refresh`、`model/updated`、完整 snapshot DTO | 尚未完成 | Phase 3 |
 
@@ -118,6 +121,7 @@ model provider 负责“如何用已选模型执行一次调用”
 - model lifecycle、availability、metadata quality 和 freshness projection；
 - capability/workload/visibility filter；
 - `(ProviderId, ModelId)` 的解析、校验和稳定排序；
+- 启动前的 provider 无关模型选择：请求模型、同 provider 候选、跨 provider 候选、兼容性检查和替换说明；
 - 所选模型基础 instructions 的资产、revision 与选择；
 - immutable `ModelCatalogSnapshot` 及 generation 变化；
 - cache/refresh/merge 的诊断信息和不含秘密的 telemetry。
@@ -703,7 +707,53 @@ Catalog 不应成为错误的授权替代品：
 - provider 最终仍可能因权限、region 或下线返回错误，runtime 必须保留真实 provider error；
 - manager 不把一次调用失败永久改写为 model unavailable，除非随后完整 refresh 证实。
 
-### 10.3 稳定排序
+### 10.3 模型选择与替换
+
+> 状态：Proposed。当前 `ModelsManager::resolve` 只校验一个准确模型；本节规定 Agent、工作流和其他上层以后共用的模型选择契约。
+
+`zeta-models-manager` 应拥有 provider 无关的候选选择，不能把排序复制到 App Server、Core、Agent 定义或各 provider adapter。`zeta-agents` 声明 Agent 的默认值、覆盖权限、替换范围和模型要求；App Server 将这些值连同 Session 或工作流基线转换成通用选择请求，manager 不依赖 `zeta-agents`。
+
+计划中的通用输入与结果至少表达：
+
+```rust
+pub struct ModelSelectionRequest {
+    pub baseline: ModelSelectionTarget,
+    pub preferred: Option<ModelRef>,
+    pub requested_override: Option<ModelRef>,
+    pub override_policy: ModelOverridePolicy,
+    pub replacement_policy: ModelReplacementPolicy,
+    pub requirements: ModelRequirements,
+    pub eligible_scopes: Vec<CatalogScopeKey>,
+}
+
+pub struct ModelSelectionDecision {
+    pub requested: ModelRef,
+    pub selected: ResolvedModelSelection,
+    pub substitution: Option<ModelSubstitution>,
+}
+```
+
+`ModelSelectionTarget` 在进程内绑定准确 `ModelRef` 与 `CatalogScopeKey`；`ResolvedModelSelection` 还包含所选 scope、目录 generation 和已解析 metadata。opaque scope 不进入客户端或持久记录，跨边界只保存不含秘密且足以恢复的 provider、执行 runtime、访问来源和配置 revision。App Server 负责从当前 Session、工作流、已配置 provider 和账号授权生成有序 `eligible_scopes`，但不在其中筛选或排序模型。
+
+选择分为两步。第一步确定请求模型：获准的本次显式覆盖优先于定义偏好，定义偏好优先于基线；禁止覆盖时收到显式请求必须返回类型化错误，不能静默忽略。第二步从目录选择实际模型：
+
+1. 请求的准确模型。
+2. 同一 scope、目录明确属于同一模型族的兼容模型。
+3. 同一 scope 的其他兼容模型。
+4. 同 provider 的其他已允许 scope 中的兼容模型。
+5. 其他已允许 provider 的兼容模型。
+
+模型族、替换优先级、scope 顺序和 provider 顺序必须来自 provider 明确事实、内置可审阅 metadata 或用户策略，不能解析模型 ID 猜测。每个候选都要重新检查 workload、工具调用、输入类型、上下文长度、推理等级、结构化输出、执行 runtime、生命周期、账号可用性、区域、组织策略和费用限制。自动替换只能选择目录证明为可用的候选；`Unverified` 或 `Unknown` 可以按策略保留给用户准确指定的模型，但不能成为自动替换目标。
+
+同一个 `ProviderId` 下可以同时存在不同 endpoint、API key、企业租户、用户订阅和本地 runtime，因此“同 provider 优先”必须先保持同一 scope。切换到同 provider 的另一个 scope 仍可能改变凭据、数据边界和计费来源，必须受 `eligible_scopes` 限制，并在选择结果中作为访问来源变化单独记录；它不能被当作普通同模型族替换。
+
+推理等级与服务等级只能在实际模型确定后解析。调用方把某个等级声明为硬要求时，不支持该等级的模型不是兼容候选；只声明偏好时，可以采用所选模型明确公布的默认值并产生警告。不同 provider 的等级名称不能按枚举位置或字面相似度自动映射，也不能把更高费用的服务等级当作无影响替换。
+
+替换成功不是错误。结果必须记录请求模型、实际模型、原因、是否改变访问 scope、是否跨 provider、每个参与 scope 的 generation 和最终推理配置，并在运行开始前向客户端产生非阻塞警告；改变访问 scope 或跨 provider 的警告必须明确显示变化。`ModelReplacementPolicy::None` 表示要求准确模型；它与禁止本次覆盖组合后即可表达严格模型要求，不增加一个同时混合默认值、覆盖权和失败语义的 `Fixed` 类型。
+
+替换只发生在 Agent 或工作流运行创建前。目录刷新不能修改已经冻结的运行，一次 provider 调用失败也不能触发换模型后重放；后者属于可能产生重复工具调用或费用的调用重试问题，不是目录选择。
+
+### 10.4 稳定排序
 
 默认排序建议使用：
 
@@ -734,6 +784,8 @@ MetadataQuality
 CatalogWarning
 TokenLimits
 ModelModality / ModelWorkload
+ModelSelectionRecord
+ModelSubstitution
 ```
 
 `ModelInfo` 建议收敛为 provider-independent 的模型事实与 Zeta 默认 metadata：
@@ -774,19 +826,20 @@ credential account 的秘密信息。普通客户端也不需要看到 opaque ca
 
 ### 11.3 Agent 运行时
 
-`ResolvedModel` 在一次 model invocation 开始时进入 immutable `ModelInvocationSnapshot`：
+Agent 运行创建前，App Server 把 Session 或工作流模型基线、Agent 定义策略和本次启动参数交给 manager。选择结果进入不可变 `AgentModelSelectionSnapshot`：
 
 ```text
-ModelRef
+requested ModelRef
++ selected ModelRef
++ selected runtime / access source / config revision
++ substitution reason / scope changed / provider changed
 + resolved limits/capabilities
-+ provider config revision
-+ catalog generation
-+ warnings/policy decisions
++ participating catalog generations
++ reasoning effort / service tier
++ warnings / policy decisions
 ```
 
-刷新 catalog 不修改 in-flight invocation。下一次调用若发现 selected model 已明确 retired 或不再
-满足强制能力，ThreadRuntime 在安全点返回 typed capability/config error，不能在后台静默切换到
-另一模型。
+每次模型调用仍在 invocation safe point 为已经冻结的准确 `selected ModelRef` 建立不可变 provider binding，并记录 provider config revision。刷新 catalog、Session 切换模型或上级 Agent 修改配置都不能改变已经开始的 Agent 运行；下一次调用若发现准确模型无法建立 binding，应返回类型化能力或配置错误，不能在后台重新选择模型。
 
 ## 12. 错误与降级
 
@@ -801,6 +854,7 @@ ModelRef
 | Invalid provider payload | 不提交坏 snapshot；保留 last-known | provider schema error |
 | Pagination incomplete | 只可提交 Partial，或整体失败 | 不因缺席下架模型 |
 | Empty complete result | 提交空 live availability，保留 configured/history tombstone | 明确显示当前 scope 无可用模型 |
+| No compatible selection | 不修改 catalog；返回候选检查摘要 | Agent 或工作流不启动，说明准确模型和替换策略均无法满足要求 |
 | Cache corrupt/schema mismatch | 丢弃可删除 cache，重新发现 | 不影响 Config/Thread recovery |
 | User override invalid | 拒绝该配置事务 | typed config error |
 
@@ -854,6 +908,7 @@ zeta-rs/models-manager/
     ├── cache.rs               # cache state + freshness
     ├── merge.rs               # field-level provenance merge
     ├── filter.rs              # query/filter/sort
+    ├── selection.rs           # Proposed：provider 无关的候选选择与替换结果
     ├── policy.rs              # named policies
     ├── error.rs
     ├── manager_tests.rs
@@ -958,10 +1013,11 @@ contract test；未文档化 cache header 不成为正确性依赖。
 - 增加 `model/list`、`model/refresh`、`model/updated`；
 - Desktop/CLI/TUI picker 迁移到统一 snapshot；
 - provider 配置或凭据 revision 触发新 scope；
-- Agent runtime 在安全点使用 typed resolution。
+- 增加统一 `ModelSelectionRequest` 与 `ModelSelectionDecision`，让 Agent 启动按“准确模型 → 同 scope → 同 provider 的其他允许 scope → 其他允许 provider”选择；
+- App Server 冻结请求模型、实际模型、替换原因、推理配置与目录 generation，并让客户端显示非阻塞警告；
+- Agent runtime 在安全点使用已经冻结的准确模型，不在调用失败后重新选择。
 
-完成条件：所有产品入口看到相同目录、相同 warning 和相同排序，refresh 不影响 in-flight
-invocation。
+完成条件：所有产品入口看到相同目录、相同 warning 和相同排序；同一选择请求得到确定结果；同 provider 与跨 provider 替换均有契约测试；refresh 不影响已开始的 Agent 运行或 in-flight invocation。
 
 ### 阶段 4：持久缓存与维护流程
 
@@ -984,7 +1040,7 @@ invocation。
 7. manager 使用 stale-while-revalidate、singleflight 和 typed read policy。
 8. 不用 inference probing 发现模型或能力。
 9. 静态 seed 不证明当前账号可用，动态列表也不一定提供完整能力 metadata。
-10. Catalog refresh 不修改已开始的 model invocation，也不静默替换用户选中的模型。
+10. Catalog refresh 不修改已开始的 Agent 运行或 model invocation；模型替换只在运行创建前依据显式策略执行，并以警告展示请求模型和实际模型。
 11. Persisted catalog 是可删除 projection，不是 Config、Thread 或 billing authority。
 12. Provider runtime/认证留在 `zeta-model-provider`，wire endpoint/codec 留在 `zeta-api`，
     raw HTTP/network policy 留在 `zeta-http-client`，retry/framing 留在 `zeta-client`。
@@ -992,3 +1048,5 @@ invocation。
 14. Catalog TTL 是可配置的 Zeta policy；provider cache hint/validator 只有证据充分时才参与计算。
 15. Provider discovery 必须逐家验证；`../pi` 或 OpenAI-compatible 行为不能作为其他厂商的协议
     证明。
+16. 不新增独立模型路由 crate；`zeta-models-manager` 拥有 provider 无关的候选筛选与选择，`zeta-agents` 只声明 Agent 策略，`zeta-model-provider` 只调用已经选定的准确模型。
+17. 自动替换顺序固定为准确模型、同 scope 兼容模型、同 provider 的其他允许 scope、其他允许 provider；没有兼容候选才失败，任何 scope 或模型替换都不能静默发生。

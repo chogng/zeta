@@ -44,8 +44,8 @@ use crate::terminal::screen_selection::ScreenSelection;
 use crate::terminal::screen_selection::ScreenSelectionOutcome;
 use crate::theme::ThemeChoices;
 use crate::theme::ThemePickerOutcome;
-use crate::thread::SubagentPickerState;
-use crate::thread::SubagentPickerView;
+use crate::thread::AgentThreadSwitcher;
+use crate::thread::AgentThreadSwitcherView;
 use crate::thread::ThreadPresentationEvent;
 use crate::thread::ThreadPresentationStore;
 use crate::thread::ThreadRequestIdentity;
@@ -112,7 +112,7 @@ enum EmptyInputNavigation {
     PreviousScreen,
     NextScreen,
     FocusManager,
-    FocusSubagents,
+    FocusAgentThreads,
 }
 
 fn empty_input_navigation(
@@ -129,7 +129,7 @@ fn empty_input_navigation(
             Some(EmptyInputNavigation::FocusManager)
         }
         KeyCode::Down if matches!(screen, Some(TerminalScreen::Session(_))) => {
-            Some(EmptyInputNavigation::FocusSubagents)
+            Some(EmptyInputNavigation::FocusAgentThreads)
         }
         _ => None,
     }
@@ -142,7 +142,7 @@ pub(crate) struct App {
     thread: ThreadState,
     thread_presentations: ThreadPresentationStore,
     sessions: SessionsState,
-    subagent_picker: SubagentPickerState,
+    agent_thread_switcher: AgentThreadSwitcher,
     input_surface: Option<InputSurface>,
     overlay: Option<DetailOverlay>,
     welcome: WelcomeModel,
@@ -172,7 +172,7 @@ impl App {
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
             ),
             sessions: SessionsState::default(),
-            subagent_picker: SubagentPickerState::default(),
+            agent_thread_switcher: AgentThreadSwitcher::default(),
             input_surface: None,
             overlay: None,
             welcome: WelcomeModel::for_workspace(Path::new(".")),
@@ -182,7 +182,7 @@ impl App {
             status: Status::Ready,
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
-            top_tip: TopTip::new(Instant::now()),
+            top_tip: TopTip::new(),
             terminal_settings: TerminalSettings::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
@@ -221,7 +221,7 @@ impl App {
                 input_catalog,
             ),
             sessions: SessionsState::default(),
-            subagent_picker: SubagentPickerState::default(),
+            agent_thread_switcher: AgentThreadSwitcher::default(),
             input_surface: None,
             overlay: None,
             welcome: WelcomeModel::for_workspace(dir_root),
@@ -231,7 +231,7 @@ impl App {
             status: Status::Ready,
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
-            top_tip: TopTip::new(Instant::now()),
+            top_tip: TopTip::new(),
             terminal_settings: TerminalSettings::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
@@ -317,10 +317,14 @@ impl App {
         if matches!(outcome, ChatComposerOutcome::Unhandled) {
             return self.handle_app_key(key, now);
         }
-        self.handle_chat_composer_outcome(outcome)
+        self.handle_chat_composer_outcome(outcome, now)
     }
 
-    fn handle_chat_composer_outcome(&mut self, outcome: ChatComposerOutcome) -> Option<AppCommand> {
+    fn handle_chat_composer_outcome(
+        &mut self,
+        outcome: ChatComposerOutcome,
+        now: Instant,
+    ) -> Option<AppCommand> {
         match outcome {
             ChatComposerOutcome::Command(command) => self.handle_slash_command(command),
             ChatComposerOutcome::SubmissionRejected(error) => {
@@ -337,9 +341,13 @@ impl App {
                     self.status = Status::Working;
                     return Some(AppCommand::CreateSessionAndEnter { submission });
                 }
+                let starts_conversation = !self.thread.has_user_message();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
                 ));
+                if starts_conversation {
+                    self.top_tip.show_policy_tip(now);
+                }
                 if self.turn_input_mode == TurnInputMode::Steer {
                     let steer_id = self
                         .chat_composer
@@ -588,7 +596,7 @@ impl App {
         let outcome = self
             .chat_composer
             .activate_completion(&mut self.thread_presentations.active_mut().input, index)?;
-        self.handle_chat_composer_outcome(outcome)
+        self.handle_chat_composer_outcome(outcome, Instant::now())
     }
 
     pub(crate) fn activate_thread_request_choice(&mut self, index: usize) -> Option<AppCommand> {
@@ -735,7 +743,7 @@ impl App {
             && self.approval_view().is_none()
             && self.query_view().is_none()
             && !self.sessions.manager().focused()
-            && !self.subagent_picker.focused()
+            && !self.agent_thread_switcher.focused()
             && self.thread_presentations.active().selected_cell.is_none()
             && self.input_surface.is_none()
             && self.completion().is_none()
@@ -1219,21 +1227,21 @@ impl App {
         }
     }
 
-    pub(crate) fn subagent_picker_view(&self) -> Option<SubagentPickerView<'_>> {
+    pub(crate) fn agent_thread_switcher_view(&self) -> Option<AgentThreadSwitcherView<'_>> {
         matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
-            .then(|| self.subagent_picker.view())
+            .then(|| self.agent_thread_switcher.view())
     }
 
-    pub(crate) fn subagent_picker_rows(&self) -> u16 {
+    pub(crate) fn agent_thread_switcher_rows(&self) -> u16 {
         if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
-            self.subagent_picker.desired_rows()
+            self.agent_thread_switcher.desired_rows()
         } else {
             0
         }
     }
 
-    pub(crate) fn subagent_picker_focused(&self) -> bool {
-        self.subagent_picker.focused()
+    pub(crate) fn agent_thread_switcher_focused(&self) -> bool {
+        self.agent_thread_switcher.focused()
     }
 
     pub(crate) fn dispatch_next_queued_turn(&mut self) -> Option<AppCommand> {
@@ -1280,6 +1288,10 @@ impl App {
 
     pub(crate) fn top_tip(&self) -> &TopTip {
         &self.top_tip
+    }
+
+    pub(crate) fn show_policy_tip(&mut self, now: Instant) {
+        self.top_tip.show_policy_tip(now);
     }
 
     pub(crate) fn status_line_runtime(&self) -> StatusLineRuntime {
@@ -1511,16 +1523,21 @@ impl App {
             AppEvent::SessionPickerOpened(view) => self.show_session_picker(view),
             AppEvent::SessionCatalogReceived(catalog) => {
                 self.sessions.refresh_catalog(catalog);
-                self.reconcile_subagent_picker();
+                self.reconcile_agent_thread_switcher();
             }
             AppEvent::ThreadContextChanged {
                 session_id,
                 thread_id,
             } => {
+                let context_changed = self.sessions.active_session_id() != Some(&session_id)
+                    || self.sessions.remembered_thread(&session_id) != Some(&thread_id);
                 self.close_transient_surfaces();
                 self.thread_presentations.switch(thread_id.clone());
                 self.sessions.activate_context(session_id, thread_id);
-                self.reconcile_subagent_picker();
+                if context_changed {
+                    self.top_tip.reset();
+                }
+                self.reconcile_agent_thread_switcher();
             }
             AppEvent::ThreadGoalChanged(goal) => {
                 self.thread_presentations.active_mut().goal = goal;
@@ -1582,19 +1599,24 @@ impl App {
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptSnapshotReceived(
                         transcript,
-                    ))
+                    ));
+                self.hide_navigation_for_existing_conversation();
             }
             AppEvent::ThreadTranscriptHistoryPageReceived(transcript) => {
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptHistoryPageReceived(
                         transcript,
-                    ))
+                    ));
+                self.hide_navigation_for_existing_conversation();
             }
-            AppEvent::ThreadTranscriptUpdateReceived(update) => self
-                .thread
-                .update(ThreadPresentationEvent::TranscriptUpdateReceived(update)),
+            AppEvent::ThreadTranscriptUpdateReceived(update) => {
+                self.thread
+                    .update(ThreadPresentationEvent::TranscriptUpdateReceived(update));
+                self.hide_navigation_for_existing_conversation();
+            }
             AppEvent::TranscriptCleared => {
                 self.thread.update(ThreadPresentationEvent::Cleared);
+                self.top_tip.reset();
                 self.skill_diagnostic_warnings.clear();
                 self.thread_presentations
                     .active_mut()
@@ -1725,26 +1747,26 @@ impl App {
         if !key.modifiers.is_empty() {
             return None;
         }
-        if self.subagent_picker.focused() {
+        if self.agent_thread_switcher.focused() {
             return match key.code {
                 KeyCode::Up => {
-                    if !self.subagent_picker.select_previous() {
-                        self.subagent_picker.blur();
+                    if !self.agent_thread_switcher.select_previous() {
+                        self.agent_thread_switcher.blur();
                     }
                     Some(None)
                 }
                 KeyCode::Down => {
-                    self.subagent_picker.select_next();
+                    self.agent_thread_switcher.select_next();
                     Some(None)
                 }
                 KeyCode::Enter => Some(
-                    self.subagent_picker
+                    self.agent_thread_switcher
                         .selected()
                         .cloned()
                         .map(|thread_id| AppCommand::SwitchThread { thread_id }),
                 ),
                 KeyCode::Esc => {
-                    self.subagent_picker.blur();
+                    self.agent_thread_switcher.blur();
                     Some(None)
                 }
                 _ => None,
@@ -1766,8 +1788,8 @@ impl App {
                 self.sessions.manager_mut().focus();
                 return Some(None);
             }
-            EmptyInputNavigation::FocusSubagents => {
-                self.subagent_picker.focus();
+            EmptyInputNavigation::FocusAgentThreads => {
+                self.agent_thread_switcher.focus();
                 return Some(None);
             }
         };
@@ -1796,7 +1818,7 @@ impl App {
         }
     }
 
-    fn reconcile_subagent_picker(&mut self) {
+    fn reconcile_agent_thread_switcher(&mut self) {
         let visible_session_id = match self.sessions.screen() {
             Some(TerminalScreen::Session(session_id)) => Some(session_id.clone()),
             Some(TerminalScreen::Manager) | None => None,
@@ -1811,7 +1833,7 @@ impl App {
                 .iter()
                 .find(|session| &session.session_id == session_id)
         });
-        self.subagent_picker
+        self.agent_thread_switcher
             .reconcile(session, viewed_thread.as_ref());
     }
 
@@ -1930,10 +1952,16 @@ impl App {
         let context = self.app_keymap_context(true);
         let chord_expired = self.app_keymap.expire(context, now);
         let top_tip_changed = self.top_tip.poll(now);
-        let elapsed_changed = self.subagent_picker.refresh_elapsed();
+        let elapsed_changed = self.agent_thread_switcher.refresh_elapsed();
         let manager_changed = matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.refresh_manager_time(now);
         chord_expired || top_tip_changed || elapsed_changed || manager_changed
+    }
+
+    fn hide_navigation_for_existing_conversation(&mut self) {
+        if self.thread.has_user_message() {
+            self.top_tip.hide_navigation();
+        }
     }
 
     pub(crate) fn pending_key_chord_label(&self) -> Option<String> {
@@ -1966,13 +1994,13 @@ impl App {
         if invocation.origin == SlashCommandOrigin::Local && invocation.arguments.is_empty() {
             match local {
                 Some(TuiSlashCommandAction::Sessions | TuiSlashCommandAction::Agents) => {
-                    self.subagent_picker.blur();
+                    self.agent_thread_switcher.blur();
                     self.close_transient_surfaces();
                     self.sessions.show_manager();
                     return None;
                 }
                 Some(TuiSlashCommandAction::Subagents) => {
-                    self.subagent_picker.focus();
+                    self.agent_thread_switcher.focus();
                     return None;
                 }
                 Some(TuiSlashCommandAction::Queue) => {

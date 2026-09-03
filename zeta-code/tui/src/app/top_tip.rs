@@ -6,13 +6,20 @@ use std::time::Duration;
 use std::time::Instant;
 
 const NOTICE_DURATION: Duration = Duration::from_secs(3);
-const REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+const POLICY_TIP_DURATION: Duration = Duration::from_secs(5);
+const POLICY_TIP: &str = "shift+tab to cycle policy";
 
 #[derive(Debug)]
 pub(crate) struct TopTip {
-    index: usize,
-    refresh_at: Instant,
+    phase: TopTipPhase,
     notice: Option<Notice>,
+}
+
+#[derive(Debug)]
+enum TopTipPhase {
+    Navigation,
+    Policy { expires_at: Instant },
+    Hidden,
 }
 
 #[derive(Debug)]
@@ -22,12 +29,27 @@ struct Notice {
 }
 
 impl TopTip {
-    pub(crate) fn new(now: Instant) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            index: 0,
-            refresh_at: now + REFRESH_INTERVAL,
+            phase: TopTipPhase::Navigation,
             notice: None,
         }
+    }
+
+    pub(crate) fn show_policy_tip(&mut self, now: Instant) {
+        self.phase = TopTipPhase::Policy {
+            expires_at: now + POLICY_TIP_DURATION,
+        };
+    }
+
+    pub(crate) fn hide_navigation(&mut self) {
+        if matches!(self.phase, TopTipPhase::Navigation) {
+            self.phase = TopTipPhase::Hidden;
+        }
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.phase = TopTipPhase::Navigation;
     }
 
     pub(crate) fn show_notice(&mut self, text: String, now: Instant) {
@@ -41,10 +63,10 @@ impl TopTip {
         &self,
         frame: &mut Frame<'_>,
         area: Rect,
-        tips: &[Option<&str>],
+        tip: Option<&str>,
         context: RenderContext<'_>,
     ) {
-        if let Some(text) = self.text(tips) {
+        if let Some(text) = self.text(tip) {
             key_hint::draw_right(frame, area, text, context);
         }
     }
@@ -57,22 +79,25 @@ impl TopTip {
         if notice_expired {
             self.notice = None;
         }
-        if now < self.refresh_at {
-            return notice_expired;
+        let policy_expired = matches!(
+            self.phase,
+            TopTipPhase::Policy { expires_at } if expires_at <= now
+        );
+        if policy_expired {
+            self.phase = TopTipPhase::Hidden;
         }
-        self.index = self.index.wrapping_add(1);
-        self.refresh_at = now + REFRESH_INTERVAL;
-        notice_expired || self.notice.is_none()
+        notice_expired || policy_expired
     }
 
-    fn text<'a>(&'a self, tips: &[Option<&'a str>]) -> Option<&'a str> {
+    fn text<'a>(&'a self, tip: Option<&'a str>) -> Option<&'a str> {
         if let Some(notice) = self.notice.as_ref() {
             return Some(notice.text.as_str());
         }
-        let count = tips.iter().flatten().count();
-        tips.iter()
-            .filter_map(|tip| *tip)
-            .nth(self.index % count.max(1))
+        match self.phase {
+            TopTipPhase::Navigation => tip,
+            TopTipPhase::Policy { .. } => Some(POLICY_TIP),
+            TopTipPhase::Hidden => None,
+        }
     }
 }
 

@@ -2,11 +2,11 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 触发 429 限流和自动重试
+> 触发 429 限流和自动重试
 
 ● Model invocation failed
 
-❯ 限流失败后继续下一轮
+> 限流失败后继续下一轮
 
 ● 429 重试耗尽后仍可恢复。
 
@@ -28,9 +28,9 @@ expression: screen
 
 
 
-                                                                                shift+tab to cycle
+                                                                         shift+tab to cycle policy
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
   ⏸ ask permissions on

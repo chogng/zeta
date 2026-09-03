@@ -2,7 +2,7 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 尝试在工作区外创建 sandbox-must-not-write.txt
+> 尝试在工作区外创建 sandbox-must-not-write.txt
 
 ● Thought
 
@@ -31,6 +31,6 @@ operation not permitted
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   ↑↓ select · space expand · enter details · esc input

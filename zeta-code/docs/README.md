@@ -4,12 +4,14 @@
 
 ## 快速理解
 
-`zeta-code` 的文档按产品宿主、TUI 架构和交互视觉三类分开。已完成的迁移计划和历史讨论不保留为长期入口，其有效结论已经并入下面的当前文档。
+`zeta-code` 的文档按产品宿主、TUI 架构、界面部位、交互和视觉样式分开。已完成的迁移计划和历史讨论不保留为长期入口，其有效结论已经并入下面的当前文档。
 
 | 想了解或修改什么 | 先读 | 再读 |
 | --- | --- | --- |
 | CLI 命令、输出、退出码和 App Server 接线 | [产品与 CLI 架构](architecture.md) | [`zeta-code` README](../README.md) |
 | TUI 状态、事件、布局、生命周期和功能边界 | [TUI 架构](tui.md) | [TUI crate README](../tui/README.md) |
-| 键盘、鼠标、焦点、选择和颜色语义 | [TUI 交互契约](tui-interaction.md) | [TUI 主题实现](../tui/README.md) |
+| 界面区域叫什么、位于哪里 | [界面部位词典](LAYOUT.md) | [TUI 架构](tui.md) |
+| 键盘、鼠标、焦点和选择如何变化 | [TUI 交互契约](tui-interaction.md) | [TUI 样式](styles.md) |
+| 输入提示、状态字符、边线和颜色如何显示 | [TUI 样式](styles.md) | [TUI 主题实现](../tui/README.md) |
 
 共享系统只在根 `docs/` 维护。修改 App Server 契约时读 [App Server API](../../docs/zeta-app-server-api.md)，修改跨端快捷键时读 [三端快捷键系统](../../docs/keybindings.md)，判断产品归属时读 [产品线与宿主边界](../../docs/product-lines.md)。

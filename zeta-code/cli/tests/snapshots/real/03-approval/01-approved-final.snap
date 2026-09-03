@@ -2,7 +2,7 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 请创建 approved-by-tui.txt
+> 请创建 approved-by-tui.txt
 
 ● Ran write_file
 
@@ -28,9 +28,9 @@ expression: screen
 
 
 
-                                                                                shift+tab to cycle
+                                                                         shift+tab to cycle policy
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
   ⏸ ask permissions on

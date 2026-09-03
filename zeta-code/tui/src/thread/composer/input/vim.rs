@@ -69,7 +69,7 @@ impl VimState {
 
     pub(super) fn prompt(&self) -> &'static str {
         match self.mode {
-            VimMode::Insert => "❯ ",
+            VimMode::Insert => "> ",
             VimMode::Normal => "N ",
             VimMode::Visual => "V ",
         }

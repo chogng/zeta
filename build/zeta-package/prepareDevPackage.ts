@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { constants, createReadStream } from "node:fs";
 import { chmod, copyFile, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -115,6 +116,7 @@ interface FirstPartyExecutables {
   readonly appServerDaemon: string;
   readonly bubblewrap?: ResolvedBubblewrap;
   readonly commandRunner?: string;
+  readonly packageStore: string;
   readonly sandboxSetup?: string;
   readonly serverHost: string;
   readonly codeModeHost: string;
@@ -444,11 +446,11 @@ async function materializeV8File(file: ResolvedV8File, cacheDirectory: string): 
   }
 }
 
-async function v8CargoEnvironment(target: string): Promise<NodeJS.ProcessEnv> {
-  if (/^(1|true|yes)$/iu.test(process.env.V8_FROM_SOURCE ?? "")) return { ...process.env };
-  const archiveOverride = process.env.RUSTY_V8_ARCHIVE;
-  const bindingOverride = process.env.RUSTY_V8_SRC_BINDING_PATH;
-  if (archiveOverride && bindingOverride) return { ...process.env };
+async function v8CargoEnvironment(target: string, environment: NodeJS.ProcessEnv = process.env): Promise<NodeJS.ProcessEnv> {
+  if (/^(1|true|yes)$/iu.test(environment.V8_FROM_SOURCE ?? "")) return { ...environment };
+  const archiveOverride = environment.RUSTY_V8_ARCHIVE;
+  const bindingOverride = environment.RUSTY_V8_SRC_BINDING_PATH;
+  if (archiveOverride && bindingOverride) return { ...environment };
   if (archiveOverride || bindingOverride) {
     throw new Error("RUSTY_V8_ARCHIVE and RUSTY_V8_SRC_BINDING_PATH must be set together");
   }
@@ -460,18 +462,28 @@ async function v8CargoEnvironment(target: string): Promise<NodeJS.ProcessEnv> {
     materializeV8File(pair.binding, cacheDirectory),
   ]);
   return {
-    ...process.env,
+    ...environment,
     RUSTY_V8_MIRROR: v8CacheRoot,
   };
 }
 
-function cargoBuild(packageName: string, binaryArgs: readonly string[], expectedTargets: readonly string[], environment: NodeJS.ProcessEnv = process.env): Map<string, string> {
+export function developmentCargoEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+  logicalCpuCount = availableParallelism(),
+): NodeJS.ProcessEnv {
+  if (environment.CARGO_BUILD_JOBS !== undefined) return { ...environment };
+  return {
+    ...environment,
+    CARGO_BUILD_JOBS: String(Math.max(1, Math.floor(logicalCpuCount / 2))),
+  };
+}
+
+function cargoBuild(binaryArgs: readonly string[], expectedTargets: readonly string[], environment: NodeJS.ProcessEnv = process.env): Map<string, string> {
   const result = spawnSync("cargo", [
     "build",
+    "--workspace",
     "--manifest-path",
     join(cargoWorkspace, "Cargo.toml"),
-    "--package",
-    packageName,
     ...binaryArgs,
     "--profile",
     "dev-small",
@@ -507,33 +519,49 @@ function cargoBuild(packageName: string, binaryArgs: readonly string[], expected
 }
 
 async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<FirstPartyExecutables> {
-  const cargoEnvironment = await v8CargoEnvironment(hostTarget(platform));
-  const serverArtifacts = cargoBuild("zeta-server-host", ["--bin", "zeta-server"], ["zeta-server"], cargoEnvironment);
-  const daemonArtifacts = cargoBuild("zeta-app-server-daemon", ["--bin", "zeta-app-server-daemon"], ["zeta-app-server-daemon"], cargoEnvironment);
-  const codeModeHostArtifacts = cargoBuild("zeta-code-mode-host", ["--bin", "zeta-code-mode-host"], ["zeta-code-mode-host"], cargoEnvironment);
+  const cargoEnvironment = await v8CargoEnvironment(hostTarget(platform), developmentCargoEnvironment());
+  const binaryArgs = [
+    "--bin", "zeta-package-store",
+    "--bin", "zeta-server",
+    "--bin", "zeta-app-server-daemon",
+    "--bin", "zeta-code-mode-host",
+  ];
+  const expectedTargets = ["zeta-package-store", "zeta-server", "zeta-app-server-daemon", "zeta-code-mode-host"];
+  if (platform === "win32") {
+    binaryArgs.push(
+      "--bin", "zeta-command-runner",
+      "--bin", "zeta-windows-sandbox-setup",
+    );
+    expectedTargets.push("zeta-command-runner", "zeta-windows-sandbox-setup");
+  }
+  if (platform === "linux") {
+    binaryArgs.push("--bin", "bwrap");
+    expectedTargets.push("bwrap");
+  }
+  const artifacts = cargoBuild(binaryArgs, expectedTargets, cargoEnvironment);
   const executables: {
     appServerDaemon: string;
     bubblewrap?: ResolvedBubblewrap;
     commandRunner?: string;
+    packageStore: string;
     sandboxSetup?: string;
     serverHost: string;
     codeModeHost: string;
   } = {
-    appServerDaemon: requiredExecutable(daemonArtifacts, "zeta-app-server-daemon"),
-    codeModeHost: requiredExecutable(codeModeHostArtifacts, "zeta-code-mode-host"),
-    serverHost: requiredExecutable(serverArtifacts, "zeta-server"),
+    appServerDaemon: requiredExecutable(artifacts, "zeta-app-server-daemon"),
+    codeModeHost: requiredExecutable(artifacts, "zeta-code-mode-host"),
+    packageStore: requiredExecutable(artifacts, "zeta-package-store"),
+    serverHost: requiredExecutable(artifacts, "zeta-server"),
   };
   if (platform === "win32") {
-    const sandboxArtifacts = cargoBuild("zeta-windows-sandbox", ["--bins"], ["zeta-command-runner", "zeta-windows-sandbox-setup"], cargoEnvironment);
-    executables.commandRunner = requiredExecutable(sandboxArtifacts, "zeta-command-runner");
-    executables.sandboxSetup = requiredExecutable(sandboxArtifacts, "zeta-windows-sandbox-setup");
+    executables.commandRunner = requiredExecutable(artifacts, "zeta-command-runner");
+    executables.sandboxSetup = requiredExecutable(artifacts, "zeta-windows-sandbox-setup");
   }
   if (platform === "linux") {
     const bubblewrap = await resolveVendoredBubblewrapSource();
-    const bubblewrapArtifacts = cargoBuild("zeta-bwrap", ["--bin", "bwrap"], ["bwrap"], cargoEnvironment);
     executables.bubblewrap = {
       ...bubblewrap,
-      binary: requiredExecutable(bubblewrapArtifacts, "bwrap"),
+      binary: requiredExecutable(artifacts, "bwrap"),
     };
   }
   for (const path of Object.values(executables).filter((value) => typeof value === "string")) {
@@ -972,11 +1000,10 @@ export async function prepareDevelopmentPackage(
   const target = hostTarget();
   const isWindows = process.platform === "win32";
   const outputDirectory = zetaPackageBuildPath(repositoryRoot, "dev", "store-v1", target, javascriptRuntime, developmentBuildProfile);
-  const publisher = requiredExecutable(cargoBuild("zeta-package-store", ["--bin", "zeta-package-store"], ["zeta-package-store"]), "zeta-package-store");
   const executables = await buildFirstPartyExecutables(process.platform);
   const ripgrep = await resolveRipgrep(target, isWindows);
   const node = javascriptRuntime === "packaged-node" ? await resolveNode(target, isWindows) : undefined;
-  const packageRoot = await publishDevelopmentPackage(outputDirectory, publisher, (staging) => assemblePackage(
+  const packageRoot = await publishDevelopmentPackage(outputDirectory, executables.packageStore, (staging) => assemblePackage(
     staging,
     target,
     process.platform,

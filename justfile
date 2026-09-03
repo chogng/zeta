@@ -49,6 +49,14 @@ check-config-migrations:
 zeta *args:
     {{ python }} -B scripts/zeta.py {args}
 
+# Assemble the complete immutable development package shared by Zeta products.
+zeta-package *args:
+    node build/zeta-package/prepareDevPackage.ts {args}
+
+# Assemble the complete development package and launch Zeta Code against it.
+zeta-package-run *args:
+    {{ python }} -B scripts/zeta_package.py {args}
+
 # Launch the zeta Electron Desktop product.
 zeta-desktop:
     corepack pnpm --dir zeta-ts dev

@@ -2,18 +2,18 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ /config
+> /config
 
 ● Saved API key for openai-compatible
 
-❯ /statusline
+> /statusline
 
-❯ /theme
+> /theme
 
-❯ /theme zeta-code-dark
+> /theme zeta-code-dark
 └─ Theme set to Zeta Code Dark
 
-❯ /help
+> /help
 
 
 

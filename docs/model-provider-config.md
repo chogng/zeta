@@ -227,7 +227,11 @@ definition/runtime 显式声明。
 
 `ProviderConfigRegistry::builtin()` 把所有 rows 自动注入 `ProviderDefinition.models`、默认审核模型和 count eligibility。Provider 文件只拥有 endpoint、adapter、profile 和 transport 特例，不能再写一份产品模型名单。
 
-`ModelAccess` 当前区分 `ApiKey`、`Subscription`、`Local`、`Enterprise` 和 `Unknown`。`Subscription` 要求客户端使用登录系统中的用户账户，`ApiKey` 要求模型凭据领域中的开发者密钥；二者不能互相降级。它们不能承担 backend routing，`StaticModelRuntime::{ProviderApi, ChatGptSubscription, KimiCode}` 才是独立执行事实；`ModelRef.provider` 只表示模型厂商。认证、订阅权益和远端可用性仍只在实际 Turn 中验证。
+`ModelAccess` 当前区分 `ApiKey`、`Subscription`、`Local`、`Enterprise` 和 `Unknown`。`Subscription` 要求客户端使用登录系统中的用户账户，`ApiKey` 要求模型凭据领域中的开发者密钥；二者不能互相降级。它们不能承担 backend routing，`StaticModelRuntime::{ProviderApi, ChatGptSubscription, KimiCode}` 才是独立执行事实；`ModelRef.provider` 只表示模型厂商。当前认证、订阅权益和远端可用性仍只在实际 Turn 中验证。
+
+> Proposed：自动替换上线前，provider runtime 需要按不含秘密的 catalog scope 向 `zeta-models-manager` 提供凭据存在、账号授权和执行 runtime 可用性的受控事实；manager 只能自动选择已经证实可用的 scope。真实调用仍是最终 authority，选择前检查不能保证之后没有限流、撤权或服务故障，也不能把 credential 内容放进目录。
+
+> Proposed：为了支持 [`zeta-models-manager` 的兼容模型替换](models-manager.md#103-模型选择与替换)，静态模型清单还需要增加可选、带来源的模型族和替换排序 metadata。它们只能来自 provider 明确声明或内置可审阅资料，不能根据模型 ID、价格或发布时间猜测；动态目录返回的明确事实按字段合并，未知继续保持 `Unknown`。执行 runtime 和访问来源继续作为独立事实参与候选检查，同 provider 的 API key、用户订阅和企业 endpoint 不能互相伪装。这些字段只提供目录事实，不在本 crate 执行候选选择。
 
 这些 rows 是：
 

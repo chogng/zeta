@@ -3,8 +3,8 @@
 > 这是一份定位界面问题用的词典。讨论 UI 时优先使用本文中的中文名称；括号里的英文名与代码名称用于搜索实现。
 >
 > 整页区域由 [`app/layout.rs`](../tui/src/app/layout.rs) 分配，绘制顺序由
-> [`app/frame.rs`](../tui/src/app/frame.rs) 决定。架构和交互规则分别见
-> [`tui.md`](tui.md) 与 [`tui-interaction.md`](tui-interaction.md)。
+> [`app/frame.rs`](../tui/src/app/frame.rs) 决定。架构、交互和视觉样式分别见
+> [`tui.md`](tui.md)、[`tui-interaction.md`](tui-interaction.md) 与 [`styles.md`](styles.md)。
 
 ## 1. 先分清当前页面
 
@@ -38,7 +38,7 @@
 │ 状态区 Status Area                                       │
 │   通常显示 StatusLine；需要操作时改为 KeyHints            │
 │                                                          │ ← 条件性间隔
-│ Subagent 选择器 SubagentPicker（展开时）                  │
+│ Agents AgentThreadSwitcher（有被委托 Agent 时）          │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -53,11 +53,11 @@
 | Queue 区 | `queue` | 输入在当前 Turn 结束后再发送时，显示排队消息；普通输入框不属于这里 |
 | 提问面板 | `request` / `Query` | Agent 要求用户选择或输入答案时出现，位于输入位置上方 |
 | 输入位置 | `composer` / Composer Position | 页面为输入相关组件预留的位置；它是位置名称，不等于输入框 |
-| 输入框 | `ChatInput` | 有上下边线、包含 `❯` 和草稿文字的编辑框；这是输入位置的默认内容 |
+| 输入框 | `ChatInput` | 有上下边线、包含输入提示符和草稿文字的编辑框；这是输入位置的默认内容，具体字符见[样式契约](styles.md) |
 | 状态区 | `status` / Status Area | 输入位置下面的一至两行槽位；在状态行和按键提示之间切换 |
 | 状态行 | `StatusLine` | 正常状态下显示权限模式、模型、Git、Plan、Queue、Subagent 等摘要 |
 | 按键提示 | `KeyHints` | 某个交互需要明确操作时替换状态行，例如 `↑↓ choose · enter confirm` |
-| Subagent 选择器 | `subagent_picker` / `SubagentPicker` | 页面最下方的 Main/Subagent 横向选择区；只在有内容时出现 |
+| Agents | `agent_thread_switcher` / `AgentThreadSwitcher` | 页面最下方的 Agent Thread 列表；一行一个 `main` 或被委托 Agent，Enter 切换当前 Thread，只在存在被委托 Agent 时出现 |
 
 ### 输入位置里可能出现什么
 
@@ -74,10 +74,10 @@
 
 | 推荐名称 | 位置 | 用途 |
 | --- | --- | --- |
-| 顶部提示 | `TopTip` | 固定贴在输入框上沿右侧，轮播 `← for agents`、`shift+tab to cycle` 等当前可用提示；临时通知会短暂覆盖它，不改变布局高度 |
+| 顶部提示 | `TopTip` | 固定贴在输入框上沿右侧；空会话默认显示 `← for agents`，首次提交进入对话后改为 `shift+tab to cycle policy`，保留 5 秒后留空；临时通知会短暂覆盖它，不改变布局高度 |
 | 状态区按键提示 | `KeyHints` | 位于输入位置下方，会替换 `StatusLine`，并参与布局高度计算 |
 
-因此，“输入框上 `← for agents` 和 `shift+tab` 的显示位置”叫顶部提示，不能叫状态行；“输入框下方的模型和 Git 信息”才是状态行。
+因此，`← for agents` 和一次性的 `shift+tab to cycle policy` 都属于顶部提示；输入框下方的权限模式、模型和 Git 信息才属于状态行。这里没有轮播：提示只会在进入对话时切换一次，到期后直接消失。
 
 ## 3. Session 管理页面
 
@@ -111,26 +111,29 @@ Session 管理页面复用正文区的位置，但内部改为 Welcome 和 Sessi
 最后绘制，位于最上层
   字符选择 Screen Selection
   详情浮层 DetailOverlay       ┐ 同一帧二选一
-  输入补全 Completion Popup    ┘
+  输入补全浮层 CompletionView  ┘
 普通 Session 页面或 Session 管理页面
 ```
 
 | 推荐名称 | 代码名称 | 怎么认 |
 | --- | --- | --- |
 | 详情浮层 | `DetailOverlay` | 居中、靠可用区域底部的只读详情框，通常有 `Esc to close`；打开时阻止底层操作 |
-| 输入补全 | Completion Popup | 输入 `/`、`@`、`$` 时出现在输入框上方的候选列表；有详情浮层时不显示 |
+| 输入补全浮层 | `CompletionView` | 输入 `/`、`@`、`$` 时出现在输入框上方的候选列表；有详情浮层时不显示 |
+| Slash Command 补全 | `CompletionView::Slash` | 输入 `/` 时显示产品或 App Server 提供的 Slash Command 候选 |
+| Mention 补全 | `CompletionView::Mention` | 输入 `@` 时显示文件或 Plugin 上下文候选 |
+| Skill 补全 | `CompletionView::Skill` | 输入 `$` 时显示可调用 Skill 候选 |
 | 字符选择 | `ScreenSelection` | 鼠标拖选、双击或三击形成的终端字符选择效果，画在所有内容之上 |
 
 不要把审批面板、提问面板叫“弹窗”：它们会参与普通纵向布局。只有覆盖在页面之上的
-`DetailOverlay` 和 Completion Popup 才叫浮层。
+`DetailOverlay` 和输入补全浮层才叫浮层。三种补全是同一个输入补全浮层的互斥内容，不是三个不同浮层；描述具体问题时使用“Slash Command 补全浮层”“Mention 补全浮层”或“Skill 补全浮层”。
 
 ## 5. 高度变化时会发生什么
 
-- 没有内容的 Goal、Plan、Queue、Query 和 Subagent 选择器高度为 0，不留下空壳。
+- 没有内容的 Goal、Plan、Queue、Query 和 Agents 高度为 0，不留下空壳。
 - 正文区拿走普通组件分配后剩余的高度；空间允许时至少保留 4 行。
 - 输入框高度随多行草稿变化；审批面板和功能页面会用自己的高度替换它。
 - 状态区通常最多显示两行，但 `KeyHints` 可以临时替换状态行。
-- 状态区和 Subagent 选择器都出现时，中间保留一行；只出现一方时不保留。
+- 状态区和 Agents 都出现时，中间保留一行；只出现一方时不保留。
 - Session 管理页面至少给 Session 列表保留 4 行；终端变矮时先压缩 Welcome。
 
 因此，定位“组件消失”问题时必须附上终端宽高。`80×24` 表示 80 列、24 行。
@@ -150,7 +153,8 @@ Session 管理页面复用正文区的位置，但内部改为 Welcome 和 Sessi
 - `Session 页面 / Transcript / 某个工具正文单元 / 展开状态 / PageUp 后内容跳动`
 - `Session 页面 / Query / 第三个选项 / 60×20 / 鼠标点到下一项`
 - `Session 管理页面 / Working 分组 / foo Session 行 / 100×28 / 时长列被截断`
-- `Session 页面 / Completion Popup / @ 文件候选 / 80×24 / 第一项盖住输入框上边线`
+- `Session 页面 / Mention 补全浮层 / @ 文件候选 / 80×24 / 第一项盖住输入框上边线`
+- `Session 页面 / Slash Command 补全浮层 / /skills 候选项 / 80×24 / 第一项盖住输入框上边线`
 - `Session 页面 / DetailOverlay / /status 详情 / 80×18 / 底部按键提示不可见`
 
 如果仍不知道名称，可以说“在 A 和 B 之间的那一行”，但 A、B 尽量使用本文术语。

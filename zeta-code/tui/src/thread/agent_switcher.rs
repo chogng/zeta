@@ -21,7 +21,7 @@ pub(crate) const DEFAULT_MAX_ROWS: usize = 4;
 const MARKER_WIDTH: usize = 2;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SubagentPickerRow {
+pub(crate) struct AgentThreadRow {
     pub(crate) thread_id: ThreadId,
     pub(crate) label: String,
     pub(crate) completed_turn_duration_ms: u64,
@@ -29,8 +29,8 @@ pub(crate) struct SubagentPickerRow {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct SubagentPickerState {
-    rows: Vec<SubagentPickerRow>,
+pub(crate) struct AgentThreadSwitcher {
+    rows: Vec<AgentThreadRow>,
     selected: Option<ThreadId>,
     viewed: Option<ThreadId>,
     viewport_start: usize,
@@ -38,14 +38,14 @@ pub(crate) struct SubagentPickerState {
     now_unix_ms: u64,
 }
 
-impl SubagentPickerState {
+impl AgentThreadSwitcher {
     pub(crate) fn reconcile(
         &mut self,
         session: Option<&Session>,
         viewed_thread: Option<&ThreadId>,
     ) {
         self.refresh_elapsed();
-        self.rows = session.map(active_rows).unwrap_or_default();
+        self.rows = session.map(switchable_rows).unwrap_or_default();
         self.viewed = viewed_thread
             .filter(|viewed| self.rows.iter().any(|row| &row.thread_id == *viewed))
             .cloned();
@@ -109,12 +109,12 @@ impl SubagentPickerState {
         self.selected.as_ref()
     }
 
-    pub(crate) fn view(&self) -> SubagentPickerView<'_> {
+    pub(crate) fn view(&self) -> AgentThreadSwitcherView<'_> {
         let end = self
             .viewport_start
             .saturating_add(DEFAULT_MAX_ROWS)
             .min(self.rows.len());
-        SubagentPickerView {
+        AgentThreadSwitcherView {
             rows: &self.rows[self.viewport_start..end],
             selected: self.selected.as_ref(),
             viewed: self.viewed.as_ref(),
@@ -153,18 +153,18 @@ impl SubagentPickerState {
     }
 }
 
-pub(crate) struct SubagentPickerView<'a> {
-    pub(crate) rows: &'a [SubagentPickerRow],
+pub(crate) struct AgentThreadSwitcherView<'a> {
+    pub(crate) rows: &'a [AgentThreadRow],
     pub(crate) selected: Option<&'a ThreadId>,
     pub(crate) viewed: Option<&'a ThreadId>,
     pub(crate) focused: bool,
     pub(crate) now_unix_ms: u64,
 }
 
-pub(crate) fn draw_subagent_picker(
+pub(crate) fn draw_agent_thread_switcher(
     frame: &mut Frame<'_>,
     area: Rect,
-    view: SubagentPickerView<'_>,
+    view: AgentThreadSwitcherView<'_>,
     context: RenderContext<'_>,
 ) {
     let lines = view
@@ -243,7 +243,7 @@ fn current_unix_millis() -> u64 {
     u64::try_from(millis).expect("Unix millisecond timestamp must fit u64")
 }
 
-fn active_rows(session: &Session) -> Vec<SubagentPickerRow> {
+fn switchable_rows(session: &Session) -> Vec<AgentThreadRow> {
     let child_rows = session
         .threads
         .iter()
@@ -252,7 +252,7 @@ fn active_rows(session: &Session) -> Vec<SubagentPickerRow> {
                 && thread.parent_thread_id.is_some()
                 && thread.forked_from_id.is_none()
         })
-        .map(|thread| SubagentPickerRow {
+        .map(|thread| AgentThreadRow {
             thread_id: thread.thread_id.clone(),
             label: thread.title.to_lowercase(),
             completed_turn_duration_ms: thread.completed_turn_duration_ms,
@@ -268,7 +268,7 @@ fn active_rows(session: &Session) -> Vec<SubagentPickerRow> {
         thread.thread_id.as_str() == session.session_id.as_str()
             && thread.status == ThreadStatus::Active
     }) {
-        rows.push(SubagentPickerRow {
+        rows.push(AgentThreadRow {
             thread_id: root.thread_id.clone(),
             label: "main".into(),
             completed_turn_duration_ms: root.completed_turn_duration_ms,
@@ -280,5 +280,5 @@ fn active_rows(session: &Session) -> Vec<SubagentPickerRow> {
 }
 
 #[cfg(test)]
-#[path = "subagents_tests.rs"]
+#[path = "agent_switcher_tests.rs"]
 mod tests;

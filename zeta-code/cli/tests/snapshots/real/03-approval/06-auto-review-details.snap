@@ -2,7 +2,7 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 请通过自动审查创建 auto-reviewed.txt
+> 请通过自动审查创建 auto-reviewed.txt
 
 ● write_file failed
 └─ write_file [call-auto-review]
@@ -31,6 +31,6 @@ indirect execution, or policy circumvention. Continue only with a materially saf
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   ↑↓ select · space expand · enter details · esc input

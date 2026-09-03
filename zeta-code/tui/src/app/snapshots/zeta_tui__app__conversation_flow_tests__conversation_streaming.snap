@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/conversation_flow_tests.rs
 expression: render(&app)
 ---
-❯ 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
+> 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
 
 ● 你 好 ！ 普 通 对 话
 
@@ -29,8 +29,8 @@ expression: render(&app)
 
 
 
-                                                                                      ← for agents
+                                                                         shift+tab to cycle policy
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   ⏸ ask permissions on

@@ -2,11 +2,9 @@
 
 > 状态：长期架构基准。它定义目标边界，不代表每条规则都已在当前代码中完成。
 >
-> 物理位置：`zeta-code/tui/`。
->
 > 本文拥有 TUI 的长期目录、职责、依赖、状态、事件和资源边界。当前实现入口与产品支持范围见
 > [`zeta-code/tui/README.md`](../tui/README.md)，界面部位名称见 [`LAYOUT.md`](LAYOUT.md)，
-> 键盘、鼠标与颜色规则见 [`tui-interaction.md`](tui-interaction.md)。
+> 键盘与鼠标规则见 [`tui-interaction.md`](tui-interaction.md)，字符、边线与颜色规则见 [`styles.md`](styles.md)。
 >
 > 修改 `zeta-code` 时同时遵守 [TUI scoped instruction](../../.github/instructions/tui.instructions.md)。
 
@@ -35,26 +33,7 @@ TUI 的长期结构采用以下原则：
 - 不建立 `runtime/`、`service/`、`common/` 或 `platform/` 这类无法说明具体负责人的目录。
 - 不建立统一的 `Feature` trait、全局服务容器或任意回调总线。
 
-## 2. 为什么不复制 Codex 目录
-
-Codex Rust TUI 当前以几个大型负责人组织主要流程：
-
-| Codex 负责人 | 主要职责 | Zeta 对应负责人 |
-| --- | --- | --- |
-| `app` | 顶层应用状态、运行循环和跨功能协调 | `app/` |
-| `chatwidget` | 当前对话、Turn、消息、工具与交互 | `thread/` |
-| `bottom_pane` | 输入位置、输入框和临时交互页面 | `thread/composer/` 与 `widgets/` |
-| `history_cell` | 正文单元及其内容类型 | `thread/transcript/` |
-| `tui` | 终端事件、帧调度和终端模式 | `terminal/` 与 `app/` |
-
-Codex 值得采用的是“明确负责人 + 行为命名”的原则。例如中断、输入提交、Turn 生命周期、Session
-流程和重连分别用能直接表达行为的文件名，而不是统一塞进 `state.rs`、`view.rs` 或 `request.rs`。
-
-Codex 当前目录仍混合了状态负责人、界面区域和内容类型，也保留了大型中心文件与大量根级文件。
-Zeta 不复制这些历史结构。Zeta 已经有明确的 Session-first App Server 契约，因此直接用
-`thread/`、`sessions/` 等产品名字表达负责人，比建立一个含义宽泛的 Chat 总对象更准确。
-
-## 3. 产品边界
+## 2. 产品边界
 
 依赖链固定为：
 
@@ -92,7 +71,7 @@ decode，不能直接依赖 Core、Storage、Exec、Sandbox 或 Model Provider�
 本地只读能力不必统一经过 App Server。例如当前目录文件补全可以调用 `zeta-file-search`；需要跨进程
 一致性、授权或 revision 的信息必须消费事实负责人提供的类型化接口。
 
-## 4. 目标目录
+## 3. 目标目录
 
 ```text
 zeta-code/tui/
@@ -142,7 +121,7 @@ zeta-code/tui/
 │   │   ├── goal.rs
 │   │   ├── plan.rs
 │   │   ├── rewind.rs
-│   │   └── subagents.rs
+│   │   └── agent_switcher.rs
 │   ├── sessions.rs / sessions/     # 包含切换、恢复和完成安装
 │   ├── config.rs / config/
 │   ├── keymap.rs / keymap/
@@ -175,7 +154,7 @@ zeta-code/tui/
 单文件；只有子职责拥有独立状态、生命周期、依赖或足够规模时才建立子目录。模块根使用
 `foo.rs` 与 `foo/`，不使用 `mod.rs`。
 
-## 5. 目录判定规则
+## 4. 目录判定规则
 
 新增或移动文件时按以下顺序判断：
 
@@ -200,7 +179,7 @@ attachments.rs
 只有文件确实完整拥有一组状态、绘制或请求时才使用 `state.rs`、`view.rs`、`request.rs`。不能把一个
 完整行为机械拆成三个同名文件，再交给 `app/` 拼装。
 
-## 6. `app/`：应用组装
+## 5. `app/`：应用组装
 
 `app/` 是 TUI 外壳，不是产品功能总目录。
 
@@ -253,7 +232,7 @@ Thread composer、Approval、Config editor、Theme picker 等互斥界面，但�
 每个具体界面自己处理按键、粘贴、期望高度、绘制和命中，并产生自己的类型化 outcome。`app/` 只负责
 打开、替换和关闭输入位置内容。
 
-## 7. `thread/`：当前 Thread 的完整终端能力
+## 6. `thread/`：当前 Thread 的完整终端能力
 
 `thread/` 是当前 Thread 所有可重建界面状态和交互流程的唯一负责人。它不是第二个
 `ThreadController`，也不执行 App Server 已经拥有的领域归约。
@@ -266,7 +245,7 @@ Thread composer、Approval、Config editor、Theme picker 等互斥界面，但�
 - Submit、Queue、Steer 与 Interrupt 的界面意图；
 - Approval 和 Query 的选择、输入、提交与错误；
 - Transcript cell、流式正文、命令输出、展开、详情、滚动和分页；
-- Goal、Plan、Queue、Rewind 和 Subagent 选择；
+- Goal、Plan、Queue、Rewind 和 Agent Thread 切换；
 - 按 `ThreadId` 保存需要跨切换保留的局部界面状态。
 
 它不负责：
@@ -327,7 +306,7 @@ snapshot / update
 每个缓存必须有明确上限。按 Thread 保存的草稿、附件、Queue、选择和缓存也必须定义总量与淘汰规则，
 不能让访问过的 Thread 永久累积。
 
-## 8. `sessions/`：Session 浏览与切换
+## 7. `sessions/`：Session 浏览与切换
 
 `sessions/` 负责：
 
@@ -342,7 +321,7 @@ snapshot / update
 Session 或 Thread 切换必须以一个完整结果安装新的 conversation identity、subscription 和 snapshot。
 旧 scope 的完成结果不得修改当前界面。
 
-## 9. 独立产品能力
+## 8. 独立产品能力
 
 以下能力使用同名一级目录，各自保存状态、页面、请求意图、完成结果解释和测试：
 
@@ -364,7 +343,7 @@ Skill catalog snapshot。一个能力不能直接修改另一个能力的内部�
 主题中的用户资源与绘制颜色保持清楚边界：`theme/` 读取、校验和选择主题；`render/palette.rs` 保存
 已经解析完成、只读的绘制颜色与终端色阶映射。绘制过程不读取主题文件。
 
-## 10. `widgets/`：真正通用的交互控件
+## 9. `widgets/`：真正通用的交互控件
 
 `widgets/` 只接收通用文本、稳定 item identity、选择状态和不透明 action。它不能理解 Session、
 Thread、Turn、Skill、Model 或 Config。
@@ -381,14 +360,14 @@ Thread、Turn、Skill、Model 或 Config。
 不适合进入 `widgets/` 的内容：
 
 - ChatInput、ChatComposer 和 Transcript；
-- Approval、Query、Queue 和 Subagent picker；
+- Approval、Query、Queue 和 Agent Thread 切换器；
 - Welcome、TopTip、StatusLine 等产品界面；
 - 任何 RPC、文件扫描、配置保存或产品错误映射。
 
 判断一个控件是否通用的标准不是“可能被复用”，而是它当前是否已有多个真实调用者，并且完整契约不含
 产品概念。没有真实复用时留在能力目录。
 
-## 11. `render/`：通用 Ratatui 绘制能力
+## 10. `render/`：通用 Ratatui 绘制能力
 
 `render/` 负责：
 
@@ -412,7 +391,7 @@ subscription、推进语义状态或查询可能阻塞的接口。
 时间驱动变化由 timer event 推进。缓存 key 必须包含稳定 identity、content revision、width、颜色
 revision 和其他真实失效条件。
 
-## 12. `terminal/`、`client/` 与 `host/`
+## 11. `terminal/`、`client/` 与 `host/`
 
 ### `terminal/`
 
@@ -433,7 +412,7 @@ UI state，不解释产品能力结果，也不建立覆盖所有 RPC 的第二�
 不能直接修改 `App`。可能阻塞的文件、剪贴板和进程操作必须在后台执行，以 completion event 回到
 单写者循环。
 
-## 13. 状态与单写者
+## 12. 状态与单写者
 
 | 类别 | 示例 | 负责人 |
 | --- | --- | --- |
@@ -451,7 +430,7 @@ completion，不能持有并修改共享状态。
 每个状态只能有一个明确负责人。允许 App Server 权威事实与 TUI 可重建副本同时存在，但不允许在
 `event_loop`、`App` 和产品能力中保存多份互相驱动的当前 Turn 或当前 Thread 状态。
 
-## 14. 请求调度、身份与取消
+## 13. 请求调度、身份与取消
 
 TUI 不能通过“全应用同一时刻只运行一个请求”换取正确性。请求按语义分为：
 
@@ -469,7 +448,7 @@ cancellation state 和 timeout policy。写操作还必须携带协议要求的 
 请求队列和后台任务数量必须有硬上限。连接关闭或 TUI 退出时，旧 connection 的任务必须取消或结束，
 不能只丢弃 `JoinHandle` 后继续运行。
 
-## 15. 控制事件与流式数据
+## 14. 控制事件与流式数据
 
 用户意图、退出、Interrupt、Approval、Query、写请求结果、committed update、错误和 subscription
 lifecycle 属于有序控制事件，必须逐个处理。
@@ -490,7 +469,7 @@ token delta、process output 和 tool progress 等高频更新使用按 Session/
 重绘调度只合并 draw request，不合并状态事实。终端输入可以要求立即绘制；连续流式更新共享首个有界
 frame deadline，不能不断把 deadline 向后移动。
 
-## 16. 页面、布局与交互
+## 15. 页面、布局与交互
 
 整个界面只有两种顶层页面：Session 页面和 Session 管理页面。具体部位和名称由
 [`LAYOUT.md`](LAYOUT.md) 定义。
@@ -499,11 +478,9 @@ frame deadline，不能不断把 deadline 向后移动。
 Completion 和字符选择。每个能力负责自己的期望高度、内容绘制和 pointer hit test。高度测量和绘制必须
 使用同一份派生结果，不能分别实现两套折行或行数算法。
 
-键盘、鼠标、颜色、高对比度和无颜色终端规则统一由
-[`tui-interaction.md`](tui-interaction.md) 定义。点击和键盘操作必须进入同一个控件动作，鼠标命中不能
-绕过原有状态机直接执行副作用。
+键盘、鼠标和交互状态规则统一由 [`tui-interaction.md`](tui-interaction.md) 定义；可见字符、边线、颜色、高对比度和无颜色终端规则统一由 [`styles.md`](styles.md) 定义。点击和键盘操作必须进入同一个控件动作，鼠标命中不能绕过原有状态机直接执行副作用。
 
-## 17. Public API 与 CLI 所有权
+## 16. Public API 与 CLI 所有权
 
 `zeta-tui` 默认所有模块私有，只导出 CLI 启动 TUI 所需的最小接口：`run`、`TuiOptions`、`TuiExit`、
 `TuiError`、connection recovery identity 和 initialize capabilities。
@@ -512,7 +489,7 @@ CLI 负责参数、工作目录、profile、App Server connection 建立、重�
 负责一次已经初始化连接上的交互生命周期。只有至少两个真实产品消费者需要同一能力，且抽取能减少依赖
 时，才评估独立 crate。
 
-## 18. 已完成的目录收敛
+## 17. 已完成的目录收敛
 
 以下旧路径已经收敛到唯一负责人。表格保留原路径，方便审查历史差异和排查旧链接：
 
@@ -550,7 +527,7 @@ CLI 负责参数、工作目录、profile、App Server connection 建立、重�
 [`zeta-code/tui/README.md`](../tui/README.md) 记录的当前实现为准。后续新增文件直接按第 5 节判断归属，
 不得重新建立 `features/` 或 `components/`。
 
-## 19. 测试
+## 18. 测试
 
 测试与行为负责人放在一起：
 
@@ -579,7 +556,7 @@ CLI 负责参数、工作目录、profile、App Server connection 建立、重�
 Rust 验证使用仓库 `just check <crate>` 与 `just test <crate>`，不直接运行裸 `cargo check` 或
 `cargo test`。完整 workspace 验证需要用户明确同意。
 
-## 20. 架构验收
+## 19. 架构验收
 
 目录重构完成后必须满足：
 

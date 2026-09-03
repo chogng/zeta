@@ -2,7 +2,7 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ /resume thread:session-<ID>
+> /resume thread:session-<ID>
 └─ Resumed session thread:session-<ID> on thread
 thread:session-<ID>.
 
@@ -28,9 +28,9 @@ thread:session-<ID>.
 
 
 
-                                                                                shift+tab to cycle
+                                                                                      ← for agents
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
   ⏸ ask permissions on

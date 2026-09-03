@@ -195,7 +195,7 @@ fn actual_tui_queues_restores_and_completes_messages() {
     process.escape();
     process.wait_for_screen("Enter view");
     process.send(b"r");
-    process.wait_for_screen("❯ 第三条：稍后恢复到输入框\n────────────────");
+    process.wait_for_screen("> 第三条：稍后恢复到输入框\n────────────────");
     process.assert_snapshot("real/04-queue/02-message-restored-to-input");
 
     first_gate.release();

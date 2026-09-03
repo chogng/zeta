@@ -14,8 +14,10 @@
 [`core-multi-agent.md`](core-multi-agent.md) 为准；canonical 产品契约以
 [`protocol.md`](protocol.md) 为准；**harness 产品策略**（提示词组织、工具面选择与注册时机、
 上下文裁剪/压缩策略、prompt cache）以
-[`agent-harness-design.md`](agent-harness-design.md) 为准。本文拥有三件事：**跨层分层与依赖
-规则、重审后的关键决策、分阶段实施计划**。
+[`agent-harness-design.md`](agent-harness-design.md) 为准；Agent 定义与启动策略以
+[`agents.md`](agents.md) 为准；provider 无关的模型目录与候选选择以
+[`models-manager.md`](models-manager.md) 为准。本文拥有三件事：**跨层分层与依赖规则、重审后的
+关键决策、分阶段实施计划**。
 
 组件状态使用四个显式标记，本文和四篇领域文档共用同一词表：
 
@@ -32,6 +34,7 @@
 | Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化 | [分层与执行链](#3-分层与执行链) |
 | 执行内核会异步化（tokio）吗？ | 不承诺；保留同步端口 + per-Thread OS 线程，流式经 sink 达成 | [R2](#42-r2同步执行内核流式经-sink) |
 | Turn 中途策略会漂移吗？ | 模型选择与 policy revision 都在 `TurnAccepted` 冻结；恢复遇到 revision 变化会 fail closed | [R1](#41-r1策略冻结-durable-化) |
+| Agent 请求的模型不可用时怎么办？ | 目标设计是在运行创建前按策略选择同 scope、同 provider 或其他允许 provider 的兼容模型并警告；运行开始后不再换模型 | [`agents.md`](agents.md#41-模型选择与替换)、[`models-manager.md`](models-manager.md#103-模型选择与替换) |
 | 上下文溢出怎么办？ | 已由纯 planner 返回显式 overflow/compaction outcome；checkpoint durable commit 后才重规划 | [R3](#43-r3上下文系统裁剪落地) |
 | 多 Agent 什么时候做？ | 阶段 D 契约与阶段 E 的上下文模式、委托、消息、等待、取消树、恢复和 UI 投影已落地；会话入口与委托运行共用的 Agent 定义仍按统一契约推进 | [R4](#44-r4多-agent-契约冻结先行)、[`agents.md`](agents.md) |
 
@@ -105,6 +108,7 @@
 | --- | --- | --- | --- |
 | policy 冻结（durable policy revision binding） | 已实现 | A | `TurnAccepted.policy_revision`、`ToolScheduler` recovery checks |
 | `ModelInvocationSnapshot` | 部分 | B | selected model、`ContextPlan` 与 tools 已冻结；独立 provider/config/catalog revision 集合尚未建模 |
+| Agent 运行创建前的模型继承、覆盖与兼容替换 | 仅设计 | E 之后 | [`agents.md`](agents.md#41-模型选择与替换)、[`models-manager.md`](models-manager.md#103-模型选择与替换) |
 | `ContextInput` / `ContextPlan` / 纯内容选择 planner | 已实现 | B | [`core-context.md`](core-context.md) |
 | 通用 context budget / token measurement 判定 | 已实现 | B | [`zeta-context-engine`](../zeta-rs/context-engine/README.md)；OpenAI exact，Anthropic/Google/Kimi/Z.AI estimated remote preflight 已接入，local tokenizer 尚未接入 |
 | `ContextManager`（薄协调，无 cache） | 已实现 | B | `core/src/context_manager.rs`、`loaded_thread.rs` |
@@ -252,6 +256,13 @@ incarnation 的 sequence gap 会清空 transient projection 并刷新 canonical 
 `ModelInvocationSnapshot` 当前随 `ContextPlan` 一起冻结 selected model、上下文计划与工具；
 输出/推理设置和独立 provider/config/catalog revision 集合尚未建模。它是可从 durable fact 与
 安全点快照重建的进程内值，无需自身持久化——这与 R1 的 policy 冻结不同。
+
+Agent 级模型策略是另一层尚未实现的创建契约：App Server 在 Agent 运行创建前组合 Session 或
+工作流基线、Agent 定义和本次启动参数，再让 `zeta-models-manager` 选择一个准确模型。请求模型、
+实际模型、替换原因、目录 generation、推理等级和服务等级随运行冻结；后续 Turn 只使用这个已选
+模型。目录刷新、上级 Agent 的临时覆盖或一次 provider 调用失败都不能触发运行中换模型或重放。
+当前 `TurnAccepted` 携带 model 的行为继续作为 Turn 级事实，不能被误写成上述 Agent 级选择已经
+落地。
 
 ### 4.4 R4：多 Agent 契约冻结先行
 

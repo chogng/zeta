@@ -330,7 +330,7 @@ Inference 通常是 POST，不能仅因“尚未收到 token”就假定安全�
 - 已产生 semantic output 后禁止透明 retry；
 - direct-provider credential error、validation error 不重试；
 - ChatGPT 订阅凭据刷新由 `zeta-chatgpt` 处理，不能套用 inference HTTP retry；
-- fallback model/provider 是 Agent policy，不是 client retry；
+- 模型替换由 `zeta-models-manager` 在运行创建前依据 Agent、Session 或工作流策略完成，不是 client retry；
 - runtime 只选择 typed policy，不自己 sleep 或写 attempt loop。
 
 ## 9. 流式处理分工

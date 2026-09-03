@@ -63,6 +63,8 @@ src/
 如果 manager 开始拼 discovery URL、读取 API key、发送 inference、解释 SSE，或者 provider runtime/UI
 重新实现 `ListedOnly` / `AllowUnlisted` 判断，说明 ownership 已漂移。
 
+同样，后续如果 App Server、Core 或 provider adapter 各自实现“准确模型 → 同 provider → 其他 provider”的候选顺序，也表示模型选择 ownership 已经漂移。该能力应扩展在本 crate 内，不能另建模型路由 crate；上层只提交 provider 无关的基线、偏好、覆盖规则、替换范围和能力要求。
+
 ## 执行路径
 
 静态路径不访问网络：
@@ -137,4 +139,6 @@ Unknown merge、fresh/stale/expired、304 generation 稳定和 per-scope singlef
 scope 或 resolution 时必须同步相应 table test、本文和系统文档；新增 protocol-visible 字段还要同步
 App Server DTO/schema fixture。
 
-当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama 已通过 provider runtime 接入 `/api/tags` 与 `/api/show`；其他 provider 动态目录仍未实现。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/refresh` / `model/updated` wire method；这些是系统文档后续阶段，不应被描述为当前行为。
+当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama 已通过 provider runtime 接入 `/api/tags` 与 `/api/show`；其他 provider 动态目录仍未实现。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/refresh` / `model/updated` wire method。
+
+跨 provider 模型选择同样尚未实现：当前 `ModelsManager::resolve` 只校验一个准确 `ModelRef`，没有候选排序、`ModelSelectionDecision`、替换原因或客户端警告。计划实现必须复用本 crate 的同一批 snapshot 与 `ModelRequirements`，只在 Agent 或工作流运行创建前选择一次；准确模型不可用时先检查同 catalog scope 的已验证兼容候选，再检查同 provider 的其他允许 scope，最后检查其他允许 provider。选择结果冻结后，catalog refresh 或真实调用失败都不能触发后台换模型。完整行为与类型边界见 [`docs/models-manager.md`](../../docs/models-manager.md#103-模型选择与替换)。

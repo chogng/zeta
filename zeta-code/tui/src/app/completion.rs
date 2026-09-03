@@ -25,6 +25,7 @@ use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::SteerId;
 use crate::thread::composer::chat_input_catalog_snapshot;
 use crate::thread::queue::QueueId;
+use std::time::Instant;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
@@ -189,6 +190,7 @@ pub(super) fn apply_request_completion(
                 switch,
                 ConversationCompletionPresentation::Silent,
             );
+            app.show_policy_tip(Instant::now());
             apply_turn_start_completion(turn, None, conversation, thread_subscription, app);
         }
         Completion::ManagerSessionCreated(Err(error)) => {

@@ -1,5 +1,5 @@
-use super::SubagentPickerState;
-use super::draw_subagent_picker;
+use super::AgentThreadSwitcher;
+use super::draw_agent_thread_switcher;
 use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -13,16 +13,16 @@ use zeta_protocol::ThreadStatus;
 #[test]
 fn completed_subagents_disappear_without_changing_stable_selection() {
     let mut session = session();
-    let mut picker = SubagentPickerState::default();
+    let mut switcher = AgentThreadSwitcher::default();
     let selected = thread_id("child-b");
-    picker.reconcile(Some(&session), Some(&selected));
-    picker.focus();
+    switcher.reconcile(Some(&session), Some(&selected));
+    switcher.focus();
 
     session.threads[1].status = ThreadStatus::Archived;
-    picker.reconcile(Some(&session), Some(&selected));
+    switcher.reconcile(Some(&session), Some(&selected));
 
-    assert_eq!(picker.selected(), Some(&selected));
-    assert_eq!(picker.view().rows.len(), 2);
+    assert_eq!(switcher.selected(), Some(&selected));
+    assert_eq!(switcher.view().rows.len(), 2);
 }
 
 #[test]
@@ -31,20 +31,20 @@ fn selection_drives_a_bounded_viewport() {
     for index in 0..6 {
         session.threads.push(child(&format!("extra-{index}")));
     }
-    let mut picker = SubagentPickerState::default();
-    picker.reconcile(Some(&session), Some(&thread_id("root")));
-    picker.focus();
+    let mut switcher = AgentThreadSwitcher::default();
+    switcher.reconcile(Some(&session), Some(&thread_id("root")));
+    switcher.focus();
     for _ in 0..6 {
-        picker.select_next();
+        switcher.select_next();
     }
 
-    assert_eq!(picker.view().rows.len(), 4);
+    assert_eq!(switcher.view().rows.len(), 4);
     assert!(
-        picker
+        switcher
             .view()
             .rows
             .iter()
-            .any(|row| Some(&row.thread_id) == picker.selected())
+            .any(|row| Some(&row.thread_id) == switcher.selected())
     );
 }
 
@@ -55,14 +55,16 @@ fn rows_use_selection_dots_lowercase_names_and_right_aligned_elapsed_time() {
     session.threads[0].completed_turn_duration_ms = 61_000;
     session.threads[1].completed_turn_duration_ms = 21_000;
     session.threads[1].active_turn_started_at_unix_ms = Some(52_000);
-    let mut picker = SubagentPickerState::default();
-    picker.reconcile(Some(&session), Some(&thread_id("child-a")));
-    picker.now_unix_ms = 62_000;
+    let mut switcher = AgentThreadSwitcher::default();
+    switcher.reconcile(Some(&session), Some(&thread_id("child-a")));
+    switcher.now_unix_ms = 62_000;
     let backend = TestBackend::new(30, 2);
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw_subagent_picker(frame, frame.area(), picker.view(), test_context()))
+        .draw(|frame| {
+            draw_agent_thread_switcher(frame, frame.area(), switcher.view(), test_context())
+        })
         .unwrap();
 
     let buffer = terminal.backend().buffer();
@@ -83,14 +85,16 @@ fn rows_use_selection_dots_lowercase_names_and_right_aligned_elapsed_time() {
 #[test]
 fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
     let session = session();
-    let mut picker = SubagentPickerState::default();
-    picker.reconcile(Some(&session), Some(&thread_id("child-a")));
-    picker.focus();
-    picker.select_next();
+    let mut switcher = AgentThreadSwitcher::default();
+    switcher.reconcile(Some(&session), Some(&thread_id("child-a")));
+    switcher.focus();
+    switcher.select_next();
     let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
 
     terminal
-        .draw(|frame| draw_subagent_picker(frame, frame.area(), picker.view(), test_context()))
+        .draw(|frame| {
+            draw_agent_thread_switcher(frame, frame.area(), switcher.view(), test_context())
+        })
         .unwrap();
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(0, 1)].symbol(), "●");
@@ -101,9 +105,11 @@ fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
     assert_eq!(buffer[(0, 2)].symbol(), "○");
     assert_eq!(buffer[(0, 2)].bg, test_context().selection_background());
 
-    picker.blur();
+    switcher.blur();
     terminal
-        .draw(|frame| draw_subagent_picker(frame, frame.area(), picker.view(), test_context()))
+        .draw(|frame| {
+            draw_agent_thread_switcher(frame, frame.area(), switcher.view(), test_context())
+        })
         .unwrap();
     let buffer = terminal.backend().buffer();
     assert_eq!(
@@ -114,16 +120,16 @@ fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
 }
 
 #[test]
-fn picker_is_absent_without_an_active_subagent() {
+fn switcher_is_absent_without_an_active_subagent() {
     let mut session = session();
     session.threads.truncate(1);
-    let mut picker = SubagentPickerState::default();
+    let mut switcher = AgentThreadSwitcher::default();
 
-    picker.reconcile(Some(&session), Some(&thread_id("root")));
+    switcher.reconcile(Some(&session), Some(&thread_id("root")));
 
-    assert_eq!(picker.desired_rows(), 0);
-    assert!(picker.view().rows.is_empty());
-    assert!(!picker.focus());
+    assert_eq!(switcher.desired_rows(), 0);
+    assert!(switcher.view().rows.is_empty());
+    assert!(!switcher.focus());
 }
 
 fn session() -> Session {

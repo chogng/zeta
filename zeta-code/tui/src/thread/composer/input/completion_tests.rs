@@ -111,7 +111,7 @@ fn completion_escape_precedes_vim_and_normal_mode_does_not_submit() {
         chat_input.handle_key(key(KeyCode::Esc)),
         ChatInputOutcome::Consumed
     );
-    assert_eq!(chat_input.input.prompt(), "❯ ");
+    assert_eq!(chat_input.input.prompt(), "> ");
     assert_eq!(
         chat_input.handle_key(key(KeyCode::Esc)),
         ChatInputOutcome::Consumed

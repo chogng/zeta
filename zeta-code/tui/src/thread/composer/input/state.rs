@@ -203,7 +203,7 @@ impl ChatInput {
 
     pub(crate) fn prompt(&self) -> &'static str {
         match self.input_mode {
-            ChatInputMode::Standard => "❯ ",
+            ChatInputMode::Standard => "> ",
             ChatInputMode::Vim => self.vim.prompt(),
         }
     }

@@ -2,7 +2,7 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 请直接创建 permission-bypassed.txt
+> 请直接创建 permission-bypassed.txt
 
 ● Ran write_file
 └─ write_file [call-bypass]
@@ -31,6 +31,6 @@ expression: screen
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   ↑↓ select · space expand · enter details · esc input

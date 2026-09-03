@@ -2,7 +2,7 @@
 source: zeta-code/cli/tests/support/tui_process.rs
 expression: screen
 ---
-❯ 触发 401 鉴权失败
+> 触发 401 鉴权失败
 
 ● Model provider authentication failed
 
@@ -28,9 +28,9 @@ credentials, then retry.
 
 
 
-                                                                                shift+tab to cycle
+                                                                         shift+tab to cycle policy
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-❯
+>
 ────────────────────────────────────────────────────────────────────────────────────────────────────
   zeta-real-scenario                                                                      ← agents
   ⏸ ask permissions on
