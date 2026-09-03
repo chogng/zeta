@@ -35,8 +35,8 @@
     "dev:web": "corepack pnpm --dir zeta-ts dev:web",
     "dev:web:full": "corepack pnpm --dir zeta-ts dev:web:full",
     "fetch:pdfium": "node build/download/fetchPdfium.ts",
-    "package:zeta": "python3 -B build/release/build_zeta_package.py",
-    "generate:protocol": "python -B scripts/zeta-rs/app-server-protocol/write_schema_fixtures.py && corepack pnpm --dir zeta-ts run protocol:generate",
+    "package:zeta": "just package",
+    "generate:protocol": "just generate-protocol",
     "verify:protocol": "cargo test --manifest-path Cargo.toml -p zeta-app-server-protocol"
   }
 }

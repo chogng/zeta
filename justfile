@@ -47,6 +47,11 @@ multi-agent-eval *args:
 check-config-migrations:
     {{ python }} -B scripts/cargo.py test -p zeta-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact
 
+# Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
+generate-protocol:
+    {{ python }} -B scripts/zeta-rs/app-server-protocol/write_schema_fixtures.py
+    corepack pnpm --dir zeta-ts run protocol:generate
+
 # Launch the zeta code TUI product from the current source tree.
 zeta *args:
     {{ python }} -B scripts/zeta-code/run.py {args}
