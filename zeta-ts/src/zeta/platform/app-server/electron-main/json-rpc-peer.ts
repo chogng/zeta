@@ -1,4 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../../../../../generated/app-server/AppServerProtocolDecoder.js";
+import type { AppServerMethod, AppServerMethodDefinition, MethodParams, MethodResult } from "../../../../../generated/app-server/types.js";
 import { CancellationError } from "../../../base/common/errors.js";
 import { getOrSet } from "../../../base/common/map.js";
 import {
@@ -50,6 +52,7 @@ export class RpcRequestCancelledError extends CancellationError {
 }
 
 interface PendingRequest {
+	readonly method: AppServerMethod;
 	resolve(value: unknown): void;
 	reject(error: Error): void;
 	timeout?: NodeJS.Timeout;
@@ -104,11 +107,11 @@ export class JsonRpcPeer implements IDisposable {
 		setDisposableOwner(this.subscriptions, this);
 	}
 
-	request<P, R>(
-		definition: RpcMethodDefinition<P, R>,
-		params: P,
+	request<M extends AppServerMethod>(
+		definition: AppServerMethodDefinition<M>,
+		params: MethodParams<M>,
 		options: RpcRequestOptions = {},
-	): Promise<R> {
+	): Promise<MethodResult<M>> {
 		if (this.closedError) return Promise.reject(this.closedError);
 		if (options.signal?.aborted) {
 			return Promise.reject(
@@ -126,9 +129,10 @@ export class JsonRpcPeer implements IDisposable {
 		}
 
 		const id = this.nextId++;
-		const promise = new Promise<R>((resolve, reject) => {
+		const promise = new Promise<MethodResult<M>>((resolve, reject) => {
 			const pending: PendingRequest = {
-				resolve: (value) => resolve(value as R),
+				method: definition.method,
+				resolve: (value) => resolve(value as MethodResult<M>),
 				reject,
 			};
 			if (options.timeoutMs !== undefined) {
@@ -227,15 +231,18 @@ export class JsonRpcPeer implements IDisposable {
 			this.protocolFailure("App Server emitted invalid JSON");
 			return;
 		}
-		if (!isObject(message) || message.jsonrpc !== "2.0") {
-			this.protocolFailure("App Server emitted an invalid JSON-RPC envelope");
+		let envelope;
+		try {
+			envelope = decodeAppServerEnvelope(message);
+		} catch (error) {
+			this.protocolFailure(error instanceof Error ? error.message : "App Server emitted an invalid JSON-RPC envelope");
 			return;
 		}
-		if (typeof message.method === "string") {
-			this.onInboundCall(message);
+		if (envelope.kind === "notification" || envelope.kind === "serverRequest") {
+			this.onInboundCall(message as Record<string, unknown>);
 			return;
 		}
-		this.onResponse(message);
+		this.onResponse(message as Record<string, unknown>);
 	}
 
 	private onResponse(message: Record<string, unknown>): void {
@@ -266,22 +273,17 @@ export class JsonRpcPeer implements IDisposable {
 		cleanupPending(pending);
 		this.retire(id, "completed");
 
-		if (hasError) {
-			const error = message.error;
-			if (
-				!isObject(error) ||
-				!Number.isInteger(error.code) ||
-				typeof error.message !== "string" ||
-				error.data !== null
-			) {
-				pending.reject(new Error("App Server emitted an invalid JSON-RPC error"));
-				this.protocolFailure("App Server emitted an invalid JSON-RPC error");
+		try {
+			const response = decodeAppServerResponse(pending.method, message);
+			if ("error" in response) {
+				pending.reject(new AppServerRemoteError(response.error.code, response.error.message, response.error.data));
 				return;
 			}
-			pending.reject(new AppServerRemoteError(error.code as number, error.message, error.data));
-			return;
+			pending.resolve(response.result);
+		} catch (error) {
+			pending.reject(error instanceof Error ? error : new Error("App Server emitted an invalid response"));
+			this.protocolFailure("App Server emitted a response that does not match its request method");
 		}
-		pending.resolve(message.result);
 	}
 
 	private onInboundCall(message: Record<string, unknown>): void {
@@ -296,15 +298,28 @@ export class JsonRpcPeer implements IDisposable {
 				this.cancelInboundRequest(message.params);
 				return;
 			}
-			const listeners = this.notificationListeners.get(method);
+			let notification;
+			try {
+				notification = decodeAppServerNotification(message);
+			} catch (error) {
+				this.protocolFailure(error instanceof Error ? error.message : "App Server emitted an invalid notification");
+				return;
+			}
+			const listeners = this.notificationListeners.get(notification.method);
 			if (!listeners) return;
 			for (const listener of listeners) {
 				try {
-					listener(message.params);
+					listener(notification.params);
 				} catch {
 					// Listener isolation: one presentation listener cannot break the connection or peers.
 				}
 			}
+			return;
+		}
+		try {
+			decodeAppServerServerRequest(message);
+		} catch (error) {
+			this.protocolFailure(error instanceof Error ? error.message : "App Server emitted an invalid server request");
 			return;
 		}
 

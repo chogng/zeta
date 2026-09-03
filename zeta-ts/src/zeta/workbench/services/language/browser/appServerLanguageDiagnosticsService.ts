@@ -8,6 +8,7 @@ import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../..
 import { type LanguageDiagnosticsPublisher } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
@@ -383,8 +384,7 @@ function reportDirAccessRefreshError(error: unknown): void {
 }
 
 function isUnsupportedDiagnosticPull(error: unknown): boolean {
-	if (!(error instanceof Error)) return false;
-	return UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES.has(error.message as AppServerErrorName) || /language request failed|language service unavailable|does not advertise this capability|method not found/i.test(error.message);
+	return error instanceof AppServerRemoteError && UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES.has(error.errorName);
 }
 
 function toDisposablePublisher(update: LanguageDiagnosticsPublisher["update"], dispose: () => void): LanguageDiagnosticsPublisher {

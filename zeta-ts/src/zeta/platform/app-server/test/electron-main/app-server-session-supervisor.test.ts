@@ -5,9 +5,11 @@ import test from "node:test";
 import { PassThrough } from "node:stream";
 import {
 	APP_SERVER_METHODS,
+	APP_SERVER_CAPABILITY_VERSION,
 	APP_SERVER_PROTOCOL_MAJOR,
 	APP_SERVER_SCHEMA_HASH,
 } from "../../../../../../generated/app-server/types.js";
+import { AppServerProtocolDecodeError } from "../../../../../../generated/app-server/AppServerProtocolDecoder.js";
 import { AppServerClient } from "../../../../platform/app-server/electron-main/app-server-client.js";
 import { AppServerSession } from "../../../../platform/app-server/electron-main/app-server-session.js";
 import { AppServerProtocolIncompatibleError } from "../../../../platform/app-server/electron-main/app-server-session.js";
@@ -33,9 +35,9 @@ class ProtocolChildProcess extends EventEmitter {
 		readonly serverName = "zeta-test",
 		readonly protocolMajor: number = APP_SERVER_PROTOCOL_MAJOR,
 		readonly contracts: Readonly<Record<string, { readonly version: number }>> = {
-			sessions: { version: 1 },
-			threads: { version: 1 },
-			turns: { version: 1 },
+			sessions: { version: APP_SERVER_CAPABILITY_VERSION },
+			threads: { version: APP_SERVER_CAPABILITY_VERSION },
+			turns: { version: APP_SERVER_CAPABILITY_VERSION },
 		},
 		readonly includeProtocolVersion = true,
 	) {
@@ -82,6 +84,8 @@ class ProtocolChildProcess extends EventEmitter {
 						sessions: true,
 						threads: true,
 						turns: true,
+						workCoordination: true,
+						projects: true,
 						resources: true,
 						attachments: true,
 						fileSystem: true,
@@ -109,7 +113,7 @@ class ProtocolChildProcess extends EventEmitter {
 				this.respond(request.id, { cwd: params.cwd });
 			} else if (request.method === "env/dirs/set") {
 				const params = request.params as { readonly dirs: readonly { readonly id: string; readonly path: string }[] };
-				this.respond(request.id, { dirs: params.dirs.map(dir => ({ ...dir, permissions: ["readFiles"] })) });
+				this.respond(request.id, { dirs: params.dirs.map(dir => ({ id: dir.id, path: dir.path, permissions: ["readFiles"] })) });
 			}
 		}
 	}
@@ -193,15 +197,15 @@ test("session closes a protocol-major-mismatched connection", async () => {
 	assert.equal(child.signalCode, "SIGTERM");
 });
 
-test("session classifies a legacy unversioned server as protocol-incompatible", async () => {
+test("session rejects an unversioned initialize result", async () => {
 	const child = new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH, true, "zeta-test", APP_SERVER_PROTOCOL_MAJOR, {
-		sessions: { version: 1 },
-		threads: { version: 1 },
-		turns: { version: 1 },
+		sessions: { version: APP_SERVER_CAPABILITY_VERSION },
+		threads: { version: APP_SERVER_CAPABILITY_VERSION },
+		turns: { version: APP_SERVER_CAPABILITY_VERSION },
 	}, false);
 	const appServer = session(child);
 
-	await assert.rejects(appServer.initialize(), AppServerProtocolIncompatibleError);
+	await assert.rejects(appServer.initialize(), AppServerProtocolDecodeError);
 
 	assert.equal(appServer.state, "closed");
 });

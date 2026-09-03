@@ -1,0 +1,123 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+	AppServerProtocolDecodeError,
+	decodeAppServerListenInfo,
+	decodeAppServerNotification,
+	decodeAppServerRequestParams,
+	decodeAppServerResponse,
+	decodeAppServerServerRequest,
+} from '../../../../../../generated/app-server/AppServerProtocolDecoder.js';
+
+test('App Server listen info accepts only the generated loopback record', () => {
+	const listenInfo = {
+		kind: 'app-server-listen-info',
+		version: 1,
+		endpoint: 'ws://127.0.0.1:41789',
+	};
+
+	assert.deepEqual(decodeAppServerListenInfo(listenInfo), listenInfo);
+	assert.throws(
+		() => decodeAppServerListenInfo({ ...listenInfo, kind: 'other' }),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => decodeAppServerListenInfo({ ...listenInfo, version: 2 }),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => decodeAppServerListenInfo({ kind: listenInfo.kind, version: listenInfo.version }),
+		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.endpoint',
+	);
+	assert.throws(
+		() => decodeAppServerListenInfo({ ...listenInfo, endpoint: 'ws://192.168.1.8:41789' }),
+		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.endpoint',
+	);
+	assert.throws(
+		() => decodeAppServerListenInfo({ ...listenInfo, token: 'secret' }),
+		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.token',
+	);
+});
+
+test('App Server response decoding selects the result schema from its pending method', () => {
+	assert.deepEqual(
+		decodeAppServerResponse('resource/release', { jsonrpc: '2.0', id: 7, result: null }),
+		{ jsonrpc: '2.0', id: 7, result: null },
+	);
+	assert.throws(
+		() => decodeAppServerResponse('resource/release', { jsonrpc: '2.0', id: 7, result: {} }),
+		AppServerProtocolDecodeError,
+	);
+	assert.deepEqual(
+		decodeAppServerResponse('resource/release', {
+			jsonrpc: '2.0',
+			id: 8,
+			error: { code: -32013, message: 'Resource not found', data: { kind: 'ResourceNotFound' } },
+		}),
+		{
+			jsonrpc: '2.0',
+			id: 8,
+			error: { code: -32013, message: 'Resource not found', data: { kind: 'ResourceNotFound' } },
+		},
+	);
+	assert.throws(
+		() => decodeAppServerResponse('resource/release', {
+			jsonrpc: '2.0',
+			id: 9,
+			error: { code: -32013, message: 'Resource not found', data: null },
+		}),
+		AppServerProtocolDecodeError,
+	);
+});
+
+test('App Server notification decoding rejects unknown methods and envelope fields', () => {
+	const notification = {
+		jsonrpc: '2.0',
+		method: 'session/deleted',
+		params: { sessionId: 'session-1' },
+	};
+
+	assert.deepEqual(decodeAppServerNotification(notification), notification);
+	assert.throws(
+		() => decodeAppServerNotification({ ...notification, method: 'session/unknown' }),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => decodeAppServerNotification({ ...notification, result: null }),
+		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.result',
+	);
+});
+
+test('App Server server-request decoding validates method, request ID, and params', () => {
+	const request = {
+		jsonrpc: '2.0',
+		id: 'browser-request-1',
+		method: 'browser/close',
+		params: { targetId: 'target-1' },
+	};
+
+	assert.deepEqual(decodeAppServerServerRequest(request), request);
+	assert.throws(
+		() => decodeAppServerServerRequest({ ...request, id: Number.MAX_SAFE_INTEGER + 1 }),
+		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.id',
+	);
+	assert.throws(
+		() => decodeAppServerServerRequest({ ...request, params: {} }),
+		AppServerProtocolDecodeError,
+	);
+});
+
+test('App Server params decoding rejects integers that JSON cannot preserve exactly', () => {
+	assert.deepEqual(
+		decodeAppServerRequestParams('resource/read', { resourceId: 'resource-1', offset: 0, maxBytes: 1024 }),
+		{ resourceId: 'resource-1', offset: 0, maxBytes: 1024 },
+	);
+	assert.throws(
+		() => decodeAppServerRequestParams('resource/read', {
+			resourceId: 'resource-1',
+			offset: Number.MAX_SAFE_INTEGER + 1,
+			maxBytes: 1024,
+		}),
+		AppServerProtocolDecodeError,
+	);
+});

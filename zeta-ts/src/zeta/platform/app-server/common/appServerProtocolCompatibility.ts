@@ -1,5 +1,5 @@
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from '../../../../../generated/app-server/types.js';
-import { isRecord } from '../../../base/common/types.js';
+import { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from '../../../../../generated/app-server/types.js';
+import { decodeAppServerResult } from '../../../../../generated/app-server/AppServerProtocolDecoder.js';
 
 const serverCapabilityFields = [
 	'agentInteractions',
@@ -7,6 +7,8 @@ const serverCapabilityFields = [
 	'sessions',
 	'threads',
 	'turns',
+	'workCoordination',
+	'projects',
 	'resources',
 	'attachments',
 	'fileSystem',
@@ -34,13 +36,12 @@ export interface AppServerCapabilityRequirement {
 }
 
 export const requiredSessionCapabilities: readonly AppServerCapabilityRequirement[] = [
-	{ name: 'sessions', minVersion: 1, maxVersion: 1 },
-	{ name: 'threads', minVersion: 1, maxVersion: 1 },
-	{ name: 'turns', minVersion: 1, maxVersion: 1 },
+	{ name: 'sessions', minVersion: APP_SERVER_CAPABILITY_VERSION, maxVersion: APP_SERVER_CAPABILITY_VERSION },
+	{ name: 'threads', minVersion: APP_SERVER_CAPABILITY_VERSION, maxVersion: APP_SERVER_CAPABILITY_VERSION },
+	{ name: 'turns', minVersion: APP_SERVER_CAPABILITY_VERSION, maxVersion: APP_SERVER_CAPABILITY_VERSION },
 ];
 
 export type AppServerProtocolIncompatibility =
-	| { readonly kind: 'missingProtocolVersion'; readonly expected: number }
 	| { readonly kind: 'majorVersion'; readonly expected: number; readonly received: number }
 	| { readonly kind: 'missingCapability'; readonly name: string; readonly minVersion: number; readonly maxVersion: number }
 	| { readonly kind: 'capabilityVersion'; readonly name: string; readonly minVersion: number; readonly maxVersion: number; readonly received: number };
@@ -68,33 +69,8 @@ export interface ValidateAppServerInitializeOptions {
 }
 
 export function validateAppServerInitializeResult(value: unknown, options: ValidateAppServerInitializeOptions = {}): InitializeResult {
-	if (!isRecord(value)) throw new Error('App Server initialize result is malformed');
-	const serverInfo = value.serverInfo;
-	const protocolVersion = value.protocolVersion;
-	const capabilities = value.capabilities;
-	if (
-		!isRecord(serverInfo)
-		|| typeof serverInfo.name !== 'string'
-		|| serverInfo.name.trim().length === 0
-		|| typeof serverInfo.version !== 'string'
-		|| serverInfo.version.trim().length === 0
-		|| typeof value.schemaHash !== 'string'
-		|| value.schemaHash.trim().length === 0
-		|| !isRecord(capabilities)
-		|| serverCapabilityFields.some(field => typeof capabilities[field] !== 'boolean')
-		|| !Array.isArray(value.slashCommands)
-		|| value.slashCommands.some(command => !validSlashCommand(command))
-	) {
-		throw new Error('App Server initialize result is malformed');
-	}
-	if (!isRecord(protocolVersion) || !positiveSafeInteger(protocolVersion.major) || !positiveSafeInteger(protocolVersion.revision)) {
-		throw new AppServerProtocolIncompatibleError({ kind: 'missingProtocolVersion', expected: APP_SERVER_PROTOCOL_MAJOR });
-	}
-	const contracts = capabilities.contracts;
-	if (contracts !== undefined && (!isRecord(contracts) || Object.values(contracts).some(contract => !isRecord(contract) || !positiveSafeInteger(contract.version)))) {
-		throw new Error('App Server initialize result is malformed');
-	}
-	const advertisedContracts = isRecord(contracts) ? contracts : {};
+	const initialized = decodeAppServerResult('initialize', value);
+	const { serverInfo, protocolVersion, capabilities } = initialized;
 	if (options.expectedServerName && serverInfo.name !== options.expectedServerName) {
 		throw new Error(`Unexpected App Server identity: ${serverInfo.name}`);
 	}
@@ -106,17 +82,16 @@ export function validateAppServerInitializeResult(value: unknown, options: Valid
 		if (booleanField && capabilities[booleanField] !== true) {
 			throw new AppServerProtocolIncompatibleError({ kind: 'missingCapability', ...requirement });
 		}
-		const contract = advertisedContracts[requirement.name];
-		if (!isRecord(contract)) {
+		const contract = capabilities.contracts[requirement.name];
+		if (contract === undefined) {
 			throw new AppServerProtocolIncompatibleError({ kind: 'missingCapability', ...requirement });
 		}
-		const version = contract.version as number;
+		const version = contract.version;
 		if (version < requirement.minVersion || version > requirement.maxVersion) {
 			throw new AppServerProtocolIncompatibleError({ kind: 'capabilityVersion', ...requirement, received: version });
 		}
 	}
-	if (!isRecord(contracts)) throw new Error('App Server initialize result is malformed');
-	return value as unknown as InitializeResult;
+	return initialized;
 }
 
 export function appServerProtocolDiagnostics(initialized: InitializeResult): AppServerProtocolDiagnostics {
@@ -132,8 +107,6 @@ export function appServerProtocolDiagnostics(initialized: InitializeResult): App
 
 function describeIncompatibility(incompatibility: AppServerProtocolIncompatibility): string {
 	switch (incompatibility.kind) {
-		case 'missingProtocolVersion':
-			return `Zeta App Server does not advertise a protocol version; Desktop requires major ${incompatibility.expected}`;
 		case 'majorVersion':
 			return `Zeta App Server protocol major mismatch: Desktop requires ${incompatibility.expected}, server advertised ${incompatibility.received}`;
 		case 'missingCapability':
@@ -141,15 +114,4 @@ function describeIncompatibility(incompatibility: AppServerProtocolIncompatibili
 		case 'capabilityVersion':
 			return `Zeta App Server capability ${incompatibility.name} is incompatible: Desktop supports versions ${incompatibility.minVersion}-${incompatibility.maxVersion}, server advertised ${incompatibility.received}`;
 	}
-}
-
-function positiveSafeInteger(value: unknown): value is number {
-	return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
-}
-
-function validSlashCommand(value: unknown): boolean {
-	return isRecord(value)
-		&& typeof value.name === 'string'
-		&& typeof value.description === 'string'
-		&& (value.argumentMode === 'none' || value.argumentMode === 'optional');
 }

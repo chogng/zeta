@@ -1333,16 +1333,27 @@
           "type": "integer"
         },
         "data": {
-          "type": "null"
+          "$ref": "#/$defs/AppServerErrorData"
         },
         "message": {
-          "$ref": "#/$defs/AppServerErrorName"
+          "type": "string"
         }
       },
       "required": [
         "code",
         "message",
         "data"
+      ],
+      "type": "object"
+    },
+    "AppServerErrorData": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/AppServerErrorName"
+        }
+      },
+      "required": [
+        "kind"
       ],
       "type": "object"
     },
@@ -1475,11 +1486,11 @@
           "type": "string"
         },
         "kind": {
+          "const": "app-server-listen-info",
           "type": "string"
         },
         "version": {
-          "format": "uint32",
-          "minimum": 0,
+          "const": 1,
           "type": "integer"
         }
       },

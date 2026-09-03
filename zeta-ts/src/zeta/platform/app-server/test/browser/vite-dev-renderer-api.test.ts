@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { isRecord } from "../../../../base/common/types.js";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../../generated/app-server/types.js";
+import { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../../generated/app-server/types.js";
 import { connectViteDevRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type ViteDevHotContext } from "../../../../platform/app-server/browser/viteDevConnection.js";
 
@@ -52,6 +52,8 @@ class FakeHotContext implements ViteDevHotContext {
 					sessions: true,
 					threads: true,
 					turns: true,
+					workCoordination: true,
+					projects: true,
 					resources: true,
 					attachments: true,
 					fileSystem: true,
@@ -70,7 +72,11 @@ class FakeHotContext implements ViteDevHotContext {
 					marketplace: true,
 					mcp: true,
 					mcpOAuth: true,
-					contracts: { sessions: { version: 1 }, threads: { version: 1 }, turns: { version: 1 } },
+					contracts: {
+						sessions: { version: APP_SERVER_CAPABILITY_VERSION },
+						threads: { version: APP_SERVER_CAPABILITY_VERSION },
+						turns: { version: APP_SERVER_CAPABILITY_VERSION },
+					},
 				},
 				slashCommands: [],
 			});

@@ -124,9 +124,30 @@ pub enum AppServerErrorName {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AppServerErrorData {
+    pub kind: AppServerErrorName,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 pub struct AppServerError {
     #[ts(type = "number")]
     pub code: i64,
-    pub message: AppServerErrorName,
-    pub data: (),
+    pub message: String,
+    pub data: AppServerErrorData,
 }
+
+impl AppServerError {
+    pub fn new(code: i64, name: AppServerErrorName) -> Self {
+        Self {
+            code,
+            message: format!("{name:?}"),
+            data: AppServerErrorData { kind: name },
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "error_tests.rs"]
+mod tests;

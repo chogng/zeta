@@ -2380,15 +2380,8 @@ fn serialize_response(value: Value) -> String {
 }
 
 fn error_response(id: JsonRpcId, code: i64, message: AppServerErrorName) -> Value {
-    serde_json::to_value(JsonRpcFailure::new(
-        id,
-        AppServerError {
-            code,
-            message,
-            data: (),
-        },
-    ))
-    .expect("JSON-RPC error response must serialize")
+    serde_json::to_value(JsonRpcFailure::new(id, AppServerError::new(code, message)))
+        .expect("JSON-RPC error response must serialize")
 }
 
 fn resource_error(error: ResourceError) -> String {

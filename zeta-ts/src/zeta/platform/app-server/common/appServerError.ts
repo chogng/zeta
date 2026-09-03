@@ -1,7 +1,12 @@
+import type { AppServerErrorData, AppServerErrorName } from '../../../../../generated/app-server/types.js';
+
 /** Transport-independent error returned by an App Server request. */
 export class AppServerRemoteError extends Error {
-	constructor(readonly code: number, readonly errorName: string, readonly data: null) {
-		super(errorName);
+	readonly errorName: AppServerErrorName;
+
+	constructor(readonly code: number, message: string, readonly data: AppServerErrorData) {
+		super(message);
 		this.name = "AppServerRemoteError";
+		this.errorName = data.kind;
 	}
 }

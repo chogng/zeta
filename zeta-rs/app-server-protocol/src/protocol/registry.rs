@@ -221,6 +221,7 @@ use crate::protocol::environment::SessionDirPermissionsSetParams;
 use crate::protocol::environment::SessionDirRemoveParams;
 use crate::protocol::environment::SessionDirSelector;
 use crate::protocol::error::AppServerError;
+use crate::protocol::error::AppServerErrorData;
 use crate::protocol::error::AppServerErrorName;
 use crate::protocol::extension_host::ExtensionHostCancellationReasonDto;
 use crate::protocol::extension_host::ExtensionHostChanged;
@@ -3414,6 +3415,7 @@ typescript_bindings! {
     DebugAdapterReadResult,
     DebugAdapterCloseParams,
     AppServerErrorName,
+    AppServerErrorData,
     AppServerError,
 }
 

@@ -1,6 +1,7 @@
 import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../generated/app-server/types.js";
 import type { FsChanged } from "../../../../../generated/app-server/types.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
+import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
@@ -191,11 +192,11 @@ export class BrowserFileService extends Disposable implements IFileService {
 }
 
 function isRevisionConflict(error: unknown): boolean {
-	return error instanceof Error && error.message === "FileSystemRevisionConflict";
+	return error instanceof AppServerRemoteError && error.errorName === "FileSystemRevisionConflict";
 }
 
 function isFileNotFound(error: unknown): boolean {
-	return error instanceof Error && error.message === "FileSystemNotFound";
+	return error instanceof AppServerRemoteError && error.errorName === "FileSystemNotFound";
 }
 
 const MAX_RESOURCE_READ_BYTES = 262_144;

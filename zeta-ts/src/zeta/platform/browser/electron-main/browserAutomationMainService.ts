@@ -1,4 +1,4 @@
-import { APP_SERVER_HOST_METHODS, type BrowserCloseParams, type BrowserCreateParams, type BrowserCreateResult, type BrowserObserveParams, type BrowserObserveResult, type BrowserPerformParams, type BrowserPerformResult } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_SERVER_REQUESTS, type BrowserCloseParams, type BrowserCreateParams, type BrowserCreateResult, type BrowserObserveParams, type BrowserObserveResult, type BrowserPerformParams, type BrowserPerformResult } from "../../../../../generated/app-server/types.js";
 import { DisposableStore, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { RpcMethodDefinition, RpcRequestContext } from "../../app-server/electron-main/json-rpc-peer.js";
 import type { IBrowserViewMainService } from "./browserViewIpc.js";
@@ -184,10 +184,10 @@ export class BrowserAutomationMainService {
 /** Registers all generated browser host methods on the restart-safe App Server supervisor. */
 export function registerBrowserAutomationHost(registrar: BrowserHostRequestRegistrar, service: BrowserAutomationMainService): IDisposable {
 	const registrations = new DisposableStore();
-	registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/create"], (params, context) => service.create(params, context)));
-	registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/observe"], (params, context) => service.observe(params, context)));
-	registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/perform"], (params, context) => service.perform(params, context)));
-	registrations.add(registrar.registerRequestHandler(APP_SERVER_HOST_METHODS["browser/close"], params => service.close(params)));
+	registrations.add(registrar.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/create"], (params, context) => service.create(params, context)));
+	registrations.add(registrar.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/observe"], (params, context) => service.observe(params, context)));
+	registrations.add(registrar.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/perform"], (params, context) => service.perform(params, context)));
+	registrations.add(registrar.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/close"], params => service.close(params)));
 	return registrations;
 }
 

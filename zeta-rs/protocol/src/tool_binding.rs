@@ -27,7 +27,9 @@ pub enum ToolSourceProvenance {
     Mcp {
         server_id: String,
         remote_name: String,
+        #[ts(type = "number")]
         catalog_generation: u64,
+        #[ts(type = "number")]
         connection_generation: u64,
     },
     Dynamic {
@@ -66,6 +68,7 @@ pub enum ToolCallCaller {
 pub struct ToolCallBinding {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registry_incarnation: Option<String>,
+    #[ts(type = "number")]
     pub registry_generation: u64,
     pub definition_digest: String,
     pub source_chain: Vec<ToolSourceProvenance>,

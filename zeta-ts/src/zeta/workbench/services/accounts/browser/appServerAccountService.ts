@@ -46,7 +46,7 @@ export class AppServerAccountService extends Disposable implements IAccountServi
 }
 
 function accountState(value: AccountReadResult): AccountState {
-	return { revision: value.revision, accounts: value.accounts.map(account) };
+	return { revision: BigInt(value.revision), accounts: value.accounts.map(account) };
 }
 
 function account(value: AccountDto): Account {
@@ -58,7 +58,7 @@ function account(value: AccountDto): Account {
 		...(value.organization === null ? {} : { organization: value.organization }),
 		...(value.plan === null ? {} : { plan: value.plan }),
 		status: value.status,
-		credentialRevision: value.credentialRevision,
+		credentialRevision: BigInt(value.credentialRevision),
 	};
 }
 

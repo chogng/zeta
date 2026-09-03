@@ -11,12 +11,13 @@ import {
 import {
 	JsonRpcPeer,
 	RpcRequestCancelledError,
-	type RpcMethodDefinition,
 } from "../../../../platform/app-server/electron-main/json-rpc-peer.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
+import { AppServerProtocolDecodeError } from "../../../../../../generated/app-server/AppServerProtocolDecoder.js";
 import {
 	APP_SERVER_METHODS,
 	APP_SERVER_NOTIFICATIONS,
+	APP_SERVER_SERVER_REQUESTS,
 } from "../../../../../../generated/app-server/types.js";
 
 class FakeChildProcess extends EventEmitter {
@@ -132,15 +133,15 @@ test("pairs typed requests and preserves remote error details", async () => {
 	const child = new FakeChildProcess();
 	const peer = new JsonRpcPeer(child as unknown as ChildProcessWithoutNullStreams);
 	const firstFrame = once(child.stdin, "data");
-	const read = peer.request(APP_SERVER_METHODS["session/thread/read"], { sessionId: "session_1", threadId: "thread_1" });
+	const release = peer.request(APP_SERVER_METHODS["resource/release"], { resourceId: "resource_1" });
 	const [{ id }] = (await firstFrame).map((chunk) =>
 		JSON.parse((chunk as Buffer).toString("utf8")),
 	);
 	child.stdout.write(
-		`${JSON.stringify({ jsonrpc: "2.0", id, result: { thread: { threadId: "thread_1", title: "one", sequence: 0, turns: [] } } })}\n`,
+		`${JSON.stringify({ jsonrpc: "2.0", id, result: null })}\n`,
 	);
 
-	assert.equal((await read).thread.threadId, "thread_1");
+	assert.equal(await release, null);
 
 	const secondFrame = once(child.stdin, "data");
 	const failed = peer.request(APP_SERVER_METHODS["config/read"], {});
@@ -148,28 +149,28 @@ test("pairs typed requests and preserves remote error details", async () => {
 		JSON.parse((chunk as Buffer).toString("utf8")),
 	);
 	child.stdout.write(
-		`${JSON.stringify({ jsonrpc: "2.0", id: secondId, error: { code: -32030, message: "ConfigUnavailable", data: null } })}\n`,
+		`${JSON.stringify({ jsonrpc: "2.0", id: secondId, error: { code: -32030, message: "Configuration is unavailable", data: { kind: "ConfigUnavailable" } } })}\n`,
 	);
 
 	await assert.rejects(failed, (error: unknown) => {
 		assert.ok(error instanceof AppServerRemoteError);
 		assert.equal(error.code, -32030);
 		assert.equal(error.errorName, "ConfigUnavailable");
-		assert.equal(error.data, null);
+		assert.deepEqual(error.data, { kind: "ConfigUnavailable" });
 		return true;
 	});
 	await peer.close();
 });
 
-test("rejects App Server errors with non-null protocol data", async () => {
+test("rejects App Server errors without structured protocol data", async () => {
 	const child = new FakeChildProcess();
 	const peer = new JsonRpcPeer(child as unknown as ChildProcessWithoutNullStreams);
 	const frame = once(child.stdin, "data");
 	const failed = peer.request(APP_SERVER_METHODS["config/read"], {});
 	const [{ id }] = (await frame).map((chunk) => JSON.parse((chunk as Buffer).toString("utf8")));
-	child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32030, message: "ConfigUnavailable", data: {} } })}\n`);
+	child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32030, message: "Configuration is unavailable", data: null } })}\n`);
 
-	await assert.rejects(failed, /invalid JSON-RPC error/);
+	await assert.rejects(failed, AppServerProtocolDecodeError);
 	peer.dispose();
 });
 
@@ -192,14 +193,14 @@ test("times out locally and ignores the retired request's late response", async 
 	);
 
 	const nextFrame = once(child.stdin, "data");
-	const next = peer.request(APP_SERVER_METHODS["config/read"], {});
+	const next = peer.request(APP_SERVER_METHODS["resource/release"], { resourceId: "resource_1" });
 	const [{ id: nextId }] = (await nextFrame).map((chunk) =>
 		JSON.parse((chunk as Buffer).toString("utf8")),
 	);
 	child.stdout.write(
-		`${JSON.stringify({ jsonrpc: "2.0", id: nextId, result: { preferredModel: null, theme: null } })}\n`,
+		`${JSON.stringify({ jsonrpc: "2.0", id: nextId, result: null })}\n`,
 	);
-	assert.equal((await next).preferredModel, null);
+	assert.equal(await next, null);
 	await peer.close();
 });
 
@@ -281,12 +282,9 @@ test("isolates notification listeners", async () => {
 test("cancels inbound request handlers and returns a cancellation error", async () => {
 	const child = new FakeChildProcess();
 	const peer = new JsonRpcPeer(child as unknown as ChildProcessWithoutNullStreams);
-	const definition: RpcMethodDefinition<{ value: string }, string> = {
-		method: "desktop/test",
-	};
-	peer.registerRequestHandler(definition, (_params, context) =>
-		new Promise<string>((resolve) => {
-			context.signal.addEventListener("abort", () => resolve("cancelled"), {
+	peer.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/close"], (_params, context) =>
+		new Promise<void>((resolve) => {
+			context.signal.addEventListener("abort", () => resolve(), {
 				once: true,
 			});
 		}),
@@ -294,7 +292,7 @@ test("cancels inbound request handlers and returns a cancellation error", async 
 	const responseFrame = once(child.stdin, "data");
 
 	child.stdout.write(
-		`${JSON.stringify({ jsonrpc: "2.0", id: "server-1", method: "desktop/test", params: { value: "work" } })}\n`,
+		`${JSON.stringify({ jsonrpc: "2.0", id: "server-1", method: "browser/close", params: { targetId: "target-1" } })}\n`,
 	);
 	child.stdout.write(
 		`${JSON.stringify({ jsonrpc: "2.0", method: "$/cancelRequest", params: { id: "server-1" } })}\n`,
@@ -314,21 +312,21 @@ test("unknown and duplicate response IDs close the peer", async () => {
 		let id = 999;
 		if (duplicate) {
 			const requestFrame = once(child.stdin, "data");
-			const request = peer.request(APP_SERVER_METHODS["config/read"], {});
+			const request = peer.request(APP_SERVER_METHODS["resource/release"], { resourceId: "resource_1" });
 			const [chunk] = await requestFrame;
 			id = JSON.parse((chunk as Buffer).toString("utf8")).id;
 			child.stdout.write(
-				`${JSON.stringify({ jsonrpc: "2.0", id, result: { preferredModel: null, theme: null } })}\n`,
+				`${JSON.stringify({ jsonrpc: "2.0", id, result: null })}\n`,
 			);
 			await request;
 		}
 
 		child.stdout.write(
-			`${JSON.stringify({ jsonrpc: "2.0", id, result: { preferredModel: null, theme: null } })}\n`,
+			`${JSON.stringify({ jsonrpc: "2.0", id, result: null })}\n`,
 		);
 
 		await assert.rejects(
-			peer.request(APP_SERVER_METHODS["config/read"], {}),
+			peer.request(APP_SERVER_METHODS["resource/release"], { resourceId: "resource_1" }),
 			duplicate ? /duplicate response/ : /unknown request/,
 		);
 	}

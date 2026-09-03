@@ -1,4 +1,5 @@
-import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
+import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../../../../../generated/app-server/AppServerProtocolDecoder.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
 import { CancellationError, toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
@@ -41,7 +42,7 @@ export interface ViteDevRequestOptions {
 }
 
 interface PendingRequest {
-	readonly method: string;
+	readonly method: AppServerMethod;
 	readonly resolve: (value: unknown) => void;
 	readonly reject: (error: Error) => void;
 	readonly timeout: ReturnType<typeof setTimeout>;
@@ -209,11 +210,11 @@ export class ViteDevAppServerConnection {
 		try {
 			const frame = validateFramePayload(payload);
 			const message: unknown = JSON.parse(frame);
-			if (!isRecord(message) || message.jsonrpc !== "2.0") throw new Error("App Server emitted an invalid JSON-RPC envelope");
-			if (typeof message.method === "string") {
-				this.handleInboundCall(message);
+			const envelope = decodeAppServerEnvelope(message);
+			if (envelope.kind === "notification" || envelope.kind === "serverRequest") {
+				this.handleInboundCall(message as Record<string, unknown>);
 			} else {
-				this.handleResponse(message);
+				this.handleResponse(message as Record<string, unknown>);
 			}
 		} catch (error) {
 			this.fail(toError(error));
@@ -235,29 +236,23 @@ export class ViteDevAppServerConnection {
 		this.pending.delete(id);
 		clearTimeout(pending.timeout);
 		if (pending.abortListener) pending.signal?.removeEventListener("abort", pending.abortListener);
-		const hasResult = Object.hasOwn(message, "result");
-		const hasError = Object.hasOwn(message, "error");
-		if (hasResult === hasError) throw new Error("App Server response must contain exactly one of result or error");
-		if (hasError) {
-			const error = message.error;
-			if (!isRecord(error) || !Number.isInteger(error.code) || typeof error.message !== "string" || error.data !== null) {
-				pending.reject(new Error("App Server emitted an invalid JSON-RPC error"));
-				return;
-			}
-			pending.reject(new AppServerRemoteError(error.code as number, error.message, error.data));
+		const response = decodeAppServerResponse(pending.method, message);
+		if ("error" in response) {
+			pending.reject(new AppServerRemoteError(response.error.code, response.error.message, response.error.data));
 			return;
 		}
-		pending.resolve(message.result);
+		pending.resolve(response.result);
 	}
 
 	private handleInboundCall(message: Record<string, unknown>): void {
 		if (Object.hasOwn(message, "id")) {
+			decodeAppServerServerRequest(message);
 			const frame = JSON.stringify({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not found", data: null } });
 			this.hot.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
 			return;
 		}
-		if (!Object.hasOwn(message, "params") || !serverNotificationMethods.has(message.method as string)) return;
-		const notification = { method: message.method, params: message.params } as ServerNotification;
+		const wireNotification = decodeAppServerNotification(message);
+		const notification = { method: wireNotification.method, params: wireNotification.params } as ServerNotification;
 		for (const listener of this.notificationListeners) {
 			try {
 				listener(notification);
@@ -308,8 +303,6 @@ export class ViteDevAppServerConnection {
 		}
 	}
 }
-
-const serverNotificationMethods: ReadonlySet<string> = new Set(Object.values(APP_SERVER_NOTIFICATIONS).map((definition) => definition.method));
 
 function validateConnectedPayload(payload: unknown): ViteDevAppServerMetadata {
 	if (!isRecord(payload) || payload.protocolVersion !== WEB_APP_SERVER_PROTOCOL_VERSION) {

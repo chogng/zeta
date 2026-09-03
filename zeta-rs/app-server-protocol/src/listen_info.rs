@@ -3,6 +3,8 @@ use std::fmt;
 use std::net::SocketAddr;
 
 use schemars::JsonSchema;
+use schemars::Schema;
+use schemars::SchemaGenerator;
 use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
@@ -16,11 +18,27 @@ const LISTEN_INFO_VERSION: u32 = 1;
 #[serde(deny_unknown_fields)]
 #[ts(rename_all = "camelCase")]
 pub struct AppServerListenInfo {
+    #[schemars(schema_with = "listen_info_kind_schema")]
     #[ts(type = "\"app-server-listen-info\"")]
     kind: String,
+    #[schemars(schema_with = "listen_info_version_schema")]
     #[ts(type = "1")]
     version: u32,
     endpoint: String,
+}
+
+fn listen_info_kind_schema(_: &mut SchemaGenerator) -> Schema {
+    schemars::json_schema!({
+        "type": "string",
+        "const": LISTEN_INFO_KIND,
+    })
+}
+
+fn listen_info_version_schema(_: &mut SchemaGenerator) -> Schema {
+    schemars::json_schema!({
+        "type": "integer",
+        "const": LISTEN_INFO_VERSION,
+    })
 }
 
 impl AppServerListenInfo {

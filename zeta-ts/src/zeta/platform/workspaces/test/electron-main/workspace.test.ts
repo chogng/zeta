@@ -550,11 +550,11 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 	const adapter = new AppServerWorkspaceTransitionAdapter(host);
 
 	assert.equal(
-		adapter.classifyRuntimeError(new AppServerRemoteError(-32071, "EnvCwdSetBusy", null)),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32071, "Workspace switch is busy", { kind: "EnvCwdSetBusy" })),
 		WorkspaceTransitionFailureKind.RuntimeBusy,
 	);
 	assert.equal(
-		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, "EnvCwdSetUnavailable", null)),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, "Workspace switch is unavailable", { kind: "EnvCwdSetUnavailable" })),
 		WorkspaceTransitionFailureKind.RuntimeUnsupported,
 	);
 	state = "restarting";

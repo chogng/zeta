@@ -669,10 +669,60 @@ fn schema_hash_is_stable_sha256_of_the_generated_schema() {
 }
 
 #[test]
+fn generated_method_maps_match_the_protocol_registries() {
+    let output = typescript();
+
+    assert!(output.contains("export interface AppServerRequestMap {"));
+    assert!(output.contains("export interface AppServerNotificationMap {"));
+    assert!(output.contains("export interface AppServerServerRequestMap {"));
+    assert!(!output.contains("AppServerMethodMap"));
+    assert!(!output.contains("AppServerHostMethodMap"));
+    for method in CLIENT_METHODS {
+        assert!(output.contains(&format!(
+            "  {:?}: {{ params: {}; response: {} }};",
+            method.method,
+            method.params_type(),
+            method.result_type()
+        )));
+    }
+    for notification in SERVER_NOTIFICATIONS {
+        assert!(output.contains(&format!(
+            "  {:?}: {};",
+            notification.method,
+            notification.params_type()
+        )));
+    }
+    for request in HOST_METHODS {
+        assert!(output.contains(&format!(
+            "  {:?}: {{ params: {}; response: {} }};",
+            request.method,
+            request.params_type(),
+            request.result_type()
+        )));
+    }
+}
+
+#[test]
 fn schema_fixtures_match_the_generators() {
-    let typescript_fixture = include_str!("../schema/typescript/types.ts");
     let schema = include_str!("../schema/json/schema.json");
 
-    assert_eq!(typescript_fixture.replace("\r\n", "\n"), typescript());
     assert_eq!(schema.replace("\r\n", "\n"), json_schema());
+    let fixture_directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("schema")
+        .join("typescript");
+    let mut fixture_names = std::fs::read_dir(&fixture_directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect::<Vec<_>>();
+    fixture_names.sort();
+    let mut expected_names = TYPESCRIPT_FILES
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect::<Vec<_>>();
+    expected_names.sort();
+    assert_eq!(fixture_names, expected_names);
+    for (file_name, expected) in typescript_files() {
+        let actual = std::fs::read_to_string(fixture_directory.join(file_name)).unwrap();
+        assert_eq!(actual.replace("\r\n", "\n"), expected, "{file_name}");
+    }
 }

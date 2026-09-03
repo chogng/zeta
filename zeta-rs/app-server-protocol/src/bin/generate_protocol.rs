@@ -1,9 +1,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 use zeta_app_server_protocol::JSON_SCHEMA_FIXTURE;
-use zeta_app_server_protocol::TYPESCRIPT_FIXTURE;
+use zeta_app_server_protocol::TYPESCRIPT_FIXTURE_DIRECTORY;
 use zeta_app_server_protocol::json_schema;
-use zeta_app_server_protocol::typescript;
+use zeta_app_server_protocol::typescript_files;
 
 const USAGE: &str = "usage: generate_protocol <json|typescript> --out <directory>\n       generate_protocol fixtures";
 
@@ -18,20 +18,6 @@ impl Artifact {
             "json" => Ok(Self::JsonSchema),
             "typescript" => Ok(Self::TypeScript),
             _ => Err(USAGE.into()),
-        }
-    }
-
-    fn file_name(&self) -> &'static str {
-        match self {
-            Self::JsonSchema => "schema.json",
-            Self::TypeScript => "types.ts",
-        }
-    }
-
-    fn contents(&self) -> String {
-        match self {
-            Self::JsonSchema => json_schema(),
-            Self::TypeScript => typescript(),
         }
     }
 }
@@ -80,7 +66,12 @@ impl Command {
             Self::Generate {
                 artifact,
                 output_directory,
-            } => write_artifact(&output_directory, artifact.file_name(), artifact.contents()),
+            } => match artifact {
+                Artifact::JsonSchema => {
+                    write_artifact(&output_directory, "schema.json", json_schema())
+                }
+                Artifact::TypeScript => write_typescript_files(&output_directory),
+            },
             Self::WriteFixtures => write_fixtures(),
         }
     }
@@ -109,7 +100,14 @@ fn write_artifact(directory: &Path, file_name: &str, contents: String) -> std::i
 fn write_fixtures() -> std::io::Result<()> {
     let crate_directory = Path::new(env!("CARGO_MANIFEST_DIR"));
     write_fixture(crate_directory.join(JSON_SCHEMA_FIXTURE), json_schema())?;
-    write_fixture(crate_directory.join(TYPESCRIPT_FIXTURE), typescript())
+    write_typescript_files(&crate_directory.join(TYPESCRIPT_FIXTURE_DIRECTORY))
+}
+
+fn write_typescript_files(directory: &Path) -> std::io::Result<()> {
+    for (file_name, contents) in typescript_files() {
+        write_artifact(directory, file_name, contents)?;
+    }
+    Ok(())
 }
 
 fn write_fixture(path: PathBuf, contents: String) -> std::io::Result<()> {

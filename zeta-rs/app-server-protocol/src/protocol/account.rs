@@ -24,6 +24,7 @@ pub struct AccountDto {
     pub organization: Option<String>,
     pub plan: Option<String>,
     pub status: AccountStatusDto,
+    #[ts(type = "number")]
     pub credential_revision: u64,
 }
 
@@ -31,6 +32,7 @@ pub struct AccountDto {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct AccountReadResult {
+    #[ts(type = "number")]
     pub revision: u64,
     pub accounts: Vec<AccountDto>,
 }
