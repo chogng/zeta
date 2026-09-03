@@ -1,10 +1,10 @@
-use crate::components::chat_input::SlashCommandCatalog;
-use crate::components::list_selection::ListSelectionGroup;
-use crate::components::list_selection::ListSelectionItem;
-use crate::components::list_selection::ListSelectionModel;
-use crate::components::search_box::SearchBoxModel;
-use crate::features::keymap::fixed_shortcuts;
 use crate::keymap::KeymapActionSnapshot;
+use crate::keymap::fixed_shortcuts;
+use crate::thread::composer::SlashCommandCatalog;
+use crate::widgets::list_selection::ListSelectionGroup;
+use crate::widgets::list_selection::ListSelectionItem;
+use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::search_box::SearchBoxModel;
 use zeta_slash_commands::SlashCommandOrigin;
 
 pub(crate) fn help_choices(

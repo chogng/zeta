@@ -2,9 +2,9 @@ use super::app::App;
 use super::app::AppEvent;
 use super::app::Status;
 use crate::app::apply_active_turn_snapshot;
-use crate::app::chat_input_catalog_snapshot;
-use crate::components::chat_history::MessageRole;
-use crate::features::thread::present_turn_error;
+use crate::thread::composer::chat_input_catalog_snapshot;
+use crate::thread::present_turn_error;
+use crate::thread::transcript::MessageRole;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -338,7 +338,7 @@ fn enabled_unique_skills_become_dollar_selector_items() {
         SkillName::new("commit").unwrap(),
     );
     let digest = ContentDigest::sha256(b"commit skill");
-    let registry = crate::app::chat_input_catalog_snapshot(
+    let registry = crate::thread::composer::chat_input_catalog_snapshot(
         &[SlashCommandDefinition {
             name: "commit".into(),
             description: "run the commit product command".into(),

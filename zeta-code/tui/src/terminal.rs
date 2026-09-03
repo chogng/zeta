@@ -1,4 +1,6 @@
 mod event_source;
+pub(crate) mod mouse;
+pub(crate) mod screen_selection;
 mod session;
 mod terminal_probe;
 

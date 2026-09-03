@@ -1,9 +1,9 @@
 use super::ActiveConversation;
 use crate::app::{App, AppCommand, AppEvent, Status};
-use crate::components::chat_history::MessageRole;
-use crate::components::chat_input::{
+use crate::thread::composer::{
     ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
 };
+use crate::thread::transcript::MessageRole;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
 use std::ops::Deref;
@@ -247,7 +247,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     assert_eq!(skill_id.name.as_str(), "skill-creator");
     assert_eq!(enablement, SkillEnablementDto::Disabled);
 
-    let view = crate::features::skills::set_enablement(
+    let view = crate::skills::set_enablement(
         &mut client,
         &zeta_protocol::SessionId::new("test-session").unwrap(),
         skill_id,
@@ -325,10 +325,10 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
 fn theme_selection_updates_the_tui_toml_section() {
     let (mut client, state_root) = client();
 
-    crate::features::config::set_tui_theme(&mut client, "zeta-code-light".into()).unwrap();
+    crate::config::set_tui_theme(&mut client, "zeta-code-light".into()).unwrap();
 
     assert_eq!(
-        crate::features::config::tui_theme(&client.read_config().unwrap()),
+        crate::config::tui_theme(&client.read_config().unwrap()),
         "zeta-code-light"
     );
     drop(client);
@@ -340,24 +340,24 @@ fn keybindings_and_status_line_are_persisted_in_the_tui_toml_section() {
     let (mut client, state_root) = client();
     let revision = client.read_config().unwrap().revision;
 
-    crate::features::keymap::set_keymap(
+    crate::keymap::set_keymap(
         &mut client,
-        crate::features::keymap::KeymapEdit {
+        crate::keymap::KeymapEdit {
             expected_revision: revision,
             command_id: "zetaCode.action.copyLastResponse".into(),
-            kind: crate::features::keymap::KeymapEditKind::Set {
+            kind: crate::keymap::KeymapEditKind::Set {
                 key: "ctrl+y".into(),
-                intent: crate::features::keymap::KeymapEditIntent::AddAlternate,
+                intent: crate::keymap::KeymapEditIntent::AddAlternate,
             },
         },
     )
     .unwrap();
     let revision = client.read_config().unwrap().revision;
-    crate::features::status_line::set_status_line(
+    crate::status::set_status_line(
         &mut client,
-        crate::features::status_line::StatusLineEdit {
+        crate::status::StatusLineEdit {
             expected_revision: revision,
-            item: crate::features::status_line::StatusLineItem::GitChanges,
+            item: crate::status::StatusLineItem::GitChanges,
             enabled: false,
         },
     )
@@ -493,7 +493,10 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         })
         .unwrap();
     assert_eq!(listed.dirs.len(), 1);
-    assert_eq!(listed.dirs[0].path, additional.canonicalize().unwrap());
+    assert_eq!(
+        listed.dirs[0].path.canonicalize().unwrap(),
+        additional.canonicalize().unwrap()
+    );
     assert_eq!(
         listed.dirs[0].permissions,
         vec![PermissionDto::ReadFiles, PermissionDto::ExecuteCommands,]
@@ -504,11 +507,14 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         &mut app,
     );
     assert_eq!(app.list_selection().unwrap().title(), "Directories");
+    let Some(AppCommand::RemoveDir { path }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("the selected directory emits an exact remove command")
+    };
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::RemoveDir {
-            path: additional.canonicalize().unwrap(),
-        })
+        path.canonicalize().unwrap(),
+        additional.canonicalize().unwrap()
     );
 
     drop(client);

@@ -1,82 +1,82 @@
 use super::command::AppCommand;
-use super::composer_mode::ComposerMode;
-use super::composer_mode::ComposerOutcome;
 use super::escape::ScreenEscapeOutcome;
 use super::escape::ScreenEscapeSequence;
 use super::event::AppEvent;
 use super::frame::InputPointerTarget;
 use super::help::help_choices;
-use crate::components::chat_composer::ChatComposer;
-use crate::components::chat_composer::ChatComposerOutcome;
-use crate::components::chat_composer::ChatComposerView;
-use crate::components::chat_history::ChatHistoryRenderCache;
-use crate::components::chat_history::ChatHistoryScroll;
-use crate::components::chat_history::Message;
-use crate::components::chat_input::ChatInputCatalog;
-use crate::components::chat_input::ChatInputItem;
-use crate::components::detail_list::DetailList;
-use crate::components::detail_list::DetailListRow;
-use crate::components::list_selection::ListSelectionAdjustment;
-use crate::components::list_selection::ListSelectionState;
-use crate::components::overlay::DetailOverlay;
-use crate::components::overlay::OverlayInputOutcome;
-use crate::components::top_tip::TopTip;
-use crate::components::welcome::WelcomeModel;
-use crate::features::approval::Approval;
-use crate::features::approval::ApprovalOutcome;
-use crate::features::config::ConfigSelectionAction;
-use crate::features::config::FollowUpMode;
-use crate::features::config::TerminalSettings;
-use crate::features::connectors::ConnectorChoices;
-use crate::features::connectors::ConnectorSelectionAction;
-use crate::features::dirs::DirChoices;
-use crate::features::dirs::DirSelectionAction;
-use crate::features::keymap::KeymapChoices;
-use crate::features::keymap::KeymapEditorOutcome;
-use crate::features::mcp::McpChoices;
-use crate::features::mcp::McpSelectionAction;
-use crate::features::models::ModelChoices;
-use crate::features::models::ModelSelectionAction;
-use crate::features::query::Query;
-use crate::features::query::QueryOutcome;
-use crate::features::queue::QueueChoices;
-use crate::features::queue::QueueInput;
-use crate::features::queue::QueueSelectionAction;
-use crate::features::queue::QueueView;
-use crate::features::rewind::RewindChoices;
-use crate::features::rewind::RewindSelectionAction;
-use crate::features::sessions::SessionChoices;
-use crate::features::sessions::SessionManagerPointerTarget;
-use crate::features::sessions::SessionManagerView;
-use crate::features::sessions::SessionSelectionAction;
-use crate::features::sessions::SessionsState;
-use crate::features::sessions::TerminalScreen;
-use crate::features::skills::{SkillChoices, SkillDiagnosticWarnings, SkillSelectionAction};
-use crate::features::status_line::ApprovalModeStatus;
-use crate::features::status_line::StatusLineChoices;
-use crate::features::status_line::StatusLineModel;
-use crate::features::status_line::StatusLineRuntime;
-use crate::features::status_line::StatusLineSelectionAction;
-use crate::features::theme::ThemeChoices;
-use crate::features::theme::ThemePickerOutcome;
-use crate::features::thread::SubagentPickerState;
-use crate::features::thread::SubagentPickerView;
-use crate::features::thread::ThreadFeatureState;
-use crate::features::thread::ThreadPresentationEvent;
-use crate::features::thread::ThreadPresentationStore;
-use crate::features::thread::ThreadRequestIdentity;
-use crate::features::thread::ThreadRequestKind;
-use crate::features::thread::TurnActivity;
+use super::input_surface::ComposerMode;
+use super::input_surface::ComposerOutcome;
+use crate::app::top_tip::TopTip;
+use crate::app::welcome::WelcomeModel;
+use crate::config::ConfigSelectionAction;
+use crate::config::FollowUpMode;
+use crate::config::TerminalSettings;
+use crate::connectors::ConnectorChoices;
+use crate::connectors::ConnectorSelectionAction;
+use crate::dirs::DirChoices;
+use crate::dirs::DirSelectionAction;
 use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
-use crate::mouse::MouseMode;
-use crate::mouse::PointerInteraction;
+use crate::keymap::KeymapChoices;
+use crate::keymap::KeymapEditorOutcome;
+use crate::mcp::McpChoices;
+use crate::mcp::McpSelectionAction;
+use crate::models::ModelChoices;
+use crate::models::ModelSelectionAction;
 use crate::render::RenderContext;
 use crate::render::RenderTheme;
-use crate::screen_selection::ScreenSelection;
-use crate::screen_selection::ScreenSelectionOutcome;
+use crate::sessions::SessionChoices;
+use crate::sessions::SessionManagerPointerTarget;
+use crate::sessions::SessionManagerView;
+use crate::sessions::SessionSelectionAction;
+use crate::sessions::SessionsState;
+use crate::sessions::TerminalScreen;
+use crate::skills::{SkillChoices, SkillDiagnosticWarnings, SkillSelectionAction};
+use crate::status::ApprovalModeStatus;
+use crate::status::StatusLineChoices;
+use crate::status::StatusLineModel;
+use crate::status::StatusLineRuntime;
+use crate::status::StatusLineSelectionAction;
+use crate::terminal::mouse::MouseMode;
+use crate::terminal::mouse::PointerInteraction;
+use crate::terminal::screen_selection::ScreenSelection;
+use crate::terminal::screen_selection::ScreenSelectionOutcome;
+use crate::theme::ThemeChoices;
+use crate::theme::ThemePickerOutcome;
+use crate::thread::SubagentPickerState;
+use crate::thread::SubagentPickerView;
+use crate::thread::ThreadFeatureState;
+use crate::thread::ThreadPresentationEvent;
+use crate::thread::ThreadPresentationStore;
+use crate::thread::ThreadRequestIdentity;
+use crate::thread::ThreadRequestKind;
+use crate::thread::TurnActivity;
+use crate::thread::composer::ChatComposer;
+use crate::thread::composer::ChatComposerOutcome;
+use crate::thread::composer::ChatComposerView;
+use crate::thread::composer::ChatInputCatalog;
+use crate::thread::composer::ChatInputItem;
+use crate::thread::interaction::approval::Approval;
+use crate::thread::interaction::approval::ApprovalOutcome;
+use crate::thread::interaction::query::Query;
+use crate::thread::interaction::query::QueryOutcome;
+use crate::thread::queue::QueueChoices;
+use crate::thread::queue::QueueInput;
+use crate::thread::queue::QueueSelectionAction;
+use crate::thread::queue::QueueView;
+use crate::thread::rewind::RewindChoices;
+use crate::thread::rewind::RewindSelectionAction;
+use crate::thread::transcript::ChatHistoryRenderCache;
+use crate::thread::transcript::ChatHistoryScroll;
+use crate::thread::transcript::Message;
+use crate::widgets::detail_list::DetailList;
+use crate::widgets::detail_list::DetailListRow;
+use crate::widgets::list_selection::ListSelectionAdjustment;
+use crate::widgets::list_selection::ListSelectionState;
+use crate::widgets::overlay::DetailOverlay;
+use crate::widgets::overlay::OverlayInputOutcome;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -509,13 +509,13 @@ impl App {
 
     fn handle_config_editor_outcome(
         &mut self,
-        outcome: crate::features::config::ConfigEditorOutcome,
+        outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
-            crate::features::config::ConfigEditorOutcome::Action(
+            crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetTerminalSettings(edit),
             ) => Some(AppCommand::EditConfig(edit)),
-            crate::features::config::ConfigEditorOutcome::Action(
+            crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::ChooseFollowUpMode { queue, steer },
             ) => Some(AppCommand::EditConfig(
                 match self.terminal_settings.follow_up_mode() {
@@ -523,21 +523,21 @@ impl App {
                     FollowUpMode::Steer => *queue,
                 },
             )),
-            crate::features::config::ConfigEditorOutcome::Action(
+            crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::ChooseInputMode { standard, vim },
             ) => Some(AppCommand::EditConfig(
                 match self.terminal_settings.input_mode() {
-                    crate::components::chat_input::ChatInputMode::Standard => *vim,
-                    crate::components::chat_input::ChatInputMode::Vim => *standard,
+                    crate::thread::composer::ChatInputMode::Standard => *vim,
+                    crate::thread::composer::ChatInputMode::Vim => *standard,
                 },
             )),
-            crate::features::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::SetPermissions(edit),
-            ) => Some(AppCommand::EditPermissions(edit)),
-            crate::features::config::ConfigEditorOutcome::Action(
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetPermissions(
+                edit,
+            )) => Some(AppCommand::EditPermissions(edit)),
+            crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::OpenProviderApiKey { .. },
             ) => None,
-            crate::features::config::ConfigEditorOutcome::Adjust(action, adjustment) => {
+            crate::config::ConfigEditorOutcome::Adjust(action, adjustment) => {
                 Some(AppCommand::EditConfig(match action {
                     ConfigSelectionAction::ChooseFollowUpMode { queue, steer } => {
                         match adjustment {
@@ -552,11 +552,11 @@ impl App {
                     _ => return None,
                 }))
             }
-            crate::features::config::ConfigEditorOutcome::SaveApiKey(edit) => {
+            crate::config::ConfigEditorOutcome::SaveApiKey(edit) => {
                 Some(AppCommand::SetProviderApiKey(edit))
             }
-            crate::features::config::ConfigEditorOutcome::Consumed => None,
-            crate::features::config::ConfigEditorOutcome::Dismiss => {
+            crate::config::ConfigEditorOutcome::Consumed => None,
+            crate::config::ConfigEditorOutcome::Dismiss => {
                 self.close_composer_mode();
                 None
             }
@@ -617,7 +617,7 @@ impl App {
     }
 
     pub(crate) fn toggle_transcript_cell(&mut self, render_key: &str) -> bool {
-        let cell_id = crate::features::thread::TranscriptCellId::from_render_key(render_key);
+        let cell_id = crate::thread::TranscriptCellId::from_render_key(render_key);
         if !self
             .thread
             .cells()
@@ -631,7 +631,7 @@ impl App {
     }
 
     pub(crate) fn open_transcript_cell_details(&mut self, render_key: &str) -> bool {
-        let cell_id = crate::features::thread::TranscriptCellId::from_render_key(render_key);
+        let cell_id = crate::thread::TranscriptCellId::from_render_key(render_key);
         let Some(details) = self.thread.details(&cell_id) else {
             return false;
         };
@@ -800,23 +800,25 @@ impl App {
 
     pub(crate) fn select_screen_range(
         &mut self,
-        range: crate::screen_selection::ScreenSelectionRange,
+        range: crate::terminal::screen_selection::ScreenSelectionRange,
     ) {
         self.screen_selection.select(range);
     }
 
     #[cfg(test)]
-    fn show_help(&mut self, model: crate::components::list_selection::ListSelectionModel) {
+    fn show_help(&mut self, model: crate::widgets::list_selection::ListSelectionModel) {
         self.open_composer_mode(ComposerMode::help(model));
     }
 
-    pub(crate) fn approval_view(&self) -> Option<crate::features::approval::ApprovalView<'_>> {
+    pub(crate) fn approval_view(
+        &self,
+    ) -> Option<crate::thread::interaction::approval::ApprovalView<'_>> {
         matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
             .then(|| self.approval.as_ref().map(Approval::view))
             .flatten()
     }
 
-    pub(crate) fn query_view(&self) -> Option<crate::features::query::QueryView<'_>> {
+    pub(crate) fn query_view(&self) -> Option<crate::thread::interaction::query::QueryView<'_>> {
         matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
             .then(|| self.query.as_ref().map(Query::view))
             .flatten()
@@ -868,13 +870,13 @@ impl App {
     }
 
     fn update_queue_picker(&mut self) {
-        let spec = crate::features::queue::choices(&self.queue_view());
+        let spec = crate::thread::queue::choices(&self.queue_view());
         if let Some(mode) = self.composer_mode.as_mut() {
             mode.replace_queue(spec);
         }
     }
 
-    fn open_queue_detail(&mut self, queue_id: crate::features::queue::QueueId) {
+    fn open_queue_detail(&mut self, queue_id: crate::thread::queue::QueueId) {
         let Some(text) = self
             .queue_view()
             .items
@@ -893,7 +895,7 @@ impl App {
     fn handle_queue_input(
         &mut self,
         input: QueueInput,
-        queue_id: crate::features::queue::QueueId,
+        queue_id: crate::thread::queue::QueueId,
     ) -> Option<AppCommand> {
         match input {
             QueueInput::Restore => {
@@ -1107,11 +1109,11 @@ impl App {
     }
 
     pub(crate) fn latest_agent_response(&self) -> Option<&str> {
-        crate::components::chat_history::latest_agent_response(self.messages())
+        crate::thread::transcript::latest_agent_response(self.messages())
     }
 
     pub(crate) fn transcript_markdown(&self) -> String {
-        crate::components::chat_history::export_markdown(self.messages())
+        crate::thread::transcript::export_markdown(self.messages())
     }
 
     pub(crate) fn transcript_scroll(&self) -> &ChatHistoryScroll {
@@ -1142,7 +1144,7 @@ impl App {
         self.thread_presentations.active().goal.as_ref()
     }
 
-    pub(crate) fn plan_view(&self) -> Option<crate::features::thread::plan::PlanInlineView<'_>> {
+    pub(crate) fn plan_view(&self) -> Option<crate::thread::plan::PlanInlineView<'_>> {
         self.thread_presentations.active().plan.view()
     }
 
@@ -1964,7 +1966,7 @@ impl App {
                     return None;
                 }
                 Some(TuiSlashCommandAction::Queue) => {
-                    let spec = crate::features::queue::choices(&self.queue_view());
+                    let spec = crate::thread::queue::choices(&self.queue_view());
                     self.show_queue_picker(spec);
                     return None;
                 }
@@ -2080,9 +2082,9 @@ impl App {
 #[cfg(test)]
 #[path = "state_tests.rs"]
 mod tests;
-use crate::components::chat_input::CompletionView;
+use crate::thread::composer::CompletionView;
 #[cfg(test)]
-use crate::components::chat_input::SlashCommandCatalog;
-use crate::components::chat_input::SlashCommandInvocation;
-use crate::components::chat_input::TuiSlashCommandAction;
+use crate::thread::composer::SlashCommandCatalog;
+use crate::thread::composer::SlashCommandInvocation;
+use crate::thread::composer::TuiSlashCommandAction;
 use zeta_slash_commands::SlashCommandOrigin;

@@ -34,13 +34,15 @@ pub(crate) struct TerminationSource {
 
 impl TerminationSource {
     pub(crate) fn register() -> Result<Self, io::Error> {
-        let mut source = Self {
+        let source = Self {
             request: TerminationRequest {
                 requested: Arc::new(AtomicBool::new(false)),
             },
             #[cfg(unix)]
             ids: Vec::new(),
         };
+        #[cfg(unix)]
+        let mut source = source;
         #[cfg(unix)]
         for signal in [SIGINT, SIGTERM] {
             let id = signal_hook::flag::register(signal, Arc::clone(&source.request.requested))?;

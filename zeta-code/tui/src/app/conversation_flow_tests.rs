@@ -4,9 +4,9 @@ use super::AppCommand;
 use super::AppEvent;
 use super::Status;
 use super::apply_active_turn_snapshot;
-use crate::features::config::set_preferred_model;
-use crate::features::thread::ThreadRequestScope;
-use crate::features::thread::submit_prompt;
+use crate::config::set_preferred_model;
+use crate::thread::ThreadRequestScope;
+use crate::thread::submit_prompt;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -195,7 +195,7 @@ fn app_for_conversation(
     app
 }
 
-fn submit_from_input(app: &mut App, prompt: &str) -> crate::components::chat_input::ChatSubmission {
+fn submit_from_input(app: &mut App, prompt: &str) -> crate::thread::composer::ChatSubmission {
     app.insert_text(prompt);
     let Some(AppCommand::SubmitTurn { submission }) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))

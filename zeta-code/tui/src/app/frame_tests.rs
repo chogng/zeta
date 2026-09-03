@@ -4,22 +4,22 @@ use super::input_overlay_index_at;
 use super::layout;
 use crate::app::App;
 use crate::app::AppEvent;
-use crate::components::chat_composer::ChatComposerPointerTarget;
-use crate::components::chat_input::ChatInputCatalog;
-use crate::components::chat_input::SkillCompletionItem;
-use crate::components::chat_input::SlashCommandCatalog;
-use crate::components::chat_input::built_in_slash_command_definitions;
-use crate::components::detail_list::DetailList;
-use crate::components::detail_list::DetailListRow;
-use crate::components::list_selection::ListSelectionGroup;
-use crate::components::list_selection::ListSelectionItem;
-use crate::components::list_selection::ListSelectionModel;
-use crate::components::search_box::SearchBoxModel;
-use crate::features::config::FollowUpMode;
-use crate::features::config::TerminalSettings;
-use crate::features::file_search::FileSearchManager;
-use crate::features::thread::TurnActivity;
+use crate::config::FollowUpMode;
+use crate::config::TerminalSettings;
 use crate::render::test_context;
+use crate::thread::TurnActivity;
+use crate::thread::composer::ChatComposerPointerTarget;
+use crate::thread::composer::ChatInputCatalog;
+use crate::thread::composer::SkillCompletionItem;
+use crate::thread::composer::SlashCommandCatalog;
+use crate::thread::composer::built_in_slash_command_definitions;
+use crate::thread::composer::file_search::FileSearchManager;
+use crate::widgets::detail_list::DetailList;
+use crate::widgets::detail_list::DetailListRow;
+use crate::widgets::list_selection::ListSelectionGroup;
+use crate::widgets::list_selection::ListSelectionItem;
+use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -964,8 +964,7 @@ fn mention_popup_aligns_markers_with_the_query_and_highlights_fuzzy_matches() {
     let terminal_area = Rect::new(0, 0, 80, 20);
 
     let buffer = render_buffer(&app, 80, 20);
-    let Some(crate::components::chat_input::CompletionView::Mention(popup)) = app.completion()
-    else {
+    let Some(crate::thread::composer::CompletionView::Mention(popup)) = app.completion() else {
         panic!("expected mention suggestions");
     };
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
@@ -1112,7 +1111,7 @@ fn wait_for_mention_results(app: &mut App, dir: &Path) {
         }
         if matches!(
             app.completion(),
-            Some(crate::components::chat_input::CompletionView::Mention(popup))
+            Some(crate::thread::composer::CompletionView::Mention(popup))
                 if popup.matches.len() >= 2
         ) {
             return;

@@ -531,7 +531,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - zeta code 本机进程级 SSH/broker/install 验证：`zeta-code/cli/tests/remote_connect.rs`
 - zeta code PTY 交互断线/恢复验证：`zeta-code/cli/tests/remote_connect_interactive.rs`
 - zeta code transport-neutral recovery handoff：`zeta-code/tui/src/app/recovery.rs`、
-  `zeta-code/tui/src/features/sessions/active.rs`
+  `zeta-code/tui/src/sessions/active.rs`
 - Shared runtime fetch CLI boundary：`zeta-code/cli/src/remote_fetch.rs`
 - Shared atomic connection profiles：`zeta-rs/remote-connections/src/profile_store.rs`
 - app named connection CLI：`app/src/features/remote/remote_connection_cli.rs`

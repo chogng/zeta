@@ -2,16 +2,23 @@
 
 mod app;
 mod client;
-mod components;
-mod features;
+mod config;
+mod connectors;
+mod dirs;
 mod host;
 mod keymap;
-mod mouse;
+mod mcp;
+mod models;
 mod render;
-mod screen_selection;
+mod sessions;
+mod skills;
+mod status;
 mod terminal;
 #[cfg(test)]
 mod test_support;
+mod theme;
+mod thread;
+mod widgets;
 
 use std::fmt;
 use std::path::PathBuf;

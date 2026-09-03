@@ -12,7 +12,7 @@ Desktop TypeScript registry 是图形界面 token 的唯一声明目录。构建
 | 图形界面的整套主题外观 | 切换主题入口或覆盖公开 token | 重写组件选择器 |
 | 编辑器语法颜色 | 覆盖 `editor.token.*Foreground` | 让解析器携带固定 RGB |
 | 编辑器折叠状态 | 覆盖 `editor.foldBackground`、`editor.foldPlaceholderForeground`、`editorGutter.foldingControlForeground` | 在组件或 `[gui]` 中硬编码折叠颜色 |
-| Zeta Code TUI 外观 | 修改 `zeta-code/tui/src/render/theme.rs` 或 TUI 用户主题 JSON | 在 `zeta-ts` 注册 `tui.*` token |
+| Zeta Code TUI 外观 | 修改 `zeta-code/tui/src/render/palette.rs` 或 TUI 用户主题 JSON | 在 `zeta-ts` 注册 `tui.*` token |
 | 跟随操作系统明暗模式 | 选择 `system` | 维护第四套 system 主题值 |
 
 ## 所有权
@@ -26,7 +26,7 @@ Desktop TypeScript registry 是图形界面 token 的唯一声明目录。构建
 | Rust 桌面端快照与加载 | `zeta-rs/theme` | 嵌入同一 manifest，严格解析图形界面用户主题，并解析 GUI 交给它的主题选择 |
 | GUI 主题偏好 | profile `config.toml` 的 `[gui].theme` | GUI 负责默认值与校验；配置后端只保存 `[gui]` 键值表 |
 | 图形界面用户主题 | profile root 的 `themes/*.json` | 保存符合共享 Schema 的主题文档 |
-| Zeta Code TUI 主题 | `zeta-code/tui/src/features/theme`、`zeta-code/tui/src/render/theme.rs` | 拥有内置调色板、终端色彩降级、TUI 用户主题及 `[tui].theme` 的解释与校验 |
+| Zeta Code TUI 主题 | `zeta-code/tui/src/theme`、`zeta-code/tui/src/render/palette.rs` | 拥有内置调色板、终端色彩降级、TUI 用户主题及 `[tui].theme` 的解释与校验 |
 | 离线治理 | `tokenCompiler.ts` 与 `build/desktop/compileDesignTokens.ts` | 校验所有明暗方案并生成共享图形界面契约 |
 
 `src/zeta/base` 不引用主题平台或 Workbench。TUI 也不反向引用 TypeScript 前端或图形界面主题 crate。

@@ -2,7 +2,7 @@
 
 > 这是一份定位界面问题用的词典。讨论 UI 时优先使用本文中的中文名称；括号里的英文名与代码名称用于搜索实现。
 >
-> 整页区域由 [`app/screen_layout.rs`](../tui/src/app/screen_layout.rs) 分配，绘制顺序由
+> 整页区域由 [`app/layout.rs`](../tui/src/app/layout.rs) 分配，绘制顺序由
 > [`app/frame.rs`](../tui/src/app/frame.rs) 决定。架构和交互规则分别见
 > [`tui.md`](tui.md) 与 [`tui-interaction.md`](tui-interaction.md)。
 

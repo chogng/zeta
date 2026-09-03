@@ -1,20 +1,23 @@
+use super::Completion;
 use super::activate_pointer_item;
 use super::schedule_action;
 use super::update_pointer_hover;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
-use crate::app::composer_mode::ComposerModePointerTarget;
 use crate::app::frame;
 use crate::app::frame::InputPointerTarget;
-use crate::components::chat_composer::ChatComposerPointerTarget;
-use crate::components::chat_input::CompletionView;
-use crate::components::list_selection::ListSelectionGroup;
-use crate::components::list_selection::ListSelectionItem;
-use crate::components::list_selection::ListSelectionItemId;
-use crate::components::list_selection::ListSelectionModel;
-use crate::components::search_box::SearchBoxModel;
-use crate::mouse::MouseMode;
+use crate::app::input_surface::ComposerModePointerTarget;
+use crate::app::requests::RequestLane;
+use crate::app::requests::RequestTasks;
+use crate::terminal::mouse::MouseMode;
+use crate::thread::composer::ChatComposerPointerTarget;
+use crate::thread::composer::CompletionView;
+use crate::widgets::list_selection::ListSelectionGroup;
+use crate::widgets::list_selection::ListSelectionItem;
+use crate::widgets::list_selection::ListSelectionItemId;
+use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -29,36 +32,69 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
-fn request_actions_wait_for_the_active_request_without_losing_order() {
+fn control_and_read_actions_bypass_a_busy_write_lane_without_losing_write_order() {
+    let mut app = App::new();
+    let mut requests = RequestTasks::default();
+    let (release, wait) = std::sync::mpsc::sync_channel(0);
+    requests.spawn(
+        Some(RequestLane::Write),
+        "zeta-tui-test-write",
+        move || {
+            wait.recv().expect("the test releases the write request");
+            Completion::Presentation(Err("finished".into()))
+        },
+        &mut app,
+    );
     let mut queued = VecDeque::new();
-    let first = AppCommand::OpenConfigEditor;
-    let second = AppCommand::OpenRewindPicker;
-    let third = AppCommand::OpenThemePicker;
+    let write = AppCommand::SetTheme {
+        preference: "zeta-code-dark".into(),
+    };
 
-    assert!(schedule_action(Some(first), true, &mut queued).is_none());
-    assert!(schedule_action(Some(second), true, &mut queued).is_none());
-    assert!(schedule_action(Some(third), true, &mut queued).is_none());
-    assert_eq!(queued.len(), 3);
+    assert!(schedule_action(Some(write), &requests, &mut queued).is_none());
     assert!(matches!(
-        schedule_action(None, false, &mut queued),
+        schedule_action(Some(AppCommand::OpenConfigEditor), &requests, &mut queued),
         Some(AppCommand::OpenConfigEditor)
     ));
     assert!(matches!(
-        schedule_action(None, false, &mut queued),
-        Some(AppCommand::OpenRewindPicker)
+        schedule_action(Some(AppCommand::Interrupt), &requests, &mut queued),
+        Some(AppCommand::Interrupt)
     ));
+    assert_eq!(queued.len(), 1);
+    release
+        .send(())
+        .expect("the write request remains alive until released");
+    let completed = (0..10_000)
+        .find_map(|_| {
+            let completed = requests.poll();
+            if completed.is_empty() {
+                std::thread::yield_now();
+                None
+            } else {
+                Some(completed)
+            }
+        })
+        .expect("the released write request completes");
+    assert_eq!(completed.len(), 1);
     assert!(matches!(
-        schedule_action(None, false, &mut queued),
-        Some(AppCommand::OpenThemePicker)
+        schedule_action(None, &requests, &mut queued),
+        Some(AppCommand::SetTheme { .. })
     ));
 }
 
 #[test]
 fn quit_bypasses_a_pending_request() {
+    let mut app = App::new();
+    let mut requests = RequestTasks::default();
+    requests.spawn(
+        Some(RequestLane::Write),
+        "zeta-tui-test-write",
+        || Completion::Presentation(Err("finished".into())),
+        &mut app,
+    );
     let mut queued = VecDeque::new();
 
     assert!(matches!(
-        schedule_action(Some(AppCommand::Quit), true, &mut queued),
+        schedule_action(Some(AppCommand::Quit), &requests, &mut queued),
         Some(AppCommand::Quit)
     ));
     assert!(queued.is_empty());

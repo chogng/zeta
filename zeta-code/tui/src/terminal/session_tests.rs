@@ -1,6 +1,6 @@
 use super::TerminalModeGuard;
 use super::TerminalModeOperations;
-use crate::mouse::MouseMode;
+use crate::terminal::mouse::MouseMode;
 use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;

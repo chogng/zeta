@@ -3,7 +3,11 @@ use super::App;
 use super::AppCommand;
 use super::AppEvent;
 use super::Status;
-use super::chat_input_catalog_snapshot;
+use super::completion::Completion;
+use super::completion::apply_request_completion;
+use super::completion::apply_thread_snapshot;
+use super::completion::apply_tui_config;
+use super::completion::finish_product_command_request;
 use super::dispatch::execute_product_command;
 use super::event_pump::EventPump;
 use super::event_pump::RuntimeEvent;
@@ -11,50 +15,49 @@ use super::frame;
 use super::frame::InputPointerTarget;
 use super::redraw::RedrawPriority;
 use super::redraw::RedrawScheduler;
-use super::request_completion::RequestCompletion;
-use super::request_completion::apply_request_completion;
-use super::request_completion::apply_thread_snapshot;
-use super::request_completion::apply_tui_config;
-use super::request_completion::create_manager_session_and_start;
-use super::request_completion::finish_conversation_request;
-use super::request_completion::finish_product_command_request;
-use super::request_completion::interrupt_and_read;
-use super::request_completion::refresh_skills_and_registry;
-use super::request_completion::resolve_thread_request_and_read;
-use super::request_completion::start_turn_and_read;
-use super::request_completion::steer_turn_and_read;
-use super::slash_command_registry;
-use super::transcript_batch::TranscriptBatch;
+use super::requests::RequestLane;
+use super::requests::RequestTasks;
+use super::requests::request_lane;
 use crate::TuiError;
 use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
-use crate::components::chat_composer::ChatComposerPointerTarget;
-use crate::components::chat_input::ChatInputCatalog;
-use crate::features::approval::Approval;
-use crate::features::config;
-use crate::features::dirs;
-use crate::features::file_search::FileSearchManager;
-use crate::features::keymap;
-use crate::features::mcp;
-use crate::features::query::Query;
-use crate::features::rewind;
-use crate::features::sessions;
-use crate::features::sessions::ResumeOutcome;
-use crate::features::skills;
-use crate::features::status_line;
-use crate::features::theme as theme_feature;
-use crate::features::theme::ThemeResource;
-use crate::features::thread::ThreadRequestScope;
-use crate::features::thread::ThreadSubscription;
-use crate::features::thread::ThreadUpdateDisposition;
-use crate::features::thread::TranscriptUpdateDisposition;
-use crate::features::thread::read_older_thread_history;
-use crate::features::thread::read_thread_history;
+use crate::config;
+use crate::dirs;
 use crate::host;
-use crate::screen_selection::ClickCount;
-use crate::screen_selection::ScreenSelectionOutcome;
+use crate::keymap;
+use crate::mcp;
+use crate::sessions;
+use crate::sessions::ResumeOutcome;
+use crate::sessions::create_manager_session_and_start;
+use crate::sessions::finish_conversation_request;
+use crate::skills;
+use crate::skills::refresh_and_build_input_catalog;
+use crate::status as status_line;
 use crate::terminal;
+use crate::terminal::screen_selection::ClickCount;
+use crate::terminal::screen_selection::ScreenSelectionOutcome;
+use crate::theme as theme_feature;
+use crate::theme::ThemeResource;
+use crate::thread::ThreadRequestScope;
+use crate::thread::ThreadSubscription;
+use crate::thread::ThreadUpdateDisposition;
+use crate::thread::TranscriptUpdateDisposition;
+use crate::thread::composer::ChatComposerPointerTarget;
+use crate::thread::composer::ChatInputCatalog;
+use crate::thread::composer::chat_input_catalog_snapshot;
+use crate::thread::composer::file_search::FileSearchManager;
+use crate::thread::composer::slash_command_registry;
+use crate::thread::interaction::approval::Approval;
+use crate::thread::interaction::query::Query;
+use crate::thread::interrupt_and_read;
+use crate::thread::read_older_thread_history;
+use crate::thread::read_thread_history;
+use crate::thread::resolve_request_and_read;
+use crate::thread::rewind;
+use crate::thread::start_turn_and_read;
+use crate::thread::steer_turn_and_read;
+use crate::thread::transcript::batch::TranscriptBatch;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
@@ -171,7 +174,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     }
 
     let pump = EventPump::start(events)?;
-    let mut pending_request: Option<client::RequestTask<RequestCompletion>> = None;
+    let mut requests = RequestTasks::default();
     let mut queued_actions = VecDeque::new();
     let mut thread_refresh_requested = false;
     let mut config_refresh_requested = false;
@@ -354,34 +357,25 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 },
             };
 
-            if let Some(task) = pending_request.as_mut() {
-                match task.poll() {
-                    Ok(Some(completion)) => {
-                        pending_request = None;
-                        redraw.request(Instant::now(), RedrawPriority::Batched);
-                        apply_request_completion(
-                            completion,
-                            &mut conversation,
-                            &mut active_turn,
-                            &mut thread_subscription,
-                            &mut app,
-                        );
-                    }
-                    Ok(None) => {}
-                    Err(error) => {
-                        pending_request = None;
-                        redraw.request(Instant::now(), RedrawPriority::Batched);
-                        app.update(AppEvent::FailureReported(error.to_string()));
-                    }
+            for completion in requests.poll() {
+                redraw.request(Instant::now(), RedrawPriority::Batched);
+                match completion {
+                    Ok(completion) => apply_request_completion(
+                        completion,
+                        &mut conversation,
+                        &mut active_turn,
+                        &mut thread_subscription,
+                        &mut app,
+                    ),
+                    Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
                 }
             }
 
             queued_turn_dispatch_requested |= had_active_turn && active_turn.is_none();
 
-            let mut action =
-                schedule_action(action, pending_request.is_some(), &mut queued_actions);
+            let mut action = schedule_action(action, &requests, &mut queued_actions);
             if action.is_none()
-                && pending_request.is_none()
+                && requests.is_idle(Some(RequestLane::Write))
                 && queued_actions.is_empty()
                 && queued_turn_dispatch_requested
             {
@@ -401,18 +395,20 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             }
 
             if let Some(action) = action {
+                let action_lane = request_lane(&action);
                 match action {
                     AppCommand::ConnectConnectorDeviceOAuth {
                         connector_id,
                         connection_generation,
                     } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-connect-device-oauth",
                                 move || {
-                                    RequestCompletion::Presentation(
-                                        crate::features::connectors::connect_device_oauth(
+                                    Completion::Presentation(
+                                        crate::connectors::connect_device_oauth(
                                             &mut request_client,
                                             connector_id,
                                             connection_generation,
@@ -426,15 +422,16 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::ExecuteProductCommand(invocation) => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let next_conversation = conversation.clone();
                             let next_subscription = thread_subscription.clone();
                             let dir_permissions = app.terminal_settings().dir_permissions();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-product-command",
                                 move || {
-                                    RequestCompletion::ProductCommand(
+                                    Completion::ProductCommand(
                                         execute_product_command(
                                             next_conversation,
                                             &mut request_client,
@@ -461,14 +458,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         if let Some(turn_id) = active_turn.clone()
                             && !matches!(app.status(), Status::Error)
                         {
-                            if pending_request.is_none() {
+                            if requests.is_idle(action_lane) {
                                 let request_client = client.clone();
                                 let scope = thread_request_scope(&conversation);
                                 let history = thread_subscription.history();
-                                pending_request = spawn_request(
+                                requests.spawn(
+                                    action_lane,
                                     "zeta-tui-interrupt-turn",
                                     move || {
-                                        RequestCompletion::TurnInterrupted(interrupt_and_read(
+                                        Completion::TurnInterrupted(interrupt_and_read(
                                             request_client,
                                             scope,
                                             turn_id,
@@ -484,32 +482,54 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             ));
                         }
                     }
-                    AppCommand::ReadClipboardImage => app.update(AppEvent::ClipboardImageRead(
-                        host::clipboard::read_image().map(|image| image.png),
-                    )),
+                    AppCommand::ReadClipboardImage => {
+                        requests.spawn(
+                            action_lane,
+                            "zeta-tui-read-clipboard-image",
+                            move || {
+                                Completion::Presentation(Ok(AppEvent::ClipboardImageRead(
+                                    host::clipboard::read_image().map(|image| image.png),
+                                )))
+                            },
+                            &mut app,
+                        );
+                    }
                     AppCommand::CopyLastResponse => {
-                        let result = app
+                        let response = app
                             .latest_agent_response()
-                            .ok_or_else(|| "there is no Zeta response to copy".to_owned())
-                            .and_then(|response| {
-                                let char_count = response.chars().count();
-                                host::clipboard::write_text(response).map(|()| char_count)
-                            });
-                        match result {
-                            Ok(char_count) => app.update(AppEvent::TopTipNoticeShown(format!(
-                                "Copied {char_count} chars to clipboard"
-                            ))),
-                            Err(error) => app.update(AppEvent::HostOperationCompleted(Err(error))),
-                        }
+                            .map(str::to_owned)
+                            .ok_or_else(|| "there is no Zeta response to copy".to_owned());
+                        requests.spawn(
+                            action_lane,
+                            "zeta-tui-copy-last-response",
+                            move || {
+                                let event = response
+                                    .and_then(|response| {
+                                        let char_count = response.chars().count();
+                                        host::clipboard::write_text(&response).map(|()| char_count)
+                                    })
+                                    .map(|char_count| {
+                                        AppEvent::TopTipNoticeShown(format!(
+                                            "Copied {char_count} chars to clipboard"
+                                        ))
+                                    })
+                                    .unwrap_or_else(|error| {
+                                        AppEvent::HostOperationCompleted(Err(error))
+                                    });
+                                Completion::Presentation(Ok(event))
+                            },
+                            &mut app,
+                        );
                     }
                     AppCommand::OpenConfigEditor => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-read-config",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         config::read_config_choices(
                                             &mut request_client,
                                             &session_id,
@@ -523,12 +543,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::EditConfig(edit) => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-set-config",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         config::set_terminal_settings(&mut request_client, edit)
                                             .map(AppEvent::ConfigUpdated)
                                             .map_err(|error| error.to_string()),
@@ -539,12 +560,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::EditPermissions(edit) => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-set-directory-permissions",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         config::set_permissions(&mut request_client, edit)
                                             .map(AppEvent::ConfigEditorUpdated)
                                             .map_err(|error| error.to_string()),
@@ -555,13 +577,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::SetProviderApiKey(edit) => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-set-provider-api-key",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         config::set_provider_api_key(
                                             &mut request_client,
                                             edit,
@@ -580,10 +603,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::OpenKeymapEditor => {
                         let mut request_client = client.clone();
-                        pending_request = spawn_request(
+                        requests.spawn(
+                            action_lane,
                             "zeta-tui-read-keymap",
                             move || {
-                                RequestCompletion::Presentation(
+                                Completion::Presentation(
                                     keymap::read_keymap(&mut request_client)
                                         .map(AppEvent::KeymapEditorOpened),
                                 )
@@ -593,10 +617,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::OpenStatusLineEditor => {
                         let mut request_client = client.clone();
-                        pending_request = spawn_request(
+                        requests.spawn(
+                            action_lane,
                             "zeta-tui-read-status-line",
                             move || {
-                                RequestCompletion::Presentation(
+                                Completion::Presentation(
                                     status_line::read_status_line(&mut request_client)
                                         .map(AppEvent::StatusLineEditorOpened),
                                 )
@@ -606,10 +631,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::EditStatusLine(edit) => {
                         let mut request_client = client.clone();
-                        pending_request = spawn_request(
+                        requests.spawn(
+                            action_lane,
                             "zeta-tui-set-status-line",
                             move || {
-                                RequestCompletion::Presentation(
+                                Completion::Presentation(
                                     status_line::set_status_line(&mut request_client, edit)
                                         .map(AppEvent::StatusLineEditorUpdated),
                                 )
@@ -619,10 +645,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::EditKeymap(edit) => {
                         let mut request_client = client.clone();
-                        pending_request = spawn_request(
+                        requests.spawn(
+                            action_lane,
                             "zeta-tui-set-keymap",
                             move || {
-                                RequestCompletion::Presentation(
+                                Completion::Presentation(
                                     keymap::set_keymap(&mut request_client, edit)
                                         .map(AppEvent::KeymapEditorOpened),
                                 )
@@ -632,31 +659,44 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::ExportTranscript { requested_path } => {
                         let markdown = app.transcript_markdown();
-                        let result = if markdown.is_empty() {
-                            Err("there is no conversation to export".to_owned())
-                        } else {
-                            host::transcript_export::write(
-                                &host_dir_root,
-                                requested_path.as_deref(),
-                                &markdown,
-                            )
-                            .map(|path| format!("Exported conversation to {}", path.display()))
-                        };
-                        app.update(AppEvent::HostOperationCompleted(result));
+                        let export_root = host_dir_root.clone();
+                        requests.spawn(
+                            action_lane,
+                            "zeta-tui-export-transcript",
+                            move || {
+                                let result = if markdown.is_empty() {
+                                    Err("there is no conversation to export".to_owned())
+                                } else {
+                                    host::transcript_export::write(
+                                        &export_root,
+                                        requested_path.as_deref(),
+                                        &markdown,
+                                    )
+                                    .map(|path| {
+                                        format!("Exported conversation to {}", path.display())
+                                    })
+                                };
+                                Completion::Presentation(Ok(AppEvent::HostOperationCompleted(
+                                    result,
+                                )))
+                            },
+                            &mut app,
+                        );
                     }
                     AppCommand::Suspend => terminal.suspend()?,
                     AppCommand::LoadOlderHistory => {
-                        if pending_request.is_none()
+                        if requests.is_idle(action_lane)
                             && let Some(ThreadSnapshotHistory::Before { turn_id, .. }) =
                                 thread_subscription.older_history()
                         {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
                             let thread_id = conversation.thread_id().clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-load-older-history",
                                 move || {
-                                    RequestCompletion::ThreadHistoryPage(read_older_thread_history(
+                                    Completion::ThreadHistoryPage(read_older_thread_history(
                                         &mut request_client,
                                         &session_id,
                                         &thread_id,
@@ -668,13 +708,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::OpenThemePicker => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let request_theme_resource = theme_resource.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-open-theme",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         request_client
                                             .read_config()
                                             .map_err(|error| error.to_string())
@@ -694,13 +735,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::OpenCustomThemePicker => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let request_theme_resource = theme_resource.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-open-custom-theme",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         request_client
                                             .read_config()
                                             .map_err(|error| error.to_string())
@@ -722,14 +764,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::OpenRewindPicker => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
                             let thread_id = conversation.thread_id().clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-load-rewind",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         rewind::load_selection(
                                             &mut request_client,
                                             &session_id,
@@ -744,14 +787,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::RemoveDir { path } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
                             let event_path = path.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-remove-directory",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         dirs::remove(&mut request_client, &session_id, path)
                                             .map(|choices| AppEvent::DirRemoved {
                                                 path: event_path,
@@ -770,13 +814,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     } => {
                         let command = format!("/rewind {before_turn_id}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let mut next_conversation = conversation.clone();
                             let next_subscription = thread_subscription.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-rewind-thread",
-                                move || RequestCompletion::ConversationChanged {
+                                move || Completion::ConversationChanged {
                                     command,
                                     result: next_conversation
                                         .rewind_active_thread(
@@ -804,11 +849,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     } => {
                         let command = format!("/resume {session_id}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let mut next_conversation = conversation.clone();
                             let next_subscription = thread_subscription.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-resume-session",
                                 move || match next_conversation.resume_session(
                                     &mut request_client,
@@ -816,7 +862,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                     preferred_thread_id.as_ref(),
                                 ) {
                                     Ok(ResumeOutcome::Changed(change)) => {
-                                        RequestCompletion::ConversationChanged {
+                                        Completion::ConversationChanged {
                                             command,
                                             result: finish_conversation_request(
                                                 &mut request_client,
@@ -827,7 +873,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         }
                                     }
                                     Ok(ResumeOutcome::Listed(_)) => {
-                                        RequestCompletion::ConversationChanged {
+                                        Completion::ConversationChanged {
                                             command,
                                             result: Err(
                                                 "resume selection did not identify a session"
@@ -835,7 +881,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             ),
                                         }
                                     }
-                                    Err(error) => RequestCompletion::ConversationChanged {
+                                    Err(error) => Completion::ConversationChanged {
                                         command,
                                         result: Err(error.to_string()),
                                     },
@@ -845,12 +891,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::ArchiveSessions { session_ids } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-archive-sessions",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         sessions::archive(&mut request_client, session_ids)
                                             .map(AppEvent::SessionCatalogReceived)
                                             .map_err(|error| error.to_string()),
@@ -861,16 +908,17 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::ResolveThreadRequest(response) => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let request = response.identity();
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
                             let history = thread_subscription.history();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-resolve-thread-request",
-                                move || RequestCompletion::ThreadRequestResolved {
+                                move || Completion::ThreadRequestResolved {
                                     request,
-                                    result: resolve_thread_request_and_read(
+                                    result: resolve_request_and_read(
                                         request_client,
                                         scope,
                                         response,
@@ -882,15 +930,16 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::CreateSessionAndEnter { submission } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let request_client = client.clone();
                             let next_conversation = conversation.clone();
                             let next_subscription = thread_subscription.clone();
                             let approval_mode = app.approval_mode();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-create-manager-session",
                                 move || {
-                                    RequestCompletion::ManagerSessionCreated(
+                                    Completion::ManagerSessionCreated(
                                         create_manager_session_and_start(
                                             request_client,
                                             next_conversation,
@@ -905,11 +954,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::SwitchThread { thread_id } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let mut next_conversation = conversation.clone();
                             let next_subscription = thread_subscription.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-switch-thread",
                                 move || {
                                     let result = next_conversation
@@ -923,20 +973,21 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                                 change,
                                             )
                                         });
-                                    RequestCompletion::ThreadChanged(result)
+                                    Completion::ThreadChanged(result)
                                 },
                                 &mut app,
                             );
                         }
                     }
                     AppCommand::DisconnectConnector { connector_id } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-disconnect-connector",
                                 move || {
-                                    RequestCompletion::Presentation(
-                                        crate::features::connectors::disconnect(
+                                    Completion::Presentation(
+                                        crate::connectors::disconnect(
                                             &mut request_client,
                                             connector_id,
                                         )
@@ -952,12 +1003,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         server_id,
                         enablement,
                     } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-set-mcp-enablement",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         mcp::set_enablement(
                                             &mut request_client,
                                             server_id,
@@ -974,11 +1026,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::SetPreferredModel { preference } => {
                         let command = format!("/model {preference}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-set-preferred-model",
-                                move || RequestCompletion::PreferredModelUpdated {
+                                move || Completion::PreferredModelUpdated {
                                     command,
                                     result: config::set_preferred_model(
                                         &mut request_client,
@@ -996,11 +1049,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         app.update(AppEvent::CommandStarted(command.clone()));
                         match theme_resource.resolve(&preference) {
                             Ok(selection) => {
-                                if pending_request.is_none() {
+                                if requests.is_idle(action_lane) {
                                     let mut request_client = client.clone();
-                                    pending_request = spawn_request(
+                                    requests.spawn(
+                                        action_lane,
                                         "zeta-tui-set-theme",
-                                        move || RequestCompletion::ThemeUpdated {
+                                        move || Completion::ThemeUpdated {
                                             command,
                                             label: selection.label,
                                             theme: selection.theme,
@@ -1021,13 +1075,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         skill_id,
                         enablement,
                     } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let skill_session_id = conversation.session_id().clone();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-set-skill-enablement",
                                 move || {
-                                    RequestCompletion::Presentation(
+                                    Completion::Presentation(
                                         skills::set_enablement(
                                             &mut request_client,
                                             &skill_session_id,
@@ -1046,15 +1101,16 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         app.cycle_next_approval_mode();
                     }
                     AppCommand::SubmitTurn { submission } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
                             let approval_mode = app.approval_mode();
                             let history = thread_subscription.history();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-start-turn",
                                 move || {
-                                    RequestCompletion::TurnStarted(start_turn_and_read(
+                                    Completion::TurnStarted(start_turn_and_read(
                                         request_client,
                                         scope,
                                         submission,
@@ -1070,14 +1126,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         queue_id,
                         submission,
                     } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
                             let approval_mode = app.approval_mode();
                             let history = thread_subscription.history();
-                            pending_request = spawn_request(
+                            requests.spawn(
+                                action_lane,
                                 "zeta-tui-start-queued-turn",
-                                move || RequestCompletion::QueuedTurnStarted {
+                                move || Completion::QueuedTurnStarted {
                                     queue_id,
                                     result: start_turn_and_read(
                                         request_client,
@@ -1095,7 +1152,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         steer_id,
                         submission,
                     } => {
-                        if pending_request.is_none() {
+                        if requests.is_idle(action_lane) {
                             if matches!(app.status(), Status::Working) && !app.steers_active_turn()
                             {
                                 queued_actions.push_front(AppCommand::SteerTurn {
@@ -1106,9 +1163,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 let request_client = client.clone();
                                 let scope = thread_request_scope(&conversation);
                                 let history = thread_subscription.history();
-                                pending_request = spawn_request(
+                                requests.spawn(
+                                    action_lane,
                                     "zeta-tui-steer-turn",
-                                    move || RequestCompletion::TurnSteered {
+                                    move || Completion::TurnSteered {
                                         steer_id,
                                         result: steer_turn_and_read(
                                             request_client,
@@ -1130,12 +1188,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                 }
             }
-            if pending_request.is_none() && config_refresh_requested {
+            if requests.is_idle(Some(RequestLane::Read)) && config_refresh_requested {
                 let mut request_client = client.clone();
-                pending_request = spawn_request(
+                requests.spawn(
+                    Some(RequestLane::Read),
                     "zeta-tui-refresh-config",
                     move || {
-                        RequestCompletion::ConfigRefreshed(
+                        Completion::ConfigRefreshed(
                             request_client
                                 .read_config()
                                 .map_err(|error| error.to_string()),
@@ -1143,19 +1202,20 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     },
                     &mut app,
                 );
-                if pending_request.is_some() {
+                if !requests.is_idle(Some(RequestLane::Read)) {
                     config_refresh_requested = false;
                 }
             }
-            if pending_request.is_none() && thread_refresh_requested {
+            if requests.is_idle(Some(RequestLane::Read)) && thread_refresh_requested {
                 let mut request_client = client.clone();
                 let session_id = conversation.session_id().clone();
                 let thread_id = conversation.thread_id().clone();
                 let history = thread_subscription.history();
-                pending_request = spawn_request(
+                requests.spawn(
+                    Some(RequestLane::Read),
                     "zeta-tui-refresh-thread",
                     move || {
-                        RequestCompletion::ThreadRefreshed(read_thread_history(
+                        Completion::ThreadRefreshed(read_thread_history(
                             &mut request_client,
                             &session_id,
                             &thread_id,
@@ -1164,18 +1224,19 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     },
                     &mut app,
                 );
-                if pending_request.is_some() {
+                if !requests.is_idle(Some(RequestLane::Read)) {
                     thread_refresh_requested = false;
                 }
             }
-            if pending_request.is_none() && skills_refresh_requested {
+            if requests.is_idle(Some(RequestLane::Read)) && skills_refresh_requested {
                 let request_client = client.clone();
                 let server_slash_commands = server_slash_commands.clone();
                 let skills_session_id = conversation.session_id().clone();
-                pending_request = spawn_request(
+                requests.spawn(
+                    Some(RequestLane::Read),
                     "zeta-tui-refresh-skills",
                     move || {
-                        RequestCompletion::SkillsRefreshed(refresh_skills_and_registry(
+                        Completion::SkillsRefreshed(refresh_and_build_input_catalog(
                             request_client,
                             server_slash_commands,
                             skills_session_id,
@@ -1184,16 +1245,17 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     },
                     &mut app,
                 );
-                if pending_request.is_some() {
+                if !requests.is_idle(Some(RequestLane::Read)) {
                     skills_refresh_requested = false;
                 }
             }
-            if pending_request.is_none() && sessions_refresh_requested {
+            if requests.is_idle(Some(RequestLane::Read)) && sessions_refresh_requested {
                 let mut request_client = client.clone();
-                pending_request = spawn_request(
+                requests.spawn(
+                    Some(RequestLane::Read),
                     "zeta-tui-refresh-sessions",
                     move || {
-                        RequestCompletion::Presentation(
+                        Completion::Presentation(
                             sessions::load_catalog(&mut request_client)
                                 .map(AppEvent::SessionCatalogReceived)
                                 .map_err(|error| error.to_string()),
@@ -1201,24 +1263,25 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     },
                     &mut app,
                 );
-                if pending_request.is_some() {
+                if !requests.is_idle(Some(RequestLane::Read)) {
                     sessions_refresh_requested = false;
                 }
             }
-            if pending_request.is_none() && connectors_refresh_requested {
+            if requests.is_idle(Some(RequestLane::Read)) && connectors_refresh_requested {
                 let mut request_client = client.clone();
-                pending_request = spawn_request(
+                requests.spawn(
+                    Some(RequestLane::Read),
                     "zeta-tui-refresh-connectors",
                     move || {
-                        RequestCompletion::Presentation(
-                            crate::features::connectors::load_selection(&mut request_client)
+                        Completion::Presentation(
+                            crate::connectors::load_selection(&mut request_client)
                                 .map(AppEvent::ConnectorPickerUpdated)
                                 .map_err(|error| error.to_string()),
                         )
                     },
                     &mut app,
                 );
-                if pending_request.is_some() {
+                if !requests.is_idle(Some(RequestLane::Read)) {
                     connectors_refresh_requested = false;
                 }
             }
@@ -1244,19 +1307,19 @@ fn activate_pointer_item(
     let target = frame::input_pointer_target_at(app, area, column, row)?;
     match target {
         InputPointerTarget::ComposerMode(
-            crate::app::composer_mode::ComposerModePointerTarget::Tab(index),
+            crate::app::input_surface::ComposerModePointerTarget::Tab(index),
         ) => {
             app.select_tab(index);
             None
         }
         InputPointerTarget::ComposerMode(
-            crate::app::composer_mode::ComposerModePointerTarget::Search,
+            crate::app::input_surface::ComposerModePointerTarget::Search,
         ) => {
             app.focus_composer_search();
             None
         }
         InputPointerTarget::ComposerMode(
-            crate::app::composer_mode::ComposerModePointerTarget::Item(index),
+            crate::app::input_surface::ComposerModePointerTarget::Item(index),
         ) => app.activate_visible_item(index),
         InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
             app.activate_input_completion(index)
@@ -1323,7 +1386,7 @@ fn finish_pointer_gesture(
 fn copy_screen_range(
     app: &mut App,
     terminal: &terminal::TerminalSession,
-    range: crate::screen_selection::ScreenSelectionRange,
+    range: crate::terminal::screen_selection::ScreenSelectionRange,
 ) {
     app.select_screen_range(range);
     let Some(text) = terminal.selected_text(range) else {
@@ -1353,37 +1416,16 @@ fn draw_terminal(
 
 fn schedule_action(
     action: Option<AppCommand>,
-    request_pending: bool,
+    requests: &RequestTasks,
     queued: &mut VecDeque<AppCommand>,
 ) -> Option<AppCommand> {
-    if request_pending {
-        return match action {
-            Some(action) if uses_request_task(&action) => {
-                queued.push_back(action);
-                None
-            }
-            action => action,
-        };
+    if let Some(action) = action {
+        queued.push_back(action);
     }
-    if let Some(next) = queued.pop_front() {
-        if let Some(action) = action {
-            queued.push_back(action);
-        }
-        Some(next)
-    } else {
-        action
-    }
-}
-
-fn uses_request_task(action: &AppCommand) -> bool {
-    !matches!(
-        action,
-        AppCommand::Quit
-            | AppCommand::Suspend
-            | AppCommand::CopyLastResponse
-            | AppCommand::ExportTranscript { .. }
-            | AppCommand::ReadClipboardImage
-    )
+    let runnable = queued
+        .iter()
+        .position(|action| requests.is_idle(request_lane(action)))?;
+    queued.remove(runnable)
 }
 
 #[derive(Default)]
@@ -1481,22 +1523,6 @@ fn refresh_server_event(
                     ..ServerRefresh::default()
                 },
             }
-        }
-    }
-}
-
-fn spawn_request(
-    name: &'static str,
-    request: impl FnOnce() -> RequestCompletion + Send + 'static,
-    app: &mut App,
-) -> Option<client::RequestTask<RequestCompletion>> {
-    match client::RequestTask::spawn(name, request) {
-        Ok(task) => Some(task),
-        Err(error) => {
-            app.update(AppEvent::FailureReported(format!(
-                "could not start background request: {error}"
-            )));
-            None
         }
     }
 }

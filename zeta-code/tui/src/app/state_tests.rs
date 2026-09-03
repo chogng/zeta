@@ -2,48 +2,48 @@ use super::App;
 use super::AppCommand;
 use super::Status;
 use crate::app::AppEvent;
-use crate::components::chat_history::CommandStatus;
-use crate::components::chat_history::MessageRole;
-use crate::components::chat_input::ChatInputItem;
-use crate::components::chat_input::ChatInputMode;
-use crate::components::chat_input::ChatSubmission;
-use crate::components::chat_input::CompletionView;
-use crate::components::chat_input::built_in_slash_command_definitions;
-use crate::components::detail_list::DetailList;
-use crate::components::detail_list::DetailListRow;
-use crate::components::list_selection::ListSelectionGroup;
-use crate::components::list_selection::ListSelectionItem;
-use crate::components::list_selection::ListSelectionModel;
-use crate::features::approval::Approval;
-use crate::features::approval::ApprovalSpec;
-use crate::features::config::FollowUpMode;
-use crate::features::config::TerminalSettings;
-use crate::features::config::config_choices;
-use crate::features::file_search::FileSearchManager;
-use crate::features::keymap::KeymapEditIntent;
-use crate::features::keymap::KeymapEditKind;
-use crate::features::keymap::KeymapEditorUpdate;
-use crate::features::keymap::keymap_choices;
-use crate::features::keymap::settings_from_tui as keymap_settings_from_tui;
-use crate::features::query::Query;
-use crate::features::query::QueryChoice;
-use crate::features::query::QueryCustomAnswer;
-use crate::features::query::QueryQuestion;
-use crate::features::rewind::rewind_choices;
-use crate::features::status_line::StatusLineEditorUpdate;
-use crate::features::status_line::StatusLineItem;
-use crate::features::status_line::StatusLineSettings;
-use crate::features::status_line::status_line_choices;
-use crate::features::theme::ThemePickerCatalog;
-use crate::features::theme::ThemePickerChoice;
-use crate::features::theme::ThemePickerTarget;
-use crate::features::theme::ThemePreviewPalette;
-use crate::features::theme::custom_theme_choices;
-use crate::features::theme::theme_choices;
-use crate::features::thread::TurnActivity;
-use crate::mouse::MouseMode;
+use crate::config::FollowUpMode;
+use crate::config::TerminalSettings;
+use crate::config::config_choices;
+use crate::keymap::KeymapEditIntent;
+use crate::keymap::KeymapEditKind;
+use crate::keymap::KeymapEditorUpdate;
+use crate::keymap::keymap_choices;
+use crate::keymap::settings_from_tui as keymap_settings_from_tui;
 use crate::render::RenderTheme;
+use crate::status::StatusLineEditorUpdate;
+use crate::status::StatusLineItem;
+use crate::status::StatusLineSettings;
+use crate::status::status_line_choices;
+use crate::terminal::mouse::MouseMode;
 use crate::test_support::empty_config_snapshot;
+use crate::theme::ThemePickerCatalog;
+use crate::theme::ThemePickerChoice;
+use crate::theme::ThemePickerTarget;
+use crate::theme::ThemePreviewPalette;
+use crate::theme::custom_theme_choices;
+use crate::theme::theme_choices;
+use crate::thread::TurnActivity;
+use crate::thread::composer::ChatInputItem;
+use crate::thread::composer::ChatInputMode;
+use crate::thread::composer::ChatSubmission;
+use crate::thread::composer::CompletionView;
+use crate::thread::composer::built_in_slash_command_definitions;
+use crate::thread::composer::file_search::FileSearchManager;
+use crate::thread::interaction::approval::Approval;
+use crate::thread::interaction::approval::ApprovalSpec;
+use crate::thread::interaction::query::Query;
+use crate::thread::interaction::query::QueryChoice;
+use crate::thread::interaction::query::QueryCustomAnswer;
+use crate::thread::interaction::query::QueryQuestion;
+use crate::thread::rewind::rewind_choices;
+use crate::thread::transcript::CommandStatus;
+use crate::thread::transcript::MessageRole;
+use crate::widgets::detail_list::DetailList;
+use crate::widgets::detail_list::DetailListRow;
+use crate::widgets::list_selection::ListSelectionGroup;
+use crate::widgets::list_selection::ListSelectionItem;
+use crate::widgets::list_selection::ListSelectionModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -932,16 +932,14 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
     let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
     assert_eq!(
         edit,
-        Some(AppCommand::EditKeymap(
-            crate::features::keymap::KeymapEdit {
-                expected_revision: 7,
-                command_id: "zetaCode.action.cycleApprovalMode".into(),
-                kind: KeymapEditKind::Set {
-                    key: "ctrl+y".into(),
-                    intent: KeymapEditIntent::ReplaceUser,
-                },
-            }
-        ))
+        Some(AppCommand::EditKeymap(crate::keymap::KeymapEdit {
+            expected_revision: 7,
+            command_id: "zetaCode.action.cycleApprovalMode".into(),
+            kind: KeymapEditKind::Set {
+                key: "ctrl+y".into(),
+                intent: KeymapEditIntent::ReplaceUser,
+            },
+        }))
     );
 }
 
@@ -1094,9 +1092,9 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
     )
     .unwrap();
     let mut app = App::for_dir_with_slash_commands(&dir, registry.clone());
-    app.replace_chat_input_catalog(crate::components::chat_input::ChatInputCatalog::new(
+    app.replace_chat_input_catalog(crate::thread::composer::ChatInputCatalog::new(
         registry,
-        vec![crate::components::chat_input::SkillCompletionItem::new(
+        vec![crate::thread::composer::SkillCompletionItem::new(
             "commit".into(),
             "draft a commit message".into(),
             skill.clone(),

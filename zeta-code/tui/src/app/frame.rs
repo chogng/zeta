@@ -1,22 +1,22 @@
 use crate::app::App;
-use crate::app::composer_mode::ComposerModePointerTarget;
-use crate::components::chat_composer;
-use crate::components::chat_composer::ChatComposerPointerTarget;
-use crate::components::chat_composer::ChatComposerSurface;
-use crate::components::chat_history;
-use crate::components::chat_history::ChatHistoryPointerState;
-use crate::components::chat_history::ChatHistoryView;
-use crate::components::chat_input;
-use crate::components::key_hint;
-use crate::components::welcome;
-use crate::features::approval;
-use crate::features::query;
-use crate::features::queue;
-use crate::features::sessions;
-use crate::features::status_line;
-use crate::features::thread::goal;
-use crate::features::thread::plan;
+use crate::app::input_surface::ComposerModePointerTarget;
+use crate::app::welcome;
 use crate::render::Renderable;
+use crate::sessions;
+use crate::status as status_line;
+use crate::thread::composer as chat_composer;
+use crate::thread::composer as chat_input;
+use crate::thread::composer::ChatComposerPointerTarget;
+use crate::thread::composer::ChatComposerSurface;
+use crate::thread::goal;
+use crate::thread::interaction::approval;
+use crate::thread::interaction::query;
+use crate::thread::plan;
+use crate::thread::queue;
+use crate::thread::transcript as chat_history;
+use crate::thread::transcript::ChatHistoryPointerState;
+use crate::thread::transcript::ChatHistoryView;
+use crate::widgets::key_hint;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -56,7 +56,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let hovered = app.hovered_pointer_target();
     let pressed = app.pressed_pointer_target();
     if let Some(manager) = app.session_manager_view() {
-        let manager_areas = super::screen_layout::manager_areas(
+        let manager_areas = super::layout::manager_areas(
             areas.session.transcript,
             welcome::desired_height(areas.session.transcript.width),
         );
@@ -79,14 +79,17 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         );
     } else {
         let messages = app.transcript_views();
-        ChatHistoryView {
-            messages: &messages,
-            scroll: app.transcript_scroll(),
-            render_cache: app.transcript_render_cache(),
-            welcome: app.welcome(),
-            pointer: transcript_pointer_state(hovered, pressed),
+        if messages.is_empty() {
+            welcome::draw(frame, areas.session.transcript, app.welcome(), context);
+        } else {
+            ChatHistoryView {
+                messages: &messages,
+                scroll: app.transcript_scroll(),
+                render_cache: app.transcript_render_cache(),
+                pointer: transcript_pointer_state(hovered, pressed),
+            }
+            .render(frame, areas.session.transcript, context);
         }
-        .render(frame, areas.session.transcript, context);
     }
     let cursor = if app.accepts_input() && app.chat_input_focused() {
         chat_input::ChatInputCursor::Visible
@@ -166,7 +169,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     }
     draw_status_area(frame, areas.session.status, app, context);
     if let Some(subagent_picker) = app.subagent_picker_view() {
-        crate::features::thread::draw_subagent_picker(
+        crate::thread::draw_subagent_picker(
             frame,
             chat_input::content_area(areas.session.subagent_picker),
             subagent_picker,
@@ -181,7 +184,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         context,
     );
     if let Some(overlay) = app.overlay() {
-        crate::components::overlay::draw(frame, transient_area(&areas), overlay, context);
+        crate::widgets::overlay::draw(frame, transient_area(&areas), overlay, context);
     } else if completion_visible(app) {
         let hovered_composer = match hovered {
             Some(InputPointerTarget::Composer(target)) => Some(*target),
@@ -258,7 +261,7 @@ pub(crate) enum InputPointerTarget {
     ComposerMode(ComposerModePointerTarget),
     Approval(usize),
     Query(usize),
-    SessionManager(crate::features::sessions::SessionManagerPointerTarget),
+    SessionManager(crate::sessions::SessionManagerPointerTarget),
     TranscriptToggle(String),
     TranscriptDetails(String),
 }
@@ -324,7 +327,7 @@ pub(crate) fn input_pointer_target_at(
         return Some(InputPointerTarget::ComposerMode(target));
     }
     if let Some(manager) = app.session_manager_view() {
-        let manager_areas = super::screen_layout::manager_areas(
+        let manager_areas = super::layout::manager_areas(
             areas.session.transcript,
             welcome::desired_height(areas.session.transcript.width),
         );
@@ -358,7 +361,7 @@ pub(crate) fn input_pointer_target_at(
 }
 
 pub(crate) struct FrameLayout {
-    pub(crate) session: super::screen_layout::SessionAreas,
+    pub(crate) session: super::layout::SessionAreas,
     pub(crate) input: Rect,
 }
 
@@ -395,7 +398,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         queue::desired_height(&queue_view, queue::DEFAULT_MAX_VISIBLE_ITEMS)
     };
     let status_area = status_area_view(app);
-    let session = super::screen_layout::session_areas(
+    let session = super::layout::session_areas(
         terminal_area,
         if app.session_manager_view().is_some() {
             0

@@ -1,0 +1,24 @@
+pub(crate) mod batch;
+mod cache;
+mod cell;
+mod exec;
+mod markdown;
+mod projection;
+mod state;
+mod view;
+
+pub(crate) use cache::ChatHistoryRenderCache;
+pub(crate) use cell::CommandStatus;
+pub(crate) use cell::ExecutionKind;
+pub(crate) use cell::Message;
+pub(crate) use cell::MessageRole;
+pub(crate) use markdown::export_markdown;
+pub(crate) use markdown::latest_agent_response;
+pub(crate) use projection::TranscriptCell;
+pub(crate) use projection::TranscriptCellId;
+pub(crate) use projection::TranscriptProjection;
+pub(crate) use state::ChatHistoryScroll;
+pub(crate) use view::ChatHistoryPointerState;
+pub(crate) use view::ChatHistoryPointerTarget;
+pub(crate) use view::ChatHistoryView;
+pub(crate) use view::pointer_target_at;

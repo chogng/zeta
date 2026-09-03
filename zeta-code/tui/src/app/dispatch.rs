@@ -1,20 +1,20 @@
 //! Built-in product command dispatch for the active Session and Thread.
 
 use crate::app::AppEvent;
-use crate::components::chat_input::ChatInputItem;
-use crate::components::chat_input::SlashCommandInvocation;
-use crate::components::chat_input::TuiSlashCommandAction;
-use crate::features::config;
-use crate::features::dirs;
-use crate::features::mcp;
-use crate::features::models;
-use crate::features::rewind;
-use crate::features::sessions;
-use crate::features::sessions::ActiveConversation;
-use crate::features::sessions::ConversationChange;
-use crate::features::sessions::ResumeOutcome;
-use crate::features::skills::load_selection;
-use crate::features::status;
+use crate::config;
+use crate::dirs;
+use crate::mcp;
+use crate::models;
+use crate::sessions;
+use crate::sessions::ActiveConversation;
+use crate::sessions::ConversationChange;
+use crate::sessions::ResumeOutcome;
+use crate::skills::load_selection;
+use crate::status;
+use crate::thread::composer::ChatInputItem;
+use crate::thread::composer::SlashCommandInvocation;
+use crate::thread::composer::TuiSlashCommandAction;
+use crate::thread::rewind;
 use std::fmt;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
@@ -27,9 +27,9 @@ use zeta_protocol::TurnId;
 #[cfg(test)]
 use crate::app::App;
 #[cfg(test)]
-use crate::features::sessions::ConversationTranscript;
+use crate::sessions::ConversationTranscript;
 #[cfg(test)]
-use crate::features::thread::read_thread;
+use crate::thread::read_thread;
 #[cfg(test)]
 use zeta_protocol::Thread;
 
@@ -149,7 +149,7 @@ impl ActiveConversation {
             }
             TuiSlashCommandAction::Connectors => {
                 output.events.push(AppEvent::ConnectorPickerOpened(
-                    crate::features::connectors::load_selection(client)?,
+                    crate::connectors::load_selection(client)?,
                 ));
             }
             TuiSlashCommandAction::Resume => {

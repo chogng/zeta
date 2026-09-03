@@ -68,7 +68,7 @@ Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origi
 作为普通 `StartTurn.input`。Local command 必须存在真实 client execution path，否则不能进入 catalog。
 Desktop 的 `/new`、`/history` 属于
 Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Zeta TUI 的 `/theme` 属于
-device-local presentation preference：无参数时打开由 `features/theme` 拥有的固定 Zeta Code
+device-local presentation preference：无参数时打开由 `theme` 拥有的固定 Zeta Code
 Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通用 `ListSelection` 则以显式
 的上下焦点移动进入 SearchBox。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
 整份合并结果，不按客户端优先级静默覆盖。Skill 与命令使用不同前缀；同名 Skill 仍因来源歧义不进入无来源限定的 `$name` 候选，但不会覆盖或屏蔽 `/name` 命令。

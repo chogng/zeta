@@ -1,8 +1,8 @@
-use crate::mouse::MouseMode;
-use crate::screen_selection::ScreenSelectionRange;
-use crate::screen_selection::line_range_at;
-use crate::screen_selection::text_in_range;
-use crate::screen_selection::token_range_at;
+use crate::terminal::mouse::MouseMode;
+use crate::terminal::screen_selection::ScreenSelectionRange;
+use crate::terminal::screen_selection::line_range_at;
+use crate::terminal::screen_selection::text_in_range;
+use crate::terminal::screen_selection::token_range_at;
 use crossterm::ExecutableCommand;
 use crossterm::event::DisableBracketedPaste;
 use crossterm::event::DisableMouseCapture;

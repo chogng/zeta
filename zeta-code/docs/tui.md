@@ -1,6 +1,6 @@
 # `zeta code` TUI 架构
 
-> 状态：Accepted architecture baseline。
+> 状态：Accepted and implemented architecture baseline。
 >
 > 物理位置：`zeta-code/tui/`。
 >
@@ -99,8 +99,8 @@ zeta-code/tui/
 ├── src/
 │   ├── lib.rs
 │   ├── app.rs / app/
-│   │   ├── bootstrap.rs
 │   │   ├── command.rs
+│   │   ├── completion.rs
 │   │   ├── event.rs
 │   │   ├── event_loop.rs
 │   │   ├── event_pump.rs
@@ -108,22 +108,32 @@ zeta-code/tui/
 │   │   ├── layout.rs
 │   │   ├── input_surface.rs
 │   │   ├── recovery.rs
-│   │   └── redraw.rs
+│   │   ├── redraw.rs
+│   │   └── requests.rs
 │   ├── thread.rs / thread/
+│   │   ├── completion.rs
 │   │   ├── state.rs
 │   │   ├── subscription.rs
 │   │   ├── composer.rs / composer/
-│   │   │   ├── editor.rs
-│   │   │   ├── completion.rs
-│   │   │   ├── attachments.rs
-│   │   │   ├── paste.rs
+│   │   │   ├── catalog.rs
 │   │   │   ├── file_search.rs
-│   │   │   └── vim.rs
+│   │   │   ├── input.rs / input/
+│   │   │   │   ├── editor.rs
+│   │   │   │   ├── completion.rs
+│   │   │   │   ├── attachments.rs
+│   │   │   │   ├── pending_pastes.rs
+│   │   │   │   └── vim.rs
+│   │   │   ├── steer.rs
+│   │   │   ├── submission.rs
+│   │   │   └── surface.rs
 │   │   ├── transcript.rs / transcript/
 │   │   │   ├── cell.rs
 │   │   │   ├── exec.rs
 │   │   │   ├── markdown.rs
 │   │   │   ├── cache.rs
+│   │   │   ├── projection.rs
+│   │   │   ├── state.rs
+│   │   │   ├── view.rs
 │   │   │   └── batch.rs
 │   │   ├── interaction.rs / interaction/
 │   │   │   ├── approval.rs
@@ -133,7 +143,7 @@ zeta-code/tui/
 │   │   ├── plan.rs
 │   │   ├── rewind.rs
 │   │   └── subagents.rs
-│   ├── sessions.rs / sessions/
+│   ├── sessions.rs / sessions/     # 包含切换、恢复和完成安装
 │   ├── config.rs / config/
 │   ├── keymap.rs / keymap/
 │   ├── theme.rs / theme/
@@ -149,6 +159,7 @@ zeta-code/tui/
 │   │   ├── tab_list.rs
 │   │   ├── text_prompt.rs
 │   │   ├── key_capture.rs
+│   │   ├── key_hint.rs
 │   │   ├── detail_list.rs
 │   │   └── overlay.rs
 │   ├── render.rs / render/
@@ -501,11 +512,11 @@ CLI 负责参数、工作目录、profile、App Server connection 建立、重�
 负责一次已经初始化连接上的交互生命周期。只有至少两个真实产品消费者需要同一能力，且抽取能减少依赖
 时，才评估独立 crate。
 
-## 18. 当前实现收敛表
+## 18. 已完成的目录收敛
 
-当前代码尚未完全符合本文目标。后续结构调整按下表确定最终负责人：
+以下旧路径已经收敛到唯一负责人。表格保留原路径，方便审查历史差异和排查旧链接：
 
-| 当前路径 | 最终归属 |
+| 原路径 | 最终归属 |
 | --- | --- |
 | `features/thread/` | `thread/` |
 | `components/chat_input/` | `thread/composer/` |
@@ -530,12 +541,13 @@ CLI 负责参数、工作目录、profile、App Server connection 建立、重�
 | `features/mcp/` | `mcp/` |
 | `features/dirs.rs` | `dirs/` |
 | 通用 `components/*` | `widgets/` |
-| `components/welcome.rs`、`top_tip.rs`、`key_hint.rs` | 对应 `app/` 页面职责 |
+| `components/welcome.rs`、`top_tip.rs` | 对应 `app/` 页面职责 |
+| `components/key_hint.rs` | `widgets/key_hint.rs`；它只处理通用按键提示数据与绘制 |
 | 根 `mouse.rs`、`screen_selection.rs` | `terminal/` |
-| 全局 `app/request_completion.rs` | 完成处理回到各产品能力；`app/` 只路由 |
+| 全局 `app/request_completion.rs` | Thread、Session、Skill 完成分别进入同名能力目录；`app/completion.rs` 只协调顶层安装 |
 
-收敛时必须同时移动相关测试、更新模块声明、构建元数据和文档。旧路径在新负责人建立后直接删除，不保留
-转发文件或两套实现。文件移动不能改变产品行为，也不能把 App Server 权威逻辑带进 TUI。
+相关测试、模块声明和文档已随负责人移动。旧路径已经删除，没有转发文件或两套实现。后续新增文件直接
+按第 5 节判断归属，不得重新建立 `features/` 或 `components/`。
 
 ## 19. 测试
 
