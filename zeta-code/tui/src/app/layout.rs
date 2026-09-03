@@ -2,6 +2,7 @@ use ratatui::layout::Rect;
 
 const MIN_TRANSCRIPT_ROWS: u16 = 4;
 const MIN_MANAGER_ROWS: u16 = 4;
+const TOP_TIP_ROWS: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ManagerAreas {
@@ -38,6 +39,7 @@ pub(crate) struct SessionAreas {
     pub(crate) plan: Rect,
     pub(crate) queue: Rect,
     pub(crate) request: Rect,
+    pub(crate) top_tip: Rect,
     pub(crate) composer: Rect,
     pub(crate) status: Rect,
     pub(crate) agent_thread_switcher: Rect,
@@ -62,9 +64,11 @@ pub(crate) fn session_areas(
     let available_above_gap = available_above_status.saturating_sub(switcher_gap_rows);
     let transcript_rows = MIN_TRANSCRIPT_ROWS.min(available_above_gap);
     let available_chrome = available_above_gap.saturating_sub(transcript_rows);
-    let composer_rows = composer_desired_rows.min(available_chrome);
-    let request_rows = request_desired_rows.min(available_chrome.saturating_sub(composer_rows));
-    let available_inline = available_chrome
+    let top_tip_rows = TOP_TIP_ROWS.min(available_chrome);
+    let available_input = available_chrome.saturating_sub(top_tip_rows);
+    let composer_rows = composer_desired_rows.min(available_input);
+    let request_rows = request_desired_rows.min(available_input.saturating_sub(composer_rows));
+    let available_inline = available_input
         .saturating_sub(composer_rows)
         .saturating_sub(request_rows);
     let queue_rows = queue_desired_rows.min(available_inline);
@@ -80,7 +84,8 @@ pub(crate) fn session_areas(
         .saturating_sub(switcher_gap_rows)
         .saturating_sub(status_rows);
     let composer_y = status_y.saturating_sub(composer_rows);
-    let request_y = composer_y.saturating_sub(request_rows);
+    let top_tip_y = composer_y.saturating_sub(top_tip_rows);
+    let request_y = top_tip_y.saturating_sub(request_rows);
     let queue_y = request_y.saturating_sub(queue_rows);
     let plan_y = queue_y.saturating_sub(plan_rows);
     let goal_y = plan_y.saturating_sub(goal_rows);
@@ -108,6 +113,11 @@ pub(crate) fn session_areas(
         request: Rect {
             y: request_y,
             height: request_rows,
+            ..area
+        },
+        top_tip: Rect {
+            y: top_tip_y,
+            height: top_tip_rows,
             ..area
         },
         composer: Rect {

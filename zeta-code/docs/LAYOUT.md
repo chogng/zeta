@@ -58,6 +58,7 @@
 ├──────────────── Plan 行（有进行中计划时）───────────────┤
 ├──────────────── Queue 区（有排队消息时，最多显示 3 条）─┤
 │ Query 面板（Agent 提问时，位于输入位置上方）             │
+│ 顶部提示 TopTip（固定一行，提示为空时留空）              │
 ├──────────────────────────────────────────────────────────┤
 │ 输入位置 Composer Position                               │
 │   通常显示 ChatInput；也可能被 Approval 或功能页面替换    │
@@ -80,12 +81,405 @@
 | Plan 行 | `plan` | 一行 `Plan 已完成数/总数: 当前步骤`；计划结束后隐藏 |
 | Queue 区 | `queue` | 输入在当前 Turn 结束后再发送时，显示排队消息；普通输入框不属于这里 |
 | 提问面板 | `request` / `Query` | Agent 要求用户选择或输入答案时出现，位于输入位置上方 |
+| 顶部提示 | `top_tip` / `TopTip` | 输入位置上方固定占用一行；提示文字右对齐，没有内容时整行留空，不与上方区域共享字符 |
 | 输入位置 | `composer` / Composer Position | 页面为输入相关组件预留的位置；它是位置名称，不等于输入框 |
 | 输入框 | `ChatInput` | 有上下边线、包含输入提示符和草稿文字的编辑框；这是输入位置的默认内容，具体字符见[样式契约](styles.md) |
 | 状态区 | `status` / Status Area | 输入位置下面固定两行的槽位；普通状态显示两行状态行，功能页面打开时第一行留空、第二行显示操作提示 |
 | 状态行 | `StatusLine` | 正常状态下显示权限模式、模型、Git、Plan、Queue、Subagent 等摘要 |
 | 操作提示栏（HitBar） | `StatusAreaView::HitBar` / `KeyHints` | 某个交互需要明确操作时占用状态区第二行，例如 `↑↓ choose · enter confirm`；第一行保持为空白分隔 |
 | Agents | `agent_thread_switcher` / `AgentThreadSwitcher` | 页面最下方的 Agent Thread 列表；一行一个 `main` 或被委托 Agent，Enter 切换当前 Thread，只在存在被委托 Agent 时出现 |
+
+### 正文单元会输出什么
+
+正文区只读取一个按时间顺序排列的正文单元集合。执行单元在运行、接收输出和完成时始终是这个集合中的同一个元素；完成只更新内容和状态，不存在独立的实时输出集合或已完成历史集合。
+
+| 内容类型 | 代码身份 | 对应内容 | 默认输出 | 展开或状态变化 |
+| --- | --- | --- | --- | --- |
+| 用户消息 | `MessageRole::User` | 已提交的用户文本和用户上下文 | `> 用户文本` | 多行内容继续与首行正文对齐 |
+| Agent 消息 | `MessageRole::Agent` | Agent 的正文回复 | `● Agent 文本` | Markdown 和代码块在单元内折行与高亮 |
+| 思考 | `MessageRole::Reasoning` | 可选展开的思考摘要 | `● Thought` | 展开后在下方输出有界摘要；过长内容可打开详情浮层 |
+| 历史 Plan | `MessageRole::Plan` | 已进入正文的 Plan 文本或更新 | `● Plan 内容` | 它是正文记录，不是输入框上方的当前 `Plan` 行 |
+| 执行 | `ExecCell` | Agent 发起的 Tool Call、命令、读取、搜索和修改 | `● Running <name>`、`● Ran <name>` 或 `● <name> failed` | 运行时原位更新；展开后用 `└─ ` 输出参数、`stdout`、`stderr` 和结果；多个同类操作可合并为一个单元 |
+| 本地命令 | `ExecutionKind::LocalCommand` | 用户直接在 TUI 中提交的本地命令 | 运行时为 `● <command>`，结束后为 `> <command>` | 结果紧跟命令显示；它表达用户输入，不与 Agent 发起的执行归为同一类 |
+| 提示 | `MessageRole::Notice` | 必须留在正文中的产品提示 | `● 提示文本` | 使用警告语义颜色，不伪装成 Agent 回复 |
+| 错误 | `MessageRole::Error` | Turn 失败或无法归入执行单元的本地错误 | `● 错误摘要` | 可展开有界详情；过长内容可打开详情浮层；Tool Call 失败仍由 `ExecCell` 输出 |
+
+下面的代码块只表示正文区里的可见字符，不表示颜色、背景色或当前选择状态。每个正文单元末尾都有一个空行；终端变窄时，正文会继续折行并与首行正文对齐，详情会与 `└─ ` 后的内容对齐。
+
+#### 普通内容
+
+单行用户消息、Agent 回复和连续对话分别输出为：
+
+```text
+> 帮我检查登录失败的问题
+
+● 我会先检查错误路径和现有测试。
+```
+
+多行用户消息和多行 Agent 回复只有首行带角色标记：
+
+```text
+> 请检查这两个问题：
+  登录失败后能否重试
+  错误是否会留在正文中
+
+● 登录失败会生成错误单元。
+  下一轮仍然可以继续提交消息。
+```
+
+IDE、文件或其他用户上下文仍属于用户内容；第一行说明上下文名称，后续行输出内容：
+
+```text
+> Context · Active file
+  zeta-code/tui/src/thread/transcript/exec.rs
+```
+
+当前图片和图片附件在正文中显示为占位文本：
+
+```text
+> [Image]
+```
+
+Agent 消息中的代码围栏不会作为字符显示；围栏内代码按语言高亮，普通文字仍按正文输出：
+
+```text
+● 可以把判断收敛到一个函数：
+  fn is_complete(&self) -> bool {
+      self.result.is_some()
+  }
+```
+
+#### 思考、Plan、提示和错误
+
+思考默认折叠，只显示固定摘要：
+
+```text
+● Thought
+```
+
+展开后在同一单元下显示思考内容：
+
+```text
+● Thought
+└─ 先确认失败来自模型还是工具。
+   再检查失败后能否开始下一轮。
+```
+
+思考超过 12 行时，正文只保留前 12 行和省略数量，并提供完整详情入口：
+
+```text
+● Thought
+└─ 第 1 行
+   第 2 行
+   第 3 行
+   第 4 行
+   第 5 行
+   第 6 行
+   第 7 行
+   第 8 行
+   第 9 行
+   第 10 行
+   第 11 行
+   第 12 行
+   … 8 lines omitted
+   view full
+```
+
+进入正文的 Plan 会输出说明和每一步的状态；`[ ]` 表示等待，`[>]` 表示正在进行，`[x]` 表示完成：
+
+```text
+● 先确认现状，再修改文档。
+  [x] 核对正文单元类型
+  [>] 补齐输出示例
+  [ ] 检查文档链接
+```
+
+如果 Plan 没有说明也没有步骤，则输出：
+
+```text
+● Plan updated
+```
+
+提示和 Agent 回复都使用 `●`，但提示使用警告语义颜色：
+
+```text
+● Session 已切换，未提交的输入已恢复。
+```
+
+错误默认只显示第一行摘要，并使用失败语义颜色：
+
+```text
+● Model invocation failed
+```
+
+多行错误可以展开；超过 12 行时与思考使用相同的有界摘要和 `view full`：
+
+```text
+● Model invocation failed
+└─ Model invocation failed
+   HTTP 500 returned by the configured provider
+   Request ID: request-123
+```
+
+错误不会结束整段正文。用户可以在它后面继续开始下一轮：
+
+```text
+> 触发 401 鉴权失败
+
+● Model provider authentication failed
+
+> 鉴权失败后继续下一轮
+
+● 401 之后的下一轮恢复成功。
+```
+
+#### 用户本地命令
+
+本地命令从提交到完成始终是同一个正文单元。下面三段表示同一位置先后出现的三个状态，不是正文中同时保留的三条记录。
+
+刚提交、尚未开始时保留用户输入标记：
+
+```text
+> /theme zeta-code-dark
+```
+
+运行时原位变为警告语义的运行标记：
+
+```text
+● /theme zeta-code-dark
+```
+
+完成后原位恢复用户输入标记，并在下方输出结果：
+
+```text
+> /theme zeta-code-dark
+└─ Theme set to Zeta Code Dark
+```
+
+打开功能页面、没有正文结果的本地命令只保留命令行；页面本身占用输入位置，不会伪装成命令详情：
+
+```text
+> /statusline
+```
+
+#### Agent 发起的单次执行
+
+单次执行在折叠状态下只显示摘要。运行、成功和失败分别为：
+
+```text
+● Running write_file
+```
+
+```text
+● Ran write_file
+```
+
+```text
+● write_file failed
+```
+
+这三段也是同一个 `ExecCell` 的阶段变化。Tool Call 开始时插入单元，实时输出和最终结果继续更新这个单元，完成时摘要从 `Running` 原位变成 `Ran` 或 `failed`。
+
+展开后，详情按工具名和 Tool Call 标识、参数、`stdout`、`stderr`、结果的顺序输出；没有内容的部分直接跳过：
+
+```text
+● Ran exec_command
+└─ exec_command [call-test]
+   {
+     "cmd": "cargo test -p zeta-tui"
+   }
+   Compiling zeta-tui...
+   warning: one retry was required
+   42 tests passed
+   view full
+```
+
+正文中的 `stdout`、`stderr` 和结果不额外显示字段标题，仍按上述固定顺序排列。命令输出中的 ANSI 颜色会转换为终端样式，ANSI 控制字符本身不会显示。
+
+执行尚未完成但已经产生实时输出时，展开的是当前有界输出：
+
+```text
+● Running exec_command
+└─ exec_command [call-test]
+   {
+     "cmd": "cargo test -p zeta-tui"
+   }
+   Compiling zeta-tui...
+   running 42 tests
+   view full
+```
+
+执行失败时仍可展开同一个单元查看参数和失败结果：
+
+```text
+● shell-command failed
+└─ shell-command [call-sandbox]
+   {
+     "program": "/bin/sh",
+     "arguments": ["-c", "touch ../outside.txt"]
+   }
+   operation not permitted
+   view full
+```
+
+需要审批时，审批面板占用输入位置，不会进入正文集合。正文里的执行单元停留在运行态；用户批准后原位变成成功，用户拒绝、自动审查拒绝或沙盒阻止后原位变成失败：
+
+| 阶段 | 正文区 | 其他区域 |
+| --- | --- | --- |
+| 等待用户审批 | `● Running write_file` | 输入位置显示审批面板和 `Approve once`、`Decline` |
+| 用户批准并执行成功 | `● Ran write_file` | 审批面板关闭 |
+| 用户或自动审查拒绝 | `● write_file failed` | 拒绝原因进入该执行单元的详情或后续错误说明 |
+| 沙盒阻止命令 | `● shell-command failed` | 沙盒原因进入该执行单元的详情 |
+
+#### 多次执行的合并
+
+相邻的读取、搜索和列目录操作可以合并为一个探索单元。折叠时只显示操作数：
+
+```text
+● Explored 2 operations
+```
+
+展开后仍逐个保留工具名、Tool Call 标识和各自内容，并用空行分隔：
+
+```text
+● Explored 2 operations
+└─ read_file [call-read]
+   {
+     "path": "zeta-code/docs/LAYOUT.md"
+   }
+   # Zeta Code TUI 界面词典与布局
+
+   rg [call-search]
+   {
+     "pattern": "TranscriptCell"
+   }
+   zeta-code/docs/tui.md: TranscriptCell
+   view full
+```
+
+相邻命令只有在前一个命令已经成功完成后才会合并。合并后折叠摘要为：
+
+```text
+● Ran 2 commands
+```
+
+展开后每个命令仍保持独立详情：
+
+```text
+● Ran 2 commands
+└─ exec_command [call-check]
+   {
+     "cmd": "cargo check -p zeta-tui"
+   }
+   Finished dev profile
+
+   exec_command [call-test]
+   {
+     "cmd": "cargo test -p zeta-tui"
+   }
+   42 tests passed
+   view full
+```
+
+读取、搜索和列目录最多合并 16 次；命令组也最多合并 16 次。修改类工具和无法识别类别的工具不合并，每次 Tool Call 都保留自己的执行单元。探索组或命令组中只要仍有调用未完成，整个单元就使用运行语义颜色；全部完成后，只要有一个调用失败就使用失败语义颜色，否则使用成功或弱化语义颜色。首行始终保持 `Explored <数量> operations` 或 `Ran <数量> commands`。
+
+#### 过长输出与完整详情
+
+每个 `stdout` 或 `stderr` 实时输出最多保留 200 行、64 KiB；超过行数时保留头尾，并在完整详情中被裁剪的位置说明省略行数：
+
+```text
+… 36 lines omitted …
+```
+
+超过字节上限时同样保留头尾，并在中间显示：
+
+```text
+… output omitted …
+```
+
+实时输出和完成结果的单行都最多保留 4 KiB，过长行以 `…` 结尾。执行完成后的单个结果最多保留 256 KiB。
+
+只要 `ExecCell` 保存了参数、输出或结果，展开后就会显示 `view full`，即使内联内容没有超过 12 行。内联预览最多显示合并详情的前 12 行；更多内容会先显示省略数量，再显示完整详情入口：
+
+```text
+● Ran exec_command
+└─ exec_command [call-build]
+   detail line 1
+   detail line 2
+   detail line 3
+   detail line 4
+   detail line 5
+   detail line 6
+   detail line 7
+   detail line 8
+   detail line 9
+   detail line 10
+   detail line 11
+   … 28 lines omitted; view full
+   view full
+```
+
+完整详情浮层不是新的正文单元，也不会复制执行记录。它覆盖在当前页面上，标题为 `Transcript cell`，显示该单元在上述容量限制内保存的详情，按 Esc 后回到原正文位置。思考和错误出现 `view full` 时也使用同一个浮层：
+
+```text
+Transcript cell
+Content: exec_command [call-build]
+         ...完整参数、输出和结果...
+Esc to close
+```
+
+如果恢复 Session 时先收到输出或结果、没有收到对应的 Tool Call 开始记录，正文仍会恢复一个占位执行单元，折叠摘要使用 `Running tool`、`Ran tool` 或 `tool failed`，详情仍按 Tool Call 标识归入这个单元。
+
+#### 一段完整正文
+
+一次包含思考、执行失败、纠正和最终回复的正文会保持真实发生顺序：
+
+```text
+> 帮我运行测试并修复失败
+
+● Thought
+
+● exec_command failed
+└─ exec_command [call-test-1]
+   {
+     "cmd": "cargo test -p zeta-tui"
+   }
+   test transcript::view failed
+   view full
+
+● 我找到失败原因了，会先修正文档断言。
+
+● Ran apply_patch
+
+● Ran exec_command
+└─ exec_command [call-test-2]
+   {
+     "cmd": "cargo test -p zeta-tui"
+   }
+   42 tests passed
+   view full
+
+● 测试已经通过。
+```
+
+上例为了同时展示折叠与展开状态，手工让不同执行单元处于不同展开状态。任何一个执行单元从运行到完成都只更新原位置，不会把运行态另存为一条“历史单元”。
+
+#### 颜色和交互补充
+
+| 情况 | 可见标记 | 语义颜色或背景 |
+| --- | --- | --- |
+| 用户消息、本地命令输入 | `>` | 弱化标记；输入正文行使用用户消息背景 |
+| Agent 消息、思考、Plan | `●` | 弱化标记 |
+| 提示 | `●` | 警告色 |
+| 错误、失败执行 | `●` | 失败色 |
+| 运行中的执行或本地命令 | `●` | 警告色 |
+| 成功的命令执行 | `●` | 成功色 |
+| 成功的修改执行 | `●` | 强调色 |
+| 成功的读取、搜索、列目录或其他执行 | `●` | 弱化色 |
+
+键盘选中可展开单元后按 Space 切换展开状态，鼠标可以点击首行左侧标记完成同一操作。键盘选中已展开单元后按 Enter 打开完整详情，鼠标也可以点击 `view full`。键盘选择、悬停和按下只改变交互样式，不改变正文字符、单元身份或内容顺序。
+
+内部类型如何产生这些行、谁负责测量、缓存和命中，由 [TUI 架构的 Transcript 章节](tui.md#transcript) 定义。
 
 ### 输入位置里可能出现什么
 
@@ -95,15 +489,15 @@
 | --- | --- | --- |
 | 普通草稿输入 | 输入框（`ChatInput`） | 默认占用输入位置 |
 | 权限确认 | 审批面板（`Approval`） | 替换输入框，占用输入位置 |
-| Status | Status 面板（`StatusPanel`） | 替换输入框并固定占用 8 行，正文区让出对应高度；Esc 关闭后恢复输入框 |
-| Theme、Model、Config、Session picker 等页面 | 功能页面（`InputSurface`） | 替换输入框，占用输入位置；描述问题时再补具体页面名 |
+| Status | Status 面板（`StatusPanel`） | 替换输入框；空间足够时完整展开，空间不足时保留正文并允许面板滚动；Esc 关闭后恢复输入框 |
+| Theme、Model、Config、Session picker 等页面 | 功能页面（`ComposerSlot`） | 替换输入框，占用输入位置；描述问题时再补具体页面名 |
 | Agent 的结构化问题 | 提问面板（`Query`） | 不替换输入位置，而是在它上方单独占区；需要自由输入时仍使用下方输入框 |
 
 ### 输入框附近的两种提示
 
 | 推荐名称 | 位置 | 用途 |
 | --- | --- | --- |
-| 顶部提示 | `TopTip` | 固定贴在输入框上沿右侧；空会话默认显示 `← for agents`；首次提交进入对话后显示 `shift+tab to cycle policy`，对话中每次切换权限策略时再次显示并重新计时，距最后一次触发 5 秒后留空；临时通知会短暂覆盖它，不改变布局高度 |
+| 顶部提示 | `TopTip` | 在输入位置上方固定占用一整行，文字靠右；空会话默认显示 `← for agents`；首次提交进入对话后显示 `shift+tab to cycle policy`，对话中每次切换权限策略时再次显示并重新计时，距最后一次触发 5 秒后整行留空；临时通知会短暂覆盖当前文字，不改变这一行的高度 |
 | 状态区操作提示栏（HitBar） | `StatusAreaView::HitBar` / `KeyHints` | 位于输入位置下方的状态区第二行，会替换状态行的第二行；第一行保持为空白分隔，状态区总高度不变 |
 
 因此，`← for agents` 和 `shift+tab to cycle policy` 都属于顶部提示；输入框下方的权限模式、模型和 Git 信息才属于状态行。这里没有轮播：后一个提示由首次进入对话或切换权限策略触发；连续切换会刷新计时，距最后一次触发 5 秒后直接消失。
@@ -119,6 +513,7 @@ Session 管理页面复用正文区的位置，但内部改为 Welcome 和 Sessi
 │ Session 列表 Session Manager                             │
 │   ├─ 状态分组标题                                        │
 │   └─ Session 行：图标 / 名称 / 当前操作或问题 / 时长      │
+│ 顶部提示 TopTip（固定一行，提示为空时留空）              │
 ├──────────────────────────────────────────────────────────┤
 │ 输入位置：ChatInput 或功能页面                           │
 ├──────────────────────────────────────────────────────────┤
@@ -177,6 +572,13 @@ Idle (2)                                  ← 静态分组标题
 | Skill 补全 | `CompletionView::Skill` | 输入 `$` 时显示可调用 Skill 候选 |
 | 字符选择 | `ScreenSelection` | 鼠标拖选、双击或三击形成的终端字符选择效果，画在所有内容之上 |
 
+`/status` 是输入位置中的 `StatusPanel`，不是详情浮层。它依次显示模型、上下文窗口、当前 Thread
+的累计模型调用数、输入 token、缓存读取 token、缓存读取占比、缓存写入 token、输出 token、
+推理输出 token、累计参考费用，以及 Session/Thread 身份。空间足够时它按完整内容展开；空间不足时
+至少保留 4 行正文，并用方向键、PageUp/PageDown、Home/End 滚动。缓存占比是
+`缓存读取 token / 总输入 token`，不是请求次数的命中率。聚合缺少部分报告时，已知非零 token
+以 `>=` 标记为下界，已知费用以 `≥` 标记为下界；没有可信值时显示 `unknown`。
+
 不要把审批面板、提问面板叫“弹窗”：它们会参与普通纵向布局。只有覆盖在页面之上的
 `DetailOverlay` 和输入补全浮层才叫浮层。三种补全是同一个输入补全浮层的互斥内容，不是三个不同浮层；描述具体问题时使用“Slash Command 补全浮层”“Mention 补全浮层”或“Skill 补全浮层”。
 
@@ -184,6 +586,7 @@ Idle (2)                                  ← 静态分组标题
 
 - 没有内容的 Goal、Plan、Queue、Query 和 Agents 高度为 0，不留下空壳。
 - 正文区拿走普通组件分配后剩余的高度；空间允许时至少保留 4 行。
+- 顶部提示固定占用一行；没有提示文字时这一行保持为空。
 - 输入框高度随多行草稿变化；审批面板和功能页面会用自己的高度替换它。
 - 状态区固定占用两行。普通状态下两行都属于 `StatusLine`；功能页面或其他需要明确操作的交互打开时，第一行留空，第二行显示操作提示栏。
 - 状态区和 Agents 都出现时，中间保留一行；只出现一方时不保留。

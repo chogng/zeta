@@ -7,6 +7,7 @@ use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
+use crate::models::ModelSummary;
 use crate::render::test_context;
 use crate::status::RemainingContextWindow;
 use crate::status::StatusViewData;
@@ -69,32 +70,32 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
 
     assert!(!rendered.contains("dir assistant"));
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
-    assert!(rendered.contains("Welcome back!"));
-    assert!(rendered.contains("Tips for getting started"));
-    assert!(rendered.contains("Try asking"));
+    assert!(rendered.contains(" ▀▙▄▄▄▟▀"));
+    assert!(rendered.contains("Automatic model · Access unknown"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
-    let rows = rendered.lines().collect::<Vec<_>>();
-    assert!(rows[18].trim().is_empty());
-    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
+    let status_line = rendered.lines().last().unwrap();
+    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
-fn top_tip_notice_overlays_the_row_above_chat_input_without_changing_layout() {
+fn top_tip_notice_uses_the_fixed_row_above_chat_input_without_changing_layout() {
     let mut app = App::new();
     let terminal_area = Rect::new(0, 0, 80, 20);
-    let composer_before = layout(&app, terminal_area).session.composer;
+    let areas_before = layout(&app, terminal_area).session;
 
     app.update(AppEvent::TopTipNoticeShown(
         "Copied 246 chars to clipboard".into(),
     ));
 
-    let composer_after = layout(&app, terminal_area).session.composer;
+    let areas_after = layout(&app, terminal_area).session;
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
-    let notice_row = usize::from(composer_after.y.saturating_sub(1));
+    let notice_row = usize::from(areas_after.top_tip.y);
 
-    assert_eq!(composer_after, composer_before);
+    assert_eq!(areas_after, areas_before);
+    assert_eq!(areas_after.top_tip.height, 1);
+    assert_eq!(areas_after.top_tip.bottom(), areas_after.composer.y);
     assert!(
         rows[notice_row]
             .trim_end()
@@ -105,13 +106,15 @@ fn top_tip_notice_overlays_the_row_above_chat_input_without_changing_layout() {
 }
 
 #[test]
-fn status_panel_uses_fixed_input_height_and_escape_restores_the_composer() {
+fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_the_composer() {
     let mut app = App::new();
     let terminal_area = Rect::new(0, 0, 80, 20);
     app.insert_text("/");
     assert!(app.completion().is_some());
     let before = layout(&app, terminal_area).session;
 
+    let usage = zeta_protocol::ModelUsageSummary::default();
+    let reference_cost = zeta_protocol::ModelReferenceCostSummary::default();
     app.update(AppEvent::StatusPanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
         full_context_window: Some(100_000),
@@ -120,15 +123,24 @@ fn status_panel_uses_fixed_input_height_and_escape_restores_the_composer() {
             remaining_tokens: 80_000,
             available_tokens: 90_000,
         },
+        usage: &usage,
+        reference_cost: &reference_cost,
         session_id: "session-1",
         thread_id: "thread-1",
         thread_sequence: 4,
     })));
 
-    assert_eq!(layout(&app, terminal_area).session.composer.height, 8);
+    assert_eq!(
+        layout(&app, Rect::new(0, 0, 80, 30))
+            .session
+            .composer
+            .height,
+        18
+    );
+    assert_eq!(layout(&app, terminal_area).session.composer.height, 13);
     assert_eq!(layout(&app, terminal_area).session.status.height, 2);
     assert_ne!(layout(&app, terminal_area).session, before);
-    assert!(app.input_surface().is_some());
+    assert!(app.composer_slot().is_some());
     assert!(app.overlay().is_none());
     assert!(app.completion().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
@@ -136,18 +148,20 @@ fn status_panel_uses_fixed_input_height_and_escape_restores_the_composer() {
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
     assert!(rows[18].trim().is_empty());
-    assert_eq!(rows[19].trim_end(), "  Esc to close");
-    assert_snapshot!("status_panel_fixed_input_height", rendered);
+    assert_eq!(
+        rows[19].trim_end(),
+        "  ↑/↓ scroll · PgUp/PgDn page · Home/End jump · Esc close"
+    );
+    assert_snapshot!("status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.input_surface().is_none());
+    assert!(app.composer_slot().is_none());
     assert_eq!(layout(&app, terminal_area).session, before);
     assert_eq!(app.input(), "/");
-    assert_snapshot!("status_panel_after_escape", render(&app, 80, 20));
 }
 
 #[test]
-fn manager_keeps_overflow_text_left_of_the_top_tip_notice() {
+fn manager_keeps_overflow_text_out_of_the_fixed_top_tip_row() {
     let mut app = App::new();
     app.update(AppEvent::SessionCatalogReceived(
         (0..24)
@@ -167,14 +181,14 @@ fn manager_keeps_overflow_text_left_of_the_top_tip_notice() {
     ));
 
     let terminal_area = Rect::new(0, 0, 100, 20);
-    let composer = layout(&app, terminal_area).session.composer;
+    let areas = layout(&app, terminal_area).session;
     let rendered = render(&app, terminal_area.width, terminal_area.height);
-    let notice_row = rendered
-        .lines()
-        .nth(usize::from(composer.y.saturating_sub(1)))
-        .unwrap();
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let notice_row = rows[usize::from(areas.top_tip.y)];
+    let manager_last_row = rows[usize::from(areas.top_tip.y.saturating_sub(1))];
 
-    assert!(notice_row.contains("more below"));
+    assert!(manager_last_row.contains("more below"));
+    assert!(!notice_row.contains("more below"));
     assert!(
         notice_row
             .trim_end()
@@ -192,13 +206,7 @@ fn empty_session_input_offers_manager_navigation() {
     );
 
     let terminal_area = Rect::new(0, 0, 80, 20);
-    let top_tip_row = usize::from(
-        layout(&app, terminal_area)
-            .session
-            .composer
-            .y
-            .saturating_sub(1),
-    );
+    let top_tip_row = usize::from(layout(&app, terminal_area).session.top_tip.y);
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
@@ -233,13 +241,7 @@ fn narrow_session_keeps_manager_tip_above_input_and_status_below() {
     );
 
     let terminal_area = Rect::new(0, 0, 24, 20);
-    let top_tip_row = usize::from(
-        layout(&app, terminal_area)
-            .session
-            .composer
-            .y
-            .saturating_sub(1),
-    );
+    let top_tip_row = usize::from(layout(&app, terminal_area).session.top_tip.y);
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
@@ -307,7 +309,7 @@ fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
         .unwrap();
     let completed = rendered.lines().find(|line| line.contains("done")).unwrap();
 
-    assert!(rendered.contains("Welcome back!"));
+    assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
     assert!(rendered.contains("Needs input"));
     assert!(rendered.contains("Working"));
     assert!(rendered.contains("Completed"));
@@ -477,10 +479,13 @@ fn path_is_only_visible_in_the_empty_welcome_banner() {
 #[test]
 fn status_line_renders_the_configured_model_without_provider() {
     let mut app = App::new();
-    app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
-        provider: "anthropic".into(),
-        model: "claude-sonnet".into(),
-    })));
+    app.update(AppEvent::ModelSummaryReceived(ModelSummary::from_catalog(
+        Some(ModelRefDto {
+            provider: "anthropic".into(),
+            model: "claude-sonnet".into(),
+        }),
+        None,
+    )));
 
     let buffer = render_buffer(&app, 80, 20);
     let context_line = (0..80)
@@ -498,10 +503,13 @@ fn status_line_renders_the_configured_model_without_provider() {
 #[test]
 fn narrow_status_line_keeps_the_first_configured_item() {
     let mut app = App::new();
-    app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
-        provider: "anthropic".into(),
-        model: "claude-sonnet".into(),
-    })));
+    app.update(AppEvent::ModelSummaryReceived(ModelSummary::from_catalog(
+        Some(ModelRefDto {
+            provider: "anthropic".into(),
+            model: "claude-sonnet".into(),
+        }),
+        None,
+    )));
 
     let rendered = render(&app, 24, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
@@ -537,13 +545,17 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
         "current",
         vec![manager_session("current", SessionManagerStatus::Idle, None)],
     );
-    app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
-        provider: "anthropic".into(),
-        model: "claude-sonnet".into(),
-    })));
+    app.update(AppEvent::ModelSummaryReceived(ModelSummary::from_catalog(
+        Some(ModelRefDto {
+            provider: "anthropic".into(),
+            model: "claude-sonnet".into(),
+        }),
+        None,
+    )));
     let terminal_area = Rect::new(0, 0, 80, 20);
-    let composer = layout(&app, terminal_area).session.composer;
-    let top_tip_row = composer.y.saturating_sub(1);
+    let areas = layout(&app, terminal_area).session;
+    let composer = areas.composer;
+    let top_tip_row = areas.top_tip.y;
 
     let before = render(&app, 80, 20);
     assert!(
@@ -786,7 +798,7 @@ fn theme_candidate_focus_repaints_only_the_composer_focus_border() {
         .session
         .composer
         .y;
-    assert_eq!(first[(2, 1)].fg, test_context().accent());
+    assert_eq!(first[(4, 1)].fg, Color::Rgb(0x40, 0x85, 0xac));
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
     assert_eq!(
         first[(1, interaction_y)].fg,
@@ -799,7 +811,7 @@ fn theme_candidate_focus_repaints_only_the_composer_focus_border() {
 
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let second = render_buffer(&app, 80, 24);
-    assert_eq!(second[(2, 1)].fg, test_context().accent());
+    assert_eq!(second[(4, 1)].fg, first[(4, 1)].fg);
     assert_eq!(second[(0, interaction_y)].fg, Color::Green);
     assert_eq!(
         second[(1, interaction_y)].fg,

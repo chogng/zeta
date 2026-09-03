@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::app::input_surface::InputSurfacePointerTarget;
+use crate::app::composer_slot::ComposerSlotPointerTarget;
 use crate::app::welcome;
 use crate::render::Renderable;
 use crate::sessions;
@@ -113,20 +113,20 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             pressed_choice,
             context,
         );
-    } else if let Some(mode) = app.input_surface() {
-        let hovered_mode = match hovered {
-            Some(InputPointerTarget::InputSurface(target)) => Some(*target),
+    } else if let Some(slot) = app.composer_slot() {
+        let hovered_slot = match hovered {
+            Some(InputPointerTarget::ComposerSlot(target)) => Some(*target),
             _ => None,
         };
-        let pressed_mode = match pressed {
-            Some(InputPointerTarget::InputSurface(target)) => Some(*target),
+        let pressed_slot = match pressed {
+            Some(InputPointerTarget::ComposerSlot(target)) => Some(*target),
             _ => None,
         };
-        mode.draw(
+        slot.draw(
             frame,
             areas.session.composer,
-            hovered_mode,
-            pressed_mode,
+            hovered_slot,
+            pressed_slot,
             context,
         );
     } else {
@@ -175,13 +175,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             context,
         );
     }
-    draw_top_tip(
-        frame,
-        areas.session.transcript,
-        areas.session.composer,
-        app,
-        context,
-    );
+    draw_top_tip(frame, areas.session.top_tip, app, context);
     if let Some(overlay) = app.overlay() {
         crate::widgets::overlay::draw(frame, transient_area(&areas), overlay, context);
     } else if completion_visible(app) {
@@ -207,25 +201,15 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
 
 fn draw_top_tip(
     frame: &mut Frame<'_>,
-    content: Rect,
-    composer: Rect,
+    area: Rect,
     app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
-    if content.is_empty() || composer.is_empty() || composer.y <= content.y {
+    if area.is_empty() {
         return;
     }
-    app.top_tip().draw(
-        frame,
-        Rect {
-            x: content.x,
-            y: composer.y.saturating_sub(1),
-            width: content.width,
-            height: 1,
-        },
-        app.screen_navigation_tip(),
-        context,
-    );
+    app.top_tip()
+        .draw(frame, area, app.screen_navigation_tip(), context);
 }
 
 #[cfg(test)]
@@ -247,7 +231,7 @@ pub(crate) fn input_overlay_index_at(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InputPointerTarget {
     Composer(ChatComposerPointerTarget),
-    InputSurface(InputSurfacePointerTarget),
+    ComposerSlot(ComposerSlotPointerTarget),
     Approval(usize),
     Query(usize),
     SessionManager(crate::sessions::SessionManagerPointerTarget),
@@ -310,10 +294,10 @@ pub(crate) fn input_pointer_target_at(
     {
         return Some(InputPointerTarget::Query(index));
     }
-    if let Some(mode) = app.input_surface()
-        && let Some(target) = mode.pointer_target_at(areas.session.composer, column, row)
+    if let Some(slot) = app.composer_slot()
+        && let Some(target) = slot.pointer_target_at(areas.session.composer, column, row)
     {
-        return Some(InputPointerTarget::InputSurface(target));
+        return Some(InputPointerTarget::ComposerSlot(target));
     }
     if let Some(manager) = app.session_manager_view() {
         let manager_areas = super::layout::manager_areas(
@@ -362,8 +346,8 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
     }
     .desired_height(terminal_area.width, app.render_context());
     let mode_rows = app
-        .input_surface()
-        .map(|mode| mode.desired_height(terminal_area.width))
+        .composer_slot()
+        .map(|slot| slot.desired_height(terminal_area.width))
         .unwrap_or_default();
     let approval_rows = app
         .approval_view()
@@ -446,7 +430,7 @@ fn transient_area(areas: &FrameLayout) -> Rect {
 
 fn completion_visible(app: &App) -> bool {
     app.overlay().is_none()
-        && app.input_surface().is_none()
+        && app.composer_slot().is_none()
         && app.approval_view().is_none()
         && app.query_view().is_none()
         && app.completion().is_some()

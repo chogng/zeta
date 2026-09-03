@@ -9,7 +9,8 @@ fn session_layout_bounds_queue_and_preserves_transcript() {
     assert_eq!(areas.transcript.height, 4);
     assert_eq!(areas.goal.height, 0);
     assert_eq!(areas.plan.height, 0);
-    assert_eq!(areas.queue.height, 6);
+    assert_eq!(areas.queue.height, 5);
+    assert_eq!(areas.top_tip.height, 1);
     assert_eq!(areas.composer.height, 3);
     assert_eq!(areas.status.height, 2);
     assert_eq!(areas.agent_thread_switcher.height, 4);
@@ -20,7 +21,8 @@ fn session_layout_uses_zero_height_for_absent_rows() {
     let areas = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 1, 0);
 
     assert_eq!(areas.queue.height, 0);
-    assert_eq!(areas.composer.y, areas.transcript.height);
+    assert_eq!(areas.top_tip.y, areas.transcript.height);
+    assert_eq!(areas.composer.y, areas.top_tip.y + areas.top_tip.height);
 }
 
 #[test]
@@ -30,7 +32,8 @@ fn session_layout_places_goal_plan_and_queue_above_input() {
     assert_eq!(areas.goal.y, areas.transcript.height);
     assert_eq!(areas.plan.y, areas.goal.y + areas.goal.height);
     assert_eq!(areas.queue.y, areas.plan.y + areas.plan.height);
-    assert_eq!(areas.composer.y, areas.queue.y + areas.queue.height);
+    assert_eq!(areas.top_tip.y, areas.queue.y + areas.queue.height);
+    assert_eq!(areas.composer.y, areas.top_tip.y + areas.top_tip.height);
     assert_eq!(areas.status.y, areas.composer.y + areas.composer.height);
     assert_eq!(
         areas.agent_thread_switcher.y,
@@ -54,11 +57,13 @@ fn session_layout_does_not_reserve_an_agent_thread_gap_without_both_surfaces() {
 }
 
 #[test]
-fn session_layout_places_query_immediately_above_the_input_area() {
+fn session_layout_places_query_above_the_fixed_top_tip_row() {
     let areas = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 1, 3, 1, 0);
 
     assert_eq!(areas.request.height, 1);
-    assert_eq!(areas.composer.y, areas.request.y + areas.request.height);
+    assert_eq!(areas.top_tip.y, areas.request.y + areas.request.height);
+    assert_eq!(areas.top_tip.height, 1);
+    assert_eq!(areas.composer.y, areas.top_tip.y + areas.top_tip.height);
 }
 
 #[test]
