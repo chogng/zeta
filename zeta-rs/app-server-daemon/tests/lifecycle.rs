@@ -1,5 +1,6 @@
 #![cfg(any(unix, windows))]
 
+use std::fs::OpenOptions;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
@@ -94,8 +95,14 @@ fn start_replaces_a_daemon_from_a_different_executable_identity() {
     let packaged = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
     let first_executable = root.path().join("daemon-first");
     let second_executable = root.path().join("daemon-second");
-    std::fs::hard_link(packaged, &first_executable).unwrap();
-    std::fs::hard_link(packaged, &second_executable).unwrap();
+    std::fs::copy(packaged, &first_executable).unwrap();
+    std::fs::copy(packaged, &second_executable).unwrap();
+    OpenOptions::new()
+        .append(true)
+        .open(&second_executable)
+        .unwrap()
+        .write_all(&[0])
+        .unwrap();
     let cleanup = StopOnDrop {
         options: options.clone(),
         executable: &second_executable,
@@ -107,6 +114,43 @@ fn start_replaces_a_daemon_from_a_different_executable_identity() {
     assert_eq!(first.status, LifecycleStatus::Started);
     assert_eq!(replacement.status, LifecycleStatus::Restarted);
     assert_ne!(replacement.instance_id, first.instance_id);
+    drop(cleanup);
+}
+
+#[test]
+fn source_executable_can_be_replaced_while_daemon_is_running() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let dir = root.path().join("dir");
+    std::fs::create_dir(&profile).unwrap();
+    std::fs::create_dir(&dir).unwrap();
+    let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
+    let packaged = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let source = root.path().join(if cfg!(windows) {
+        "zeta-app-server-daemon.exe"
+    } else {
+        "zeta-app-server-daemon"
+    });
+    std::fs::copy(packaged, &source).unwrap();
+    let cleanup = StopOnDrop {
+        options: options.clone(),
+        executable: &source,
+    };
+
+    let started = run_lifecycle(LifecycleCommand::Start, options.clone(), &source).unwrap();
+    std::fs::remove_file(&source).unwrap();
+    std::fs::copy(packaged, &source).unwrap();
+    OpenOptions::new()
+        .append(true)
+        .open(&source)
+        .unwrap()
+        .write_all(&[0])
+        .unwrap();
+    let restarted = run_lifecycle(LifecycleCommand::Start, options, &source).unwrap();
+
+    assert_eq!(started.status, LifecycleStatus::Started);
+    assert_eq!(restarted.status, LifecycleStatus::Restarted);
+    assert_ne!(started.instance_id, restarted.instance_id);
     drop(cleanup);
 }
 

@@ -4,7 +4,7 @@
 
 ## 快速理解
 
-Zeta 使用 `build/` 保存构建系统实现，使用 `scripts/` 保存开发者和 CI 直接调用的稳定操作入口，使用根 `.build/` 保存常规本地产物。日常构建、测试和开发不再向 `zeta-ts/` 或仓库根散落 `dist`、`output`、`target` 和 Bazel 便捷链接。文档站由独立的 `zeta-docs` 仓库构建和清理。
+Zeta 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保存构建系统实现，使用 `scripts/` 保存开发者和 CI 直接调用的稳定操作入口，使用根 `.build/` 保存常规本地产物。日常构建、测试和开发不再向 `zeta-ts/` 或仓库根散落 `dist`、`output`、`target` 和 Bazel 便捷链接。文档站由独立的 `zeta-docs` 仓库构建和清理。
 
 | 看到的路径 | 它是什么 | 是否受版本控制 | 能否整体删除 |
 | --- | --- | --- | --- |
@@ -18,13 +18,15 @@ Zeta 使用 `build/` 保存构建系统实现，使用 `scripts/` 保存开发�
 
 ## 构建入口
 
-根 `package.json` 提供统一入口；产品特定命令继续由根命令委托到对应构建系统。
+根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 只提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口，不编排 Rust workspace。
 
 | 命令 | 结果 |
 | --- | --- |
-| `corepack pnpm build` | 依次构建 Electron Desktop 和根 Cargo workspace |
+| `just build` | 构建 Electron Desktop 和根 Cargo workspace |
+| `just build-desktop` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
+| `just build-rust` | 通过统一 Cargo 执行器构建根 Rust workspace |
+| `corepack pnpm build` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
 | `corepack pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
-| `corepack pnpm build:rust` | 构建根 Cargo workspace |
 | `corepack pnpm test:build` | 运行构建工具自身的单元测试 |
 | `corepack pnpm test` | 通过 `scripts/test.ts` 运行构建工具检查和 Desktop 单元测试 |
 | `corepack pnpm test:integration` | 通过 `scripts/test-integration.ts` 运行 Editor 浏览器集成测试 |
@@ -82,11 +84,11 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 `scripts/` 可以调用 `build/` 的构建准备能力，`build/` 不得依赖或调用 `scripts/`。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责稳定入口、进程编排和临时测试输出生命周期。
 
-根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行根命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`scripts` 和 `zeta-ts` 共用根锁文件与 TypeScript 版本，pnpm 内容寻址 store 使用用户级默认缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
+根 `Justfile` 只声明稳定命令并委托到 `build/`、`scripts/` 或产品自身的构建入口，不保存构建机制。根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行 Node 命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`scripts` 和 `zeta-ts` 共用根锁文件与 TypeScript 版本，pnpm 内容寻址 store 使用用户级默认缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。文档站框架配置、内容生成、打包和验收全部归独立的 `zeta-docs` 仓库。
 
-Node 构建工具和仓库脚本统一使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成一份中间 JavaScript 副本；`build/tsconfig.json` 和 `scripts/tsconfig.json` 分别通过 `erasableSyntaxOnly` 和严格类型检查保证两个源码边界同时满足 Node 运行时约束。`build/release/` 保留已有 Python/Shell 发布契约，因为它们由 Bazel 和平台签名流程直接调用，不伪装成 Node 工具。
+Node 构建工具和仓库脚本统一使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成一份中间 JavaScript 副本；`build/tsconfig.json` 和 `scripts/tsconfig.json` 分别通过 `erasableSyntaxOnly` 和严格类型检查保证两个源码边界同时满足 Node 运行时约束。`build/lib/just_shell.py` 是 Just 在执行 recipe 前选择平台 shell 的引导适配器；`build/release/` 保留已有 Python/Shell 发布契约，因为它们由 Cargo、Bazel 和平台签名流程直接调用，不伪装成 Node 工具。
 
 平台专属构建流程只有在出现实际实现时才新增 `build/win32/` 或 `build/linux/`，不创建空分类。`zeta-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
 

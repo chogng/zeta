@@ -23,12 +23,15 @@ use crate::LifecycleOutput;
 use crate::LifecycleStatus;
 use crate::endpoint::EndpointPaths;
 use crate::endpoint::connect_existing;
+use crate::process::ExecutableIdentity;
 use crate::process::ProcessRecord;
 use crate::process::executable_identity;
 use crate::process::force_terminate;
+use crate::process::prune_staged_daemons;
 use crate::process::read_process_record;
 use crate::process::remove_stale_process_record;
 use crate::process::spawn_daemon;
+use crate::process::stage_daemon;
 use crate::wire::ConnectionPrelude;
 use crate::wire::ControlCommand;
 use crate::wire::ControlPrelude;
@@ -82,15 +85,17 @@ fn start_unlocked(
     options: &ConnectionOptions,
     daemon_executable: &Path,
 ) -> Result<LifecycleOutput, String> {
+    let staged = stage_daemon(endpoint, daemon_executable)?;
     let mut replaced_stale_daemon = false;
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
         if control.state == ControlState::Stopping {
             return Err("Local App Server daemon is stopping".into());
         }
         let record = validate_managed_response(endpoint, &control)?;
-        if validate_executable_identity(&record, daemon_executable).is_ok() {
+        if validate_executable_identity(&record, &staged.identity).is_ok() {
             let probe = probe_app_server(endpoint, options)
                 .map_err(|error| diagnostic_error(endpoint, &error))?;
+            prune_staged_daemons(endpoint, &staged.path)?;
             return Ok(lifecycle_output(
                 LifecycleStatus::AlreadyRunning,
                 endpoint,
@@ -103,7 +108,7 @@ fn start_unlocked(
     }
 
     remove_stale_process_record(&endpoint.pid)?;
-    let _spawned_pid = spawn_daemon(endpoint, options, daemon_executable)?;
+    let _spawned_pid = spawn_daemon(endpoint, options, &staged.path)?;
     let deadline = Instant::now() + START_TIMEOUT;
     let mut last_error = None;
     while Instant::now() < deadline {
@@ -111,10 +116,11 @@ fn start_unlocked(
             Ok(Some(control)) if control.state == ControlState::Running => {
                 let record = validate_managed_response(endpoint, &control)
                     .map_err(|error| diagnostic_error(endpoint, &error))?;
-                validate_executable_identity(&record, daemon_executable)
+                validate_executable_identity(&record, &staged.identity)
                     .map_err(|error| diagnostic_error(endpoint, &error))?;
                 let probe = probe_app_server(endpoint, options)
                     .map_err(|error| diagnostic_error(endpoint, &error))?;
+                prune_staged_daemons(endpoint, &staged.path)?;
                 return Ok(lifecycle_output(
                     if replaced_stale_daemon {
                         LifecycleStatus::Restarted
@@ -197,7 +203,8 @@ fn version_unlocked(
         return Err("Local App Server daemon is stopping".into());
     }
     let record = validate_managed_response(endpoint, &control)?;
-    validate_executable_identity(&record, daemon_executable)?;
+    let expected = executable_identity(daemon_executable)?;
+    validate_executable_identity(&record, &expected)?;
     let probe =
         probe_app_server(endpoint, options).map_err(|error| diagnostic_error(endpoint, &error))?;
     Ok(lifecycle_output(
@@ -210,14 +217,14 @@ fn version_unlocked(
 
 fn validate_executable_identity(
     record: &ProcessRecord,
-    daemon_executable: &Path,
+    expected: &ExecutableIdentity,
 ) -> Result<(), String> {
-    let expected = executable_identity(daemon_executable)?;
-    if record.executable_identity.as_ref() != Some(&expected) {
-        return Err(format!(
-            "running Local App Server daemon executable is stale: {}",
-            daemon_executable.display()
-        ));
+    if !record
+        .executable_identity
+        .as_ref()
+        .is_some_and(|actual| actual.same_contents(expected))
+    {
+        return Err("running Local App Server daemon executable is stale".into());
     }
     Ok(())
 }

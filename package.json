@@ -5,10 +5,9 @@
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "preinstall": "node build/pnpm/preinstall.ts",
-    "build": "corepack pnpm run build:desktop && corepack pnpm run build:rust",
+    "build": "corepack pnpm run build:desktop",
     "build:desktop": "corepack pnpm --dir zeta-ts build",
     "build:stanza": "corepack pnpm --dir zeta-ts build:stanza",
-    "build:rust": "cargo build --workspace",
     "clean": "node build/clean.ts",
     "icons:generate": "node build/resources/icons/generate.ts",
     "icons:check": "node build/resources/icons/generate.ts --check",

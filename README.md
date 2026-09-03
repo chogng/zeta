@@ -33,6 +33,14 @@ corepack pnpm install
 
 Build definitions live in [`build/`](build), while reproducible local artifacts are collected under the ignored `.build/` root. See [`docs/build.md`](docs/build.md) for the command and output layout.
 
+Build all three product lines through the repository-level command:
+
+```bash
+just build
+```
+
+`corepack pnpm build` builds only the Electron and Browser workspace.
+
 ### `zeta code`
 
 ```bash

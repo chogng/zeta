@@ -39,7 +39,6 @@
     "build:preload": "tsc -p tsconfig.preload.json && node ../build/desktop/verifySandboxPreload.ts",
     "build:renderer": "tsc -p tsconfig.renderer.json --noEmit && vite build --config ../build/vite/vite.config.ts",
     "build:stanza": "corepack pnpm run typecheck:stanza && vite build --config ../build/vite/stanza.vite.config.ts",
-    "build:rust": "cargo build --manifest-path ../Cargo.toml -p zeta-server-host -p zeta-app-server-daemon --bins --profile dev-small",
     "test:main": "corepack pnpm run test:build-tools && corepack pnpm run test:unit",
     "test:build-tools": "corepack pnpm --dir ../build test",
     "test:extensions": "node ../scripts/test/clean-output.ts && tsc -p tsconfig.extensions-test.json && node ../scripts/test/extensions.ts",

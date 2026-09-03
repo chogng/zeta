@@ -1,10 +1,21 @@
 set working-directory := "."
 set positional-arguments
-export JUST_SHELL := justfile_directory() / "scripts/just-shell.py"
+export JUST_SHELL := justfile_directory() / "build/lib/just_shell.py"
 set shell := ["python3", "-c", 'import os, runpy; runpy.run_path(os.environ["JUST_SHELL"], run_name="__main__")']
 set windows-shell := ["python", "-c", 'import os, runpy; runpy.run_path(os.environ["JUST_SHELL"], run_name="__main__")']
 
 python := if os_family() == "windows" { "python" } else { "python3" }
+
+# Build all three product lines from the repository root.
+build: build-desktop build-rust
+
+# Build the Electron Desktop product.
+build-desktop:
+    corepack pnpm --dir zeta-ts build
+
+# Build the root Rust workspace with the locked V8 inputs when required.
+build-rust *args:
+    {{ python }} -B build/cargo_with_v8.py build --workspace {args}
 
 # Test one Rust package. V8 inputs are configured only when its dependency graph needs them.
 test *args:
