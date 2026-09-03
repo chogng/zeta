@@ -183,10 +183,9 @@ impl PluginPackageStore {
                 NoSymlinkPathStatus::Missing => {
                     sync_directory_tree(&staging)?;
                     if let Err(error) = fs::rename(&staging, &object) {
-                        if inspect_store_path(&self.boundary, &object)?
-                            != NoSymlinkPathStatus::Existing
-                        {
-                            return Err(store_io(error));
+                        match inspect_store_path(&self.boundary, &object)? {
+                            NoSymlinkPathStatus::Existing => {}
+                            NoSymlinkPathStatus::Missing => return Err(store_io(error)),
                         }
                     }
                     require_existing_store_path(&self.boundary, &object)?;

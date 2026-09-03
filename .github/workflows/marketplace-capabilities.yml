@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/marketplace-capabilities.yml"
+      - "rust-toolchain.toml"
       - "zeta-rs/app-server-protocol/src/protocol/extensions.rs"
       - "zeta-rs/app-server-protocol/src/protocol/marketplace.rs"
       - "zeta-rs/app-server-protocol/src/protocol/plugins.rs"
@@ -15,6 +16,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/marketplace-capabilities.yml"
+      - "rust-toolchain.toml"
       - "zeta-rs/app-server-protocol/src/protocol/extensions.rs"
       - "zeta-rs/app-server-protocol/src/protocol/marketplace.rs"
       - "zeta-rs/app-server-protocol/src/protocol/plugins.rs"
@@ -36,9 +38,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install Rust stable
-        run: rustup toolchain install stable --profile minimal --component clippy
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
       - name: Test Marketplace capability crates
-        run: cargo +stable test --locked -p zeta-plugins -p zeta-marketplace-client -p zeta-marketplace-manager -p zeta-extensions -p zeta-app-server-protocol
+        run: cargo test --locked -p zeta-plugins -p zeta-marketplace-client -p zeta-marketplace-manager -p zeta-extensions -p zeta-app-server-protocol
       - name: Lint Marketplace capability crates
-        run: cargo +stable clippy --locked -p zeta-plugins -p zeta-marketplace-client -p zeta-marketplace-manager -p zeta-extensions -p zeta-app-server-protocol --all-targets --no-deps -- -D warnings
+        run: cargo clippy --locked -p zeta-plugins -p zeta-marketplace-client -p zeta-marketplace-manager -p zeta-extensions -p zeta-app-server-protocol --all-targets --no-deps -- -D warnings
