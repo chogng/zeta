@@ -1,3 +1,4 @@
+use crate::AppServerListenInfo;
 use crate::protocol::error::AppServerError;
 use crate::protocol::registry::CLIENT_METHODS;
 use crate::protocol::registry::ClientRequestSchema;
@@ -20,6 +21,7 @@ use serde_json::Value;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeSet;
+use ts_rs::Config;
 
 /// Checked-in JSON Schema fixture, relative to this crate's manifest directory.
 pub const JSON_SCHEMA_FIXTURE: &str = "schema/json/schema.json";
@@ -32,6 +34,7 @@ pub const TYPESCRIPT_FIXTURE: &str = "schema/typescript/types.ts";
 #[schemars(title = "Zeta App Server Protocol")]
 #[serde(rename_all = "camelCase")]
 struct ProtocolSchema {
+    listen_info: AppServerListenInfo,
     client_request: JsonRpcRequest<ClientRequestSchema>,
     client_response: JsonRpcResponse<ClientResultSchema, AppServerError>,
     host_request: JsonRpcRequest<HostRequestSchema>,
@@ -59,6 +62,9 @@ pub fn typescript() -> String {
         crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR,
         crate::protocol::initialize::APP_SERVER_PROTOCOL_REVISION,
     );
+    output.push_str("export ");
+    output.push_str(&<AppServerListenInfo as ts_rs::TS>::decl(&Config::default()));
+    output.push('\n');
     for binding in TYPESCRIPT_BINDINGS {
         output.push_str("export ");
         output.push_str(&binding.declaration());

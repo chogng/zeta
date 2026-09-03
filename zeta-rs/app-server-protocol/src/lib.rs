@@ -3,6 +3,7 @@
 //! Domain entities deliberately remain private to `zeta-core`.
 
 mod export;
+mod listen_info;
 pub mod protocol;
 pub mod rpc;
 
@@ -11,6 +12,8 @@ pub use export::TYPESCRIPT_FIXTURE;
 pub use export::json_schema;
 pub use export::schema_hash;
 pub use export::typescript;
+pub use listen_info::AppServerListenInfo;
+pub use listen_info::AppServerListenInfoError;
 
 #[cfg(test)]
 #[path = "schema_fixtures.rs"]

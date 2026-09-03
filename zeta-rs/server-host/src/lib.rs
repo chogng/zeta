@@ -38,5 +38,5 @@ pub fn run_remote(arguments: impl IntoIterator<Item = String>) -> Result<(), Str
 }
 
 fn usage() -> &'static str {
-    "usage: zeta-server app-server (--listen stdio:// | connect | daemon <start|restart|stop|version>) [--product-services PATH] | zeta-server remote <command> | zeta-server remote-server <command>"
+    "usage: zeta-server app-server <transport-or-lifecycle> [options] | zeta-server remote <command> | zeta-server remote-server <command>"
 }

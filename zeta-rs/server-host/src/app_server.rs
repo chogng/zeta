@@ -1,6 +1,10 @@
 use std::env;
+use std::io::BufReader;
+use std::io::Write;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use zeta_app_server::AppServer;
 use zeta_app_server::LocalAppServerOptions;
@@ -11,6 +15,10 @@ use zeta_app_server_client::local_profile_root;
 use zeta_app_server_daemon::ConnectionOptions;
 use zeta_app_server_daemon::DAEMON_PATH_ENV;
 use zeta_app_server_daemon::LifecycleCommand;
+use zeta_app_server_protocol::AppServerListenInfo;
+use zeta_app_server_transport::CapabilityTokenSha256;
+use zeta_app_server_transport::parse_loopback_websocket_bind;
+use zeta_app_server_transport::start_websocket_acceptor;
 use zeta_fast_regex_search::FastRegexWorkerCommand;
 
 const DIR_GRANT_SOURCE: &str = "ZETA_DIR_GRANT_SOURCE";
@@ -20,9 +28,12 @@ pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
     let options =
         AppServerHostOptions::from_environment(product_services.or_else(product_services_path))?;
     match command {
-        AppServerHostCommand::Direct => open_server(&options)?
+        AppServerHostCommand::Stdio => open_server(&options)?
             .serve_stdio()
             .map_err(|error| error.to_string()),
+        AppServerHostCommand::WebSocket(websocket) => {
+            serve_websocket(open_server(&options)?, websocket)
+        }
         AppServerHostCommand::Connect => zeta_app_server_daemon::connect(
             options.daemon_connection_options(),
             &daemon_executable_path()?,
@@ -47,7 +58,15 @@ fn parse_arguments(
 ) -> Result<(AppServerHostCommand, Option<PathBuf>), String> {
     let (command, remaining) = match arguments {
         [listen, address, remaining @ ..] if listen == "--listen" && address == "stdio://" => {
-            (AppServerHostCommand::Direct, remaining)
+            (AppServerHostCommand::Stdio, remaining)
+        }
+        [listen, address, remaining @ ..]
+            if listen == "--listen" && address.starts_with("ws://") =>
+        {
+            let bind_address = parse_loopback_websocket_bind(address)
+                .map_err(|error| format!("invalid App Server WebSocket listener: {error}"))?;
+            let (websocket, remaining) = parse_websocket_options(bind_address, remaining)?;
+            (AppServerHostCommand::WebSocket(websocket), remaining)
         }
         [command, remaining @ ..] if command == "connect" => {
             (AppServerHostCommand::Connect, remaining)
@@ -73,14 +92,102 @@ fn parse_arguments(
 }
 
 fn usage() -> &'static str {
-    "usage: zeta-server app-server (--listen stdio:// | connect | daemon <start|restart|stop|version>) [--product-services PATH]"
+    "usage: zeta-server app-server (--listen stdio:// | --listen ws://127.0.0.1:0 --ws-auth capability-token --ws-token-sha256 HEX --emit-listen-info stdout-json | connect | daemon <start|restart|stop|version>) [--product-services PATH]"
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum AppServerHostCommand {
-    Direct,
+    Stdio,
+    WebSocket(WebSocketHostOptions),
     Connect,
     Daemon(LifecycleCommand),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct WebSocketHostOptions {
+    bind_address: SocketAddr,
+    token_sha256: CapabilityTokenSha256,
+}
+
+fn parse_websocket_options<'a>(
+    bind_address: SocketAddr,
+    arguments: &'a [String],
+) -> Result<(WebSocketHostOptions, &'a [String]), String> {
+    let [
+        auth_flag,
+        auth,
+        token_flag,
+        token,
+        emit_flag,
+        emit,
+        remaining @ ..,
+    ] = arguments
+    else {
+        return Err(usage().into());
+    };
+    if auth_flag != "--ws-auth"
+        || auth != "capability-token"
+        || token_flag != "--ws-token-sha256"
+        || emit_flag != "--emit-listen-info"
+        || emit != "stdout-json"
+    {
+        return Err(usage().into());
+    }
+    let token_sha256 = CapabilityTokenSha256::from_hex(token)
+        .map_err(|error| format!("invalid App Server WebSocket authentication: {error}"))?;
+    Ok((
+        WebSocketHostOptions {
+            bind_address,
+            token_sha256,
+        },
+        remaining,
+    ))
+}
+
+fn serve_websocket(server: AppServer, options: WebSocketHostOptions) -> Result<(), String> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| error.to_string())?;
+    runtime.block_on(async move {
+        let server = Arc::new(server);
+        let connection_server = Arc::clone(&server);
+        let listener = start_websocket_acceptor(
+            options.bind_address,
+            options.token_sha256,
+            move |reader, writer| {
+                if let Err(error) =
+                    connection_server.serve_product_host_jsonl(BufReader::new(reader), writer)
+                    && !is_peer_disconnect(&error)
+                {
+                    eprintln!("App Server WebSocket connection failed: {error}");
+                }
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+        let listen_info = AppServerListenInfo::loopback_websocket(listener.address())
+            .map_err(|error| error.to_string())?;
+        let mut stdout = std::io::stdout().lock();
+        serde_json::to_writer(&mut stdout, &listen_info).map_err(|error| error.to_string())?;
+        stdout.write_all(b"\n").map_err(|error| error.to_string())?;
+        stdout.flush().map_err(|error| error.to_string())?;
+        listener
+            .run_until(async {
+                let _ = tokio::signal::ctrl_c().await;
+            })
+            .await
+            .map_err(|error| error.to_string())
+    })
+}
+
+fn is_peer_disconnect(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::ConnectionReset
+    )
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

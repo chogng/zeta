@@ -11,11 +11,7 @@ Zeta Code CLI/TUI composition. The canonical cross-product consumer boundary is 
 while `run_app_server` and `run_remote` preserve compatibility for product hosts that already parse
 their own top-level arguments. `src/main.rs` only maps process success and failure to an exit code.
 
-`src/app_server.rs::run` validates direct, broker-connect, and daemon lifecycle commands; binds
-`ZETA_PROFILE_ROOT`; binds a directory only when `ZETA_WORKSPACE_ROOT` is explicitly present;
-resolves the optional product services manifest through `InstallContext`; and delegates server
-behavior to `zeta-app-server`. It must never infer a directory from the host process current
-directory.
+`src/app_server.rs::run` validates stdio, loopback WebSocket, broker-connect, and daemon lifecycle commands; binds `ZETA_PROFILE_ROOT`; binds a directory only when `ZETA_WORKSPACE_ROOT` is explicitly present; resolves the optional product services manifest through `InstallContext`; and delegates server behavior to `zeta-app-server`. It must never infer a directory from the host process current directory. The WebSocket command passes a capability-token digest to `zeta-app-server-transport`, then emits exactly one generated `AppServerListenInfo` JSON line after the listener is bound.
 
 `zeta-app-server-daemon` owns the local profile authority process, serialized lifecycle operations,
 private socket paths, bounded data/control preludes, process-generation records, initialize/schema
@@ -40,17 +36,8 @@ unbound Sessions remain readable but cannot be mutated implicitly.
 
 ## Integration obligations
 
-Desktop packages sibling `bin/zeta-server[.exe]` and `bin/zeta-app-server-daemon[.exe]` executables
-and invokes `app-server connect`; TUI and app expose the
-same hidden command by delegating it to this crate. `app-server --listen stdio://` remains the direct,
-single-process compatibility/test mode. Product compatibility commands may delegate here, but
-product clients must not package `zeta-cli` as their backend. Adding TUI state, interactive prompts,
-renderer policy, or product-specific command discovery here is architectural drift.
+The supported shared-process entrypoint is `app-server --listen ws://127.0.0.1:0 --ws-auth capability-token --ws-token-sha256 HEX --emit-listen-info stdout-json`. Each client connection uses the emitted loopback endpoint and the original token; the digest, not the token, crosses the process argument boundary. Desktop still invokes `app-server connect` until its connection relay migrates to this entrypoint. `app-server --listen stdio://` remains the direct compatibility/test mode, while `app-server connect` and the sibling daemon remain available to clients that need profile process reuse. Product clients must not package `zeta-cli` as their backend. Adding TUI state, interactive prompts, renderer policy, or product-specific command discovery here is architectural drift.
 
 ## Tests and extension points
 
-Run `cargo test -p zeta-server-host -p zeta-app-server-daemon`. Server-host tests exercise direct
-compatibility and command parsing; daemon tests exercise the real profile endpoint, concurrent
-startup election, idempotent lifecycle commands, generation replacement, and initialize gate.
-Add a new command only when it is backend-neutral and has a canonical shared domain owner. Product
-commands remain in their product host.
+Run `just test zeta-server-host` and `just test zeta-app-server-daemon`. Server-host tests exercise stdio compatibility, WebSocket argument validation, two independently initialized connections, and connection-local close behavior. Daemon tests exercise the profile endpoint, concurrent startup election, idempotent lifecycle commands, generation replacement, and initialize gate. Add a new command only when it is backend-neutral and has a canonical shared domain owner. Product commands remain in their product host.

@@ -10993,6 +10993,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "ts-rs",
+ "url",
  "zeroize",
  "zeta-collaboration",
  "zeta-environment",
@@ -11005,9 +11006,13 @@ dependencies = [
 name = "zeta-app-server-transport"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "rustix 1.1.4",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
+ "tokio",
+ "tokio-tungstenite",
  "zeta-app-server-protocol",
  "zeta-uds",
 ]
@@ -12118,13 +12123,18 @@ dependencies = [
 name = "zeta-server-host"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
+ "tokio",
+ "tokio-tungstenite",
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-daemon",
  "zeta-app-server-protocol",
+ "zeta-app-server-transport",
  "zeta-fast-regex-search",
  "zeta-package-store",
  "zeta-remote",

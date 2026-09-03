@@ -2,12 +2,19 @@
 
 mod deadline_stream;
 mod local_socket;
+mod websocket;
 
 pub use deadline_stream::DeadlineStream;
 pub use local_socket::LocalConnectionGuard;
 pub use local_socket::LocalConnections;
 pub use local_socket::LocalSocketAccept;
 pub use local_socket::PollingLocalListener;
+pub use websocket::CapabilityTokenSha256;
+pub use websocket::StartedWebSocketListener;
+pub use websocket::WebSocketReader;
+pub use websocket::WebSocketWriter;
+pub use websocket::parse_loopback_websocket_bind;
+pub use websocket::start_websocket_acceptor;
 
 use std::io::{self, BufRead, Write};
 

@@ -1467,6 +1467,29 @@
       ],
       "type": "string"
     },
+    "AppServerListenInfo": {
+      "additionalProperties": false,
+      "description": "Machine-readable startup record emitted after an App Server listener is ready.",
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "version",
+        "endpoint"
+      ],
+      "type": "object"
+    },
     "ApprovalMode": {
       "enum": [
         "askPermissions",
@@ -31289,11 +31312,15 @@
     "hostResponse": {
       "$ref": "#/$defs/JsonRpcResponse2"
     },
+    "listenInfo": {
+      "$ref": "#/$defs/AppServerListenInfo"
+    },
     "serverNotification": {
       "$ref": "#/$defs/JsonRpcNotification"
     }
   },
   "required": [
+    "listenInfo",
     "clientRequest",
     "clientResponse",
     "hostRequest",
