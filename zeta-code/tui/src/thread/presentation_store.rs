@@ -7,6 +7,8 @@ use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::queue::Queue;
 use crate::thread::transcript::ChatHistoryRenderCache;
 use crate::thread::transcript::ChatHistoryScroll;
+use crate::thread::transcript::TranscriptScrollAnchor;
+use crate::thread::transcript::TranscriptScrollTarget;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
@@ -25,7 +27,6 @@ pub(crate) struct ThreadPresentationState {
     pub(crate) render_cache: ChatHistoryRenderCache,
     pub(crate) expanded_cells: BTreeSet<TranscriptCellId>,
     pub(crate) selected_cell: Option<TranscriptCellId>,
-    pub(crate) scroll_anchor: Option<TranscriptScrollAnchor>,
 }
 
 impl Default for ThreadPresentationState {
@@ -45,7 +46,6 @@ impl ThreadPresentationState {
             render_cache: ChatHistoryRenderCache::default(),
             expanded_cells: BTreeSet::new(),
             selected_cell: None,
-            scroll_anchor: None,
         }
     }
 
@@ -54,10 +54,12 @@ impl ThreadPresentationState {
             self.expanded_cells.insert(cell_id.clone());
         }
         self.selected_cell = Some(cell_id.clone());
-        self.scroll_anchor = Some(TranscriptScrollAnchor {
-            cell_id: cell_id.clone(),
-            line_offset: 0,
-        });
+        self.scroll.apply(TranscriptScrollTarget::Anchor(
+            TranscriptScrollAnchor::Cell {
+                cell_id: cell_id.as_str().to_owned(),
+                line_offset: 0,
+            },
+        ));
         self.expanded_cells.contains(cell_id)
     }
 
@@ -72,10 +74,12 @@ impl ThreadPresentationState {
             return false;
         };
         let cell_id = cell_ids[index].clone();
-        self.scroll_anchor = Some(TranscriptScrollAnchor {
-            cell_id: cell_id.clone(),
-            line_offset: 0,
-        });
+        self.scroll.apply(TranscriptScrollTarget::Anchor(
+            TranscriptScrollAnchor::Cell {
+                cell_id: cell_id.as_str().to_owned(),
+                line_offset: 0,
+            },
+        ));
         self.selected_cell = Some(cell_id);
         true
     }
@@ -91,19 +95,15 @@ impl ThreadPresentationState {
             self.selected_cell = None;
             return false;
         };
-        self.scroll_anchor = Some(TranscriptScrollAnchor {
-            cell_id: cell_id.clone(),
-            line_offset: 0,
-        });
+        self.scroll.apply(TranscriptScrollTarget::Anchor(
+            TranscriptScrollAnchor::Cell {
+                cell_id: cell_id.as_str().to_owned(),
+                line_offset: 0,
+            },
+        ));
         self.selected_cell = Some(cell_id);
         true
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct TranscriptScrollAnchor {
-    pub(crate) cell_id: TranscriptCellId,
-    pub(crate) line_offset: usize,
 }
 
 #[derive(Debug)]

@@ -1,9 +1,11 @@
 use super::Args;
 use super::check_rust_output;
 use super::constant_name;
+use super::raster_dimensions;
 use super::terminal_dimensions;
 use clap::Parser;
 use std::fs;
+use std::path::Path;
 
 #[test]
 fn default_terminal_dimensions_compensate_for_tall_cells() {
@@ -13,6 +15,22 @@ fn default_terminal_dimensions_compensate_for_tall_cells() {
         (12, 3)
     );
     assert_eq!(terminal_dimensions(32, 16, None, Some(3)).unwrap(), (12, 3));
+}
+
+#[test]
+fn matching_pixel_grid_preserves_an_odd_source_edge() {
+    assert_eq!(
+        raster_dimensions(Path::new("pet.sprite"), 16, 9, 8, 5).unwrap(),
+        (16, 9)
+    );
+    assert_eq!(
+        raster_dimensions(Path::new("pet.svg"), 16, 9, 8, 5).unwrap(),
+        (16, 10)
+    );
+    assert_eq!(
+        raster_dimensions(Path::new("pet.sprite"), 16, 9, 8, 4).unwrap(),
+        (16, 8)
+    );
 }
 
 #[test]

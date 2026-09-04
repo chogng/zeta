@@ -19,6 +19,7 @@ use super::redraw::RedrawScheduler;
 use super::requests::RequestLane;
 use super::requests::RequestTasks;
 use super::requests::request_lane;
+use crate::AppServerProcess;
 use crate::TuiError;
 use crate::TuiExit;
 use crate::TuiOptions;
@@ -26,6 +27,8 @@ use crate::client;
 use crate::config;
 use crate::dirs;
 use crate::host;
+use crate::host::process_resources::ProcessResourceDemand;
+use crate::host::process_resources::ProcessResourceTargets;
 use crate::keymap;
 use crate::mcp;
 use crate::sessions;
@@ -84,13 +87,16 @@ pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<
 fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
     let mut client = session.client();
     let events = session.take_events()?;
+    let startup_context = options.startup_context();
     let TuiOptions {
         thread_title,
         display_dir_root,
         host_dir_root,
         host_file_search_root,
         theme_root,
+        app_server_process,
         recovery,
+        ..
     } = options;
     let initialization = client.initialization()?;
     let server_slash_commands = initialization.slash_commands.clone();
@@ -133,7 +139,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         None => ThemeResource::new(terminal.background_color()),
     };
     let mut file_search = host_file_search_root.map(FileSearchManager::new);
-    let mut app = App::for_dir_with_input_catalog(&display_dir_root, input_catalog);
+    let mut app = App::for_dir_with_input_catalog_and_startup_context(
+        &display_dir_root,
+        input_catalog,
+        startup_context,
+    );
     let initial_config = client.read_config();
     let initial_model_catalog = client.list_models().ok();
     let theme_preference = initial_config
@@ -177,7 +187,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         });
     }
 
-    let pump = EventPump::start(events)?;
+    let resource_targets = match app_server_process {
+        AppServerProcess::Local(process_id) => ProcessResourceTargets::TuiAndAppServer(process_id),
+        AppServerProcess::IncludedInTui | AppServerProcess::Remote => ProcessResourceTargets::Tui,
+    };
+    let mut pump = EventPump::start(events, resource_targets)?;
     let mut requests = RequestTasks::default();
     let mut queued_actions = VecDeque::from([AppCommand::RefreshClipboardImageAvailability]);
     let mut thread_refresh_requested = false;
@@ -187,6 +201,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut sessions_refresh_requested = false;
     let mut queued_turn_dispatch_requested = false;
     let mut redraw = RedrawScheduler::default();
+    let mut process_resource_demand = ProcessResourceDemand::Disabled;
     let mut pending_runtime_event = None;
     if let Err(error) = draw_terminal(&mut terminal, &app) {
         let _ = pump.shutdown();
@@ -194,6 +209,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     }
     let result = (|| {
         loop {
+            sync_process_resource_demand(
+                &mut pump,
+                &mut app,
+                terminal.area()?,
+                &mut process_resource_demand,
+            );
             let had_active_turn = app.active_turn().is_some();
             let mut runtime_event = match pending_runtime_event.take() {
                 Some(event) => event,
@@ -219,6 +240,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Tick)
                 | RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(_))
+                | RuntimeEvent::ProcessResources(_)
                 | RuntimeEvent::TerminationRequested => {}
             }
             runtime_event = match runtime_event {
@@ -289,6 +311,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 RuntimeEvent::TerminationRequested => {
                     return Ok(TuiExit::TerminationRequested);
                 }
+                RuntimeEvent::ProcessResources(reading) => {
+                    app.update(AppEvent::ProcessResourcesSampled(reading));
+                    if !matches!(process_resource_demand, ProcessResourceDemand::Disabled) {
+                        redraw.request(Instant::now(), RedrawPriority::Batched);
+                    }
+                    None
+                }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(error)) => {
                     return Err(error.into());
                 }
@@ -301,7 +330,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
                     Event::FocusGained => Some(AppCommand::RefreshClipboardImageAvailability),
-                    Event::Key(key) if key.kind != KeyEventKind::Release => app.handle_key(key),
+                    Event::Key(key) if key.kind != KeyEventKind::Release => {
+                        app.handle_key_in_area(key, terminal.area()?)
+                    }
                     Event::Mouse(mouse)
                         if mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
                     {
@@ -358,8 +389,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             mouse.column,
                             mouse.row,
                             direction,
-                        );
-                        None
+                        )
                     }
                     Event::Paste(text) => {
                         app.handle_paste(text);
@@ -1177,6 +1207,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::SteerTurn {
+                        source,
                         steer_id,
                         submission,
                     } => {
@@ -1184,6 +1215,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             if matches!(app.status(), Status::Working) && !app.steers_active_turn()
                             {
                                 queued_actions.push_front(AppCommand::SteerTurn {
+                                    source,
                                     steer_id,
                                     submission,
                                 });
@@ -1197,6 +1229,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                     "zeta-tui-steer-turn",
                                     move || Completion::TurnSteered {
                                         scope: completion_scope,
+                                        source,
                                         steer_id,
                                         result: steer_turn_and_read(
                                             request_client,
@@ -1210,6 +1243,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 );
                             } else {
                                 app.update(AppEvent::SteerSubmissionFailed {
+                                    source,
                                     steer_id,
                                     error: "the active Turn is no longer available".into(),
                                 });
@@ -1336,6 +1370,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     &mut app,
                 );
             }
+            sync_process_resource_demand(
+                &mut pump,
+                &mut app,
+                terminal.area()?,
+                &mut process_resource_demand,
+            );
             if redraw.take_due(Instant::now()) {
                 draw_terminal(&mut terminal, &app)?;
             }
@@ -1347,6 +1387,21 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         (Ok(_), Err(error)) => Err(error.into()),
         (Ok(exit), Ok(())) => Ok(exit),
     }
+}
+
+fn sync_process_resource_demand(
+    pump: &mut EventPump,
+    app: &mut App,
+    terminal_area: ratatui::layout::Rect,
+    current: &mut ProcessResourceDemand,
+) {
+    let next = frame::process_resource_demand(app, terminal_area);
+    if next == *current {
+        return;
+    }
+    let request = pump.set_process_resource_demand(next);
+    app.apply_process_resource_request(request);
+    *current = next;
 }
 
 fn activate_pointer_item(
@@ -1382,6 +1437,10 @@ fn activate_pointer_item(
             app.activate_session_manager_pointer_target(target);
             None
         }
+        InputPointerTarget::Queue(queue_id) => {
+            app.activate_queue_pointer_target(queue_id);
+            None
+        }
         InputPointerTarget::TranscriptJumpToBottom => {
             app.follow_latest_transcript();
             None
@@ -1403,14 +1462,14 @@ fn scroll_pointer_item(
     column: u16,
     row: u16,
     direction: TranscriptScrollDirection,
-) -> bool {
+) -> Option<AppCommand> {
     if app.scroll_session_manager(direction == TranscriptScrollDirection::Up) {
-        return true;
+        return None;
     }
     if !frame::transcript_contains(app, area, column, row) {
-        return false;
+        return None;
     }
-    app.scroll_transcript(direction)
+    app.navigate_transcript(direction, area)
 }
 
 fn finish_pointer_gesture(
@@ -1490,13 +1549,19 @@ fn schedule_action(
     requests: &RequestTasks,
     queued: &mut VecDeque<AppCommand>,
 ) -> Option<AppCommand> {
-    if let Some(action) = action
-        && (!matches!(action, AppCommand::RefreshClipboardImageAvailability)
-            || !queued
+    if let Some(action) = action {
+        let duplicate = match &action {
+            AppCommand::RefreshClipboardImageAvailability => queued
                 .iter()
-                .any(|queued| matches!(queued, AppCommand::RefreshClipboardImageAvailability)))
-    {
-        queued.push_back(action);
+                .any(|queued| matches!(queued, AppCommand::RefreshClipboardImageAvailability)),
+            AppCommand::LoadOlderHistory => queued
+                .iter()
+                .any(|queued| matches!(queued, AppCommand::LoadOlderHistory)),
+            _ => false,
+        };
+        if !duplicate {
+            queued.push_back(action);
+        }
     }
     let runnable = queued
         .iter()

@@ -15,16 +15,20 @@ fn tui_table_defaults_missing_terminal_fields() {
 }
 
 #[test]
-fn terminal_settings_update_removes_legacy_directory_permissions() {
-    let section = FrontendConfigDto(BTreeMap::from([(
-        "dirPermissions".into(),
-        serde_json::json!({"readFiles": true, "writeFiles": true}),
-    )]));
+fn terminal_settings_update_removes_legacy_fields() {
+    let section = FrontendConfigDto(BTreeMap::from([
+        (
+            "dirPermissions".into(),
+            serde_json::json!({"readFiles": true, "writeFiles": true}),
+        ),
+        ("followUpMode".into(), serde_json::json!("steer")),
+    ]));
 
     let settings = TerminalSettings::from_tui(&section).unwrap();
     let updated = settings.write_to_tui(&section).unwrap();
 
     assert!(!updated.0.contains_key("dirPermissions"));
+    assert!(!updated.0.contains_key("followUpMode"));
 }
 
 #[test]

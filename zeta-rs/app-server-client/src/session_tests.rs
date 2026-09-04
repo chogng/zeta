@@ -44,6 +44,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
         ClientCapabilities::default(),
     )
     .unwrap();
+    assert_eq!(session.process_id(), None);
     let events = session.take_events().unwrap();
     let mut client = session.client();
     let created_session = client

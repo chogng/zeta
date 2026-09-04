@@ -1,56 +1,55 @@
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-
-const SCROLL_STEP: usize = 5;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TranscriptScrollDirection {
     Up,
     Down,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum TranscriptScrollAnchor {
+    Header { line_offset: usize },
+    Cell { cell_id: String, line_offset: usize },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum TranscriptScrollTarget {
+    FollowLatest,
+    Anchor(TranscriptScrollAnchor),
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ChatHistoryScroll {
-    rows_from_bottom: usize,
+    position: TranscriptScrollPosition,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+enum TranscriptScrollPosition {
+    #[default]
+    FollowLatest,
+    Anchor(TranscriptScrollAnchor),
 }
 
 impl ChatHistoryScroll {
-    pub(crate) fn scroll(&mut self, direction: TranscriptScrollDirection) -> bool {
-        let previous = self.rows_from_bottom;
-        self.rows_from_bottom = match direction {
-            TranscriptScrollDirection::Up => self.rows_from_bottom.saturating_add(SCROLL_STEP),
-            TranscriptScrollDirection::Down => self.rows_from_bottom.saturating_sub(SCROLL_STEP),
-        };
-        self.rows_from_bottom != previous
-    }
-
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> bool {
-        match (key.modifiers, key.code) {
-            (KeyModifiers::NONE, KeyCode::PageUp) => self.scroll(TranscriptScrollDirection::Up),
-            (KeyModifiers::NONE, KeyCode::PageDown) => self.scroll(TranscriptScrollDirection::Down),
-            (KeyModifiers::CONTROL, KeyCode::Home) => {
-                self.rows_from_bottom = usize::MAX;
-                true
-            }
-            (KeyModifiers::CONTROL, KeyCode::End) => {
-                self.rows_from_bottom = 0;
-                true
-            }
-            _ => false,
+    pub(crate) fn anchor(&self) -> Option<&TranscriptScrollAnchor> {
+        match &self.position {
+            TranscriptScrollPosition::FollowLatest => None,
+            TranscriptScrollPosition::Anchor(anchor) => Some(anchor),
         }
     }
 
-    pub(crate) fn paragraph_offset(&self, bottom_offset: usize) -> usize {
-        bottom_offset.saturating_sub(self.rows_from_bottom)
-    }
-
-    pub(crate) fn is_scrolled(&self, bottom_offset: usize) -> bool {
-        self.paragraph_offset(bottom_offset) < bottom_offset
+    pub(crate) fn apply(&mut self, target: TranscriptScrollTarget) -> bool {
+        let position = match target {
+            TranscriptScrollTarget::FollowLatest => TranscriptScrollPosition::FollowLatest,
+            TranscriptScrollTarget::Anchor(anchor) => TranscriptScrollPosition::Anchor(anchor),
+        };
+        if self.position == position {
+            return false;
+        }
+        self.position = position;
+        true
     }
 
     pub(crate) fn follow_latest(&mut self) {
-        self.rows_from_bottom = 0;
+        self.position = TranscriptScrollPosition::FollowLatest;
     }
 }
 

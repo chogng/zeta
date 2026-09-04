@@ -62,11 +62,6 @@ impl<A> ListSelection<A> {
         self.state.focus_search()
     }
 
-    pub(crate) fn selected_action(&self) -> Option<&A> {
-        let id = self.state.selected_item()?.id()?;
-        self.actions.get(id)
-    }
-
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         self.state.handle_paste(pasted);
     }

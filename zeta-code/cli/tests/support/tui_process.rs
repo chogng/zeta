@@ -247,6 +247,10 @@ impl TuiProcess {
         self.send_input(b"\x1b[A");
     }
 
+    pub fn alt_up(&mut self) {
+        self.send_input(b"\x1b[1;3A");
+    }
+
     pub fn control_up(&mut self) {
         self.send_input(b"\x1b[1;5A");
     }
@@ -269,6 +273,17 @@ impl TuiProcess {
 
     pub fn escape(&mut self) {
         self.send_input(b"\x1b");
+    }
+
+    pub fn scroll_up(&mut self, column: u16, row: u16) {
+        self.send_input(
+            format!(
+                "\x1b[<64;{};{}M",
+                column.saturating_add(1),
+                row.saturating_add(1)
+            )
+            .as_bytes(),
+        );
     }
 
     pub fn send(&mut self, bytes: &[u8]) {

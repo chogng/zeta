@@ -9,6 +9,7 @@ use crate::thread::composer::Steer;
 use crate::thread::composer::SteerId;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 
 pub(crate) struct ChatComposerView<'a> {
     input: &'a ChatInput,
@@ -76,7 +77,14 @@ impl ChatComposer {
         input: &mut ChatInput,
         key: KeyEvent,
     ) -> ChatComposerOutcome {
-        self.handle_key_with_submission_target(input, key, SubmissionTarget::Steer)
+        if key.code == KeyCode::Enter
+            && key.modifiers == KeyModifiers::CONTROL
+            && input.completion().is_none()
+            && input.accepts_submission_key()
+        {
+            return self.steer_current_input(input);
+        }
+        self.handle_key_with_submission_target(input, key, SubmissionTarget::Queue)
     }
 
     pub(crate) fn handle_queued_turn_key(
@@ -101,19 +109,17 @@ impl ChatComposer {
         {
             return self.queue_current_input(input);
         }
-        if submission_target == SubmissionTarget::Steer
-            && key.code == KeyCode::Enter
-            && key.modifiers.is_empty()
-            && input.completion().is_none()
-            && input.accepts_submission_key()
-            && input.submission_contains_skill()
-        {
+        map_chat_input_outcome(input.handle_key(key))
+    }
+
+    fn steer_current_input(&mut self, input: &mut ChatInput) -> ChatComposerOutcome {
+        if input.submission_contains_skill() {
             return ChatComposerOutcome::SubmissionRejected(
-                "A running Turn cannot change its Skill; switch follow-up messages to Queue or wait for the next Turn"
+                "A running Turn cannot change its Skill; queue the message with Enter or wait for the next Turn"
                     .into(),
             );
         }
-        map_chat_input_outcome(input.handle_key(key))
+        map_chat_input_outcome(input.submit_current())
     }
 
     #[cfg(test)]
@@ -174,7 +180,6 @@ impl ChatComposer {
 enum SubmissionTarget {
     Start,
     Queue,
-    Steer,
 }
 
 fn map_chat_input_outcome(outcome: ChatInputOutcome) -> ChatComposerOutcome {

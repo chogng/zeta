@@ -24,7 +24,7 @@ fn key(code: KeyCode) -> KeyEvent {
 }
 
 #[test]
-fn tab_navigation_switches_tabs_and_wraps() {
+fn keyboard_navigation_switches_tabs_in_both_directions_and_wraps() {
     let mut tabs = TabListState::new(vec![TestTab("Overview"), TestTab("Providers")]);
 
     assert_eq!(
@@ -33,7 +33,7 @@ fn tab_navigation_switches_tabs_and_wraps() {
     );
     assert_eq!(tabs.active_tab().tab_label(), "Providers");
     assert_eq!(
-        tabs.handle_key(key(KeyCode::Tab)),
+        tabs.handle_key(key(KeyCode::Left)),
         TabListInputOutcome::ActiveChanged
     );
     assert_eq!(tabs.active_tab().tab_label(), "Overview");
@@ -43,7 +43,17 @@ fn tab_navigation_switches_tabs_and_wraps() {
     );
     assert_eq!(tabs.active_tab().tab_label(), "Providers");
     assert_eq!(
-        tabs.handle_key(key(KeyCode::BackTab)),
+        tabs.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        TabListInputOutcome::ActiveChanged
+    );
+    assert_eq!(tabs.active_tab().tab_label(), "Overview");
+    assert_eq!(
+        tabs.handle_key(key(KeyCode::Left)),
+        TabListInputOutcome::ActiveChanged
+    );
+    assert_eq!(tabs.active_tab().tab_label(), "Providers");
+    assert_eq!(
+        tabs.handle_key(key(KeyCode::Right)),
         TabListInputOutcome::ActiveChanged
     );
     assert_eq!(tabs.active_tab().tab_label(), "Overview");

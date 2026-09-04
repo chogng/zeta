@@ -3,24 +3,15 @@ use serde::Deserialize;
 use serde::Serialize;
 use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) enum FollowUpMode {
-    #[default]
-    Queue,
-    Steer,
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct TerminalSettings {
     mouse_interactions: bool,
-    follow_up_mode: FollowUpMode,
     input_mode: ChatInputMode,
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 3] = ["mouseInteractions", "followUpMode", "inputMode"];
+    const KEYS: [&'static str; 2] = ["mouseInteractions", "inputMode"];
 
     pub(crate) fn from_tui(section: &FrontendConfigDto) -> Result<Self, String> {
         let defaults = serde_json::to_value(Self::default())
@@ -49,6 +40,7 @@ impl TerminalSettings {
             .ok_or_else(|| "TUI configuration must serialize as an object".to_owned())?;
         let mut values = section.0.clone();
         values.remove("dirPermissions");
+        values.remove("followUpMode");
         for key in Self::KEYS {
             let value = fields
                 .get(key)
@@ -66,14 +58,6 @@ impl TerminalSettings {
         self.mouse_interactions = enabled;
     }
 
-    pub(crate) const fn follow_up_mode(self) -> FollowUpMode {
-        self.follow_up_mode
-    }
-
-    pub(crate) fn set_follow_up_mode(&mut self, mode: FollowUpMode) {
-        self.follow_up_mode = mode;
-    }
-
     pub(crate) const fn input_mode(self) -> ChatInputMode {
         self.input_mode
     }
@@ -87,7 +71,6 @@ impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
             mouse_interactions: true,
-            follow_up_mode: FollowUpMode::Queue,
             input_mode: ChatInputMode::Standard,
         }
     }

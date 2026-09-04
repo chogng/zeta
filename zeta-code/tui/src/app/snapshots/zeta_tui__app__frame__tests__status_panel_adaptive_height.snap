@@ -1,25 +1,24 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
-assertion_line: 181
 expression: rendered
 ---
                                                                                 
-   ▜▙▄▄▄▟▛    Zeta Code v0.1.0                                                  
-  ▄█▖▌█▌▗█▄   Automatic model · Access unknown                                  
-   ▜█▀▀▀█▛    .                                                                 
+  Zeta Code v0.1.0                                                              
+  Automatic model · Access unknown                                              
+  .                                                                             
                                                                                 
-  Status──────────────────────────────────────────────────────────────────────  
-  Model: openai/gpt                                                             
-  Full context window: 100,000 tokens                                           
+─ Status ───────────────────────────────────────────────────────────────────────
+   Session    Processes                                                         
+  Model:                    openai/gpt                                          
+  Full context window:      100,000 tokens                                      
   Available context window: 90,000 tokens                                       
   Remaining context window: 80,000 tokens (88.8%)                               
-  Model calls: 0                                                                
-  Input tokens: 0 tokens                                                        
-  Cached input: 0 tokens                                                        
-  Cached input share: unknown                                                   
-  Cache writes: 0 tokens                                                        
-  Output tokens: 0 tokens                                                       
-  Reasoning output: 0 tokens                                                    
-  Reference cost: unknown                                                       
+  Model calls:              0                                                   
+  Input tokens:             0 tokens                                            
+  Cached input:             0 tokens                                            
+  Cached input share:       unknown                                             
+  Cache writes:             0 tokens                                            
+  Output tokens:            0 tokens                                            
+  Reasoning output:         0 tokens                                            
                                                                                 
-  ↑/↓ scroll · PgUp/PgDn page · Home/End jump · Esc close
+  Tab to switch · Esc to close

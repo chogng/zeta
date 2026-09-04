@@ -5,8 +5,7 @@ use ratatui::layout::Rect;
 use std::time::Duration;
 use std::time::Instant;
 
-const NOTICE_DURATION: Duration = Duration::from_secs(3);
-const POLICY_TIP_DURATION: Duration = Duration::from_secs(5);
+const TRANSIENT_TIP_DURATION: Duration = Duration::from_secs(5);
 const POLICY_TIP: &str = "shift+tab to cycle policy";
 const CLIPBOARD_IMAGE_TIP: &str = "image in clipboard · ctrl+v to paste";
 
@@ -14,7 +13,7 @@ const CLIPBOARD_IMAGE_TIP: &str = "image in clipboard · ctrl+v to paste";
 pub(crate) struct TopTip {
     phase: TopTipPhase,
     notice: Option<Notice>,
-    clipboard_image_available: bool,
+    clipboard_image_expires_at: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -35,13 +34,13 @@ impl TopTip {
         Self {
             phase: TopTipPhase::Navigation,
             notice: None,
-            clipboard_image_available: false,
+            clipboard_image_expires_at: None,
         }
     }
 
     pub(crate) fn show_policy_tip(&mut self, now: Instant) {
         self.phase = TopTipPhase::Policy {
-            expires_at: now + POLICY_TIP_DURATION,
+            expires_at: now + TRANSIENT_TIP_DURATION,
         };
     }
 
@@ -58,16 +57,16 @@ impl TopTip {
     pub(crate) fn show_notice(&mut self, text: String, now: Instant) {
         self.notice = Some(Notice {
             text,
-            expires_at: now + NOTICE_DURATION,
+            expires_at: now + TRANSIENT_TIP_DURATION,
         });
     }
 
-    pub(crate) fn show_clipboard_image(&mut self) {
-        self.clipboard_image_available = true;
+    pub(crate) fn show_clipboard_image(&mut self, now: Instant) {
+        self.clipboard_image_expires_at = Some(now + TRANSIENT_TIP_DURATION);
     }
 
     pub(crate) fn hide_clipboard_image(&mut self) {
-        self.clipboard_image_available = false;
+        self.clipboard_image_expires_at = None;
     }
 
     pub(crate) fn draw(
@@ -90,6 +89,12 @@ impl TopTip {
         if notice_expired {
             self.notice = None;
         }
+        let clipboard_image_expired = self
+            .clipboard_image_expires_at
+            .is_some_and(|expires_at| expires_at <= now);
+        if clipboard_image_expired {
+            self.clipboard_image_expires_at = None;
+        }
         let policy_expired = matches!(
             self.phase,
             TopTipPhase::Policy { expires_at } if expires_at <= now
@@ -97,14 +102,14 @@ impl TopTip {
         if policy_expired {
             self.phase = TopTipPhase::Hidden;
         }
-        notice_expired || policy_expired
+        notice_expired || clipboard_image_expired || policy_expired
     }
 
     fn text<'a>(&'a self, tip: Option<&'a str>) -> Option<&'a str> {
         if let Some(notice) = self.notice.as_ref() {
             return Some(notice.text.as_str());
         }
-        if self.clipboard_image_available {
+        if self.clipboard_image_expires_at.is_some() {
             return Some(CLIPBOARD_IMAGE_TIP);
         }
         match self.phase {

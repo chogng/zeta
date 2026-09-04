@@ -7,7 +7,9 @@ publish.workspace = true
 
 [features]
 default = ["compiler"]
-compiler = ["dep:anyhow", "dep:clap", "dep:image", "dep:resvg"]
+grid = ["dep:anyhow"]
+rust-source = []
+compiler = ["grid", "rust-source", "dep:clap", "dep:image", "dep:resvg"]
 
 [lib]
 doctest = false

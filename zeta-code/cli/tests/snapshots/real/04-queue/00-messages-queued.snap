@@ -26,11 +26,11 @@ expression: screen
 
 
 
-
-Queue 2: 第三条：稍后恢复到输入框
-Queue 1: 第二条：应该保留并自动发送                                      shift+tab to cycle policy
+  Queue 1: 第二条：应该保留并自动发送 · next
+  Queue 2: 第三条：稍后恢复到输入框
+                                                                         shift+tab to cycle policy
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 >
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  queue 2 · zeta-real-scenario                                                            ← agents
+  zeta-real-scenario
   ⏸ ask permissions on

@@ -16,6 +16,12 @@ use zeta_protocol::SkillId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SteerSource {
+    Composer,
+    Queue(QueueId),
+}
+
 /// A typed side-effect intent emitted by the single-writer application state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AppCommand {
@@ -95,6 +101,7 @@ pub(crate) enum AppCommand {
         submission: ChatSubmission,
     },
     SteerTurn {
+        source: SteerSource,
         steer_id: SteerId,
         submission: ChatSubmission,
     },

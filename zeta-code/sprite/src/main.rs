@@ -6,9 +6,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use zeta_sprite::compiler::ansi_preview;
 use zeta_sprite::compiler::rasterize;
-use zeta_sprite::compiler::rust_source;
 use zeta_sprite::compiler::source_dimensions;
 use zeta_sprite::pack_quadrants_rgba;
+use zeta_sprite::terminal_sprite_rust_source;
 
 #[derive(Debug, Parser)]
 #[command(about = "Convert an SVG, PNG, or pixel grid into a terminal Unicode sprite")]
@@ -46,12 +46,8 @@ fn main() -> Result<()> {
     let (source_width, source_height) = source_dimensions(&args.input)?;
     let (columns, rows) =
         terminal_dimensions(source_width, source_height, args.columns, args.rows)?;
-    let logical_width = columns
-        .checked_mul(2)
-        .context("terminal sprite width is too large")?;
-    let logical_height = rows
-        .checked_mul(2)
-        .context("terminal sprite height is too large")?;
+    let (logical_width, logical_height) =
+        raster_dimensions(&args.input, source_width, source_height, columns, rows)?;
     let image = rasterize(&args.input, logical_width, logical_height)?;
     let sprite = pack_quadrants_rgba(
         image.width,
@@ -69,7 +65,7 @@ fn main() -> Result<()> {
     }
 
     if let Some(path) = args.rust_output {
-        let source = rust_source(&args.name, &sprite);
+        let source = terminal_sprite_rust_source(&args.name, &sprite);
         if args.check {
             check_rust_output(&path, &source)?;
             eprintln!("checked {}", path.display());
@@ -132,6 +128,29 @@ fn terminal_dimensions(
         bail!("terminal sprite dimensions exceed u16");
     }
     Ok(dimensions)
+}
+
+fn raster_dimensions(
+    input: &Path,
+    source_width: u32,
+    source_height: u32,
+    columns: u32,
+    rows: u32,
+) -> Result<(u32, u32)> {
+    let is_pixel_grid = input
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("sprite"));
+    if is_pixel_grid && source_width.div_ceil(2) == columns && source_height.div_ceil(2) == rows {
+        return Ok((source_width, source_height));
+    }
+    Ok((
+        columns
+            .checked_mul(2)
+            .context("terminal sprite width is too large")?,
+        rows.checked_mul(2)
+            .context("terminal sprite height is too large")?,
+    ))
 }
 
 fn ceil_ratio(numerator: u64, denominator: u64) -> u32 {

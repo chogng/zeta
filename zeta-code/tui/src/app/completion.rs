@@ -1,6 +1,7 @@
 use super::ActiveConversation;
 use super::App;
 use super::AppEvent;
+use super::command::SteerSource;
 use super::dispatch::ProductCommandOutput;
 use crate::config;
 use crate::keymap;
@@ -77,6 +78,7 @@ pub(super) enum Completion {
     },
     TurnSteered {
         scope: ThreadRequestScope,
+        source: SteerSource,
         steer_id: SteerId,
         result: Result<(TurnSteerResult, LatestThreadSnapshot), ClientError>,
     },
@@ -326,11 +328,12 @@ pub(super) fn apply_request_completion(
             app,
         ),
         Completion::TurnSteered {
+            source,
             steer_id,
             result: Ok((steer, snapshot)),
             ..
         } => {
-            app.update(AppEvent::SteerCompleted(steer_id));
+            app.update(AppEvent::SteerCompleted { source, steer_id });
             if snapshot.thread.sequence < conversation.thread_sequence().max(steer.sequence) {
                 return;
             }
@@ -347,11 +350,13 @@ pub(super) fn apply_request_completion(
             );
         }
         Completion::TurnSteered {
+            source,
             steer_id,
             result: Err(error),
             ..
         } => {
             app.update(AppEvent::SteerSubmissionFailed {
+                source,
                 steer_id,
                 error: error.to_string(),
             });

@@ -302,6 +302,8 @@ generation 和结果安装。
 | 用户直接提交的本地命令 | 本地命令单元（计划类型 `LocalCommandCell`） | 在提交、运行和完成之间原位更新 | 输出命令、运行状态和结果，并保留“用户输入”身份 |
 | Agent 发起的工具或命令执行 | 执行单元 `ExecCell` | 按 Tool Call 标识聚合开始、`stdout`、`stderr` 和结果，运行到完成始终更新同一单元 | 输出执行摘要、状态、有界预览、完整详情和可点击动作 |
 
+Welcome 是正文历史的产品页眉，不是 App Server 消息，也不是 `TranscriptCell`。`app/` 生成页眉格子，`Transcript` 把它放在所有正文单元之前并纳入同一滚动坐标；内容溢出后它自然离开视口，回到绝对顶部时重新出现。
+
 ```mermaid
 flowchart TD
     A[App Server snapshot 或增量更新] --> B[一个有序 TranscriptCell 集合]
@@ -317,8 +319,7 @@ flowchart TD
     H --> J[解析展开、详情等命中目标]
 ```
 
-流式 batch、正文单元、命令输出归组、Markdown 转换、滚动、分页和缓存失效必须在同一个负责人内。
-`app/` 只决定正文区获得多少空间，不理解正文内容。
+流式 batch、正文单元、命令输出归组、Markdown 转换、滚动、分页和缓存失效必须在同一个负责人内。`app/` 决定正文区获得多少空间并提供产品页眉，但不解释正文内容或实现另一套滚动。
 
 正文单元的输出契约固定为：
 
@@ -362,7 +363,7 @@ Session 或 Thread 切换必须以一个完整结果安装新的 conversation id
 | `config/` | `[tui]` 设置读取、校验、编辑和保存 | 通用配置存储、秘密持久化 |
 | `keymap/` | 应用按键解析、Chord 状态、快捷键编辑 | Chat editor 的局部文字编辑 |
 | `theme/` | TUI 主题文件、选择、预览和设置保存 | 通用绘制流程、图形界面主题 |
-| `status/` | StatusLine、`/status` 内容和宽度降级 | 查询外部事实、拥有 Turn 状态 |
+| `status/` | StatusLine、`/status` 页签、进程资源聚合与内存历史、宽度降级 | 执行本机采样、猜测工具进程归属、拥有 Turn 状态 |
 | `skills/` | Skill catalog 的界面快照、设置和诊断 | 扫描或加载 Skill 正文 |
 | `models/` | 模型选择界面和偏好保存 | 模型调用和供应商实现 |
 | `connectors/` | Connector 浏览、连接和断开流程 | Connector 后台运行 |
@@ -440,9 +441,7 @@ UI state，不解释产品能力结果，也不建立覆盖所有 RPC 的第二�
 
 ### `host/`
 
-负责剪贴板、浏览器打开、transcript export、进程终止信号和其他确有调用者的窄系统操作。Host 操作
-不能直接修改 `App`。可能阻塞的文件、剪贴板和进程操作必须在后台执行，以 completion event 回到
-单写者循环。
+负责剪贴板、浏览器打开、transcript export、进程资源采样、进程终止信号和其他确有调用者的窄系统操作。采样器没有可见需求时阻塞休眠；状态行实际显示资源项时每 2 秒只刷新所需指标，Processes 页可见时每秒刷新当前 TUI 进程与 CLI 明确登记的本地 App Server PID。远程 App Server 不进入本机采样，没有可靠身份协议的工具进程不通过进程树猜测归属。当前行为与内存诊断边界由[进程资源观测与内存诊断](process-resources.md)统一说明。Host 操作不能直接修改 `App`。可能阻塞的文件、剪贴板和进程操作必须在后台执行，以 completion event 回到单写者循环。
 
 ## 12. 状态与单写者
 
@@ -450,11 +449,11 @@ UI state，不解释产品能力结果，也不建立覆盖所有 RPC 的第二�
 | --- | --- | --- |
 | 可重建界面状态 | active Thread snapshot、Turn phase、连接错误 | 对应产品能力 |
 | 局部交互状态 | 草稿、光标、选择和滚动 | 对应控件或能力 |
-| 运行资源 | terminal handle、client、channel、task、clock、cache | event loop、driver 或资源模块 |
+| 运行资源 | terminal handle、client、进程资源采样器、channel、task、clock、cache | event loop、driver 或资源模块 |
 | 权威产品状态 | Turn reducer、writer lease、approval policy | TUI 外的事实负责人 |
 
 所有可见状态只有主事件循环写入。后台 task、transport callback、host 操作和 renderer 只能产生 event 或
-completion，不能持有并修改共享状态。
+completion，不能持有并修改共享状态。进程资源事件只保留尚未处理的最新读数，避免终端输入繁忙时累积采样事件；`status/` 聚合 TUI 与本地 App Server 的内存和 CPU，并最多保存 301 个本机内存合计读数，用于计算 1 分钟与 5 分钟变化。
 
 单写者不等于所有工作同步执行。RPC、文件读取、目录搜索、大型正文计算和剪贴板操作必须在后台完成，
 结果回到事件循环后由负责人判断是否仍然有效。

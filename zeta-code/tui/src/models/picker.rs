@@ -66,7 +66,7 @@ pub(crate) fn model_choices(
     ModelChoices {
         model: ListSelectionModel::new("Model", vec![ListSelectionGroup::new("Models", items)])
             .with_activation_mode(ListSelectionActivationMode::Enter)
-            .with_activation_label("apply")
+            .with_activation_action("apply")
             .without_tab_bar()
             .with_initial_selected(selected)
             .with_search(SearchBoxModel::new("Search models"))

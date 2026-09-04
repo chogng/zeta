@@ -171,7 +171,7 @@ struct ListSelectionPresentation {
     search: Option<SearchBoxModel>,
     empty_message: String,
     activation_mode: ListSelectionActivationMode,
-    activation_label: Option<String>,
+    activation_action: Option<String>,
     key_hints: KeyHints,
     show_tabs: bool,
     initial_selected: usize,
@@ -190,7 +190,7 @@ impl ListSelectionModel {
                 search: None,
                 empty_message: "No matching items".into(),
                 activation_mode: ListSelectionActivationMode::Enter,
-                activation_label: None,
+                activation_action: None,
                 key_hints: KeyHints::new(),
                 show_tabs: true,
                 initial_selected: 0,
@@ -203,17 +203,17 @@ impl ListSelectionModel {
         self
     }
 
-    pub(crate) fn with_activation_label(mut self, label: impl Into<String>) -> Self {
-        self.presentation.activation_label = Some(label.into());
+    pub(crate) fn with_activation_action(mut self, action: impl Into<String>) -> Self {
+        self.presentation.activation_action = Some(action.into());
         self
     }
 
-    pub(crate) fn with_key_hint(
+    pub(crate) fn with_key_action(
         mut self,
         keys: impl Into<String>,
-        label: impl Into<String>,
+        action: impl Into<String>,
     ) -> Self {
-        self.presentation.key_hints = self.presentation.key_hints.with(keys, label);
+        self.presentation.key_hints = self.presentation.key_hints.with_action(keys, action);
         self
     }
 
@@ -245,12 +245,12 @@ impl ListSelectionModel {
     pub(crate) fn key_hints(&self) -> KeyHints {
         let presentation = &self.presentation;
         let mut hints = KeyHints::new();
-        if let Some(label) = &presentation.activation_label {
+        if let Some(action) = &presentation.activation_action {
             let keys = match presentation.activation_mode {
                 ListSelectionActivationMode::Enter => "Enter",
                 ListSelectionActivationMode::EnterOrSpace => "Enter/Space",
             };
-            hints = hints.with(keys, label);
+            hints = hints.with_action(keys, action);
         }
         hints.extend(presentation.key_hints.clone())
     }

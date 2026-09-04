@@ -1,16 +1,15 @@
 ---
 source: zeta-code/tui/src/app/session_manager_tests.rs
-assertion_line: 30
 expression: render(&app)
 ---
-   ▜▙▄▄▄▟▛    Zeta Code v0.1.0
-  ▄█▖▌█▌▗█▄   Automatic model · Access unknown
-   ▜█▀▀▀█▛    .
+   ▐▖  ▗▌    Zeta Code v0.1.0
+   ▗█▄▄█▖    Automatic model · Access unknown
+  ▗█▝██▘█▖   .
+   ▜▌  ▐▛
+   ▝    ▘
 
 Idle (1)
   ○ Snapshot session
-
-
 
 
 
@@ -34,4 +33,4 @@ Idle (1)
 >
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  enter to return
+  Enter to return

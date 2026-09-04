@@ -1,22 +1,26 @@
 use super::chat_panel::ChatPanel;
 use super::command::AppCommand;
+use super::command::SteerSource;
 use super::command_panel::CommandPanel;
 use super::command_panel::CommandPanelOutcome;
 use super::escape::ScreenEscapeOutcome;
 use super::escape::ScreenEscapeSequence;
 use super::event::AppEvent;
+use super::frame;
 use super::frame::InputPointerTarget;
 use super::help::help_choices;
+use crate::TuiStartupContext;
 use crate::app::top_tip::TopTip;
+use crate::app::welcome;
 use crate::app::welcome::WelcomeModel;
 use crate::config::ConfigSelectionAction;
-use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
 use crate::connectors::ConnectorChoices;
 use crate::connectors::ConnectorSelectionAction;
 use crate::dirs::DirChoices;
 use crate::dirs::DirSelectionAction;
 use crate::host::clipboard::ClipboardImageAvailability;
+use crate::host::process_resources::ProcessResourceRequest;
 use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
@@ -36,6 +40,7 @@ use crate::sessions::SessionSelectionAction;
 use crate::sessions::SessionsState;
 use crate::sessions::TerminalScreen;
 use crate::skills::{SkillChoices, SkillDiagnosticWarnings, SkillSelectionAction};
+use crate::status::ProcessResourcesModel;
 use crate::status::StatusLineChoices;
 use crate::status::StatusLineModel;
 use crate::status::StatusLineRuntime;
@@ -58,19 +63,20 @@ use crate::thread::composer::ChatComposerOutcome;
 use crate::thread::composer::ChatComposerView;
 use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::ChatInputItem;
-use crate::thread::queue::QueueChoices;
-use crate::thread::queue::QueueInput;
-use crate::thread::queue::QueueSelectionAction;
+use crate::thread::queue::QueueId;
+use crate::thread::queue::QueueKeyOutcome;
 use crate::thread::queue::QueueView;
 use crate::thread::rewind::RewindChoices;
 use crate::thread::rewind::RewindSelectionAction;
 use crate::thread::transcript::ChatHistoryRenderCache;
 use crate::thread::transcript::ChatHistoryScroll;
 use crate::thread::transcript::Message;
+use crate::thread::transcript::TranscriptScrollAnchor;
 use crate::thread::transcript::TranscriptScrollDirection;
+use crate::thread::transcript::first_scroll_target;
+use crate::thread::transcript::scroll_target;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
-use crate::widgets::list_selection::ListSelectionAdjustment;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::overlay::DetailOverlay;
 use crate::widgets::overlay::OverlayInputOutcome;
@@ -79,6 +85,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::layout::Position;
+use ratatui::layout::Rect;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -143,6 +150,8 @@ pub(crate) struct App {
     render_theme: RenderTheme,
     render_theme_revision: u64,
     skill_diagnostic_warnings: SkillDiagnosticWarnings,
+    process_resources: ProcessResourcesModel,
+    startup_context: TuiStartupContext,
 }
 
 impl App {
@@ -167,6 +176,8 @@ impl App {
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
+            process_resources: ProcessResourcesModel::default(),
+            startup_context: TuiStartupContext::new("."),
         }
     }
 
@@ -186,10 +197,24 @@ impl App {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn for_dir_with_input_catalog(
         dir_root: &Path,
         input_catalog: ChatInputCatalog,
     ) -> Self {
+        Self::for_dir_with_input_catalog_and_startup_context(
+            dir_root,
+            input_catalog,
+            TuiStartupContext::new(dir_root.to_path_buf()),
+        )
+    }
+
+    pub(crate) fn for_dir_with_input_catalog_and_startup_context(
+        dir_root: &Path,
+        input_catalog: ChatInputCatalog,
+        startup_context: TuiStartupContext,
+    ) -> Self {
+        let process_resources = ProcessResourcesModel::new(startup_context.app_server_process);
         Self {
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
@@ -210,6 +235,8 @@ impl App {
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
+            process_resources,
+            startup_context,
         }
     }
 
@@ -222,6 +249,23 @@ impl App {
     }
 
     fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+        self.handle_key_at_in_area(key, now, Rect::new(0, 0, 80, 24))
+    }
+
+    pub(crate) fn handle_key_in_area(
+        &mut self,
+        key: KeyEvent,
+        terminal_area: Rect,
+    ) -> Option<AppCommand> {
+        self.handle_key_at_in_area(key, Instant::now(), terminal_area)
+    }
+
+    fn handle_key_at_in_area(
+        &mut self,
+        key: KeyEvent,
+        now: Instant,
+        terminal_area: Rect,
+    ) -> Option<AppCommand> {
         if key.kind == KeyEventKind::Press {
             self.pointer.clear();
         }
@@ -241,6 +285,9 @@ impl App {
         }
         if let Some(outcome) = self.chat_panel.handle_command_key(key) {
             return self.handle_command_panel_outcome(outcome);
+        }
+        if let Some(command) = self.handle_queue_key(key) {
+            return command;
         }
         let temporary_interaction_active = self.completion().is_some();
         let is_screen_escape_press = key.kind == KeyEventKind::Press
@@ -266,16 +313,14 @@ impl App {
         }
         if !self.accepts_input() {
             self.screen_escape_sequence.reset();
-            return self.handle_app_key(key, now);
+            return self.handle_app_key(key, now, terminal_area);
         }
 
-        let outcome = self.chat_panel.handle_composer_key(
-            &mut self.thread_presentations.active_mut().input,
-            key,
-            self.terminal_settings.follow_up_mode(),
-        );
+        let outcome = self
+            .chat_panel
+            .handle_composer_key(&mut self.thread_presentations.active_mut().input, key);
         if matches!(outcome, ChatComposerOutcome::Unhandled) {
-            return self.handle_app_key(key, now);
+            return self.handle_app_key(key, now, terminal_area);
         }
         self.handle_chat_composer_outcome(outcome, now)
     }
@@ -286,7 +331,10 @@ impl App {
         now: Instant,
     ) -> Option<AppCommand> {
         match outcome {
-            ChatComposerOutcome::Command(command) => self.handle_slash_command(command),
+            ChatComposerOutcome::Command(command) => {
+                self.thread_presentations.active_mut().queue.finish_edit();
+                self.handle_slash_command(command)
+            }
             ChatComposerOutcome::SubmissionRejected(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
@@ -297,6 +345,8 @@ impl App {
                 None
             }
             ChatComposerOutcome::Submit(submission) => {
+                self.follow_latest_transcript();
+                self.thread_presentations.active_mut().queue.finish_edit();
                 if matches!(self.sessions.screen(), Some(TerminalScreen::Manager)) {
                     self.status = Status::Working;
                     return Some(AppCommand::CreateSessionAndEnter { submission });
@@ -311,6 +361,7 @@ impl App {
                 if self.chat_panel.is_steering() {
                     let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
                     return Some(AppCommand::SteerTurn {
+                        source: SteerSource::Composer,
                         steer_id,
                         submission,
                     });
@@ -322,6 +373,92 @@ impl App {
             ChatComposerOutcome::Consumed => None,
             ChatComposerOutcome::Unhandled => None,
         }
+    }
+
+    fn handle_queue_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
+        if self.thread_presentations.active().queue.focused() {
+            let outcome = self.thread_presentations.active_mut().queue.handle_key(key);
+            if outcome == QueueKeyOutcome::Unhandled {
+                return None;
+            }
+            return Some(match outcome {
+                QueueKeyOutcome::Restore(queue_id) => {
+                    let state = self.thread_presentations.active_mut();
+                    if let Err(error) = state.queue.restore(queue_id, &mut state.input) {
+                        self.thread
+                            .update(ThreadPresentationEvent::FailureReported(error));
+                    }
+                    None
+                }
+                QueueKeyOutcome::Send(queue_id) => self.send_queued_message(queue_id),
+                QueueKeyOutcome::Consumed => None,
+                QueueKeyOutcome::Unhandled => unreachable!("handled above"),
+            });
+        }
+        if !self.accepts_input() || self.session_manager_view().is_some() {
+            return None;
+        }
+        if key.kind == KeyEventKind::Press
+            && key.code == KeyCode::Up
+            && key.modifiers == KeyModifiers::ALT
+            && self.thread_presentations.active_mut().queue.focus_latest()
+        {
+            self.thread_presentations.active_mut().selected_cell = None;
+            self.agent_thread_switcher.blur();
+            return Some(None);
+        }
+        None
+    }
+
+    fn send_queued_message(&mut self, queue_id: QueueId) -> Option<AppCommand> {
+        if matches!(self.status, Status::Working) && !self.chat_panel.is_steering() {
+            self.thread.update(ThreadPresentationEvent::FailureReported(
+                "wait until the active Turn can accept steering before sending this queued message"
+                    .into(),
+            ));
+            return None;
+        }
+        let submission = self
+            .thread_presentations
+            .active_mut()
+            .queue
+            .begin_send(queue_id)?;
+        self.follow_latest_transcript();
+        if matches!(self.status, Status::Working) {
+            if submission
+                .input
+                .iter()
+                .any(|item| matches!(item, ChatInputItem::Skill { .. }))
+            {
+                self.thread_presentations
+                    .active_mut()
+                    .queue
+                    .fail_send(queue_id);
+                self.thread.update(ThreadPresentationEvent::FailureReported(
+                    "A running Turn cannot change its Skill; leave this message queued or wait for the next Turn"
+                        .into(),
+                ));
+                return None;
+            }
+            self.thread.update(ThreadPresentationEvent::UserSubmitted(
+                submission.display_text.clone(),
+            ));
+            let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
+            return Some(AppCommand::SteerTurn {
+                source: SteerSource::Queue(queue_id),
+                steer_id,
+                submission,
+            });
+        }
+        self.thread.update(ThreadPresentationEvent::UserSubmitted(
+            submission.display_text.clone(),
+        ));
+        self.status = Status::Working;
+        self.chat_panel.queue_input();
+        Some(AppCommand::SubmitQueuedTurn {
+            queue_id,
+            submission,
+        })
     }
 
     fn handle_thread_request_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
@@ -375,14 +512,6 @@ impl App {
             CommandPanelOutcome::Model(ModelSelectionAction::Select { preference }) => {
                 Some(AppCommand::SetPreferredModel { preference })
             }
-            CommandPanelOutcome::Queue(QueueSelectionAction::Select(queue_id)) => {
-                self.open_queue_detail(queue_id);
-                None
-            }
-            CommandPanelOutcome::QueueInput {
-                input,
-                action: QueueSelectionAction::Select(queue_id),
-            } => self.handle_queue_input(input, queue_id),
             CommandPanelOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
                 checkpoint_label,
@@ -423,14 +552,6 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetTerminalSettings(edit),
             ) => Some(AppCommand::EditConfig(edit)),
-            crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::ChooseFollowUpMode { queue, steer },
-            ) => Some(AppCommand::EditConfig(
-                match self.terminal_settings.follow_up_mode() {
-                    FollowUpMode::Queue => *steer,
-                    FollowUpMode::Steer => *queue,
-                },
-            )),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetVimMode(edit)) => {
                 Some(AppCommand::EditConfig(edit))
             }
@@ -440,17 +561,6 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::OpenProviderApiKey { .. },
             ) => None,
-            crate::config::ConfigEditorOutcome::Adjust(action, adjustment) => {
-                Some(AppCommand::EditConfig(match action {
-                    ConfigSelectionAction::ChooseFollowUpMode { queue, steer } => {
-                        match adjustment {
-                            ListSelectionAdjustment::Previous => *queue,
-                            ListSelectionAdjustment::Next => *steer,
-                        }
-                    }
-                    _ => return None,
-                }))
-            }
             crate::config::ConfigEditorOutcome::SaveApiKey(edit) => {
                 Some(AppCommand::SetProviderApiKey(edit))
             }
@@ -552,6 +662,7 @@ impl App {
             return;
         }
         if self.accepts_input()
+            && !self.queue_focused()
             && let Err(error) = self
                 .chat_panel
                 .handle_input_paste(&mut self.thread_presentations.active_mut().input, pasted)
@@ -562,13 +673,16 @@ impl App {
     }
 
     fn attach_image_bytes(&mut self, bytes: Vec<u8>) {
-        if self.accepts_input()
-            && let Err(error) = self
+        if self.accepts_input() && !self.queue_focused() {
+            match self
                 .chat_panel
                 .attach_image_bytes(&mut self.thread_presentations.active_mut().input, bytes)
-        {
-            self.thread
-                .update(ThreadPresentationEvent::FailureReported(error));
+            {
+                Ok(()) => self.chat_panel.hide_clipboard_image(),
+                Err(error) => self
+                    .thread
+                    .update(ThreadPresentationEvent::FailureReported(error)),
+            }
         }
     }
 
@@ -603,7 +717,10 @@ impl App {
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
-        if self.chat_panel.command_active() || self.overlay.is_some() {
+        if self.chat_panel.command_active()
+            || self.overlay.is_some()
+            || self.thread_presentations.active().queue.focused()
+        {
             return None;
         }
         self.thread_presentations.active().input.completion()
@@ -615,9 +732,32 @@ impl App {
             && self.query_view().is_none()
             && !self.sessions.manager().focused()
             && !self.agent_thread_switcher.focused()
+            && !self.thread_presentations.active().queue.focused()
             && self.thread_presentations.active().selected_cell.is_none()
             && !self.chat_panel.command_active()
             && self.completion().is_none()
+    }
+
+    pub(crate) fn queue_focused(&self) -> bool {
+        self.thread_presentations.active().queue.focused()
+    }
+
+    pub(crate) fn queue_key_hints(&self) -> &'static str {
+        "↑↓ to select · Enter to edit · Ctrl+Enter to send now · Ctrl+↑/↓ to move · Delete to remove · Esc to return to input"
+    }
+
+    pub(crate) fn activate_queue_pointer_target(&mut self, queue_id: QueueId) -> bool {
+        if !self
+            .thread_presentations
+            .active_mut()
+            .queue
+            .select(queue_id)
+        {
+            return false;
+        }
+        self.thread_presentations.active_mut().selected_cell = None;
+        self.agent_thread_switcher.blur();
+        true
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
@@ -732,103 +872,12 @@ impl App {
         self.screen_escape_sequence.reset();
         self.chat_panel.close_command();
         self.overlay = None;
+        self.thread_presentations.active_mut().queue.blur();
         self.pointer.clear();
     }
 
     fn show_dirs_picker(&mut self, spec: DirChoices) {
         self.open_command_panel(CommandPanel::dirs(spec));
-    }
-
-    fn show_queue_picker(&mut self, spec: QueueChoices) {
-        self.open_command_panel(CommandPanel::queue(spec));
-    }
-
-    fn update_queue_picker(&mut self) {
-        let spec = crate::thread::queue::choices(&self.queue_view());
-        self.chat_panel.replace_queue(spec);
-    }
-
-    fn open_queue_detail(&mut self, queue_id: crate::thread::queue::QueueId) {
-        let Some(text) = self
-            .queue_view()
-            .items
-            .into_iter()
-            .find(|item| item.id == queue_id)
-            .map(|item| item.text.to_owned())
-        else {
-            return;
-        };
-        self.show_overlay(DetailList::new(
-            "Queued message",
-            vec![DetailListRow::new("Message", text)],
-        ));
-    }
-
-    fn handle_queue_input(
-        &mut self,
-        input: QueueInput,
-        queue_id: crate::thread::queue::QueueId,
-    ) -> Option<AppCommand> {
-        match input {
-            QueueInput::Restore => {
-                let state = self.thread_presentations.active_mut();
-                match state.queue.restore(queue_id, &mut state.input) {
-                    Ok(()) => self.close_command_panel(),
-                    Err(error) => self
-                        .thread
-                        .update(ThreadPresentationEvent::FailureReported(error)),
-                }
-                None
-            }
-            QueueInput::Delete => {
-                self.thread_presentations
-                    .active_mut()
-                    .queue
-                    .delete(queue_id);
-                self.update_queue_picker();
-                None
-            }
-            QueueInput::MoveUp => {
-                self.thread_presentations
-                    .active_mut()
-                    .queue
-                    .move_up(queue_id);
-                self.update_queue_picker();
-                None
-            }
-            QueueInput::MoveDown => {
-                self.thread_presentations
-                    .active_mut()
-                    .queue
-                    .move_down(queue_id);
-                self.update_queue_picker();
-                None
-            }
-            QueueInput::Send => {
-                if matches!(self.status, Status::Working) {
-                    self.thread.update(ThreadPresentationEvent::FailureReported(
-                        "finish or interrupt the active Turn before sending this queued message"
-                            .into(),
-                    ));
-                    return None;
-                }
-                let submission = self
-                    .thread_presentations
-                    .active_mut()
-                    .queue
-                    .begin_send(queue_id)?;
-                self.close_command_panel();
-                self.thread.update(ThreadPresentationEvent::UserSubmitted(
-                    submission.display_text.clone(),
-                ));
-                self.status = Status::Working;
-                self.chat_panel.queue_input();
-                Some(AppCommand::SubmitQueuedTurn {
-                    queue_id,
-                    submission,
-                })
-            }
-        }
     }
 
     fn update_dirs_picker(&mut self, spec: DirChoices) {
@@ -917,8 +966,14 @@ impl App {
         self.open_command_panel(CommandPanel::status_line(spec));
     }
 
-    fn show_status_panel(&mut self, panel: crate::status::StatusPanel) {
+    fn show_status_panel(&mut self, mut panel: crate::status::StatusPanel) {
+        panel.apply_process_resources(self.process_resources.view());
         self.open_command_panel(CommandPanel::status(panel));
+    }
+
+    fn show_startup_panel(&mut self) {
+        let context = self.startup_context.clone();
+        self.open_command_panel(CommandPanel::startup(&context));
     }
 
     fn update_status_line_editor(&mut self, spec: StatusLineChoices) {
@@ -976,11 +1031,40 @@ impl App {
         &self.thread_presentations.active().scroll
     }
 
-    pub(crate) fn scroll_transcript(&mut self, direction: TranscriptScrollDirection) -> bool {
-        self.thread_presentations
-            .active_mut()
-            .scroll
-            .scroll(direction)
+    pub(crate) fn scroll_transcript(
+        &mut self,
+        direction: TranscriptScrollDirection,
+        terminal_area: Rect,
+    ) -> bool {
+        let transcript_area = frame::layout(self, terminal_area).session.transcript;
+        let messages = self.transcript_views();
+        let target = scroll_target(
+            transcript_area,
+            usize::from(welcome::history_height(transcript_area.height)),
+            &messages,
+            self.transcript_scroll(),
+            self.transcript_render_cache(),
+            self.render_context(),
+            direction,
+        );
+        target.is_some_and(|target| self.thread_presentations.active_mut().scroll.apply(target))
+    }
+
+    pub(crate) fn navigate_transcript(
+        &mut self,
+        direction: TranscriptScrollDirection,
+        terminal_area: Rect,
+    ) -> Option<AppCommand> {
+        if self.scroll_transcript(direction, terminal_area)
+            || direction == TranscriptScrollDirection::Down
+        {
+            return None;
+        }
+        let messages = self.transcript_views();
+        if let Some(target) = first_scroll_target(true, &messages) {
+            self.thread_presentations.active_mut().scroll.apply(target);
+        }
+        Some(AppCommand::LoadOlderHistory)
     }
 
     pub(crate) fn follow_latest_transcript(&mut self) {
@@ -1171,7 +1255,6 @@ impl App {
 
     pub(crate) fn status_line_runtime(&self) -> StatusLineRuntime {
         let plan = self.plan_view().map(|view| (view.completed, view.total));
-        let queue = self.queue_view().items.len();
         let visible_session = match self.sessions.screen() {
             Some(TerminalScreen::Session(session_id)) => Some(session_id),
             Some(TerminalScreen::Manager) | None => None,
@@ -1200,9 +1283,15 @@ impl App {
             .unwrap_or(0);
         StatusLineRuntime {
             plan,
-            queue,
             subagents,
+            process_resources: self.process_resources.view(),
         }
+    }
+
+    pub(crate) fn apply_process_resource_request(&mut self, request: ProcessResourceRequest) {
+        self.process_resources.apply_request(request);
+        self.chat_panel
+            .apply_process_resources(self.process_resources.view());
     }
 
     pub(crate) fn accepts_input(&self) -> bool {
@@ -1241,7 +1330,9 @@ impl App {
     }
 
     pub(crate) fn update(&mut self, event: AppEvent) {
-        self.pointer.clear();
+        if !matches!(&event, AppEvent::ProcessResourcesSampled(_)) {
+            self.pointer.clear();
+        }
         match event {
             AppEvent::DirPickerOpened(view) => self.show_dirs_picker(view),
             AppEvent::DirRemoved { path, choices } => {
@@ -1258,7 +1349,9 @@ impl App {
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
             AppEvent::ClipboardImageAvailabilityChanged(availability) => match availability {
-                ClipboardImageAvailability::Available => self.chat_panel.show_clipboard_image(),
+                ClipboardImageAvailability::Available => {
+                    self.chat_panel.show_clipboard_image(Instant::now());
+                }
                 ClipboardImageAvailability::Unavailable => self.chat_panel.hide_clipboard_image(),
             },
             AppEvent::ConfigSettingsReceived(settings) => {
@@ -1336,6 +1429,11 @@ impl App {
             AppEvent::HostOperationCompleted(Err(error)) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
+            }
+            AppEvent::ProcessResourcesSampled(reading) => {
+                self.process_resources.apply(reading);
+                self.chat_panel
+                    .apply_process_resources(self.process_resources.view());
             }
             AppEvent::TopTipNoticeShown(notice) => {
                 self.chat_panel.show_notice(notice, Instant::now());
@@ -1443,15 +1541,33 @@ impl App {
             AppEvent::SkillDiagnosticsReceived(diagnostics) => {
                 self.report_skill_diagnostics(&diagnostics)
             }
-            AppEvent::SteerCompleted(steer_id) => {
+            AppEvent::SteerCompleted { source, steer_id } => {
                 self.chat_panel.finish_steer(steer_id);
+                if let SteerSource::Queue(queue_id) = source {
+                    self.thread_presentations
+                        .active_mut()
+                        .queue
+                        .finish_send(queue_id);
+                }
             }
-            AppEvent::SteerSubmissionFailed { steer_id, error } => {
+            AppEvent::SteerSubmissionFailed {
+                source,
+                steer_id,
+                error,
+            } => {
                 self.chat_panel.finish_steer(steer_id);
+                let message = match source {
+                    SteerSource::Composer => format!("could not steer the active Turn: {error}"),
+                    SteerSource::Queue(queue_id) => {
+                        self.thread_presentations
+                            .active_mut()
+                            .queue
+                            .fail_send(queue_id);
+                        format!("could not steer the queued message: {error}")
+                    }
+                };
                 self.thread
-                    .update(ThreadPresentationEvent::FailureReported(format!(
-                        "could not steer the active Turn: {error}"
-                    )));
+                    .update(ThreadPresentationEvent::FailureReported(message));
             }
             AppEvent::QueueSubmissionCompleted(queue_id) => {
                 self.thread_presentations
@@ -1487,18 +1603,29 @@ impl App {
                     .update(ThreadPresentationEvent::TranscriptSnapshotReceived(
                         transcript,
                     ));
+                self.reconcile_transcript_scroll_anchor();
                 self.hide_navigation_for_existing_conversation();
             }
             AppEvent::ThreadTranscriptHistoryPageReceived(transcript) => {
+                let reveal_older_history = self.transcript_scroll_is_at_first_cell();
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptHistoryPageReceived(
                         transcript,
                     ));
+                if reveal_older_history {
+                    let messages = self.transcript_views();
+                    if let Some(target) = first_scroll_target(true, &messages) {
+                        self.thread_presentations.active_mut().scroll.apply(target);
+                    }
+                } else {
+                    self.reconcile_transcript_scroll_anchor();
+                }
                 self.hide_navigation_for_existing_conversation();
             }
             AppEvent::ThreadTranscriptUpdateReceived(update) => {
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptUpdateReceived(update));
+                self.reconcile_transcript_scroll_anchor();
                 self.hide_navigation_for_existing_conversation();
             }
             AppEvent::TranscriptCleared => {
@@ -1702,21 +1829,80 @@ impl App {
             .reconcile(session, viewed_thread.as_ref());
     }
 
-    fn handle_app_key(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+    fn handle_app_key(
+        &mut self,
+        key: KeyEvent,
+        now: Instant,
+        terminal_area: Rect,
+    ) -> Option<AppCommand> {
         let keymap_context = self.app_keymap_context(key.kind == KeyEventKind::Press);
         if let Some(action) = self.app_keymap.resolve_single(&key, keymap_context) {
             return self.apply_app_keymap_action(action, now);
         }
         if self.list_selection().is_none()
-            && self
-                .thread_presentations
-                .active_mut()
-                .scroll
-                .handle_key(key)
+            && let Some(command) = self.handle_transcript_scroll_key(key, terminal_area)
         {
-            return (key.code == KeyCode::Home).then_some(AppCommand::LoadOlderHistory);
+            return command;
         }
         None
+    }
+
+    fn handle_transcript_scroll_key(
+        &mut self,
+        key: KeyEvent,
+        terminal_area: Rect,
+    ) -> Option<Option<AppCommand>> {
+        match (key.modifiers, key.code) {
+            (KeyModifiers::NONE, KeyCode::PageUp) => {
+                Some(self.navigate_transcript(TranscriptScrollDirection::Up, terminal_area))
+            }
+            (KeyModifiers::NONE, KeyCode::PageDown) => {
+                Some(self.navigate_transcript(TranscriptScrollDirection::Down, terminal_area))
+            }
+            (KeyModifiers::CONTROL, KeyCode::Home) => {
+                let messages = self.transcript_views();
+                if let Some(target) = first_scroll_target(true, &messages) {
+                    self.thread_presentations.active_mut().scroll.apply(target);
+                }
+                Some(Some(AppCommand::LoadOlderHistory))
+            }
+            (KeyModifiers::CONTROL, KeyCode::End) => {
+                self.follow_latest_transcript();
+                Some(None)
+            }
+            _ => None,
+        }
+    }
+
+    fn transcript_scroll_is_at_first_cell(&self) -> bool {
+        let Some(TranscriptScrollAnchor::Cell {
+            cell_id,
+            line_offset,
+        }) = self.transcript_scroll().anchor()
+        else {
+            return false;
+        };
+        *line_offset == 0
+            && self
+                .thread
+                .cells()
+                .first()
+                .is_some_and(|cell| cell.cell_id().as_str() == cell_id.as_str())
+    }
+
+    fn reconcile_transcript_scroll_anchor(&mut self) {
+        let cell_id = match self.transcript_scroll().anchor() {
+            Some(TranscriptScrollAnchor::Header { .. }) | None => return,
+            Some(TranscriptScrollAnchor::Cell { cell_id, .. }) => cell_id.clone(),
+        };
+        if !self
+            .thread
+            .cells()
+            .iter()
+            .any(|cell| cell.cell_id().as_str() == cell_id.as_str())
+        {
+            self.follow_latest_transcript();
+        }
     }
 
     fn handle_transcript_selection_key(&mut self, key: KeyEvent) -> bool {
@@ -1868,11 +2054,6 @@ impl App {
                     self.agent_thread_switcher.focus();
                     return None;
                 }
-                Some(TuiSlashCommandAction::Queue) => {
-                    let spec = crate::thread::queue::choices(&self.queue_view());
-                    self.show_queue_picker(spec);
-                    return None;
-                }
                 _ => {}
             }
         }
@@ -1919,6 +2100,12 @@ impl App {
             {
                 Some(AppCommand::OpenConfigEditor)
             }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Startup))
+                if invocation.arguments.is_empty() =>
+            {
+                self.show_startup_panel();
+                None
+            }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::StatusLine))
                 if invocation.arguments.is_empty() =>
             {
@@ -1950,6 +2137,7 @@ impl App {
                 if self.chat_panel.is_steering() {
                     let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
                     return Some(AppCommand::SteerTurn {
+                        source: SteerSource::Composer,
                         steer_id,
                         submission,
                     });

@@ -106,16 +106,43 @@ pub(crate) fn draw_scrolled(
     );
 }
 
+pub(crate) fn draw_body_scrolled(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    detail: &DetailList,
+    scroll: u16,
+    context: RenderContext<'_>,
+) {
+    let lines = detail_lines(
+        detail,
+        Style::default().add_modifier(Modifier::BOLD),
+        Style::default().fg(context.muted()),
+    );
+    frame.render_widget(
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .scroll((scroll, 0)),
+        horizontal_margin(area, 2),
+    );
+}
+
 fn detail_lines<'a>(
     detail: &'a DetailList,
     label_style: Style,
     value_style: Style,
 ) -> Vec<Line<'a>> {
+    let label_width = detail
+        .rows()
+        .iter()
+        .map(|row| row.label().width())
+        .max()
+        .unwrap_or_default();
     detail
         .rows()
         .iter()
         .flat_map(|row| {
-            let label = format!("{}: ", row.label());
+            let padding = " ".repeat(label_width.saturating_sub(row.label().width()));
+            let label = format!("{}: {padding}", row.label());
             let continuation = " ".repeat(label.width());
             prefix_lines(
                 styled_text_lines(row.value(), value_style),

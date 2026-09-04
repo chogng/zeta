@@ -1,6 +1,7 @@
 mod model;
 mod panel;
 mod panel_request;
+mod resources;
 mod settings;
 mod settings_request;
 mod setup;
@@ -15,6 +16,20 @@ pub(crate) use panel::StatusViewData;
 pub(crate) use panel::status_panel;
 pub(crate) use panel_request::StatusRequestScope;
 pub(crate) use panel_request::load_status_panel;
+pub(crate) use resources::AppServerResourcesView;
+#[cfg(test)]
+pub(crate) use resources::ProcessCpuCurrent;
+pub(crate) use resources::ProcessMemoryCurrent;
+pub(crate) use resources::ProcessResourcesModel;
+pub(crate) use resources::ProcessResourcesView;
+#[cfg(test)]
+pub(crate) use resources::ProcessUsageView;
+pub(crate) use resources::format_bytes as format_memory_bytes;
+pub(crate) use resources::format_compact_process_cpu;
+pub(crate) use resources::format_compact_process_memory;
+pub(crate) use resources::format_memory_change;
+pub(crate) use resources::format_process_cpu;
+pub(crate) use resources::format_process_memory;
 pub(crate) use settings::StatusLineItem;
 pub(crate) use settings::StatusLineSettings;
 pub(crate) use settings_request::StatusLineEdit;

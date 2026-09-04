@@ -2,15 +2,20 @@ use super::App;
 use super::AppCommand;
 use super::Status;
 use crate::app::AppEvent;
-use crate::config::FollowUpMode;
+use crate::app::command::SteerSource;
 use crate::config::TerminalSettings;
 use crate::config::config_choices;
+use crate::host::process_resources::ProcessResourceDemand;
+use crate::host::process_resources::ProcessResourceRequest;
+use crate::host::process_resources::ProcessResourceUsage;
+use crate::host::process_resources::ProcessResourcesReading;
 use crate::keymap::KeymapEditIntent;
 use crate::keymap::KeymapEditKind;
 use crate::keymap::KeymapEditorUpdate;
 use crate::keymap::keymap_choices;
 use crate::keymap::settings_from_tui as keymap_settings_from_tui;
 use crate::render::RenderTheme;
+use crate::status::ProcessMemoryCurrent;
 use crate::status::StatusLineEditorUpdate;
 use crate::status::StatusLineItem;
 use crate::status::StatusLineSettings;
@@ -47,6 +52,7 @@ use crate::widgets::list_selection::ListSelectionModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::layout::Rect;
 use ratatui::style::Color;
 use std::collections::BTreeMap;
 use std::fs;
@@ -80,12 +86,6 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
 use zeta_terminal_detection::ColorLevel;
-
-fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
-    let mut settings = TerminalSettings::default();
-    settings.set_follow_up_mode(mode);
-    app.update(AppEvent::ConfigSettingsReceived(settings));
-}
 
 #[test]
 fn skill_diagnostics_are_notices_and_are_suppressed_until_they_clear() {
@@ -560,6 +560,39 @@ fn control_home_requests_an_older_history_page() {
 }
 
 #[test]
+fn page_up_at_loaded_start_anchors_the_view_and_requests_older_history() {
+    let mut app = App::new();
+    app.update(AppEvent::FailureReported("only loaded message".into()));
+
+    assert_eq!(
+        app.handle_key_in_area(
+            KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE),
+            Rect::new(0, 0, 80, 24),
+        ),
+        Some(AppCommand::LoadOlderHistory)
+    );
+    assert!(app.transcript_scroll().anchor().is_some());
+}
+
+#[test]
+fn submitting_after_manual_scroll_restores_follow_latest() {
+    let mut app = App::new();
+    for index in 0..20 {
+        app.update(AppEvent::FailureReported(format!("failure {index}")));
+    }
+    assert!(app.scroll_transcript(
+        crate::thread::transcript::TranscriptScrollDirection::Up,
+        Rect::new(0, 0, 80, 20),
+    ));
+    assert!(app.transcript_scroll().anchor().is_some());
+
+    app.insert_text("continue");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(app.transcript_scroll().anchor(), None);
+}
+
+#[test]
 fn clipboard_png_submits_through_the_existing_attachment_path() {
     let mut app = App::new();
     app.update(AppEvent::ClipboardImageRead(Ok(
@@ -657,6 +690,26 @@ fn config_slash_command_is_owned_by_the_local_host() {
 }
 
 #[test]
+fn startup_slash_command_opens_a_read_only_context_panel() {
+    let mut app = App::new();
+    app.insert_text("/startup");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, None);
+    assert_eq!(
+        app.list_selection().map(|selection| selection.title()),
+        Some("Startup")
+    );
+    assert_eq!(app.command_panel_key_hints(), Some("Esc to close"));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert!(app.command_panel().is_some());
+}
+
+#[test]
 fn theme_slash_command_is_owned_by_the_tui_host() {
     let mut app = App::new();
     app.insert_text("/theme");
@@ -704,44 +757,6 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
 }
 
 #[test]
-fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
-    let mut config = empty_config_snapshot();
-    config.revision = 7;
-    let mut app = App::new();
-    app.update(AppEvent::ConfigEditorOpened(config_choices(
-        &config,
-        &ProviderListResult { providers: vec![] },
-        TerminalSettings::default(),
-        StatusLineSettings::default(),
-    )));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-
-    assert!(matches!(
-        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
-        Some(AppCommand::EditConfig(edit))
-            if edit.server_config.revision == 7
-                && edit.terminal.follow_up_mode() == FollowUpMode::Steer
-    ));
-    assert!(matches!(
-        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
-        Some(AppCommand::EditConfig(edit))
-            if edit.terminal.follow_up_mode() == FollowUpMode::Queue
-    ));
-    assert!(matches!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::EditConfig(edit))
-            if edit.terminal.follow_up_mode() == FollowUpMode::Steer
-    ));
-
-    set_follow_up_mode(&mut app, FollowUpMode::Steer);
-    assert!(matches!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::EditConfig(edit))
-            if edit.terminal.follow_up_mode() == FollowUpMode::Queue
-    ));
-}
-
-#[test]
 fn config_vim_mode_toggles_on_enter() {
     let mut config = empty_config_snapshot();
     config.revision = 7;
@@ -752,7 +767,7 @@ fn config_vim_mode_toggles_on_enter() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for _ in 0..2 {
+    for _ in 0..1 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -775,7 +790,7 @@ fn config_show_git_changes_as_diff_toggles_on_enter() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for _ in 0..3 {
+    for _ in 0..2 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -967,6 +982,46 @@ fn statusline_accounting_follows_the_current_thread_context() {
         app.status_line()
             .top_text_for_width(80, app.status_line_runtime()),
         ""
+    );
+}
+
+#[test]
+fn process_resource_sample_updates_the_optional_statusline_items() {
+    let mut app = App::new();
+    let request = ProcessResourceRequest {
+        revision: 1,
+        cpu_cycle: 1,
+        demand: ProcessResourceDemand::Processes,
+    };
+    app.apply_process_resource_request(request);
+
+    app.update(AppEvent::ProcessResourcesSampled(ProcessResourcesReading {
+        request,
+        tui: Ok(ProcessResourceUsage {
+            resident_bytes: Some(128 * 1024 * 1024),
+            cpu_tenths_percent: Some(124),
+        }),
+        app_server: None,
+        sampled_at: Instant::now(),
+    }));
+    assert_eq!(
+        app.status_line_runtime().process_resources.local.memory,
+        ProcessMemoryCurrent::Available(128 * 1024 * 1024)
+    );
+
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(
+            item,
+            matches!(item, StatusLineItem::Memory | StatusLineItem::Cpu),
+        );
+    }
+    app.update(AppEvent::StatusLineSettingsReceived(settings));
+
+    assert_eq!(
+        app.status_line()
+            .top_text_for_width(80, app.status_line_runtime()),
+        "memory 128.0 MiB · cpu 12.4%"
     );
 }
 
@@ -1512,34 +1567,73 @@ fn control_c_interrupts_a_turn_waiting_for_user_input() {
 }
 
 #[test]
-fn enter_steers_the_working_turn_and_tracks_delivery() {
+fn control_enter_steers_the_working_turn_and_tracks_delivery() {
     let mut app = App::new();
-    set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
 
     app.insert_text("second");
     app.handle_paste("third".into());
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
 
     let Some(AppCommand::SteerTurn {
+        source,
         steer_id,
         submission,
     }) = action
     else {
         panic!("expected active Turn steer");
     };
+    assert_eq!(source, SteerSource::Composer);
     assert_eq!(submission.display_text, "secondthird");
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages()[1].text, "secondthird");
     assert!(app.command_panel().is_none());
 
-    app.update(AppEvent::SteerCompleted(steer_id));
+    app.update(AppEvent::SteerCompleted { source, steer_id });
 
     assert!(app.command_panel().is_none());
     assert_eq!(app.status(), &Status::Working);
+}
+
+#[test]
+fn queue_selection_can_steer_an_older_message_immediately() {
+    let mut app = App::new();
+    app.insert_text("first");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    for message in ["second", "third"] {
+        app.insert_text(message);
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    }
+    let second_id = app.queue_view().items[0].id;
+
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+
+    let Some(AppCommand::SteerTurn {
+        source: SteerSource::Queue(queue_id),
+        steer_id,
+        submission,
+    }) = action
+    else {
+        panic!("expected the selected Queue message to steer");
+    };
+    assert_eq!(queue_id, second_id);
+    assert_eq!(submission.display_text, "second");
+    assert!(app.queue_view().items[0].sending);
+    assert!(!app.queue_focused());
+
+    app.update(AppEvent::SteerCompleted {
+        source: SteerSource::Queue(queue_id),
+        steer_id,
+    });
+
+    assert_eq!(app.queue_view().items.len(), 1);
+    assert_eq!(app.queue_view().items[0].text, "third");
 }
 
 #[test]
@@ -1562,24 +1656,35 @@ fn enter_queues_a_new_turn_by_default_while_the_current_turn_is_working() {
 }
 
 #[test]
-fn queue_command_restores_the_selected_message_without_bare_up_interception() {
+fn alt_up_focuses_the_queue_and_enter_restores_the_selected_message() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("restore me");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TurnCompleted);
-    app.insert_text("/queue");
-
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT)),
         None
     );
-    assert_eq!(app.list_selection().unwrap().title(), "Queue");
-    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+    assert!(app.queue_focused());
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(app.input(), "restore me");
-    assert!(app.list_selection().is_none());
-    assert!(app.queue_view().items.is_empty());
+    assert!(!app.queue_focused());
+    assert!(app.queue_view().items[0].editing);
+}
+
+#[test]
+fn queue_focus_keeps_global_interrupt_available() {
+    let mut app = App::new();
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.insert_text("queued");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+        Some(AppCommand::Interrupt)
+    );
 }
 
 #[test]
@@ -1609,7 +1714,7 @@ fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
 
     assert_eq!(
         app.session_manager_hint(),
-        "space to preview · ctrl+x to archive"
+        "Space to preview · Ctrl+X to archive"
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
@@ -1628,7 +1733,7 @@ fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.session_manager_hint(),
-        "space to preview · ctrl+x to archive"
+        "Space to preview · Ctrl+X to archive"
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -1676,8 +1781,6 @@ fn empty_enter_does_not_bypass_queue_dispatch_order() {
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("send this now");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    set_follow_up_mode(&mut app, FollowUpMode::Steer);
-
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
@@ -1701,18 +1804,18 @@ fn a_created_turn_does_not_claim_the_running_steer_action() {
 #[test]
 fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
     let mut app = App::new();
-    set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("change direction");
     let Some(AppCommand::SteerTurn { steer_id, .. }) =
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL))
     else {
         panic!("expected active Turn steer");
     };
 
     app.update(AppEvent::SteerSubmissionFailed {
+        source: SteerSource::Composer,
         steer_id,
         error: "sequence conflict".into(),
     });

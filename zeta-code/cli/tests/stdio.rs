@@ -55,6 +55,7 @@ fn zeta_code_cli_serves_the_remote_stdio_contract() {
         ClientCapabilities::default(),
     )
     .unwrap();
+    assert!(session.process_id().is_some());
     let events = session.take_events().unwrap();
     let mut client = session.client();
 

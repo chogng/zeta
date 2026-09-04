@@ -1,6 +1,11 @@
 use super::RuntimeEvent;
 use super::RuntimeQueue;
+use super::next_process_resource_request;
 use crate::client::ClientEvent;
+use crate::host::process_resources::ProcessResourceDemand;
+use crate::host::process_resources::ProcessResourceRequest;
+use crate::host::process_resources::ProcessResourceUsage;
+use crate::host::process_resources::ProcessResourcesReading;
 use crate::terminal::TerminalEvent;
 use crossterm::event::Event;
 use crossterm::event::KeyModifiers;
@@ -9,6 +14,7 @@ use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn terminal_input_is_received_before_queued_client_work() {
@@ -70,6 +76,71 @@ fn ticks_coalesce_while_the_consumer_is_busy() {
 }
 
 #[test]
+fn process_resource_readings_coalesce_and_remain_behind_user_input() {
+    let queue = RuntimeQueue::default();
+    let stop = AtomicBool::new(false);
+    assert!(queue.push_process_resources(resource_reading(1, 10), &stop));
+    assert!(queue.push_process_resources(resource_reading(1, 20), &stop));
+    assert!(queue.push_priority(
+        RuntimeEvent::Terminal(TerminalEvent::Input(Event::FocusGained)),
+        &stop,
+    ));
+
+    assert!(matches!(
+        queue.recv(None).unwrap(),
+        Some(RuntimeEvent::Terminal(TerminalEvent::Input(
+            Event::FocusGained
+        )))
+    ));
+    let Some(RuntimeEvent::ProcessResources(reading)) = queue.recv(None).unwrap() else {
+        panic!("expected a process resource reading");
+    };
+    assert_eq!(reading.tui.unwrap().resident_bytes, Some(20));
+    assert!(
+        queue
+            .recv(Some(Duration::from_millis(1)))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn stale_process_resource_reading_cannot_replace_a_newer_request() {
+    let queue = RuntimeQueue::default();
+    let stop = AtomicBool::new(false);
+    assert!(queue.push_process_resources(resource_reading(2, 20), &stop));
+    assert!(queue.push_process_resources(resource_reading(1, 10), &stop));
+
+    let Some(RuntimeEvent::ProcessResources(reading)) = queue.recv(None).unwrap() else {
+        panic!("expected a process resource reading");
+    };
+    assert_eq!(reading.request.revision, 2);
+    assert_eq!(reading.tui.unwrap().resident_bytes, Some(20));
+}
+
+#[test]
+fn cpu_observation_cycle_restarts_only_after_cpu_was_not_requested() {
+    let cpu = ProcessResourceDemand::StatusLine(
+        crate::host::process_resources::ProcessResourceMetrics::Cpu,
+    );
+    let first = next_process_resource_request(ProcessResourceRequest::default(), cpu);
+    let detailed = next_process_resource_request(first, ProcessResourceDemand::Processes);
+    let disabled = next_process_resource_request(detailed, ProcessResourceDemand::Disabled);
+    let restarted = next_process_resource_request(disabled, cpu);
+
+    assert_eq!(
+        [
+            first.cpu_cycle,
+            detailed.cpu_cycle,
+            disabled.cpu_cycle,
+            restarted.cpu_cycle
+        ],
+        [1, 1, 1, 2]
+    );
+    assert_eq!(restarted.revision, 4);
+}
+
+#[test]
 fn consecutive_pointer_movements_keep_only_the_latest_position() {
     let queue = RuntimeQueue::default();
     let stop = AtomicBool::new(false);
@@ -121,6 +192,22 @@ fn mouse(kind: MouseEventKind, column: u16, row: u16) -> RuntimeEvent {
         row,
         modifiers: KeyModifiers::NONE,
     })))
+}
+
+fn resource_reading(revision: u64, resident_bytes: u64) -> ProcessResourcesReading {
+    ProcessResourcesReading {
+        request: ProcessResourceRequest {
+            revision,
+            cpu_cycle: 1,
+            demand: ProcessResourceDemand::Processes,
+        },
+        tui: Ok(ProcessResourceUsage {
+            resident_bytes: Some(resident_bytes),
+            cpu_tenths_percent: Some(10),
+        }),
+        app_server: None,
+        sampled_at: Instant::now(),
+    }
 }
 
 fn assert_mouse(

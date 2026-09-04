@@ -19,7 +19,7 @@ pub(crate) struct KeyHints {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum KeyHint {
-    Action { keys: String, label: String },
+    Action { keys: String, action: String },
     Note(String),
 }
 
@@ -28,10 +28,14 @@ impl KeyHints {
         Self::default()
     }
 
-    pub(crate) fn with(mut self, keys: impl Into<String>, label: impl Into<String>) -> Self {
+    pub(crate) fn with_action(
+        mut self,
+        keys: impl Into<String>,
+        action: impl Into<String>,
+    ) -> Self {
         self.push(KeyHint::Action {
             keys: keys.into(),
-            label: label.into(),
+            action: action.into(),
         });
         self
     }
@@ -57,10 +61,10 @@ impl KeyHints {
             self.text.push_str(SEPARATOR);
         }
         match &entry {
-            KeyHint::Action { keys, label } => {
+            KeyHint::Action { keys, action } => {
                 self.text.push_str(keys);
-                self.text.push(' ');
-                self.text.push_str(label);
+                self.text.push_str(" to ");
+                self.text.push_str(action);
             }
             KeyHint::Note(note) => self.text.push_str(note),
         }

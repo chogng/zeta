@@ -1,16 +1,21 @@
 use super::InputPointerTarget;
 use super::draw;
 use super::input_overlay_index_at;
+use super::input_pointer_target_at;
 use super::layout;
+use super::process_resource_demand;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
-use crate::config::FollowUpMode;
-use crate::config::TerminalSettings;
+use crate::app::CommandPanel;
 use crate::host::clipboard::ClipboardImageAvailability;
+use crate::host::process_resources::ProcessResourceDemand;
+use crate::host::process_resources::ProcessResourceMetrics;
 use crate::models::ModelSummary;
 use crate::render::test_context;
 use crate::status::RemainingContextWindow;
+use crate::status::StatusLineItem;
+use crate::status::StatusLineSettings;
 use crate::status::StatusViewData;
 use crate::status::status_panel;
 use crate::thread::TurnActivity;
@@ -59,19 +64,13 @@ use zeta_protocol::ThreadStatus;
 use zeta_slash_commands::SlashCommandArgumentMode;
 use zeta_slash_commands::SlashCommandDefinition;
 
-fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
-    let mut settings = TerminalSettings::default();
-    settings.set_follow_up_mode(mode);
-    app.update(AppEvent::ConfigSettingsReceived(settings));
-}
-
 #[test]
 fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     let rendered = render(&App::new(), 80, 20);
 
     assert!(!rendered.contains("dir assistant"));
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
-    assert!(rendered.contains(" ▜▙▄▄▄▟▛"));
+    assert!(rendered.contains(" ▐▖  ▗▌ "));
     assert!(rendered.contains("Automatic model · Access unknown"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
@@ -107,7 +106,7 @@ fn top_tip_notice_uses_the_fixed_row_above_chat_input_without_changing_layout() 
 }
 
 #[test]
-fn clipboard_image_tip_uses_the_fixed_row_above_chat_input() {
+fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     let mut app = App::new();
     let terminal_area = Rect::new(0, 0, 80, 20);
     let areas_before = layout(&app, terminal_area).session;
@@ -129,6 +128,102 @@ fn clipboard_image_tip_uses_the_fixed_row_above_chat_input() {
             .ends_with("image in clipboard · ctrl+v to paste")
     );
     assert_snapshot!("clipboard_image_top_tip", rendered);
+
+    app.update(AppEvent::ClipboardImageRead(Ok(
+        b"\x89PNG\r\n\x1a\npayload".to_vec(),
+    )));
+    let rendered_after_paste = render(&app, terminal_area.width, terminal_area.height);
+    assert!(!rendered_after_paste.contains("image in clipboard"));
+    assert!(rendered_after_paste.contains("[Image #1]"));
+    assert_snapshot!(
+        "clipboard_image_pasted_into_chat_input",
+        rendered_after_paste
+    );
+}
+
+#[test]
+fn status_command_panel_uses_the_shared_title_and_close_hint() {
+    let usage = zeta_protocol::ModelUsageSummary::default();
+    let reference_cost = zeta_protocol::ModelReferenceCostSummary::default();
+    let panel = CommandPanel::status(status_panel(StatusViewData {
+        model: "openai/gpt",
+        full_context_window: None,
+        available_context_window: None,
+        remaining_context_window: RemainingContextWindow::Unknown,
+        usage: &usage,
+        reference_cost: &reference_cost,
+        session_id: "session-1",
+        thread_id: "thread-1",
+        thread_sequence: 1,
+    }));
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+
+    terminal
+        .draw(|frame| panel.draw(frame, frame.area(), None, None, test_context()))
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(0, 0)].symbol(), "─");
+    assert_eq!(buffer[(2, 0)].symbol(), "S");
+    assert_eq!(buffer[(9, 0)].symbol(), "─");
+    assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
+}
+
+#[test]
+fn process_resource_demand_follows_the_content_that_is_actually_visible() {
+    let mut app = App::new();
+    let area = Rect::new(0, 0, 80, 20);
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::Disabled
+    );
+
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, matches!(item, StatusLineItem::Memory));
+    }
+    app.update(AppEvent::StatusLineSettingsReceived(settings));
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Memory)
+    );
+    assert_eq!(
+        process_resource_demand(&app, Rect::new(0, 0, 1, 20)),
+        ProcessResourceDemand::Disabled
+    );
+
+    let usage = zeta_protocol::ModelUsageSummary::default();
+    let reference_cost = zeta_protocol::ModelReferenceCostSummary::default();
+    app.update(AppEvent::StatusPanelOpened(status_panel(StatusViewData {
+        model: "openai/gpt",
+        full_context_window: None,
+        available_context_window: None,
+        remaining_context_window: RemainingContextWindow::Unknown,
+        usage: &usage,
+        reference_cost: &reference_cost,
+        session_id: "session-1",
+        thread_id: "thread-1",
+        thread_sequence: 1,
+    })));
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::Disabled
+    );
+
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::Processes
+    );
+    assert_eq!(
+        process_resource_demand(&app, Rect::new(0, 0, 80, 1)),
+        ProcessResourceDemand::Disabled
+    );
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::Disabled
+    );
 }
 
 #[test]
@@ -161,7 +256,7 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
             .session
             .composer
             .height,
-        18
+        19
     );
     assert_eq!(layout(&app, terminal_area).session.composer.height, 13);
     assert_eq!(layout(&app, terminal_area).session.bottom.height, 2);
@@ -173,11 +268,9 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
     assert_eq!(app.input(), "/");
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
+    assert!(rows[5].starts_with("─ Status ─"));
     assert!(rows[18].trim().is_empty());
-    assert_eq!(
-        rows[19].trim_end(),
-        "  ↑/↓ scroll · PgUp/PgDn page · Home/End jump · Esc close"
-    );
+    assert_eq!(rows[19].trim_end(), "  Tab to switch · Esc to close");
     assert_snapshot!("status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -345,19 +438,18 @@ fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
     assert!(completed.starts_with("  ● done"));
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
-        "  enter to return"
+        "  Enter to return"
     );
 }
 
 #[test]
 fn pending_steer_is_shown_once_in_chat_history() {
     let mut app = App::new();
-    set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("start");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("check the tests first");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
 
     let rendered = render(&app, 80, 20);
 
@@ -415,7 +507,7 @@ fn turn_activity_does_not_enter_status_line() {
 }
 
 #[test]
-fn queued_message_is_visible_inline_and_counted_in_status_line() {
+fn queued_message_is_visible_only_in_the_queue_region() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("edit this later");
@@ -424,31 +516,28 @@ fn queued_message_is_visible_inline_and_counted_in_status_line() {
     let rendered = render(&app, 80, 20);
 
     assert!(rendered.contains("Queue 1: edit this later"));
-    assert!(
-        rendered
-            .lines()
-            .any(|line| line.trim_start().starts_with("queue 1"))
-    );
+    assert!(!rendered.lines().any(|line| line.contains("queue 1 ·")));
 }
 
 #[test]
-fn follow_up_mode_keeps_queue_count_in_status_line() {
+fn queue_focus_is_visible_and_queue_rows_are_clickable() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
-    set_follow_up_mode(&mut app, FollowUpMode::Steer);
-    app.insert_text("change direction");
-
-    assert!(!render(&app, 80, 20).contains("working"));
-
-    set_follow_up_mode(&mut app, FollowUpMode::Queue);
+    app.insert_text("edit this later");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    set_follow_up_mode(&mut app, FollowUpMode::Steer);
+    let terminal_area = Rect::new(0, 0, 120, 20);
+    let queue_area = layout(&app, terminal_area).session.queue;
+    let queue_id = app.queue_view().items[0].id;
 
-    assert!(
-        render(&app, 80, 20)
-            .lines()
-            .any(|line| line.trim_start().starts_with("queue 1"))
+    assert_eq!(
+        input_pointer_target_at(&app, terminal_area, queue_area.x + 2, queue_area.y),
+        Some(InputPointerTarget::Queue(queue_id))
     );
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    let rendered = render(&app, 120, 20);
+
+    assert!(rendered.contains("> Queue 1: edit this later · next"));
+    assert!(rendered.contains("Enter to edit"));
 }
 
 #[test]
@@ -491,7 +580,7 @@ fn status_line_colors_current_and_next_modes_independently() {
 }
 
 #[test]
-fn path_is_only_visible_in_the_empty_welcome_banner() {
+fn welcome_header_remains_at_the_start_of_scrollable_history() {
     let mut app = App::for_dir(Path::new("/work/zeta"));
 
     let empty = render(&app, 80, 20);
@@ -499,7 +588,24 @@ fn path_is_only_visible_in_the_empty_welcome_banner() {
     assert!(!empty.lines().last().unwrap().contains("/work/zeta"));
 
     app.update(AppEvent::ProductNotice("Conversation started.".into()));
+    assert!(render(&app, 80, 20).contains("/work/zeta"));
+
+    for index in 0..12 {
+        app.update(AppEvent::FailureReported(format!(
+            "Model invocation failed {index}"
+        )));
+    }
     assert!(!render(&app, 80, 20).contains("/work/zeta"));
+
+    app.handle_key_in_area(
+        KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL),
+        Rect::new(0, 0, 80, 20),
+    );
+    let scrolled_to_start = render(&app, 80, 20);
+    assert!(scrolled_to_start.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
+    assert!(scrolled_to_start.contains("/work/zeta"));
+    assert!(scrolled_to_start.contains("Conversation started."));
+    assert_snapshot!("transcript_scrolled_to_welcome_header", scrolled_to_start);
 }
 
 #[test]
@@ -802,6 +908,15 @@ fn command_panel_supports_keyboard_tab_switching_and_search() {
 }
 
 #[test]
+fn startup_panel_renders_the_effective_context() {
+    let mut app = App::new();
+    app.insert_text("/startup");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_snapshot!("startup_panel", render(&app, 80, 20));
+}
+
+#[test]
 fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
@@ -824,7 +939,7 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
         .session
         .composer
         .y;
-    assert_eq!(first[(4, 1)].fg, Color::Rgb(0x40, 0x85, 0xac));
+    assert_eq!(first[(3, 1)].fg, Color::Rgb(0x40, 0x85, 0xac));
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
     assert_eq!(
         first[(1, interaction_y)].fg,
@@ -881,7 +996,7 @@ fn submitted_slash_command_is_immediately_visible_in_the_transcript() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let rendered = render(&app, 80, 20);
-    assert!(rendered.lines().next().unwrap().contains("> /status"));
+    assert!(rendered.lines().any(|line| line.contains("> /status")));
 }
 
 #[test]
@@ -892,7 +1007,10 @@ fn scrolled_transcript_shows_jump_control_at_the_bottom_of_the_content_area() {
             "Model invocation failed {index}"
         )));
     }
-    app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+    app.handle_key_in_area(
+        KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE),
+        Rect::new(0, 0, 50, 16),
+    );
 
     assert_snapshot!("transcript_jump_to_bottom", render(&app, 50, 16));
 }
@@ -907,10 +1025,13 @@ fn command_completion_renders_an_adjacent_result_line() {
 
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
+    let command_row = rows
+        .iter()
+        .position(|row| row.contains("> /theme zeta-code-light"))
+        .unwrap();
 
-    assert!(rows[0].contains("> /theme zeta-code-light"));
-    assert!(rows[1].contains("└─ Theme set to Zeta Code Light"));
-    assert!(rows[2].trim().is_empty());
+    assert!(rows[command_row + 1].contains("└─ Theme set to Zeta Code Light"));
+    assert!(rows[command_row + 2].trim().is_empty());
 }
 
 #[test]
@@ -925,8 +1046,11 @@ fn transcript_and_chat_input_content_start_in_the_same_column() {
     let terminal_area = Rect::new(0, 0, 80, 20);
     let input = layout(&app, terminal_area).input;
     let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
+    let transcript_row = (0..input.y)
+        .find(|row| buffer[(2, *row)].symbol() == "/")
+        .unwrap();
 
-    assert_eq!(buffer[(2, 0)].symbol(), "/");
+    assert_eq!(buffer[(2, transcript_row)].symbol(), "/");
     assert_eq!(buffer[(2, input.y + 1)].symbol(), "d");
 }
 
@@ -960,7 +1084,7 @@ fn slash_popup_uses_focus_colored_text_without_a_selection_surface() {
     let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
     let selected = &buffer[(2, popup_top)];
     let unselected = &buffer[(2, popup_top + 1)];
-    let surface_background = buffer[(0, 0)].bg;
+    let surface_background = test_context().background();
 
     assert_eq!(selected.fg, test_context().focus());
     assert_eq!(selected.bg, surface_background);

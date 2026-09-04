@@ -1,0 +1,24 @@
+---
+source: zeta-code/tui/src/app/frame_tests.rs
+expression: scrolled_to_start
+---
+                                                                                
+   ▐▖  ▗▌    Zeta Code v0.1.0                                                   
+   ▗█▄▄█▖    Automatic model · Access unknown                                   
+  ▗█▝██▘█▖   /work/zeta                                                         
+   ▜▌  ▐▛                                                                       
+   ▝    ▘                                                                       
+● Conversation started.                                                         
+                                                                                
+● Model invocation failed 0                                                     
+                                                                                
+● Model invocation failed 1                                                     
+                                                                                
+● Model invocation failed 2                                                     
+                            Jump to bottom (click) ↓                            
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+>                                                                               
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+  ⏸ ask permissions on

@@ -1,4 +1,3 @@
-use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
 use crate::models::preferred_model_label;
 use crate::status::StatusLineSettings;
@@ -35,10 +34,6 @@ pub(crate) struct ConfigEdit {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
     SetTerminalSettings(ConfigEdit),
-    ChooseFollowUpMode {
-        queue: Box<ConfigEdit>,
-        steer: Box<ConfigEdit>,
-    },
     SetVimMode(ConfigEdit),
     SetShowGitChangesAsDiff(ConfigEdit),
     OpenProviderApiKey {
@@ -104,10 +99,6 @@ struct ProviderApiKeyPromptState {
 #[derive(Debug)]
 pub(crate) enum ConfigEditorOutcome {
     Action(ConfigSelectionAction),
-    Adjust(
-        ConfigSelectionAction,
-        crate::widgets::list_selection::ListSelectionAdjustment,
-    ),
     SaveApiKey(ProviderApiKeyEdit),
     Consumed,
     Dismiss,
@@ -152,9 +143,7 @@ impl ConfigEditor {
                 ConfigEditorOutcome::Consumed
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
-            ListSelectionOutcome::Adjust(action, adjustment) => {
-                ConfigEditorOutcome::Adjust(action, adjustment)
-            }
+            ListSelectionOutcome::Adjust(_, _) => ConfigEditorOutcome::Consumed,
             ListSelectionOutcome::Consumed => ConfigEditorOutcome::Consumed,
             ListSelectionOutcome::Dismiss => ConfigEditorOutcome::Dismiss,
         }
@@ -202,9 +191,7 @@ impl ConfigEditor {
                 ConfigEditorOutcome::Consumed
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
-            ListSelectionOutcome::Adjust(action, adjustment) => {
-                ConfigEditorOutcome::Adjust(action, adjustment)
-            }
+            ListSelectionOutcome::Adjust(_, _) => ConfigEditorOutcome::Consumed,
             ListSelectionOutcome::Consumed => ConfigEditorOutcome::Consumed,
             ListSelectionOutcome::Dismiss => ConfigEditorOutcome::Dismiss,
         })
@@ -216,8 +203,8 @@ impl ConfigEditor {
             provider: prompt.provider,
             prompt: TextPrompt::new(prompt.spec),
             key_hints: crate::widgets::key_hint::KeyHints::new()
-                .with("Enter", "save")
-                .with("Esc", "cancel"),
+                .with_action("Enter", "save")
+                .with_action("Esc", "cancel"),
         });
     }
 }
@@ -259,28 +246,6 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
-    let follow_up_id = ListSelectionItemId::new("terminal-follow-up-mode");
-    let mut queue_terminal = terminal;
-    queue_terminal.set_follow_up_mode(FollowUpMode::Queue);
-    let mut steer_terminal = terminal;
-    steer_terminal.set_follow_up_mode(FollowUpMode::Steer);
-    actions.insert(
-        follow_up_id.clone(),
-        ConfigSelectionAction::ChooseFollowUpMode {
-            queue: Box::new(ConfigEdit {
-                terminal: queue_terminal,
-                status_line: status_line.clone(),
-                server_config: config.clone(),
-                providers: providers.clone(),
-            }),
-            steer: Box::new(ConfigEdit {
-                terminal: steer_terminal,
-                status_line: status_line.clone(),
-                server_config: config.clone(),
-                providers: providers.clone(),
-            }),
-        },
-    );
     let git_changes_id = ListSelectionItemId::new("show-git-changes-as-diff");
     let show_git_changes_as_diff = status_line.show_git_changes_as_diff();
     let mut toggled_status_line = status_line.clone();
@@ -301,16 +266,6 @@ pub(crate) fn config_choices(
                 "Mouse interactions",
                 "Select and auto-copy text, click, and hover",
                 checkbox(mouse_enabled),
-            ),
-        ListSelectionItem::new("Follow-up messages")
-            .with_id(follow_up_id)
-            .with_columns(
-                "Follow-up messages",
-                "How Enter sends a message while a Turn is running",
-                match terminal.follow_up_mode() {
-                    FollowUpMode::Queue => "Queue",
-                    FollowUpMode::Steer => "Steer",
-                },
             ),
         ListSelectionItem::new("Vim mode")
             .with_id(vim_mode_id)
@@ -339,7 +294,7 @@ pub(crate) fn config_choices(
             ],
         )
         .with_activation_mode(ListSelectionActivationMode::EnterOrSpace)
-        .with_activation_label("to change")
+        .with_activation_action("change")
         .with_search(SearchBoxModel::new("Search configuration"))
         .with_empty_message("No matching configuration"),
         actions,
@@ -367,8 +322,6 @@ pub(crate) fn provider_api_key_prompt(
 
 fn overview(config: &ConfigReadResult) -> Vec<ListSelectionItem> {
     vec![
-        detail("Revision", config.revision.to_string()),
-        detail("Generation", config.generation.to_string()),
         detail(
             "Preferred model",
             preferred_model_label(config.preferred_model.as_ref()),

@@ -504,6 +504,9 @@ impl<'a> RenderContext<'a> {
     pub(crate) const fn hover_foreground(self) -> Color {
         self.theme.hover_foreground()
     }
+    pub(crate) const fn inserted_marker(self) -> Color {
+        self.theme.inserted_marker()
+    }
     pub(crate) const fn muted(self) -> Color {
         self.theme.muted()
     }
@@ -512,6 +515,9 @@ impl<'a> RenderContext<'a> {
     }
     pub(crate) const fn pressed_foreground(self) -> Color {
         self.theme.pressed_foreground()
+    }
+    pub(crate) const fn removed_marker(self) -> Color {
+        self.theme.removed_marker()
     }
     pub(crate) const fn overlay_background(self) -> Color {
         self.theme.overlay_background()

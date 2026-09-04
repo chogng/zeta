@@ -47,6 +47,9 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
         let mut options = zeta_tui::TuiOptions::new("TUI conversation")
             .with_dir_root(&dir_root)
             .with_profile_root(&profile_root);
+        if let Some(process_id) = session.process_id() {
+            options = options.with_app_server_process_id(process_id);
+        }
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
         }

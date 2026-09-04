@@ -1,11 +1,12 @@
 ---
 source: zeta-code/tui/src/app/session_manager_tests.rs
-assertion_line: 42
 expression: render(&app)
 ---
-   ▜▙▄▄▄▟▛    Zeta Code v0.1.0
-  ▄█▖▌█▌▗█▄   Automatic model · Access unknown
-   ▜█▀▀▀█▛    .
+   ▐▖  ▗▌    Zeta Code v0.1.0
+   ▗█▄▄█▖    Automatic model · Access unknown
+  ▗█▝██▘█▖   .
+   ▜▌  ▐▛
+   ▝    ▘
 
 Idle (1)
 > ○ Snapshot session
@@ -19,19 +20,17 @@ Idle (1)
 
 
 
-
-
   Session preview─────────────────────────────────────────────────────────────────────────────────
-  Session: Snapshot session
-  ID: current
-  Status: idle
+  Session:  Snapshot session
+  ID:       current
+  Status:   idle
   Time:
   Branches: 1 branch
-  Size: 0 tokens
-  Root: main · active
+  Size:     0 tokens
+  Root:     main · active
 
 
 
   Esc to close
 
-  space to preview · ctrl+x to archive
+  Space to preview · Ctrl+X to archive

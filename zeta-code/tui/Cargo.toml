@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 syntect = { workspace = true }
+sysinfo = { workspace = true }
 unicode-width = { workspace = true }
 zeroize = { workspace = true }
 zeta-ansi-escape = { workspace = true }
@@ -30,6 +31,7 @@ zeta-keybinding = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-slash-commands = { workspace = true }
+zeta-sprite = { workspace = true }
 zeta-terminal-detection = { workspace = true }
 zeta-utils-elapsed = { workspace = true }
 zeta-utils-path = { workspace = true }
@@ -56,6 +58,9 @@ image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 insta = { workspace = true }
 tempfile = { workspace = true }
 zeta-client = { workspace = true }
+
+[build-dependencies]
+zeta-sprite = { workspace = true, features = ["grid", "rust-source"] }
 
 [lints.rust]
 # Keep unsafe code denied outside the explicitly scoped Windows console adapter.

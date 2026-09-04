@@ -1,10 +1,7 @@
 use super::Queue;
-use super::QueueInput;
-use super::choices;
-use super::queue_input;
+use super::QueueKeyOutcome;
 use crate::thread::composer::ChatInput;
 use crate::thread::composer::ChatInputQueueOutcome;
-use crate::widgets::list_selection::ListSelection;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -30,9 +27,9 @@ fn queue_preserves_stable_identity_and_derives_display_positions() {
             .view()
             .items
             .iter()
-            .map(|item| (item.position, item.text, item.sending))
+            .map(|item| (item.position, item.text, item.sending, item.editing))
             .collect::<Vec<_>>(),
-        [(1, "first", false), (2, "second", false)]
+        [(1, "first", false, false), (2, "second", false, false)]
     );
     assert!(!queue.is_empty());
 
@@ -43,9 +40,9 @@ fn queue_preserves_stable_identity_and_derives_display_positions() {
             .view()
             .items
             .iter()
-            .map(|item| (item.position, item.text, item.sending))
+            .map(|item| (item.position, item.text, item.sending, item.editing))
             .collect::<Vec<_>>(),
-        [(1, "first", true), (2, "second", false)]
+        [(1, "first", true, false), (2, "second", false, false)]
     );
 
     assert!(queue.fail_send(first_id));
@@ -65,7 +62,7 @@ fn queue_preserves_stable_identity_and_derives_display_positions() {
 }
 
 #[test]
-fn restore_preserves_a_nonempty_draft_and_restores_by_stable_identity() {
+fn restore_preserves_position_while_the_message_is_edited() {
     let mut queue = Queue::default();
     let first = queue.push(queued_input("first"));
     let second = queue.push(queued_input("second"));
@@ -79,33 +76,100 @@ fn restore_preserves_a_nonempty_draft_and_restores_by_stable_identity() {
     input = ChatInput::new();
     queue.restore(second, &mut input).unwrap();
     assert_eq!(input.text(), "second");
-    assert_eq!(queue.view().items[0].id, first);
+    assert_eq!(
+        queue
+            .view()
+            .items
+            .iter()
+            .map(|item| (item.id, item.position, item.editing))
+            .collect::<Vec<_>>(),
+        [(first, 1, false), (second, 2, true)]
+    );
+
+    input.insert_text(" updated");
+    let ChatInputQueueOutcome::Queued(updated) = input.queue_current() else {
+        panic!("expected edited Queue content");
+    };
+    assert_eq!(queue.push(updated), second);
+    assert_eq!(
+        queue
+            .view()
+            .items
+            .iter()
+            .map(|item| (item.id, item.position, item.text, item.editing))
+            .collect::<Vec<_>>(),
+        [
+            (first, 1, "first", false),
+            (second, 2, "second updated", false)
+        ]
+    );
 }
 
 #[test]
-fn queue_picker_owns_input_mapping_and_hints() {
+fn focused_queue_supports_selection_reordering_and_actions() {
+    let mut queue = Queue::default();
+    let first = queue.push(queued_input("first"));
+    let second = queue.push(queued_input("second"));
+
+    assert!(queue.focus_latest());
+    assert_eq!(queue.view().selected, Some(second));
     assert_eq!(
-        queue_input(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)),
-        Some(QueueInput::Restore)
+        queue.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)),
+        QueueKeyOutcome::Consumed
     );
+    assert_eq!(queue.view().selected, Some(first));
     assert_eq!(
-        queue_input(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT)),
-        Some(QueueInput::MoveDown)
+        queue.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::CONTROL)),
+        QueueKeyOutcome::Consumed
     );
+    assert_eq!(queue.view().items[1].id, first);
+    assert_eq!(queue.view().selected, Some(first));
     assert_eq!(
-        queue_input(KeyEvent {
+        queue.handle_key(KeyEvent {
             kind: KeyEventKind::Release,
-            ..KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)
+            ..KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)
         }),
-        None
+        QueueKeyOutcome::Consumed
     );
+    assert_eq!(
+        queue.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        QueueKeyOutcome::Restore(first)
+    );
+}
 
-    let queue = Queue::default();
-    let spec = choices(&queue.view());
-    let selection = ListSelection::new(spec.model, spec.actions);
+#[test]
+fn down_after_the_last_message_returns_focus_to_the_composer() {
+    let mut queue = Queue::default();
+    queue.push(queued_input("only"));
+
+    assert!(queue.focus_latest());
+    assert_eq!(
+        queue.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
+        QueueKeyOutcome::Consumed
+    );
+    assert!(!queue.focused());
+}
+
+#[test]
+fn deleting_a_selected_message_keeps_the_nearest_message_selected() {
+    let mut queue = Queue::default();
+    let first = queue.push(queued_input("first"));
+    let second = queue.push(queued_input("second"));
+    let third = queue.push(queued_input("third"));
+    queue.focus_latest();
+    queue.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(queue.view().selected, Some(second));
+
+    queue.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE));
 
     assert_eq!(
-        selection.key_hints(),
-        "Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send"
+        queue
+            .view()
+            .items
+            .iter()
+            .map(|item| item.id)
+            .collect::<Vec<_>>(),
+        [first, third]
     );
+    assert_eq!(queue.view().selected, Some(third));
 }

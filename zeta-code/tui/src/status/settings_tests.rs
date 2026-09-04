@@ -90,6 +90,25 @@ fn accounting_items_round_trip_when_enabled() {
 }
 
 #[test]
+fn process_status_items_round_trip_without_becoming_defaults() {
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "statusLine".into(),
+        json!(["memory", "cpu"]),
+    )]));
+
+    let settings = StatusLineSettings::from_tui(&section).unwrap();
+
+    assert_eq!(
+        settings.items().collect::<Vec<_>>(),
+        vec![StatusLineItem::Memory, StatusLineItem::Cpu]
+    );
+    assert_eq!(
+        settings.write_to_tui(&FrontendConfigDto::default()).0["statusLine"],
+        json!(["memory", "cpu"])
+    );
+}
+
+#[test]
 fn unknown_and_duplicate_items_are_rejected() {
     for status_line in [json!(["future"]), json!(["model", "model"])] {
         let section = FrontendConfigDto(BTreeMap::from([("statusLine".into(), status_line)]));

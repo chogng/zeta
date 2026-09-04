@@ -1,9 +1,11 @@
+use super::command::SteerSource;
 use crate::config::ConfigChoices;
 use crate::config::ConfigEditResult;
 use crate::config::TerminalSettings;
 use crate::connectors::ConnectorChoices;
 use crate::dirs::DirChoices;
 use crate::host::clipboard::ClipboardImageAvailability;
+use crate::host::process_resources::ProcessResourcesReading;
 use crate::keymap::KeymapEditorUpdate;
 use crate::keymap::KeymapSettings;
 use crate::mcp::McpChoices;
@@ -74,6 +76,7 @@ pub(crate) enum AppEvent {
         statistics: GitDiffStatisticsDto,
     },
     HostOperationCompleted(Result<String, String>),
+    ProcessResourcesSampled(ProcessResourcesReading),
     TopTipNoticeShown(String),
     InterruptFailed(String),
     ProductNotice(String),
@@ -111,8 +114,12 @@ pub(crate) enum AppEvent {
     SkillSettingsOpened(SkillChoices),
     SkillSettingsUpdated(SkillChoices),
     SkillDiagnosticsReceived(Vec<SkillDiagnosticDto>),
-    SteerCompleted(SteerId),
+    SteerCompleted {
+        source: SteerSource,
+        steer_id: SteerId,
+    },
     SteerSubmissionFailed {
+        source: SteerSource,
         steer_id: SteerId,
         error: String,
     },

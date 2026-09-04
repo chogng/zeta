@@ -10,16 +10,20 @@ pub(crate) enum StatusLineItem {
     Model,
     CacheHitRate,
     ReferenceCost,
+    Memory,
+    Cpu,
     GitBranch,
     GitChanges,
 }
 
 impl StatusLineItem {
-    pub(crate) const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::Permissions,
         Self::Model,
         Self::CacheHitRate,
         Self::ReferenceCost,
+        Self::Memory,
+        Self::Cpu,
         Self::GitBranch,
         Self::GitChanges,
     ];
@@ -30,6 +34,8 @@ impl StatusLineItem {
             "model" => Some(Self::Model),
             "cache-hit-rate" => Some(Self::CacheHitRate),
             "reference-cost" => Some(Self::ReferenceCost),
+            "memory" => Some(Self::Memory),
+            "cpu" => Some(Self::Cpu),
             "git-branch" => Some(Self::GitBranch),
             "git-changes" => Some(Self::GitChanges),
             _ => None,
@@ -42,6 +48,8 @@ impl StatusLineItem {
             Self::Model => "model",
             Self::CacheHitRate => "cache-hit-rate",
             Self::ReferenceCost => "reference-cost",
+            Self::Memory => "memory",
+            Self::Cpu => "cpu",
             Self::GitBranch => "git-branch",
             Self::GitChanges => "git-changes",
         }
@@ -53,6 +61,8 @@ impl StatusLineItem {
             Self::Model => "Model",
             Self::CacheHitRate => "Cache hit rate",
             Self::ReferenceCost => "Reference cost",
+            Self::Memory => "Memory",
+            Self::Cpu => "CPU",
             Self::GitBranch => "Git branch",
             Self::GitChanges => "Git changes",
         }
@@ -64,6 +74,8 @@ impl StatusLineItem {
             Self::Model => "Configured model",
             Self::CacheHitRate => "Cached input as a share of total input",
             Self::ReferenceCost => "Current Thread accumulated reference cost",
+            Self::Memory => "Local TUI and App Server resident memory",
+            Self::Cpu => "Local TUI and App Server CPU share",
             Self::GitBranch => "Current Git branch",
             Self::GitChanges => "Working tree changes",
         }

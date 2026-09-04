@@ -118,6 +118,13 @@ impl AppServerSession {
         self.client.clone()
     }
 
+    /// Returns the operating-system process ID when this session owns a stdio App Server child.
+    ///
+    /// Embedded sessions share the caller process and therefore return `None`.
+    pub fn process_id(&self) -> Option<u32> {
+        self.process.as_ref().map(Child::id)
+    }
+
     /// Takes the single event stream for this connection.
     pub fn take_events(&mut self) -> Result<AppServerEvents, TakeEventsError> {
         self.events.take().ok_or(TakeEventsError)

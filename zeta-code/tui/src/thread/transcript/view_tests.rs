@@ -1,8 +1,10 @@
 use super::ChatHistoryPointerState;
 use super::ChatHistoryPointerTarget;
 use super::ChatHistoryView;
+use super::first_scroll_target;
 use super::message_lines;
 use super::pointer_target_at;
+use super::scroll_target;
 use crate::render::Renderable;
 use crate::render::test_context;
 use crate::thread::transcript::ChatHistoryRenderCache;
@@ -11,9 +13,12 @@ use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::ExecutionKind;
 use crate::thread::transcript::Message;
 use crate::thread::transcript::MessageRole;
+use crate::thread::transcript::TranscriptScrollAnchor;
 use crate::thread::transcript::TranscriptScrollDirection;
+use crate::thread::transcript::TranscriptScrollTarget;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 
@@ -51,6 +56,7 @@ fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        header: None,
         messages: &messages,
         scroll: &scroll,
         render_cache: &render_cache,
@@ -151,6 +157,7 @@ fn user_message_starts_in_the_symbol_column_and_fills_the_content_row() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        header: None,
         messages: &messages,
         scroll: &scroll,
         render_cache: &render_cache,
@@ -184,6 +191,7 @@ fn local_command_fills_only_its_input_rows() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        header: None,
         messages: &messages,
         scroll: &scroll,
         render_cache: &render_cache,
@@ -232,6 +240,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     let mut terminal = Terminal::new(TestBackend::new(30, 4)).unwrap();
 
     let hovered = ChatHistoryView {
+        header: None,
         messages: &messages,
         scroll: &scroll,
         render_cache: &render_cache,
@@ -289,6 +298,7 @@ fn pointer_rows_follow_the_same_multiline_height_as_rendering() {
     assert_eq!(
         pointer_target_at(
             Rect::new(0, 0, 30, 10),
+            0,
             &messages,
             &ChatHistoryScroll::default(),
             &ChatHistoryRenderCache::default(),
@@ -312,6 +322,7 @@ fn long_transcripts_buffer_only_visible_cells() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        header: None,
         messages: &messages,
         scroll: &scroll,
         render_cache: &render_cache,
@@ -338,6 +349,7 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let view = ChatHistoryView {
+        header: None,
         messages: &messages,
         scroll: &scroll,
         render_cache: &render_cache,
@@ -362,18 +374,32 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
 #[test]
 fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
     let messages = (0..8)
-        .map(|index| Message::plain(MessageRole::Agent, format!("message {index}")))
+        .map(|index| {
+            Message::plain(MessageRole::Agent, format!("message {index}"))
+                .with_cell_id(format!("message-{index}"))
+        })
         .collect::<Vec<_>>();
     let mut scroll = ChatHistoryScroll::default();
-    assert!(scroll.scroll(TranscriptScrollDirection::Up));
     let render_cache = ChatHistoryRenderCache::default();
+    let area = Rect::new(0, 0, 40, 6);
+    let target = scroll_target(
+        area,
+        0,
+        &messages,
+        &scroll,
+        &render_cache,
+        test_context(),
+        TranscriptScrollDirection::Up,
+    )
+    .unwrap();
+    assert!(scroll.apply(target));
     let view = ChatHistoryView {
+        header: None,
         messages: &messages,
         scroll: &scroll,
         render_cache: &render_cache,
         pointer: ChatHistoryPointerState::default(),
     };
-    let area = Rect::new(0, 0, 40, 6);
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
 
     terminal
@@ -394,6 +420,7 @@ fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
     assert_eq!(
         pointer_target_at(
             area,
+            0,
             &messages,
             &scroll,
             &render_cache,
@@ -402,6 +429,140 @@ fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
             area.bottom() - 1,
         ),
         Some(ChatHistoryPointerTarget::JumpToBottom)
+    );
+}
+
+#[test]
+fn scrolling_to_the_start_reveals_the_history_header_before_messages() {
+    let area = Rect::new(0, 0, 40, 6);
+    let mut header = Buffer::empty(Rect::new(0, 0, area.width, 3));
+    header.set_string(0, 0, "welcome header", Color::Reset);
+    let messages = (0..8)
+        .map(|index| {
+            Message::plain(MessageRole::Agent, format!("message {index}"))
+                .with_cell_id(format!("message-{index}"))
+        })
+        .collect::<Vec<_>>();
+    let mut scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
+
+    assert_eq!(
+        first_scroll_target(true, &messages),
+        Some(TranscriptScrollTarget::Anchor(
+            TranscriptScrollAnchor::Header { line_offset: 0 }
+        ))
+    );
+    scroll.apply(first_scroll_target(true, &messages).unwrap());
+    let view = ChatHistoryView {
+        header: Some(&header),
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &render_cache,
+        pointer: ChatHistoryPointerState::default(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+
+    terminal
+        .draw(|frame| view.render(frame, area, test_context()))
+        .unwrap();
+
+    let first_row = (0..area.width)
+        .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+        .collect::<String>();
+    assert!(first_row.starts_with("welcome header"));
+}
+
+#[test]
+fn transcript_changes_do_not_move_a_manually_scrolled_viewport() {
+    let mut messages = (0..12)
+        .map(|index| {
+            Message::plain(MessageRole::Agent, format!("message {index}"))
+                .with_cell_id(format!("message-{index}"))
+        })
+        .collect::<Vec<_>>();
+    let area = Rect::new(0, 0, 40, 6);
+    let render_cache = ChatHistoryRenderCache::default();
+    let mut scroll = ChatHistoryScroll::default();
+    let target = scroll_target(
+        area,
+        0,
+        &messages,
+        &scroll,
+        &render_cache,
+        test_context(),
+        TranscriptScrollDirection::Up,
+    )
+    .unwrap();
+    assert!(scroll.apply(target));
+
+    let first_row = render_first_row(area, &messages, &scroll, &render_cache);
+    messages.extend((12..16).map(|index| {
+        Message::plain(MessageRole::Agent, format!("message {index}"))
+            .with_cell_id(format!("message-{index}"))
+    }));
+    let first_row_after_append = render_first_row(area, &messages, &scroll, &render_cache);
+    messages.splice(
+        0..0,
+        (0..4).map(|index| {
+            Message::plain(MessageRole::Agent, format!("older {index}"))
+                .with_cell_id(format!("older-{index}"))
+        }),
+    );
+    let first_row_after_prepend = render_first_row(area, &messages, &scroll, &render_cache);
+    let first_row_after_resize = render_first_row(
+        Rect::new(0, 0, 16, area.height),
+        &messages,
+        &scroll,
+        &render_cache,
+    );
+
+    assert!(first_row.contains("message 7"));
+    assert_eq!(first_row_after_append, first_row);
+    assert_eq!(first_row_after_prepend, first_row);
+    assert!(first_row_after_resize.contains("message 7"));
+}
+
+#[test]
+fn manual_scroll_keeps_the_anchored_line_visible_during_streaming_growth() {
+    let area = Rect::new(0, 0, 40, 6);
+    let render_cache = ChatHistoryRenderCache::default();
+    let mut scroll = ChatHistoryScroll::default();
+    let mut messages = vec![
+        Message::plain(
+            MessageRole::Agent,
+            (0..20)
+                .map(|index| format!("line {index}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+        .with_cell_id("streaming-message"),
+    ];
+    let target = scroll_target(
+        area,
+        0,
+        &messages,
+        &scroll,
+        &render_cache,
+        test_context(),
+        TranscriptScrollDirection::Up,
+    )
+    .unwrap();
+    assert!(scroll.apply(target));
+
+    let first_row = render_first_row(area, &messages, &scroll, &render_cache);
+    messages[0] = Message::plain(
+        MessageRole::Agent,
+        (0..30)
+            .map(|index| format!("line {index}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+    .with_cell_id("streaming-message");
+
+    assert!(first_row.contains("line 10"));
+    assert_eq!(
+        render_first_row(area, &messages, &scroll, &render_cache),
+        first_row
     );
 }
 
@@ -417,6 +578,7 @@ fn jump_control_is_hidden_while_following_the_latest_content() {
     assert_eq!(
         pointer_target_at(
             area,
+            0,
             &messages,
             &scroll,
             &render_cache,
@@ -426,4 +588,28 @@ fn jump_control_is_hidden_while_following_the_latest_content() {
         ),
         None
     );
+}
+
+fn render_first_row(
+    area: Rect,
+    messages: &[Message],
+    scroll: &ChatHistoryScroll,
+    render_cache: &ChatHistoryRenderCache,
+) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| {
+            ChatHistoryView {
+                header: None,
+                messages,
+                scroll,
+                render_cache,
+                pointer: ChatHistoryPointerState::default(),
+            }
+            .render(frame, area, test_context())
+        })
+        .unwrap();
+    (0..area.width)
+        .map(|column| terminal.backend().buffer()[(column, 0)].symbol())
+        .collect()
 }

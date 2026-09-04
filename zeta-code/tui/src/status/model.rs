@@ -1,3 +1,4 @@
+use crate::host::process_resources::ProcessResourceMetrics;
 use crate::thread::TurnApprovalModes;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
@@ -11,16 +12,21 @@ use zeta_protocol::ModelReferenceCostSummary;
 use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::StreamInstanceId;
 
+use super::ProcessResourcesView;
 use super::StatusLineItem;
 use super::StatusLineSettings;
+use super::format_compact_process_cpu;
+use super::format_compact_process_memory;
+use super::format_process_cpu;
+use super::format_process_memory;
 
 const SEPARATOR: &str = " · ";
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLineRuntime {
     pub(crate) plan: Option<(usize, usize)>,
-    pub(crate) queue: usize,
     pub(crate) subagents: usize,
+    pub(crate) process_resources: ProcessResourcesView,
 }
 
 impl StatusLineRuntime {
@@ -29,10 +35,8 @@ impl StatusLineRuntime {
         if let Some((completed, total)) = self.plan {
             segments.push(format!("plan {completed}/{total}"));
         }
-        for (label, count) in [("queue", self.queue), ("subagents", self.subagents)] {
-            if count > 0 {
-                segments.push(format!("{label} {count}"));
-            }
+        if self.subagents > 0 {
+            segments.push(format!("subagents {}", self.subagents));
         }
         segments.join(SEPARATOR)
     }
@@ -46,8 +50,86 @@ pub(super) struct ApprovalModeDisplay {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DisplayValue {
-    full: String,
-    compact: String,
+    full: Vec<StatusLineSegment>,
+    compact: Vec<StatusLineSegment>,
+    process_resources: Option<ProcessResourceMetrics>,
+}
+
+impl DisplayValue {
+    fn plain(full: impl Into<String>, compact: impl Into<String>) -> Self {
+        Self {
+            full: vec![StatusLineSegment::chrome(full)],
+            compact: vec![StatusLineSegment::chrome(compact)],
+            process_resources: None,
+        }
+    }
+
+    fn process_resource(
+        full: impl Into<String>,
+        compact: impl Into<String>,
+        metrics: ProcessResourceMetrics,
+    ) -> Self {
+        Self {
+            full: vec![StatusLineSegment::chrome(full)],
+            compact: vec![StatusLineSegment::chrome(compact)],
+            process_resources: Some(metrics),
+        }
+    }
+}
+
+struct FittedValues {
+    segments: Vec<StatusLineSegment>,
+    visible_values: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum StatusLineSegmentKind {
+    Chrome,
+    Inserted,
+    Removed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct StatusLineSegment {
+    text: String,
+    kind: StatusLineSegmentKind,
+}
+
+impl StatusLineSegment {
+    pub(super) fn chrome(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            kind: StatusLineSegmentKind::Chrome,
+        }
+    }
+
+    pub(super) fn inserted(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            kind: StatusLineSegmentKind::Inserted,
+        }
+    }
+
+    pub(super) fn removed(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            kind: StatusLineSegmentKind::Removed,
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn text(&self) -> &str {
+        &self.text
+    }
+
+    #[cfg(test)]
+    pub(super) const fn kind(&self) -> StatusLineSegmentKind {
+        self.kind
+    }
+
+    pub(super) fn into_parts(self) -> (String, StatusLineSegmentKind) {
+        (self.text, self.kind)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -91,10 +173,8 @@ impl StatusLineModel {
     }
 
     pub(crate) fn apply_preferred_model(&mut self, model: Option<&ModelRefDto>) {
-        self.preferred_model = model.map(|model| DisplayValue {
-            full: model.model.clone(),
-            compact: model.model.clone(),
-        });
+        self.preferred_model =
+            model.map(|model| DisplayValue::plain(model.model.clone(), model.model.clone()));
     }
 
     pub(crate) fn apply_thread_accounting(
@@ -131,10 +211,7 @@ impl StatusLineModel {
                 format!("detached@{}", object_id.chars().take(8).collect::<String>())
             }
         };
-        self.git_branch = Some(DisplayValue {
-            full: identity.clone(),
-            compact: identity,
-        });
+        self.git_branch = Some(DisplayValue::plain(identity.clone(), identity));
         self.git_change_count = status.changes.len();
     }
 
@@ -177,17 +254,47 @@ impl StatusLineModel {
         true
     }
 
+    #[cfg(test)]
     pub(crate) fn top_text_for_width(&self, width: usize, runtime: StatusLineRuntime) -> String {
+        self.top_segments_for_width(width, runtime)
+            .iter()
+            .map(StatusLineSegment::text)
+            .collect()
+    }
+
+    pub(super) fn top_segments_for_width(
+        &self,
+        width: usize,
+        runtime: StatusLineRuntime,
+    ) -> Vec<StatusLineSegment> {
+        self.top_layout_for_width(width, runtime).segments
+    }
+
+    pub(crate) fn visible_process_resources(
+        &self,
+        width: usize,
+        runtime: StatusLineRuntime,
+    ) -> Option<ProcessResourceMetrics> {
+        self.top_layout_for_width(width, runtime).process_resources
+    }
+
+    fn top_layout_for_width(&self, width: usize, runtime: StatusLineRuntime) -> StatusLineLayout {
+        let process_resources = runtime.process_resources;
         let runtime = runtime.text();
         let mut values = Vec::new();
         if !runtime.is_empty() {
-            values.push(DisplayValue {
-                full: runtime.clone(),
-                compact: runtime,
-            });
+            values.push(DisplayValue::plain(runtime.clone(), runtime));
         }
-        values.extend(self.configured_values());
-        fit_values(&values, width)
+        values.extend(self.configured_values(process_resources));
+        let fitted = fit_values(&values, width);
+        let process_resources = values[..fitted.visible_values]
+            .iter()
+            .filter_map(|value| value.process_resources)
+            .reduce(ProcessResourceMetrics::union);
+        StatusLineLayout {
+            segments: fitted.segments,
+            process_resources,
+        }
     }
 
     pub(crate) fn policy_text_for_width(
@@ -201,7 +308,7 @@ impl StatusLineModel {
         truncate_with_ellipsis(&approval_mode_text(approval.into()), width)
     }
 
-    fn configured_values(&self) -> Vec<DisplayValue> {
+    fn configured_values(&self, resources: ProcessResourcesView) -> Vec<DisplayValue> {
         let mut values = Vec::new();
         for item in self.settings.items() {
             match item {
@@ -209,6 +316,16 @@ impl StatusLineModel {
                 StatusLineItem::Model => values.extend(self.preferred_model.iter().cloned()),
                 StatusLineItem::CacheHitRate => values.extend(self.cache_hit_rate.iter().cloned()),
                 StatusLineItem::ReferenceCost => values.extend(self.reference_cost.iter().cloned()),
+                StatusLineItem::Memory => values.push(DisplayValue::process_resource(
+                    format!("memory {}", format_process_memory(resources.local.memory)),
+                    format_compact_process_memory(resources.local.memory),
+                    ProcessResourceMetrics::Memory,
+                )),
+                StatusLineItem::Cpu => values.push(DisplayValue::process_resource(
+                    format!("cpu {}", format_process_cpu(resources.local.cpu)),
+                    format_compact_process_cpu(resources.local.cpu),
+                    ProcessResourceMetrics::Cpu,
+                )),
                 StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),
                 StatusLineItem::GitChanges => values.extend(self.git_changes_display().into_iter()),
             }
@@ -221,19 +338,27 @@ impl StatusLineModel {
             return None;
         }
         if self.settings.show_git_changes_as_diff() {
-            self.git_diff_statistics.map(|statistics| DisplayValue {
-                full: format!("+{} -{}", statistics.additions, statistics.deletions),
-                compact: format!("+{} -{}", statistics.additions, statistics.deletions),
+            self.git_diff_statistics.map(|statistics| {
+                let segments = vec![
+                    StatusLineSegment::inserted(format!("+{}", statistics.additions)),
+                    StatusLineSegment::chrome(" "),
+                    StatusLineSegment::removed(format!("-{}", statistics.deletions)),
+                ];
+                DisplayValue {
+                    full: segments.clone(),
+                    compact: segments,
+                    process_resources: None,
+                }
             })
         } else {
-            Some(DisplayValue {
-                full: if self.git_change_count == 1 {
+            Some(DisplayValue::plain(
+                if self.git_change_count == 1 {
                     "1 change".into()
                 } else {
                     format!("{} changes", self.git_change_count)
                 },
-                compact: "*".into(),
-            })
+                "*",
+            ))
         }
     }
 }
@@ -253,13 +378,15 @@ fn git_status_is_older(next: &GitStatusCursor, current: &GitStatusCursor) -> boo
 }
 
 fn cache_hit_rate_display(usage: &ModelUsageSummary) -> Option<DisplayValue> {
-    format_cache_hit_rate(usage).map(|percentage| DisplayValue {
-        full: format!("cache hit {percentage}"),
-        compact: if percentage == "unknown" {
-            "cache ?".into()
-        } else {
-            format!("cache {percentage}")
-        },
+    format_cache_hit_rate(usage).map(|percentage| {
+        DisplayValue::plain(
+            format!("cache hit {percentage}"),
+            if percentage == "unknown" {
+                "cache ?".into()
+            } else {
+                format!("cache {percentage}")
+            },
+        )
     })
 }
 
@@ -267,13 +394,15 @@ fn reference_cost_display(
     model_invocations: u64,
     summary: &ModelReferenceCostSummary,
 ) -> Option<DisplayValue> {
-    format_reference_cost(model_invocations, summary).map(|amount| DisplayValue {
-        full: format!("cost {amount}"),
-        compact: if amount == "unknown" {
-            "cost ?".into()
-        } else {
-            amount
-        },
+    format_reference_cost(model_invocations, summary).map(|amount| {
+        DisplayValue::plain(
+            format!("cost {amount}"),
+            if amount == "unknown" {
+                "cost ?".into()
+            } else {
+                amount
+            },
+        )
     })
 }
 
@@ -332,45 +461,118 @@ fn format_money(amount: &ModelMoneyAmount) -> Option<String> {
     })
 }
 
-fn fit_values(values: &[DisplayValue], width: usize) -> String {
+struct StatusLineLayout {
+    segments: Vec<StatusLineSegment>,
+    process_resources: Option<ProcessResourceMetrics>,
+}
+
+fn fit_values(values: &[DisplayValue], width: usize) -> FittedValues {
     if width == 0 {
-        return String::new();
+        return FittedValues {
+            segments: Vec::new(),
+            visible_values: 0,
+        };
     }
 
     if values.is_empty() {
-        return String::new();
+        return FittedValues {
+            segments: Vec::new(),
+            visible_values: 0,
+        };
     }
 
-    let full = values
-        .iter()
-        .map(|value| value.full.as_str())
-        .collect::<Vec<_>>()
-        .join(SEPARATOR);
-    if full.width() <= width {
-        return full;
+    let full = join_values(values, false);
+    if segments_width(&full) <= width {
+        return FittedValues {
+            segments: full,
+            visible_values: values.len(),
+        };
     }
 
-    let compact = values
-        .iter()
-        .map(|value| value.compact.as_str())
-        .collect::<Vec<_>>()
-        .join(SEPARATOR);
-    if compact.width() <= width {
-        return compact;
+    let compact = join_values(values, true);
+    if segments_width(&compact) <= width {
+        return FittedValues {
+            segments: compact,
+            visible_values: values.len(),
+        };
     }
 
     for visible in (1..values.len()).rev() {
-        let candidate = values[..visible]
-            .iter()
-            .map(|value| value.compact.as_str())
-            .collect::<Vec<_>>()
-            .join(SEPARATOR);
-        if candidate.width() <= width {
-            return candidate;
+        let candidate = join_values(&values[..visible], true);
+        if segments_width(&candidate) <= width {
+            return FittedValues {
+                segments: candidate,
+                visible_values: visible,
+            };
         }
     }
 
-    truncate_with_ellipsis(&values[0].compact, width)
+    FittedValues {
+        segments: truncate_segments_with_ellipsis(&values[0].compact, width),
+        visible_values: usize::from(width > 1),
+    }
+}
+
+fn join_values(values: &[DisplayValue], compact: bool) -> Vec<StatusLineSegment> {
+    let mut segments = Vec::new();
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            segments.push(StatusLineSegment::chrome(SEPARATOR));
+        }
+        segments.extend(
+            if compact { &value.compact } else { &value.full }
+                .iter()
+                .cloned(),
+        );
+    }
+    segments
+}
+
+fn segments_width(segments: &[StatusLineSegment]) -> usize {
+    segments.iter().map(|segment| segment.text.width()).sum()
+}
+
+fn truncate_segments_with_ellipsis(
+    segments: &[StatusLineSegment],
+    width: usize,
+) -> Vec<StatusLineSegment> {
+    if width == 0 {
+        return Vec::new();
+    }
+    if segments_width(segments) <= width {
+        return segments.to_vec();
+    }
+    if width == 1 {
+        return vec![StatusLineSegment::chrome("…")];
+    }
+
+    let content_width = width - 1;
+    let mut rendered = Vec::new();
+    let mut rendered_width = 0;
+    for segment in segments {
+        let mut text = String::new();
+        let mut truncated = false;
+        for character in segment.text.chars() {
+            let character_width = character.width().unwrap_or(0);
+            if rendered_width + character_width > content_width {
+                truncated = true;
+                break;
+            }
+            text.push(character);
+            rendered_width += character_width;
+        }
+        if !text.is_empty() {
+            rendered.push(StatusLineSegment {
+                text,
+                kind: segment.kind,
+            });
+        }
+        if truncated || rendered_width == content_width {
+            break;
+        }
+    }
+    rendered.push(StatusLineSegment::chrome("…"));
+    rendered
 }
 
 pub(super) fn approval_mode_text(approval: TurnApprovalModes) -> String {

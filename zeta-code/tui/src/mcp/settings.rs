@@ -54,7 +54,7 @@ pub(crate) fn mcp_choices(servers: &BTreeMap<String, McpServerConfigDto>) -> Mcp
             ],
         )
         .with_activation_mode(ListSelectionActivationMode::Enter)
-        .with_activation_label("toggle")
+        .with_activation_action("toggle")
         .with_search(SearchBoxModel::new("Search MCP servers"))
         .with_empty_message("No matching MCP servers"),
         actions,

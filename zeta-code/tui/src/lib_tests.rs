@@ -54,6 +54,17 @@ fn remote_dir_is_displayed_without_enabling_local_path_search() {
     assert_eq!(options.display_dir_root, remote_root);
     assert_eq!(options.host_dir_root, local_root);
     assert_eq!(options.host_file_search_root, None);
+    assert_eq!(options.app_server_process, crate::AppServerProcess::Remote);
+}
+
+#[test]
+fn local_app_server_process_is_carried_into_the_startup_context() {
+    let options = crate::TuiOptions::new("Local").with_app_server_process_id(42);
+
+    assert_eq!(
+        options.startup_context().app_server_process,
+        crate::AppServerProcess::Local(42)
+    );
 }
 
 #[test]

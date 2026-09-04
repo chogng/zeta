@@ -33,7 +33,7 @@ fn agents_manager_simulates_navigation_and_transient_preview() {
     assert!(app.session_manager_focused());
     assert_eq!(
         app.session_manager_hint(),
-        "space to preview · ctrl+x to archive"
+        "Space to preview · Ctrl+X to archive"
     );
 
     assert_eq!(app.handle_key(key(KeyCode::Char(' '))), None);

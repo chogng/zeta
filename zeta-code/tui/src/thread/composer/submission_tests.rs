@@ -42,3 +42,28 @@ fn queue_target_returns_content_to_the_feature_owner() {
     assert_eq!(queued.display_text(), "follow up");
     assert_eq!(input.text(), "");
 }
+
+#[test]
+fn active_turn_queues_enter_and_steers_ctrl_enter() {
+    let mut composer = ChatComposer::new();
+    let mut input = ChatInput::new();
+    composer.insert_text(&mut input, "queued");
+
+    assert!(matches!(
+        composer.handle_active_turn_key(
+            &mut input,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        ),
+        ChatComposerOutcome::Queued(_)
+    ));
+
+    composer.insert_text(&mut input, "steered");
+    let outcome = composer.handle_active_turn_key(
+        &mut input,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL),
+    );
+    let ChatComposerOutcome::Submit(submission) = outcome else {
+        panic!("expected a one-shot steer submission");
+    };
+    assert_eq!(submission.display_text, "steered");
+}

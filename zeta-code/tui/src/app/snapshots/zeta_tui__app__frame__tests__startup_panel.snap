@@ -1,0 +1,24 @@
+---
+source: zeta-code/tui/src/app/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+                                                                                
+   ▐▖  ▗▌    Zeta Code v0.1.0                                                   
+   ▗█▄▄█▖    Automatic model · Access unknown                                   
+  ▗█▝██▘█▖   .                                                                  
+   ▜▌  ▐▛                                                                       
+   ▝    ▘                                                                       
+> /startup                                                                      
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+─ Startup ──────────────────────────────────────────────────────────────────────
+                                                                                
+> Mode  ·  New                                                                  
+  Workspace  ·  .                                                               
+  Profile  ·  default                                                           
+  Connection  ·  Local App Server                                               
+                                                                                
+  Esc to close

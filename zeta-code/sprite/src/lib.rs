@@ -3,6 +3,16 @@
 #[cfg(feature = "compiler")]
 pub mod compiler;
 
+#[cfg(feature = "grid")]
+mod grid;
+#[cfg(feature = "rust-source")]
+mod rust_source;
+
+#[cfg(feature = "grid")]
+pub use grid::compile_sprite_grid;
+#[cfg(feature = "rust-source")]
+pub use rust_source::terminal_sprite_rust_source;
+
 use std::error::Error;
 use std::fmt;
 

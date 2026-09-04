@@ -1,0 +1,14 @@
+---
+source: zeta-code/tui/src/status/panel_tests.rs
+expression: terminal.backend().to_string()
+---
+"   Session    Processes                                                         "
+"  Local resident memory:      240.0 MiB                                         "
+"  Local observed peak:        260.0 MiB                                         "
+"  Local CPU:                  12.4%                                             "
+"  1 minute memory change:     +3.0 MiB                                          "
+"  5 minute memory change:     -8.0 MiB                                          "
+"  TUI resident memory:        140.0 MiB                                         "
+"  TUI CPU:                    8.4%                                              "
+"  App Server resident memory: 100.0 MiB                                         "
+"  App Server CPU:             4.0%                                              "

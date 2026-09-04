@@ -1,9 +1,20 @@
+use super::AppServerResourcesView;
+use super::ProcessMemoryCurrent;
+use super::ProcessResourcesView;
+use super::format_memory_bytes;
+use super::format_memory_change;
+use super::format_process_cpu;
+use super::format_process_memory;
 use super::model::format_cache_hit_rate;
 use super::model::format_reference_cost;
 use crate::render::RenderContext;
 use crate::widgets::detail_list;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
+use crate::widgets::tab_list;
+use crate::widgets::tab_list::TabListInputOutcome;
+use crate::widgets::tab_list::TabListItem;
+use crate::widgets::tab_list::TabListState;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -15,6 +26,24 @@ use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::ModelUsageTotal;
 
 const PAGE_ROWS: u16 = 5;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StatusSection {
+    Session,
+    Processes,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct StatusTab {
+    section: StatusSection,
+    label: &'static str,
+}
+
+impl TabListItem for StatusTab {
+    fn tab_label(&self) -> &str {
+        self.label
+    }
+}
 
 pub(crate) struct StatusViewData<'a> {
     pub(crate) model: &'a str,
@@ -49,106 +78,254 @@ pub(crate) enum StatusPanelOutcome {
 
 #[derive(Debug)]
 pub(crate) struct StatusPanel {
-    detail: DetailList,
-    scroll: u16,
+    tabs: TabListState<StatusTab>,
+    session: DetailList,
+    processes: DetailList,
+    scroll: [u16; 2],
 }
 
 impl StatusPanel {
+    pub(crate) fn title(&self) -> &str {
+        "Status"
+    }
+
+    pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
+        self.processes = DetailList::new("Processes", process_rows(resources));
+    }
+
     pub(crate) fn desired_height(&self, width: u16) -> u16 {
-        self.detail
-            .desired_height_for_width(width.saturating_sub(4))
+        let content_width = width.saturating_sub(4);
+        self.session
+            .desired_height_for_width(content_width)
+            .max(self.processes.desired_height_for_width(content_width))
+            .saturating_add(tab_list::desired_height(self.tabs.tabs(), content_width))
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> StatusPanelOutcome {
-        if key.kind != KeyEventKind::Press || key.modifiers != KeyModifiers::NONE {
+        if key.kind != KeyEventKind::Press {
             return StatusPanelOutcome::Consumed;
         }
 
+        if key.code == KeyCode::Esc && key.modifiers == KeyModifiers::NONE {
+            return StatusPanelOutcome::Dismiss;
+        }
+        let tab_outcome = self.tabs.handle_key(key);
+        if !matches!(tab_outcome, TabListInputOutcome::Unhandled) {
+            return StatusPanelOutcome::Consumed;
+        }
+        if key.modifiers != KeyModifiers::NONE {
+            return StatusPanelOutcome::Consumed;
+        }
+        let scroll = &mut self.scroll[self.tabs.active_index()];
         match key.code {
-            KeyCode::Esc => return StatusPanelOutcome::Dismiss,
-            KeyCode::Up => self.scroll = self.scroll.saturating_sub(1),
-            KeyCode::Down => self.scroll = self.scroll.saturating_add(1),
-            KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(PAGE_ROWS),
-            KeyCode::PageDown => self.scroll = self.scroll.saturating_add(PAGE_ROWS),
-            KeyCode::Home => self.scroll = 0,
-            KeyCode::End => self.scroll = u16::MAX,
+            KeyCode::Up => *scroll = scroll.saturating_sub(1),
+            KeyCode::Down => *scroll = scroll.saturating_add(1),
+            KeyCode::PageUp => *scroll = scroll.saturating_sub(PAGE_ROWS),
+            KeyCode::PageDown => *scroll = scroll.saturating_add(PAGE_ROWS),
+            KeyCode::Home => *scroll = 0,
+            KeyCode::End => *scroll = u16::MAX,
             _ => {}
         }
         StatusPanelOutcome::Consumed
     }
 
-    pub(crate) fn draw(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-        let visible_rows = area.height.saturating_sub(1);
+    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
+        let outcome = self.tabs.select(index);
+        !matches!(outcome, TabListInputOutcome::Unhandled)
+    }
+
+    pub(crate) fn tab_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
+        let tab_area = self.tab_area(area);
+        self.tabs.index_at(tab_area, column, row)
+    }
+
+    pub(crate) fn draw(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        hovered_tab: Option<usize>,
+        pressed_tab: Option<usize>,
+        context: RenderContext<'_>,
+    ) {
+        let tab_area = self.tab_area(area);
+        tab_list::draw(
+            frame,
+            tab_area,
+            &self.tabs,
+            false,
+            hovered_tab,
+            pressed_tab,
+            context,
+        );
+        let detail_area = Rect {
+            y: tab_area.bottom(),
+            height: area.bottom().saturating_sub(tab_area.bottom()),
+            ..area
+        };
+        let detail = self.active_detail();
+        let visible_rows = detail_area.height;
         let content_height =
-            u16::try_from(self.detail.content_height(area.width.saturating_sub(4)))
+            u16::try_from(detail.content_height(detail_area.width.saturating_sub(4)))
                 .unwrap_or(u16::MAX);
         let allocated_max_scroll = content_height.saturating_sub(visible_rows);
-        detail_list::draw_scrolled(
+        detail_list::draw_body_scrolled(
             frame,
-            area,
-            &self.detail,
-            self.scroll.min(allocated_max_scroll),
+            detail_area,
+            detail,
+            self.scroll[self.tabs.active_index()].min(allocated_max_scroll),
             context,
         );
     }
 
     pub(crate) const fn key_hints(&self) -> &'static str {
-        "↑/↓ scroll · PgUp/PgDn page · Home/End jump · Esc close"
+        "Tab to switch · Esc to close"
+    }
+
+    pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
+        if !matches!(self.tabs.active_tab().section, StatusSection::Processes) {
+            return false;
+        }
+        let content = crate::render::horizontal_margin(area, 2);
+        let tab_area = self.tab_area(area);
+        content.width > 0 && area.bottom() > tab_area.bottom()
+    }
+
+    fn active_detail(&self) -> &DetailList {
+        match self.tabs.active_tab().section {
+            StatusSection::Session => &self.session,
+            StatusSection::Processes => &self.processes,
+        }
+    }
+
+    fn tab_area(&self, area: Rect) -> Rect {
+        let content = crate::render::horizontal_margin(area, 2);
+        Rect {
+            height: tab_list::desired_height(self.tabs.tabs(), content.width).min(content.height),
+            ..content
+        }
     }
 }
 
 pub(crate) fn status_panel(data: StatusViewData<'_>) -> StatusPanel {
-    StatusPanel {
-        detail: DetailList::new(
-            "Status",
-            vec![
-                detail("Model", data.model),
-                detail(
-                    "Full context window",
-                    format_optional_tokens(data.full_context_window),
-                ),
-                detail(
-                    "Available context window",
-                    format_optional_tokens(data.available_context_window),
-                ),
-                detail(
-                    "Remaining context window",
-                    format_remaining_context(data.remaining_context_window),
-                ),
-                detail("Model calls", data.usage.model_invocations.to_string()),
-                detail("Input tokens", format_usage_total(&data.usage.input_tokens)),
-                detail(
-                    "Cached input",
-                    format_usage_total(&data.usage.cached_input_tokens),
-                ),
-                detail(
-                    "Cached input share",
-                    format_cache_hit_rate(data.usage).unwrap_or_else(|| "unknown".into()),
-                ),
-                detail(
-                    "Cache writes",
-                    format_usage_total(&data.usage.cache_write_input_tokens),
-                ),
-                detail(
-                    "Output tokens",
-                    format_usage_total(&data.usage.output_tokens),
-                ),
-                detail(
-                    "Reasoning output",
-                    format_usage_total(&data.usage.reasoning_tokens),
-                ),
-                detail(
-                    "Reference cost",
-                    format_reference_cost(data.usage.model_invocations, data.reference_cost)
-                        .unwrap_or_else(|| "unknown".into()),
-                ),
-                detail("Session ID", data.session_id),
-                detail("Thread ID", data.thread_id),
-                detail("Thread version", data.thread_sequence.to_string()),
-            ],
+    let base_rows = vec![
+        detail("Model", data.model),
+        detail(
+            "Full context window",
+            format_optional_tokens(data.full_context_window),
         ),
-        scroll: 0,
+        detail(
+            "Available context window",
+            format_optional_tokens(data.available_context_window),
+        ),
+        detail(
+            "Remaining context window",
+            format_remaining_context(data.remaining_context_window),
+        ),
+        detail("Model calls", data.usage.model_invocations.to_string()),
+        detail("Input tokens", format_usage_total(&data.usage.input_tokens)),
+        detail(
+            "Cached input",
+            format_usage_total(&data.usage.cached_input_tokens),
+        ),
+        detail(
+            "Cached input share",
+            format_cache_hit_rate(data.usage).unwrap_or_else(|| "unknown".into()),
+        ),
+        detail(
+            "Cache writes",
+            format_usage_total(&data.usage.cache_write_input_tokens),
+        ),
+        detail(
+            "Output tokens",
+            format_usage_total(&data.usage.output_tokens),
+        ),
+        detail(
+            "Reasoning output",
+            format_usage_total(&data.usage.reasoning_tokens),
+        ),
+        detail(
+            "Reference cost",
+            format_reference_cost(data.usage.model_invocations, data.reference_cost)
+                .unwrap_or_else(|| "unknown".into()),
+        ),
+        detail("Session ID", data.session_id),
+        detail("Thread ID", data.thread_id),
+        detail("Thread version", data.thread_sequence.to_string()),
+    ];
+    StatusPanel {
+        tabs: TabListState::new(status_tabs()),
+        session: DetailList::new("Session", base_rows),
+        processes: DetailList::new("Processes", process_rows(ProcessResourcesView::default())),
+        scroll: [0, 0],
     }
+}
+
+fn status_tabs() -> Vec<StatusTab> {
+    vec![
+        StatusTab {
+            section: StatusSection::Session,
+            label: "Session",
+        },
+        StatusTab {
+            section: StatusSection::Processes,
+            label: "Processes",
+        },
+    ]
+}
+
+fn process_rows(resources: ProcessResourcesView) -> Vec<DetailListRow> {
+    let observed_peak = resources.observed_peak_bytes.map_or_else(
+        || match resources.local.memory {
+            ProcessMemoryCurrent::Unavailable => "unavailable".into(),
+            ProcessMemoryCurrent::Collecting | ProcessMemoryCurrent::Available(_) => {
+                "collecting".into()
+            }
+        },
+        format_memory_bytes,
+    );
+    let change = |change| match resources.local.memory {
+        ProcessMemoryCurrent::Unavailable => "unavailable".into(),
+        ProcessMemoryCurrent::Collecting | ProcessMemoryCurrent::Available(_) => {
+            format_memory_change(change)
+        }
+    };
+    let mut rows = vec![
+        detail(
+            "Local resident memory",
+            format_process_memory(resources.local.memory),
+        ),
+        detail("Local observed peak", observed_peak),
+        detail("Local CPU", format_process_cpu(resources.local.cpu)),
+        detail(
+            "1 minute memory change",
+            change(resources.one_minute_change_bytes),
+        ),
+        detail(
+            "5 minute memory change",
+            change(resources.five_minute_change_bytes),
+        ),
+        detail(
+            "TUI resident memory",
+            format_process_memory(resources.tui.memory),
+        ),
+        detail("TUI CPU", format_process_cpu(resources.tui.cpu)),
+    ];
+    match resources.app_server {
+        AppServerResourcesView::IncludedInTui => {
+            rows.push(detail("App Server", "included in the TUI process"))
+        }
+        AppServerResourcesView::Local(app_server) => {
+            rows.push(detail(
+                "App Server resident memory",
+                format_process_memory(app_server.memory),
+            ));
+            rows.push(detail("App Server CPU", format_process_cpu(app_server.cpu)));
+        }
+        AppServerResourcesView::Remote => {
+            rows.push(detail("App Server", "remote — excluded from local totals"))
+        }
+    }
+    rows
 }
 
 fn detail(label: &str, value: impl Into<String>) -> DetailListRow {

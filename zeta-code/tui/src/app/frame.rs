@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::app::welcome;
+use crate::host::process_resources::ProcessResourceDemand;
 use crate::render::Renderable;
 use crate::sessions;
 use crate::status as status_line;
@@ -13,6 +14,7 @@ use crate::thread::interaction::approval;
 use crate::thread::interaction::query;
 use crate::thread::plan;
 use crate::thread::queue;
+use crate::thread::queue::QueueId;
 use crate::thread::transcript as chat_history;
 use crate::thread::transcript::ChatHistoryPointerState;
 use crate::thread::transcript::ChatHistoryView;
@@ -78,17 +80,20 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         );
     } else {
         let messages = app.transcript_views();
-        if messages.is_empty() {
-            welcome::draw(frame, areas.session.transcript, app.welcome(), context);
-        } else {
-            ChatHistoryView {
-                messages: &messages,
-                scroll: app.transcript_scroll(),
-                render_cache: app.transcript_render_cache(),
-                pointer: transcript_pointer_state(hovered, pressed),
-            }
-            .render(frame, areas.session.transcript, context);
+        let header = welcome::history_buffer(
+            areas.session.transcript.width,
+            areas.session.transcript.height,
+            app.welcome(),
+            context,
+        );
+        ChatHistoryView {
+            header: Some(&header),
+            messages: &messages,
+            scroll: app.transcript_scroll(),
+            render_cache: app.transcript_render_cache(),
+            pointer: transcript_pointer_state(hovered, pressed),
         }
+        .render(frame, areas.session.transcript, context);
     }
     let cursor = if app.accepts_input() && app.chat_input_focused() {
         chat_input::ChatInputCursor::Visible
@@ -158,11 +163,21 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         goal::draw(frame, areas.session.goal, app.goal_view(), context);
         plan::draw(frame, areas.session.plan, app.plan_view(), context);
         let queue_view = app.queue_view();
+        let hovered_queue = match hovered {
+            Some(InputPointerTarget::Queue(queue_id)) => Some(*queue_id),
+            _ => None,
+        };
+        let pressed_queue = match pressed {
+            Some(InputPointerTarget::Queue(queue_id)) => Some(*queue_id),
+            _ => None,
+        };
         queue::draw(
             frame,
             areas.session.queue,
             &queue_view,
             queue::DEFAULT_MAX_VISIBLE_ITEMS,
+            hovered_queue,
+            pressed_queue,
             context,
         );
     }
@@ -235,6 +250,7 @@ pub(crate) enum InputPointerTarget {
     Approval(usize),
     Query(usize),
     SessionManager(crate::sessions::SessionManagerPointerTarget),
+    Queue(QueueId),
     TranscriptJumpToBottom,
     TranscriptToggle(String),
     TranscriptDetails(String),
@@ -313,9 +329,20 @@ pub(crate) fn input_pointer_target_at(
             return Some(InputPointerTarget::SessionManager(target));
         }
     } else {
+        let queue_view = app.queue_view();
+        if let Some(queue_id) = queue::pointer_target_at(
+            areas.session.queue,
+            &queue_view,
+            queue::DEFAULT_MAX_VISIBLE_ITEMS,
+            column,
+            row,
+        ) {
+            return Some(InputPointerTarget::Queue(queue_id));
+        }
         let messages = app.transcript_views();
         if let Some(target) = chat_history::pointer_target_at(
             areas.session.transcript,
+            usize::from(welcome::history_height(areas.session.transcript.height)),
             &messages,
             app.transcript_scroll(),
             app.transcript_render_cache(),
@@ -419,6 +446,35 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
     FrameLayout { session, input }
 }
 
+pub(crate) fn process_resource_demand(app: &App, terminal_area: Rect) -> ProcessResourceDemand {
+    let areas = layout(app, terminal_area);
+    if app
+        .command_panel()
+        .is_some_and(|panel| panel.process_resources_visible(areas.session.composer))
+    {
+        return ProcessResourceDemand::Processes;
+    }
+    if !matches!(bottom_content(app), BottomContent::StatusLine) {
+        return ProcessResourceDemand::Disabled;
+    }
+    let area = chat_input::content_area(areas.session.bottom);
+    if area.is_empty() {
+        return ProcessResourceDemand::Disabled;
+    }
+    let policy = app
+        .status_line()
+        .policy_text_for_width(usize::from(area.width), app.approval_mode_status());
+    if area.height == 1 && !policy.is_empty() {
+        return ProcessResourceDemand::Disabled;
+    }
+    app.status_line()
+        .visible_process_resources(usize::from(area.width), app.status_line_runtime())
+        .map_or(
+            ProcessResourceDemand::Disabled,
+            ProcessResourceDemand::StatusLine,
+        )
+}
+
 fn completion_area(areas: &FrameLayout) -> Rect {
     Rect {
         x: areas.session.transcript.x,
@@ -486,31 +542,39 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     }
     if app.approval_view().is_some() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓ choose · enter confirm"),
+            text: Cow::Borrowed("↑↓ to choose · Enter to confirm"),
             style: HitBarStyle::Keys,
         };
     }
     if app.query_view().is_some() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓ choose · enter answer · esc cancel custom input"),
+            text: Cow::Borrowed("↑↓ to choose · Enter to answer · Esc to cancel custom input"),
+            style: HitBarStyle::Keys,
+        };
+    }
+    if app.queue_focused() {
+        return BottomContent::HitBar {
+            text: Cow::Borrowed(app.queue_key_hints()),
             style: HitBarStyle::Keys,
         };
     }
     if app.transcript_selection_active() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓ select · space expand · enter details · esc input"),
+            text: Cow::Borrowed(
+                "↑↓ to select · Space to expand · Enter to view details · Esc to return to input",
+            ),
             style: HitBarStyle::Keys,
         };
     }
     if app.agent_thread_switcher_focused() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓ select · enter switch · esc input"),
+            text: Cow::Borrowed("↑↓ to select · Enter to switch · Esc to return to input"),
             style: HitBarStyle::Keys,
         };
     }
     if let Some(prefix) = app.pending_key_chord_label() {
         return BottomContent::HitBar {
-            text: Cow::Owned(format!("{prefix} … waiting for next key · esc cancel")),
+            text: Cow::Owned(format!("{prefix} … waiting for next key · Esc to cancel")),
             style: HitBarStyle::Warning,
         };
     }

@@ -12,6 +12,7 @@ mod models;
 mod render;
 mod sessions;
 mod skills;
+mod startup;
 mod status;
 mod terminal;
 #[cfg(test)]
@@ -63,8 +64,55 @@ pub struct TuiOptions {
     display_dir_root: PathBuf,
     host_dir_root: PathBuf,
     host_file_search_root: Option<PathBuf>,
+    profile_root: Option<PathBuf>,
     theme_root: Option<PathBuf>,
+    connection: TuiConnectionKind,
+    app_server_process: AppServerProcess,
     recovery: Option<TuiRecoveryState>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TuiConnectionKind {
+    Local,
+    Remote,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum AppServerProcess {
+    IncludedInTui,
+    Local(u32),
+    Remote,
+}
+
+impl TuiConnectionKind {
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::Local => "Local App Server",
+            Self::Remote => "Remote App Server",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TuiStartupContext {
+    pub(crate) workspace: PathBuf,
+    pub(crate) profile_root: Option<PathBuf>,
+    pub(crate) connection: TuiConnectionKind,
+    pub(crate) app_server_process: AppServerProcess,
+    pub(crate) recovery: Option<TuiRecoveryState>,
+}
+
+impl TuiStartupContext {
+    #[cfg(test)]
+    pub(crate) fn new(workspace: impl Into<PathBuf>) -> Self {
+        Self {
+            workspace: workspace.into(),
+            profile_root: None,
+            connection: TuiConnectionKind::Local,
+            app_server_process: AppServerProcess::IncludedInTui,
+            recovery: None,
+        }
+    }
 }
 
 impl TuiOptions {
@@ -75,7 +123,10 @@ impl TuiOptions {
             display_dir_root: dir_root.clone(),
             host_dir_root: dir_root.clone(),
             host_file_search_root: Some(dir_root),
+            profile_root: None,
             theme_root: None,
+            connection: TuiConnectionKind::Local,
+            app_server_process: AppServerProcess::IncludedInTui,
             recovery: None,
         }
     }
@@ -86,6 +137,8 @@ impl TuiOptions {
         self.display_dir_root = dir_root.clone();
         self.host_dir_root = dir_root.clone();
         self.host_file_search_root = Some(dir_root);
+        self.connection = TuiConnectionKind::Local;
+        self.app_server_process = AppServerProcess::IncludedInTui;
         self
     }
 
@@ -97,12 +150,23 @@ impl TuiOptions {
     pub fn with_remote_dir(mut self, remote_dir_root: impl Into<PathBuf>) -> Self {
         self.display_dir_root = remote_dir_root.into();
         self.host_file_search_root = None;
+        self.connection = TuiConnectionKind::Remote;
+        self.app_server_process = AppServerProcess::Remote;
+        self
+    }
+
+    /// Includes the locally owned App Server child in process resource monitoring.
+    pub fn with_app_server_process_id(mut self, process_id: u32) -> Self {
+        self.connection = TuiConnectionKind::Local;
+        self.app_server_process = AppServerProcess::Local(process_id);
         self
     }
 
     /// Enables Zeta Code theme documents from the active profile.
     pub fn with_profile_root(mut self, profile_root: impl Into<PathBuf>) -> Self {
-        let product_root = profile_root.into().join("zeta-code");
+        let profile_root = profile_root.into();
+        let product_root = profile_root.join("zeta-code");
+        self.profile_root = Some(profile_root);
         self.theme_root = Some(product_root);
         self
     }
@@ -111,6 +175,16 @@ impl TuiOptions {
     pub fn with_recovery(mut self, recovery: TuiRecoveryState) -> Self {
         self.recovery = Some(recovery);
         self
+    }
+
+    pub(crate) fn startup_context(&self) -> TuiStartupContext {
+        TuiStartupContext {
+            workspace: self.display_dir_root.clone(),
+            profile_root: self.profile_root.clone(),
+            connection: self.connection,
+            app_server_process: self.app_server_process,
+            recovery: self.recovery.clone(),
+        }
     }
 }
 

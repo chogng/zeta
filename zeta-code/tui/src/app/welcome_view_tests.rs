@@ -28,14 +28,15 @@ fn wide_header_keeps_pet_and_identity_information_together() {
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
     assert!(rendered.contains("openai-chatgpt/gpt-5.6 · Subscription"));
     assert!(rendered.contains("/work/zeta"));
-    assert!(rendered.contains(" ▜▙▄▄▄▟▛"));
+    assert!(rendered.contains(" ▐▖  ▗▌ "));
+    assert_eq!(super::desired_height(80), 5);
     assert_eq!(
         buffer[(3, 1)].fg,
         ratatui::style::Color::Rgb(0x40, 0x85, 0xac)
     );
-    assert_eq!(buffer[(4, 2)].bg, ratatui::style::Color::Rgb(0, 0, 0));
-    assert_eq!(buffer[(14, 1)].symbol(), "Z");
-    assert!(buffer[(14, 1)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(4, 3)].fg, ratatui::style::Color::Rgb(0, 0, 0));
+    assert_eq!(buffer[(13, 1)].symbol(), "Z");
+    assert!(buffer[(13, 1)].modifier.contains(Modifier::BOLD));
     assert_snapshot!("welcome_pet_identity_header", rendered);
 }
 
@@ -73,8 +74,8 @@ fn pet_pixel_map() -> String {
             };
             rows[cell_y * 2 + quadrant / 2][cell_x * 2 + quadrant % 2] = match color {
                 None => '.',
-                Some(ratatui::style::Color::Rgb(0x40, 0x85, 0xac)) => 'B',
-                Some(ratatui::style::Color::Rgb(0, 0, 0)) => 'K',
+                Some(color) if color.components() == [0x40, 0x85, 0xac] => 'B',
+                Some(color) if color.components() == [0, 0, 0] => 'K',
                 Some(color) => panic!("unexpected pet color {color:?}"),
             };
         }
@@ -85,24 +86,24 @@ fn pet_pixel_map() -> String {
         .join("\n")
 }
 
-fn quadrant_mask(symbol: &str) -> u8 {
+fn quadrant_mask(symbol: char) -> u8 {
     match symbol {
-        "" | " " => 0,
-        "▘" => 1,
-        "▝" => 2,
-        "▀" => 3,
-        "▖" => 4,
-        "▌" => 5,
-        "▞" => 6,
-        "▛" => 7,
-        "▗" => 8,
-        "▚" => 9,
-        "▐" => 10,
-        "▜" => 11,
-        "▄" => 12,
-        "▙" => 13,
-        "▟" => 14,
-        "█" => 15,
+        ' ' => 0,
+        '▘' => 1,
+        '▝' => 2,
+        '▀' => 3,
+        '▖' => 4,
+        '▌' => 5,
+        '▞' => 6,
+        '▛' => 7,
+        '▗' => 8,
+        '▚' => 9,
+        '▐' => 10,
+        '▜' => 11,
+        '▄' => 12,
+        '▙' => 13,
+        '▟' => 14,
+        '█' => 15,
         symbol => panic!("unexpected quadrant symbol {symbol}"),
     }
 }

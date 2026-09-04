@@ -60,7 +60,7 @@ fn session_choices_at(
             ],
         )
         .with_activation_mode(ListSelectionActivationMode::Enter)
-        .with_activation_label("resume")
+        .with_activation_action("resume")
         .with_initial_selected(selected)
         .with_search(SearchBoxModel::new("Search saved sessions"))
         .with_empty_message("No matching sessions"),

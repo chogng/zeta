@@ -249,7 +249,7 @@ pub(crate) fn keymap_choices(
                 ListSelectionGroup::new("Diagnostics", diagnostic_items),
             ],
         )
-        .with_activation_label("edit")
+        .with_activation_action("edit")
         .with_search(SearchBoxModel::new("Search shortcuts"))
         .with_empty_message("No matching shortcuts"),
         actions: item_actions,
@@ -320,7 +320,7 @@ pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) ->
             action.label,
             vec![ListSelectionGroup::new("Actions", items)],
         )
-        .with_activation_label("choose")
+        .with_activation_action("choose")
         .with_key_hint_note(summary)
         .without_tab_bar(),
         actions,

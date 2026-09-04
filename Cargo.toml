@@ -235,6 +235,7 @@ serde_yaml = "0.9"
 signal-hook = "0.3"
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
 sys-locale = "0.3"
+sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.7"
 rustix = "1.1.4"
@@ -395,6 +396,7 @@ zeta-settings = { path = "app/settings" }
 zeta-shell-command = { path = "zeta-rs/shell-command" }
 zeta-shell-completion = { path = "zeta-rs/shell-completion" }
 zeta-slash-commands = { path = "zeta-rs/slash-commands" }
+zeta-sprite = { path = "zeta-code/sprite", default-features = false }
 zeta-slash-launcher = { path = "zeta-rs/slash-launcher" }
 zeta-skills = { path = "zeta-rs/skills" }
 zeta-state = { path = "zeta-rs/state" }

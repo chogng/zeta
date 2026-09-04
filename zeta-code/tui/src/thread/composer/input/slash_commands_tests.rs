@@ -19,6 +19,7 @@ fn builtins_follow_enum_presentation_order() {
             "connectors",
             "rewind",
             "config",
+            "startup",
             "add-dir",
             "fork",
             "help",
@@ -31,7 +32,6 @@ fn builtins_follow_enum_presentation_order() {
             "sessions",
             "agents",
             "subagents",
-            "queue",
         ]
     );
     assert_eq!(definitions.len(), 22);

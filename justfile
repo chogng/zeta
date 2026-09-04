@@ -56,13 +56,9 @@ generate-protocol:
 zeta *args:
     {{ python }} -B scripts/zeta-code/run.py {args}
 
-# Regenerate the Welcome pet and preview its final terminal cells.
+# Preview the Welcome pet's final terminal cells.
 pet:
-    @{{ python }} -B scripts/cargo.py run --quiet -p zeta-sprite -- zeta-code/tui/assets/welcome/pet.sprite --columns 9 --rows 3 --rust zeta-code/tui/src/app/welcome/pet/asset.rs
-
-# Verify that the Welcome pet matches its pixel-grid design source.
-pet-check:
-    @{{ python }} -B scripts/cargo.py run --quiet -p zeta-sprite -- zeta-code/tui/assets/welcome/pet.sprite --columns 9 --rows 3 --rust zeta-code/tui/src/app/welcome/pet/asset.rs --check
+    @{{ python }} -B scripts/cargo.py run --quiet -p zeta-sprite -- zeta-code/tui/assets/welcome/pet.sprite --columns 8 --rows 5
 
 # Assemble the complete immutable development package shared by Zeta products.
 zeta-package *args:

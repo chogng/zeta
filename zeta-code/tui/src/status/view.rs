@@ -1,5 +1,7 @@
 use super::StatusLineModel;
 use super::StatusLineRuntime;
+use super::model::StatusLineSegment;
+use super::model::StatusLineSegmentKind;
 use super::model::approval_mode_display;
 use super::model::approval_mode_text;
 use crate::render::RenderContext;
@@ -24,7 +26,7 @@ pub(crate) fn draw(
         return;
     }
 
-    let top = status_line.top_text_for_width(usize::from(area.width), runtime);
+    let top = status_line.top_segments_for_width(usize::from(area.width), runtime);
     let policy_width = usize::from(area.width);
     let policy = status_line.policy_text_for_width(policy_width, approval);
     let lines = if area.height == 1 {
@@ -42,8 +44,21 @@ pub(crate) fn draw(
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-fn top_line(text: String, context: RenderContext<'_>) -> Line<'static> {
-    Line::styled(text, Style::default().fg(context.chat_input_chrome()))
+fn top_line(segments: Vec<StatusLineSegment>, context: RenderContext<'_>) -> Line<'static> {
+    Line::from(
+        segments
+            .into_iter()
+            .map(|segment| {
+                let (text, kind) = segment.into_parts();
+                let color = match kind {
+                    StatusLineSegmentKind::Chrome => context.chat_input_chrome(),
+                    StatusLineSegmentKind::Inserted => context.inserted_marker(),
+                    StatusLineSegmentKind::Removed => context.removed_marker(),
+                };
+                Span::styled(text, Style::default().fg(color))
+            })
+            .collect::<Vec<_>>(),
+    )
 }
 
 fn styled_policy_line(
@@ -99,3 +114,7 @@ fn mode_color(approval_mode: ApprovalMode, context: RenderContext<'_>) -> ratatu
         ApprovalMode::BypassPermissions => context.danger(),
     }
 }
+
+#[cfg(test)]
+#[path = "view_tests.rs"]
+mod tests;

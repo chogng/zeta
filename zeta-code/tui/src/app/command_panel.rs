@@ -1,3 +1,4 @@
+use crate::TuiStartupContext;
 use crate::config::ConfigChoices;
 use crate::config::ConfigEditor;
 use crate::config::ConfigEditorOutcome;
@@ -16,6 +17,7 @@ use crate::sessions::SessionChoices;
 use crate::sessions::SessionSelectionAction;
 use crate::skills::SkillChoices;
 use crate::skills::SkillSelectionAction;
+use crate::status::ProcessResourcesView;
 use crate::status::StatusLineChoices;
 use crate::status::StatusLineSelectionAction;
 use crate::status::StatusPanel;
@@ -23,9 +25,6 @@ use crate::status::StatusPanelOutcome;
 use crate::theme::ThemeChoices;
 use crate::theme::ThemePicker;
 use crate::theme::ThemePickerOutcome;
-use crate::thread::queue::QueueChoices;
-use crate::thread::queue::QueueInput;
-use crate::thread::queue::QueueSelectionAction;
 use crate::thread::rewind::RewindChoices;
 use crate::thread::rewind::RewindSelectionAction;
 use crate::widgets::key_capture;
@@ -65,10 +64,10 @@ pub(crate) enum CommandPanel {
     Keymap(KeymapEditor),
     Mcp(ListSelection<McpSelectionAction>),
     Model(ListSelection<ModelSelectionAction>),
-    Queue(ListSelection<QueueSelectionAction>),
     Rewind(ListSelection<RewindSelectionAction>),
     Sessions(ListSelection<SessionSelectionAction>),
     Skills(ListSelection<SkillSelectionAction>),
+    Startup(ListSelection<()>),
     Status(StatusPanel),
     StatusLine(ListSelection<StatusLineSelectionAction>),
     Theme(ThemePicker),
@@ -82,11 +81,6 @@ pub(crate) enum CommandPanelOutcome {
     Keymap(KeymapEditorOutcome),
     Mcp(McpSelectionAction),
     Model(ModelSelectionAction),
-    Queue(QueueSelectionAction),
-    QueueInput {
-        input: QueueInput,
-        action: QueueSelectionAction,
-    },
     Rewind(RewindSelectionAction),
     Sessions(SessionSelectionAction),
     Skills(SkillSelectionAction),
@@ -125,10 +119,6 @@ impl CommandPanel {
         Self::Model(ListSelection::new(spec.model, spec.actions))
     }
 
-    pub(crate) fn queue(spec: QueueChoices) -> Self {
-        Self::Queue(ListSelection::new(spec.model, spec.actions))
-    }
-
     pub(crate) fn rewind(spec: RewindChoices) -> Self {
         Self::Rewind(ListSelection::new(spec.model, spec.actions))
     }
@@ -141,6 +131,13 @@ impl CommandPanel {
         Self::Skills(ListSelection::new(spec.model, spec.actions))
     }
 
+    pub(crate) fn startup(context: &TuiStartupContext) -> Self {
+        Self::Startup(ListSelection::new(
+            crate::startup::choices(context),
+            BTreeMap::new(),
+        ))
+    }
+
     pub(crate) fn status_line(spec: StatusLineChoices) -> Self {
         Self::StatusLine(ListSelection::new(spec.model, spec.actions))
     }
@@ -149,17 +146,24 @@ impl CommandPanel {
         Self::Status(panel)
     }
 
+    pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
+        if let Self::Status(panel) = self {
+            panel.apply_process_resources(resources);
+        }
+    }
+
+    pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
+        match self {
+            Self::Status(panel) => panel.process_resources_visible(composer_body_area(area)),
+            _ => false,
+        }
+    }
+
     pub(crate) fn theme(spec: ThemeChoices) -> Self {
         Self::Theme(ThemePicker::new(spec))
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> CommandPanelOutcome {
-        if let Self::Queue(selection) = self
-            && let Some(input) = crate::thread::queue::queue_input(key)
-            && let Some(action) = selection.selected_action().copied()
-        {
-            return CommandPanelOutcome::QueueInput { input, action };
-        }
         match self {
             Self::Help(content) => map_read_only(content.handle_key(key)),
             Self::Dirs(content) => {
@@ -174,9 +178,6 @@ impl CommandPanel {
             Self::Model(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Model)
             }
-            Self::Queue(content) => {
-                map_selection(content.handle_key(key), CommandPanelOutcome::Queue)
-            }
             Self::Rewind(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Rewind)
             }
@@ -186,6 +187,7 @@ impl CommandPanel {
             Self::Skills(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Skills)
             }
+            Self::Startup(content) => map_read_only(content.handle_key(key)),
             Self::Status(content) => match content.handle_key(key) {
                 StatusPanelOutcome::Consumed => CommandPanelOutcome::Consumed,
                 StatusPanelOutcome::Dismiss => CommandPanelOutcome::Dismiss,
@@ -206,10 +208,10 @@ impl CommandPanel {
             Self::Keymap(content) => content.handle_paste(pasted),
             Self::Mcp(content) => content.handle_paste(pasted),
             Self::Model(content) => content.handle_paste(pasted),
-            Self::Queue(content) => content.handle_paste(pasted),
             Self::Rewind(content) => content.handle_paste(pasted),
             Self::Sessions(content) => content.handle_paste(pasted),
             Self::Skills(content) => content.handle_paste(pasted),
+            Self::Startup(content) => content.handle_paste(pasted),
             Self::Status(_) => {}
             Self::StatusLine(content) => content.handle_paste(pasted),
             Self::Theme(content) => content.handle_paste(pasted),
@@ -225,10 +227,10 @@ impl CommandPanel {
             Self::Keymap(editor) => editor.selection(),
             Self::Mcp(selection) => Some(selection.state()),
             Self::Model(selection) => Some(selection.state()),
-            Self::Queue(selection) => Some(selection.state()),
             Self::Rewind(selection) => Some(selection.state()),
             Self::Sessions(selection) => Some(selection.state()),
             Self::Skills(selection) => Some(selection.state()),
+            Self::Startup(selection) => Some(selection.state()),
             Self::Status(_) => None,
             Self::StatusLine(selection) => Some(selection.state()),
             Self::Theme(picker) => Some(picker.selection()),
@@ -244,10 +246,10 @@ impl CommandPanel {
             | Self::Keymap(_)
             | Self::Mcp(_)
             | Self::Model(_)
-            | Self::Queue(_)
             | Self::Rewind(_)
             | Self::Sessions(_)
             | Self::Skills(_)
+            | Self::Startup(_)
             | Self::Status(_)
             | Self::StatusLine(_)
             | Self::Theme(_) => None,
@@ -263,10 +265,10 @@ impl CommandPanel {
             | Self::Connectors(_)
             | Self::Mcp(_)
             | Self::Model(_)
-            | Self::Queue(_)
             | Self::Rewind(_)
             | Self::Sessions(_)
             | Self::Skills(_)
+            | Self::Startup(_)
             | Self::Status(_)
             | Self::StatusLine(_)
             | Self::Theme(_) => None,
@@ -297,10 +299,6 @@ impl CommandPanel {
         pressed: Option<CommandPanelPointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
-        if let Self::Status(panel) = self {
-            panel.draw(frame, area, context);
-            return;
-        }
         let body = composer_body_area(area);
         let presentation_focus = self
             .list_selection()
@@ -325,7 +323,9 @@ impl CommandPanel {
                 ])),
             area,
         );
-        if let Some(selection) = self.list_selection() {
+        if let Self::Status(panel) = self {
+            panel.draw(frame, body, tab_index(hovered), tab_index(pressed), context);
+        } else if let Some(selection) = self.list_selection() {
             list_selection::draw_with_pointer(
                 frame,
                 body,
@@ -351,8 +351,13 @@ impl CommandPanel {
         column: u16,
         row: u16,
     ) -> Option<CommandPanelPointerTarget> {
-        let selection = self.list_selection()?;
         let body = composer_body_area(area);
+        if let Self::Status(panel) = self {
+            return panel
+                .tab_index_at(body, column, row)
+                .map(CommandPanelPointerTarget::Tab);
+        }
+        let selection = self.list_selection()?;
         selection
             .tab_index_at(body, column, row)
             .map(CommandPanelPointerTarget::Tab)
@@ -369,7 +374,9 @@ impl CommandPanel {
     }
 
     fn title(&self) -> &str {
-        if let Some(selection) = self.list_selection() {
+        if let Self::Status(panel) = self {
+            panel.title()
+        } else if let Some(selection) = self.list_selection() {
             selection.title()
         } else if let Some(prompt) = self.text_prompt() {
             prompt.title()
@@ -389,10 +396,10 @@ impl CommandPanel {
             Self::Keymap(content) => content.key_hints(),
             Self::Mcp(content) => content.key_hints(),
             Self::Model(content) => content.key_hints(),
-            Self::Queue(content) => content.key_hints(),
             Self::Rewind(content) => content.key_hints(),
             Self::Sessions(content) => content.key_hints(),
             Self::Skills(content) => content.key_hints(),
+            Self::Startup(content) => content.key_hints(),
             Self::Status(content) => content.key_hints(),
             Self::StatusLine(content) => content.key_hints(),
             Self::Theme(content) => content.key_hints(),
@@ -408,11 +415,11 @@ impl CommandPanel {
             Self::Keymap(content) => content.select_tab(index),
             Self::Mcp(content) => content.select_tab(index),
             Self::Model(content) => content.select_tab(index),
-            Self::Queue(content) => content.select_tab(index),
             Self::Rewind(content) => content.select_tab(index),
             Self::Sessions(content) => content.select_tab(index),
             Self::Skills(content) => content.select_tab(index),
-            Self::Status(_) => false,
+            Self::Startup(content) => content.select_tab(index),
+            Self::Status(content) => content.select_tab(index),
             Self::StatusLine(content) => content.select_tab(index),
             Self::Theme(content) => content.select_tab(index),
         }
@@ -427,10 +434,10 @@ impl CommandPanel {
             Self::Keymap(content) => content.focus_search(),
             Self::Mcp(content) => content.focus_search(),
             Self::Model(content) => content.focus_search(),
-            Self::Queue(content) => content.focus_search(),
             Self::Rewind(content) => content.focus_search(),
             Self::Sessions(content) => content.focus_search(),
             Self::Skills(content) => content.focus_search(),
+            Self::Startup(content) => content.focus_search(),
             Self::Status(_) => false,
             Self::StatusLine(content) => content.focus_search(),
             Self::Theme(content) => content.focus_search(),
@@ -458,9 +465,6 @@ impl CommandPanel {
             Self::Model(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, CommandPanelOutcome::Model)),
-            Self::Queue(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Queue)),
             Self::Rewind(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, CommandPanelOutcome::Rewind)),
@@ -470,6 +474,7 @@ impl CommandPanel {
             Self::Skills(content) => content
                 .activate_visible_item(index)
                 .map(|outcome| map_selection(outcome, CommandPanelOutcome::Skills)),
+            Self::Startup(content) => content.activate_visible_item(index).map(map_read_only),
             Self::Status(_) => None,
             Self::StatusLine(content) => content
                 .activate_visible_item(index)
@@ -522,14 +527,6 @@ impl CommandPanel {
 
     pub(crate) fn replace_mcp(&mut self, spec: McpChoices) -> bool {
         let Self::Mcp(content) = self else {
-            return false;
-        };
-        content.replace(spec.model, spec.actions);
-        true
-    }
-
-    pub(crate) fn replace_queue(&mut self, spec: QueueChoices) -> bool {
-        let Self::Queue(content) = self else {
             return false;
         };
         content.replace(spec.model, spec.actions);

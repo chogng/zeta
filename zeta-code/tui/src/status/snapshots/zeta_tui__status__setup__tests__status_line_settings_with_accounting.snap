@@ -7,5 +7,7 @@ expression: "rows.join(\"\\n\")"
   Model             Configured model                                     [ ✔ ]  
   Cache hit rate    Cached input as a share of total input               [   ]  
   Reference cost    Current Thread accumulated reference cost            [   ]  
+  Memory            Local TUI and App Server resident memory             [   ]  
+  CPU               Local TUI and App Server CPU share                   [   ]  
   Git branch        Current Git branch                                   [ ✔ ]  
   Git changes       Working tree changes                                 [   ]

@@ -2,12 +2,12 @@ use super::command_panel::CommandPanel;
 use super::command_panel::CommandPanelOutcome;
 use super::top_tip::TopTip;
 use crate::config::ConfigChoices;
-use crate::config::FollowUpMode;
 use crate::connectors::ConnectorChoices;
 use crate::dirs::DirChoices;
 use crate::keymap::KeymapChoices;
 use crate::mcp::McpChoices;
 use crate::skills::SkillChoices;
+use crate::status::ProcessResourcesView;
 use crate::status::StatusLineChoices;
 use crate::status::StatusLineModel;
 use crate::theme::ThemeChoices;
@@ -26,7 +26,6 @@ use crate::thread::interaction::approval::ApprovalView;
 use crate::thread::interaction::query::Query;
 use crate::thread::interaction::query::QueryOutcome;
 use crate::thread::interaction::query::QueryView;
-use crate::thread::queue::QueueChoices;
 use crate::widgets::list_selection::ListSelectionState;
 use crossterm::event::KeyEvent;
 use std::time::Instant;
@@ -68,15 +67,11 @@ impl ChatPanel {
         &mut self,
         input: &mut ChatInput,
         key: KeyEvent,
-        follow_up_mode: FollowUpMode,
     ) -> ChatComposerOutcome {
         match self.input_mode {
             InputMode::Start => self.composer.handle_key(input, key),
             InputMode::Queue => self.composer.handle_queued_turn_key(input, key),
-            InputMode::Steer => match follow_up_mode {
-                FollowUpMode::Queue => self.composer.handle_queued_turn_key(input, key),
-                FollowUpMode::Steer => self.composer.handle_active_turn_key(input, key),
-            },
+            InputMode::Steer => self.composer.handle_active_turn_key(input, key),
         }
     }
 
@@ -240,12 +235,6 @@ impl ChatPanel {
         }
     }
 
-    pub(crate) fn replace_queue(&mut self, choices: QueueChoices) {
-        if let Some(command) = self.command.as_mut() {
-            command.replace_queue(choices);
-        }
-    }
-
     pub(crate) fn replace_keymap(&mut self, choices: KeymapChoices) {
         if let Some(command) = self.command.as_mut() {
             command.replace_keymap_catalog(choices);
@@ -255,6 +244,12 @@ impl ChatPanel {
     pub(crate) fn replace_status_line(&mut self, choices: StatusLineChoices) {
         if let Some(command) = self.command.as_mut() {
             command.replace_status_line(choices);
+        }
+    }
+
+    pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
+        if let Some(command) = self.command.as_mut() {
+            command.apply_process_resources(resources);
         }
     }
 
@@ -431,8 +426,8 @@ impl ChatPanel {
         self.top_tip.show_notice(notice, now);
     }
 
-    pub(crate) fn show_clipboard_image(&mut self) {
-        self.top_tip.show_clipboard_image();
+    pub(crate) fn show_clipboard_image(&mut self, now: Instant) {
+        self.top_tip.show_clipboard_image(now);
     }
 
     pub(crate) fn hide_clipboard_image(&mut self) {

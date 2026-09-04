@@ -94,7 +94,7 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
                 ListSelectionGroup::new("Manage", manage),
             ],
         )
-        .with_activation_label("toggle")
+        .with_activation_action("toggle")
         .with_search(SearchBoxModel::new("Search available skills"))
         .with_empty_message("No matching skills"),
         actions,

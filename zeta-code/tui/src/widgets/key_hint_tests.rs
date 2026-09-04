@@ -8,13 +8,13 @@ use ratatui::backend::TestBackend;
 #[test]
 fn key_hints_format_actions_and_notes_in_order() {
     let hints = KeyHints::new()
-        .with("Enter", "apply")
+        .with_action("Enter", "apply")
         .with_note("current: dark")
-        .with("Esc", "to close");
+        .with_action("Esc", "close");
 
     assert_eq!(
         hints.text(),
-        "Enter apply  ·  current: dark  ·  Esc to close"
+        "Enter to apply  ·  current: dark  ·  Esc to close"
     );
 }
 
@@ -24,7 +24,7 @@ fn key_hint_uses_two_character_horizontal_insets() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), "Enter apply", test_context()))
+        .draw(|frame| draw(frame, frame.area(), "Enter to apply", test_context()))
         .unwrap();
 
     let buffer = terminal.backend().buffer();

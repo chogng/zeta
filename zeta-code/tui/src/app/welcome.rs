@@ -1,4 +1,4 @@
-//! Responsive empty-Thread identity header.
+//! Responsive Thread identity header.
 
 mod pet;
 
@@ -7,12 +7,14 @@ use crate::models::access_label;
 use crate::render::RenderContext;
 use crate::render::horizontal_margin;
 use ratatui::Frame;
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Widget;
 use std::path::Path;
 use zeta_protocol::ModelAccess;
 
@@ -20,7 +22,7 @@ const INFO_ROWS: u16 = 3;
 const PET_GAP: u16 = 3;
 const MIN_INFO_WIDTH_WITH_PET: u16 = 12;
 
-/// Display-only context for the empty-Thread identity header.
+/// Display-only context for the Thread identity header.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct WelcomeModel {
     directory: String,
@@ -60,12 +62,32 @@ pub(crate) fn desired_height(_available_width: u16) -> u16 {
     pet::sprite().height().max(INFO_ROWS)
 }
 
+pub(crate) fn history_height(available_height: u16) -> u16 {
+    desired_height(0).saturating_add(1).min(available_height)
+}
+
+pub(crate) fn history_buffer(
+    width: u16,
+    height: u16,
+    model: &WelcomeModel,
+    context: RenderContext<'_>,
+) -> Buffer {
+    let area = Rect::new(0, 0, width, history_height(height));
+    let mut buffer = Buffer::empty(area);
+    render(&mut buffer, area, model, context);
+    buffer
+}
+
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     model: &WelcomeModel,
     context: RenderContext<'_>,
 ) {
+    render(frame.buffer_mut(), area, model, context);
+}
+
+fn render(buffer: &mut Buffer, area: Rect, model: &WelcomeModel, context: RenderContext<'_>) {
     let available = horizontal_margin(area, 2);
     if available.is_empty() {
         return;
@@ -83,7 +105,7 @@ pub(crate) fn draw(
         .saturating_add(u16::from(available.height > content_height));
     let text_x = if show_pet {
         let pet_area = Rect::new(available.x, content_y, sprite.width(), sprite.height());
-        frame.render_widget(pet::PetWidget::new(sprite), pet_area);
+        pet::PetWidget::new(sprite).render(pet_area, buffer);
         pet_area.right().saturating_add(PET_GAP)
     } else {
         available.x
@@ -94,31 +116,29 @@ pub(crate) fn draw(
         available.right().saturating_sub(text_x),
         INFO_ROWS.min(available.height),
     );
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled(
-                    "Zeta Code",
-                    Style::default()
-                        .fg(context.foreground())
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(" v{}", env!("CARGO_PKG_VERSION")),
-                    Style::default().fg(context.muted()),
-                ),
-            ]),
-            Line::from(Span::styled(
-                model.model_line(),
+    Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled(
+                "Zeta Code",
+                Style::default()
+                    .fg(context.foreground())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" v{}", env!("CARGO_PKG_VERSION")),
                 Style::default().fg(context.muted()),
-            )),
-            Line::from(Span::styled(
-                model.directory(),
-                Style::default().fg(context.muted()),
-            )),
+            ),
         ]),
-        text_area,
-    );
+        Line::from(Span::styled(
+            model.model_line(),
+            Style::default().fg(context.muted()),
+        )),
+        Line::from(Span::styled(
+            model.directory(),
+            Style::default().fg(context.muted()),
+        )),
+    ])
+    .render(text_area, buffer);
 }
 
 fn format_directory(directory: &Path, home: Option<&Path>) -> String {

@@ -61,7 +61,7 @@ pub(crate) fn rewind_choices(thread: &Thread) -> RewindChoices {
             vec![ListSelectionGroup::new("Checkpoints", items)],
         )
         .with_activation_mode(ListSelectionActivationMode::Enter)
-        .with_activation_label("rewind")
+        .with_activation_action("rewind")
         .without_tab_bar()
         .with_initial_selected(selected)
         .with_search(SearchBoxModel::new("Search message checkpoints"))

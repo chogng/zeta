@@ -5,9 +5,8 @@ use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::ChatInputQueueOutcome;
 use crate::thread::composer::CompletionView;
 use crate::thread::composer::built_in_slash_command_definitions;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
+use crate::thread::transcript::TranscriptScrollAnchor;
+use crate::thread::transcript::TranscriptScrollTarget;
 use zeta_protocol::ThreadId;
 use zeta_slash_commands::SlashCommandArgumentMode;
 use zeta_slash_commands::SlashCommandCatalog;
@@ -24,19 +23,23 @@ fn switching_threads_restores_draft_queue_and_scroll_together() {
     };
     store.active_mut().queue.push(queued);
     store.active_mut().input.insert_text("main remaining draft");
+    let scroll_anchor = TranscriptScrollAnchor::Cell {
+        cell_id: "main-message".into(),
+        line_offset: 2,
+    };
     store
         .active_mut()
         .scroll
-        .handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+        .apply(TranscriptScrollTarget::Anchor(scroll_anchor.clone()));
 
     store.switch(child);
     store.active_mut().input.insert_text("child draft");
-    assert_eq!(store.active().scroll.paragraph_offset(20), 20);
+    assert_eq!(store.active().scroll.anchor(), None);
     store.switch(main);
 
     assert_eq!(store.active().input.text(), "main remaining draft");
     assert_eq!(store.active().queue.view().items[0].text, "main draft");
-    assert_eq!(store.active().scroll.paragraph_offset(20), 15);
+    assert_eq!(store.active().scroll.anchor(), Some(&scroll_anchor));
 }
 
 #[test]

@@ -1,4 +1,7 @@
 use super::*;
+use crate::status::ProcessCpuCurrent;
+use crate::status::ProcessMemoryCurrent;
+use crate::status::ProcessUsageView;
 use crate::thread::TurnApprovalModes;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitDiffStatisticsDto;
@@ -11,7 +14,7 @@ use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::StreamInstanceId;
 
 #[test]
-fn status_line_combines_counts_model_branch_and_changes() {
+fn status_line_combines_plan_subagents_model_branch_and_changes() {
     let mut status_line = StatusLineModel::new();
     status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
     status_line.apply_git_status(&git_status(1));
@@ -21,16 +24,74 @@ fn status_line_combines_counts_model_branch_and_changes() {
             100,
             StatusLineRuntime {
                 plan: Some((1, 3)),
-                queue: 2,
                 subagents: 1,
+                ..StatusLineRuntime::default()
             }
         ),
-        "plan 1/3 · queue 2 · subagents 1 · claude-sonnet · main · 1 change"
+        "plan 1/3 · subagents 1 · claude-sonnet · main · 1 change"
     );
     assert_eq!(
         status_line.policy_text_for_width(100, ApprovalMode::AskPermissions),
         "⏸ ask permissions on"
     );
+}
+
+#[test]
+fn memory_and_cpu_are_opt_in_and_use_compact_text_when_space_is_tight() {
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(
+            item,
+            matches!(item, StatusLineItem::Memory | StatusLineItem::Cpu),
+        );
+    }
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_settings(settings);
+    let runtime = StatusLineRuntime {
+        process_resources: ProcessResourcesView {
+            local: ProcessUsageView {
+                memory: ProcessMemoryCurrent::Available(146_590_924),
+                cpu: ProcessCpuCurrent::Available(124),
+            },
+            ..ProcessResourcesView::default()
+        },
+        ..StatusLineRuntime::default()
+    };
+
+    assert_eq!(
+        status_line.top_text_for_width(40, runtime),
+        "memory 139.8 MiB · cpu 12.4%"
+    );
+    assert_eq!(
+        status_line.top_text_for_width(20, runtime),
+        "mem 140M · cpu 12%"
+    );
+    assert_eq!(
+        status_line.visible_process_resources(40, runtime),
+        Some(ProcessResourceMetrics::MemoryAndCpu)
+    );
+    assert_eq!(
+        status_line.visible_process_resources(9, runtime),
+        Some(ProcessResourceMetrics::Memory)
+    );
+    assert_eq!(status_line.visible_process_resources(1, runtime), None);
+}
+
+#[test]
+fn runtime_status_hides_resource_demand_when_it_uses_the_available_width() {
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, matches!(item, StatusLineItem::Memory));
+    }
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_settings(settings);
+    let runtime = StatusLineRuntime {
+        plan: Some((1, 3)),
+        ..StatusLineRuntime::default()
+    };
+
+    assert_eq!(status_line.top_text_for_width(8, runtime), "plan 1/3");
+    assert_eq!(status_line.visible_process_resources(8, runtime), None);
 }
 
 #[test]
@@ -59,6 +120,20 @@ fn git_changes_can_show_added_and_deleted_lines() {
     assert_eq!(
         status_line.top_text_for_width(80, StatusLineRuntime::default()),
         "main · +14 -3"
+    );
+    assert_eq!(
+        status_line
+            .top_segments_for_width(80, StatusLineRuntime::default())
+            .iter()
+            .map(|segment| (segment.text(), segment.kind()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("main", StatusLineSegmentKind::Chrome),
+            (" · ", StatusLineSegmentKind::Chrome),
+            ("+14", StatusLineSegmentKind::Inserted),
+            (" ", StatusLineSegmentKind::Chrome),
+            ("-3", StatusLineSegmentKind::Removed),
+        ]
     );
     assert!(!status_line.request_git_text_diff());
 }

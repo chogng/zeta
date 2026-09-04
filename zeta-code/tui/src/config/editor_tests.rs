@@ -1,7 +1,6 @@
 use super::config_choices;
 use super::provider_api_key_prompt;
 use crate::config::ConfigSelectionAction;
-use crate::config::FollowUpMode;
 use crate::config::TerminalSettings;
 use crate::status::StatusLineSettings;
 use crate::test_support::empty_config_snapshot;
@@ -60,6 +59,12 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .collect::<Vec<_>>(),
         vec!["Config", "Providers", "Language servers"]
     );
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .all(|item| !matches!(item.label(), "Revision" | "Generation"))
+    );
     let mouse = &state.visible_items()[0];
     assert_eq!(mouse.label(), "Mouse interactions");
     assert_eq!(
@@ -72,7 +77,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             if edit.server_config.revision == 4
                 && !edit.terminal.mouse_interactions()
     ));
-    let vim_mode = &state.visible_items()[2];
+    let vim_mode = &state.visible_items()[1];
     assert_eq!(vim_mode.label(), "Vim mode");
     assert_eq!(
         vim_mode.description(),
@@ -83,7 +88,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetVimMode(edit)
             if edit.terminal.input_mode() == ChatInputMode::Vim
     ));
-    let git_changes = &state.visible_items()[3];
+    let git_changes = &state.visible_items()[2];
     assert_eq!(git_changes.label(), "Show Git changes as diff");
     assert_eq!(
         git_changes.description(),
@@ -93,19 +98,6 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         view.actions.get(git_changes.id().unwrap()).unwrap(),
         ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
             if edit.status_line.show_git_changes_as_diff()
-    ));
-    let follow_up = &state.visible_items()[1];
-    assert_eq!(follow_up.label(), "Follow-up messages");
-    assert_eq!(
-        follow_up.description(),
-        Some("How Enter sends a message while a Turn is running Queue")
-    );
-    assert!(matches!(
-        view.actions.get(follow_up.id().unwrap()).unwrap(),
-        ConfigSelectionAction::ChooseFollowUpMode { queue, steer }
-            if queue.server_config.revision == 4
-                && queue.terminal.follow_up_mode() == FollowUpMode::Queue
-                && steer.terminal.follow_up_mode() == FollowUpMode::Steer
     ));
 
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -160,7 +152,7 @@ fn config_editor_shows_a_checked_vim_mode_when_enabled() {
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(
-        state.visible_items()[2].description(),
+        state.visible_items()[1].description(),
         Some("Use Vim editing in ChatInput [ ✔ ]")
     );
 }

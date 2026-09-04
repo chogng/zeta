@@ -1,6 +1,11 @@
 use crate::client::ClientEvent;
 use crate::client::ClientEventSource;
 use crate::host::TerminationSource;
+use crate::host::process_resources::ProcessResourceDemand;
+use crate::host::process_resources::ProcessResourceRequest;
+use crate::host::process_resources::ProcessResourceTargets;
+use crate::host::process_resources::ProcessResourcesReading;
+use crate::host::process_resources::ProcessResourcesSource;
 use crate::terminal::TerminalEvent;
 use crate::terminal::TerminalEventSource;
 use crossterm::event::Event;
@@ -20,6 +25,7 @@ const EVENT_QUEUE_CAPACITY: usize = 1_024;
 pub(super) enum RuntimeEvent {
     Terminal(TerminalEvent),
     Client(ClientEvent),
+    ProcessResources(ProcessResourcesReading),
     TerminationRequested,
 }
 
@@ -28,11 +34,24 @@ pub(super) struct EventPump {
     stop: Arc<AtomicBool>,
     terminal: TerminalEventSource,
     client: ClientEventSource,
+    process_resources: ProcessResourcesRuntime,
+    process_resource_request: ProcessResourceRequest,
     _termination: TerminationSource,
 }
 
+enum ProcessResourcesRuntime {
+    Active(ProcessResourcesSource),
+    Unavailable {
+        error: String,
+        targets: ProcessResourceTargets,
+    },
+}
+
 impl EventPump {
-    pub(super) fn start(events: AppServerEvents) -> Result<Self, io::Error> {
+    pub(super) fn start(
+        events: AppServerEvents,
+        resource_targets: ProcessResourceTargets,
+    ) -> Result<Self, io::Error> {
         let queue = Arc::new(RuntimeQueue::default());
         let stop = Arc::new(AtomicBool::new(false));
         let termination = TerminationSource::register()?;
@@ -66,13 +85,57 @@ impl EventPump {
             }
         };
 
+        let resources_queue = Arc::clone(&queue);
+        let resources_stop = Arc::clone(&stop);
+        let process_resources = match ProcessResourcesSource::start(
+            Arc::clone(&stop),
+            resource_targets,
+            move |reading| resources_queue.push_process_resources(reading, &resources_stop),
+        ) {
+            Ok(source) => ProcessResourcesRuntime::Active(source),
+            Err(error) => ProcessResourcesRuntime::Unavailable {
+                error: error.to_string(),
+                targets: resource_targets,
+            },
+        };
+
         Ok(Self {
             queue,
             stop,
             terminal,
             client,
+            process_resources,
+            process_resource_request: ProcessResourceRequest::default(),
             _termination: termination,
         })
+    }
+
+    pub(super) fn set_process_resource_demand(
+        &mut self,
+        demand: ProcessResourceDemand,
+    ) -> ProcessResourceRequest {
+        if self.process_resource_request.demand == demand {
+            return self.process_resource_request;
+        }
+        let request = next_process_resource_request(self.process_resource_request, demand);
+        self.process_resource_request = request;
+        match &self.process_resources {
+            ProcessResourcesRuntime::Active(source) => source.set_request(request),
+            ProcessResourcesRuntime::Unavailable { error, targets }
+                if !matches!(demand, ProcessResourceDemand::Disabled) =>
+            {
+                let reading = ProcessResourcesReading {
+                    request,
+                    tui: Err(error.clone()),
+                    app_server: matches!(targets, ProcessResourceTargets::TuiAndAppServer(_))
+                        .then(|| Err(error.clone())),
+                    sampled_at: std::time::Instant::now(),
+                };
+                let _ = self.queue.push_process_resources(reading, &self.stop);
+            }
+            ProcessResourcesRuntime::Unavailable { .. } => {}
+        }
+        request
     }
 
     pub(super) fn recv(&self) -> Result<RuntimeEvent, io::Error> {
@@ -89,9 +152,43 @@ impl EventPump {
     pub(super) fn shutdown(mut self) -> Result<(), io::Error> {
         self.stop.store(true, Ordering::Release);
         self.queue.close();
+        let resources_result = match &mut self.process_resources {
+            ProcessResourcesRuntime::Active(source) => source.join(),
+            ProcessResourcesRuntime::Unavailable { .. } => Ok(()),
+        };
         let terminal_result = self.terminal.join();
         let client_result = self.client.join();
-        terminal_result.and(client_result)
+        resources_result.and(terminal_result).and(client_result)
+    }
+}
+
+fn next_process_resource_request(
+    current: ProcessResourceRequest,
+    demand: ProcessResourceDemand,
+) -> ProcessResourceRequest {
+    let revision = current
+        .revision
+        .checked_add(1)
+        .expect("process resource request revision overflowed");
+    let previous_cpu = current
+        .demand
+        .metrics()
+        .is_some_and(|metrics| metrics.includes_cpu());
+    let next_cpu = demand
+        .metrics()
+        .is_some_and(|metrics| metrics.includes_cpu());
+    let cpu_cycle = if !previous_cpu && next_cpu {
+        current
+            .cpu_cycle
+            .checked_add(1)
+            .expect("process CPU observation cycle overflowed")
+    } else {
+        current.cpu_cycle
+    };
+    ProcessResourceRequest {
+        revision,
+        cpu_cycle,
+        demand,
     }
 }
 
@@ -106,6 +203,7 @@ struct RuntimeQueue {
 struct RuntimeQueueState {
     priority: VecDeque<RuntimeEvent>,
     client: VecDeque<RuntimeEvent>,
+    process_resources: Option<ProcessResourcesReading>,
     tick_pending: bool,
     termination_requested: bool,
     closed: bool,
@@ -118,6 +216,22 @@ impl RuntimeQueue {
 
     fn push_client(&self, event: RuntimeEvent, stop: &AtomicBool) -> bool {
         self.push(event, stop, QueueLane::Client)
+    }
+
+    fn push_process_resources(&self, reading: ProcessResourcesReading, stop: &AtomicBool) -> bool {
+        let mut state = self.state.lock().unwrap();
+        if state.closed || stop.load(Ordering::Acquire) {
+            return false;
+        }
+        if state
+            .process_resources
+            .as_ref()
+            .is_none_or(|current| current.request.revision <= reading.request.revision)
+        {
+            state.process_resources = Some(reading);
+        }
+        self.available.notify_one();
+        true
     }
 
     fn push(&self, event: RuntimeEvent, stop: &AtomicBool, lane: QueueLane) -> bool {
@@ -242,6 +356,7 @@ fn mouse_kind(event: &RuntimeEvent) -> Option<MouseEventKind> {
         RuntimeEvent::Terminal(TerminalEvent::Input(Event::Mouse(mouse))) => Some(mouse.kind),
         RuntimeEvent::Terminal(_)
         | RuntimeEvent::Client(_)
+        | RuntimeEvent::ProcessResources(_)
         | RuntimeEvent::TerminationRequested => None,
     }
 }
@@ -251,6 +366,7 @@ impl RuntimeQueueState {
         !self.termination_requested
             && self.priority.is_empty()
             && self.client.is_empty()
+            && self.process_resources.is_none()
             && !self.tick_pending
             && !self.closed
     }
@@ -264,6 +380,9 @@ impl RuntimeQueueState {
         }
         if let Some(event) = self.client.pop_front() {
             return Some(event);
+        }
+        if let Some(reading) = self.process_resources.take() {
+            return Some(RuntimeEvent::ProcessResources(reading));
         }
         if std::mem::take(&mut self.tick_pending) {
             return Some(RuntimeEvent::Terminal(TerminalEvent::Tick));

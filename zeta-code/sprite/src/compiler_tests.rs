@@ -1,6 +1,5 @@
 use super::ansi_preview;
 use super::rasterize;
-use super::rust_source;
 use super::source_dimensions;
 use crate::pack_half_blocks_rgba;
 use image::RgbaImage;
@@ -87,29 +86,10 @@ fn shrinking_pixel_art_preserves_symmetric_features() {
 }
 
 #[test]
-fn previews_and_rust_assets_use_the_packed_cell_data() {
+fn previews_use_the_packed_cell_data() {
     let pixels = vec![[0x40, 0x85, 0xac, 0xff]; 4];
     let sprite = pack_half_blocks_rgba(2, 2, &pixels, 128).unwrap();
 
     let preview = ansi_preview(sprite.as_sprite());
     assert!(preview.contains("\x1b[38;2;64;133;172m█"));
-    let source = rust_source("PET", &sprite);
-    assert!(source.contains("pub(super) static PET: PetSprite = PetSprite::new("));
-    assert!(source.contains("    2,"));
-    assert!(source.contains("    1,"));
-    assert!(source.contains("SpriteCell::new(\"█\", Some(Color::Rgb(0x40, 0x85, 0xac)), None)"));
-    assert!(!source.contains("zeta_sprite"));
-}
-
-#[test]
-fn two_color_rust_cells_are_emitted_in_rustfmt_ready_form() {
-    let blue = [0x40, 0x85, 0xac, 0xff];
-    let black = [0x00, 0x00, 0x00, 0xff];
-    let sprite = pack_half_blocks_rgba(1, 2, &[blue, black], 128).unwrap();
-
-    let source = rust_source("PET", &sprite);
-
-    assert!(source.contains("        SpriteCell::new(\n"));
-    assert!(source.contains("            Some(Color::Rgb(0x40, 0x85, 0xac)),\n"));
-    assert!(source.contains("            Some(Color::Rgb(0x00, 0x00, 0x00)),\n"));
 }

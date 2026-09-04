@@ -76,6 +76,30 @@ fn actual_tui_runs_three_complete_conversation_turns() {
 }
 
 #[test]
+fn actual_tui_scrolls_the_transcript_with_the_mouse_wheel() {
+    let fixture = Fixture::new("transcript-mouse-scroll");
+    let server = ScenarioServer::start([HttpResponse::streaming(
+        [
+            "line 01\nline 02\nline 03\nline 04\nline 05\nline 06\nline 07\nline 08\nline 09\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20",
+        ],
+        None,
+    )]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], SMALL_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("fill the transcript");
+    process.wait_for_stable_screen("line 20");
+
+    for _ in 0..5 {
+        process.scroll_up(1, 1);
+    }
+
+    process.wait_for_stable_screen("Zeta Code v");
+    process.wait_for_screen("Jump to bottom (click) ↓");
+    process.quit();
+}
+
+#[test]
 fn actual_tui_displays_git_branch_and_changes() {
     let fixture = Fixture::new("git-status");
     let initialized = Command::new("git")
@@ -172,7 +196,7 @@ fn actual_tui_queues_restores_and_completes_messages() {
     ]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Tips for getting started");
+    process.wait_for_screen("Zeta Code v");
     process.submit("首轮：保持运行以便操作队列");
     first_gate.wait_until_reached();
     process.wait_for_screen("首轮仍在运行");
@@ -183,18 +207,13 @@ fn actual_tui_queues_restores_and_completes_messages() {
     process.type_text("第三条：稍后恢复到输入框");
     process.enter();
     process.wait_for_screen("第三条：稍后恢复到输入框");
+    process.wait_for_screen("shift+tab to cycle policy");
     process.assert_snapshot("real/04-queue/00-messages-queued");
 
-    process.type_text("/queue");
+    process.alt_up();
+    process.wait_for_screen("> Queue 2: 第三条：稍后恢复到输入框");
+    process.assert_snapshot("real/04-queue/01-message-selected");
     process.enter();
-    process.wait_for_screen("Enter view");
-    process.down();
-    process.enter();
-    process.wait_for_screen("Queued message");
-    process.assert_snapshot("real/04-queue/01-message-detail-open");
-    process.escape();
-    process.wait_for_screen("Enter view");
-    process.send(b"r");
     process.wait_for_screen("> 第三条：稍后恢复到输入框\n────────────────");
     process.assert_snapshot("real/04-queue/02-message-restored-to-input");
 

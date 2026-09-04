@@ -15,10 +15,13 @@ fn detail_list_exposes_read_only_rows_without_selection_state() {
 }
 
 #[test]
-fn detail_list_renders_each_value_line_below_its_label() {
+fn detail_list_left_aligns_values_and_indents_continuation_lines() {
     let detail = DetailList::new(
         "Process",
-        vec![DetailListRow::new("Content", "first line\nsecond line")],
+        vec![
+            DetailListRow::new("ID", "42"),
+            DetailListRow::new("Content", "first line\nsecond line"),
+        ],
     );
     let mut terminal = Terminal::new(TestBackend::new(30, 6)).unwrap();
 
@@ -29,6 +32,7 @@ fn detail_list_renders_each_value_line_below_its_label() {
         .unwrap();
 
     let rendered = terminal.backend().to_string();
+    assert!(rendered.contains("ID:      42"));
     assert!(rendered.contains("Content: first line"));
     assert!(rendered.contains("         second line"));
 }

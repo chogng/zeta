@@ -106,8 +106,7 @@ impl ActiveConversation {
         match command {
             TuiSlashCommandAction::Sessions
             | TuiSlashCommandAction::Agents
-            | TuiSlashCommandAction::Subagents
-            | TuiSlashCommandAction::Queue => {
+            | TuiSlashCommandAction::Subagents => {
                 return Err(CommandExecutionError(format!(
                     "/{} must be handled by the TUI navigation layer",
                     command.command()
@@ -246,6 +245,7 @@ impl ActiveConversation {
             | TuiSlashCommandAction::Export
             | TuiSlashCommandAction::Help
             | TuiSlashCommandAction::Shortcuts
+            | TuiSlashCommandAction::Startup
             | TuiSlashCommandAction::StatusLine => {
                 return Err(CommandExecutionError(
                     "host command reached the App Server dispatcher".into(),

@@ -151,7 +151,7 @@ pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> D
     DirChoices {
         model: ListSelectionModel::new("Directories", groups)
             .with_activation_mode(ListSelectionActivationMode::Enter)
-            .with_activation_label("change")
+            .with_activation_action("change")
             .without_tab_bar()
             .with_search(SearchBoxModel::new("Search directories"))
             .with_empty_message("No directories"),

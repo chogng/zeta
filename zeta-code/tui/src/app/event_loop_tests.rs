@@ -118,6 +118,17 @@ fn repeated_clipboard_availability_refreshes_are_coalesced() {
 }
 
 #[test]
+fn repeated_older_history_requests_are_coalesced() {
+    let requests = RequestTasks::default();
+    let mut queued = VecDeque::from([AppCommand::LoadOlderHistory]);
+
+    let action = schedule_action(Some(AppCommand::LoadOlderHistory), &requests, &mut queued);
+
+    assert_eq!(action, Some(AppCommand::LoadOlderHistory));
+    assert!(queued.is_empty());
+}
+
+#[test]
 fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
     let mut app = App::new();
     app.insert_text("/");
@@ -320,13 +331,17 @@ fn transcript_mouse_wheel_reveals_jump_control_and_click_returns_to_latest() {
     let area = Rect::new(0, 0, 50, 16);
     let transcript = frame::layout(&app, area).session.transcript;
 
-    assert!(scroll_pointer_item(
-        &mut app,
-        area,
-        transcript.x,
-        transcript.y,
-        TranscriptScrollDirection::Up,
-    ));
+    assert_eq!(
+        scroll_pointer_item(
+            &mut app,
+            area,
+            transcript.x,
+            transcript.y,
+            TranscriptScrollDirection::Up,
+        ),
+        None
+    );
+    assert!(app.transcript_scroll().anchor().is_some());
     let jump = (transcript.x..transcript.right())
         .find(|column| {
             frame::input_pointer_target_at(
@@ -346,4 +361,24 @@ fn transcript_mouse_wheel_reveals_jump_control_and_click_returns_to_latest() {
         frame::input_pointer_target_at(&app, area, column, transcript.bottom().saturating_sub(1))
             != Some(InputPointerTarget::TranscriptJumpToBottom)
     }));
+}
+
+#[test]
+fn transcript_mouse_wheel_at_loaded_start_requests_older_history() {
+    let mut app = App::new();
+    app.update(AppEvent::FailureReported("only loaded message".into()));
+    let area = Rect::new(0, 0, 50, 16);
+    let transcript = frame::layout(&app, area).session.transcript;
+
+    assert_eq!(
+        scroll_pointer_item(
+            &mut app,
+            area,
+            transcript.x,
+            transcript.y,
+            TranscriptScrollDirection::Up,
+        ),
+        Some(AppCommand::LoadOlderHistory)
+    );
+    assert!(app.transcript_scroll().anchor().is_some());
 }

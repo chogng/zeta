@@ -71,7 +71,7 @@ pub(crate) fn connector_choices(catalog: &ConnectorListResult) -> ConnectorChoic
             ],
         )
         .with_activation_mode(ListSelectionActivationMode::Enter)
-        .with_activation_label("connect/disconnect")
+        .with_activation_action("connect/disconnect")
         .with_search(SearchBoxModel::new("Search connectors"))
         .with_empty_message("No matching Connectors"),
         actions,
