@@ -81,6 +81,7 @@ zeta-code/tui/
 │   │   ├── chat_panel.rs
 │   │   ├── command.rs
 │   │   ├── completion.rs
+│   │   ├── driver.rs / driver/
 │   │   ├── event.rs
 │   │   ├── event_loop.rs
 │   │   ├── event_pump.rs
@@ -90,6 +91,7 @@ zeta-code/tui/
 │   │   ├── recovery.rs
 │   │   ├── redraw.rs
 │   │   ├── requests.rs
+│   │   ├── start.rs
 │   │   └── startup.rs
 │   ├── thread.rs / thread/
 │   │   ├── completion.rs
@@ -203,6 +205,9 @@ attachments.rs
 - 读文件、写配置、访问剪贴板或直接执行 RPC；
 - 通过一个覆盖所有功能的巨大 `match` 实现产品行为。
 
+`start.rs` 读取初始目录、配置、主题、Session/Thread 和订阅，并一次性组装 terminal、`AppDriver`
+与 `EventPump`。`event_loop.rs` 从这三个已准备好的对象开始工作，只处理运行期间的事件顺序、绘制和退出清理。
+
 顶层 `AppEvent` 和 `AppCommand` 只做领域路由：
 
 ```rust,ignore
@@ -226,7 +231,7 @@ enum AppCommand {
 }
 ```
 
-代码不要求逐字使用这些类型名，但必须保持“一种能力一个顶层分支”，具体事件和命令留在对应目录。能力可以直接把自己的 `Event` 转成 `AppEvent`，但不能在顶层重新建立同义的平级 variant。Config、Connectors、Directories、Keymap、MCP、Models、Sessions、Skills、Status、Theme 和 Thread 同时负责解释自己的 `Command`、后台任务名称、请求参数与完成结果。Thread 先用自己的 `CommandState` 和历史游标判断请求、重排、完成事件或跨能力操作；`CommandRequest` 只保存请求意图。`AppDriver` 持有 client、当前 Session/Thread、订阅和后台任务，在启动任务时注入这些运行资源。`event_loop` 只决定终端事件、服务端事件、任务完成和绘制的处理顺序。
+代码不要求逐字使用这些类型名，但必须保持“一种能力一个顶层分支”，具体事件和命令留在对应目录。能力可以直接把自己的 `Event` 转成 `AppEvent`，但不能在顶层重新建立同义的平级 variant。Config、Connectors、Directories、Keymap、MCP、Models、Sessions、Skills、Status、Theme 和 Thread 同时负责解释自己的 `Command`、后台任务名称、请求参数与完成结果。Thread 先用自己的 `CommandState` 和历史游标判断请求、重排、完成事件或跨能力操作；Thread 和 Sessions 的 `CommandRequest` 都只保存请求意图。`AppDriver` 持有 client、当前 Session/Thread、订阅和后台任务，在启动任务时注入这些运行资源。`event_loop` 只决定终端事件、服务端事件、任务完成和绘制的处理顺序。
 
 ### 输入位置
 

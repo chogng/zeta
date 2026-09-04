@@ -39,27 +39,17 @@ pub(crate) enum SessionCompletion {
 
 pub(crate) enum CommandRequest {
     Resume {
-        client: AppServerRequestHandle,
-        conversation: ActiveConversation,
-        subscription: ThreadSubscription,
         session_id: String,
         preferred_thread_id: Option<zeta_protocol::ThreadId>,
     },
     Archive {
-        client: AppServerRequestHandle,
         session_ids: Vec<zeta_protocol::SessionId>,
     },
     CreateAndEnter {
-        client: AppServerRequestHandle,
-        conversation: ActiveConversation,
-        subscription: ThreadSubscription,
         submission: ChatSubmission,
         approval_mode: ApprovalMode,
     },
     SwitchThread {
-        client: AppServerRequestHandle,
-        conversation: ActiveConversation,
-        subscription: ThreadSubscription,
         thread_id: zeta_protocol::ThreadId,
     },
 }
@@ -83,12 +73,14 @@ impl CommandRequest {
         }
     }
 
-    pub(crate) fn execute(self) -> SessionCompletion {
+    pub(crate) fn execute(
+        self,
+        mut client: AppServerRequestHandle,
+        mut conversation: ActiveConversation,
+        subscription: ThreadSubscription,
+    ) -> SessionCompletion {
         match self {
             Self::Resume {
-                mut client,
-                mut conversation,
-                subscription,
                 session_id,
                 preferred_thread_id,
             } => {
@@ -108,16 +100,10 @@ impl CommandRequest {
                 };
                 SessionCompletion::Changed { command, result }
             }
-            Self::Archive {
-                mut client,
-                session_ids,
-            } => SessionCompletion::Catalog(
+            Self::Archive { session_ids } => SessionCompletion::Catalog(
                 archive(&mut client, session_ids).map_err(|error| error.to_string()),
             ),
             Self::CreateAndEnter {
-                client,
-                conversation,
-                subscription,
                 submission,
                 approval_mode,
             } => SessionCompletion::ManagerCreated(create_manager_session_and_start(
@@ -127,12 +113,7 @@ impl CommandRequest {
                 submission,
                 approval_mode,
             )),
-            Self::SwitchThread {
-                mut client,
-                mut conversation,
-                subscription,
-                thread_id,
-            } => {
+            Self::SwitchThread { thread_id } => {
                 let result = conversation
                     .select_thread(&mut client, thread_id)
                     .map_err(|error| error.to_string())
@@ -145,41 +126,21 @@ impl CommandRequest {
     }
 }
 
-pub(crate) fn prepare_command(
-    client: AppServerRequestHandle,
-    conversation: &ActiveConversation,
-    subscription: &ThreadSubscription,
-    approval_mode: ApprovalMode,
-    command: Command,
-) -> CommandRequest {
+pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> CommandRequest {
     match command {
         Command::Resume {
             session_id,
             preferred_thread_id,
         } => CommandRequest::Resume {
-            client,
-            conversation: conversation.clone(),
-            subscription: subscription.clone(),
             session_id,
             preferred_thread_id,
         },
-        Command::Archive { session_ids } => CommandRequest::Archive {
-            client,
-            session_ids,
-        },
+        Command::Archive { session_ids } => CommandRequest::Archive { session_ids },
         Command::CreateAndEnter { submission } => CommandRequest::CreateAndEnter {
-            client,
-            conversation: conversation.clone(),
-            subscription: subscription.clone(),
             submission,
             approval_mode,
         },
-        Command::SwitchThread { thread_id } => CommandRequest::SwitchThread {
-            client,
-            conversation: conversation.clone(),
-            subscription: subscription.clone(),
-            thread_id,
-        },
+        Command::SwitchThread { thread_id } => CommandRequest::SwitchThread { thread_id },
     }
 }
 

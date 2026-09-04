@@ -182,18 +182,16 @@ impl AppDriver {
         if let Some(command_line) = command.command_line() {
             self.app.update(ThreadEvent::CommandStarted(command_line));
         }
-        let request: SessionCommandRequest = sessions::prepare_command(
-            self.client.clone(),
-            &self.conversation,
-            &self.thread_subscription,
-            self.app.approval_mode(),
-            command,
-        );
+        let request: SessionCommandRequest =
+            sessions::prepare_command(self.app.approval_mode(), command);
         let name = request.name();
+        let client = self.client.clone();
+        let conversation = self.conversation.clone();
+        let subscription = self.thread_subscription.clone();
         self.requests.spawn(
             request_key,
             name,
-            move || Completion::Sessions(request.execute()),
+            move || Completion::Sessions(request.execute(client, conversation, subscription)),
             &mut self.app,
         );
     }

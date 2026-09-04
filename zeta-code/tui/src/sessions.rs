@@ -1,5 +1,7 @@
 mod active;
 mod completion;
+#[cfg(test)]
+mod completion_tests;
 mod manager;
 mod picker;
 mod state;

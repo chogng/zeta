@@ -222,11 +222,12 @@ src/
 | `App` | crate-private | presentation `Status`、产品能力与局部交互协调和单写者 state transition | 不保存 worker/channel、不复制能力状态或编辑器细节 |
 | `app::chat_panel::ChatPanel` | private | 持有 Session 页面底部聊天交互区的 ChatComposer、输入目标、CommandPanel、Approval、Query、TopTip 和 StatusLine，并统一路由其键盘与粘贴生命周期 | 不保存 Transcript、Queue、Agent/Session Manager、Overlay 或外部副作用 |
 | `AppCommand` | crate-private | 把各能力的 `Command` 与应用级 Quit/Suspend 汇入事件循环 | 顶层只做领域路由；具体命令由对应能力目录定义，不携带任意闭包或执行 I/O |
+| `app::start` | private module | 读取启动所需的服务端目录、配置和会话数据，建立初始 Thread 订阅，并一次性组装 terminal、`AppDriver` 与 `EventPump` | 不处理运行期事件、不绘制、不保存第二份应用状态 |
 | `app::AppDriver` | private | 持有 client、当前 Session/Thread、订阅、后台请求、待执行命令、刷新需求和目录搜索，并把完成结果交给唯一的 `App` 写入口 | 不接收终端事件、不绘制、不解释各能力内部命令或复制界面状态 |
 | `AppEvent` | crate-private | 把各能力完成的 `Event` 汇入单写者状态入口 | 顶层只做领域路由；具体事实由对应能力目录定义 |
 | `config/thread/sessions/...::{Command,Event}` | crate-private | 各能力自己的副作用意图与已完成事实 | 不引用 `App`，不把其他能力的行为塞进自己的分支 |
-| `config/connectors/dirs/keymap/mcp/models/skills/status/theme::execute`、`sessions::CommandRequest`、`host::Operation` | crate-private | 解释对应 `Command`，拥有后台任务名称、请求顺序和领域结果转换 | 不修改 `App`、不决定请求通道或调度顺序 |
-| `thread::{prepare_command,CommandState,CommandRequest}` | crate-private | 根据当前 Turn、批准模式、Steer 状态和历史游标解释 Thread 命令；`CommandRequest` 只保存后台请求意图 | 不持有 client、Session/Thread 身份或历史窗口，不修改 `App`、不选择请求通道 |
+| `config/connectors/dirs/keymap/mcp/models/skills/status/theme::execute`、`host::Operation` | crate-private | 解释对应 `Command`，拥有后台任务名称、请求顺序和领域结果转换 | 不修改 `App`、不决定请求通道或调度顺序 |
+| `thread::{prepare_command,CommandState,CommandRequest}`、`sessions::{prepare_command,CommandRequest}` | crate-private | 按能力状态解释命令；`CommandRequest` 只保存后台请求意图 | 不持有 client、Session/Thread、订阅或历史窗口，不修改 `App`、不选择请求通道 |
 | `TurnActivity` | crate-private | canonical Turn status 到 Working/waiting/Cancelling presentation state 的窄映射 | 不复制完整 Turn reducer |
 | `ThreadState` | crate-private | 当前执行队首与正文状态 | snapshot 更新执行队首和正文；不执行 RPC、不复制服务端状态机 |
 | `ThreadPresentationEvent` | crate-private | snapshot/transient/reset/user/notice/failure/interrupted/clear 的 Thread 内部事实 | 只改变 active Thread presentation owner |
