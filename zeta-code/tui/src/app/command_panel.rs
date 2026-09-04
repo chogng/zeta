@@ -46,7 +46,9 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use std::collections::BTreeMap;
 
-const TITLE_BAR_HEIGHT: u16 = 1;
+const TITLE_BAR_ROWS: u16 = 1;
+const TITLE_BODY_GAP_ROWS: u16 = 1;
+const HEADER_ROWS: u16 = TITLE_BAR_ROWS + TITLE_BODY_GAP_ROWS;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum CommandPanelPointerTarget {
@@ -154,7 +156,7 @@ impl CommandPanel {
 
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
         match self {
-            Self::Status(panel) => panel.process_resources_visible(composer_body_area(area)),
+            Self::Status(panel) => panel.process_resources_visible(body_area(area)),
             _ => false,
         }
     }
@@ -276,10 +278,9 @@ impl CommandPanel {
     }
 
     pub(crate) fn desired_height(&self, width: u16) -> u16 {
-        if let Self::Status(panel) = self {
-            return panel.desired_height(width);
-        }
-        let body_height = if let Some(selection) = self.list_selection() {
+        let body_rows = if let Self::Status(panel) = self {
+            panel.desired_height(width)
+        } else if let Some(selection) = self.list_selection() {
             selection.desired_height(width)
         } else if let Some(prompt) = self.text_prompt() {
             prompt.desired_height()
@@ -288,7 +289,7 @@ impl CommandPanel {
         } else {
             0
         };
-        body_height.saturating_add(TITLE_BAR_HEIGHT)
+        body_rows.saturating_add(HEADER_ROWS)
     }
 
     pub(crate) fn draw(
@@ -299,7 +300,7 @@ impl CommandPanel {
         pressed: Option<CommandPanelPointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
-        let body = composer_body_area(area);
+        let body = body_area(area);
         let presentation_focus = self
             .list_selection()
             .and_then(ListSelectionState::presentation_focus)
@@ -351,7 +352,7 @@ impl CommandPanel {
         column: u16,
         row: u16,
     ) -> Option<CommandPanelPointerTarget> {
-        let body = composer_body_area(area);
+        let body = body_area(area);
         if let Self::Status(panel) = self {
             return panel
                 .tab_index_at(body, column, row)
@@ -589,11 +590,11 @@ fn map_selection<A>(
     }
 }
 
-fn composer_body_area(area: Rect) -> Rect {
-    let title_height = TITLE_BAR_HEIGHT.min(area.height);
+fn body_area(area: Rect) -> Rect {
+    let header_rows = HEADER_ROWS.min(area.height);
     Rect {
-        y: area.y.saturating_add(title_height),
-        height: area.height.saturating_sub(title_height),
+        y: area.y.saturating_add(header_rows),
+        height: area.height.saturating_sub(header_rows),
         ..area
     }
 }

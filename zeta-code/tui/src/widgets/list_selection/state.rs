@@ -447,7 +447,7 @@ impl ListSelectionState {
             .and_then(ListSelectionItem::preview)
             .map(ListSelectionPreview::desired_height)
             .unwrap_or_default();
-        1u16.saturating_add(tab_rows)
+        tab_rows
             .saturating_add(search_rows)
             .saturating_add(list_rows.min(u16::MAX as usize) as u16)
             .saturating_add(preview_rows.min(u16::MAX as usize) as u16)

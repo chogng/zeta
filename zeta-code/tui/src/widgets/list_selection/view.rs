@@ -66,7 +66,7 @@ pub(crate) fn draw_with_pointer(
     let areas = selection_areas(content, view, tab_height);
 
     if view.show_tabs() {
-        let tab_area = content_after_state_column(areas[1]);
+        let tab_area = content_after_state_column(areas[0]);
         tab_list::draw(
             frame,
             tab_area,
@@ -81,7 +81,7 @@ pub(crate) fn draw_with_pointer(
     if let Some(search) = view.search() {
         search_box::draw(
             frame,
-            content_after_state_column(areas[2]),
+            content_after_state_column(areas[1]),
             search,
             hovered_search,
             pressed_search,
@@ -90,7 +90,7 @@ pub(crate) fn draw_with_pointer(
     }
 
     let visible_items = view.visible_items();
-    let rendered_rows = usize::from(areas[3].height).min(visible_items.len());
+    let rendered_rows = usize::from(areas[2].height).min(visible_items.len());
     let first_row = view.first_rendered_row(rendered_rows);
     if visible_items.is_empty() {
         frame.render_widget(
@@ -98,10 +98,10 @@ pub(crate) fn draw_with_pointer(
                 view.empty_message(),
                 Style::default().fg(context.muted()),
             ))),
-            content_after_state_column(areas[3]),
+            content_after_state_column(areas[2]),
         );
     } else {
-        let column_layout = ItemColumnLayout::new(areas[3].width, &visible_items);
+        let column_layout = ItemColumnLayout::new(areas[2].width, &visible_items);
         for (row, (index, item)) in visible_items
             .iter()
             .enumerate()
@@ -110,9 +110,9 @@ pub(crate) fn draw_with_pointer(
             .enumerate()
         {
             let row_area = Rect::new(
-                areas[3].x,
-                areas[3].y.saturating_add(row as u16),
-                areas[3].width,
+                areas[2].x,
+                areas[2].y.saturating_add(row as u16),
+                areas[2].width,
                 1,
             );
             draw_item(
@@ -144,7 +144,7 @@ pub(crate) fn draw_with_pointer(
                 Constraint::Length(caption_height),
                 Constraint::Length(bottom_margin),
             ])
-            .split(content_after_state_column(areas[4]));
+            .split(content_after_state_column(areas[3]));
         let separator_color = preview.separator_color().unwrap_or_else(|| context.muted());
         frame.render_widget(
             Paragraph::new(dashed_rule(
@@ -192,7 +192,7 @@ impl ListSelectionState {
         let tab_height = tab_list::desired_height(self.tabs(), tab_area.width);
         let areas = selection_areas(content, self, tab_height);
         self.tab_list()
-            .index_at(content_after_state_column(areas[1]), column, row)
+            .index_at(content_after_state_column(areas[0]), column, row)
     }
 
     pub(crate) fn item_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
@@ -210,16 +210,16 @@ impl ListSelectionState {
         };
         let areas = selection_areas(content, self, tab_height);
         let visible_items = self.visible_items();
-        let rendered_rows = usize::from(areas[3].height).min(visible_items.len());
+        let rendered_rows = usize::from(areas[2].height).min(visible_items.len());
         let first_row = self.first_rendered_row(rendered_rows);
-        if column < areas[3].x
-            || column >= areas[3].right()
-            || row < areas[3].y
-            || row >= areas[3].y.saturating_add(rendered_rows as u16)
+        if column < areas[2].x
+            || column >= areas[2].right()
+            || row < areas[2].y
+            || row >= areas[2].y.saturating_add(rendered_rows as u16)
         {
             return None;
         }
-        let index = first_row.saturating_add(usize::from(row - areas[3].y));
+        let index = first_row.saturating_add(usize::from(row - areas[2].y));
         (index < visible_items.len()).then_some(index)
     }
 
@@ -239,7 +239,7 @@ impl ListSelectionState {
         } else {
             0
         };
-        content_after_state_column(selection_areas(content, self, tab_height)[2])
+        content_after_state_column(selection_areas(content, self, tab_height)[1])
             .contains(ratatui::layout::Position::new(column, row))
     }
 }
@@ -269,7 +269,6 @@ fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) ->
     Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),
             Constraint::Length(tab_height),
             Constraint::Length(search_height),
             Constraint::Min(1),

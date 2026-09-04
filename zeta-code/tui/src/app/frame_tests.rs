@@ -256,7 +256,7 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
             .session
             .composer
             .height,
-        19
+        21
     );
     assert_eq!(layout(&app, terminal_area).session.composer.height, 13);
     assert_eq!(layout(&app, terminal_area).session.bottom.height, 2);
@@ -269,6 +269,8 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
     assert!(rows[5].starts_with("─ Status ─"));
+    assert!(rows[6].trim().is_empty());
+    assert!(rows[7].starts_with("   Session    Processes"));
     assert!(rows[18].trim().is_empty());
     assert_eq!(rows[19].trim_end(), "  Tab to switch · Esc to close");
     assert_snapshot!("status_panel_adaptive_height", rendered);

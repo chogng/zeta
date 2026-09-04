@@ -2,7 +2,6 @@
 source: zeta-code/tui/src/status/setup_tests.rs
 expression: "rows.join(\"\\n\")"
 ---
-                                                                                
 > Permissions       Current permission mode                              [ ✔ ]  
   Model             Configured model                                     [ ✔ ]  
   Cache hit rate    Cached input as a share of total input               [   ]  

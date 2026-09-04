@@ -8,6 +8,7 @@ expression: rendered
   .                                                                             
                                                                                 
 ─ Status ───────────────────────────────────────────────────────────────────────
+                                                                                
    Session    Processes                                                         
   Model:                    openai/gpt                                          
   Full context window:      100,000 tokens                                      
@@ -19,6 +20,5 @@ expression: rendered
   Cached input share:       unknown                                             
   Cache writes:             0 tokens                                            
   Output tokens:            0 tokens                                            
-  Reasoning output:         0 tokens                                            
                                                                                 
   Tab to switch · Esc to close
