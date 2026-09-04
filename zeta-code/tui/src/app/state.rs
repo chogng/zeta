@@ -244,10 +244,12 @@ impl App {
         RenderContext::new(&self.render_theme, self.render_theme_revision)
     }
 
+    #[cfg(test)]
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<AppCommand> {
         self.handle_key_at(key, Instant::now())
     }
 
+    #[cfg(test)]
     fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
         self.handle_key_at_in_area(key, now, Rect::new(0, 0, 80, 24))
     }
