@@ -48,12 +48,9 @@ fn memory_and_cpu_are_opt_in_and_use_compact_text_when_space_is_tight() {
     let mut status_line = StatusLineModel::new();
     status_line.apply_settings(settings);
     let runtime = StatusLineRuntime {
-        process_resources: ProcessResourcesView {
-            local: ProcessUsageView {
-                memory: ProcessMemoryCurrent::Available(146_590_924),
-                cpu: ProcessCpuCurrent::Available(124),
-            },
-            ..ProcessResourcesView::default()
+        process_resources: ProcessUsageView {
+            memory: ProcessMemoryCurrent::Available(146_590_924),
+            cpu: ProcessCpuCurrent::Available(124),
         },
         ..StatusLineRuntime::default()
     };

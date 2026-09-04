@@ -35,7 +35,11 @@ pub(crate) use panel::StatusViewData;
 pub(crate) use panel::status_panel;
 pub(crate) use panel_request::StatusRequestScope;
 pub(crate) use panel_request::load_status_panel;
+#[cfg(test)]
+pub(crate) use resources::AppServerProcessResourcesView;
 pub(crate) use resources::AppServerResourcesView;
+#[cfg(test)]
+pub(crate) use resources::ObservedProcessResourcesView;
 #[cfg(test)]
 pub(crate) use resources::ProcessCpuCurrent;
 pub(crate) use resources::ProcessMemoryCurrent;

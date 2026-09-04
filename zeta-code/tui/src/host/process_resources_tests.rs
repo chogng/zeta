@@ -5,11 +5,15 @@ use super::ProcessResourceSampleIntervals;
 use super::ProcessResourceTargets;
 use super::ProcessResourcesSampler;
 use super::ProcessResourcesSource;
+use super::append_descendants;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::Instant;
+use sysinfo::Pid;
 
 #[test]
 fn demand_uses_no_timer_when_disabled_and_slower_status_line_sampling() {
@@ -51,6 +55,25 @@ fn sampler_reads_tui_memory_and_collects_cpu_after_the_first_interval() {
     let second = sampler.sample(request, Instant::now()).tui.unwrap();
     assert!(second.cpu_tenths_percent.is_some());
     assert!(second.cpu_tenths_percent.unwrap() <= 1_000);
+}
+
+#[test]
+fn descendant_walk_preserves_tree_depth_and_stops_cycles() {
+    let root = Pid::from_u32(10);
+    let child = Pid::from_u32(11);
+    let sibling = Pid::from_u32(12);
+    let grandchild = Pid::from_u32(13);
+    let children = HashMap::from([
+        (root, vec![child, sibling]),
+        (child, vec![grandchild]),
+        (grandchild, vec![root]),
+    ]);
+    let mut visited = HashSet::from([root]);
+    let mut descendants = Vec::new();
+
+    append_descendants(root, 1, &children, &mut visited, &mut descendants);
+
+    assert_eq!(descendants, vec![(child, 1), (grandchild, 2), (sibling, 1)]);
 }
 
 #[test]

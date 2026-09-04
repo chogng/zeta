@@ -105,7 +105,7 @@ TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，�
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 从本机采样 TUI 和由 CLI 明确登记的本地 App Server 进程资源，并消费 typed model capacity、Turn `contextUsage` 与 Thread accounting 汇总，不从 transcript 推导上下文占用、token、费用或工具进程归属。`/statusline` 编辑 `[tui].statusLine` 中有顺序的权限、模型、缓存命中率、累计参考费用、本机进程内存、CPU、Git 分支和 Git 变更项；Config 页面还提供 Vim mode 与 Show Git changes as diff 开关，并展示 Config、Providers 与 Language servers。快捷键、状态栏、主题、Mouse interactions 和 Vim mode 的选择保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端保存完整键值表，字段默认值和校验由 TUI 负责。旧 `[tui].dirPermissions` 和 `[tui].followUpMode` 会在下一次保存 TUI 设置时删除；Queue/Steer 是每次发送时的交互选择，不保存为配置。当前 Session 的目录授权只通过 Session RPC 修改。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
+`ImageAttachmentRef`。`/status` 从本机采样 TUI、由 CLI 明确登记的本地 App Server 及其子进程资源；Processes 页把 App Server 合计、主进程和子进程按层级列出。它同时消费 typed model capacity、Turn `contextUsage` 与 Thread accounting 汇总，不从 transcript 推导上下文占用、token 或费用。`/statusline` 编辑 `[tui].statusLine` 中有顺序的权限、模型、缓存命中率、累计参考费用、本机进程内存、CPU、Git 分支和 Git 变更项；Config 页面还提供 Vim mode 与 Show Git changes as diff 开关，并展示 Config、Providers 与 Language servers。快捷键、状态栏、主题、Mouse interactions 和 Vim mode 的选择保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端保存完整键值表，字段默认值和校验由 TUI 负责。旧 `[tui].dirPermissions` 和 `[tui].followUpMode` 会在下一次保存 TUI 设置时删除；Queue/Steer 是每次发送时的交互选择，不保存为配置。当前 Session 的目录授权只通过 Session RPC 修改。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
 
 进程资源的按需采样生命周期、统计周期和内存诊断边界由[进程资源观测与内存诊断](../docs/process-resources.md)统一说明。
 

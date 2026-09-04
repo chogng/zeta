@@ -7,6 +7,8 @@ use super::StatusViewData;
 use super::status_panel;
 use crate::render::horizontal_margin;
 use crate::render::test_context;
+use crate::status::AppServerProcessResourcesView;
+use crate::status::ObservedProcessResourcesView;
 use crate::status::ProcessCpuCurrent;
 use crate::status::ProcessUsageView;
 use crossterm::event::KeyCode;
@@ -104,9 +106,16 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
             memory: ProcessMemoryCurrent::Available(140 * 1024 * 1024),
             cpu: ProcessCpuCurrent::Available(84),
         },
-        app_server: AppServerResourcesView::Local(ProcessUsageView {
-            memory: ProcessMemoryCurrent::Available(100 * 1024 * 1024),
-            cpu: ProcessCpuCurrent::Available(40),
+        app_server: AppServerResourcesView::Local(AppServerProcessResourcesView {
+            total: ProcessUsageView {
+                memory: ProcessMemoryCurrent::Available(100 * 1024 * 1024),
+                cpu: ProcessCpuCurrent::Available(40),
+            },
+            process: ProcessUsageView {
+                memory: ProcessMemoryCurrent::Available(100 * 1024 * 1024),
+                cpu: ProcessCpuCurrent::Available(40),
+            },
+            descendants: Vec::new(),
         }),
         observed_peak_bytes: Some(180 * 1024 * 1024),
         one_minute_change_bytes: Some(3 * 1024 * 1024),
@@ -119,13 +128,16 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
         row_value(panel.processes.rows(), "TUI resident memory"),
         "140.0 MiB"
     );
-    assert_eq!(row_value(panel.processes.rows(), "Local CPU"), "12.4%");
+    assert_eq!(
+        row_value(panel.processes.rows(), "Local total CPU"),
+        "12.4%"
+    );
     assert_eq!(
         row_value(panel.processes.rows(), "1 minute memory change"),
         "+3.0 MiB"
     );
     assert_eq!(
-        row_value(panel.processes.rows(), "App Server resident memory"),
+        row_value(panel.processes.rows(), "App Server total memory"),
         "100.0 MiB"
     );
     assert_eq!(
@@ -148,16 +160,42 @@ fn process_tab_renders_local_total_and_owned_process_details() {
             memory: ProcessMemoryCurrent::Available(140 * 1024 * 1024),
             cpu: ProcessCpuCurrent::Available(84),
         },
-        app_server: AppServerResourcesView::Local(ProcessUsageView {
-            memory: ProcessMemoryCurrent::Available(100 * 1024 * 1024),
-            cpu: ProcessCpuCurrent::Available(40),
+        app_server: AppServerResourcesView::Local(AppServerProcessResourcesView {
+            total: ProcessUsageView {
+                memory: ProcessMemoryCurrent::Available(100 * 1024 * 1024),
+                cpu: ProcessCpuCurrent::Available(40),
+            },
+            process: ProcessUsageView {
+                memory: ProcessMemoryCurrent::Available(40 * 1024 * 1024),
+                cpu: ProcessCpuCurrent::Available(10),
+            },
+            descendants: vec![
+                ObservedProcessResourcesView {
+                    process_id: 101,
+                    depth: 1,
+                    name: "rust-analyzer".into(),
+                    usage: ProcessUsageView {
+                        memory: ProcessMemoryCurrent::Available(50 * 1024 * 1024),
+                        cpu: ProcessCpuCurrent::Available(25),
+                    },
+                },
+                ObservedProcessResourcesView {
+                    process_id: 102,
+                    depth: 2,
+                    name: "proc-macro-srv".into(),
+                    usage: ProcessUsageView {
+                        memory: ProcessMemoryCurrent::Available(10 * 1024 * 1024),
+                        cpu: ProcessCpuCurrent::Available(5),
+                    },
+                },
+            ],
         }),
         observed_peak_bytes: Some(260 * 1024 * 1024),
         one_minute_change_bytes: Some(3 * 1024 * 1024),
         five_minute_change_bytes: Some(-8 * i128::from(1024 * 1024)),
     });
     panel.select_tab(1);
-    let backend = TestBackend::new(80, 10);
+    let backend = TestBackend::new(80, 15);
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();

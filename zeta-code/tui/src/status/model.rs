@@ -12,13 +12,13 @@ use zeta_protocol::ModelReferenceCostSummary;
 use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::StreamInstanceId;
 
-use super::ProcessResourcesView;
 use super::StatusLineItem;
 use super::StatusLineSettings;
 use super::format_compact_process_cpu;
 use super::format_compact_process_memory;
 use super::format_process_cpu;
 use super::format_process_memory;
+use super::resources::ProcessUsageView;
 
 const SEPARATOR: &str = " · ";
 
@@ -26,7 +26,7 @@ const SEPARATOR: &str = " · ";
 pub(crate) struct StatusLineRuntime {
     pub(crate) plan: Option<(usize, usize)>,
     pub(crate) subagents: usize,
-    pub(crate) process_resources: ProcessResourcesView,
+    pub(crate) process_resources: ProcessUsageView,
 }
 
 impl StatusLineRuntime {
@@ -308,7 +308,7 @@ impl StatusLineModel {
         truncate_with_ellipsis(&approval_mode_text(approval.into()), width)
     }
 
-    fn configured_values(&self, resources: ProcessResourcesView) -> Vec<DisplayValue> {
+    fn configured_values(&self, resources: ProcessUsageView) -> Vec<DisplayValue> {
         let mut values = Vec::new();
         for item in self.settings.items() {
             match item {
@@ -317,13 +317,13 @@ impl StatusLineModel {
                 StatusLineItem::CacheHitRate => values.extend(self.cache_hit_rate.iter().cloned()),
                 StatusLineItem::ReferenceCost => values.extend(self.reference_cost.iter().cloned()),
                 StatusLineItem::Memory => values.push(DisplayValue::process_resource(
-                    format!("memory {}", format_process_memory(resources.local.memory)),
-                    format_compact_process_memory(resources.local.memory),
+                    format!("memory {}", format_process_memory(resources.memory)),
+                    format_compact_process_memory(resources.memory),
                     ProcessResourceMetrics::Memory,
                 )),
                 StatusLineItem::Cpu => values.push(DisplayValue::process_resource(
-                    format!("cpu {}", format_process_cpu(resources.local.cpu)),
-                    format_compact_process_cpu(resources.local.cpu),
+                    format!("cpu {}", format_process_cpu(resources.cpu)),
+                    format_compact_process_cpu(resources.cpu),
                     ProcessResourceMetrics::Cpu,
                 )),
                 StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),

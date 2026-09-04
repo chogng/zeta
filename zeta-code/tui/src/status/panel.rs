@@ -279,11 +279,11 @@ fn process_rows(resources: ProcessResourcesView) -> Vec<DetailListRow> {
     };
     let mut rows = vec![
         detail(
-            "Local resident memory",
+            "Local total resident memory",
             format_process_memory(resources.local.memory),
         ),
         detail("Local observed peak", observed_peak),
-        detail("Local CPU", format_process_cpu(resources.local.cpu)),
+        detail("Local total CPU", format_process_cpu(resources.local.cpu)),
         detail(
             "1 minute memory change",
             change(resources.one_minute_change_bytes),
@@ -304,10 +304,35 @@ fn process_rows(resources: ProcessResourcesView) -> Vec<DetailListRow> {
         }
         AppServerResourcesView::Local(app_server) => {
             rows.push(detail(
-                "App Server resident memory",
-                format_process_memory(app_server.memory),
+                "App Server total memory",
+                format_process_memory(app_server.total.memory),
             ));
-            rows.push(detail("App Server CPU", format_process_cpu(app_server.cpu)));
+            rows.push(detail(
+                "App Server total CPU",
+                format_process_cpu(app_server.total.cpu),
+            ));
+            rows.push(detail(
+                "App Server process memory",
+                format_process_memory(app_server.process.memory),
+            ));
+            rows.push(detail(
+                "App Server process CPU",
+                format_process_cpu(app_server.process.cpu),
+            ));
+            if app_server.descendants.is_empty() {
+                rows.push(detail("App Server child processes", "none"));
+            } else {
+                for process in app_server.descendants {
+                    let indent = "  ".repeat(process.depth.saturating_sub(1));
+                    let label = format!("{indent}• {} (PID {})", process.name, process.process_id);
+                    let value = format!(
+                        "{} · {}",
+                        format_process_memory(process.usage.memory),
+                        format_process_cpu(process.usage.cpu)
+                    );
+                    rows.push(detail(label, value));
+                }
+            }
         }
         AppServerResourcesView::Remote => {
             rows.push(detail("App Server", "remote — excluded from local totals"))
@@ -316,7 +341,7 @@ fn process_rows(resources: ProcessResourcesView) -> Vec<DetailListRow> {
     rows
 }
 
-fn detail(label: &str, value: impl Into<String>) -> DetailListRow {
+fn detail(label: impl Into<String>, value: impl Into<String>) -> DetailListRow {
     DetailListRow::new(label, value)
 }
 

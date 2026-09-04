@@ -74,8 +74,8 @@ impl StatusLineItem {
             Self::Model => "Configured model",
             Self::CacheHitRate => "Cached input as a share of total input",
             Self::ReferenceCost => "Current Thread accumulated reference cost",
-            Self::Memory => "Local TUI and App Server resident memory",
-            Self::Cpu => "Local TUI and App Server CPU share",
+            Self::Memory => "Local TUI, App Server, and child-process resident memory",
+            Self::Cpu => "Local TUI, App Server, and child-process CPU share",
             Self::GitBranch => "Current Git branch",
             Self::GitChanges => "Working tree changes",
         }

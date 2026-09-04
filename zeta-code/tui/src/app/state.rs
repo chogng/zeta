@@ -1363,7 +1363,7 @@ impl App {
         StatusLineRuntime {
             plan,
             subagents,
-            process_resources: self.process_resources.view(),
+            process_resources: self.process_resources.view().local,
         }
     }
 

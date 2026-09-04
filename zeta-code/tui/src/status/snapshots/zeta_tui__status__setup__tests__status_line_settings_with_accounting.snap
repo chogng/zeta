@@ -2,11 +2,11 @@
 source: zeta-code/tui/src/status/setup_tests.rs
 expression: "rows.join(\"\\n\")"
 ---
-> Permissions       Current permission mode                              [ ✔ ]  
-  Model             Configured model                                     [ ✔ ]  
-  Cache hit rate    Cached input as a share of total input               [   ]  
-  Reference cost    Current Thread accumulated reference cost            [   ]  
-  Memory            Local TUI and App Server resident memory             [   ]  
-  CPU               Local TUI and App Server CPU share                   [   ]  
-  Git branch        Current Git branch                                   [ ✔ ]  
-  Git changes       Working tree changes                                 [   ]
+> Permissions       Current permission mode                                                  [ ✔ ]  
+  Model             Configured model                                                         [ ✔ ]  
+  Cache hit rate    Cached input as a share of total input                                   [   ]  
+  Reference cost    Current Thread accumulated reference cost                                [   ]  
+  Memory            Local TUI, App Server, and child-process resident memory                 [   ]  
+  CPU               Local TUI, App Server, and child-process CPU share                       [   ]  
+  Git branch        Current Git branch                                                       [ ✔ ]  
+  Git changes       Working tree changes                                                     [   ]

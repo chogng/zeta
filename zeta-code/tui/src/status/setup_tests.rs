@@ -35,8 +35,14 @@ fn setup_lists_each_item_with_a_description_checkbox_and_toggle_action() {
                 "Reference cost",
                 "Current Thread accumulated reference cost [   ]"
             ),
-            ("Memory", "Local TUI and App Server resident memory [   ]"),
-            ("CPU", "Local TUI and App Server CPU share [   ]"),
+            (
+                "Memory",
+                "Local TUI, App Server, and child-process resident memory [   ]",
+            ),
+            (
+                "CPU",
+                "Local TUI, App Server, and child-process CPU share [   ]",
+            ),
             ("Git branch", "Current Git branch [ ✔ ]"),
             ("Git changes", "Working tree changes [   ]"),
         ]
@@ -58,7 +64,7 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
     settings.set(StatusLineItem::GitChanges, false);
     let view = list_selection(&settings, 1);
     let state = ListSelectionState::new(view.model);
-    let backend = TestBackend::new(80, 10);
+    let backend = TestBackend::new(100, 10);
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
@@ -79,7 +85,7 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
     let buffer = terminal.backend().buffer();
     let rows = (0..10)
         .map(|row| {
-            (0..80)
+            (0..100)
                 .map(|column| buffer[(column, row)].symbol())
                 .collect::<String>()
         })
@@ -107,11 +113,11 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
         .unwrap();
     let memory = rows
         .iter()
-        .find(|row| row.contains("Local TUI and App Server resident memory"))
+        .find(|row| row.contains("Local TUI, App Server, and child-process resident memory"))
         .unwrap();
     let cpu = rows
         .iter()
-        .find(|row| row.contains("Local TUI and App Server CPU share"))
+        .find(|row| row.contains("Local TUI, App Server, and child-process CPU share"))
         .unwrap();
 
     let description_column = column_of(permissions, "Current permission mode");
@@ -136,11 +142,14 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
         description_column
     );
     assert_eq!(
-        column_of(memory, "Local TUI and App Server resident memory"),
+        column_of(
+            memory,
+            "Local TUI, App Server, and child-process resident memory",
+        ),
         description_column
     );
     assert_eq!(
-        column_of(cpu, "Local TUI and App Server CPU share"),
+        column_of(cpu, "Local TUI, App Server, and child-process CPU share"),
         description_column
     );
     assert_eq!(

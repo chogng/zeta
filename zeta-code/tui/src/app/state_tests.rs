@@ -1079,7 +1079,7 @@ fn process_resource_sample_updates_the_optional_statusline_items() {
         },
     ));
     assert_eq!(
-        app.status_line_runtime().process_resources.local.memory,
+        app.status_line_runtime().process_resources.memory,
         ProcessMemoryCurrent::Available(128 * 1024 * 1024)
     );
 

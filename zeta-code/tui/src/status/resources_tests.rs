@@ -8,11 +8,13 @@ use super::format_compact_process_cpu;
 use super::format_compact_process_memory;
 use super::format_memory_change;
 use crate::AppServerProcess;
+use crate::host::process_resources::ObservedProcess;
 use crate::host::process_resources::ProcessResourceDemand;
 use crate::host::process_resources::ProcessResourceMetrics;
 use crate::host::process_resources::ProcessResourceRequest;
 use crate::host::process_resources::ProcessResourceUsage;
 use crate::host::process_resources::ProcessResourcesReading;
+use crate::host::process_resources::ProcessTreeResourceUsage;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -44,10 +46,17 @@ fn model_aggregates_local_processes_and_tracks_bounded_memory_history() {
                 memory: ProcessMemoryCurrent::Available(500 * MIB),
                 cpu: ProcessCpuCurrent::Available(25),
             },
-            app_server: AppServerResourcesView::Local(super::ProcessUsageView {
-                memory: ProcessMemoryCurrent::Available(20 * MIB),
-                cpu: ProcessCpuCurrent::Available(25),
-            }),
+            app_server: AppServerResourcesView::Local(super::AppServerProcessResourcesView {
+                total: super::ProcessUsageView {
+                    memory: ProcessMemoryCurrent::Available(20 * MIB),
+                    cpu: ProcessCpuCurrent::Available(25),
+                },
+                process: super::ProcessUsageView {
+                    memory: ProcessMemoryCurrent::Available(20 * MIB),
+                    cpu: ProcessCpuCurrent::Available(25),
+                },
+                descendants: Vec::new(),
+            },),
             observed_peak_bytes: Some(520 * MIB),
             one_minute_change_bytes: Some(60 * i128::from(MIB)),
             five_minute_change_bytes: Some(300 * i128::from(MIB)),
@@ -73,6 +82,55 @@ fn unavailable_local_process_marks_the_total_unavailable_without_discarding_hist
     assert_eq!(view.local.cpu, ProcessCpuCurrent::Unavailable);
     assert_eq!(view.observed_peak_bytes, Some(120 * MIB));
     assert_eq!(model.sample_count(), 1);
+}
+
+#[test]
+fn model_includes_app_server_descendants_in_app_server_and_local_totals() {
+    let mut model = ProcessResourcesModel::new(AppServerProcess::Local(42));
+    model.apply_request(detailed_request());
+    model.apply(ProcessResourcesReading {
+        request: detailed_request(),
+        tui: Ok(usage(100 * MIB, Some(20))),
+        app_server: Some(Ok(ProcessTreeResourceUsage {
+            root: usage(40 * MIB, Some(10)),
+            descendants: vec![
+                ObservedProcess {
+                    process_id: 101,
+                    depth: 1,
+                    name: "rust-analyzer".into(),
+                    usage: Ok(usage(200 * MIB, Some(30))),
+                },
+                ObservedProcess {
+                    process_id: 102,
+                    depth: 2,
+                    name: "proc-macro-srv".into(),
+                    usage: Ok(usage(60 * MIB, Some(5))),
+                },
+            ],
+        })),
+        sampled_at: Instant::now(),
+    });
+
+    let view = model.view();
+    assert_eq!(
+        view.local,
+        super::ProcessUsageView {
+            memory: ProcessMemoryCurrent::Available(400 * MIB),
+            cpu: ProcessCpuCurrent::Available(65),
+        }
+    );
+    let AppServerResourcesView::Local(app_server) = view.app_server else {
+        panic!("expected local App Server resources");
+    };
+    assert_eq!(
+        app_server.total,
+        super::ProcessUsageView {
+            memory: ProcessMemoryCurrent::Available(300 * MIB),
+            cpu: ProcessCpuCurrent::Available(45),
+        }
+    );
+    assert_eq!(app_server.descendants.len(), 2);
+    assert_eq!(app_server.descendants[1].depth, 2);
 }
 
 #[test]
@@ -175,7 +233,12 @@ fn reading(
     ProcessResourcesReading {
         request: detailed_request(),
         tui: Ok(usage(tui_memory, cpu)),
-        app_server: app_server_memory.map(|memory| Ok(usage(memory, cpu))),
+        app_server: app_server_memory.map(|memory| {
+            Ok(ProcessTreeResourceUsage {
+                root: usage(memory, cpu),
+                descendants: Vec::new(),
+            })
+        }),
         sampled_at,
     }
 }

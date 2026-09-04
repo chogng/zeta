@@ -18,15 +18,15 @@
 
 ## 1. 用户可见语义
 
-状态行提供快速读数，Processes 页提供本机合计、TUI 与本地 App Server 明细、观察到的内存峰值以及 1 分钟和 5 分钟变化。内存使用常驻内存口径；CPU 表示进程占本机逻辑 CPU 总容量的比例。
+状态行提供快速读数，Processes 页提供本机合计、TUI、本地 App Server 进程树、观察到的内存峰值以及 1 分钟和 5 分钟变化。App Server 先显示包含全部子进程的合计，再显示主进程和按父子层级排列的子进程；LSP 与其他由 App Server 启动的进程都使用操作系统进程名展示，不靠命令参数猜测角色。内存使用常驻内存口径；CPU 表示进程占本机逻辑 CPU 总容量的比例。
 
 资源观测只覆盖身份明确且由产品直接拥有的本机进程：
 
 - 当前 TUI 进程始终属于本机合计；
-- CLI 明确登记 PID 的本地 App Server 单独采样并计入合计；
+- CLI 明确登记 PID 的本地 App Server 及其全部后代进程单独采样并计入合计；
 - 进程内 App Server 已包含在 TUI 进程读数中，不能重复相加；
 - 远程 App Server 明确排除在本机合计之外；
-- 没有可靠身份协议的工具进程不计入任何一项，也不通过进程树猜测归属。
+- 不属于本地 App Server 进程树的工具进程不计入任何一项。
 
 读取失败、目标进程退出或系统不支持时显示 `unavailable`。CPU 需要两个时间点才能计算，开始一段新的观测周期后首次显示 `collecting`。
 
@@ -78,7 +78,7 @@
 | `StatusPanel` | 暴露当前页签是否为 Processes | 读取操作系统进程数据 |
 | 应用排版与事件循环 | 合并所有可见条件，产生唯一观测需求；把当前请求安装到显示模型 | 执行阻塞式系统调用 |
 | 事件泵 | 为需求分配版本，把请求传给 Host，并把最新读数送回单写者循环 | 解释峰值、趋势或泄漏 |
-| `host/process_resources.rs` | 按需求刷新明确 PID，并在停止时休眠 | 猜测工具进程归属或修改 UI 状态 |
+| `host/process_resources.rs` | 按需求刷新 TUI，以及明确 App Server PID 为根的进程树，并在停止时休眠 | 根据命令参数猜测子进程角色或修改 UI 状态 |
 | `status/resources.rs` | 聚合读数，维护有界历史，生成显示快照 | 决定采样时机 |
 
 资源观测属于附加信息。线程创建失败、系统接口不可用或单次读取失败都会使指标进入不可用状态，不会阻止 TUI 启动、输入、对话或退出。某个应计入合计的本地进程不可读时，本机合计也显示不可用，不把不完整数值伪装成完整合计。
@@ -111,6 +111,7 @@
 - 恢复后内存立即可用、CPU 首次为 `collecting`；
 - 未采样间隔不会进入峰值和趋势计算；
 - 读取失败不会中断 TUI，且不产生不完整合计；
+- App Server 子进程按稳定层级排列并进入 App Server 与本机合计；
 - 高频输入下资源事件仍只保留最新值。
 
 只有在诊断能力进入实现阶段后，才增加长时间斜率、空闲基线、有界存储、导出内容和停止清理测试。短时单元测试不能用“内存没有上涨”证明不存在泄漏。
@@ -119,7 +120,7 @@
 
 | 状态 | 内容 | 证据 |
 | --- | --- | --- |
-| 已实现 | 无可见需求时休眠；状态行每 2 秒、Processes 页每秒按需读取明确进程 | [`ProcessResourcesSource`](../tui/src/host/process_resources.rs) |
+| 已实现 | 无可见需求时休眠；状态行每 2 秒、Processes 页每秒按需读取 TUI 与本地 App Server 进程树 | [`ProcessResourcesSource`](../tui/src/host/process_resources.rs) |
 | 已实现 | 可见需求计算、版本隔离、最新事件合并和按需重绘 | [`frame`](../tui/src/app/frame.rs)、[`EventPump`](../tui/src/app/event_pump.rs)、[`App`](../tui/src/app/state.rs) |
 | 已实现 | 本机聚合、观察峰值和有界趋势历史 | [`ProcessResourcesModel`](../tui/src/status/resources.rs) |
 | 已实现 | 状态行内存与 CPU 项、Status 面板 Processes 页 | [`StatusLineModel`](../tui/src/status/model.rs)、[`StatusPanel`](../tui/src/status/panel.rs) |
@@ -128,7 +129,7 @@
 ## 8. 长期不变量
 
 - 默认资源观测没有可见消费者时不采样。
-- 只有身份明确的本机产品进程进入合计，不通过父子进程关系猜测归属。
+- 只有当前 TUI 和明确 App Server PID 为根的本机进程树进入合计。
 - 远程资源不混入本机读数，缺少局部读数时不制造完整合计。
 - 采样和历史始终有固定成本上限，资源事件不能无限积压。
 - 可选的观测失败不能影响 TUI 核心交互生命周期。

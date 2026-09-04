@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io;
 use std::sync::Arc;
 use std::sync::Condvar;
@@ -103,10 +105,24 @@ pub(crate) struct ProcessResourceUsage {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ObservedProcess {
+    pub(crate) process_id: u32,
+    pub(crate) depth: usize,
+    pub(crate) name: String,
+    pub(crate) usage: Result<ProcessResourceUsage, String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ProcessTreeResourceUsage {
+    pub(crate) root: ProcessResourceUsage,
+    pub(crate) descendants: Vec<ObservedProcess>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ProcessResourcesReading {
     pub(crate) request: ProcessResourceRequest,
     pub(crate) tui: Result<ProcessResourceUsage, String>,
-    pub(crate) app_server: Option<Result<ProcessResourceUsage, String>>,
+    pub(crate) app_server: Option<Result<ProcessTreeResourceUsage, String>>,
     pub(crate) sampled_at: Instant,
 }
 
@@ -305,20 +321,27 @@ impl ProcessResourcesSampler {
                 };
             }
         };
-        let mut pids = vec![state.tui_pid];
-        if let Some(pid) = state.app_server_pid {
-            pids.push(pid);
-        }
-        let mut refresh = ProcessRefreshKind::nothing();
+        let mut refresh = ProcessRefreshKind::nothing().without_tasks();
         if self.metrics.includes_memory() {
             refresh = refresh.with_memory();
         }
         if self.metrics.includes_cpu() {
             refresh = refresh.with_cpu();
         }
-        state
-            .system
-            .refresh_processes_specifics(ProcessesToUpdate::Some(&pids), true, refresh);
+        match state.app_server_pid {
+            Some(_) => {
+                state
+                    .system
+                    .refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
+            }
+            None => {
+                state.system.refresh_processes_specifics(
+                    ProcessesToUpdate::Some(&[state.tui_pid]),
+                    true,
+                    refresh,
+                );
+            }
+        }
         let tui = process_usage(
             &state.system,
             state.tui_pid,
@@ -328,14 +351,34 @@ impl ProcessResourcesSampler {
             state.logical_processors,
         );
         let app_server = state.app_server_pid.map(|pid| {
-            process_usage(
+            let root = process_usage(
                 &state.system,
                 pid,
                 "App Server",
                 self.metrics,
                 state.cpu_ready,
                 state.logical_processors,
-            )
+            )?;
+            let descendants = descendant_processes(&state.system, pid)
+                .into_iter()
+                .map(|(process_id, depth)| {
+                    let name = process_name(&state.system, process_id);
+                    ObservedProcess {
+                        process_id: process_id.as_u32(),
+                        depth,
+                        usage: process_usage(
+                            &state.system,
+                            process_id,
+                            &name,
+                            self.metrics,
+                            state.cpu_ready,
+                            state.logical_processors,
+                        ),
+                        name,
+                    }
+                })
+                .collect();
+            Ok(ProcessTreeResourceUsage { root, descendants })
         });
         state.cpu_ready = self.metrics.includes_cpu();
         ProcessResourcesReading {
@@ -344,6 +387,80 @@ impl ProcessResourcesSampler {
             app_server,
             sampled_at,
         }
+    }
+}
+
+fn descendant_processes(system: &System, root: Pid) -> Vec<(Pid, usize)> {
+    let mut children = HashMap::<Pid, Vec<Pid>>::new();
+    for (process_id, process) in system.processes() {
+        if let Some(parent_process_id) = process.parent() {
+            children
+                .entry(parent_process_id)
+                .or_default()
+                .push(*process_id);
+        }
+    }
+    for process_ids in children.values_mut() {
+        process_ids.sort_by_key(|process_id| {
+            (
+                process_name(system, *process_id).to_lowercase(),
+                process_id.as_u32(),
+            )
+        });
+    }
+
+    let mut descendants = Vec::new();
+    let mut visited = HashSet::from([root]);
+    append_descendants(root, 1, &children, &mut visited, &mut descendants);
+    descendants
+}
+
+fn append_descendants(
+    parent: Pid,
+    depth: usize,
+    children: &HashMap<Pid, Vec<Pid>>,
+    visited: &mut HashSet<Pid>,
+    descendants: &mut Vec<(Pid, usize)>,
+) {
+    let Some(process_ids) = children.get(&parent) else {
+        return;
+    };
+    for process_id in process_ids {
+        if !visited.insert(*process_id) {
+            continue;
+        }
+        descendants.push((*process_id, depth));
+        append_descendants(
+            *process_id,
+            depth.saturating_add(1),
+            children,
+            visited,
+            descendants,
+        );
+    }
+}
+
+fn process_name(system: &System, pid: Pid) -> String {
+    let fallback = || format!("process {}", pid.as_u32());
+    let Some(process) = system.process(pid) else {
+        return fallback();
+    };
+    let name = process
+        .name()
+        .to_string_lossy()
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                '�'
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
+    if name.trim().is_empty() {
+        fallback()
+    } else {
+        name
     }
 }
 

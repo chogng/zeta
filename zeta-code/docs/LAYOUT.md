@@ -582,7 +582,7 @@ Idle (2)                                  ← 静态分组标题
 | Skill 补全 | `CompletionView::Skill` | 输入 `$` 时显示可调用 Skill 候选 |
 | 字符选择 | `ScreenSelection` | 鼠标拖选、双击或三击形成的终端字符选择效果，画在所有内容之上 |
 
-`/status` 打开的是输入位置中的 Status 面板（代码类型为 `StatusPanel`），不是详情浮层。Session 页显示模型、上下文窗口、当前 Thread 的累计模型调用数、输入 token、缓存读取 token、缓存读取占比、缓存写入 token、输出 token、推理输出 token、累计参考费用，以及 Session/Thread 身份。Processes 页显示本机进程合计的当前常驻内存、当前连续观测期间的内存峰值、1 分钟与 5 分钟内存变化、CPU 占用，以及 TUI 与本地 App Server 的明细；远程 App Server 明确标为不计入本机合计。当前没有可靠进程身份协议的工具进程不归入任何一项，也不通过进程树猜测归属。
+`/status` 打开的是输入位置中的 Status 面板（代码类型为 `StatusPanel`），不是详情浮层。Session 页显示模型、上下文窗口、当前 Thread 的累计模型调用数、输入 token、缓存读取 token、缓存读取占比、缓存写入 token、输出 token、推理输出 token、累计参考费用，以及 Session/Thread 身份。Processes 页显示本机进程合计的当前常驻内存、当前连续观测期间的内存峰值、1 分钟与 5 分钟内存变化、CPU 占用，以及 TUI 与本地 App Server 的明细；本地 App Server 先显示包含全部子进程的合计，再显示主进程和按父子层级排列的子进程。子进程使用操作系统进程名和 PID 展示，不根据命令参数猜测 LSP 或工具角色。远程 App Server 明确标为不计入本机合计。
 
 Tab 和 Shift-Tab 循环切换页签，当前页签复用统一的交互强调样式，不在文字中添加方括号；每个页签独立保留滚动位置。空间足够时面板按所有页签中最大的完整内容高度展开，因此切换 Session 与 Processes 不会让输入位置上下跳动；空间不足时至少保留 4 行正文，并用方向键、PageUp/PageDown、Home/End 滚动。缓存占比是 `缓存读取 token / 总输入 token`，不是请求次数的命中率。聚合缺少部分报告时，已知非零 token 以 `>=` 标记为下界，已知费用以 `≥` 标记为下界；没有可信值时显示 `unknown`。CPU 是占本机逻辑 CPU 总容量的比例；首次采样显示 `collecting`，系统不支持或读取失败时显示 `unavailable`。
 
