@@ -226,7 +226,7 @@ enum AppCommand {
 }
 ```
 
-代码不要求逐字使用这些类型名，但必须保持“一种能力一个顶层分支”，具体事件和命令留在对应目录。能力可以直接把自己的 `Event` 转成 `AppEvent`，但不能在顶层重新建立同义的平级 variant。Config、Connectors、Directories、Keymap、MCP、Models、Sessions、Skills、Status、Theme 和 Thread 同时负责解释自己的 `Command`、后台任务名称、请求参数与完成结果；`AppDriver` 持有 client、当前 Session/Thread、订阅和后台任务，按请求通道启动任务。`event_loop` 只决定终端事件、服务端事件、任务完成和绘制的处理顺序。
+代码不要求逐字使用这些类型名，但必须保持“一种能力一个顶层分支”，具体事件和命令留在对应目录。能力可以直接把自己的 `Event` 转成 `AppEvent`，但不能在顶层重新建立同义的平级 variant。Config、Connectors、Directories、Keymap、MCP、Models、Sessions、Skills、Status、Theme 和 Thread 同时负责解释自己的 `Command`、后台任务名称、请求参数与完成结果。Thread 先用自己的 `CommandState` 和历史游标判断请求、重排、完成事件或跨能力操作；`CommandRequest` 只保存请求意图。`AppDriver` 持有 client、当前 Session/Thread、订阅和后台任务，在启动任务时注入这些运行资源。`event_loop` 只决定终端事件、服务端事件、任务完成和绘制的处理顺序。
 
 ### 输入位置
 

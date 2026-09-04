@@ -1,0 +1,25 @@
+---
+source: zeta-code/tui/src/app/frame_tests.rs
+assertion_line: 1156
+expression: "render(&app, terminal_area.width, terminal_area.height)"
+---
+content underlying transcript content underlying transcript content             
+                                                                                
+● Model invocation failed 8 underlying transcript content underlying transcript 
+content underlying transcript content underlying transcript content             
+                                                                                
+● Model invocation failed 9 underlying transcript content underlying transcript 
+content underlying transcript content underlying transcript content             
+                                                                                
+● Model invocation failed 10 underlying transcript content underlying transcript
+  /status                    show the active session, thread, and model         
+  /statusline                choose the items shown in the status line          
+  /skills                    browse configured skill sources                    
+  /mcp                       list configured MCP tools                          
+  /resume                    list or resume a saved session                     
+  /archive                   archive the current session and start a new chat   
+────────────────────────────────────────────────────────────────────────────────
+> /                                                                             
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+  ⏸ ask permissions on

@@ -77,6 +77,8 @@ use crate::theme::ThemePickerOutcome;
 use crate::thread::AgentThreadSwitcher;
 use crate::thread::AgentThreadSwitcherView;
 use crate::thread::Command as ThreadCommand;
+use crate::thread::CommandActivity as ThreadCommandActivity;
+use crate::thread::CommandState as ThreadCommandState;
 use crate::thread::Event as ThreadEvent;
 use crate::thread::ThreadPresentationEvent;
 use crate::thread::ThreadPresentationStore;
@@ -1137,8 +1139,27 @@ impl App {
         &self.welcome
     }
 
+    #[cfg(test)]
     pub(crate) fn status(&self) -> &Status {
         &self.status
+    }
+
+    pub(crate) fn thread_command_state(&self) -> ThreadCommandState {
+        let activity = match self.status {
+            Status::Ready => ThreadCommandActivity::Ready,
+            Status::Working => ThreadCommandActivity::Working,
+            Status::Error => ThreadCommandActivity::Error,
+            Status::WaitingForApproval
+            | Status::WaitingForUserInput
+            | Status::WaitingForCapability
+            | Status::Cancelling => ThreadCommandActivity::Other,
+        };
+        ThreadCommandState::new(
+            self.active_turn().cloned(),
+            self.approval_mode(),
+            activity,
+            self.steers_active_turn(),
+        )
     }
 
     pub(crate) fn active_turn(&self) -> Option<&TurnId> {

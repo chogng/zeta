@@ -1,3 +1,5 @@
+use super::Command;
+use super::Event;
 use super::LatestThreadSnapshot;
 use super::OlderThreadHistoryPage;
 use super::ThreadRequestIdentity;
@@ -21,6 +23,51 @@ use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::TurnId;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CommandActivity {
+    Ready,
+    Working,
+    Error,
+    Other,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CommandState {
+    active_turn: Option<TurnId>,
+    approval_mode: ApprovalMode,
+    activity: CommandActivity,
+    steering: bool,
+}
+
+impl CommandState {
+    pub(crate) fn new(
+        active_turn: Option<TurnId>,
+        approval_mode: ApprovalMode,
+        activity: CommandActivity,
+        steering: bool,
+    ) -> Self {
+        Self {
+            active_turn,
+            approval_mode,
+            activity,
+            steering,
+        }
+    }
+}
+
+pub(crate) enum CommandPreparation {
+    ExecuteProductCommand(super::composer::SlashCommandInvocation),
+    RewindToCheckpoint {
+        before_turn_id: TurnId,
+        checkpoint_label: String,
+    },
+    CycleNextApprovalMode,
+    Request(CommandRequest),
+    Present(Event),
+    Requeue(Command),
+    None,
+}
 
 pub(crate) enum TurnStartCompletion {
     Rejected(ClientError),
@@ -87,51 +134,113 @@ impl ThreadCompletion {
 
 pub(crate) enum CommandRequest {
     Interrupt {
-        client: AppServerRequestHandle,
-        scope: ThreadRequestScope,
         turn_id: TurnId,
-        history: ThreadSnapshotHistory,
     },
     LoadOlderHistory {
-        client: AppServerRequestHandle,
-        scope: ThreadRequestScope,
         before_turn_id: TurnId,
     },
-    OpenRewindPicker {
-        client: AppServerRequestHandle,
-        scope: ThreadRequestScope,
-    },
+    OpenRewindPicker,
     ResolveRequest {
-        client: AppServerRequestHandle,
-        scope: ThreadRequestScope,
         request: ThreadRequestIdentity,
         response: ThreadRequestResponse,
-        history: ThreadSnapshotHistory,
     },
     SubmitTurn {
-        client: AppServerRequestHandle,
-        scope: ThreadRequestScope,
         submission: ChatSubmission,
         approval_mode: ApprovalMode,
-        history: ThreadSnapshotHistory,
     },
     SubmitQueuedTurn {
-        client: AppServerRequestHandle,
-        scope: ThreadRequestScope,
         queue_id: QueueId,
         submission: ChatSubmission,
         approval_mode: ApprovalMode,
-        history: ThreadSnapshotHistory,
     },
     SteerTurn {
-        client: AppServerRequestHandle,
-        scope: ThreadRequestScope,
         turn_id: TurnId,
         source: SteerSource,
         steer_id: SteerId,
         submission: ChatSubmission,
-        history: ThreadSnapshotHistory,
     },
+}
+
+pub(crate) fn prepare_command(
+    older_history: Option<ThreadSnapshotHistory>,
+    state: CommandState,
+    command: Command,
+) -> CommandPreparation {
+    match command {
+        Command::ExecuteProductCommand(invocation) => {
+            CommandPreparation::ExecuteProductCommand(invocation)
+        }
+        Command::Interrupt => match (state.active_turn, state.activity) {
+            (Some(turn_id), activity) if activity != CommandActivity::Error => {
+                CommandPreparation::Request(CommandRequest::Interrupt { turn_id })
+            }
+            (_, CommandActivity::Ready) => CommandPreparation::None,
+            _ => CommandPreparation::Present(Event::InterruptFailed(
+                "the active turn is not available".into(),
+            )),
+        },
+        Command::LoadOlderHistory => match older_history {
+            Some(ThreadSnapshotHistory::Before { turn_id, .. }) => {
+                CommandPreparation::Request(CommandRequest::LoadOlderHistory {
+                    before_turn_id: turn_id,
+                })
+            }
+            Some(ThreadSnapshotHistory::Latest { .. }) | None => CommandPreparation::None,
+        },
+        Command::OpenRewindPicker => CommandPreparation::Request(CommandRequest::OpenRewindPicker),
+        Command::RewindToCheckpoint {
+            before_turn_id,
+            checkpoint_label,
+        } => CommandPreparation::RewindToCheckpoint {
+            before_turn_id,
+            checkpoint_label,
+        },
+        Command::ResolveRequest(response) => {
+            let request = response.identity();
+            CommandPreparation::Request(CommandRequest::ResolveRequest { request, response })
+        }
+        Command::CycleNextApprovalMode => CommandPreparation::CycleNextApprovalMode,
+        Command::SubmitTurn { submission } => {
+            CommandPreparation::Request(CommandRequest::SubmitTurn {
+                submission,
+                approval_mode: state.approval_mode,
+            })
+        }
+        Command::SubmitQueuedTurn {
+            queue_id,
+            submission,
+        } => CommandPreparation::Request(CommandRequest::SubmitQueuedTurn {
+            queue_id,
+            submission,
+            approval_mode: state.approval_mode,
+        }),
+        Command::SteerTurn {
+            source,
+            steer_id,
+            submission,
+        } => {
+            if state.activity == CommandActivity::Working && !state.steering {
+                return CommandPreparation::Requeue(Command::SteerTurn {
+                    source,
+                    steer_id,
+                    submission,
+                });
+            }
+            match state.active_turn {
+                Some(turn_id) => CommandPreparation::Request(CommandRequest::SteerTurn {
+                    turn_id,
+                    source,
+                    steer_id,
+                    submission,
+                }),
+                None => CommandPreparation::Present(Event::SteerSubmissionFailed {
+                    source,
+                    steer_id,
+                    error: "the active Turn is no longer available".into(),
+                }),
+            }
+        }
+    }
 }
 
 impl CommandRequest {
@@ -147,44 +256,34 @@ impl CommandRequest {
         }
     }
 
-    pub(crate) fn execute(self) -> ThreadCompletion {
+    pub(crate) fn execute(
+        self,
+        mut client: AppServerRequestHandle,
+        scope: ThreadRequestScope,
+        history: ThreadSnapshotHistory,
+    ) -> ThreadCompletion {
         match self {
-            Self::Interrupt {
-                client,
-                scope,
-                turn_id,
-                history,
-            } => {
+            Self::Interrupt { turn_id } => {
                 let completion_scope = scope.clone();
                 ThreadCompletion::Interrupted {
                     scope: completion_scope,
                     result: interrupt_and_read(client, scope, turn_id, history),
                 }
             }
-            Self::LoadOlderHistory {
-                mut client,
-                scope,
-                before_turn_id,
-            } => {
+            Self::LoadOlderHistory { before_turn_id } => {
                 let session_id = scope.session_id().clone();
                 let thread_id = scope.thread_id().clone();
                 let result =
                     read_older_thread_history(&mut client, &session_id, &thread_id, before_turn_id);
                 ThreadCompletion::HistoryPage { scope, result }
             }
-            Self::OpenRewindPicker { mut client, scope } => {
+            Self::OpenRewindPicker => {
                 let result =
                     rewind::load_selection(&mut client, scope.session_id(), scope.thread_id())
                         .map_err(|error| error.to_string());
                 ThreadCompletion::RewindPickerLoaded { scope, result }
             }
-            Self::ResolveRequest {
-                client,
-                scope,
-                request,
-                response,
-                history,
-            } => {
+            Self::ResolveRequest { request, response } => {
                 let completion_scope = scope.clone();
                 ThreadCompletion::RequestResolved {
                     scope: completion_scope,
@@ -193,11 +292,8 @@ impl CommandRequest {
                 }
             }
             Self::SubmitTurn {
-                client,
-                scope,
                 submission,
                 approval_mode,
-                history,
             } => {
                 let completion_scope = scope.clone();
                 ThreadCompletion::Started {
@@ -206,12 +302,9 @@ impl CommandRequest {
                 }
             }
             Self::SubmitQueuedTurn {
-                client,
-                scope,
                 queue_id,
                 submission,
                 approval_mode,
-                history,
             } => {
                 let completion_scope = scope.clone();
                 ThreadCompletion::QueuedTurnStarted {
@@ -221,13 +314,10 @@ impl CommandRequest {
                 }
             }
             Self::SteerTurn {
-                client,
-                scope,
                 turn_id,
                 source,
                 steer_id,
                 submission,
-                history,
             } => {
                 let completion_scope = scope.clone();
                 ThreadCompletion::Steered {
@@ -304,3 +394,7 @@ pub(crate) fn steer_turn_and_read(
     let snapshot = read_thread_history(&mut client, &session_id, &thread_id, history)?;
     Ok((steer, snapshot))
 }
+
+#[cfg(test)]
+#[path = "completion_tests.rs"]
+mod tests;

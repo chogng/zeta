@@ -1132,6 +1132,34 @@ fn bare_slash_renders_the_first_command_window() {
 }
 
 #[test]
+fn slash_popup_clears_covered_transcript_rows_edge_to_edge() {
+    let mut app = App::new();
+    for index in 0..12 {
+        app.update(ThreadEvent::FailureReported(format!(
+            "Model invocation failed {index} {}",
+            "underlying transcript content ".repeat(4)
+        )));
+    }
+    app.insert_text("/");
+
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let popup_bottom = layout(&app, terminal_area).input.y;
+    let popup_top = popup_bottom - 6;
+    let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
+
+    for row in popup_top..popup_bottom {
+        assert_eq!(buffer[(0, row)].symbol(), " ");
+        assert_eq!(buffer[(79, row)].symbol(), " ");
+        assert_eq!(buffer[(0, row)].bg, test_context().background());
+        assert_eq!(buffer[(79, row)].bg, test_context().background());
+    }
+    assert_snapshot!(
+        "slash_popup_clears_covered_transcript_rows_edge_to_edge",
+        render(&app, terminal_area.width, terminal_area.height)
+    );
+}
+
+#[test]
 fn slash_popup_uses_focus_colored_text_without_a_selection_surface() {
     let mut app = App::new();
     app.insert_text("/");

@@ -74,7 +74,7 @@ mod mention {
                 })
                 .collect()
         };
-        super::clear_popup(frame, layout.area, context);
+        super::clear_popup(frame, area, layout.area, context);
         frame.render_widget(Paragraph::new(lines), layout.area);
     }
 
@@ -163,7 +163,7 @@ mod skill {
         let Some(layout) = description_popup_layout(area, popup.selected, &item_heights) else {
             return;
         };
-        super::clear_popup(frame, layout.area, context);
+        super::clear_popup(frame, area, layout.area, context);
         if popup.items.is_empty() {
             frame.render_widget(
                 Paragraph::new(Line::from(Span::styled(
@@ -277,7 +277,7 @@ mod slash {
         let Some(layout) = description_popup_layout(area, popup.selected, &item_heights) else {
             return;
         };
-        super::clear_popup(frame, layout.area, context);
+        super::clear_popup(frame, area, layout.area, context);
         if popup.commands.is_empty() {
             frame.render_widget(
                 Paragraph::new(Line::from(Span::styled(
@@ -361,11 +361,22 @@ use ratatui::widgets::Wrap;
 const MAX_VISIBLE_DESCRIPTION_ITEMS: usize = 6;
 const MAX_DESCRIPTION_LINES: usize = 2;
 
-fn clear_popup(frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-    frame.render_widget(Clear, area);
+fn clear_popup(
+    frame: &mut Frame<'_>,
+    available_area: Rect,
+    content_area: Rect,
+    context: RenderContext<'_>,
+) {
+    let surface_area = Rect::new(
+        available_area.x,
+        content_area.y,
+        available_area.width,
+        content_area.height,
+    );
+    frame.render_widget(Clear, surface_area);
     frame.render_widget(
         Block::default().style(Style::default().bg(context.background())),
-        area,
+        surface_area,
     );
 }
 

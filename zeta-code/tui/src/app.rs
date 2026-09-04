@@ -37,4 +37,5 @@ pub(crate) use completion::apply_active_turn_snapshot;
 pub(crate) use event::AppEvent;
 pub(crate) use event_loop::run;
 pub(crate) use state::App;
+#[cfg(test)]
 pub(crate) use state::Status;
