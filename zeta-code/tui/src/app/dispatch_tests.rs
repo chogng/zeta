@@ -1,6 +1,11 @@
 use super::ActiveConversation;
 use crate::app::command_panel::CommandPanel;
 use crate::app::{App, AppCommand, AppEvent, Status};
+use crate::dirs::Command as DirCommand;
+use crate::models::Command as ModelCommand;
+use crate::sessions::Command as SessionCommand;
+use crate::skills::Command as SkillCommand;
+use crate::skills::Event as SkillEvent;
 use crate::thread::composer::{
     ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
 };
@@ -239,10 +244,10 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     let action = app
         .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();
-    let AppCommand::SetSkillEnablement {
+    let AppCommand::Skills(SkillCommand::SetEnablement {
         skill_id,
         enablement,
-    } = action
+    }) = action
     else {
         panic!("Enter should request a skill enablement change");
     };
@@ -256,7 +261,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
         enablement,
     )
     .unwrap();
-    app.update(AppEvent::SkillSettingsUpdated(view));
+    app.update(SkillEvent::SettingsUpdated(view));
     app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
     let disabled = app.list_selection().unwrap();
     assert_eq!(disabled.active_tab().label(), "Disabled (1)");
@@ -438,10 +443,10 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
     assert!(app.session_manager_view().is_none());
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::ResumeSession {
+        Some(AppCommand::Sessions(SessionCommand::Resume {
             session_id: current_session,
             preferred_thread_id: None,
-        })
+        }))
     );
     app.update(AppEvent::CommandPanelClosed);
 
@@ -453,9 +458,9 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
     assert_eq!(app.list_selection().unwrap().title(), "Model");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::SetPreferredModel {
+        Some(AppCommand::Models(ModelCommand::SetPreferred {
             preference: "clear".into(),
-        })
+        }))
     );
 
     drop(client);
@@ -544,7 +549,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         &mut app,
     );
     assert_eq!(app.list_selection().unwrap().title(), "Directories");
-    let Some(AppCommand::RemoveDir { path }) =
+    let Some(AppCommand::Dirs(DirCommand::Remove { path })) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
         panic!("the selected directory emits an exact remove command")

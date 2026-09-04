@@ -2,18 +2,30 @@ use super::App;
 use super::AppCommand;
 use super::Status;
 use crate::app::AppEvent;
+use crate::config::Command as ConfigCommand;
+use crate::config::Event as ConfigEvent;
 use crate::config::TerminalSettings;
 use crate::config::config_choices;
+use crate::dirs::Command as DirCommand;
+use crate::host::Command as HostCommand;
+use crate::host::Event as HostEvent;
 use crate::host::process_resources::ProcessResourceDemand;
 use crate::host::process_resources::ProcessResourceRequest;
 use crate::host::process_resources::ProcessResourceUsage;
 use crate::host::process_resources::ProcessResourcesReading;
+use crate::keymap::Command as KeymapCommand;
+use crate::keymap::Event as KeymapEvent;
 use crate::keymap::KeymapEditIntent;
 use crate::keymap::KeymapEditKind;
 use crate::keymap::KeymapEditorUpdate;
 use crate::keymap::keymap_choices;
 use crate::keymap::settings_from_tui as keymap_settings_from_tui;
 use crate::render::RenderTheme;
+use crate::sessions::Command as SessionCommand;
+use crate::sessions::Event as SessionEvent;
+use crate::skills::Event as SkillEvent;
+use crate::status::Command as StatusCommand;
+use crate::status::Event as StatusEvent;
 use crate::status::ProcessMemoryCurrent;
 use crate::status::StatusLineEditorUpdate;
 use crate::status::StatusLineItem;
@@ -23,12 +35,16 @@ use crate::status::status_line_choices;
 use crate::status::status_panel;
 use crate::terminal::mouse::MouseMode;
 use crate::test_support::empty_config_snapshot;
+use crate::theme::Command as ThemeCommand;
+use crate::theme::Event as ThemeEvent;
 use crate::theme::ThemePickerCatalog;
 use crate::theme::ThemePickerChoice;
 use crate::theme::ThemePickerTarget;
 use crate::theme::ThemePreviewPalette;
 use crate::theme::custom_theme_choices;
 use crate::theme::theme_choices;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
 use crate::thread::TurnActivity;
 use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::ChatInputMode;
@@ -61,6 +77,8 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
+use zeta_app_server_protocol::protocol::config::LanguageServerConfigDto;
+use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
@@ -97,7 +115,7 @@ fn skill_diagnostics_are_notices_and_are_suppressed_until_they_clear() {
         message: "frontmatter is invalid".into(),
     };
 
-    app.update(AppEvent::SkillDiagnosticsReceived(vec![diagnostic.clone()]));
+    app.update(SkillEvent::DiagnosticsReceived(vec![diagnostic.clone()]));
     assert_eq!(app.messages().len(), 2);
     assert!(
         app.messages()
@@ -109,11 +127,11 @@ fn skill_diagnostics_are_notices_and_are_suppressed_until_they_clear() {
         "broken/SKILL.md: frontmatter is invalid"
     );
 
-    app.update(AppEvent::SkillDiagnosticsReceived(vec![diagnostic.clone()]));
+    app.update(SkillEvent::DiagnosticsReceived(vec![diagnostic.clone()]));
     assert_eq!(app.messages().len(), 2);
 
-    app.update(AppEvent::SkillDiagnosticsReceived(Vec::new()));
-    app.update(AppEvent::SkillDiagnosticsReceived(vec![diagnostic]));
+    app.update(SkillEvent::DiagnosticsReceived(Vec::new()));
+    app.update(SkillEvent::DiagnosticsReceived(vec![diagnostic]));
     assert_eq!(app.messages().len(), 4);
 }
 
@@ -122,7 +140,7 @@ fn config_session() -> SessionId {
 }
 
 fn enter_test_session(app: &mut App) {
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: SessionId::new("test-session").unwrap(),
         thread_id: ThreadId::new("test-thread").unwrap(),
     });
@@ -163,20 +181,22 @@ fn approval_preserves_the_hidden_draft_and_stays_open_after_submission_failure()
     let mut app = App::new();
     enter_test_session(&mut app);
     app.insert_text("draft");
-    app.update(AppEvent::ApprovalRequested(Approval::new(ApprovalSpec {
-        title: "Approval required".into(),
-        reason: "Run tests".into(),
-        details: Vec::new(),
-    })));
+    app.update(ThreadEvent::ApprovalRequested(Approval::new(
+        ApprovalSpec {
+            title: "Approval required".into(),
+            reason: "Run tests".into(),
+            details: Vec::new(),
+        },
+    )));
 
     app.handle_paste("ignored".into());
-    let Some(AppCommand::ResolveThreadRequest(response)) =
+    let Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response))) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
         panic!("expected an Approval response");
     };
     let request = response.identity();
-    app.update(AppEvent::ThreadRequestSubmissionFailed {
+    app.update(ThreadEvent::RequestSubmissionFailed {
         request,
         error: "offline".into(),
     });
@@ -193,7 +213,7 @@ fn query_paste_uses_its_own_editor_without_changing_the_chat_draft() {
     let mut app = App::new();
     enter_test_session(&mut app);
     app.insert_text("draft");
-    app.update(AppEvent::QueryRequested(
+    app.update(ThreadEvent::QueryRequested(
         Query::new(vec![QueryQuestion {
             id: "answer".into(),
             header: "Answer".into(),
@@ -221,15 +241,15 @@ fn query_paste_uses_its_own_editor_without_changing_the_chat_draft() {
 #[test]
 fn selected_theme_closes_the_theme_picker_immediately() {
     let mut app = App::new();
-    app.update(AppEvent::ThemePickerOpened(theme_choices(&theme_catalog())));
+    app.update(ThemeEvent::PickerOpened(theme_choices(&theme_catalog())));
 
     assert_eq!(app.list_selection().unwrap().title(), "Theme");
     let command = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(
         command,
-        Some(AppCommand::SetTheme {
+        Some(AppCommand::Theme(ThemeCommand::Set {
             preference: "zeta-code-dark".into(),
-        })
+        }))
     );
     assert!(app.list_selection().is_none());
 }
@@ -240,7 +260,7 @@ fn selected_render_theme_is_read_through_the_frame_context() {
     let theme =
         RenderTheme::from_palette(crate::render::ThemePalette::light(), ColorLevel::TrueColor);
 
-    app.update(AppEvent::RenderThemeChanged(theme));
+    app.update(ThemeEvent::RenderChanged(theme));
 
     assert_eq!(app.render_context().background(), Color::Rgb(255, 255, 255));
 }
@@ -248,12 +268,12 @@ fn selected_render_theme_is_read_through_the_frame_context() {
 #[test]
 fn pointer_activation_uses_the_feature_action_mapping() {
     let mut app = App::new();
-    app.update(AppEvent::ThemePickerOpened(theme_choices(&theme_catalog())));
+    app.update(ThemeEvent::PickerOpened(theme_choices(&theme_catalog())));
 
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     assert_eq!(
         app.activate_visible_item(1),
-        Some(AppCommand::OpenCustomThemePicker)
+        Some(AppCommand::Theme(ThemeCommand::OpenCustomPicker))
     );
     assert_eq!(
         app.list_selection().unwrap().selected_visible_index(),
@@ -265,19 +285,19 @@ fn pointer_activation_uses_the_feature_action_mapping() {
 fn selected_custom_theme_closes_the_entire_theme_flow_immediately() {
     let catalog = theme_catalog();
     let mut app = App::new();
-    app.update(AppEvent::ThemePickerOpened(theme_choices(&catalog)));
+    app.update(ThemeEvent::PickerOpened(theme_choices(&catalog)));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::OpenCustomThemePicker)
+        Some(AppCommand::Theme(ThemeCommand::OpenCustomPicker))
     );
-    app.update(AppEvent::ThemePickerOpened(custom_theme_choices(&catalog)));
+    app.update(ThemeEvent::PickerOpened(custom_theme_choices(&catalog)));
     let command = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(
         command,
-        Some(AppCommand::SetCustomTheme {
+        Some(AppCommand::Theme(ThemeCommand::SetCustom {
             preference: "aurora".into(),
-        })
+        }))
     );
     assert!(app.list_selection().is_none());
 }
@@ -318,14 +338,14 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::RewindPickerOpened(rewind_choices(&thread)));
+    app.update(ThreadEvent::RewindPickerOpened(rewind_choices(&thread)));
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::RewindToCheckpoint {
+        Some(AppCommand::Thread(ThreadCommand::RewindToCheckpoint {
             before_turn_id: turn_id,
             checkpoint_label: "restore here".into(),
-        })
+        }))
     );
 }
 
@@ -459,7 +479,7 @@ fn pasted_image_path_submits_a_structured_image() {
 
     assert_eq!(app.input(), "[Image #1] ");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let Some(AppCommand::SubmitTurn { submission, .. }) = action else {
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission, .. })) = action else {
         panic!("expected image submission");
     };
     assert_eq!(submission.display_text, "[Image #1]");
@@ -478,7 +498,10 @@ fn control_v_requests_a_clipboard_image_read() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL));
 
-    assert_eq!(action, Some(AppCommand::ReadClipboardImage));
+    assert_eq!(
+        action,
+        Some(AppCommand::Host(HostCommand::ReadClipboardImage))
+    );
     assert_eq!(app.status(), &Status::Ready);
 }
 
@@ -488,7 +511,7 @@ fn control_o_requests_copy_and_control_z_requests_suspend() {
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL)),
-        Some(AppCommand::CopyLastResponse)
+        Some(AppCommand::Host(HostCommand::CopyLastResponse))
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL)),
@@ -502,9 +525,9 @@ fn export_slash_command_stays_in_the_terminal_host() {
     app.insert_text("/export notes/conversation.md");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::ExportTranscript {
+        Some(AppCommand::Host(HostCommand::ExportTranscript {
             requested_path: Some(std::path::PathBuf::from("notes/conversation.md")),
-        })
+        }))
     );
 }
 
@@ -512,7 +535,7 @@ fn export_slash_command_stays_in_the_terminal_host() {
 fn export_rejects_image_arguments_before_host_io() {
     let mut app = App::new();
     app.insert_text("/export ");
-    app.update(AppEvent::ClipboardImageRead(Ok(
+    app.update(HostEvent::ClipboardImageRead(Ok(
         b"\x89PNG\r\n\x1a\npayload".to_vec(),
     )));
 
@@ -555,21 +578,21 @@ fn control_home_requests_an_older_history_page() {
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL)),
-        Some(AppCommand::LoadOlderHistory)
+        Some(AppCommand::Thread(ThreadCommand::LoadOlderHistory))
     );
 }
 
 #[test]
 fn page_up_at_loaded_start_anchors_the_view_and_requests_older_history() {
     let mut app = App::new();
-    app.update(AppEvent::FailureReported("only loaded message".into()));
+    app.update(ThreadEvent::FailureReported("only loaded message".into()));
 
     assert_eq!(
         app.handle_key_in_area(
             KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE),
             Rect::new(0, 0, 80, 24),
         ),
-        Some(AppCommand::LoadOlderHistory)
+        Some(AppCommand::Thread(ThreadCommand::LoadOlderHistory))
     );
     assert!(app.transcript_scroll().anchor().is_some());
 }
@@ -578,7 +601,7 @@ fn page_up_at_loaded_start_anchors_the_view_and_requests_older_history() {
 fn submitting_after_manual_scroll_restores_follow_latest() {
     let mut app = App::new();
     for index in 0..20 {
-        app.update(AppEvent::FailureReported(format!("failure {index}")));
+        app.update(ThreadEvent::FailureReported(format!("failure {index}")));
     }
     assert!(app.scroll_transcript(
         crate::thread::transcript::TranscriptScrollDirection::Up,
@@ -595,13 +618,13 @@ fn submitting_after_manual_scroll_restores_follow_latest() {
 #[test]
 fn clipboard_png_submits_through_the_existing_attachment_path() {
     let mut app = App::new();
-    app.update(AppEvent::ClipboardImageRead(Ok(
+    app.update(HostEvent::ClipboardImageRead(Ok(
         b"\x89PNG\r\n\x1a\npayload".to_vec(),
     )));
 
     assert_eq!(app.input(), "[Image #1] ");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let Some(AppCommand::SubmitTurn { submission, .. }) = action else {
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission, .. })) = action else {
         panic!("expected image submission");
     };
     assert_eq!(submission.display_text, "[Image #1]");
@@ -619,7 +642,10 @@ fn active_turn_accepts_clipboard_images_for_a_follow_up() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL));
 
-    assert_eq!(action, Some(AppCommand::ReadClipboardImage));
+    assert_eq!(
+        action,
+        Some(AppCommand::Host(HostCommand::ReadClipboardImage))
+    );
     assert_eq!(app.input(), "");
 }
 
@@ -651,7 +677,7 @@ fn product_command_is_delegated_to_the_typed_dispatcher() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    let Some(AppCommand::ExecuteProductCommand(invocation)) = action else {
+    let Some(AppCommand::Thread(ThreadCommand::ExecuteProductCommand(invocation))) = action else {
         panic!("expected product command action");
     };
     assert_eq!(invocation.command.name, "status");
@@ -674,7 +700,7 @@ fn shortcut_slash_command_is_owned_by_the_local_host() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, Some(AppCommand::OpenKeymapEditor));
+    assert_eq!(action, Some(AppCommand::Keymap(KeymapCommand::OpenEditor)));
     assert_eq!(app.messages()[0].text, "/shortcuts");
 }
 
@@ -685,7 +711,7 @@ fn config_slash_command_is_owned_by_the_local_host() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, Some(AppCommand::OpenConfigEditor));
+    assert_eq!(action, Some(AppCommand::Config(ConfigCommand::OpenEditor)));
     assert_eq!(app.messages()[0].text, "/config");
 }
 
@@ -716,7 +742,7 @@ fn theme_slash_command_is_owned_by_the_tui_host() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, Some(AppCommand::OpenThemePicker));
+    assert_eq!(action, Some(AppCommand::Theme(ThemeCommand::OpenPicker)));
 }
 
 #[test]
@@ -728,9 +754,9 @@ fn inline_theme_selection_requests_a_tui_config_edit() {
 
     assert_eq!(
         action,
-        Some(AppCommand::SetTheme {
+        Some(AppCommand::Theme(ThemeCommand::Set {
             preference: "zeta-code-light".into(),
-        })
+        }))
     );
 }
 
@@ -739,7 +765,7 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
     let mut config = empty_config_snapshot();
     config.revision = 7;
     let mut app = App::new();
-    app.update(AppEvent::ConfigEditorOpened(config_choices(
+    app.update(ConfigEvent::EditorOpened(config_choices(
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
@@ -750,7 +776,7 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
 
     assert!(matches!(
         action,
-        Some(AppCommand::EditConfig(edit))
+        Some(AppCommand::Config(ConfigCommand::Edit(edit)))
             if edit.server_config.revision == 7
                 && !edit.terminal.mouse_interactions()
     ));
@@ -761,7 +787,7 @@ fn config_vim_mode_toggles_on_enter() {
     let mut config = empty_config_snapshot();
     config.revision = 7;
     let mut app = App::new();
-    app.update(AppEvent::ConfigEditorOpened(config_choices(
+    app.update(ConfigEvent::EditorOpened(config_choices(
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
@@ -773,7 +799,7 @@ fn config_vim_mode_toggles_on_enter() {
 
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::EditConfig(edit))
+        Some(AppCommand::Config(ConfigCommand::Edit(edit)))
             if edit.server_config.revision == 7
                 && edit.terminal.input_mode() == ChatInputMode::Vim
     ));
@@ -784,7 +810,7 @@ fn config_show_git_changes_as_diff_toggles_on_enter() {
     let mut config = empty_config_snapshot();
     config.revision = 7;
     let mut app = App::new();
-    app.update(AppEvent::ConfigEditorOpened(config_choices(
+    app.update(ConfigEvent::EditorOpened(config_choices(
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
@@ -796,8 +822,51 @@ fn config_show_git_changes_as_diff_toggles_on_enter() {
 
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::EditConfig(edit))
+        Some(AppCommand::Config(ConfigCommand::Edit(edit)))
             if edit.status_line.show_git_changes_as_diff()
+    ));
+}
+
+#[test]
+fn config_language_server_switch_emits_a_revision_bound_backend_edit() {
+    let mut config = empty_config_snapshot();
+    config.revision = 7;
+    config.language_servers.insert(
+        "rust-analyzer".into(),
+        LanguageServerConfigDto {
+            mode: LanguageServerModeDto::Disabled,
+            executable: None,
+        },
+    );
+    let mut app = App::new();
+    app.update(ConfigEvent::EditorOpened(config_choices(
+        &config,
+        &ProviderListResult {
+            providers: vec![ProviderCatalogEntryDto {
+                provider: "ollama".into(),
+                display_name: "Ollama".into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                api_key_configured: false,
+            }],
+        },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "Language servers"
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::SetLanguageServerMode(edit)))
+            if edit.expected_revision == 7
+                && edit.server_id == "rust-analyzer"
+                && edit.config.mode == LanguageServerModeDto::Enabled
     ));
 }
 
@@ -812,7 +881,7 @@ fn directory_permission_selection_emits_a_revision_bound_server_edit() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::DirPickerOpened(crate::dirs::choices(
+    app.update(crate::dirs::Event::PickerOpened(crate::dirs::choices(
         &config_session(),
         directories,
     )));
@@ -822,7 +891,7 @@ fn directory_permission_selection_emits_a_revision_bound_server_edit() {
 
     assert!(matches!(
         action,
-        Some(AppCommand::SetDirPermissions(params))
+        Some(AppCommand::Dirs(DirCommand::SetPermissions(params)))
             if params.expected_revision == 3
                 && params.permissions == vec![PermissionDto::WriteFiles]
     ));
@@ -840,7 +909,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::ConfigEditorOpened(config_choices(
+    app.update(ConfigEvent::EditorOpened(config_choices(
         &config,
         &providers,
         TerminalSettings::default(),
@@ -858,13 +927,13 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
     app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    let Some(AppCommand::SetProviderApiKey(edit)) = action else {
+    let Some(AppCommand::Config(ConfigCommand::SetProviderApiKey(edit))) = action else {
         panic!("provider API key input must emit a typed secret edit");
     };
     assert!(!format!("{edit:?}").contains("api_key: \"sk\""));
     assert_eq!(edit.into_parts(), ("openai".into(), "sk".into()));
 
-    app.update(AppEvent::ConfigApiKeySaved {
+    app.update(ConfigEvent::ApiKeySaved {
         provider: "openai".into(),
         choices: config_choices(
             &config,
@@ -889,7 +958,7 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::ConfigEditorOpened(config_choices(
+    app.update(ConfigEvent::EditorOpened(config_choices(
         &config,
         &providers,
         TerminalSettings::default(),
@@ -916,7 +985,10 @@ fn statusline_slash_command_is_owned_by_the_local_host() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, Some(AppCommand::OpenStatusLineEditor));
+    assert_eq!(
+        action,
+        Some(AppCommand::Status(StatusCommand::OpenLineEditor))
+    );
     assert_eq!(app.messages()[0].text, "/statusline");
 }
 
@@ -925,7 +997,7 @@ fn statusline_selection_emits_a_revision_bound_edit() {
     let settings = StatusLineSettings::default();
     let choices = status_line_choices(&settings, 7);
     let mut app = App::new();
-    app.update(AppEvent::StatusLineEditorOpened(StatusLineEditorUpdate {
+    app.update(StatusEvent::LineEditorOpened(StatusLineEditorUpdate {
         settings,
         choices,
     }));
@@ -934,7 +1006,7 @@ fn statusline_selection_emits_a_revision_bound_edit() {
 
     assert!(matches!(
         action,
-        Some(AppCommand::EditStatusLine(edit))
+        Some(AppCommand::Status(StatusCommand::EditLine(edit)))
             if edit.expected_revision == 7
                 && edit.item == StatusLineItem::Permissions
                 && !edit.enabled
@@ -951,12 +1023,12 @@ fn statusline_accounting_follows_the_current_thread_context() {
     settings.set(StatusLineItem::Model, false);
     settings.set(StatusLineItem::GitBranch, false);
     settings.set(StatusLineItem::GitChanges, false);
-    app.update(AppEvent::StatusLineSettingsReceived(settings));
+    app.update(StatusEvent::LineSettingsReceived(settings));
     let mut usage = zeta_protocol::ModelUsageSummary::default();
     usage.model_invocations = 1;
     usage.input_tokens.reported = 2_000;
     usage.cached_input_tokens.reported = 500;
-    app.update(AppEvent::ThreadAccountingChanged {
+    app.update(ThreadEvent::AccountingChanged {
         usage,
         reference_cost: zeta_protocol::ModelReferenceCostSummary {
             known_amounts: vec![zeta_protocol::ModelMoneyAmount {
@@ -973,7 +1045,7 @@ fn statusline_accounting_follows_the_current_thread_context() {
         "cache hit 25.0% · cost $0.00125"
     );
 
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: zeta_protocol::SessionId::new("session-next").unwrap(),
         thread_id: zeta_protocol::ThreadId::new("thread-next").unwrap(),
     });
@@ -995,15 +1067,17 @@ fn process_resource_sample_updates_the_optional_statusline_items() {
     };
     app.apply_process_resource_request(request);
 
-    app.update(AppEvent::ProcessResourcesSampled(ProcessResourcesReading {
-        request,
-        tui: Ok(ProcessResourceUsage {
-            resident_bytes: Some(128 * 1024 * 1024),
-            cpu_tenths_percent: Some(124),
-        }),
-        app_server: None,
-        sampled_at: Instant::now(),
-    }));
+    app.update(HostEvent::ProcessResourcesSampled(
+        ProcessResourcesReading {
+            request,
+            tui: Ok(ProcessResourceUsage {
+                resident_bytes: Some(128 * 1024 * 1024),
+                cpu_tenths_percent: Some(124),
+            }),
+            app_server: None,
+            sampled_at: Instant::now(),
+        },
+    ));
     assert_eq!(
         app.status_line_runtime().process_resources.local.memory,
         ProcessMemoryCurrent::Available(128 * 1024 * 1024)
@@ -1016,7 +1090,7 @@ fn process_resource_sample_updates_the_optional_statusline_items() {
             matches!(item, StatusLineItem::Memory | StatusLineItem::Cpu),
         );
     }
-    app.update(AppEvent::StatusLineSettingsReceived(settings));
+    app.update(StatusEvent::LineSettingsReceived(settings));
 
     assert_eq!(
         app.status_line()
@@ -1030,7 +1104,7 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
     let mut app = App::new();
     let settings = keymap_settings_from_tui(&Default::default()).unwrap();
     let choices = keymap_choices(settings.keymap.setup_actions(), &[], 7);
-    app.update(AppEvent::KeymapEditorOpened(KeymapEditorUpdate {
+    app.update(KeymapEvent::EditorOpened(KeymapEditorUpdate {
         settings,
         choices,
         notice: None,
@@ -1051,14 +1125,16 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
     let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
     assert_eq!(
         edit,
-        Some(AppCommand::EditKeymap(crate::keymap::KeymapEdit {
-            expected_revision: 7,
-            command_id: "zetaCode.action.cycleApprovalMode".into(),
-            kind: KeymapEditKind::Set {
-                key: "ctrl+y".into(),
-                intent: KeymapEditIntent::ReplaceUser,
-            },
-        }))
+        Some(AppCommand::Keymap(KeymapCommand::Edit(
+            crate::keymap::KeymapEdit {
+                expected_revision: 7,
+                command_id: "zetaCode.action.cycleApprovalMode".into(),
+                kind: KeymapEditKind::Set {
+                    key: "ctrl+y".into(),
+                    intent: KeymapEditIntent::ReplaceUser,
+                },
+            }
+        )))
     );
 }
 
@@ -1069,7 +1145,7 @@ fn inline_product_arguments_reach_the_typed_dispatcher() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    let Some(AppCommand::ExecuteProductCommand(invocation)) = action else {
+    let Some(AppCommand::Thread(ThreadCommand::ExecuteProductCommand(invocation))) = action else {
         panic!("expected product command action");
     };
     assert_eq!(invocation.command.name, "model");
@@ -1105,12 +1181,12 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
 
     assert_eq!(
         action,
-        Some(AppCommand::SubmitTurn {
+        Some(AppCommand::Thread(ThreadCommand::SubmitTurn {
             submission: ChatSubmission {
                 display_text: "/diagnose logs".into(),
                 input: vec![ChatInputItem::Text("/diagnose logs".into())],
             },
-        })
+        }))
     );
     assert_eq!(app.status(), &Status::Working);
     assert_eq!(app.messages()[0].role, MessageRole::User);
@@ -1139,7 +1215,7 @@ fn help_uses_the_runtime_command_catalog_and_descriptions() {
         }]),
     )])))
     .unwrap();
-    app.update(AppEvent::KeymapSettingsReceived(settings));
+    app.update(KeymapEvent::SettingsReceived(settings));
     app.insert_text("/help");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1232,7 +1308,7 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
 
     assert_eq!(
         action,
-        Some(AppCommand::SubmitTurn {
+        Some(AppCommand::Thread(ThreadCommand::SubmitTurn {
             submission: ChatSubmission {
                 display_text: "$commit staged changes".into(),
                 input: vec![
@@ -1240,7 +1316,7 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
                     ChatInputItem::Text("$commit staged changes".into()),
                 ],
             },
-        })
+        }))
     );
     assert_eq!(app.messages()[0].text, "$commit staged changes");
     let _ = fs::remove_dir_all(dir);
@@ -1314,7 +1390,7 @@ fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
 
     let mut settings = TerminalSettings::default();
     settings.set_mouse_interactions(false);
-    app.update(AppEvent::ConfigSettingsReceived(settings));
+    app.update(ConfigEvent::SettingsReceived(settings));
 
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     assert!(app.screen_selection().range().is_none());
@@ -1326,7 +1402,7 @@ fn terminal_settings_apply_vim_mode_to_the_active_chat_input() {
     let mut settings = TerminalSettings::default();
     settings.set_input_mode(ChatInputMode::Vim);
 
-    app.update(AppEvent::ConfigSettingsReceived(settings));
+    app.update(ConfigEvent::SettingsReceived(settings));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     assert_eq!(app.thread_presentations.active().input.prompt(), "N ");
@@ -1414,7 +1490,7 @@ fn terminal_screen_change_closes_command_panels_including_status() {
 
     let usage = zeta_protocol::ModelUsageSummary::default();
     let reference_cost = zeta_protocol::ModelReferenceCostSummary::default();
-    app.update(AppEvent::StatusPanelOpened(status_panel(StatusViewData {
+    app.update(StatusEvent::PanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
         full_context_window: None,
         available_context_window: None,
@@ -1426,7 +1502,7 @@ fn terminal_screen_change_closes_command_panels_including_status() {
         thread_sequence: 1,
     })));
     assert!(app.command_panel().is_some());
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: SessionId::new("other-session").unwrap(),
         thread_id: ThreadId::new("other-thread").unwrap(),
     });
@@ -1447,7 +1523,7 @@ fn two_screen_escape_presses_within_the_gesture_window_open_rewind() {
             KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
             started + Duration::from_millis(200),
         ),
-        Some(AppCommand::OpenRewindPicker)
+        Some(AppCommand::Thread(ThreadCommand::OpenRewindPicker))
     );
 }
 
@@ -1533,7 +1609,7 @@ fn control_c_interrupts_a_working_turn_without_exiting() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
 
-    assert_eq!(action, Some(AppCommand::Interrupt));
+    assert_eq!(action, Some(AppCommand::Thread(ThreadCommand::Interrupt)));
     assert_eq!(app.status(), &Status::Cancelling);
 }
 
@@ -1553,13 +1629,13 @@ fn a_second_control_c_does_not_duplicate_an_interrupt() {
 #[test]
 fn control_c_interrupts_a_turn_waiting_for_user_input() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(
+    app.update(ThreadEvent::TurnActivityChanged(
         TurnActivity::WaitingForUserInput,
     ));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
 
-    assert_eq!(action, Some(AppCommand::Interrupt));
+    assert_eq!(action, Some(AppCommand::Thread(ThreadCommand::Interrupt)));
     assert_eq!(app.status(), &Status::Cancelling);
 }
 
@@ -1568,17 +1644,17 @@ fn control_enter_steers_the_working_turn_and_tracks_delivery() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
 
     app.insert_text("second");
     app.handle_paste("third".into());
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
 
-    let Some(AppCommand::SteerTurn {
+    let Some(AppCommand::Thread(ThreadCommand::SteerTurn {
         source,
         steer_id,
         submission,
-    }) = action
+    })) = action
     else {
         panic!("expected active Turn steer");
     };
@@ -1589,7 +1665,7 @@ fn control_enter_steers_the_working_turn_and_tracks_delivery() {
     assert_eq!(app.messages()[1].text, "secondthird");
     assert!(app.command_panel().is_none());
 
-    app.update(AppEvent::SteerCompleted { source, steer_id });
+    app.update(ThreadEvent::SteerCompleted { source, steer_id });
 
     assert!(app.command_panel().is_none());
     assert_eq!(app.status(), &Status::Working);
@@ -1600,7 +1676,7 @@ fn queue_selection_can_steer_an_older_message_immediately() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     for message in ["second", "third"] {
         app.insert_text(message);
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1611,11 +1687,11 @@ fn queue_selection_can_steer_an_older_message_immediately() {
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
 
-    let Some(AppCommand::SteerTurn {
+    let Some(AppCommand::Thread(ThreadCommand::SteerTurn {
         source: SteerSource::Queue(queue_id),
         steer_id,
         submission,
-    }) = action
+    })) = action
     else {
         panic!("expected the selected Queue message to steer");
     };
@@ -1624,7 +1700,7 @@ fn queue_selection_can_steer_an_older_message_immediately() {
     assert!(app.queue_view().items[0].sending);
     assert!(!app.queue_focused());
 
-    app.update(AppEvent::SteerCompleted {
+    app.update(ThreadEvent::SteerCompleted {
         source: SteerSource::Queue(queue_id),
         steer_id,
     });
@@ -1638,7 +1714,7 @@ fn enter_queues_a_new_turn_by_default_while_the_current_turn_is_working() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("next turn");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1655,7 +1731,7 @@ fn enter_queues_a_new_turn_by_default_while_the_current_turn_is_working() {
 #[test]
 fn alt_up_focuses_the_queue_and_enter_restores_the_selected_message() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("restore me");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(
@@ -1673,14 +1749,14 @@ fn alt_up_focuses_the_queue_and_enter_restores_the_selected_message() {
 #[test]
 fn queue_focus_keeps_global_interrupt_available() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("queued");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-        Some(AppCommand::Interrupt)
+        Some(AppCommand::Thread(ThreadCommand::Interrupt))
     );
 }
 
@@ -1701,7 +1777,7 @@ fn sessions_and_agents_commands_open_the_manager_screen() {
 #[test]
 fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
     let mut app = App::new();
-    app.update(AppEvent::SessionCatalogReceived(vec![
+    app.update(SessionEvent::CatalogReceived(vec![
         manager_state_session("one"),
         manager_state_session("two"),
     ]));
@@ -1715,9 +1791,9 @@ fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
-        Some(AppCommand::ArchiveSessions {
+        Some(AppCommand::Sessions(SessionCommand::Archive {
             session_ids: vec![SessionId::new("one").unwrap()],
-        })
+        }))
     );
 
     assert_eq!(
@@ -1734,38 +1810,38 @@ fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::ResumeSession {
+        Some(AppCommand::Sessions(SessionCommand::Resume {
             session_id: "two".into(),
             preferred_thread_id: None,
-        })
+        }))
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
-        Some(AppCommand::ArchiveSessions {
+        Some(AppCommand::Sessions(SessionCommand::Archive {
             session_ids: vec![SessionId::new("two").unwrap()],
-        })
+        }))
     );
 }
 
 #[test]
 fn queued_turn_stays_editable_when_automatic_submission_is_rejected() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("keep this message");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TurnCompleted);
+    app.update(ThreadEvent::TurnCompleted);
 
-    let Some(AppCommand::SubmitQueuedTurn {
+    let Some(AppCommand::Thread(ThreadCommand::SubmitQueuedTurn {
         queue_id,
         submission,
-    }) = app.dispatch_next_queued_turn()
+    })) = app.dispatch_next_queued_turn()
     else {
         panic!("expected queued Turn dispatch");
     };
     assert_eq!(submission.display_text, "keep this message");
     assert!(app.queue_view().items[0].sending);
 
-    app.update(AppEvent::QueueSubmissionFailed {
+    app.update(ThreadEvent::QueueSubmissionFailed {
         queue_id,
         error: "server unavailable".into(),
     });
@@ -1775,7 +1851,7 @@ fn queued_turn_stays_editable_when_automatic_submission_is_rejected() {
 #[test]
 fn empty_enter_does_not_bypass_queue_dispatch_order() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("send this now");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(
@@ -1788,7 +1864,7 @@ fn empty_enter_does_not_bypass_queue_dispatch_order() {
 #[test]
 fn a_created_turn_does_not_claim_the_running_steer_action() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Starting));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Starting));
     app.insert_text("after the queued turn");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1803,15 +1879,15 @@ fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("change direction");
-    let Some(AppCommand::SteerTurn { steer_id, .. }) =
+    let Some(AppCommand::Thread(ThreadCommand::SteerTurn { steer_id, .. })) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL))
     else {
         panic!("expected active Turn steer");
     };
 
-    app.update(AppEvent::SteerSubmissionFailed {
+    app.update(ThreadEvent::SteerSubmissionFailed {
         source: SteerSource::Composer,
         steer_id,
         error: "sequence conflict".into(),
@@ -1834,7 +1910,7 @@ fn completion_returns_the_app_to_ready_without_appending_transcript_content() {
     app.insert_text("hello");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    app.update(AppEvent::TurnCompleted);
+    app.update(ThreadEvent::TurnCompleted);
 
     assert_eq!(app.messages().len(), 1);
     assert_eq!(app.messages()[0].role, MessageRole::User);
@@ -1846,7 +1922,7 @@ fn completion_returns_the_app_to_ready_without_appending_transcript_content() {
 fn client_error_is_visible_in_history_and_status() {
     let mut app = App::new();
 
-    app.update(AppEvent::FailureReported("provider unavailable".into()));
+    app.update(ThreadEvent::FailureReported("provider unavailable".into()));
 
     assert_eq!(app.messages().len(), 1);
     assert_eq!(app.messages()[0].role, MessageRole::Error);
@@ -1861,7 +1937,7 @@ fn interrupted_turn_returns_to_ready_with_a_notice() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
 
-    app.update(AppEvent::TurnInterrupted);
+    app.update(ThreadEvent::TurnInterrupted);
 
     assert_eq!(app.status(), &Status::Ready);
     assert_eq!(app.messages().last().unwrap().role, MessageRole::Notice);
@@ -1869,7 +1945,7 @@ fn interrupted_turn_returns_to_ready_with_a_notice() {
 }
 
 fn assert_text_submission(action: Option<AppCommand>, expected: &str) {
-    let Some(AppCommand::SubmitTurn { submission }) = action else {
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) = action else {
         panic!("expected text submission");
     };
     assert_eq!(submission.display_text, expected);
@@ -1884,12 +1960,18 @@ fn backtab_cycles_the_next_turn_approval_mode() {
     let mut app = App::new();
 
     let action = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert_eq!(action, Some(AppCommand::CycleNextApprovalMode));
+    assert_eq!(
+        action,
+        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
+    );
     assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
 
     app.set_next_approval_mode(ApprovalMode::AutoReview);
     let action = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert_eq!(action, Some(AppCommand::CycleNextApprovalMode));
+    assert_eq!(
+        action,
+        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
+    );
 }
 
 fn wait_for_mention_results(app: &mut App, dir: &Path) {
@@ -1902,7 +1984,7 @@ fn wait_for_mention_results(app: &mut App, dir: &Path) {
             file_search.stop();
         }
         for snapshot in file_search.poll() {
-            app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
+            app.update(ThreadEvent::FileSearchSnapshotReceived(snapshot));
         }
         if matches!(
             app.completion(),

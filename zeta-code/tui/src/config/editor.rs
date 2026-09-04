@@ -19,6 +19,7 @@ use std::fmt;
 use zeroize::Zeroizing;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
+use zeta_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
@@ -37,10 +38,18 @@ pub(crate) enum ConfigSelectionAction {
     SetTerminalSettings(ConfigEdit),
     SetVimMode(ConfigEdit),
     SetShowGitChangesAsDiff(ConfigEdit),
+    SetLanguageServerMode(LanguageServerEdit),
     OpenProviderApiKey {
         provider: String,
         display_name: String,
     },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct LanguageServerEdit {
+    pub(crate) expected_revision: u64,
+    pub(crate) server_id: String,
+    pub(crate) config: LanguageServerConfigDto,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -291,13 +300,14 @@ pub(crate) fn config_choices(
     ];
     config_items.extend(overview(config));
     let provider_items = provider_items(providers, &mut actions);
+    let language_server_items = language_servers(config, &mut actions);
     ConfigChoices {
         model: ListSelectionModel::new(
             "Config",
             vec![
                 ListSelectionGroup::new("Config", config_items),
                 ListSelectionGroup::new("Providers", provider_items),
-                ListSelectionGroup::new("Language servers", language_servers(config)),
+                ListSelectionGroup::new("Language servers", language_server_items),
             ],
         )
         .with_activation_mode(ListSelectionActivationMode::EnterOrSpace)
@@ -338,10 +348,6 @@ fn overview(config: &ConfigReadResult) -> Vec<ListSelectionItem> {
             approval_review_model(&config.approval_review_model),
         ),
         detail("Providers", config.providers.len().to_string()),
-        detail(
-            "Language servers",
-            config.language_servers.len().to_string(),
-        ),
     ]
 }
 
@@ -375,24 +381,45 @@ fn provider_item(
     item.with_id(id)
 }
 
-fn language_servers(config: &ConfigReadResult) -> Vec<ListSelectionItem> {
+fn language_servers(
+    config: &ConfigReadResult,
+    actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
+) -> Vec<ListSelectionItem> {
     or_empty(
         config
             .language_servers
             .iter()
-            .map(|(language, server)| {
+            .map(|(server_id, server)| {
+                let enabled = server.mode != LanguageServerModeDto::Disabled;
                 let mode = match server.mode {
                     LanguageServerModeDto::Disabled => "disabled",
                     LanguageServerModeDto::Automatic => "automatic",
                     LanguageServerModeDto::Enabled => "enabled",
                 };
-                detail(
-                    language,
-                    server
-                        .executable
-                        .as_deref()
-                        .map(|executable| format!("{mode}  ·  {executable}"))
-                        .unwrap_or_else(|| mode.into()),
+                let id = ListSelectionItemId::new(format!("language-server-{server_id}"));
+                let mut next_config = server.clone();
+                next_config.mode = if enabled {
+                    LanguageServerModeDto::Disabled
+                } else {
+                    LanguageServerModeDto::Enabled
+                };
+                actions.insert(
+                    id.clone(),
+                    ConfigSelectionAction::SetLanguageServerMode(LanguageServerEdit {
+                        expected_revision: config.revision,
+                        server_id: server_id.clone(),
+                        config: next_config,
+                    }),
+                );
+                let description = server
+                    .executable
+                    .as_deref()
+                    .map(|executable| format!("{mode}  ·  {executable}"))
+                    .unwrap_or_else(|| mode.into());
+                ListSelectionItem::new(server_id).with_id(id).with_columns(
+                    server_id,
+                    description,
+                    checkbox(enabled),
                 )
             })
             .collect(),

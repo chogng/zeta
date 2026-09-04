@@ -211,8 +211,8 @@ enum AppEvent {
     Sessions(sessions::Event),
     Config(config::Event),
     Theme(theme::Event),
-    Terminal(terminal::Event),
-    Connection(client::Event),
+    Status(status::Event),
+    Host(host::Event),
 }
 
 enum AppCommand {
@@ -220,11 +220,13 @@ enum AppCommand {
     Sessions(sessions::Command),
     Config(config::Command),
     Theme(theme::Command),
+    Host(host::Command),
     Quit,
+    Suspend,
 }
 ```
 
-代码不要求逐字使用这些类型名，但必须保持“一种能力一个顶层分支”，具体事件和命令留在对应目录。
+代码不要求逐字使用这些类型名，但必须保持“一种能力一个顶层分支”，具体事件和命令留在对应目录。能力可以直接把自己的 `Event` 转成 `AppEvent`，但不能在顶层重新建立同义的平级 variant。
 
 ### 输入位置
 

@@ -3,6 +3,20 @@ mod picker;
 mod resource;
 mod settings;
 
+/// A completed theme operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    PickerOpened(ThemeChoices),
+    RenderChanged(crate::render::RenderTheme),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    OpenPicker,
+    OpenCustomPicker,
+    SetCustom { preference: String },
+    Set { preference: String },
+}
+
 pub(crate) use model::ThemePickerCatalog;
 pub(crate) use model::ThemePickerChoice;
 pub(crate) use model::ThemePickerTarget;

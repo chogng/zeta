@@ -11,7 +11,13 @@ use crate::app::frame;
 use crate::app::frame::InputPointerTarget;
 use crate::app::requests::RequestKey;
 use crate::app::requests::RequestTasks;
+use crate::host::Command as HostCommand;
+use crate::keymap::Command as KeymapCommand;
+use crate::sessions::Event as SessionEvent;
 use crate::terminal::mouse::MouseMode;
+use crate::theme::Command as ThemeCommand;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
 use crate::thread::composer::ChatComposerPointerTarget;
 use crate::thread::composer::CompletionView;
 use crate::thread::transcript::TranscriptScrollDirection;
@@ -48,18 +54,27 @@ fn unrelated_actions_bypass_a_busy_request_without_losing_same_domain_order() {
         &mut app,
     );
     let mut queued = VecDeque::new();
-    let write = AppCommand::SetTheme {
+    let write = ThemeCommand::Set {
         preference: "zeta-code-dark".into(),
-    };
+    }
+    .into();
 
     assert!(schedule_action(Some(write), &requests, &mut queued).is_none());
     assert!(matches!(
-        schedule_action(Some(AppCommand::OpenKeymapEditor), &requests, &mut queued),
-        Some(AppCommand::OpenKeymapEditor)
+        schedule_action(
+            Some(KeymapCommand::OpenEditor.into()),
+            &requests,
+            &mut queued
+        ),
+        Some(AppCommand::Keymap(KeymapCommand::OpenEditor))
     ));
     assert!(matches!(
-        schedule_action(Some(AppCommand::Interrupt), &requests, &mut queued),
-        Some(AppCommand::Interrupt)
+        schedule_action(
+            Some(ThreadCommand::Interrupt.into()),
+            &requests,
+            &mut queued
+        ),
+        Some(AppCommand::Thread(ThreadCommand::Interrupt))
     ));
     assert_eq!(queued.len(), 1);
     release
@@ -79,7 +94,7 @@ fn unrelated_actions_bypass_a_busy_request_without_losing_same_domain_order() {
     assert_eq!(completed.len(), 1);
     assert!(matches!(
         schedule_action(None, &requests, &mut queued),
-        Some(AppCommand::SetTheme { .. })
+        Some(AppCommand::Theme(ThemeCommand::Set { .. }))
     ));
 }
 
@@ -101,8 +116,12 @@ fn interrupt_bypasses_an_active_interaction_response() {
     let mut queued = VecDeque::new();
 
     assert!(matches!(
-        schedule_action(Some(AppCommand::Interrupt), &requests, &mut queued),
-        Some(AppCommand::Interrupt)
+        schedule_action(
+            Some(ThreadCommand::Interrupt.into()),
+            &requests,
+            &mut queued
+        ),
+        Some(AppCommand::Thread(ThreadCommand::Interrupt))
     ));
     release
         .send(())
@@ -143,26 +162,40 @@ fn quit_bypasses_a_pending_request() {
 #[test]
 fn repeated_clipboard_availability_refreshes_are_coalesced() {
     let requests = RequestTasks::default();
-    let mut queued = VecDeque::from([AppCommand::RefreshClipboardImageAvailability]);
+    let mut queued = VecDeque::from([AppCommand::from(
+        HostCommand::RefreshClipboardImageAvailability,
+    )]);
 
     let action = schedule_action(
-        Some(AppCommand::RefreshClipboardImageAvailability),
+        Some(HostCommand::RefreshClipboardImageAvailability.into()),
         &requests,
         &mut queued,
     );
 
-    assert_eq!(action, Some(AppCommand::RefreshClipboardImageAvailability));
+    assert_eq!(
+        action,
+        Some(AppCommand::Host(
+            HostCommand::RefreshClipboardImageAvailability
+        ))
+    );
     assert!(queued.is_empty());
 }
 
 #[test]
 fn repeated_older_history_requests_are_coalesced() {
     let requests = RequestTasks::default();
-    let mut queued = VecDeque::from([AppCommand::LoadOlderHistory]);
+    let mut queued = VecDeque::from([AppCommand::from(ThreadCommand::LoadOlderHistory)]);
 
-    let action = schedule_action(Some(AppCommand::LoadOlderHistory), &requests, &mut queued);
+    let action = schedule_action(
+        Some(ThreadCommand::LoadOlderHistory.into()),
+        &requests,
+        &mut queued,
+    );
 
-    assert_eq!(action, Some(AppCommand::LoadOlderHistory));
+    assert_eq!(
+        action,
+        Some(AppCommand::Thread(ThreadCommand::LoadOlderHistory))
+    );
     assert!(queued.is_empty());
 }
 
@@ -307,7 +340,7 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
     let mut app = App::new();
     let session_id = SessionId::new("pointer-session").unwrap();
     let thread_id = ThreadId::new("pointer-thread").unwrap();
-    app.update(AppEvent::SessionCatalogReceived(vec![Session {
+    app.update(SessionEvent::CatalogReceived(vec![Session {
         session_id: session_id.clone(),
         title: "Pointer session".into(),
         status: SessionStatus::Active,
@@ -324,7 +357,7 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
             status: ThreadStatus::Active,
         }],
     }]));
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id,
         thread_id,
     });
@@ -364,7 +397,7 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
 fn transcript_mouse_wheel_reveals_jump_control_and_click_returns_to_latest() {
     let mut app = App::new();
     for index in 0..12 {
-        app.update(AppEvent::FailureReported(format!("failure {index}")));
+        app.update(ThreadEvent::FailureReported(format!("failure {index}")));
     }
     let area = Rect::new(0, 0, 50, 16);
     let transcript = frame::layout(&app, area).session.transcript;
@@ -404,7 +437,7 @@ fn transcript_mouse_wheel_reveals_jump_control_and_click_returns_to_latest() {
 #[test]
 fn transcript_mouse_wheel_at_loaded_start_requests_older_history() {
     let mut app = App::new();
-    app.update(AppEvent::FailureReported("only loaded message".into()));
+    app.update(ThreadEvent::FailureReported("only loaded message".into()));
     let area = Rect::new(0, 0, 50, 16);
     let transcript = frame::layout(&app, area).session.transcript;
 
@@ -416,7 +449,7 @@ fn transcript_mouse_wheel_at_loaded_start_requests_older_history() {
             transcript.y,
             TranscriptScrollDirection::Up,
         ),
-        Some(AppCommand::LoadOlderHistory)
+        Some(AppCommand::Thread(ThreadCommand::LoadOlderHistory))
     );
     assert!(app.transcript_scroll().anchor().is_some());
 }

@@ -24,25 +24,47 @@ use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
 use crate::config;
+use crate::config::Command as ConfigCommand;
+use crate::config::Event as ConfigEvent;
+use crate::connectors::Command as ConnectorCommand;
 use crate::dirs;
+use crate::dirs::Command as DirCommand;
+use crate::dirs::Event as DirEvent;
 use crate::host;
+use crate::host::Command as HostCommand;
+use crate::host::Event as HostEvent;
 use crate::host::process_resources::ProcessResourceDemand;
 use crate::host::process_resources::ProcessResourceTargets;
 use crate::keymap;
+use crate::keymap::Command as KeymapCommand;
+use crate::keymap::Event as KeymapEvent;
 use crate::mcp;
+use crate::mcp::Command as McpCommand;
+use crate::mcp::Event as McpEvent;
+use crate::models::Command as ModelCommand;
 use crate::sessions;
+use crate::sessions::Command as SessionCommand;
+use crate::sessions::Event as SessionEvent;
 use crate::sessions::ResumeOutcome;
 use crate::sessions::SessionCompletion;
 use crate::sessions::create_manager_session_and_start;
 use crate::sessions::finish_conversation_request;
 use crate::skills;
+use crate::skills::Command as SkillCommand;
+use crate::skills::Event as SkillEvent;
 use crate::skills::finish_refresh;
 use crate::status as status_line;
+use crate::status::Command as StatusCommand;
+use crate::status::Event as StatusEvent;
 use crate::terminal;
 use crate::terminal::screen_selection::ClickCount;
 use crate::terminal::screen_selection::ScreenSelectionOutcome;
 use crate::theme as theme_feature;
+use crate::theme::Command as ThemeCommand;
+use crate::theme::Event as ThemeEvent;
 use crate::theme::ThemeResource;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
 use crate::thread::ThreadCompletion;
 use crate::thread::ThreadRequestScope;
 use crate::thread::ThreadSubscription;
@@ -157,33 +179,31 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             for diagnostic in loaded.diagnostics {
                 eprintln!("theme: {diagnostic}");
             }
-            app.update(AppEvent::RenderThemeChanged(loaded.theme));
+            app.update(ThemeEvent::RenderChanged(loaded.theme));
         }
-        Err(error) => app.update(AppEvent::FailureReported(error)),
+        Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
     match initial_config {
         Ok(config) => apply_tui_config(config, initial_model_catalog.as_ref(), &mut app),
-        Err(error) => app.update(AppEvent::FailureReported(format!(
+        Err(error) => app.update(ThreadEvent::FailureReported(format!(
             "could not read server configuration: {error}"
         ))),
     }
     match sessions::load_catalog(&mut client) {
-        Ok(catalog) => app.update(AppEvent::SessionCatalogReceived(catalog)),
-        Err(error) => app.update(AppEvent::FailureReported(format!(
+        Ok(catalog) => app.update(SessionEvent::CatalogReceived(catalog)),
+        Err(error) => app.update(ThreadEvent::FailureReported(format!(
             "could not load Sessions: {error}"
         ))),
     }
     apply_thread_snapshot(&mut app, initial_thread, initial_transcript);
-    app.update(AppEvent::SkillDiagnosticsReceived(
-        initial_skill_diagnostics,
-    ));
+    app.update(SkillEvent::DiagnosticsReceived(initial_skill_diagnostics));
     if let Ok(status) = client.git_status() {
-        app.update(AppEvent::GitStatusReceived(status));
+        app.update(StatusEvent::GitStatusReceived(status));
     }
     if app.request_git_text_diff()
         && let Ok(result) = client.git_text_diff()
     {
-        app.update(AppEvent::GitTextDiffReceived {
+        app.update(StatusEvent::GitTextDiffReceived {
             status: result.status,
             statistics: result.statistics,
         });
@@ -195,7 +215,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     };
     let mut pump = EventPump::start(events, resource_targets)?;
     let mut requests = RequestTasks::default();
-    let mut queued_actions = VecDeque::from([AppCommand::RefreshClipboardImageAvailability]);
+    let mut queued_actions = VecDeque::from([AppCommand::from(
+        HostCommand::RefreshClipboardImageAvailability,
+    )]);
     let mut thread_refresh_requested = false;
     let mut config_refresh_requested = false;
     let mut skills_refresh_requested = false;
@@ -314,7 +336,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     return Ok(TuiExit::TerminationRequested);
                 }
                 RuntimeEvent::ProcessResources(reading) => {
-                    app.update(AppEvent::ProcessResourcesSampled(reading));
+                    app.update(HostEvent::ProcessResourcesSampled(reading));
                     if !matches!(process_resource_demand, ProcessResourceDemand::Disabled) {
                         redraw.request(Instant::now(), RedrawPriority::Batched);
                     }
@@ -331,7 +353,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     None
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
-                    Event::FocusGained => Some(AppCommand::RefreshClipboardImageAvailability),
+                    Event::FocusGained => {
+                        Some(HostCommand::RefreshClipboardImageAvailability.into())
+                    }
                     Event::Key(key) if key.kind != KeyEventKind::Release => {
                         app.handle_key_in_area(key, terminal.area()?)
                     }
@@ -414,7 +438,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         &mut thread_subscription,
                         &mut app,
                     ),
-                    Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                    Err(error) => app.update(ThreadEvent::FailureReported(error.to_string())),
                 }
             }
 
@@ -437,17 +461,17 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     redraw.request(Instant::now(), RedrawPriority::Batched);
                 }
                 for snapshot in snapshots {
-                    app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
+                    app.update(ThreadEvent::FileSearchSnapshotReceived(snapshot));
                 }
             }
 
             if let Some(action) = action {
                 let action_lane = request_key(&action);
                 match action {
-                    AppCommand::ConnectConnectorDeviceOAuth {
+                    AppCommand::Connectors(ConnectorCommand::ConnectDeviceOAuth {
                         connector_id,
                         connection_generation,
-                    } => {
+                    }) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -460,7 +484,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             connector_id,
                                             connection_generation,
                                         )
-                                        .map(AppEvent::ConnectorPickerUpdated)
+                                        .map(crate::connectors::Event::PickerUpdated)
+                                        .map(AppEvent::from)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -468,7 +493,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::ExecuteProductCommand(invocation) => {
+                    AppCommand::Thread(ThreadCommand::ExecuteProductCommand(invocation)) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let next_conversation = conversation.clone();
@@ -499,7 +524,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::Quit => return Ok(TuiExit::UserRequested),
-                    AppCommand::Interrupt => {
+                    AppCommand::Thread(ThreadCommand::Interrupt) => {
                         if let Some(turn_id) = app.active_turn().cloned()
                             && !matches!(app.status(), Status::Error)
                         {
@@ -526,38 +551,40 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 );
                             }
                         } else if !matches!(app.status(), Status::Ready) {
-                            app.update(AppEvent::InterruptFailed(
+                            app.update(ThreadEvent::InterruptFailed(
                                 "the active turn is not available".into(),
                             ));
                         }
                     }
-                    AppCommand::ReadClipboardImage => {
+                    AppCommand::Host(HostCommand::ReadClipboardImage) => {
                         requests.spawn(
                             action_lane,
                             "zeta-tui-read-clipboard-image",
                             move || {
-                                Completion::Presentation(Ok(AppEvent::ClipboardImageRead(
+                                Completion::Presentation(Ok(HostEvent::ClipboardImageRead(
                                     host::clipboard::read_image().map(|image| image.png),
-                                )))
+                                )
+                                .into()))
                             },
                             &mut app,
                         );
                     }
-                    AppCommand::RefreshClipboardImageAvailability => {
+                    AppCommand::Host(HostCommand::RefreshClipboardImageAvailability) => {
                         requests.spawn(
                             action_lane,
                             "zeta-tui-refresh-clipboard-image-availability",
                             move || {
                                 Completion::Presentation(Ok(
-                                    AppEvent::ClipboardImageAvailabilityChanged(
+                                    HostEvent::ClipboardImageAvailabilityChanged(
                                         host::clipboard::image_availability(),
-                                    ),
+                                    )
+                                    .into(),
                                 ))
                             },
                             &mut app,
                         );
                     }
-                    AppCommand::CopyLastResponse => {
+                    AppCommand::Host(HostCommand::CopyLastResponse) => {
                         let response = app
                             .latest_agent_response()
                             .map(str::to_owned)
@@ -572,19 +599,19 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         host::clipboard::write_text(&response).map(|()| char_count)
                                     })
                                     .map(|char_count| {
-                                        AppEvent::TopTipNoticeShown(format!(
+                                        AppEvent::from(HostEvent::TopTipNoticeShown(format!(
                                             "Copied {char_count} chars to clipboard"
-                                        ))
+                                        )))
                                     })
                                     .unwrap_or_else(|error| {
-                                        AppEvent::HostOperationCompleted(Err(error))
+                                        AppEvent::from(HostEvent::OperationCompleted(Err(error)))
                                     });
                                 Completion::Presentation(Ok(event))
                             },
                             &mut app,
                         );
                     }
-                    AppCommand::OpenConfigEditor => {
+                    AppCommand::Config(ConfigCommand::OpenEditor) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -593,7 +620,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || {
                                     Completion::Presentation(
                                         config::read_config_choices(&mut request_client)
-                                            .map(AppEvent::ConfigEditorOpened)
+                                            .map(ConfigEvent::EditorOpened)
+                                            .map(AppEvent::from)
                                             .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -601,7 +629,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::EditConfig(edit) => {
+                    AppCommand::Config(ConfigCommand::Edit(edit)) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -610,7 +638,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || {
                                     Completion::Presentation(
                                         config::set_settings(&mut request_client, edit)
-                                            .map(AppEvent::ConfigUpdated)
+                                            .map(ConfigEvent::Updated)
+                                            .map(AppEvent::from)
                                             .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -618,7 +647,25 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SetProviderApiKey(edit) => {
+                    AppCommand::Config(ConfigCommand::SetLanguageServerMode(edit)) => {
+                        if requests.is_idle(action_lane) {
+                            let mut request_client = client.clone();
+                            requests.spawn(
+                                action_lane,
+                                "zeta-tui-set-language-server-mode",
+                                move || {
+                                    Completion::Presentation(
+                                        config::set_language_server_mode(&mut request_client, edit)
+                                            .map(ConfigEvent::Updated)
+                                            .map(AppEvent::from)
+                                            .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::Config(ConfigCommand::SetProviderApiKey(edit)) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -627,9 +674,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || {
                                     Completion::Presentation(
                                         config::set_provider_api_key(&mut request_client, edit)
-                                            .map(|update| AppEvent::ConfigApiKeySaved {
-                                                provider: update.provider,
-                                                choices: update.choices,
+                                            .map(|update| {
+                                                AppEvent::from(ConfigEvent::ApiKeySaved {
+                                                    provider: update.provider,
+                                                    choices: update.choices,
+                                                })
                                             })
                                             .map_err(|error| error.to_string()),
                                     )
@@ -638,7 +687,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenKeymapEditor => {
+                    AppCommand::Keymap(KeymapCommand::OpenEditor) => {
                         let mut request_client = client.clone();
                         requests.spawn(
                             action_lane,
@@ -646,13 +695,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             move || {
                                 Completion::Presentation(
                                     keymap::read_keymap(&mut request_client)
-                                        .map(AppEvent::KeymapEditorOpened),
+                                        .map(KeymapEvent::EditorOpened)
+                                        .map(AppEvent::from),
                                 )
                             },
                             &mut app,
                         );
                     }
-                    AppCommand::OpenStatusLineEditor => {
+                    AppCommand::Status(StatusCommand::OpenLineEditor) => {
                         let mut request_client = client.clone();
                         requests.spawn(
                             action_lane,
@@ -660,13 +710,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             move || {
                                 Completion::Presentation(
                                     status_line::read_status_line(&mut request_client)
-                                        .map(AppEvent::StatusLineEditorOpened),
+                                        .map(StatusEvent::LineEditorOpened)
+                                        .map(AppEvent::from),
                                 )
                             },
                             &mut app,
                         );
                     }
-                    AppCommand::EditStatusLine(edit) => {
+                    AppCommand::Status(StatusCommand::EditLine(edit)) => {
                         let mut request_client = client.clone();
                         requests.spawn(
                             action_lane,
@@ -674,13 +725,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             move || {
                                 Completion::Presentation(
                                     status_line::set_status_line(&mut request_client, edit)
-                                        .map(AppEvent::StatusLineEditorUpdated),
+                                        .map(StatusEvent::LineEditorUpdated)
+                                        .map(AppEvent::from),
                                 )
                             },
                             &mut app,
                         );
                     }
-                    AppCommand::EditKeymap(edit) => {
+                    AppCommand::Keymap(KeymapCommand::Edit(edit)) => {
                         let mut request_client = client.clone();
                         requests.spawn(
                             action_lane,
@@ -688,13 +740,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             move || {
                                 Completion::Presentation(
                                     keymap::set_keymap(&mut request_client, edit)
-                                        .map(AppEvent::KeymapEditorOpened),
+                                        .map(KeymapEvent::EditorOpened)
+                                        .map(AppEvent::from),
                                 )
                             },
                             &mut app,
                         );
                     }
-                    AppCommand::ExportTranscript { requested_path } => {
+                    AppCommand::Host(HostCommand::ExportTranscript { requested_path }) => {
                         let markdown = app.transcript_markdown();
                         let export_root = host_dir_root.clone();
                         requests.spawn(
@@ -713,15 +766,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         format!("Exported conversation to {}", path.display())
                                     })
                                 };
-                                Completion::Presentation(Ok(AppEvent::HostOperationCompleted(
-                                    result,
-                                )))
+                                Completion::Presentation(Ok(
+                                    HostEvent::OperationCompleted(result).into()
+                                ))
                             },
                             &mut app,
                         );
                     }
                     AppCommand::Suspend => terminal.suspend()?,
-                    AppCommand::LoadOlderHistory => {
+                    AppCommand::Thread(ThreadCommand::LoadOlderHistory) => {
                         if requests.is_idle(action_lane)
                             && let Some(ThreadSnapshotHistory::Before { turn_id, .. }) =
                                 thread_subscription.older_history()
@@ -748,7 +801,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenThemePicker => {
+                    AppCommand::Theme(ThemeCommand::OpenPicker) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let request_theme_resource = theme_resource.clone();
@@ -764,9 +817,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                                 request_theme_resource
                                                     .catalog(theme_feature::preference(&config))
                                                     .map(|catalog| {
-                                                        AppEvent::ThemePickerOpened(
+                                                        AppEvent::from(ThemeEvent::PickerOpened(
                                                             theme_feature::theme_choices(&catalog),
-                                                        )
+                                                        ))
                                                     })
                                             }),
                                     )
@@ -775,7 +828,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenCustomThemePicker => {
+                    AppCommand::Theme(ThemeCommand::OpenCustomPicker) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let request_theme_resource = theme_resource.clone();
@@ -791,11 +844,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                                 request_theme_resource
                                                     .catalog(theme_feature::preference(&config))
                                                     .map(|catalog| {
-                                                        AppEvent::ThemePickerOpened(
+                                                        AppEvent::from(ThemeEvent::PickerOpened(
                                                             theme_feature::custom_theme_choices(
                                                                 &catalog,
                                                             ),
-                                                        )
+                                                        ))
                                                     })
                                             }),
                                     )
@@ -804,7 +857,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenRewindPicker => {
+                    AppCommand::Thread(ThreadCommand::OpenRewindPicker) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
@@ -819,7 +872,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &session_id,
                                             &thread_id,
                                         )
-                                        .map(AppEvent::RewindPickerOpened)
+                                        .map(ThreadEvent::RewindPickerOpened)
+                                        .map(AppEvent::from)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -827,7 +881,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::RemoveDir { path } => {
+                    AppCommand::Dirs(DirCommand::Remove { path }) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
@@ -838,9 +892,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || {
                                     Completion::Presentation(
                                         dirs::remove(&mut request_client, &session_id, path)
-                                            .map(|choices| AppEvent::DirRemoved {
-                                                path: event_path,
-                                                choices,
+                                            .map(|choices| {
+                                                AppEvent::from(DirEvent::Removed {
+                                                    path: event_path,
+                                                    choices,
+                                                })
                                             })
                                             .map_err(|error| error.to_string()),
                                     )
@@ -849,7 +905,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SetDirPermissions(params) => {
+                    AppCommand::Dirs(DirCommand::SetPermissions(params)) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -858,7 +914,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || {
                                     Completion::Presentation(
                                         dirs::set_permissions(&mut request_client, params)
-                                            .map(AppEvent::DirPermissionsUpdated)
+                                            .map(DirEvent::PermissionsUpdated)
+                                            .map(AppEvent::from)
                                             .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -866,12 +923,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::RewindToCheckpoint {
+                    AppCommand::Thread(ThreadCommand::RewindToCheckpoint {
                         before_turn_id,
                         checkpoint_label,
-                    } => {
+                    }) => {
                         let command = format!("/rewind {before_turn_id}");
-                        app.update(AppEvent::CommandStarted(command.clone()));
+                        app.update(ThreadEvent::CommandStarted(command.clone()));
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let mut next_conversation = conversation.clone();
@@ -903,12 +960,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::ResumeSession {
+                    AppCommand::Sessions(SessionCommand::Resume {
                         session_id,
                         preferred_thread_id,
-                    } => {
+                    }) => {
                         let command = format!("/resume {session_id}");
-                        app.update(AppEvent::CommandStarted(command.clone()));
+                        app.update(ThreadEvent::CommandStarted(command.clone()));
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let mut next_conversation = conversation.clone();
@@ -952,7 +1009,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::ArchiveSessions { session_ids } => {
+                    AppCommand::Sessions(SessionCommand::Archive { session_ids }) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -961,7 +1018,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || {
                                     Completion::Presentation(
                                         sessions::archive(&mut request_client, session_ids)
-                                            .map(AppEvent::SessionCatalogReceived)
+                                            .map(SessionEvent::CatalogReceived)
+                                            .map(AppEvent::from)
                                             .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -969,7 +1027,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::ResolveThreadRequest(response) => {
+                    AppCommand::Thread(ThreadCommand::ResolveRequest(response)) => {
                         if requests.is_idle(action_lane) {
                             let request = response.identity();
                             let request_client = client.clone();
@@ -995,7 +1053,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::CreateSessionAndEnter { submission } => {
+                    AppCommand::Sessions(SessionCommand::CreateAndEnter { submission }) => {
                         if requests.is_idle(action_lane) {
                             let request_client = client.clone();
                             let next_conversation = conversation.clone();
@@ -1019,7 +1077,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SwitchThread { thread_id } => {
+                    AppCommand::Sessions(SessionCommand::SwitchThread { thread_id }) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let mut next_conversation = conversation.clone();
@@ -1045,7 +1103,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::DisconnectConnector { connector_id } => {
+                    AppCommand::Connectors(ConnectorCommand::Disconnect { connector_id }) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -1057,7 +1115,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &mut request_client,
                                             connector_id,
                                         )
-                                        .map(AppEvent::ConnectorPickerUpdated)
+                                        .map(crate::connectors::Event::PickerUpdated)
+                                        .map(AppEvent::from)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -1065,10 +1124,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SetMcpEnablement {
+                    AppCommand::Mcp(McpCommand::SetEnablement {
                         server_id,
                         enablement,
-                    } => {
+                    }) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -1081,7 +1140,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             server_id,
                                             enablement,
                                         )
-                                        .map(AppEvent::McpSettingsUpdated)
+                                        .map(McpEvent::SettingsUpdated)
+                                        .map(AppEvent::from)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -1089,9 +1149,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SetPreferredModel { preference } => {
+                    AppCommand::Models(ModelCommand::SetPreferred { preference }) => {
                         let command = format!("/model {preference}");
-                        app.update(AppEvent::CommandStarted(command.clone()));
+                        app.update(ThreadEvent::CommandStarted(command.clone()));
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             requests.spawn(
@@ -1109,10 +1169,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SetCustomTheme { preference }
-                    | AppCommand::SetTheme { preference } => {
+                    AppCommand::Theme(
+                        ThemeCommand::SetCustom { preference } | ThemeCommand::Set { preference },
+                    ) => {
                         let command = format!("/theme {preference}");
-                        app.update(AppEvent::CommandStarted(command.clone()));
+                        app.update(ThreadEvent::CommandStarted(command.clone()));
                         match theme_resource.resolve(&preference) {
                             Ok(selection) => {
                                 if requests.is_idle(action_lane) {
@@ -1134,13 +1195,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                     );
                                 }
                             }
-                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                            Err(error) => app.update(ThreadEvent::FailureReported(error)),
                         }
                     }
-                    AppCommand::SetSkillEnablement {
+                    AppCommand::Skills(SkillCommand::SetEnablement {
                         skill_id,
                         enablement,
-                    } => {
+                    }) => {
                         if requests.is_idle(action_lane) {
                             let mut request_client = client.clone();
                             let skill_session_id = conversation.session_id().clone();
@@ -1155,7 +1216,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             skill_id,
                                             enablement,
                                         )
-                                        .map(AppEvent::SkillSettingsUpdated)
+                                        .map(SkillEvent::SettingsUpdated)
+                                        .map(AppEvent::from)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -1163,10 +1225,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::CycleNextApprovalMode => {
+                    AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => {
                         app.cycle_next_approval_mode(Instant::now());
                     }
-                    AppCommand::SubmitTurn { submission } => {
+                    AppCommand::Thread(ThreadCommand::SubmitTurn { submission }) => {
                         if requests.is_idle(action_lane) {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
@@ -1192,10 +1254,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SubmitQueuedTurn {
+                    AppCommand::Thread(ThreadCommand::SubmitQueuedTurn {
                         queue_id,
                         submission,
-                    } => {
+                    }) => {
                         if requests.is_idle(action_lane) {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
@@ -1222,19 +1284,22 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SteerTurn {
+                    AppCommand::Thread(ThreadCommand::SteerTurn {
                         source,
                         steer_id,
                         submission,
-                    } => {
+                    }) => {
                         if requests.is_idle(action_lane) {
                             if matches!(app.status(), Status::Working) && !app.steers_active_turn()
                             {
-                                queued_actions.push_front(AppCommand::SteerTurn {
-                                    source,
-                                    steer_id,
-                                    submission,
-                                });
+                                queued_actions.push_front(
+                                    ThreadCommand::SteerTurn {
+                                        source,
+                                        steer_id,
+                                        submission,
+                                    }
+                                    .into(),
+                                );
                             } else if let Some(turn_id) = app.active_turn().cloned() {
                                 let request_client = client.clone();
                                 let scope = thread_request_scope(&conversation);
@@ -1260,7 +1325,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                     &mut app,
                                 );
                             } else {
-                                app.update(AppEvent::SteerSubmissionFailed {
+                                app.update(ThreadEvent::SteerSubmissionFailed {
                                     source,
                                     steer_id,
                                     error: "the active Turn is no longer available".into(),
@@ -1343,7 +1408,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     move || {
                         Completion::Presentation(
                             sessions::load_catalog(&mut request_client)
-                                .map(AppEvent::SessionCatalogReceived)
+                                .map(SessionEvent::CatalogReceived)
+                                .map(AppEvent::from)
                                 .map_err(|error| error.to_string()),
                         )
                     },
@@ -1361,7 +1427,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     move || {
                         Completion::Presentation(
                             crate::connectors::load_selection(&mut request_client)
-                                .map(AppEvent::ConnectorPickerUpdated)
+                                .map(crate::connectors::Event::PickerUpdated)
+                                .map(AppEvent::from)
                                 .map_err(|error| error.to_string()),
                         )
                     },
@@ -1380,9 +1447,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         Completion::Presentation(
                             request_client
                                 .git_text_diff()
-                                .map(|result| AppEvent::GitTextDiffReceived {
-                                    status: result.status,
-                                    statistics: result.statistics,
+                                .map(|result| {
+                                    AppEvent::from(StatusEvent::GitTextDiffReceived {
+                                        status: result.status,
+                                        statistics: result.statistics,
+                                    })
                                 })
                                 .map_err(|error| error.to_string()),
                         )
@@ -1544,10 +1613,10 @@ fn copy_screen_range(
     };
     let char_count = text.chars().count();
     match host::clipboard::write_text(&text) {
-        Ok(()) => app.update(AppEvent::TopTipNoticeShown(format!(
+        Ok(()) => app.update(HostEvent::TopTipNoticeShown(format!(
             "Copied {char_count} chars to clipboard"
         ))),
-        Err(error) => app.update(AppEvent::FailureReported(error)),
+        Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
 }
 
@@ -1571,12 +1640,17 @@ fn schedule_action(
 ) -> Option<AppCommand> {
     if let Some(action) = action {
         let duplicate = match &action {
-            AppCommand::RefreshClipboardImageAvailability => queued
-                .iter()
-                .any(|queued| matches!(queued, AppCommand::RefreshClipboardImageAvailability)),
-            AppCommand::LoadOlderHistory => queued
-                .iter()
-                .any(|queued| matches!(queued, AppCommand::LoadOlderHistory)),
+            AppCommand::Host(HostCommand::RefreshClipboardImageAvailability) => {
+                queued.iter().any(|queued| {
+                    matches!(
+                        queued,
+                        AppCommand::Host(HostCommand::RefreshClipboardImageAvailability)
+                    )
+                })
+            }
+            AppCommand::Thread(ThreadCommand::LoadOlderHistory) => queued.iter().any(|queued| {
+                matches!(queued, AppCommand::Thread(ThreadCommand::LoadOlderHistory))
+            }),
             _ => false,
         };
         if !duplicate {
@@ -1619,18 +1693,18 @@ fn refresh_server_event(
                 let request_id = envelope.interaction.request_id;
                 match envelope.interaction.request {
                     zeta_protocol::AgentRequest::Approval { request } => {
-                        app.update(AppEvent::ApprovalRequested(Approval::open(
+                        app.update(ThreadEvent::ApprovalRequested(Approval::open(
                             turn_id, request_id, request,
                         )));
                     }
                     zeta_protocol::AgentRequest::UserInput { request } => {
                         match Query::open(turn_id, request_id, request) {
-                            Ok(query) => app.update(AppEvent::QueryRequested(query)),
-                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                            Ok(query) => app.update(ThreadEvent::QueryRequested(query)),
+                            Err(error) => app.update(ThreadEvent::FailureReported(error)),
                         }
                     }
                     zeta_protocol::AgentRequest::DynamicTool { .. } => {
-                        app.update(AppEvent::FailureReported(
+                        app.update(ThreadEvent::FailureReported(
                             "dynamic Tool request is not supported by this TUI".into(),
                         ))
                     }
@@ -1655,7 +1729,7 @@ fn refresh_server_event(
             unreachable!("connection failures leave through the recovery boundary")
         }
         client::ClientEvent::GitStatusChanged(status) => {
-            app.update(AppEvent::GitStatusReceived(status));
+            app.update(StatusEvent::GitStatusReceived(status));
             ServerRefresh::default()
         }
         client::ClientEvent::SessionChanged(_) => ServerRefresh {
@@ -1675,7 +1749,7 @@ fn refresh_server_event(
             match thread_subscription.classify_transcript_update(&update) {
                 TranscriptUpdateDisposition::Ignore => ServerRefresh::default(),
                 TranscriptUpdateDisposition::Apply => {
-                    app.update(AppEvent::ThreadTranscriptUpdateReceived(update));
+                    app.update(ThreadEvent::TranscriptUpdateReceived(update));
                     ServerRefresh::default()
                 }
                 TranscriptUpdateDisposition::RefreshSnapshot => ServerRefresh {

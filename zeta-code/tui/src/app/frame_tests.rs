@@ -9,16 +9,22 @@ use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::CommandPanel;
 use crate::app::command_panel::CommandPanelPointerTarget;
+use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImageAvailability;
 use crate::host::process_resources::ProcessResourceDemand;
 use crate::host::process_resources::ProcessResourceMetrics;
+use crate::models::Event as ModelEvent;
 use crate::models::ModelSummary;
 use crate::render::test_context;
+use crate::sessions::Event as SessionEvent;
+use crate::status::Event as StatusEvent;
 use crate::status::RemainingContextWindow;
 use crate::status::StatusLineItem;
 use crate::status::StatusLineSettings;
 use crate::status::StatusViewData;
 use crate::status::status_panel;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
 use crate::thread::TurnActivity;
 use crate::thread::composer::ChatComposerPointerTarget;
 use crate::thread::composer::ChatInputCatalog;
@@ -85,7 +91,7 @@ fn top_tip_notice_uses_the_fixed_row_above_chat_input_without_changing_layout() 
     let terminal_area = Rect::new(0, 0, 80, 20);
     let areas_before = layout(&app, terminal_area).session;
 
-    app.update(AppEvent::TopTipNoticeShown(
+    app.update(HostEvent::TopTipNoticeShown(
         "Copied 246 chars to clipboard".into(),
     ));
 
@@ -112,7 +118,7 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     let terminal_area = Rect::new(0, 0, 80, 20);
     let areas_before = layout(&app, terminal_area).session;
 
-    app.update(AppEvent::ClipboardImageAvailabilityChanged(
+    app.update(HostEvent::ClipboardImageAvailabilityChanged(
         ClipboardImageAvailability::Available,
     ));
 
@@ -130,7 +136,7 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     );
     assert_snapshot!("clipboard_image_top_tip", rendered);
 
-    app.update(AppEvent::ClipboardImageRead(Ok(
+    app.update(HostEvent::ClipboardImageRead(Ok(
         b"\x89PNG\r\n\x1a\npayload".to_vec(),
     )));
     let rendered_after_paste = render(&app, terminal_area.width, terminal_area.height);
@@ -235,7 +241,7 @@ fn process_resource_demand_follows_the_content_that_is_actually_visible() {
     for item in StatusLineItem::ALL {
         settings.set(item, matches!(item, StatusLineItem::Memory));
     }
-    app.update(AppEvent::StatusLineSettingsReceived(settings));
+    app.update(StatusEvent::LineSettingsReceived(settings));
     assert_eq!(
         process_resource_demand(&app, area),
         ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Memory)
@@ -247,7 +253,7 @@ fn process_resource_demand_follows_the_content_that_is_actually_visible() {
 
     let usage = zeta_protocol::ModelUsageSummary::default();
     let reference_cost = zeta_protocol::ModelReferenceCostSummary::default();
-    app.update(AppEvent::StatusPanelOpened(status_panel(StatusViewData {
+    app.update(StatusEvent::PanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
         full_context_window: None,
         available_context_window: None,
@@ -289,7 +295,7 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
 
     let usage = zeta_protocol::ModelUsageSummary::default();
     let reference_cost = zeta_protocol::ModelReferenceCostSummary::default();
-    app.update(AppEvent::StatusPanelOpened(status_panel(StatusViewData {
+    app.update(StatusEvent::PanelOpened(status_panel(StatusViewData {
         model: "openai/gpt",
         full_context_window: Some(100_000),
         available_context_window: Some(90_000),
@@ -337,7 +343,7 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
 #[test]
 fn manager_keeps_overflow_text_out_of_the_fixed_top_tip_row() {
     let mut app = App::new();
-    app.update(AppEvent::SessionCatalogReceived(
+    app.update(SessionEvent::CatalogReceived(
         (0..24)
             .map(|index| {
                 manager_session(
@@ -350,7 +356,7 @@ fn manager_keeps_overflow_text_out_of_the_fixed_top_tip_row() {
     ));
     app.insert_text("/sessions");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TopTipNoticeShown(
+    app.update(HostEvent::TopTipNoticeShown(
         "Copied 246 chars to clipboard".into(),
     ));
 
@@ -449,7 +455,7 @@ fn left_from_a_session_opens_the_manager() {
 #[test]
 fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
     let mut app = App::new();
-    app.update(AppEvent::SessionCatalogReceived(vec![
+    app.update(SessionEvent::CatalogReceived(vec![
         manager_session(
             "needs-input",
             SessionManagerStatus::NeedsInput,
@@ -502,7 +508,7 @@ fn pending_steer_is_shown_once_in_chat_history() {
     let mut app = App::new();
     app.insert_text("start");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("check the tests first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
 
@@ -553,7 +559,7 @@ fn turn_activity_does_not_enter_status_line() {
     let mut app = App::new();
     app.insert_text("start");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("change direction");
 
     let rendered = render(&app, 80, 20);
@@ -564,7 +570,7 @@ fn turn_activity_does_not_enter_status_line() {
 #[test]
 fn queued_message_is_visible_only_in_the_queue_region() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("edit this later");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -577,7 +583,7 @@ fn queued_message_is_visible_only_in_the_queue_region() {
 #[test]
 fn queue_focus_is_visible_and_queue_rows_are_clickable() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("edit this later");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let terminal_area = Rect::new(0, 0, 120, 20);
@@ -642,11 +648,11 @@ fn welcome_header_remains_at_the_start_of_scrollable_history() {
     assert!(empty.contains("/work/zeta"));
     assert!(!empty.lines().last().unwrap().contains("/work/zeta"));
 
-    app.update(AppEvent::ProductNotice("Conversation started.".into()));
+    app.update(ThreadEvent::ProductNotice("Conversation started.".into()));
     assert!(render(&app, 80, 20).contains("/work/zeta"));
 
     for index in 0..12 {
-        app.update(AppEvent::FailureReported(format!(
+        app.update(ThreadEvent::FailureReported(format!(
             "Model invocation failed {index}"
         )));
     }
@@ -666,7 +672,7 @@ fn welcome_header_remains_at_the_start_of_scrollable_history() {
 #[test]
 fn status_line_renders_the_configured_model_without_provider() {
     let mut app = App::new();
-    app.update(AppEvent::ModelSummaryReceived(ModelSummary::from_catalog(
+    app.update(ModelEvent::SummaryReceived(ModelSummary::from_catalog(
         Some(ModelRefDto {
             provider: "anthropic".into(),
             model: "claude-sonnet".into(),
@@ -690,7 +696,7 @@ fn status_line_renders_the_configured_model_without_provider() {
 #[test]
 fn narrow_status_line_keeps_the_first_configured_item() {
     let mut app = App::new();
-    app.update(AppEvent::ModelSummaryReceived(ModelSummary::from_catalog(
+    app.update(ModelEvent::SummaryReceived(ModelSummary::from_catalog(
         Some(ModelRefDto {
             provider: "anthropic".into(),
             model: "claude-sonnet".into(),
@@ -732,7 +738,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
         "current",
         vec![manager_session("current", SessionManagerStatus::Idle, None)],
     );
-    app.update(AppEvent::ModelSummaryReceived(ModelSummary::from_catalog(
+    app.update(ModelEvent::SummaryReceived(ModelSummary::from_catalog(
         Some(ModelRefDto {
             provider: "anthropic".into(),
             model: "claude-sonnet".into(),
@@ -756,7 +762,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     app.insert_text("hello");
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::SubmitTurn { .. })
+        Some(AppCommand::Thread(ThreadCommand::SubmitTurn { .. }))
     ));
 
     let buffer = render_buffer(&app, 80, 20);
@@ -831,11 +837,11 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
     let mut app = App::new();
     let session_id = SessionId::new("root").unwrap();
     let root_id = ThreadId::new("root").unwrap();
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: session_id.clone(),
         thread_id: root_id.clone(),
     });
-    app.update(AppEvent::SessionCatalogReceived(vec![Session {
+    app.update(SessionEvent::CatalogReceived(vec![Session {
         session_id,
         title: "Session".into(),
         status: SessionStatus::Active,
@@ -891,7 +897,7 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
 #[test]
 fn turn_activity_keeps_permission_status_free_of_submission_hints() {
     let mut app = App::new();
-    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
 
     let rendered = render(&app, 80, 20);
     let status_line = rendered.lines().last().unwrap();
@@ -918,7 +924,7 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 #[test]
 fn command_panel_without_actions_keeps_the_two_bottom_rows_empty() {
     let mut app = App::new();
-    app.update(AppEvent::ProductNotice(
+    app.update(ThreadEvent::ProductNotice(
         "Conversation remains visible.".into(),
     ));
     app.update(AppEvent::HelpOpened(help_view()));
@@ -1018,7 +1024,7 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
 #[test]
 fn error_detail_is_rendered_once_and_status_line_only_offers_recovery() {
     let mut app = App::new();
-    app.update(AppEvent::FailureReported(
+    app.update(ThreadEvent::FailureReported(
         "The configured model is unavailable.".into(),
     ));
 
@@ -1054,7 +1060,7 @@ fn submitted_slash_command_is_immediately_visible_in_the_transcript() {
 fn scrolled_transcript_shows_jump_control_at_the_bottom_of_the_content_area() {
     let mut app = App::new();
     for index in 0..8 {
-        app.update(AppEvent::FailureReported(format!(
+        app.update(ThreadEvent::FailureReported(format!(
             "Model invocation failed {index}"
         )));
     }
@@ -1069,7 +1075,7 @@ fn scrolled_transcript_shows_jump_control_at_the_bottom_of_the_content_area() {
 #[test]
 fn command_completion_renders_an_adjacent_result_line() {
     let mut app = App::new();
-    app.update(AppEvent::CommandCompleted {
+    app.update(ThreadEvent::CommandCompleted {
         command: "/theme zeta-code-light".into(),
         result: "Theme set to Zeta Code Light".into(),
     });
@@ -1088,7 +1094,7 @@ fn command_completion_renders_an_adjacent_result_line() {
 #[test]
 fn transcript_and_chat_input_content_start_in_the_same_column() {
     let mut app = App::new();
-    app.update(AppEvent::CommandCompleted {
+    app.update(ThreadEvent::CommandCompleted {
         command: "/theme zeta-code-light".into(),
         result: "Theme set to Zeta Code Light".into(),
     });
@@ -1443,11 +1449,11 @@ fn manager_session(
 }
 
 fn enter_session(app: &mut App, id: &str, catalog: Vec<Session>) {
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: SessionId::new(id).unwrap(),
         thread_id: ThreadId::new(id).unwrap(),
     });
-    app.update(AppEvent::SessionCatalogReceived(catalog));
+    app.update(SessionEvent::CatalogReceived(catalog));
 }
 
 fn current_unix_millis() -> u64 {
@@ -1505,7 +1511,7 @@ fn wait_for_mention_results(app: &mut App, dir: &Path) {
             file_search.stop();
         }
         for snapshot in file_search.poll() {
-            app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
+            app.update(ThreadEvent::FileSearchSnapshotReceived(snapshot));
         }
         if matches!(
             app.completion(),

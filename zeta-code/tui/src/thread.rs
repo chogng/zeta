@@ -50,3 +50,88 @@ pub(crate) use subscription::ThreadUpdateDisposition;
 pub(crate) use subscription::TranscriptUpdateDisposition;
 pub(crate) use transcript::TranscriptCellId;
 pub(crate) use update::ThreadPresentationEvent;
+
+/// A completed current-Thread operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    CommandStarted(String),
+    CommandCompleted {
+        command: String,
+        result: String,
+    },
+    FailureReported(String),
+    ProductNotice(String),
+    FileSearchSnapshotReceived(zeta_file_search::PathSearchSnapshot),
+    InterruptFailed(String),
+    ApprovalRequested(interaction::approval::Approval),
+    QueryRequested(interaction::query::Query),
+    RewindPickerOpened(rewind::RewindChoices),
+    RequestResolved(ThreadRequestIdentity),
+    RequestSubmissionFailed {
+        request: ThreadRequestIdentity,
+        error: String,
+    },
+    ContextChanged {
+        session_id: zeta_protocol::SessionId,
+        thread_id: zeta_protocol::ThreadId,
+    },
+    AccountingChanged {
+        usage: zeta_protocol::ModelUsageSummary,
+        reference_cost: zeta_protocol::ModelReferenceCostSummary,
+    },
+    GoalChanged(Option<zeta_protocol::ThreadGoal>),
+    SteerCompleted {
+        source: composer::SteerSource,
+        steer_id: composer::SteerId,
+    },
+    SteerSubmissionFailed {
+        source: composer::SteerSource,
+        steer_id: composer::SteerId,
+        error: String,
+    },
+    QueueSubmissionCompleted(queue::QueueId),
+    QueueSubmissionFailed {
+        queue_id: queue::QueueId,
+        error: String,
+    },
+    TranscriptSnapshotReceived(
+        zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot,
+    ),
+    TranscriptHistoryPageReceived(
+        zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot,
+    ),
+    TranscriptUpdateReceived(
+        Box<zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope>,
+    ),
+    TranscriptCleared,
+    TurnActivityChanged(TurnActivity),
+    TurnPlanChanged(Option<zeta_protocol::PlanUpdate>),
+    PendingInteractionChanged(Option<(zeta_protocol::TurnId, zeta_protocol::RequestId)>),
+    TurnCompleted,
+    TurnInterrupted,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    ExecuteProductCommand(composer::SlashCommandInvocation),
+    Interrupt,
+    LoadOlderHistory,
+    OpenRewindPicker,
+    RewindToCheckpoint {
+        before_turn_id: zeta_protocol::TurnId,
+        checkpoint_label: String,
+    },
+    ResolveRequest(ThreadRequestResponse),
+    CycleNextApprovalMode,
+    SubmitTurn {
+        submission: composer::ChatSubmission,
+    },
+    SubmitQueuedTurn {
+        queue_id: queue::QueueId,
+        submission: composer::ChatSubmission,
+    },
+    SteerTurn {
+        source: composer::SteerSource,
+        steer_id: composer::SteerId,
+        submission: composer::ChatSubmission,
+    },
+}

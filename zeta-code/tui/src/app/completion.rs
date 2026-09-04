@@ -3,17 +3,24 @@ use super::App;
 use super::AppEvent;
 use super::dispatch::ProductCommandOutput;
 use crate::config;
+use crate::config::Event as ConfigEvent;
+use crate::host::Event as HostEvent;
 use crate::keymap;
+use crate::keymap::Event as KeymapEvent;
 use crate::models;
+use crate::models::Event as ModelEvent;
 use crate::render::RenderTheme;
 use crate::sessions::ConversationChange;
 use crate::sessions::ConversationCompletion;
 use crate::sessions::ConversationTranscript;
 use crate::sessions::ManagerSessionCompletion;
 use crate::sessions::SessionCompletion;
+use crate::skills::Event as SkillEvent;
 use crate::skills::SkillRefreshCompletion;
+use crate::status::Event as StatusEvent;
 use crate::status::StatusLineSettings;
 use crate::thread::ActiveTurnUpdate;
+use crate::thread::Event as ThreadEvent;
 use crate::thread::ThreadCompletion;
 use crate::thread::ThreadRequestScope;
 use crate::thread::ThreadSubscription;
@@ -103,7 +110,7 @@ pub(super) fn apply_request_completion(
     match completion {
         Completion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, None, app),
         Completion::ConfigRefreshed(Err(error)) => {
-            app.update(AppEvent::FailureReported(error));
+            app.update(ThreadEvent::FailureReported(error));
         }
         Completion::Sessions(SessionCompletion::ManagerCreated(Ok(ManagerSessionCompletion {
             conversation:
@@ -128,7 +135,7 @@ pub(super) fn apply_request_completion(
             apply_turn_start_completion(turn, None, conversation, thread_subscription, app);
         }
         Completion::Sessions(SessionCompletion::ManagerCreated(Err(error))) => {
-            app.update(AppEvent::FailureReported(error));
+            app.update(ThreadEvent::FailureReported(error));
         }
         Completion::Sessions(SessionCompletion::ThreadChanged(Ok(ConversationCompletion {
             conversation: next_conversation,
@@ -147,7 +154,7 @@ pub(super) fn apply_request_completion(
             );
         }
         Completion::Sessions(SessionCompletion::ThreadChanged(Err(error))) => {
-            app.update(AppEvent::FailureReported(error));
+            app.update(ThreadEvent::FailureReported(error));
         }
         Completion::Sessions(SessionCompletion::Changed {
             command,
@@ -174,7 +181,7 @@ pub(super) fn apply_request_completion(
         })
         | Completion::ProductCommand(Err(error))
         | Completion::Presentation(Err(error)) => {
-            app.update(AppEvent::FailureReported(error));
+            app.update(ThreadEvent::FailureReported(error));
         }
         Completion::ProductCommand(Ok(ProductCommandCompletion {
             mut output,
@@ -185,7 +192,7 @@ pub(super) fn apply_request_completion(
             }
             if let Some(change) = output.conversation_change.take() {
                 let Some((subscription, switch)) = switched else {
-                    app.update(AppEvent::FailureReported(
+                    app.update(ThreadEvent::FailureReported(
                         "conversation command completed without a subscription result".into(),
                     ));
                     return;
@@ -207,8 +214,8 @@ pub(super) fn apply_request_completion(
             command,
             result: Ok(update),
         } => {
-            app.update(AppEvent::ModelSummaryReceived(update.summary));
-            app.update(AppEvent::CommandCompleted {
+            app.update(ModelEvent::SummaryReceived(update.summary));
+            app.update(ThreadEvent::CommandCompleted {
                 command,
                 result: update.notice,
             });
@@ -216,35 +223,33 @@ pub(super) fn apply_request_completion(
         }
         Completion::PreferredModelUpdated {
             result: Err(error), ..
-        } => app.update(AppEvent::FailureReported(error)),
+        } => app.update(ThreadEvent::FailureReported(error)),
         Completion::ThemeUpdated {
             command,
             label,
             theme,
             result: Ok(()),
         } => {
-            app.update(AppEvent::RenderThemeChanged(theme));
-            app.update(AppEvent::CommandCompleted {
+            app.update(crate::theme::Event::RenderChanged(theme));
+            app.update(ThreadEvent::CommandCompleted {
                 command,
                 result: format!("Theme set to {label}"),
             });
         }
         Completion::ThemeUpdated {
             result: Err(error), ..
-        } => app.update(AppEvent::FailureReported(error)),
+        } => app.update(ThreadEvent::FailureReported(error)),
         Completion::Skills(Ok(refresh)) => {
             app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {
-                app.update(AppEvent::SkillSettingsUpdated(refresh.choices));
+                app.update(SkillEvent::SettingsUpdated(refresh.choices));
             } else {
-                app.update(AppEvent::SkillDiagnosticsReceived(
-                    refresh.choices.diagnostics,
-                ));
+                app.update(SkillEvent::DiagnosticsReceived(refresh.choices.diagnostics));
             }
         }
         Completion::Skills(Err(error)) => {
             if app.skills_view_is_active() {
-                app.update(AppEvent::FailureReported(error));
+                app.update(ThreadEvent::FailureReported(error));
             }
         }
         Completion::Thread(ThreadCompletion::Started { result, .. }) => {
@@ -265,7 +270,7 @@ pub(super) fn apply_request_completion(
             result: Ok((steer, snapshot)),
             ..
         }) => {
-            app.update(AppEvent::SteerCompleted { source, steer_id });
+            app.update(ThreadEvent::SteerCompleted { source, steer_id });
             if snapshot.thread.sequence < conversation.thread_sequence().max(steer.sequence) {
                 return;
             }
@@ -287,7 +292,7 @@ pub(super) fn apply_request_completion(
             result: Err(error),
             ..
         }) => {
-            app.update(AppEvent::SteerSubmissionFailed {
+            app.update(ThreadEvent::SteerSubmissionFailed {
                 source,
                 steer_id,
                 error: error.to_string(),
@@ -298,7 +303,7 @@ pub(super) fn apply_request_completion(
             result: Ok(snapshot),
             ..
         }) => {
-            app.update(AppEvent::ThreadRequestResolved(request));
+            app.update(ThreadEvent::RequestResolved(request));
             if snapshot.thread.sequence < conversation.thread_sequence() {
                 return;
             }
@@ -319,7 +324,7 @@ pub(super) fn apply_request_completion(
             result: Err(error),
             ..
         }) => {
-            app.update(AppEvent::ThreadRequestSubmissionFailed {
+            app.update(ThreadEvent::RequestSubmissionFailed {
                 request,
                 error: error.to_string(),
             });
@@ -347,19 +352,17 @@ pub(super) fn apply_request_completion(
             result: Ok(page), ..
         }) => {
             thread_subscription.apply_history_page(&page.thread, page.boundary);
-            app.update(AppEvent::ThreadTranscriptHistoryPageReceived(
-                page.transcript,
-            ));
+            app.update(ThreadEvent::TranscriptHistoryPageReceived(page.transcript));
         }
         Completion::Thread(ThreadCompletion::HistoryPage {
             result: Err(error), ..
         }) => {
-            app.update(AppEvent::FailureReported(error.to_string()));
+            app.update(ThreadEvent::FailureReported(error.to_string()));
         }
         Completion::Thread(ThreadCompletion::Refreshed {
             result: Err(error), ..
         }) => {
-            app.update(AppEvent::FailureReported(error.to_string()));
+            app.update(ThreadEvent::FailureReported(error.to_string()));
         }
         Completion::Thread(ThreadCompletion::Interrupted {
             result: Ok(snapshot),
@@ -383,7 +386,7 @@ pub(super) fn apply_request_completion(
         Completion::Thread(ThreadCompletion::Interrupted {
             result: Err(error), ..
         }) => {
-            app.update(AppEvent::InterruptFailed(error.to_string()));
+            app.update(ThreadEvent::InterruptFailed(error.to_string()));
         }
     }
 }
@@ -394,29 +397,29 @@ pub(super) fn apply_tui_config(
     app: &mut App,
 ) {
     match config::TerminalSettings::from_tui(&config.tui) {
-        Ok(settings) => app.update(AppEvent::ConfigSettingsReceived(settings)),
-        Err(error) => app.update(AppEvent::FailureReported(error)),
+        Ok(settings) => app.update(ConfigEvent::SettingsReceived(settings)),
+        Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
     match keymap::settings_from_tui(&config.tui) {
-        Ok(settings) => app.update(AppEvent::KeymapSettingsReceived(settings)),
-        Err(error) => app.update(AppEvent::FailureReported(error)),
+        Ok(settings) => app.update(KeymapEvent::SettingsReceived(settings)),
+        Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
     match StatusLineSettings::from_tui(&config.tui) {
-        Ok(settings) => app.update(AppEvent::StatusLineSettingsReceived(settings)),
-        Err(error) => app.update(AppEvent::FailureReported(error)),
+        Ok(settings) => app.update(StatusEvent::LineSettingsReceived(settings)),
+        Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
-    app.update(AppEvent::ModelSummaryReceived(
+    app.update(ModelEvent::SummaryReceived(
         crate::models::ModelSummary::from_catalog(config.preferred_model, model_catalog),
     ));
 }
 
 fn report_turn_start_failure(app: &mut App, error: String) {
     if app.active_turn().is_some() {
-        app.update(AppEvent::HostOperationCompleted(Err(format!(
+        app.update(HostEvent::OperationCompleted(Err(format!(
             "could not start the Turn: {error}"
         ))));
     } else {
-        app.update(AppEvent::FailureReported(error));
+        app.update(ThreadEvent::FailureReported(error));
     }
 }
 
@@ -430,7 +433,7 @@ fn apply_turn_start_completion(
     match result {
         TurnStartCompletion::Rejected(error) => {
             if let Some(queue_id) = queue_id {
-                app.update(AppEvent::QueueSubmissionFailed {
+                app.update(ThreadEvent::QueueSubmissionFailed {
                     queue_id,
                     error: error.to_string(),
                 });
@@ -442,7 +445,7 @@ fn apply_turn_start_completion(
             conversation.set_thread_sequence(start.sequence);
             app.set_active_turn_if_idle(start.turn_id);
             if let Some(queue_id) = queue_id {
-                app.update(AppEvent::QueueSubmissionCompleted(queue_id));
+                app.update(ThreadEvent::QueueSubmissionCompleted(queue_id));
             }
             match *snapshot {
                 Ok(snapshot) => {
@@ -462,7 +465,7 @@ fn apply_turn_start_completion(
                     );
                 }
                 Err(error) => {
-                    app.update(AppEvent::HostOperationCompleted(Err(format!(
+                    app.update(HostEvent::OperationCompleted(Err(format!(
                         "Turn was accepted, but its updated snapshot could not be read: {error}"
                     ))));
                 }
@@ -481,11 +484,11 @@ pub(crate) fn apply_active_turn_snapshot(app: &mut App, turns: &[Turn]) {
 fn apply_active_turn_update(app: &mut App, update: ActiveTurnUpdate) {
     match update {
         ActiveTurnUpdate::ActivityChanged(activity) => {
-            app.update(AppEvent::TurnActivityChanged(activity));
+            app.update(ThreadEvent::TurnActivityChanged(activity));
         }
-        ActiveTurnUpdate::Completed => app.update(AppEvent::TurnCompleted),
-        ActiveTurnUpdate::Failed(error) => app.update(AppEvent::FailureReported(error)),
-        ActiveTurnUpdate::Interrupted => app.update(AppEvent::TurnInterrupted),
+        ActiveTurnUpdate::Completed => app.update(ThreadEvent::TurnCompleted),
+        ActiveTurnUpdate::Failed(error) => app.update(ThreadEvent::FailureReported(error)),
+        ActiveTurnUpdate::Interrupted => app.update(ThreadEvent::TurnInterrupted),
         ActiveTurnUpdate::Unchanged => {}
     }
 }
@@ -507,15 +510,15 @@ fn apply_thread_snapshot_parts(
     snapshot: Thread,
     transcript: Option<ThreadTranscriptSnapshot>,
 ) {
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: snapshot.session_id.clone(),
         thread_id: snapshot.thread_id.clone(),
     });
-    app.update(AppEvent::ThreadAccountingChanged {
+    app.update(ThreadEvent::AccountingChanged {
         usage: snapshot.usage.clone(),
         reference_cost: snapshot.reference_cost.clone(),
     });
-    app.update(AppEvent::ThreadGoalChanged(snapshot.goal.clone()));
+    app.update(ThreadEvent::GoalChanged(snapshot.goal.clone()));
     let active_turn_updates = app.sync_active_turn(&snapshot.turns);
     let active_turn = app.active_turn().cloned();
     let plan = turn_plan(active_turn.as_ref(), &snapshot.turns);
@@ -531,10 +534,10 @@ fn apply_thread_snapshot_parts(
             })
     });
     if let Some(transcript) = transcript {
-        app.update(AppEvent::ThreadTranscriptSnapshotReceived(transcript));
+        app.update(ThreadEvent::TranscriptSnapshotReceived(transcript));
     }
-    app.update(AppEvent::TurnPlanChanged(plan));
-    app.update(AppEvent::PendingInteractionChanged(pending_interaction));
+    app.update(ThreadEvent::TurnPlanChanged(plan));
+    app.update(ThreadEvent::PendingInteractionChanged(pending_interaction));
     for update in active_turn_updates {
         apply_active_turn_update(app, update);
     }
@@ -577,7 +580,7 @@ fn finish_conversation_change(
         app.update(AppEvent::CommandPanelClosed);
     }
     if matches!(change.transcript, ConversationTranscript::Clear) {
-        app.update(AppEvent::TranscriptCleared);
+        app.update(ThreadEvent::TranscriptCleared);
     }
     app.clear_active_turn();
     match switch {
@@ -595,20 +598,20 @@ fn finish_conversation_change(
         } => {
             conversation.set_thread_sequence(snapshot.sequence);
             apply_thread_snapshot(app, snapshot, transcript);
-            app.update(AppEvent::FailureReported(format!(
+            app.update(ThreadEvent::FailureReported(format!(
                 "changed Thread, but could not unsubscribe the previous Thread: {error}"
             )));
         }
     }
     match presentation {
         ConversationCompletionPresentation::Command(command) => {
-            app.update(AppEvent::CommandCompleted {
+            app.update(ThreadEvent::CommandCompleted {
                 command,
                 result: change.notice,
             });
         }
         ConversationCompletionPresentation::Notice => {
-            app.update(AppEvent::ProductNotice(change.notice));
+            app.update(ThreadEvent::ProductNotice(change.notice));
         }
         ConversationCompletionPresentation::Silent => {}
     }

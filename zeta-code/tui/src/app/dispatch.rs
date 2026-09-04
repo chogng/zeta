@@ -77,11 +77,13 @@ impl ActiveConversation {
                 if let Some(change) = output.conversation_change {
                     match read_thread(client, self.session_id(), self.thread_id()) {
                         Ok(snapshot) => apply_conversation_change(app, change, snapshot),
-                        Err(error) => app.update(AppEvent::FailureReported(error.to_string())),
+                        Err(error) => {
+                            app.update(crate::thread::Event::FailureReported(error.to_string()))
+                        }
                     }
                 }
             }
-            Err(error) => app.update(AppEvent::FailureReported(error)),
+            Err(error) => app.update(crate::thread::Event::FailureReported(error)),
         }
     }
 
@@ -113,50 +115,58 @@ impl ActiveConversation {
                 )));
             }
             TuiSlashCommandAction::Status => {
-                output
-                    .events
-                    .push(AppEvent::StatusPanelOpened(status::load_status_panel(
+                output.events.push(
+                    status::Event::PanelOpened(status::load_status_panel(
                         client,
                         status::StatusRequestScope {
                             session_id: self.session_id(),
                             thread_id: self.thread_id(),
                         },
-                    )?));
+                    )?)
+                    .into(),
+                );
             }
             TuiSlashCommandAction::Skills => {
-                output
-                    .events
-                    .push(AppEvent::SkillSettingsOpened(load_selection(
+                output.events.push(
+                    crate::skills::Event::SettingsOpened(load_selection(
                         client,
                         self.session_id(),
                         SkillCatalogReloadDto::Refresh,
-                    )?));
+                    )?)
+                    .into(),
+                );
             }
             TuiSlashCommandAction::Mcp => {
                 output
                     .events
-                    .push(AppEvent::McpSettingsOpened(mcp::load_selection(client)?));
+                    .push(mcp::Event::SettingsOpened(mcp::load_selection(client)?).into());
             }
             TuiSlashCommandAction::Connectors => {
-                output.events.push(AppEvent::ConnectorPickerOpened(
-                    crate::connectors::load_selection(client)?,
-                ));
+                output.events.push(
+                    crate::connectors::Event::PickerOpened(crate::connectors::load_selection(
+                        client,
+                    )?)
+                    .into(),
+                );
             }
             TuiSlashCommandAction::Resume => {
                 if arguments.is_empty() {
-                    output
-                        .events
-                        .push(AppEvent::SessionPickerOpened(sessions::load_selection(
+                    output.events.push(
+                        sessions::Event::PickerOpened(sessions::load_selection(
                             client,
                             self.session_id().as_str(),
-                        )?));
+                        )?)
+                        .into(),
+                    );
                 } else {
                     match self
                         .resume_session(client, &arguments, None)
                         .map_err(session_error)?
                     {
                         ResumeOutcome::Listed(notice) => {
-                            output.events.push(AppEvent::ProductNotice(notice));
+                            output
+                                .events
+                                .push(crate::thread::Event::ProductNotice(notice).into());
                         }
                         ResumeOutcome::Changed(change) => {
                             output.conversation_change = Some(change);
@@ -170,13 +180,14 @@ impl ActiveConversation {
             }
             TuiSlashCommandAction::Rewind => {
                 if arguments.is_empty() {
-                    output
-                        .events
-                        .push(AppEvent::RewindPickerOpened(rewind::load_selection(
+                    output.events.push(
+                        crate::thread::Event::RewindPickerOpened(rewind::load_selection(
                             client,
                             self.session_id(),
                             self.thread_id(),
-                        )?));
+                        )?)
+                        .into(),
+                    );
                 } else {
                     let before_turn_id = TurnId::new(&arguments).map_err(|error| {
                         CommandExecutionError(format!(
@@ -197,12 +208,10 @@ impl ActiveConversation {
             }
             TuiSlashCommandAction::AddDir => {
                 if arguments.is_empty() {
-                    output
-                        .events
-                        .push(AppEvent::DirPickerOpened(dirs::load_selection(
-                            client,
-                            self.session_id(),
-                        )?));
+                    output.events.push(
+                        dirs::Event::PickerOpened(dirs::load_selection(client, self.session_id())?)
+                            .into(),
+                    );
                 } else {
                     let command = format!("/add-dir {arguments}");
                     let update = dirs::add(
@@ -229,10 +238,10 @@ impl ActiveConversation {
                     };
                     output
                         .events
-                        .push(AppEvent::CommandStarted(command.clone()));
+                        .push(crate::thread::Event::CommandStarted(command.clone()).into());
                     output
                         .events
-                        .push(AppEvent::CommandCompleted { command, result });
+                        .push(crate::thread::Event::CommandCompleted { command, result }.into());
                 }
             }
             TuiSlashCommandAction::Fork => {
@@ -255,14 +264,16 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::ModelPickerOpened(models::load_selection(client)?));
+                        .push(models::Event::PickerOpened(models::load_selection(client)?).into());
                 } else {
                     let update = models::set_preferred_model(client, &arguments)
                         .map_err(|error| CommandExecutionError(error.to_string()))?;
                     output
                         .events
-                        .push(AppEvent::ModelSummaryReceived(update.summary));
-                    output.events.push(AppEvent::ProductNotice(update.notice));
+                        .push(models::Event::SummaryReceived(update.summary).into());
+                    output
+                        .events
+                        .push(crate::thread::Event::ProductNotice(update.notice).into());
                 }
             }
             TuiSlashCommandAction::Theme => unreachable!("theme commands are handled locally"),
@@ -285,14 +296,14 @@ struct CommandOutput {
 #[cfg(test)]
 fn apply_conversation_change(app: &mut App, change: ConversationChange, snapshot: Thread) {
     if matches!(change.transcript, ConversationTranscript::Clear) {
-        app.update(AppEvent::TranscriptCleared);
+        app.update(crate::thread::Event::TranscriptCleared);
     }
-    app.update(AppEvent::ThreadTranscriptSnapshotReceived(
+    app.update(crate::thread::Event::TranscriptSnapshotReceived(
         zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot::from_thread(
             &snapshot,
         ),
     ));
-    app.update(AppEvent::ProductNotice(change.notice));
+    app.update(crate::thread::Event::ProductNotice(change.notice));
 }
 
 fn text_arguments(arguments: &[ChatInputItem]) -> Result<String, CommandExecutionError> {

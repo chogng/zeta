@@ -1,7 +1,8 @@
 use super::app::App;
-use super::app::AppEvent;
 use super::app::Status;
 use crate::app::apply_active_turn_snapshot;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
 use crate::thread::composer::chat_input_catalog_snapshot;
 use crate::thread::present_turn_error;
 use crate::thread::transcript::MessageRole;
@@ -120,7 +121,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         goal: None,
         turns: vec![turn.clone()],
     };
-    app.update(AppEvent::ThreadTranscriptSnapshotReceived(
+    app.update(ThreadEvent::TranscriptSnapshotReceived(
         zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot::from_thread(
             &thread,
         ),
@@ -214,7 +215,7 @@ fn waiting_active_turn_remains_interruptible() {
     assert_eq!(app.status(), &Status::WaitingForUserInput);
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-        Some(super::app::AppCommand::Interrupt)
+        Some(super::app::AppCommand::Thread(ThreadCommand::Interrupt))
     );
 }
 

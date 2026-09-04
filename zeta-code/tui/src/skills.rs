@@ -3,6 +3,21 @@ mod request;
 mod settings;
 mod warnings;
 
+/// A completed skill operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    SettingsOpened(SkillChoices),
+    SettingsUpdated(SkillChoices),
+    DiagnosticsReceived(Vec<zeta_app_server_protocol::protocol::skills::SkillDiagnosticDto>),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    SetEnablement {
+        skill_id: zeta_protocol::SkillId,
+        enablement: zeta_app_server_protocol::protocol::skills::SkillEnablementDto,
+    },
+}
+
 pub(crate) use completion::SkillRefreshCompletion;
 pub(crate) use completion::finish_refresh;
 pub(crate) use completion::refresh;

@@ -31,6 +31,29 @@ use zeta_app_server_protocol::protocol::session::SessionRequestParams;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 
+/// A completed session operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    PickerOpened(SessionChoices),
+    CatalogReceived(Vec<Session>),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    Resume {
+        session_id: String,
+        preferred_thread_id: Option<zeta_protocol::ThreadId>,
+    },
+    Archive {
+        session_ids: Vec<SessionId>,
+    },
+    CreateAndEnter {
+        submission: crate::thread::composer::ChatSubmission,
+    },
+    SwitchThread {
+        thread_id: zeta_protocol::ThreadId,
+    },
+}
+
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
     active_session_id: &str,

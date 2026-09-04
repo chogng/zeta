@@ -12,33 +12,55 @@ use crate::TuiStartupContext;
 use crate::app::top_tip::TopTip;
 use crate::app::welcome;
 use crate::app::welcome::WelcomeModel;
+use crate::config::Command as ConfigCommand;
 use crate::config::ConfigSelectionAction;
+use crate::config::Event as ConfigEvent;
 use crate::config::TerminalSettings;
+use crate::connectors::Command as ConnectorCommand;
 use crate::connectors::ConnectorChoices;
 use crate::connectors::ConnectorSelectionAction;
+use crate::connectors::Event as ConnectorEvent;
+use crate::dirs::Command as DirCommand;
 use crate::dirs::DirChoices;
 use crate::dirs::DirSelectionAction;
+use crate::dirs::Event as DirEvent;
+use crate::host::Command as HostCommand;
+use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImageAvailability;
 use crate::host::process_resources::ProcessResourceRequest;
 use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
+use crate::keymap::Command as KeymapCommand;
+use crate::keymap::Event as KeymapEvent;
 use crate::keymap::KeymapChoices;
 use crate::keymap::KeymapEditorOutcome;
+use crate::mcp::Command as McpCommand;
+use crate::mcp::Event as McpEvent;
 use crate::mcp::McpChoices;
 use crate::mcp::McpSelectionAction;
+use crate::models::Command as ModelCommand;
+use crate::models::Event as ModelEvent;
 use crate::models::ModelChoices;
 use crate::models::ModelSelectionAction;
 use crate::render::RenderContext;
 use crate::render::RenderTheme;
+use crate::sessions::Command as SessionCommand;
+use crate::sessions::Event as SessionEvent;
 use crate::sessions::SessionChoices;
 use crate::sessions::SessionManagerPointerTarget;
 use crate::sessions::SessionManagerView;
 use crate::sessions::SessionSelectionAction;
 use crate::sessions::SessionsState;
 use crate::sessions::TerminalScreen;
-use crate::skills::{SkillChoices, SkillDiagnosticWarnings, SkillSelectionAction};
+use crate::skills::Command as SkillCommand;
+use crate::skills::Event as SkillEvent;
+use crate::skills::SkillChoices;
+use crate::skills::SkillDiagnosticWarnings;
+use crate::skills::SkillSelectionAction;
+use crate::status::Command as StatusCommand;
+use crate::status::Event as StatusEvent;
 use crate::status::ProcessResourcesModel;
 use crate::status::StatusLineChoices;
 use crate::status::StatusLineModel;
@@ -48,10 +70,14 @@ use crate::terminal::mouse::MouseMode;
 use crate::terminal::mouse::PointerInteraction;
 use crate::terminal::screen_selection::ScreenSelection;
 use crate::terminal::screen_selection::ScreenSelectionOutcome;
+use crate::theme::Command as ThemeCommand;
+use crate::theme::Event as ThemeEvent;
 use crate::theme::ThemeChoices;
 use crate::theme::ThemePickerOutcome;
 use crate::thread::AgentThreadSwitcher;
 use crate::thread::AgentThreadSwitcherView;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
 use crate::thread::ThreadPresentationEvent;
 use crate::thread::ThreadPresentationStore;
 use crate::thread::ThreadRequestIdentity;
@@ -352,7 +378,7 @@ impl App {
                 self.thread_presentations.active_mut().queue.finish_edit();
                 if matches!(self.sessions.screen(), Some(TerminalScreen::Manager)) {
                     self.status = Status::Working;
-                    return Some(AppCommand::CreateSessionAndEnter { submission });
+                    return Some(SessionCommand::CreateAndEnter { submission }.into());
                 }
                 let starts_conversation = !self.thread.has_user_message();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
@@ -363,15 +389,18 @@ impl App {
                 }
                 if self.chat_panel.is_steering() {
                     let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
-                    return Some(AppCommand::SteerTurn {
-                        source: SteerSource::Composer,
-                        steer_id,
-                        submission,
-                    });
+                    return Some(
+                        ThreadCommand::SteerTurn {
+                            source: SteerSource::Composer,
+                            steer_id,
+                            submission,
+                        }
+                        .into(),
+                    );
                 }
                 self.status = Status::Working;
                 self.chat_panel.queue_input();
-                Some(AppCommand::SubmitTurn { submission })
+                Some(ThreadCommand::SubmitTurn { submission }.into())
             }
             ChatComposerOutcome::Consumed => None,
             ChatComposerOutcome::Unhandled => None,
@@ -447,27 +476,33 @@ impl App {
                 submission.display_text.clone(),
             ));
             let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
-            return Some(AppCommand::SteerTurn {
-                source: SteerSource::Queue(queue_id),
-                steer_id,
-                submission,
-            });
+            return Some(
+                ThreadCommand::SteerTurn {
+                    source: SteerSource::Queue(queue_id),
+                    steer_id,
+                    submission,
+                }
+                .into(),
+            );
         }
         self.thread.update(ThreadPresentationEvent::UserSubmitted(
             submission.display_text.clone(),
         ));
         self.status = Status::Working;
         self.chat_panel.queue_input();
-        Some(AppCommand::SubmitQueuedTurn {
-            queue_id,
-            submission,
-        })
+        Some(
+            ThreadCommand::SubmitQueuedTurn {
+                queue_id,
+                submission,
+            }
+            .into(),
+        )
     }
 
     fn handle_thread_request_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
         self.chat_panel
             .handle_request_key(key)
-            .map(|response| response.map(AppCommand::ResolveThreadRequest))
+            .map(|response| response.map(|response| ThreadCommand::ResolveRequest(response).into()))
     }
 
     fn close_thread_request(&mut self, request: &ThreadRequestIdentity) {
@@ -481,24 +516,27 @@ impl App {
     fn handle_command_panel_outcome(&mut self, outcome: CommandPanelOutcome) -> Option<AppCommand> {
         match outcome {
             CommandPanelOutcome::Dirs(DirSelectionAction::Remove { path }) => {
-                Some(AppCommand::RemoveDir { path })
+                Some(DirCommand::Remove { path }.into())
             }
             CommandPanelOutcome::Dirs(DirSelectionAction::SetPermissions(params)) => {
-                Some(AppCommand::SetDirPermissions(params))
+                Some(DirCommand::SetPermissions(params).into())
             }
             CommandPanelOutcome::Config(outcome) => self.handle_config_editor_outcome(outcome),
             CommandPanelOutcome::Connectors(ConnectorSelectionAction::ConnectDeviceOAuth {
                 connector_id,
                 connection_generation,
-            }) => Some(AppCommand::ConnectConnectorDeviceOAuth {
-                connector_id,
-                connection_generation,
-            }),
+            }) => Some(
+                ConnectorCommand::ConnectDeviceOAuth {
+                    connector_id,
+                    connection_generation,
+                }
+                .into(),
+            ),
             CommandPanelOutcome::Connectors(ConnectorSelectionAction::Disconnect {
                 connector_id,
-            }) => Some(AppCommand::DisconnectConnector { connector_id }),
+            }) => Some(ConnectorCommand::Disconnect { connector_id }.into()),
             CommandPanelOutcome::Keymap(KeymapEditorOutcome::Edit(edit)) => {
-                Some(AppCommand::EditKeymap(edit))
+                Some(KeymapCommand::Edit(edit).into())
             }
             CommandPanelOutcome::Keymap(KeymapEditorOutcome::Consumed) => None,
             CommandPanelOutcome::Keymap(KeymapEditorOutcome::Dismiss) => {
@@ -508,35 +546,45 @@ impl App {
             CommandPanelOutcome::Mcp(McpSelectionAction::SetEnablement {
                 server_id,
                 enablement,
-            }) => Some(AppCommand::SetMcpEnablement {
-                server_id,
-                enablement,
-            }),
+            }) => Some(
+                McpCommand::SetEnablement {
+                    server_id,
+                    enablement,
+                }
+                .into(),
+            ),
             CommandPanelOutcome::Model(ModelSelectionAction::Select { preference }) => {
-                Some(AppCommand::SetPreferredModel { preference })
+                Some(ModelCommand::SetPreferred { preference }.into())
             }
             CommandPanelOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
                 checkpoint_label,
-            }) => Some(AppCommand::RewindToCheckpoint {
-                before_turn_id,
-                checkpoint_label,
-            }),
-            CommandPanelOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => {
-                Some(AppCommand::ResumeSession {
+            }) => Some(
+                ThreadCommand::RewindToCheckpoint {
+                    before_turn_id,
+                    checkpoint_label,
+                }
+                .into(),
+            ),
+            CommandPanelOutcome::Sessions(SessionSelectionAction::Resume { session_id }) => Some(
+                SessionCommand::Resume {
                     session_id,
                     preferred_thread_id: None,
-                })
-            }
+                }
+                .into(),
+            ),
             CommandPanelOutcome::Skills(SkillSelectionAction::SetEnablement {
                 skill_id,
                 enablement,
-            }) => Some(AppCommand::SetSkillEnablement {
-                skill_id,
-                enablement,
-            }),
+            }) => Some(
+                SkillCommand::SetEnablement {
+                    skill_id,
+                    enablement,
+                }
+                .into(),
+            ),
             CommandPanelOutcome::StatusLine(StatusLineSelectionAction::SetEnabled(edit)) => {
-                Some(AppCommand::EditStatusLine(edit))
+                Some(StatusCommand::EditLine(edit).into())
             }
             CommandPanelOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
             CommandPanelOutcome::Consumed => None,
@@ -554,18 +602,21 @@ impl App {
         match outcome {
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetTerminalSettings(edit),
-            ) => Some(AppCommand::EditConfig(edit)),
+            ) => Some(ConfigCommand::Edit(edit).into()),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetVimMode(edit)) => {
-                Some(AppCommand::EditConfig(edit))
+                Some(ConfigCommand::Edit(edit).into())
             }
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetShowGitChangesAsDiff(edit),
-            ) => Some(AppCommand::EditConfig(edit)),
+            ) => Some(ConfigCommand::Edit(edit).into()),
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::SetLanguageServerMode(edit),
+            ) => Some(ConfigCommand::SetLanguageServerMode(edit).into()),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::OpenProviderApiKey { .. },
             ) => None,
             crate::config::ConfigEditorOutcome::SaveApiKey(edit) => {
-                Some(AppCommand::SetProviderApiKey(edit))
+                Some(ConfigCommand::SetProviderApiKey(edit).into())
             }
             crate::config::ConfigEditorOutcome::Consumed => None,
             crate::config::ConfigEditorOutcome::Dismiss => {
@@ -579,13 +630,13 @@ impl App {
         match outcome {
             ThemePickerOutcome::Select { preference } => {
                 self.close_command_panel();
-                Some(AppCommand::SetTheme { preference })
+                Some(ThemeCommand::Set { preference }.into())
             }
             ThemePickerOutcome::SelectCustom { preference } => {
                 self.close_command_panel();
-                Some(AppCommand::SetCustomTheme { preference })
+                Some(ThemeCommand::SetCustom { preference }.into())
             }
-            ThemePickerOutcome::OpenCustomThemes => Some(AppCommand::OpenCustomThemePicker),
+            ThemePickerOutcome::OpenCustomThemes => Some(ThemeCommand::OpenCustomPicker.into()),
             ThemePickerOutcome::Consumed => None,
             ThemePickerOutcome::Dismiss => {
                 self.close_command_panel();
@@ -607,7 +658,7 @@ impl App {
     pub(crate) fn activate_thread_request_choice(&mut self, index: usize) -> Option<AppCommand> {
         self.chat_panel
             .activate_request_choice(index)
-            .map(AppCommand::ResolveThreadRequest)
+            .map(|response| ThreadCommand::ResolveRequest(response).into())
     }
 
     pub(crate) fn toggle_transcript_cell(&mut self, render_key: &str) -> bool {
@@ -1068,7 +1119,7 @@ impl App {
         if let Some(target) = first_scroll_target(true, &messages) {
             self.thread_presentations.active_mut().scroll.apply(target);
         }
-        Some(AppCommand::LoadOlderHistory)
+        Some(ThreadCommand::LoadOlderHistory.into())
     }
 
     pub(crate) fn follow_latest_transcript(&mut self) {
@@ -1211,10 +1262,13 @@ impl App {
         ));
         self.status = Status::Working;
         self.chat_panel.queue_input();
-        Some(AppCommand::SubmitQueuedTurn {
-            queue_id,
-            submission,
-        })
+        Some(
+            ThreadCommand::SubmitQueuedTurn {
+                queue_id,
+                submission,
+            }
+            .into(),
+        )
     }
 
     pub(crate) fn approval_mode_status(&self) -> TurnApprovalModes {
@@ -1333,116 +1387,64 @@ impl App {
             .is_none_or(|thread| thread.status == zeta_protocol::ThreadStatus::Active)
     }
 
-    pub(crate) fn update(&mut self, event: AppEvent) {
-        if !matches!(&event, AppEvent::ProcessResourcesSampled(_)) {
+    pub(crate) fn update(&mut self, event: impl Into<AppEvent>) {
+        let event = event.into();
+        if !matches!(
+            &event,
+            AppEvent::Host(HostEvent::ProcessResourcesSampled(_))
+        ) {
             self.pointer.clear();
         }
         match event {
-            AppEvent::DirPickerOpened(view) => self.show_dirs_picker(view),
-            AppEvent::DirRemoved { path, choices } => {
-                self.update_dirs_picker(choices);
-                self.thread
-                    .update(ThreadPresentationEvent::NoticeReceived(format!(
-                        "Removed directory {}",
-                        path.display()
-                    )));
-                self.status = Status::Ready;
-                self.chat_panel.start_input();
-            }
-            AppEvent::DirPermissionsUpdated(choices) => self.update_dirs_picker(choices),
-            AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
-            AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
-            AppEvent::ClipboardImageAvailabilityChanged(availability) => match availability {
-                ClipboardImageAvailability::Available => {
-                    self.chat_panel.show_clipboard_image(Instant::now());
-                }
-                ClipboardImageAvailability::Unavailable => self.chat_panel.hide_clipboard_image(),
-            },
-            AppEvent::ConfigSettingsReceived(settings) => {
-                self.terminal_settings = settings;
-                if !settings.mouse_interactions() {
-                    self.pointer.clear();
-                    self.screen_selection.clear();
-                }
-                self.thread_presentations
-                    .set_input_mode(settings.input_mode());
-            }
-            AppEvent::ConfigUpdated(result) => {
-                self.terminal_settings = result.terminal;
-                self.chat_panel
-                    .status_line_mut()
-                    .apply_settings(result.status_line);
-                if !result.terminal.mouse_interactions() {
-                    self.screen_selection.clear();
-                }
-                self.thread_presentations
-                    .set_input_mode(result.terminal.input_mode());
-                self.chat_panel.replace_config(result.choices);
-            }
-            AppEvent::ConfigEditorOpened(view) => {
-                self.open_command_panel(CommandPanel::config(view))
-            }
-            AppEvent::ConfigApiKeySaved { provider, choices } => {
-                self.chat_panel.finish_config_prompt(choices);
-                self.thread
-                    .update(ThreadPresentationEvent::NoticeReceived(format!(
-                        "Saved API key for {provider}"
-                    )));
-                self.status = Status::Ready;
-                self.chat_panel.start_input();
-            }
-            AppEvent::ModelSummaryReceived(summary) => {
-                self.chat_panel
-                    .status_line_mut()
-                    .apply_preferred_model(summary.preferred_model());
-                self.welcome.apply_model_summary(&summary);
-            }
-            AppEvent::CommandStarted(command) => {
+            AppEvent::Dirs(event) => self.apply_dir_event(event),
+            AppEvent::Host(event) => self.apply_host_event(event),
+            AppEvent::Config(event) => self.apply_config_event(event),
+            AppEvent::Models(event) => self.apply_model_event(event),
+            AppEvent::Thread(event) => self.apply_thread_event(event),
+            AppEvent::Keymap(event) => self.apply_keymap_event(event),
+            AppEvent::Status(event) => self.apply_status_event(event),
+            AppEvent::Connectors(event) => self.apply_connector_event(event),
+            AppEvent::Mcp(event) => self.apply_mcp_event(event),
+            AppEvent::Sessions(event) => self.apply_session_event(event),
+            AppEvent::CommandPanelClosed => self.close_command_panel(),
+            #[cfg(test)]
+            AppEvent::HelpOpened(model) => self.show_help(model),
+            AppEvent::Skills(event) => self.apply_skill_event(event),
+            AppEvent::Theme(event) => self.apply_theme_event(event),
+        }
+    }
+
+    fn apply_thread_event(&mut self, event: ThreadEvent) {
+        match event {
+            ThreadEvent::CommandStarted(command) => {
                 self.thread
                     .update(ThreadPresentationEvent::CommandStarted(command));
             }
-            AppEvent::CommandCompleted { command, result } => {
+            ThreadEvent::CommandCompleted { command, result } => {
                 self.thread
                     .update(ThreadPresentationEvent::CommandCompleted { command, result });
                 self.status = Status::Ready;
                 self.chat_panel.start_input();
             }
-            AppEvent::FailureReported(error) => {
+            ThreadEvent::FailureReported(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
                 self.status = Status::Error;
                 self.chat_panel.start_input();
             }
-            AppEvent::FileSearchSnapshotReceived(snapshot) => {
+            ThreadEvent::ProductNotice(notice) => {
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(notice));
+                self.status = Status::Ready;
+                self.chat_panel.start_input();
+            }
+            ThreadEvent::FileSearchSnapshotReceived(snapshot) => {
                 self.thread_presentations
                     .active_mut()
                     .input
                     .apply_file_search_snapshot(snapshot);
             }
-            AppEvent::GitStatusReceived(status) => {
-                self.chat_panel.status_line_mut().apply_git_status(&status)
-            }
-            AppEvent::GitTextDiffReceived { status, statistics } => self
-                .chat_panel
-                .status_line_mut()
-                .apply_git_text_diff(status, statistics),
-            AppEvent::HostOperationCompleted(Ok(notice)) => {
-                self.thread
-                    .update(ThreadPresentationEvent::NoticeReceived(notice));
-            }
-            AppEvent::HostOperationCompleted(Err(error)) => {
-                self.thread
-                    .update(ThreadPresentationEvent::FailureReported(error));
-            }
-            AppEvent::ProcessResourcesSampled(reading) => {
-                self.process_resources.apply(reading);
-                self.chat_panel
-                    .apply_process_resources(self.process_resources.view());
-            }
-            AppEvent::TopTipNoticeShown(notice) => {
-                self.chat_panel.show_notice(notice, Instant::now());
-            }
-            AppEvent::InterruptFailed(error) => {
+            ThreadEvent::InterruptFailed(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(format!(
                         "could not interrupt turn: {error}"
@@ -1450,66 +1452,14 @@ impl App {
                 self.status = Status::Working;
                 self.chat_panel.steer_input();
             }
-            AppEvent::ProductNotice(notice) => {
-                self.thread
-                    .update(ThreadPresentationEvent::NoticeReceived(notice));
-                self.status = Status::Ready;
-                self.chat_panel.start_input();
+            ThreadEvent::ApprovalRequested(approval) => self.chat_panel.show_approval(approval),
+            ThreadEvent::QueryRequested(query) => self.chat_panel.show_query(query),
+            ThreadEvent::RewindPickerOpened(view) => self.show_rewind_picker(view),
+            ThreadEvent::RequestResolved(request) => self.close_thread_request(&request),
+            ThreadEvent::RequestSubmissionFailed { request, error } => {
+                self.fail_thread_request(&request, error);
             }
-            AppEvent::ApprovalRequested(approval) => self.chat_panel.show_approval(approval),
-            AppEvent::QueryRequested(query) => self.chat_panel.show_query(query),
-            AppEvent::ThreadRequestResolved(request) => self.close_thread_request(&request),
-            AppEvent::ThreadRequestSubmissionFailed { request, error } => {
-                self.fail_thread_request(&request, error)
-            }
-            AppEvent::KeymapSettingsReceived(settings) => {
-                self.app_keymap = settings.keymap;
-                for diagnostic in settings.diagnostics {
-                    self.report_keybinding_diagnostic(diagnostic);
-                }
-            }
-            AppEvent::KeymapEditorOpened(update) => {
-                self.app_keymap = update.settings.keymap;
-                for diagnostic in update.settings.diagnostics {
-                    self.report_keybinding_diagnostic(diagnostic);
-                }
-                if let Some(notice) = update.notice {
-                    self.thread
-                        .update(ThreadPresentationEvent::NoticeReceived(notice));
-                }
-                if self.chat_panel.command_is_keymap() {
-                    self.chat_panel.replace_keymap(update.choices);
-                } else {
-                    self.show_keymap_editor(update.choices);
-                }
-            }
-            AppEvent::StatusLineSettingsReceived(settings) => {
-                self.chat_panel.status_line_mut().apply_settings(settings)
-            }
-            AppEvent::StatusLineEditorOpened(update) => {
-                self.chat_panel
-                    .status_line_mut()
-                    .apply_settings(update.settings);
-                self.show_status_line_editor(update.choices);
-            }
-            AppEvent::StatusLineEditorUpdated(update) => {
-                self.chat_panel
-                    .status_line_mut()
-                    .apply_settings(update.settings);
-                self.update_status_line_editor(update.choices);
-            }
-            AppEvent::ConnectorPickerOpened(view) => self.show_connector_picker(view),
-            AppEvent::ConnectorPickerUpdated(view) => self.update_connector_picker(view),
-            AppEvent::McpSettingsOpened(view) => self.show_mcp_settings(view),
-            AppEvent::McpSettingsUpdated(view) => self.update_mcp_settings(view),
-            AppEvent::ModelPickerOpened(view) => self.show_model_picker(view),
-            AppEvent::RewindPickerOpened(view) => self.show_rewind_picker(view),
-            AppEvent::SessionPickerOpened(view) => self.show_session_picker(view),
-            AppEvent::SessionCatalogReceived(catalog) => {
-                self.sessions.refresh_catalog(catalog);
-                self.reconcile_agent_thread_switcher();
-            }
-            AppEvent::ThreadContextChanged {
+            ThreadEvent::ContextChanged {
                 session_id,
                 thread_id,
             } => {
@@ -1524,28 +1474,17 @@ impl App {
                 }
                 self.reconcile_agent_thread_switcher();
             }
-            AppEvent::ThreadAccountingChanged {
+            ThreadEvent::AccountingChanged {
                 usage,
                 reference_cost,
             } => self
                 .chat_panel
                 .status_line_mut()
                 .apply_thread_accounting(&usage, &reference_cost),
-            AppEvent::ThreadGoalChanged(goal) => {
+            ThreadEvent::GoalChanged(goal) => {
                 self.thread_presentations.active_mut().goal = goal;
             }
-            AppEvent::StatusPanelOpened(panel) => {
-                self.show_status_panel(panel);
-            }
-            AppEvent::CommandPanelClosed => self.close_command_panel(),
-            #[cfg(test)]
-            AppEvent::HelpOpened(model) => self.show_help(model),
-            AppEvent::SkillSettingsOpened(view) => self.show_skill_settings(view),
-            AppEvent::SkillSettingsUpdated(view) => self.update_skill_settings(view),
-            AppEvent::SkillDiagnosticsReceived(diagnostics) => {
-                self.report_skill_diagnostics(&diagnostics)
-            }
-            AppEvent::SteerCompleted { source, steer_id } => {
+            ThreadEvent::SteerCompleted { source, steer_id } => {
                 self.chat_panel.finish_steer(steer_id);
                 if let SteerSource::Queue(queue_id) = source {
                     self.thread_presentations
@@ -1554,7 +1493,7 @@ impl App {
                         .finish_send(queue_id);
                 }
             }
-            AppEvent::SteerSubmissionFailed {
+            ThreadEvent::SteerSubmissionFailed {
                 source,
                 steer_id,
                 error,
@@ -1573,13 +1512,13 @@ impl App {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(message));
             }
-            AppEvent::QueueSubmissionCompleted(queue_id) => {
+            ThreadEvent::QueueSubmissionCompleted(queue_id) => {
                 self.thread_presentations
                     .active_mut()
                     .queue
                     .finish_send(queue_id);
             }
-            AppEvent::QueueSubmissionFailed { queue_id, error } => {
+            ThreadEvent::QueueSubmissionFailed { queue_id, error } => {
                 self.thread_presentations
                     .active_mut()
                     .queue
@@ -1591,18 +1530,7 @@ impl App {
                 self.status = Status::Error;
                 self.chat_panel.start_input();
             }
-            AppEvent::ThemePickerOpened(view) => {
-                if self.chat_panel.command_is_theme() {
-                    self.chat_panel.push_custom_theme(view);
-                } else {
-                    self.show_theme_picker(view);
-                }
-            }
-            AppEvent::RenderThemeChanged(theme) => {
-                self.render_theme = theme;
-                self.render_theme_revision = self.render_theme_revision.wrapping_add(1).max(1);
-            }
-            AppEvent::ThreadTranscriptSnapshotReceived(transcript) => {
+            ThreadEvent::TranscriptSnapshotReceived(transcript) => {
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptSnapshotReceived(
                         transcript,
@@ -1610,7 +1538,7 @@ impl App {
                 self.reconcile_transcript_scroll_anchor();
                 self.hide_navigation_for_existing_conversation();
             }
-            AppEvent::ThreadTranscriptHistoryPageReceived(transcript) => {
+            ThreadEvent::TranscriptHistoryPageReceived(transcript) => {
                 let reveal_older_history = self.transcript_scroll_is_at_first_cell();
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptHistoryPageReceived(
@@ -1626,13 +1554,13 @@ impl App {
                 }
                 self.hide_navigation_for_existing_conversation();
             }
-            AppEvent::ThreadTranscriptUpdateReceived(update) => {
+            ThreadEvent::TranscriptUpdateReceived(update) => {
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptUpdateReceived(update));
                 self.reconcile_transcript_scroll_anchor();
                 self.hide_navigation_for_existing_conversation();
             }
-            AppEvent::TranscriptCleared => {
+            ThreadEvent::TranscriptCleared => {
                 self.thread.update(ThreadPresentationEvent::Cleared);
                 self.chat_panel.reset_top_tip();
                 self.skill_diagnostic_warnings.clear();
@@ -1645,10 +1573,9 @@ impl App {
                 self.status = Status::Ready;
                 self.chat_panel.start_input();
             }
-            AppEvent::TurnActivityChanged(activity) => {
+            ThreadEvent::TurnActivityChanged(activity) => {
                 self.status = match activity {
-                    TurnActivity::Starting => Status::Working,
-                    TurnActivity::Working => Status::Working,
+                    TurnActivity::Starting | TurnActivity::Working => Status::Working,
                     TurnActivity::WaitingForApproval => Status::WaitingForApproval,
                     TurnActivity::WaitingForUserInput => Status::WaitingForUserInput,
                     TurnActivity::WaitingForCapability => Status::WaitingForCapability,
@@ -1656,24 +1583,224 @@ impl App {
                 };
                 self.chat_panel.apply_turn_activity(activity);
             }
-            AppEvent::TurnPlanChanged(plan) => {
-                self.thread_presentations.active_mut().plan.replace(plan)
+            ThreadEvent::TurnPlanChanged(plan) => {
+                self.thread_presentations.active_mut().plan.replace(plan);
             }
-            AppEvent::PendingInteractionChanged(pending) => {
+            ThreadEvent::PendingInteractionChanged(pending) => {
                 self.chat_panel.reconcile_request(pending.as_ref());
             }
-            AppEvent::TurnCompleted => {
+            ThreadEvent::TurnCompleted => {
                 self.status = Status::Ready;
                 self.chat_panel.start_input();
                 self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().plan.replace(None);
             }
-            AppEvent::TurnInterrupted => {
+            ThreadEvent::TurnInterrupted => {
                 self.thread.update(ThreadPresentationEvent::Interrupted);
                 self.status = Status::Ready;
                 self.chat_panel.start_input();
                 self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().plan.replace(None);
+            }
+        }
+    }
+
+    fn apply_dir_event(&mut self, event: DirEvent) {
+        match event {
+            DirEvent::PickerOpened(view) => self.show_dirs_picker(view),
+            DirEvent::Removed { path, choices } => {
+                self.update_dirs_picker(choices);
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(format!(
+                        "Removed directory {}",
+                        path.display()
+                    )));
+                self.status = Status::Ready;
+                self.chat_panel.start_input();
+            }
+            DirEvent::PermissionsUpdated(choices) => self.update_dirs_picker(choices),
+        }
+    }
+
+    fn apply_host_event(&mut self, event: HostEvent) {
+        match event {
+            HostEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
+            HostEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
+            HostEvent::ClipboardImageAvailabilityChanged(availability) => match availability {
+                ClipboardImageAvailability::Available => {
+                    self.chat_panel.show_clipboard_image(Instant::now());
+                }
+                ClipboardImageAvailability::Unavailable => self.chat_panel.hide_clipboard_image(),
+            },
+            HostEvent::OperationCompleted(Ok(notice)) => {
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(notice));
+            }
+            HostEvent::OperationCompleted(Err(error)) => {
+                self.thread
+                    .update(ThreadPresentationEvent::FailureReported(error));
+            }
+            HostEvent::ProcessResourcesSampled(reading) => {
+                self.process_resources.apply(reading);
+                self.chat_panel
+                    .apply_process_resources(self.process_resources.view());
+            }
+            HostEvent::TopTipNoticeShown(notice) => {
+                self.chat_panel.show_notice(notice, Instant::now());
+            }
+        }
+    }
+
+    fn apply_config_event(&mut self, event: ConfigEvent) {
+        match event {
+            ConfigEvent::SettingsReceived(settings) => {
+                self.terminal_settings = settings;
+                if !settings.mouse_interactions() {
+                    self.pointer.clear();
+                    self.screen_selection.clear();
+                }
+                self.thread_presentations
+                    .set_input_mode(settings.input_mode());
+            }
+            ConfigEvent::Updated(result) => {
+                self.terminal_settings = result.terminal;
+                self.chat_panel
+                    .status_line_mut()
+                    .apply_settings(result.status_line);
+                if !result.terminal.mouse_interactions() {
+                    self.screen_selection.clear();
+                }
+                self.thread_presentations
+                    .set_input_mode(result.terminal.input_mode());
+                self.chat_panel.replace_config(result.choices);
+            }
+            ConfigEvent::EditorOpened(view) => {
+                self.open_command_panel(CommandPanel::config(view));
+            }
+            ConfigEvent::ApiKeySaved { provider, choices } => {
+                self.chat_panel.finish_config_prompt(choices);
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(format!(
+                        "Saved API key for {provider}"
+                    )));
+                self.status = Status::Ready;
+                self.chat_panel.start_input();
+            }
+        }
+    }
+
+    fn apply_model_event(&mut self, event: ModelEvent) {
+        match event {
+            ModelEvent::SummaryReceived(summary) => {
+                self.chat_panel
+                    .status_line_mut()
+                    .apply_preferred_model(summary.preferred_model());
+                self.welcome.apply_model_summary(&summary);
+            }
+            ModelEvent::PickerOpened(view) => self.show_model_picker(view),
+        }
+    }
+
+    fn apply_keymap_event(&mut self, event: KeymapEvent) {
+        match event {
+            KeymapEvent::SettingsReceived(settings) => {
+                self.app_keymap = settings.keymap;
+                for diagnostic in settings.diagnostics {
+                    self.report_keybinding_diagnostic(diagnostic);
+                }
+            }
+            KeymapEvent::EditorOpened(update) => {
+                self.app_keymap = update.settings.keymap;
+                for diagnostic in update.settings.diagnostics {
+                    self.report_keybinding_diagnostic(diagnostic);
+                }
+                if let Some(notice) = update.notice {
+                    self.thread
+                        .update(ThreadPresentationEvent::NoticeReceived(notice));
+                }
+                if self.chat_panel.command_is_keymap() {
+                    self.chat_panel.replace_keymap(update.choices);
+                } else {
+                    self.show_keymap_editor(update.choices);
+                }
+            }
+        }
+    }
+
+    fn apply_status_event(&mut self, event: StatusEvent) {
+        match event {
+            StatusEvent::LineSettingsReceived(settings) => {
+                self.chat_panel.status_line_mut().apply_settings(settings);
+            }
+            StatusEvent::LineEditorOpened(update) => {
+                self.chat_panel
+                    .status_line_mut()
+                    .apply_settings(update.settings);
+                self.show_status_line_editor(update.choices);
+            }
+            StatusEvent::LineEditorUpdated(update) => {
+                self.chat_panel
+                    .status_line_mut()
+                    .apply_settings(update.settings);
+                self.update_status_line_editor(update.choices);
+            }
+            StatusEvent::PanelOpened(panel) => self.show_status_panel(panel),
+            StatusEvent::GitStatusReceived(status) => {
+                self.chat_panel.status_line_mut().apply_git_status(&status);
+            }
+            StatusEvent::GitTextDiffReceived { status, statistics } => self
+                .chat_panel
+                .status_line_mut()
+                .apply_git_text_diff(status, statistics),
+        }
+    }
+
+    fn apply_connector_event(&mut self, event: ConnectorEvent) {
+        match event {
+            ConnectorEvent::PickerOpened(view) => self.show_connector_picker(view),
+            ConnectorEvent::PickerUpdated(view) => self.update_connector_picker(view),
+        }
+    }
+
+    fn apply_mcp_event(&mut self, event: McpEvent) {
+        match event {
+            McpEvent::SettingsOpened(view) => self.show_mcp_settings(view),
+            McpEvent::SettingsUpdated(view) => self.update_mcp_settings(view),
+        }
+    }
+
+    fn apply_session_event(&mut self, event: SessionEvent) {
+        match event {
+            SessionEvent::PickerOpened(view) => self.show_session_picker(view),
+            SessionEvent::CatalogReceived(catalog) => {
+                self.sessions.refresh_catalog(catalog);
+                self.reconcile_agent_thread_switcher();
+            }
+        }
+    }
+
+    fn apply_skill_event(&mut self, event: SkillEvent) {
+        match event {
+            SkillEvent::SettingsOpened(view) => self.show_skill_settings(view),
+            SkillEvent::SettingsUpdated(view) => self.update_skill_settings(view),
+            SkillEvent::DiagnosticsReceived(diagnostics) => {
+                self.report_skill_diagnostics(&diagnostics);
+            }
+        }
+    }
+
+    fn apply_theme_event(&mut self, event: ThemeEvent) {
+        match event {
+            ThemeEvent::PickerOpened(view) => {
+                if self.chat_panel.command_is_theme() {
+                    self.chat_panel.push_custom_theme(view);
+                } else {
+                    self.show_theme_picker(view);
+                }
+            }
+            ThemeEvent::RenderChanged(theme) => {
+                self.render_theme = theme;
+                self.render_theme_revision = self.render_theme_revision.wrapping_add(1).max(1);
             }
         }
     }
@@ -1699,7 +1826,7 @@ impl App {
                 let session_ids = self.sessions.manager().selected_archive_ids(&catalog);
                 return Some(
                     (!session_ids.is_empty())
-                        .then_some(AppCommand::ArchiveSessions { session_ids }),
+                        .then_some(SessionCommand::Archive { session_ids }.into()),
                 );
             }
             if !key.modifiers.is_empty() {
@@ -1717,9 +1844,15 @@ impl App {
                     Some(None)
                 }
                 KeyCode::Enter => Some(self.sessions.manager().selected_session().map(
-                    |session_id| AppCommand::ResumeSession {
-                        session_id: session_id.to_string(),
-                        preferred_thread_id: self.sessions.remembered_thread(session_id).cloned(),
+                    |session_id| {
+                        SessionCommand::Resume {
+                            session_id: session_id.to_string(),
+                            preferred_thread_id: self
+                                .sessions
+                                .remembered_thread(session_id)
+                                .cloned(),
+                        }
+                        .into()
                     },
                 )),
                 KeyCode::Char(' ') => {
@@ -1759,7 +1892,7 @@ impl App {
                     self.agent_thread_switcher
                         .selected()
                         .cloned()
-                        .map(|thread_id| AppCommand::SwitchThread { thread_id }),
+                        .map(|thread_id| SessionCommand::SwitchThread { thread_id }.into()),
                 ),
                 KeyCode::Esc => {
                     self.agent_thread_switcher.blur();
@@ -1805,10 +1938,16 @@ impl App {
                     self.sessions.show_session(session_id, viewed);
                     Some(None)
                 } else {
-                    Some(Some(AppCommand::ResumeSession {
-                        session_id: session_id.to_string(),
-                        preferred_thread_id: self.sessions.remembered_thread(&session_id).cloned(),
-                    }))
+                    Some(Some(
+                        SessionCommand::Resume {
+                            session_id: session_id.to_string(),
+                            preferred_thread_id: self
+                                .sessions
+                                .remembered_thread(&session_id)
+                                .cloned(),
+                        }
+                        .into(),
+                    ))
                 }
             }
         }
@@ -1868,7 +2007,7 @@ impl App {
                 if let Some(target) = first_scroll_target(true, &messages) {
                     self.thread_presentations.active_mut().scroll.apply(target);
                 }
-                Some(Some(AppCommand::LoadOlderHistory))
+                Some(Some(ThreadCommand::LoadOlderHistory.into()))
             }
             (KeyModifiers::CONTROL, KeyCode::End) => {
                 self.follow_latest_transcript();
@@ -1990,15 +2129,15 @@ impl App {
         now: Instant,
     ) -> Option<AppCommand> {
         match action {
-            AppKeymapAction::CycleApprovalMode => Some(AppCommand::CycleNextApprovalMode),
+            AppKeymapAction::CycleApprovalMode => Some(ThreadCommand::CycleNextApprovalMode.into()),
             AppKeymapAction::ScreenEscape => match self.screen_escape_sequence.press(now) {
                 ScreenEscapeOutcome::WaitingForSecondPress => None,
-                ScreenEscapeOutcome::OpenRewind => Some(AppCommand::OpenRewindPicker),
+                ScreenEscapeOutcome::OpenRewind => Some(ThreadCommand::OpenRewindPicker.into()),
             },
-            AppKeymapAction::OpenRewind => Some(AppCommand::OpenRewindPicker),
-            AppKeymapAction::ReadClipboardImage => Some(AppCommand::ReadClipboardImage),
+            AppKeymapAction::OpenRewind => Some(ThreadCommand::OpenRewindPicker.into()),
+            AppKeymapAction::ReadClipboardImage => Some(HostCommand::ReadClipboardImage.into()),
             AppKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
-            AppKeymapAction::CopyLastResponse => Some(AppCommand::CopyLastResponse),
+            AppKeymapAction::CopyLastResponse => Some(HostCommand::CopyLastResponse.into()),
             AppKeymapAction::Suspend => Some(AppCommand::Suspend),
         }
     }
@@ -2092,17 +2231,17 @@ impl App {
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Export)) => {
                 let requested_path = (!invocation.display_arguments.trim().is_empty())
                     .then(|| PathBuf::from(invocation.display_arguments.trim()));
-                Some(AppCommand::ExportTranscript { requested_path })
+                Some(HostCommand::ExportTranscript { requested_path }.into())
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Shortcuts))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenKeymapEditor)
+                Some(KeymapCommand::OpenEditor.into())
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Config))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenConfigEditor)
+                Some(ConfigCommand::OpenEditor.into())
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Startup))
                 if invocation.arguments.is_empty() =>
@@ -2113,18 +2252,19 @@ impl App {
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::StatusLine))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenStatusLineEditor)
+                Some(StatusCommand::OpenLineEditor.into())
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Theme))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenThemePicker)
+                Some(ThemeCommand::OpenPicker.into())
             }
-            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Theme)) => {
-                Some(AppCommand::SetTheme {
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Theme)) => Some(
+                ThemeCommand::Set {
                     preference: invocation.display_arguments.trim().to_owned(),
-                })
-            }
+                }
+                .into(),
+            ),
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Help)) => {
                 let spec = help_choices(
                     self.thread_presentations.slash_commands(),
@@ -2140,18 +2280,21 @@ impl App {
                 ));
                 if self.chat_panel.is_steering() {
                     let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
-                    return Some(AppCommand::SteerTurn {
-                        source: SteerSource::Composer,
-                        steer_id,
-                        submission,
-                    });
+                    return Some(
+                        ThreadCommand::SteerTurn {
+                            source: SteerSource::Composer,
+                            steer_id,
+                            submission,
+                        }
+                        .into(),
+                    );
                 }
                 self.status = Status::Working;
                 self.chat_panel.queue_input();
-                Some(AppCommand::SubmitTurn { submission })
+                Some(ThreadCommand::SubmitTurn { submission }.into())
             }
             (SlashCommandOrigin::Local, Some(_)) => {
-                Some(AppCommand::ExecuteProductCommand(invocation))
+                Some(ThreadCommand::ExecuteProductCommand(invocation).into())
             }
             (SlashCommandOrigin::Local, None) => None,
         }
@@ -2164,7 +2307,7 @@ impl App {
             | Status::WaitingForUserInput
             | Status::WaitingForCapability => {
                 self.status = Status::Cancelling;
-                Some(AppCommand::Interrupt)
+                Some(ThreadCommand::Interrupt.into())
             }
             Status::Cancelling => None,
             Status::Ready | Status::Error => Some(AppCommand::Quit),

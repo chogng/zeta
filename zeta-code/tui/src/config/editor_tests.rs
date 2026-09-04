@@ -11,6 +11,8 @@ use crate::widgets::text_prompt::TextPromptOutcome;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use zeta_app_server_protocol::protocol::config::LanguageServerConfigDto;
+use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
@@ -65,6 +67,12 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .iter()
             .all(|item| !matches!(item.label(), "Revision" | "Generation"))
     );
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .all(|item| item.label() != "Language servers")
+    );
     let mouse = &state.visible_items()[0];
     assert_eq!(mouse.label(), "Mouse interactions");
     assert_eq!(
@@ -117,6 +125,73 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::OpenProviderApiKey { provider, .. } if provider == "openai"
     ));
     assert!(state.visible_items()[1].id().is_none());
+}
+
+#[test]
+fn language_server_tab_exposes_one_switch_per_configured_server() {
+    let mut config = empty_config_snapshot();
+    config.revision = 7;
+    config.language_servers.insert(
+        "rust-analyzer".into(),
+        LanguageServerConfigDto {
+            mode: LanguageServerModeDto::Automatic,
+            executable: None,
+        },
+    );
+    config.language_servers.insert(
+        "typescript-language-server".into(),
+        LanguageServerConfigDto {
+            mode: LanguageServerModeDto::Disabled,
+            executable: Some("C:\\tools\\typescript-language-server.exe".into()),
+        },
+    );
+    let view = config_choices(
+        &config,
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    );
+    let mut state = ListSelectionState::new(view.model);
+
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert_eq!(state.active_tab().label(), "Language servers");
+    assert_eq!(state.visible_items().len(), 2);
+    assert_eq!(state.visible_items()[0].label(), "rust-analyzer");
+    assert_eq!(
+        state.visible_items()[0].description(),
+        Some("automatic [ ✔ ]")
+    );
+    assert!(matches!(
+        view.actions
+            .get(state.visible_items()[0].id().unwrap())
+            .unwrap(),
+        ConfigSelectionAction::SetLanguageServerMode(edit)
+            if edit.expected_revision == 7
+                && edit.server_id == "rust-analyzer"
+                && edit.config.mode == LanguageServerModeDto::Disabled
+                && edit.config.executable.is_none()
+    ));
+    assert_eq!(
+        state.visible_items()[1].label(),
+        "typescript-language-server"
+    );
+    assert_eq!(
+        state.visible_items()[1].description(),
+        Some("disabled  ·  C:\\tools\\typescript-language-server.exe [   ]")
+    );
+    assert!(matches!(
+        view.actions
+            .get(state.visible_items()[1].id().unwrap())
+            .unwrap(),
+        ConfigSelectionAction::SetLanguageServerMode(edit)
+            if edit.expected_revision == 7
+                && edit.server_id == "typescript-language-server"
+                && edit.config.mode == LanguageServerModeDto::Enabled
+                && edit.config.executable.as_deref()
+                    == Some("C:\\tools\\typescript-language-server.exe")
+    ));
 }
 
 #[test]

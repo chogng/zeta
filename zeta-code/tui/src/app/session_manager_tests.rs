@@ -1,7 +1,9 @@
 use super::App;
 use super::AppCommand;
-use super::AppEvent;
 use super::frame::draw;
+use crate::sessions::Command as SessionCommand;
+use crate::sessions::Event as SessionEvent;
+use crate::thread::Event as ThreadEvent;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -61,12 +63,12 @@ fn resuming_selected_session_restores_manager_navigation() {
 
     assert_eq!(
         app.handle_key(key(KeyCode::Enter)),
-        Some(AppCommand::ResumeSession {
+        Some(AppCommand::Sessions(SessionCommand::Resume {
             session_id: "current".into(),
             preferred_thread_id: Some(ThreadId::new("current").unwrap()),
-        })
+        }))
     );
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: SessionId::new("current").unwrap(),
         thread_id: ThreadId::new("current").unwrap(),
     });
@@ -101,11 +103,11 @@ fn agents_command_opens_the_manager() {
 
 fn active_session_app() -> App {
     let mut app = App::new();
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: SessionId::new("current").unwrap(),
         thread_id: ThreadId::new("current").unwrap(),
     });
-    app.update(AppEvent::SessionCatalogReceived(vec![session()]));
+    app.update(SessionEvent::CatalogReceived(vec![session()]));
     app
 }
 

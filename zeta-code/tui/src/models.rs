@@ -1,6 +1,17 @@
 mod picker;
 mod request;
 
+/// A completed model operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    SummaryReceived(ModelSummary),
+    PickerOpened(ModelChoices),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    SetPreferred { preference: String },
+}
+
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_protocol::ModelAccess;

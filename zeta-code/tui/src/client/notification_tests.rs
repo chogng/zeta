@@ -107,7 +107,7 @@ fn session_change_preserves_the_invalidated_tree_identity() {
 }
 
 #[test]
-fn git_status_change_updates_tui_owned_status_projection() {
+fn git_status_change_updates_tui_owned_status_state() {
     let changed = GitStatusChanged {
         status: GitStatusResult {
             repository_id: "repository-1".into(),
@@ -131,7 +131,7 @@ fn git_status_change_updates_tui_owned_status_projection() {
 }
 
 #[test]
-fn unowned_notifications_do_not_enter_the_tui_projection() {
+fn unowned_notifications_do_not_enter_tui_state() {
     assert_eq!(
         map_event(AppServerEvent::Notification(ServerNotification::Unknown {
             method: "future/changed".into(),

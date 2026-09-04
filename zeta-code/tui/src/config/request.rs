@@ -1,6 +1,7 @@
 use super::ConfigChoices;
 use super::ConfigEdit;
 use super::ConfigEditResult;
+use super::LanguageServerEdit;
 use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
 use super::config_choices;
@@ -13,6 +14,7 @@ use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_client::ProviderApiKeySetRequest;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
+use zeta_app_server_protocol::protocol::config::LanguageServerConfigureParams;
 use zeta_protocol::Patch;
 
 pub(crate) struct ProviderApiKeyUpdate {
@@ -79,6 +81,30 @@ where
     })
 }
 
+pub(crate) fn set_language_server_mode<T>(
+    client: &mut AppServerClient<T>,
+    edit: LanguageServerEdit,
+) -> Result<ConfigEditResult, ConfigCommandError>
+where
+    T: JsonRpcTransport,
+{
+    client.configure_language_server(LanguageServerConfigureParams {
+        command_id: new_command_id("language-server"),
+        expected_revision: edit.expected_revision,
+        server_id: edit.server_id,
+        config: edit.config,
+    })?;
+    let config = client.read_config()?;
+    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let providers = client.list_providers()?;
+    Ok(ConfigEditResult {
+        terminal,
+        status_line: status_line.clone(),
+        choices: config_choices(&config, &providers, terminal, status_line),
+    })
+}
+
 #[derive(Debug)]
 pub(crate) struct ConfigCommandError(String);
 
@@ -93,3 +119,7 @@ impl From<ClientError> for ConfigCommandError {
         Self(error.to_string())
     }
 }
+
+#[cfg(test)]
+#[path = "request_tests.rs"]
+mod tests;

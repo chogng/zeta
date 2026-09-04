@@ -16,6 +16,22 @@ use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
 use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
 use zeta_app_server_protocol::protocol::environment::SessionDirMutationResult;
 use zeta_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
+
+/// A completed directory operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    PickerOpened(DirChoices),
+    Removed {
+        path: std::path::PathBuf,
+        choices: DirChoices,
+    },
+    PermissionsUpdated(DirChoices),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    Remove { path: std::path::PathBuf },
+    SetPermissions(SessionDirPermissionsSetParams),
+}
 use zeta_app_server_protocol::protocol::environment::SessionDirRemoveParams;
 use zeta_protocol::SessionId;
 

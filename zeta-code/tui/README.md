@@ -221,8 +221,9 @@ src/
 | --- | --- | --- | --- |
 | `App` | crate-private | presentation `Status`、产品能力与局部交互协调和单写者 state transition | 不保存 worker/channel、不复制能力状态或编辑器细节 |
 | `app::chat_panel::ChatPanel` | private | 持有 Session 页面底部聊天交互区的 ChatComposer、输入目标、CommandPanel、Approval、Query、TopTip 和 StatusLine，并统一路由其键盘与粘贴生命周期 | 不保存 Transcript、Queue、Agent/Session Manager、Overlay 或外部副作用 |
-| `AppCommand` | crate-private | execute/quit/interrupt/suspend/copy/export/history/skill/Turn 的 typed side-effect intent | 只描述待执行行为，不携带任意闭包或执行 I/O |
-| `AppEvent` | crate-private | config、clipboard、file search、Thread/Turn 与 product command 的已完成事实 | 只能由 `App::update` 改变 presentation state |
+| `AppCommand` | crate-private | 把各能力的 `Command` 与应用级 Quit/Suspend 汇入事件循环 | 顶层只做领域路由；具体命令由对应能力目录定义，不携带任意闭包或执行 I/O |
+| `AppEvent` | crate-private | 把各能力完成的 `Event` 汇入单写者状态入口 | 顶层只做领域路由；具体事实由对应能力目录定义 |
+| `config/thread/sessions/...::{Command,Event}` | crate-private | 各能力自己的副作用意图与已完成事实 | 不引用 `App`，不把其他能力的行为塞进自己的分支 |
 | `TurnActivity` | crate-private | canonical Turn status 到 Working/waiting/Cancelling presentation state 的窄映射 | 不复制完整 Turn reducer |
 | `ThreadState` | crate-private | 当前执行队首与正文状态 | snapshot 更新执行队首和正文；不执行 RPC、不复制服务端状态机 |
 | `ThreadPresentationEvent` | crate-private | snapshot/transient/reset/user/notice/failure/interrupted/clear 的 Thread 内部事实 | 只改变 active Thread presentation owner |
@@ -242,7 +243,7 @@ src/
 | `config::TerminalSettings` | crate-private | 解释和校验 `[tui]` 中的终端设置，并在更新已知键时保留该表的其他键 | App Server 只做 revision 校验和完整表替换，不解释 TUI 字段 |
 | `app::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 directory 路径缩写为 `~/...`，供 Session 正文历史起点和 Manager 顶部的 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
 | `app::top_tip::TopTip` | crate-private | 管理剪贴板图片提示、空会话导航、进入对话时的一次性权限策略提示、临时通知及各自优先级或期限，并绘制固定顶部提示行 | 不读取剪贴板，不决定页面导航文案，不保存权限模式，不决定该行的布局位置 |
-| `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
+| `App::update` | crate-private | 按能力路由 `AppEvent`，再由对应 `apply_*_event` 更新唯一界面状态 | 不解释跨能力的扁平事件、不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
 | `AppKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，解析应用级 action，并拥有 Chord pending/超时/取消/提示生命周期 | 不处理 `ChatInput` 编辑、`ListSelection` 导航、滚动、I/O 或命令副作用 |
 | `keymap::KeymapSettings` | private | 解释 `[tui].keybindings`，完整编译后构造 User rules 与诊断 | 不执行 action；写入时保留 `[tui]` 的其他键 |
@@ -326,7 +327,7 @@ run(session, options)
    │  ├─ App Server event → typed notification mapping
    │  └─ termination request → orderly TUI exit
    ├─ App::mention_query → FileSearchManager::{update_query,stop}
-   ├─ FileSearchManager::poll → AppEvent::FileSearchSnapshotReceived → App::update
+   ├─ FileSearchManager::poll → thread::Event::FileSearchSnapshotReceived → App::update
    ├─ RequestTasks::poll → keyed completion → app::completion → App::update
    ├─ skills changed → queued background skills refresh
    ├─ newer active Thread durable update → queued session/thread/read snapshot resync
@@ -503,8 +504,8 @@ Running 状态下 ChatInput completion 可见时，Tab 仍完成 Slash、Mention
 
 Queue 保存 `TextArea`、附件、长粘贴占位绑定和 exact `SkillRef`，并由稳定 `QueueId` 标识。普通 Up 只进入 ChatInput 历史；Alt-Up 从 ChatInput 聚焦 Queue 最新可编辑项，方向键选择，Enter 把所选项恢复到 ChatInput，Ctrl-Enter 立即发送，Ctrl-Up/Down 调序，Delete 删除，Esc 或从最后一项继续向下返回 ChatInput。鼠标单击 Queue 行只选中该项。恢复不会覆盖非空草稿，并在原位置保留 editing 占位；再次按 Enter 后更新原条目，不追加到队尾。自动发送或立即发送期间条目显示为 sending，服务端接受后才移除，请求拒绝后恢复为 queued。
 
-`AppEvent::InterruptFailed` 把状态恢复到 Working，使用户可以再次请求 interrupt；ordinary
-client failure 通过 `AppEvent::FailureReported` 进入 Error 并允许输入新 prompt。
+`thread::Event::InterruptFailed` 把状态恢复到 Working，使用户可以再次请求 interrupt；ordinary
+client failure 通过 `thread::Event::FailureReported` 进入 Error 并允许输入新 prompt。
 
 ## 终端生命周期
 
@@ -612,7 +613,7 @@ directory directory/preview 和 interaction deadline。
 `ConfigReadResult` 新字段在 App Server 或消费该字段的 feature 中被静默忽略。相反，直接构造
 `ThreadItem` variant 的测试必须明确填写其全部字段，因为这些字段属于被测试对象本身的领域语义。
 
-生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter；各 feature 只解释自己拥有的字段。`provider/list` 只投影供应商名、API key 策略与是否已配置，不返回密钥。Model 面板只接收 preferred model，MCP settings 只接收 server map，status line 通过 `AppEvent::PreferredModelReceived` 与 `AppEvent::GitStatusReceived` 接收展示数据，通过 `StatusLineSettings` 接收 `[tui].statusLine` 项目。新增 Tool Search 或 Codebase 配置字段不会扩散到这些不拥有该能力的展示组件。
+生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter；各 feature 只解释自己拥有的字段。`provider/list` 只给出供应商名、API key 策略与是否已配置，不返回密钥。Model 面板只接收 preferred model，MCP settings 只接收 server map，status line 通过 `models::Event::SummaryReceived` 与 `status::Event::GitStatusReceived` 接收展示数据，通过 `StatusLineSettings` 接收 `[tui].statusLine` 项目。新增 Tool Search 或 Codebase 配置字段不会扩散到这些不拥有该能力的展示组件。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，并覆盖 transcript 折行高度、prefix、scroll、pointer hit test、cell revision、cache key 失效与资源上限、完整源码和逐个完整新增行高亮的一致性，以及 batch deadline 不后移、输入提前 deadline、到期帧只消费一次、transient latest-value、identity 顺序、cursor/scope/barrier 和批量容量边界。命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
 event-loop integration 可以继续加强当前 brokered-local 路径；连接恢复验证属于 CLI，不进入 TUI transport 测试。桌面端 Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与

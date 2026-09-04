@@ -9,6 +9,18 @@ mod editor;
 mod input;
 mod settings;
 
+/// A completed keymap operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    SettingsReceived(KeymapSettings),
+    EditorOpened(KeymapEditorUpdate),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    OpenEditor,
+    Edit(KeymapEdit),
+}
+
 use bindings::AppKeymapCondition;
 use chords::PendingChord;
 use zeta_keybinding::BindingSet;

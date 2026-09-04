@@ -7,6 +7,25 @@ mod settings_request;
 mod setup;
 mod view;
 
+/// A completed status operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    LineSettingsReceived(StatusLineSettings),
+    LineEditorOpened(StatusLineEditorUpdate),
+    LineEditorUpdated(StatusLineEditorUpdate),
+    PanelOpened(StatusPanel),
+    GitStatusReceived(zeta_app_server_protocol::protocol::git::GitStatusResult),
+    GitTextDiffReceived {
+        status: zeta_app_server_protocol::protocol::git::GitStatusResult,
+        statistics: zeta_app_server_protocol::protocol::git::GitDiffStatisticsDto,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    OpenLineEditor,
+    EditLine(StatusLineEdit),
+}
+
 pub(crate) use model::StatusLineModel;
 pub(crate) use model::StatusLineRuntime;
 pub(crate) use panel::RemainingContextWindow;

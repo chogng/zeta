@@ -1,10 +1,12 @@
 use super::ActiveConversation;
 use super::App;
 use super::AppCommand;
-use super::AppEvent;
 use super::Status;
 use super::apply_active_turn_snapshot;
 use crate::models::set_preferred_model;
+use crate::sessions::Event as SessionEvent;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
 use crate::thread::ThreadRequestScope;
 use crate::thread::submit_prompt;
 use crossterm::event::KeyCode;
@@ -109,7 +111,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
 
     model.wait_for_first_delta();
     let streaming = read_thread(&mut client, &conversation);
-    app.update(AppEvent::ThreadTranscriptSnapshotReceived(
+    app.update(ThreadEvent::TranscriptSnapshotReceived(
         streaming.transcript,
     ));
     apply_active_turn_snapshot(&mut app, &streaming.thread.turns);
@@ -129,7 +131,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     model.release_first_response();
     let completed = wait_for_completed_thread(&mut client, &conversation, 1);
     conversation.set_thread_sequence(completed.thread.sequence);
-    app.update(AppEvent::ThreadTranscriptSnapshotReceived(
+    app.update(ThreadEvent::TranscriptSnapshotReceived(
         completed.transcript,
     ));
     apply_active_turn_snapshot(&mut app, &completed.thread.turns);
@@ -150,7 +152,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     conversation.set_thread_sequence(started.sequence);
     app.set_active_turn(started.turn_id);
     let completed = wait_for_completed_thread(&mut client, &conversation, 2);
-    app.update(AppEvent::ThreadTranscriptSnapshotReceived(
+    app.update(ThreadEvent::TranscriptSnapshotReceived(
         completed.transcript,
     ));
     apply_active_turn_snapshot(&mut app, &completed.thread.turns);
@@ -184,20 +186,18 @@ fn app_for_conversation(
         .session;
     let initial = read_thread(client, conversation);
     let mut app = App::new();
-    app.update(AppEvent::ThreadContextChanged {
+    app.update(ThreadEvent::ContextChanged {
         session_id: conversation.session_id().clone(),
         thread_id: conversation.thread_id().clone(),
     });
-    app.update(AppEvent::SessionCatalogReceived(vec![session]));
-    app.update(AppEvent::ThreadTranscriptSnapshotReceived(
-        initial.transcript,
-    ));
+    app.update(SessionEvent::CatalogReceived(vec![session]));
+    app.update(ThreadEvent::TranscriptSnapshotReceived(initial.transcript));
     app
 }
 
 fn submit_from_input(app: &mut App, prompt: &str) -> crate::thread::composer::ChatSubmission {
     app.insert_text(prompt);
-    let Some(AppCommand::SubmitTurn { submission }) =
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
         panic!("normal input did not produce SubmitTurn");
