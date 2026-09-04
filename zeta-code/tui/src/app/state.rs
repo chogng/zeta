@@ -1,6 +1,5 @@
 use super::chat_panel::ChatPanel;
 use super::command::AppCommand;
-use super::command::SteerSource;
 use super::command_panel::CommandPanel;
 use super::command_panel::CommandPanelOutcome;
 use super::escape::ScreenEscapeOutcome;
@@ -63,6 +62,7 @@ use crate::thread::composer::ChatComposerOutcome;
 use crate::thread::composer::ChatComposerView;
 use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::ChatInputItem;
+use crate::thread::composer::SteerSource;
 use crate::thread::queue::QueueId;
 use crate::thread::queue::QueueKeyOutcome;
 use crate::thread::queue::QueueView;
@@ -271,8 +271,9 @@ impl App {
         if key.kind == KeyEventKind::Press {
             self.pointer.clear();
         }
+        let overlay_area = frame::transient_area(self, terminal_area);
         if let Some(overlay) = self.overlay.as_mut() {
-            if overlay.handle_key(key) == OverlayInputOutcome::Dismiss {
+            if overlay.handle_key(key, overlay_area) == OverlayInputOutcome::Dismiss {
                 self.close_overlay();
             }
             return None;
@@ -1010,7 +1011,8 @@ impl App {
         self.thread_presentations.active().input.mention_query()
     }
 
-    pub(crate) fn messages(&self) -> &[Message] {
+    #[cfg(test)]
+    pub(crate) fn messages(&self) -> Vec<Message> {
         self.thread.messages()
     }
 
@@ -1022,11 +1024,11 @@ impl App {
     }
 
     pub(crate) fn latest_agent_response(&self) -> Option<&str> {
-        crate::thread::transcript::latest_agent_response(self.messages())
+        self.thread.latest_agent_response()
     }
 
     pub(crate) fn transcript_markdown(&self) -> String {
-        crate::thread::transcript::export_markdown(self.messages())
+        crate::thread::transcript::export_markdown(&self.transcript_views())
     }
 
     pub(crate) fn transcript_scroll(&self) -> &ChatHistoryScroll {

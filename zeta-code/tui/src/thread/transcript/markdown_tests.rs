@@ -1,20 +1,6 @@
 use super::export_markdown;
-use super::latest_agent_response;
-use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::Message;
 use crate::thread::transcript::MessageRole;
-
-#[test]
-fn latest_agent_response_ignores_tools_and_notices() {
-    let messages = vec![
-        Message::plain(MessageRole::Agent, "first".into()),
-        Message::command("tool".into(), CommandStatus::Succeeded, None),
-        Message::plain(MessageRole::Agent, "second".into()),
-        Message::plain(MessageRole::Notice, "done".into()),
-    ];
-
-    assert_eq!(latest_agent_response(&messages), Some("second"));
-}
 
 #[test]
 fn markdown_export_preserves_roles_and_details() {

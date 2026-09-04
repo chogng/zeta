@@ -5,6 +5,7 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::list_selection::ListSelectionSpec;
 
 use super::StatusLineEdit;
 use super::StatusLineItem;
@@ -15,10 +16,7 @@ pub(crate) enum StatusLineSelectionAction {
     SetEnabled(StatusLineEdit),
 }
 
-pub(crate) struct StatusLineChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, StatusLineSelectionAction>,
-}
+pub(crate) type StatusLineChoices = ListSelectionSpec<StatusLineSelectionAction>;
 
 pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> StatusLineChoices {
     let mut actions = BTreeMap::new();

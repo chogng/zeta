@@ -15,6 +15,13 @@ pub(crate) enum ListSelectionOutcome<A> {
     Dismiss,
 }
 
+/// Data supplied by a feature to construct a list-selection surface.
+#[derive(Debug)]
+pub(crate) struct ListSelectionSpec<A> {
+    pub(crate) model: ListSelectionModel,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, A>,
+}
+
 /// Binds an opaque feature action to each selectable list item.
 #[derive(Debug)]
 pub(crate) struct ListSelection<A> {

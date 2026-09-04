@@ -4,7 +4,7 @@ use super::presentation::evaluate_active_turn;
 use super::presentation::recover_active_turn;
 use super::transcript::TranscriptCell;
 use super::transcript::TranscriptCellId;
-use super::transcript::TranscriptProjection;
+use super::transcript::TranscriptModel;
 use crate::thread::transcript::Message;
 use crate::thread::transcript::MessageRole;
 use std::collections::BTreeSet;
@@ -41,8 +41,7 @@ impl From<ApprovalMode> for TurnApprovalModes {
 pub(crate) struct ThreadState {
     active_turn: Option<TurnId>,
     approval_modes: TurnApprovalModes,
-    transcript: TranscriptProjection,
-    messages: Vec<Message>,
+    transcript: TranscriptModel,
 }
 
 impl ThreadState {
@@ -103,14 +102,17 @@ impl ThreadState {
         self.approval_modes.current = approval_mode;
     }
 
-    pub(crate) fn messages(&self) -> &[Message] {
-        &self.messages
+    #[cfg(test)]
+    pub(crate) fn messages(&self) -> Vec<Message> {
+        self.transcript.views(&BTreeSet::new(), None)
     }
 
     pub(crate) fn has_user_message(&self) -> bool {
-        self.messages
-            .iter()
-            .any(|message| message.role == MessageRole::User)
+        self.transcript.has_user_message()
+    }
+
+    pub(crate) fn latest_agent_response(&self) -> Option<&str> {
+        self.transcript.latest_agent_response()
     }
 
     pub(crate) fn views(
@@ -165,7 +167,6 @@ impl ThreadState {
                 self.transcript.clear();
             }
         }
-        self.messages = self.transcript.views(&BTreeSet::new(), None);
     }
 }
 

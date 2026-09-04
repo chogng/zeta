@@ -15,13 +15,16 @@ use crossterm::event::MouseEventKind;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::Instant;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
 
 #[test]
 fn terminal_input_is_received_before_queued_client_work() {
     let queue = RuntimeQueue::default();
     let stop = AtomicBool::new(false);
-    assert!(queue.push_client(RuntimeEvent::Client(ClientEvent::ConnectorsChanged), &stop,));
-    assert!(queue.push_priority(
+    assert!(queue.push_client(ClientEvent::ConnectorsChanged, &stop));
+    assert!(queue.push_terminal(
         RuntimeEvent::Terminal(TerminalEvent::Input(Event::FocusGained)),
         &stop,
     ));
@@ -42,8 +45,8 @@ fn terminal_input_is_received_before_queued_client_work() {
 fn termination_is_received_before_every_queue_lane() {
     let queue = RuntimeQueue::default();
     let stop = AtomicBool::new(false);
-    assert!(queue.push_client(RuntimeEvent::Client(ClientEvent::ConnectorsChanged), &stop,));
-    assert!(queue.push_priority(
+    assert!(queue.push_client(ClientEvent::ConnectorsChanged, &stop));
+    assert!(queue.push_terminal(
         RuntimeEvent::Terminal(TerminalEvent::Input(Event::FocusGained)),
         &stop,
     ));
@@ -81,7 +84,7 @@ fn process_resource_readings_coalesce_and_remain_behind_user_input() {
     let stop = AtomicBool::new(false);
     assert!(queue.push_process_resources(resource_reading(1, 10), &stop));
     assert!(queue.push_process_resources(resource_reading(1, 20), &stop));
-    assert!(queue.push_priority(
+    assert!(queue.push_terminal(
         RuntimeEvent::Terminal(TerminalEvent::Input(Event::FocusGained)),
         &stop,
     ));
@@ -144,8 +147,8 @@ fn cpu_observation_cycle_restarts_only_after_cpu_was_not_requested() {
 fn consecutive_pointer_movements_keep_only_the_latest_position() {
     let queue = RuntimeQueue::default();
     let stop = AtomicBool::new(false);
-    assert!(queue.push_priority(mouse(MouseEventKind::Moved, 2, 3), &stop));
-    assert!(queue.push_priority(mouse(MouseEventKind::Moved, 8, 5), &stop));
+    assert!(queue.push_terminal(mouse(MouseEventKind::Moved, 2, 3), &stop));
+    assert!(queue.push_terminal(mouse(MouseEventKind::Moved, 8, 5), &stop));
 
     assert_mouse(queue.recv(None).unwrap(), MouseEventKind::Moved, 8, 5);
     assert!(
@@ -160,10 +163,10 @@ fn consecutive_pointer_movements_keep_only_the_latest_position() {
 fn mouse_up_overtakes_pending_drag_positions() {
     let queue = RuntimeQueue::default();
     let stop = AtomicBool::new(false);
-    assert!(queue.push_priority(mouse(MouseEventKind::Down(MouseButton::Left), 1, 1), &stop,));
-    assert!(queue.push_priority(mouse(MouseEventKind::Drag(MouseButton::Left), 4, 2), &stop,));
-    assert!(queue.push_priority(mouse(MouseEventKind::Drag(MouseButton::Left), 9, 6), &stop,));
-    assert!(queue.push_priority(mouse(MouseEventKind::Up(MouseButton::Left), 10, 6), &stop,));
+    assert!(queue.push_terminal(mouse(MouseEventKind::Down(MouseButton::Left), 1, 1), &stop,));
+    assert!(queue.push_terminal(mouse(MouseEventKind::Drag(MouseButton::Left), 4, 2), &stop,));
+    assert!(queue.push_terminal(mouse(MouseEventKind::Drag(MouseButton::Left), 9, 6), &stop,));
+    assert!(queue.push_terminal(mouse(MouseEventKind::Up(MouseButton::Left), 10, 6), &stop,));
 
     assert_mouse(
         queue.recv(None).unwrap(),
@@ -183,6 +186,51 @@ fn mouse_up_overtakes_pending_drag_positions() {
             .unwrap()
             .is_none()
     );
+}
+
+#[test]
+fn client_control_is_served_after_a_bounded_terminal_burst() {
+    let queue = RuntimeQueue::default();
+    let stop = AtomicBool::new(false);
+    assert!(queue.push_client(ClientEvent::ConnectorsChanged, &stop));
+    for _ in 0..20 {
+        assert!(queue.push_terminal(
+            RuntimeEvent::Terminal(TerminalEvent::Input(Event::FocusGained)),
+            &stop,
+        ));
+    }
+
+    for _ in 0..super::TERMINAL_BURST_LIMIT {
+        assert!(matches!(
+            queue.recv(None).unwrap(),
+            Some(RuntimeEvent::Terminal(TerminalEvent::Input(
+                Event::FocusGained
+            )))
+        ));
+    }
+    assert!(matches!(
+        queue.recv(None).unwrap(),
+        Some(RuntimeEvent::Client(ClientEvent::ConnectorsChanged))
+    ));
+}
+
+#[test]
+fn client_control_overtakes_transcript_data() {
+    let queue = RuntimeQueue::default();
+    let stop = AtomicBool::new(false);
+    assert!(queue.push_client(transcript_update(), &stop));
+    assert!(queue.push_client(ClientEvent::ConfigChanged, &stop));
+
+    assert!(matches!(
+        queue.recv(None).unwrap(),
+        Some(RuntimeEvent::Client(ClientEvent::ConfigChanged))
+    ));
+    assert!(matches!(
+        queue.recv(None).unwrap(),
+        Some(RuntimeEvent::Client(ClientEvent::ThreadTranscriptUpdated(
+            _
+        )))
+    ));
 }
 
 fn mouse(kind: MouseEventKind, column: u16, row: u16) -> RuntimeEvent {
@@ -208,6 +256,17 @@ fn resource_reading(revision: u64, resident_bytes: u64) -> ProcessResourcesReadi
         app_server: None,
         sampled_at: Instant::now(),
     }
+}
+
+fn transcript_update() -> ClientEvent {
+    ClientEvent::ThreadTranscriptUpdated(Box::new(ThreadTranscriptUpdateEnvelope {
+        session_id: SessionId::new("session").unwrap(),
+        thread_id: ThreadId::new("thread").unwrap(),
+        durable_sequence: 1,
+        revision: 1,
+        stream_cursor: None,
+        changes: Vec::new(),
+    }))
 }
 
 fn assert_mouse(

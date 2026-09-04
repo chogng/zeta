@@ -1,3 +1,11 @@
+use crate::thread::queue::QueueId;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SteerSource {
+    Composer,
+    Queue(QueueId),
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct SteerId(u64);
 

@@ -10,6 +10,7 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -23,10 +24,7 @@ pub(crate) enum ConnectorSelectionAction {
     },
 }
 
-pub(crate) struct ConnectorChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, ConnectorSelectionAction>,
-}
+pub(crate) type ConnectorChoices = ListSelectionSpec<ConnectorSelectionAction>;
 
 pub(crate) fn connector_choices(catalog: &ConnectorListResult) -> ConnectorChoices {
     let mut actions = BTreeMap::new();

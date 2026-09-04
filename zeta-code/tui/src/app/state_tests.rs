@@ -2,7 +2,6 @@ use super::App;
 use super::AppCommand;
 use super::Status;
 use crate::app::AppEvent;
-use crate::app::command::SteerSource;
 use crate::config::TerminalSettings;
 use crate::config::config_choices;
 use crate::host::process_resources::ProcessResourceDemand;
@@ -35,6 +34,7 @@ use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::ChatInputMode;
 use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::CompletionView;
+use crate::thread::composer::SteerSource;
 use crate::thread::composer::built_in_slash_command_definitions;
 use crate::thread::composer::file_search::FileSearchManager;
 use crate::thread::interaction::approval::Approval;
@@ -1046,10 +1046,7 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
     );
-    assert!(matches!(
-        app.command_panel().and_then(|panel| panel.key_capture()),
-        Some(body) if body.title() == "Record shortcut"
-    ));
+    assert!(app.list_selection().is_none());
 
     let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
     assert_eq!(

@@ -287,7 +287,8 @@ fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
     apply_active_turn_snapshot(&mut app, &[turn]);
 
     assert_eq!(app.status(), &Status::Error);
-    let message = &app.messages().last().unwrap().text;
+    let messages = app.messages();
+    let message = &messages.last().unwrap().text;
     assert!(message.contains("configured model"));
     assert!(!message.contains("StableTurnError"));
     assert!(!message.contains("ModelInvocationFailed"));

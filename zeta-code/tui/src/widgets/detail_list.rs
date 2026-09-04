@@ -43,15 +43,6 @@ impl DetailList {
         &self.rows
     }
 
-    pub(crate) fn desired_height(&self) -> u16 {
-        let content_rows = self
-            .rows
-            .iter()
-            .map(|row| row.value.lines().count().max(1))
-            .sum::<usize>();
-        u16::try_from(content_rows.saturating_add(3)).unwrap_or(u16::MAX)
-    }
-
     pub(crate) fn content_height(&self, content_width: u16) -> usize {
         crate::render::wrapped_height(
             &detail_lines(self, Style::default(), Style::default()),

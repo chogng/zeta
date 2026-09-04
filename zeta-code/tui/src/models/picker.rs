@@ -3,6 +3,7 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use std::collections::BTreeMap;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
@@ -13,10 +14,7 @@ pub(crate) enum ModelSelectionAction {
     Select { preference: String },
 }
 
-pub(crate) struct ModelChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, ModelSelectionAction>,
-}
+pub(crate) type ModelChoices = ListSelectionSpec<ModelSelectionAction>;
 
 pub(crate) fn model_choices(
     catalog: &ModelListResult,

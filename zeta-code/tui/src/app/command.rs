@@ -6,6 +6,7 @@ use crate::thread::ThreadRequestResponse;
 use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::SlashCommandInvocation;
 use crate::thread::composer::SteerId;
+use crate::thread::composer::SteerSource;
 use crate::thread::queue::QueueId;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
@@ -15,12 +16,6 @@ use zeta_protocol::SessionId;
 use zeta_protocol::SkillId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SteerSource {
-    Composer,
-    Queue(QueueId),
-}
 
 /// A typed side-effect intent emitted by the single-writer application state.
 #[derive(Clone, Debug, Eq, PartialEq)]

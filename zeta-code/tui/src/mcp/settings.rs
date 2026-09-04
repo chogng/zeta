@@ -3,6 +3,7 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use std::collections::BTreeMap;
 use zeta_app_server_protocol::protocol::config::McpServerConfigDto;
@@ -17,10 +18,7 @@ pub(crate) enum McpSelectionAction {
     },
 }
 
-pub(crate) struct McpChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, McpSelectionAction>,
-}
+pub(crate) type McpChoices = ListSelectionSpec<McpSelectionAction>;
 
 pub(crate) fn mcp_choices(servers: &BTreeMap<String, McpServerConfigDto>) -> McpChoices {
     let mut actions = BTreeMap::new();

@@ -14,6 +14,7 @@ use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionOutcome;
 use crate::widgets::list_selection::ListSelectionPreview;
+use crate::widgets::list_selection::ListSelectionSpec;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -31,10 +32,7 @@ enum ThemePickerLevel {
     Custom,
 }
 
-pub(crate) struct ThemeChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, ThemeSelectionAction>,
-}
+pub(crate) type ThemeChoices = ListSelectionSpec<ThemeSelectionAction>;
 
 #[derive(Debug)]
 pub(crate) struct ThemePicker {

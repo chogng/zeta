@@ -184,7 +184,7 @@ impl CommandPanel {
 
     pub(crate) fn startup(context: &TuiStartupContext) -> Self {
         Self::Startup(ListSelection::new(
-            crate::startup::choices(context),
+            super::startup::choices(context),
             BTreeMap::new(),
         ))
     }
@@ -289,25 +289,6 @@ impl CommandPanel {
             Self::Status(_) => None,
             Self::StatusLine(selection) => Some(selection.state()),
             Self::Theme(picker) => Some(picker.selection()),
-        }
-    }
-
-    pub(crate) fn key_capture(&self) -> Option<&KeyCapture> {
-        match self {
-            Self::Keymap(editor) => editor.capture(),
-            Self::Help(_)
-            | Self::Dirs(_)
-            | Self::Config(_)
-            | Self::Connectors(_)
-            | Self::Mcp(_)
-            | Self::Model(_)
-            | Self::Rewind(_)
-            | Self::Sessions(_)
-            | Self::Skills(_)
-            | Self::Startup(_)
-            | Self::Status(_)
-            | Self::StatusLine(_)
-            | Self::Theme(_) => None,
         }
     }
 

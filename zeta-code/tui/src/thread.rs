@@ -17,6 +17,7 @@ mod update;
 pub(crate) use agent_switcher::AgentThreadSwitcher;
 pub(crate) use agent_switcher::AgentThreadSwitcherView;
 pub(crate) use agent_switcher::draw_agent_thread_switcher;
+pub(crate) use completion::ThreadCompletion;
 pub(crate) use completion::TurnStartCompletion;
 pub(crate) use completion::interrupt_and_read;
 pub(crate) use completion::resolve_request_and_read;

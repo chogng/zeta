@@ -9,7 +9,7 @@ use crate::app::AppEvent;
 use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::app::frame;
 use crate::app::frame::InputPointerTarget;
-use crate::app::requests::RequestLane;
+use crate::app::requests::RequestKey;
 use crate::app::requests::RequestTasks;
 use crate::terminal::mouse::MouseMode;
 use crate::thread::composer::ChatComposerPointerTarget;
@@ -34,12 +34,12 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
-fn control_and_read_actions_bypass_a_busy_write_lane_without_losing_write_order() {
+fn unrelated_actions_bypass_a_busy_request_without_losing_same_domain_order() {
     let mut app = App::new();
     let mut requests = RequestTasks::default();
     let (release, wait) = std::sync::mpsc::sync_channel(0);
     requests.spawn(
-        Some(RequestLane::Write),
+        Some(RequestKey::Config),
         "zeta-tui-test-write",
         move || {
             wait.recv().expect("the test releases the write request");
@@ -54,8 +54,8 @@ fn control_and_read_actions_bypass_a_busy_write_lane_without_losing_write_order(
 
     assert!(schedule_action(Some(write), &requests, &mut queued).is_none());
     assert!(matches!(
-        schedule_action(Some(AppCommand::OpenConfigEditor), &requests, &mut queued),
-        Some(AppCommand::OpenConfigEditor)
+        schedule_action(Some(AppCommand::OpenKeymapEditor), &requests, &mut queued),
+        Some(AppCommand::OpenKeymapEditor)
     ));
     assert!(matches!(
         schedule_action(Some(AppCommand::Interrupt), &requests, &mut queued),
@@ -84,11 +84,49 @@ fn control_and_read_actions_bypass_a_busy_write_lane_without_losing_write_order(
 }
 
 #[test]
+fn interrupt_bypasses_an_active_interaction_response() {
+    let mut app = App::new();
+    let mut requests = RequestTasks::default();
+    let (release, wait) = std::sync::mpsc::sync_channel(0);
+    requests.spawn(
+        Some(RequestKey::Interaction),
+        "zeta-tui-test-interaction",
+        move || {
+            wait.recv()
+                .expect("the test releases the interaction request");
+            Completion::Presentation(Err("finished".into()))
+        },
+        &mut app,
+    );
+    let mut queued = VecDeque::new();
+
+    assert!(matches!(
+        schedule_action(Some(AppCommand::Interrupt), &requests, &mut queued),
+        Some(AppCommand::Interrupt)
+    ));
+    release
+        .send(())
+        .expect("the interaction request remains alive until released");
+    let completed = (0..10_000)
+        .find_map(|_| {
+            let completed = requests.poll();
+            if completed.is_empty() {
+                std::thread::yield_now();
+                None
+            } else {
+                Some(completed)
+            }
+        })
+        .expect("the released interaction request completes");
+    assert_eq!(completed.len(), 1);
+}
+
+#[test]
 fn quit_bypasses_a_pending_request() {
     let mut app = App::new();
     let mut requests = RequestTasks::default();
     requests.spawn(
-        Some(RequestLane::Write),
+        Some(RequestKey::Config),
         "zeta-tui-test-write",
         || Completion::Presentation(Err("finished".into())),
         &mut app,

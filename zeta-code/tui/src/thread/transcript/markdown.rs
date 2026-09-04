@@ -3,14 +3,6 @@
 use super::Message;
 use super::MessageRole;
 
-pub(crate) fn latest_agent_response(messages: &[Message]) -> Option<&str> {
-    messages
-        .iter()
-        .rev()
-        .find(|message| message.role == MessageRole::Agent)
-        .map(|message| message.text.as_str())
-}
-
 pub(crate) fn export_markdown(messages: &[Message]) -> String {
     let mut output = String::new();
     for message in messages {

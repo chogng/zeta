@@ -3,7 +3,8 @@ mod request;
 mod settings;
 mod warnings;
 
-pub(crate) use completion::SkillRefresh;
+pub(crate) use completion::SkillRefreshCompletion;
+pub(crate) use completion::finish_refresh;
 pub(crate) use completion::refresh;
 pub(crate) use request::load_selection;
 pub(crate) use request::set_enablement;

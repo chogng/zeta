@@ -21,6 +21,7 @@ use std::time::Duration;
 use zeta_app_server_client::AppServerEvents;
 
 const EVENT_QUEUE_CAPACITY: usize = 1_024;
+const TERMINAL_BURST_LIMIT: usize = 8;
 
 pub(super) enum RuntimeEvent {
     Terminal(TerminalEvent),
@@ -66,14 +67,14 @@ impl EventPump {
             if matches!(event, TerminalEvent::Tick) {
                 terminal_queue.push_tick(&terminal_stop)
             } else {
-                terminal_queue.push_priority(RuntimeEvent::Terminal(event), &terminal_stop)
+                terminal_queue.push_terminal(RuntimeEvent::Terminal(event), &terminal_stop)
             }
         })?;
 
         let client_queue = Arc::clone(&queue);
         let client_stop = Arc::clone(&stop);
         let client = match ClientEventSource::start(events, Arc::clone(&stop), move |event| {
-            client_queue.push_client(RuntimeEvent::Client(event), &client_stop)
+            client_queue.push_client(event, &client_stop)
         }) {
             Ok(client) => client,
             Err(error) => {
@@ -201,21 +202,28 @@ struct RuntimeQueue {
 
 #[derive(Default)]
 struct RuntimeQueueState {
-    priority: VecDeque<RuntimeEvent>,
-    client: VecDeque<RuntimeEvent>,
+    terminal: VecDeque<RuntimeEvent>,
+    client_control: VecDeque<RuntimeEvent>,
+    client_data: VecDeque<RuntimeEvent>,
     process_resources: Option<ProcessResourcesReading>,
     tick_pending: bool,
     termination_requested: bool,
     closed: bool,
+    terminal_burst: usize,
+    next_nonterminal: NonTerminalLane,
 }
 
 impl RuntimeQueue {
-    fn push_priority(&self, event: RuntimeEvent, stop: &AtomicBool) -> bool {
-        self.push(event, stop, QueueLane::Priority)
+    fn push_terminal(&self, event: RuntimeEvent, stop: &AtomicBool) -> bool {
+        self.push(event, stop, QueueLane::Terminal)
     }
 
-    fn push_client(&self, event: RuntimeEvent, stop: &AtomicBool) -> bool {
-        self.push(event, stop, QueueLane::Client)
+    fn push_client(&self, event: ClientEvent, stop: &AtomicBool) -> bool {
+        let lane = match event {
+            ClientEvent::ThreadTranscriptUpdated(_) => QueueLane::ClientData,
+            _ => QueueLane::ClientControl,
+        };
+        self.push(RuntimeEvent::Client(event), stop, lane)
     }
 
     fn push_process_resources(&self, reading: ProcessResourcesReading, stop: &AtomicBool) -> bool {
@@ -238,8 +246,8 @@ impl RuntimeQueue {
         let mut state = self.state.lock().unwrap();
         let mut event = event;
         loop {
-            if matches!(lane, QueueLane::Priority) {
-                match coalesce_pointer_input(&mut state.priority, event) {
+            if matches!(lane, QueueLane::Terminal) {
+                match coalesce_pointer_input(&mut state.terminal, event) {
                     Some(pending) => event = pending,
                     None => {
                         self.available.notify_one();
@@ -364,8 +372,9 @@ fn mouse_kind(event: &RuntimeEvent) -> Option<MouseEventKind> {
 impl RuntimeQueueState {
     fn is_empty(&self) -> bool {
         !self.termination_requested
-            && self.priority.is_empty()
-            && self.client.is_empty()
+            && self.terminal.is_empty()
+            && self.client_control.is_empty()
+            && self.client_data.is_empty()
             && self.process_resources.is_none()
             && !self.tick_pending
             && !self.closed
@@ -375,17 +384,48 @@ impl RuntimeQueueState {
         if std::mem::take(&mut self.termination_requested) {
             return Some(RuntimeEvent::TerminationRequested);
         }
-        if let Some(event) = self.priority.pop_front() {
+        let has_nonterminal = !self.client_control.is_empty()
+            || !self.client_data.is_empty()
+            || self.process_resources.is_some()
+            || self.tick_pending;
+        if self.terminal_burst < TERMINAL_BURST_LIMIT || !has_nonterminal {
+            if let Some(event) = self.terminal.pop_front() {
+                self.terminal_burst = self
+                    .terminal_burst
+                    .saturating_add(1)
+                    .min(TERMINAL_BURST_LIMIT);
+                return Some(event);
+            }
+        }
+        if let Some(event) = self.pop_nonterminal() {
+            self.terminal_burst = 0;
             return Some(event);
         }
-        if let Some(event) = self.client.pop_front() {
+        if let Some(event) = self.terminal.pop_front() {
+            self.terminal_burst = 1;
             return Some(event);
         }
-        if let Some(reading) = self.process_resources.take() {
-            return Some(RuntimeEvent::ProcessResources(reading));
-        }
-        if std::mem::take(&mut self.tick_pending) {
-            return Some(RuntimeEvent::Terminal(TerminalEvent::Tick));
+        None
+    }
+
+    fn pop_nonterminal(&mut self) -> Option<RuntimeEvent> {
+        let mut lane = self.next_nonterminal;
+        for _ in 0..NonTerminalLane::COUNT {
+            let event = match lane {
+                NonTerminalLane::ClientControl => self.client_control.pop_front(),
+                NonTerminalLane::ClientData => self.client_data.pop_front(),
+                NonTerminalLane::ProcessResources => self
+                    .process_resources
+                    .take()
+                    .map(RuntimeEvent::ProcessResources),
+                NonTerminalLane::Tick => std::mem::take(&mut self.tick_pending)
+                    .then_some(RuntimeEvent::Terminal(TerminalEvent::Tick)),
+            };
+            self.next_nonterminal = lane.next();
+            if event.is_some() {
+                return event;
+            }
+            lane = self.next_nonterminal;
         }
         None
     }
@@ -393,15 +433,39 @@ impl RuntimeQueueState {
 
 #[derive(Clone, Copy)]
 enum QueueLane {
-    Priority,
-    Client,
+    Terminal,
+    ClientControl,
+    ClientData,
 }
 
 impl QueueLane {
     fn queue<'a>(&self, state: &'a mut RuntimeQueueState) -> &'a mut VecDeque<RuntimeEvent> {
         match self {
-            Self::Priority => &mut state.priority,
-            Self::Client => &mut state.client,
+            Self::Terminal => &mut state.terminal,
+            Self::ClientControl => &mut state.client_control,
+            Self::ClientData => &mut state.client_data,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+enum NonTerminalLane {
+    #[default]
+    ClientControl,
+    ClientData,
+    ProcessResources,
+    Tick,
+}
+
+impl NonTerminalLane {
+    const COUNT: usize = 4;
+
+    fn next(self) -> Self {
+        match self {
+            Self::ClientControl => Self::ClientData,
+            Self::ClientData => Self::ProcessResources,
+            Self::ProcessResources => Self::Tick,
+            Self::Tick => Self::ClientControl,
         }
     }
 }

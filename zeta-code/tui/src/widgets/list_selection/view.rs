@@ -24,26 +24,6 @@ use unicode_width::UnicodeWidthStr;
 const ITEM_STATE_COLUMN_WIDTH: u16 = 2;
 const ITEM_COLUMN_GAP: u16 = 4;
 
-#[cfg(test)]
-pub(crate) fn draw_test_surface(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    view: &ListSelectionState,
-    context: RenderContext<'_>,
-) {
-    let content = crate::render::horizontal_margin(area, 2);
-    let tab_rows = view.tab_rows(content.width);
-    let tabs = Rect::new(content.x, content.y, content.width, tab_rows);
-    let body = Rect::new(
-        content.x,
-        content.y.saturating_add(tab_rows),
-        content.width,
-        content.height.saturating_sub(tab_rows),
-    );
-    draw_tabs(frame, tabs, view, None, None, context);
-    draw_body_with_pointer(frame, body, view, false, false, None, None, context);
-}
-
 pub(crate) fn draw_tabs(
     frame: &mut Frame<'_>,
     area: Rect,

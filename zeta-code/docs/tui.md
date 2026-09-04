@@ -89,7 +89,8 @@ zeta-code/tui/
 │   │   ├── command_panel.rs
 │   │   ├── recovery.rs
 │   │   ├── redraw.rs
-│   │   └── requests.rs
+│   │   ├── requests.rs
+│   │   └── startup.rs
 │   ├── thread.rs / thread/
 │   │   ├── completion.rs
 │   │   ├── state.rs
@@ -111,7 +112,7 @@ zeta-code/tui/
 │   │   │   ├── exec.rs
 │   │   │   ├── markdown.rs
 │   │   │   ├── cache.rs
-│   │   │   ├── projection.rs
+│   │   │   ├── model.rs
 │   │   │   ├── state.rs
 │   │   │   ├── view.rs
 │   │   │   └── batch.rs

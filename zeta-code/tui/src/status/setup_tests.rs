@@ -63,10 +63,14 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
 
     terminal
         .draw(|frame| {
-            crate::widgets::list_selection::draw_test_surface(
+            crate::widgets::list_selection::draw_body_with_pointer(
                 frame,
-                frame.area(),
+                crate::render::horizontal_margin(frame.area(), 2),
                 &state,
+                false,
+                false,
+                None,
+                None,
                 test_context(),
             )
         })

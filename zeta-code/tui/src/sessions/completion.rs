@@ -22,6 +22,16 @@ pub(crate) struct ManagerSessionCompletion {
     pub(crate) turn: TurnStartCompletion,
 }
 
+/// Result of one asynchronous Session or active-conversation operation.
+pub(crate) enum SessionCompletion {
+    Changed {
+        command: String,
+        result: Result<ConversationCompletion, String>,
+    },
+    ThreadChanged(Result<ConversationCompletion, String>),
+    ManagerCreated(Result<ManagerSessionCompletion, String>),
+}
+
 pub(crate) fn finish_conversation_request(
     client: &mut AppServerRequestHandle,
     conversation: ActiveConversation,

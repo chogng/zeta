@@ -19,13 +19,44 @@ fn detail_scroll_is_bounded_and_supports_first_and_last_shortcuts() {
         vec![DetailListRow::new("stdout", "one\ntwo\nthree")],
     );
     let mut overlay = DetailOverlay::new(detail);
+    let available = ratatui::layout::Rect::new(0, 0, 20, 4);
 
-    overlay.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL));
-    assert_eq!(overlay.scroll, overlay.max_scroll());
-    overlay.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
-    assert_eq!(overlay.scroll, overlay.max_scroll());
-    overlay.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL));
+    overlay.handle_key(
+        KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL),
+        available,
+    );
+    let end = overlay.scroll;
+    assert!(end > 0);
+    overlay.handle_key(
+        KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE),
+        available,
+    );
+    assert_eq!(overlay.scroll, end);
+    overlay.handle_key(
+        KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL),
+        available,
+    );
     assert_eq!(overlay.scroll, 0);
+}
+
+#[test]
+fn wrapped_content_uses_the_same_width_for_height_and_scroll() {
+    let detail = DetailList::new(
+        "Output",
+        vec![DetailListRow::new(
+            "stdout",
+            "a result that wraps across several narrow terminal rows",
+        )],
+    );
+    let mut overlay = DetailOverlay::new(detail);
+    let available = ratatui::layout::Rect::new(0, 0, 18, 5);
+
+    overlay.handle_key(
+        KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL),
+        available,
+    );
+
+    assert!(overlay.scroll > 0);
 }
 
 #[test]

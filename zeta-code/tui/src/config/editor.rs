@@ -9,6 +9,7 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionOutcome;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::text_prompt::TextPrompt;
 use crate::widgets::text_prompt::TextPromptOutcome;
@@ -73,10 +74,7 @@ impl fmt::Debug for ProviderApiKeyEdit {
     }
 }
 
-pub(crate) struct ConfigChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
-}
+pub(crate) type ConfigChoices = ListSelectionSpec<ConfigSelectionAction>;
 
 pub(crate) struct ProviderApiKeyPrompt {
     pub(crate) spec: TextPromptSpec,

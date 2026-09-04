@@ -169,13 +169,13 @@ impl TranscriptCell {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct TranscriptProjection {
+pub(crate) struct TranscriptModel {
     cells: Vec<TranscriptCell>,
     next_local_id: u64,
     next_render_revision: u64,
 }
 
-impl TranscriptProjection {
+impl TranscriptModel {
     pub(in crate::thread) fn replace(&mut self, snapshot: ThreadTranscriptSnapshot) {
         self.cells.clear();
         for entry in snapshot.entries {
@@ -227,6 +227,28 @@ impl TranscriptProjection {
                 )
             })
             .collect()
+    }
+
+    pub(in crate::thread) fn has_user_message(&self) -> bool {
+        self.cells.iter().any(|cell| {
+            matches!(
+                &cell.body,
+                TranscriptCellBody::Message {
+                    role: MessageRole::User,
+                    ..
+                }
+            )
+        })
+    }
+
+    pub(in crate::thread) fn latest_agent_response(&self) -> Option<&str> {
+        self.cells.iter().rev().find_map(|cell| match &cell.body {
+            TranscriptCellBody::Message {
+                role: MessageRole::Agent,
+                text,
+            } => Some(text.as_str()),
+            _ => None,
+        })
     }
 
     pub(in crate::thread) fn cells(&self) -> &[TranscriptCell] {
@@ -663,5 +685,5 @@ fn bounded_preview(text: &str, max_lines: usize) -> String {
 }
 
 #[cfg(test)]
-#[path = "projection_tests.rs"]
+#[path = "model_tests.rs"]
 mod tests;

@@ -31,6 +31,7 @@ pub(crate) use input::draw_chat_input;
 pub(crate) use input::draw_completion;
 pub(crate) use steer::Steer;
 pub(crate) use steer::SteerId;
+pub(crate) use steer::SteerSource;
 pub(crate) use submission::ChatComposer;
 pub(crate) use submission::ChatComposerOutcome;
 pub(crate) use submission::ChatComposerView;

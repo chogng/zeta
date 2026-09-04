@@ -3,6 +3,7 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use std::collections::BTreeMap;
 use zeta_protocol::Thread;
@@ -17,10 +18,7 @@ pub(crate) enum RewindSelectionAction {
     },
 }
 
-pub(crate) struct RewindChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, RewindSelectionAction>,
-}
+pub(crate) type RewindChoices = ListSelectionSpec<RewindSelectionAction>;
 
 pub(crate) fn rewind_choices(thread: &Thread) -> RewindChoices {
     let checkpoints = thread

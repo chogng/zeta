@@ -1,4 +1,3 @@
-use super::command::SteerSource;
 use crate::config::ConfigChoices;
 use crate::config::ConfigEditResult;
 use crate::config::TerminalSettings;
@@ -21,6 +20,7 @@ use crate::theme::ThemeChoices;
 use crate::thread::ThreadRequestIdentity;
 use crate::thread::TurnActivity;
 use crate::thread::composer::SteerId;
+use crate::thread::composer::SteerSource;
 use crate::thread::interaction::approval::Approval;
 use crate::thread::interaction::query::Query;
 use crate::thread::queue::QueueId;

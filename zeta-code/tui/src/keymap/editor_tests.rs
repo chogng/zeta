@@ -108,10 +108,14 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
 
     terminal
         .draw(|frame| {
-            crate::widgets::list_selection::draw_test_surface(
+            crate::widgets::list_selection::draw_body_with_pointer(
                 frame,
-                frame.area(),
+                crate::render::horizontal_margin(frame.area(), 2),
                 &state,
+                false,
+                false,
+                None,
+                None,
                 test_context(),
             )
         })

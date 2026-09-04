@@ -10,6 +10,7 @@ pub(crate) use active::ConversationTranscript;
 pub(crate) use active::ResumeOutcome;
 pub(crate) use completion::ConversationCompletion;
 pub(crate) use completion::ManagerSessionCompletion;
+pub(crate) use completion::SessionCompletion;
 pub(crate) use completion::create_manager_session_and_start;
 pub(crate) use completion::finish_conversation_request;
 pub(crate) use manager::SessionManagerPointerTarget;

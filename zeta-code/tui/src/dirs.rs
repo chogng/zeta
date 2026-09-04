@@ -3,6 +3,7 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -24,10 +25,7 @@ pub(crate) enum DirSelectionAction {
     SetPermissions(SessionDirPermissionsSetParams),
 }
 
-pub(crate) struct DirChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, DirSelectionAction>,
-}
+pub(crate) type DirChoices = ListSelectionSpec<DirSelectionAction>;
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,

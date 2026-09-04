@@ -12,7 +12,6 @@ mod models;
 mod render;
 mod sessions;
 mod skills;
-mod startup;
 mod status;
 mod terminal;
 #[cfg(test)]

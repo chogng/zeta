@@ -1,7 +1,6 @@
 use super::ActiveConversation;
 use super::App;
 use super::AppEvent;
-use super::command::SteerSource;
 use super::dispatch::ProductCommandOutput;
 use crate::config;
 use crate::keymap;
@@ -11,28 +10,21 @@ use crate::sessions::ConversationChange;
 use crate::sessions::ConversationCompletion;
 use crate::sessions::ConversationTranscript;
 use crate::sessions::ManagerSessionCompletion;
-use crate::skills::SkillRefresh;
-use crate::skills::skill_choices;
+use crate::sessions::SessionCompletion;
+use crate::skills::SkillRefreshCompletion;
 use crate::status::StatusLineSettings;
 use crate::thread::ActiveTurnUpdate;
-use crate::thread::LatestThreadSnapshot;
-use crate::thread::OlderThreadHistoryPage;
-use crate::thread::ThreadRequestIdentity;
+use crate::thread::ThreadCompletion;
 use crate::thread::ThreadRequestScope;
 use crate::thread::ThreadSubscription;
 use crate::thread::ThreadSwitch;
 use crate::thread::TurnStartCompletion;
-use crate::thread::composer::ChatInputCatalog;
-use crate::thread::composer::SteerId;
-use crate::thread::composer::chat_input_catalog_snapshot;
 use crate::thread::queue::QueueId;
 use std::time::Instant;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
-use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
-use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
 use zeta_protocol::Thread;
 #[cfg(test)]
 use zeta_protocol::Turn;
@@ -40,87 +32,27 @@ use zeta_protocol::TurnId;
 
 pub(super) enum Completion {
     ConfigRefreshed(Result<ConfigReadResult, String>),
-    ConversationChanged {
-        command: String,
-        result: Result<ConversationCompletion, String>,
-    },
-    ThreadChanged(Result<ConversationCompletion, String>),
-    ManagerSessionCreated(Result<ManagerSessionCompletion, String>),
+    Sessions(SessionCompletion),
     ProductCommand(Result<ProductCommandCompletion, String>),
     Presentation(Result<AppEvent, String>),
     PreferredModelUpdated {
         command: String,
         result: Result<models::PreferredModelUpdate, String>,
     },
-    SkillsRefreshed(Result<SkillRefreshCompletion, String>),
+    Skills(Result<SkillRefreshCompletion, String>),
     ThemeUpdated {
         command: String,
         label: String,
         theme: RenderTheme,
         result: Result<(), String>,
     },
-    ThreadRequestResolved {
-        scope: ThreadRequestScope,
-        request: ThreadRequestIdentity,
-        result: Result<LatestThreadSnapshot, ClientError>,
-    },
-    ThreadRefreshed {
-        scope: ThreadRequestScope,
-        result: Result<LatestThreadSnapshot, ClientError>,
-    },
-    ThreadHistoryPage {
-        scope: ThreadRequestScope,
-        result: Result<OlderThreadHistoryPage, ClientError>,
-    },
-    TurnInterrupted {
-        scope: ThreadRequestScope,
-        result: Result<LatestThreadSnapshot, ClientError>,
-    },
-    TurnSteered {
-        scope: ThreadRequestScope,
-        source: SteerSource,
-        steer_id: SteerId,
-        result: Result<(TurnSteerResult, LatestThreadSnapshot), ClientError>,
-    },
-    TurnStarted {
-        scope: ThreadRequestScope,
-        result: TurnStartCompletion,
-    },
-    QueuedTurnStarted {
-        scope: ThreadRequestScope,
-        queue_id: QueueId,
-        result: TurnStartCompletion,
-    },
-}
-
-pub(super) struct SkillRefreshCompletion {
-    input_catalog: ChatInputCatalog,
-    choices: crate::skills::SkillChoices,
-}
-
-pub(super) fn finish_skill_refresh(
-    refresh: SkillRefresh,
-    server_slash_commands: &[SlashCommandDefinition],
-) -> Result<SkillRefreshCompletion, String> {
-    let input_catalog =
-        chat_input_catalog_snapshot(server_slash_commands, &refresh.catalog, &refresh.plugins)
-            .map_err(|error| error.to_string())?;
-    Ok(SkillRefreshCompletion {
-        input_catalog,
-        choices: skill_choices(&refresh.catalog),
-    })
+    Thread(ThreadCompletion),
 }
 
 impl Completion {
     fn thread_scope(&self) -> Option<&ThreadRequestScope> {
         match self {
-            Self::ThreadRequestResolved { scope, .. }
-            | Self::ThreadRefreshed { scope, .. }
-            | Self::ThreadHistoryPage { scope, .. }
-            | Self::TurnInterrupted { scope, .. }
-            | Self::TurnSteered { scope, .. }
-            | Self::TurnStarted { scope, .. }
-            | Self::QueuedTurnStarted { scope, .. } => Some(scope),
+            Self::Thread(completion) => Some(completion.scope()),
             _ => None,
         }
     }
@@ -173,7 +105,7 @@ pub(super) fn apply_request_completion(
         Completion::ConfigRefreshed(Err(error)) => {
             app.update(AppEvent::FailureReported(error));
         }
-        Completion::ManagerSessionCreated(Ok(ManagerSessionCompletion {
+        Completion::Sessions(SessionCompletion::ManagerCreated(Ok(ManagerSessionCompletion {
             conversation:
                 ConversationCompletion {
                     conversation: next_conversation,
@@ -182,7 +114,7 @@ pub(super) fn apply_request_completion(
                     switch,
                 },
             turn,
-        })) => {
+        }))) => {
             *conversation = next_conversation;
             *thread_subscription = subscription;
             finish_conversation_change(
@@ -195,15 +127,15 @@ pub(super) fn apply_request_completion(
             app.show_policy_tip(Instant::now());
             apply_turn_start_completion(turn, None, conversation, thread_subscription, app);
         }
-        Completion::ManagerSessionCreated(Err(error)) => {
+        Completion::Sessions(SessionCompletion::ManagerCreated(Err(error))) => {
             app.update(AppEvent::FailureReported(error));
         }
-        Completion::ThreadChanged(Ok(ConversationCompletion {
+        Completion::Sessions(SessionCompletion::ThreadChanged(Ok(ConversationCompletion {
             conversation: next_conversation,
             change,
             subscription,
             switch,
-        })) => {
+        }))) => {
             *conversation = next_conversation;
             *thread_subscription = subscription;
             finish_conversation_change(
@@ -214,10 +146,10 @@ pub(super) fn apply_request_completion(
                 ConversationCompletionPresentation::Notice,
             );
         }
-        Completion::ThreadChanged(Err(error)) => {
+        Completion::Sessions(SessionCompletion::ThreadChanged(Err(error))) => {
             app.update(AppEvent::FailureReported(error));
         }
-        Completion::ConversationChanged {
+        Completion::Sessions(SessionCompletion::Changed {
             command,
             result:
                 Ok(ConversationCompletion {
@@ -226,7 +158,7 @@ pub(super) fn apply_request_completion(
                     subscription,
                     switch,
                 }),
-        } => {
+        }) => {
             *conversation = next_conversation;
             *thread_subscription = subscription;
             finish_conversation_change(
@@ -237,9 +169,9 @@ pub(super) fn apply_request_completion(
                 ConversationCompletionPresentation::Command(command),
             );
         }
-        Completion::ConversationChanged {
+        Completion::Sessions(SessionCompletion::Changed {
             result: Err(error), ..
-        }
+        })
         | Completion::ProductCommand(Err(error))
         | Completion::Presentation(Err(error)) => {
             app.update(AppEvent::FailureReported(error));
@@ -300,7 +232,7 @@ pub(super) fn apply_request_completion(
         Completion::ThemeUpdated {
             result: Err(error), ..
         } => app.update(AppEvent::FailureReported(error)),
-        Completion::SkillsRefreshed(Ok(refresh)) => {
+        Completion::Skills(Ok(refresh)) => {
             app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {
                 app.update(AppEvent::SkillSettingsUpdated(refresh.choices));
@@ -310,29 +242,29 @@ pub(super) fn apply_request_completion(
                 ));
             }
         }
-        Completion::SkillsRefreshed(Err(error)) => {
+        Completion::Skills(Err(error)) => {
             if app.skills_view_is_active() {
                 app.update(AppEvent::FailureReported(error));
             }
         }
-        Completion::TurnStarted { result, .. } => {
+        Completion::Thread(ThreadCompletion::Started { result, .. }) => {
             apply_turn_start_completion(result, None, conversation, thread_subscription, app)
         }
-        Completion::QueuedTurnStarted {
+        Completion::Thread(ThreadCompletion::QueuedTurnStarted {
             queue_id, result, ..
-        } => apply_turn_start_completion(
+        }) => apply_turn_start_completion(
             result,
             Some(queue_id),
             conversation,
             thread_subscription,
             app,
         ),
-        Completion::TurnSteered {
+        Completion::Thread(ThreadCompletion::Steered {
             source,
             steer_id,
             result: Ok((steer, snapshot)),
             ..
-        } => {
+        }) => {
             app.update(AppEvent::SteerCompleted { source, steer_id });
             if snapshot.thread.sequence < conversation.thread_sequence().max(steer.sequence) {
                 return;
@@ -349,23 +281,23 @@ pub(super) fn apply_request_completion(
                 install_transcript.then_some(snapshot.transcript),
             );
         }
-        Completion::TurnSteered {
+        Completion::Thread(ThreadCompletion::Steered {
             source,
             steer_id,
             result: Err(error),
             ..
-        } => {
+        }) => {
             app.update(AppEvent::SteerSubmissionFailed {
                 source,
                 steer_id,
                 error: error.to_string(),
             });
         }
-        Completion::ThreadRequestResolved {
+        Completion::Thread(ThreadCompletion::RequestResolved {
             request,
             result: Ok(snapshot),
             ..
-        } => {
+        }) => {
             app.update(AppEvent::ThreadRequestResolved(request));
             if snapshot.thread.sequence < conversation.thread_sequence() {
                 return;
@@ -382,20 +314,20 @@ pub(super) fn apply_request_completion(
                 install_transcript.then_some(snapshot.transcript),
             );
         }
-        Completion::ThreadRequestResolved {
+        Completion::Thread(ThreadCompletion::RequestResolved {
             request,
             result: Err(error),
             ..
-        } => {
+        }) => {
             app.update(AppEvent::ThreadRequestSubmissionFailed {
                 request,
                 error: error.to_string(),
             });
         }
-        Completion::ThreadRefreshed {
+        Completion::Thread(ThreadCompletion::Refreshed {
             result: Ok(snapshot),
             ..
-        } => {
+        }) => {
             if snapshot.thread.sequence < conversation.thread_sequence() {
                 return;
             }
@@ -411,28 +343,28 @@ pub(super) fn apply_request_completion(
                 install_transcript.then_some(snapshot.transcript),
             );
         }
-        Completion::ThreadHistoryPage {
+        Completion::Thread(ThreadCompletion::HistoryPage {
             result: Ok(page), ..
-        } => {
+        }) => {
             thread_subscription.apply_history_page(&page.thread, page.boundary);
             app.update(AppEvent::ThreadTranscriptHistoryPageReceived(
                 page.transcript,
             ));
         }
-        Completion::ThreadHistoryPage {
+        Completion::Thread(ThreadCompletion::HistoryPage {
             result: Err(error), ..
-        } => {
+        }) => {
             app.update(AppEvent::FailureReported(error.to_string()));
         }
-        Completion::ThreadRefreshed {
+        Completion::Thread(ThreadCompletion::Refreshed {
             result: Err(error), ..
-        } => {
+        }) => {
             app.update(AppEvent::FailureReported(error.to_string()));
         }
-        Completion::TurnInterrupted {
+        Completion::Thread(ThreadCompletion::Interrupted {
             result: Ok(snapshot),
             ..
-        } => {
+        }) => {
             if snapshot.thread.sequence < conversation.thread_sequence() {
                 return;
             }
@@ -448,9 +380,9 @@ pub(super) fn apply_request_completion(
                 install_transcript.then_some(snapshot.transcript),
             );
         }
-        Completion::TurnInterrupted {
+        Completion::Thread(ThreadCompletion::Interrupted {
             result: Err(error), ..
-        } => {
+        }) => {
             app.update(AppEvent::InterruptFailed(error.to_string()));
         }
     }

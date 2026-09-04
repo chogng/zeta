@@ -5,6 +5,7 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -19,10 +20,7 @@ pub(crate) enum SessionSelectionAction {
     Resume { session_id: String },
 }
 
-pub(crate) struct SessionChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, SessionSelectionAction>,
-}
+pub(crate) type SessionChoices = ListSelectionSpec<SessionSelectionAction>;
 
 pub(crate) fn session_choices(sessions: &[Session], active_session_id: &str) -> SessionChoices {
     session_choices_at(sessions, active_session_id, current_unix_millis())

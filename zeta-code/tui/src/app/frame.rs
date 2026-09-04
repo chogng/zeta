@@ -192,7 +192,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     }
     draw_top_tip(frame, areas.session.top_tip, app, context);
     if let Some(overlay) = app.overlay() {
-        crate::widgets::overlay::draw(frame, transient_area(&areas), overlay, context);
+        crate::widgets::overlay::draw(frame, transient_area_from_layout(&areas), overlay, context);
     } else if completion_visible(app) {
         let hovered_composer = match hovered {
             Some(InputPointerTarget::Composer(target)) => Some(*target),
@@ -484,7 +484,7 @@ fn completion_area(areas: &FrameLayout) -> Rect {
     }
 }
 
-fn transient_area(areas: &FrameLayout) -> Rect {
+fn transient_area_from_layout(areas: &FrameLayout) -> Rect {
     Rect {
         x: areas.session.transcript.x,
         y: areas.session.transcript.y,
@@ -495,6 +495,10 @@ fn transient_area(areas: &FrameLayout) -> Rect {
             .y
             .saturating_sub(areas.session.transcript.y),
     }
+}
+
+pub(crate) fn transient_area(app: &App, terminal_area: Rect) -> Rect {
+    transient_area_from_layout(&layout(app, terminal_area))
 }
 
 fn completion_visible(app: &App) -> bool {

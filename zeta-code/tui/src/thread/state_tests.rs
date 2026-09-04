@@ -130,7 +130,8 @@ fn structured_turn_plan_is_rendered_by_the_tui() {
     state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
         ThreadTranscriptSnapshot::from_thread(&thread),
     ));
-    let plan = state.messages().last().unwrap();
+    let messages = state.messages();
+    let plan = messages.last().unwrap();
     assert_eq!(plan.role, MessageRole::Plan);
     assert_eq!(plan.text, "Implementation plan\n[x] inspect\n[>] change");
     assert_eq!(plan.cell_id.as_deref(), Some("entry:turn-plan:turn_1"));
@@ -149,8 +150,9 @@ fn command_completion_groups_the_command_with_its_result() {
         command: "/theme light".into(),
         result: "Theme set".into(),
     });
-    let message = state.messages().first().unwrap();
-    assert_eq!(state.messages().len(), 1);
+    let messages = state.messages();
+    let message = messages.first().unwrap();
+    assert_eq!(messages.len(), 1);
     assert_eq!(message.command_status, Some(CommandStatus::Succeeded));
     assert_eq!(message.execution_kind, ExecutionKind::LocalCommand);
     assert_eq!(message.detail.as_deref(), Some("Theme set"));

@@ -14,6 +14,7 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionOutcome;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 
 use super::KeymapCaptureMode;
@@ -40,10 +41,7 @@ pub(crate) enum KeymapAction {
     },
 }
 
-pub(crate) struct KeymapChoices {
-    pub(crate) model: ListSelectionModel,
-    pub(crate) actions: BTreeMap<ListSelectionItemId, KeymapAction>,
-}
+pub(crate) type KeymapChoices = ListSelectionSpec<KeymapAction>;
 
 #[derive(Debug)]
 pub(crate) struct KeymapEditor {
@@ -106,10 +104,6 @@ impl KeymapEditor {
             .expect("a keymap editor always has a selection page")
             .handle_key(key);
         self.apply_selection_outcome(outcome)
-    }
-
-    pub(crate) fn capture(&self) -> Option<&KeyCapture> {
-        self.capture.as_ref().map(|capture| &capture.view)
     }
 
     pub(crate) fn page(&self) -> KeymapEditorPage<'_> {
