@@ -70,7 +70,7 @@ fn built_in_palettes_keep_the_documented_semantic_colors() {
             Color::Rgb(242, 240, 255),
             Color::Rgb(216, 209, 255),
             Color::Rgb(229, 229, 229),
-            Color::Rgb(246, 248, 250),
+            Color::Rgb(240, 240, 240),
         ),
         (
             ThemePalette::colorblind_dark(),
@@ -90,7 +90,7 @@ fn built_in_palettes_keep_the_documented_semantic_colors() {
             Color::Rgb(238, 248, 255),
             Color::Rgb(182, 227, 255),
             Color::Rgb(229, 229, 229),
-            Color::Rgb(246, 248, 250),
+            Color::Rgb(240, 240, 240),
         ),
     ];
 

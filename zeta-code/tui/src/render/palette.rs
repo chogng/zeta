@@ -141,7 +141,7 @@ impl ThemePalette {
             screen_selection_foreground: ThemeRgb::new(0x0d, 0x11, 0x17),
             r#type: ThemeRgb::new(0x82, 0x50, 0xdf),
             transcript_jump_background: ThemeRgb::new(0xe5, 0xe5, 0xe5),
-            user_message_background: ThemeRgb::new(0xf6, 0xf8, 0xfa),
+            user_message_background: ThemeRgb::new(0xf0, 0xf0, 0xf0),
             variable: ThemeRgb::new(0x95, 0x38, 0x00),
             warning: ThemeRgb::new(0x95, 0x38, 0x00),
         }
