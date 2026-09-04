@@ -101,7 +101,7 @@ fn language_server_switch_uses_the_backend_config_authority_and_refreshes_the_ta
     assert_eq!(state.visible_items().len(), 1);
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("enabled  ·  C:\\tools\\rust-analyzer.exe [ ✔ ]")
+        Some("C:\\tools\\rust-analyzer.exe [ ✔ ]")
     );
 }
 

@@ -8,10 +8,21 @@ use zeta_config::LanguageServerModeConfig;
 use zeta_config::LanguageServersConfig;
 use zeta_lsp_server_provider::CSS_LANGUAGE_SERVER_ID;
 use zeta_lsp_server_provider::CssLanguageServerProvider;
+use zeta_lsp_server_provider::LanguageServerMode;
 use zeta_lsp_server_provider::LspServerProviders;
 use zeta_lsp_server_provider::ManagedNodeRuntime;
+use zeta_lsp_server_provider::RUST_ANALYZER_SERVER_ID;
 
 use super::configured_provider_definitions;
+use super::preference;
+
+#[test]
+fn unconfigured_builtin_language_server_is_disabled() {
+    assert_eq!(
+        preference(&LanguageServersConfig::default(), RUST_ANALYZER_SERVER_ID).mode(),
+        LanguageServerMode::Disabled
+    );
+}
 
 #[test]
 fn manually_injected_provider_requires_explicit_user_enablement() {
@@ -27,7 +38,7 @@ fn manually_injected_provider_requires_explicit_user_enablement() {
         .is_empty()
     );
 
-    let configuration = configuration(LanguageServerModeConfig::Automatic, None);
+    let configuration = configuration(LanguageServerModeConfig::Enabled, None);
     let definitions =
         configured_provider_definitions(&providers, &configuration, fixture.dir.path()).unwrap();
     assert_eq!(definitions.len(), 1);

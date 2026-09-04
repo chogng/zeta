@@ -53,7 +53,8 @@ pub(crate) use settings::StatusLineItem;
 pub(crate) use settings::StatusLineSettings;
 pub(crate) use settings_request::StatusLineEdit;
 pub(crate) use settings_request::StatusLineEditorUpdate;
-pub(crate) use settings_request::read_status_line;
+pub(crate) use settings_request::execute;
+#[cfg(test)]
 pub(crate) use settings_request::set_status_line;
 pub(crate) use setup::StatusLineChoices;
 pub(crate) use setup::StatusLineSelectionAction;

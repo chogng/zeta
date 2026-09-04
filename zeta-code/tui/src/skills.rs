@@ -21,7 +21,9 @@ pub(crate) enum Command {
 pub(crate) use completion::SkillRefreshCompletion;
 pub(crate) use completion::finish_refresh;
 pub(crate) use completion::refresh;
+pub(crate) use request::execute;
 pub(crate) use request::load_selection;
+#[cfg(test)]
 pub(crate) use request::set_enablement;
 pub(crate) use settings::SkillChoices;
 pub(crate) use settings::SkillSelectionAction;

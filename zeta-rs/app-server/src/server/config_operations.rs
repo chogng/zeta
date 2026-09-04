@@ -890,7 +890,6 @@ fn language_server_config_dto(config: LanguageServerConfig) -> LanguageServerCon
     LanguageServerConfigDto {
         mode: match config.mode {
             LanguageServerModeConfig::Disabled => LanguageServerModeDto::Disabled,
-            LanguageServerModeConfig::Automatic => LanguageServerModeDto::Automatic,
             LanguageServerModeConfig::Enabled => LanguageServerModeDto::Enabled,
         },
         executable: config
@@ -903,7 +902,6 @@ fn language_server_config_from_dto(config: LanguageServerConfigDto) -> LanguageS
     LanguageServerConfig {
         mode: match config.mode {
             LanguageServerModeDto::Disabled => LanguageServerModeConfig::Disabled,
-            LanguageServerModeDto::Automatic => LanguageServerModeConfig::Automatic,
             LanguageServerModeDto::Enabled => LanguageServerModeConfig::Enabled,
         },
         executable: config.executable.map(Into::into),

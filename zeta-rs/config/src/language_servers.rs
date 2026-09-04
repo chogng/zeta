@@ -55,7 +55,6 @@ impl<'de> Deserialize<'de> for LanguageServerId {
 pub enum LanguageServerModeConfig {
     Disabled,
     #[default]
-    Automatic,
     Enabled,
 }
 

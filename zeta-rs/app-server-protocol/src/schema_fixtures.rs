@@ -3,6 +3,7 @@ use crate::protocol::config::AgentGrepBackendDto;
 use crate::protocol::config::ApprovalReviewModelSelectionDto;
 use crate::protocol::config::ConfigUpdateParams;
 use crate::protocol::config::ExecPolicyRuleUpsertParams;
+use crate::protocol::config::LanguageServerModeDto;
 use crate::protocol::config::McpServerUpsertParams;
 use crate::protocol::config::SkillSourceAddParams;
 use crate::protocol::fs::FsChanged;
@@ -307,6 +308,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type SkillSourceConfigDto ="));
     assert!(typescript.contains("export type PluginRequestDto ="));
     assert!(typescript.contains("export type HookConfigDto ="));
+    assert!(typescript.contains("export type LanguageServerModeDto = \"disabled\" | \"enabled\";"));
     assert!(typescript.contains(r#""mcp/server/upsert": { method: "mcp/server/upsert" }"#));
     assert!(typescript.contains(r#""skill/source/add": { method: "skill/source/add" }"#));
     assert!(typescript.contains(r#""plugin/request/upsert": { method: "plugin/request/upsert" }"#));
@@ -666,6 +668,13 @@ fn schema_hash_is_stable_sha256_of_the_generated_schema() {
     assert_eq!(first, second);
     assert_eq!(first.len(), "sha256:".len() + 64);
     assert!(first.starts_with("sha256:"));
+}
+
+#[test]
+fn language_server_mode_rejects_automatic() {
+    assert!(
+        serde_json::from_value::<LanguageServerModeDto>(serde_json::json!("automatic")).is_err()
+    );
 }
 
 #[test]

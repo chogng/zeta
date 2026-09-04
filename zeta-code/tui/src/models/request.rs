@@ -1,3 +1,4 @@
+use super::Command;
 use super::ModelChoices;
 use super::ModelSummary;
 use super::model_choices;
@@ -13,6 +14,33 @@ use zeta_protocol::Patch;
 pub(crate) struct PreferredModelUpdate {
     pub(crate) summary: ModelSummary,
     pub(crate) notice: String,
+}
+
+impl Command {
+    pub(crate) const fn request_name(&self) -> &'static str {
+        match self {
+            Self::SetPreferred { .. } => "zeta-tui-set-preferred-model",
+        }
+    }
+
+    pub(crate) fn command_line(&self) -> String {
+        match self {
+            Self::SetPreferred { preference } => format!("/model {preference}"),
+        }
+    }
+}
+
+pub(crate) fn execute<T>(
+    client: &mut AppServerClient<T>,
+    command: Command,
+) -> Result<PreferredModelUpdate, String>
+where
+    T: JsonRpcTransport,
+{
+    match command {
+        Command::SetPreferred { preference } => set_preferred_model(client, &preference),
+    }
+    .map_err(|error| error.to_string())
 }
 
 pub(crate) fn load_selection<T>(

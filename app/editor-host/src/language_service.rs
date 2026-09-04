@@ -701,7 +701,6 @@ fn server_preference(
     };
     let preference = match config.mode {
         LanguageServerModeDto::Disabled => LanguageServerPreference::disabled(),
-        LanguageServerModeDto::Automatic => LanguageServerPreference::automatic(),
         LanguageServerModeDto::Enabled => LanguageServerPreference::enabled(),
     };
     if let Some(executable) = &config.executable {

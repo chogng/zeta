@@ -16,7 +16,7 @@ directory capability。
 | API / type | 当前职责 | 明确不做 |
 | --- | --- | --- |
 | `LspServerResolver` | 保存内置 server 与 preference，按 directory 生成一次冻结 resolution | 持有 live client 或自动重启 |
-| `LanguageServerPreference` / `LanguageServerMode` | 表达 Disabled、Automatic、Enabled 和 authoritative executable override | 用布尔值混合启用与发现语义 |
+| `LanguageServerPreference` / `LanguageServerMode` | 表达 Disabled、Enabled 和 authoritative executable override | 用布尔值混合启用与发现语义 |
 | `LanguageServerExecutionPolicy` | 接收产品宿主已经作出的 process allow/disallow 决策 | 自行读取或持久化 directory capability |
 | `LanguageServerExecutableCandidates` | 注入有优先级的冻结候选；`InstallContext` 是当前实现 | 搜索时启动或 probe 进程 |
 | `LspServerResolution` | 同时返回 resolved definitions 与每个内置 server 的 availability | 表示 server 已经 initialize |
@@ -29,7 +29,7 @@ directory capability。
 当前内置项包括 `rust-analyzer → rust`、`vscode-json-language-server --stdio → json/jsonc` 和
 `bash-language-server start → shellscript`。CSS 是独立 provider，不进入 PATH built-in 列表。Desktop/App Server 从
 Config snapshot 映射各自的持久化 preference；
-PATH built-in 未配置时使用 `Disabled`，需要显式选择 `Automatic` 或 `Enabled` 才会生成 definition；
+PATH built-in 未配置时使用 `Disabled`，需要显式选择 `Enabled` 才会生成 definition；
 activation-backed provider 的用户安装确认已经构成启用意图，未配置时生成 packaged definition，显式
 `Disabled` 才关闭。允许执行且冻结
 PATH 中存在可执行文件时生成 definition；否则保持无 server。显式 override 是 authoritative，失效时不会回退 PATH。
@@ -43,7 +43,7 @@ Product composition
 └─ LspServerResolver::resolve
    ├─ Disabled / disallowed → status only
    ├─ explicit path → validate exactly that path
-   └─ automatic → candidates in source order
+   └─ enabled → candidates in source order
       → canonicalize → regular file → executable permission
       → LanguageServerDefinition
       → zeta-lsp-manager
@@ -88,7 +88,7 @@ cargo test --manifest-path Cargo.toml -p zeta-lsp-server-provider
 cargo clippy --manifest-path Cargo.toml -p zeta-lsp-server-provider --all-targets -- -D warnings
 ```
 
-测试覆盖三项 built-in 的 Automatic PATH resolution/route/launch arguments、execution policy gate、
+测试覆盖三项 built-in 的 Enabled PATH resolution/route/launch arguments、execution policy gate、
 失效 explicit override 不回退，以及 CSS package 的 standalone/Electron runtime command、clean
 environment、host override 和 duplicate provider gate。
 

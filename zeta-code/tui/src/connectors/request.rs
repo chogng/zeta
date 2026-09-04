@@ -7,9 +7,35 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthStartPar
 use zeta_app_server_protocol::protocol::connectors::ConnectorDisconnectParams;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
 
+use super::Command;
 use super::ConnectorChoices;
+use super::Event;
 use super::connector_choices;
 use crate::client::new_command_id;
+
+impl Command {
+    pub(crate) const fn request_name(&self) -> &'static str {
+        match self {
+            Self::ConnectDeviceOAuth { .. } => "zeta-tui-connect-device-oauth",
+            Self::Disconnect { .. } => "zeta-tui-disconnect-connector",
+        }
+    }
+}
+
+pub(crate) fn execute<T>(client: &mut AppServerClient<T>, command: Command) -> Result<Event, String>
+where
+    T: JsonRpcTransport,
+{
+    match command {
+        Command::ConnectDeviceOAuth {
+            connector_id,
+            connection_generation,
+        } => connect_device_oauth(client, connector_id, connection_generation),
+        Command::Disconnect { connector_id } => disconnect(client, connector_id),
+    }
+    .map(Event::PickerUpdated)
+    .map_err(|error| error.to_string())
+}
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,

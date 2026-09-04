@@ -390,12 +390,7 @@ fn language_servers(
             .language_servers
             .iter()
             .map(|(server_id, server)| {
-                let enabled = server.mode != LanguageServerModeDto::Disabled;
-                let mode = match server.mode {
-                    LanguageServerModeDto::Disabled => "disabled",
-                    LanguageServerModeDto::Automatic => "automatic",
-                    LanguageServerModeDto::Enabled => "enabled",
-                };
+                let enabled = server.mode == LanguageServerModeDto::Enabled;
                 let id = ListSelectionItemId::new(format!("language-server-{server_id}"));
                 let mut next_config = server.clone();
                 next_config.mode = if enabled {
@@ -411,11 +406,7 @@ fn language_servers(
                         config: next_config,
                     }),
                 );
-                let description = server
-                    .executable
-                    .as_deref()
-                    .map(|executable| format!("{mode}  ·  {executable}"))
-                    .unwrap_or_else(|| mode.into());
+                let description = server.executable.as_deref().unwrap_or_default();
                 ListSelectionItem::new(server_id).with_id(id).with_columns(
                     server_id,
                     description,

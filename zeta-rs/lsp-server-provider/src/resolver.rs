@@ -30,7 +30,6 @@ impl LanguageServerExecutableCandidates for InstallContext {
 pub enum LanguageServerMode {
     Disabled,
     #[default]
-    Automatic,
     Enabled,
 }
 
@@ -57,13 +56,6 @@ impl LanguageServerPreference {
         }
     }
 
-    pub fn automatic() -> Self {
-        Self {
-            mode: LanguageServerMode::Automatic,
-            explicit_executable: None,
-        }
-    }
-
     pub fn enabled() -> Self {
         Self {
             mode: LanguageServerMode::Enabled,
@@ -83,7 +75,7 @@ impl LanguageServerPreference {
 
 impl Default for LanguageServerPreference {
     fn default() -> Self {
-        Self::automatic()
+        Self::enabled()
     }
 }
 

@@ -1,3 +1,5 @@
+use super::Command;
+use super::Event;
 use super::McpChoices;
 use super::mcp_choices;
 use crate::client::new_command_id;
@@ -6,6 +8,28 @@ use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::config::McpServerSetEnablementParams;
+
+impl Command {
+    pub(crate) const fn request_name(&self) -> &'static str {
+        match self {
+            Self::SetEnablement { .. } => "zeta-tui-set-mcp-enablement",
+        }
+    }
+}
+
+pub(crate) fn execute<T>(client: &mut AppServerClient<T>, command: Command) -> Result<Event, String>
+where
+    T: JsonRpcTransport,
+{
+    match command {
+        Command::SetEnablement {
+            server_id,
+            enablement,
+        } => set_enablement(client, server_id, enablement),
+    }
+    .map(Event::SettingsUpdated)
+    .map_err(|error| error.to_string())
+}
 
 pub(crate) fn load_selection<T>(client: &mut AppServerClient<T>) -> Result<McpChoices, ClientError>
 where

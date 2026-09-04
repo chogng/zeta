@@ -21,6 +21,15 @@ pub(crate) enum Command {
     Edit(KeymapEdit),
 }
 
+impl Command {
+    pub(crate) const fn request_name(&self) -> &'static str {
+        match self {
+            Self::OpenEditor => "zeta-tui-read-keymap",
+            Self::Edit(_) => "zeta-tui-set-keymap",
+        }
+    }
+}
+
 use bindings::AppKeymapCondition;
 use chords::PendingChord;
 use zeta_keybinding::BindingSet;
@@ -54,6 +63,20 @@ pub(crate) use settings::fixed_shortcuts;
 pub(crate) use settings::read_keymap;
 pub(crate) use settings::set_keymap;
 pub(crate) use settings::settings_from_tui;
+
+pub(crate) fn execute<T>(
+    client: &mut zeta_app_server_client::AppServerClient<T>,
+    command: Command,
+) -> Result<Event, String>
+where
+    T: zeta_app_server_client::JsonRpcTransport,
+{
+    match command {
+        Command::OpenEditor => read_keymap(client),
+        Command::Edit(edit) => set_keymap(client, edit),
+    }
+    .map(Event::EditorOpened)
+}
 
 /// Application-level shortcuts that sit above individual TUI components.
 #[derive(Debug)]

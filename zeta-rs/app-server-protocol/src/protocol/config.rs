@@ -261,7 +261,6 @@ pub struct HookConfigDto {
 #[serde(rename_all = "camelCase")]
 pub enum LanguageServerModeDto {
     Disabled,
-    Automatic,
     Enabled,
 }
 

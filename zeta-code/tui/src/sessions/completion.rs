@@ -1,5 +1,8 @@
 use super::ActiveConversation;
+use super::Command;
 use super::ConversationChange;
+use super::ResumeOutcome;
+use super::archive;
 use crate::thread::ThreadRequestScope;
 use crate::thread::ThreadSubscription;
 use crate::thread::ThreadSwitch;
@@ -9,6 +12,7 @@ use crate::thread::start_turn_and_read;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::Session;
 
 pub(crate) struct ConversationCompletion {
     pub(crate) conversation: ActiveConversation,
@@ -24,12 +28,159 @@ pub(crate) struct ManagerSessionCompletion {
 
 /// Result of one asynchronous Session or active-conversation operation.
 pub(crate) enum SessionCompletion {
+    Catalog(Result<Vec<Session>, String>),
     Changed {
         command: String,
         result: Result<ConversationCompletion, String>,
     },
     ThreadChanged(Result<ConversationCompletion, String>),
     ManagerCreated(Result<ManagerSessionCompletion, String>),
+}
+
+pub(crate) enum CommandRequest {
+    Resume {
+        client: AppServerRequestHandle,
+        conversation: ActiveConversation,
+        subscription: ThreadSubscription,
+        session_id: String,
+        preferred_thread_id: Option<zeta_protocol::ThreadId>,
+    },
+    Archive {
+        client: AppServerRequestHandle,
+        session_ids: Vec<zeta_protocol::SessionId>,
+    },
+    CreateAndEnter {
+        client: AppServerRequestHandle,
+        conversation: ActiveConversation,
+        subscription: ThreadSubscription,
+        submission: ChatSubmission,
+        approval_mode: ApprovalMode,
+    },
+    SwitchThread {
+        client: AppServerRequestHandle,
+        conversation: ActiveConversation,
+        subscription: ThreadSubscription,
+        thread_id: zeta_protocol::ThreadId,
+    },
+}
+
+impl Command {
+    pub(crate) fn command_line(&self) -> Option<String> {
+        match self {
+            Self::Resume { session_id, .. } => Some(format!("/resume {session_id}")),
+            Self::Archive { .. } | Self::CreateAndEnter { .. } | Self::SwitchThread { .. } => None,
+        }
+    }
+}
+
+impl CommandRequest {
+    pub(crate) const fn name(&self) -> &'static str {
+        match self {
+            Self::Resume { .. } => "zeta-tui-resume-session",
+            Self::Archive { .. } => "zeta-tui-archive-sessions",
+            Self::CreateAndEnter { .. } => "zeta-tui-create-manager-session",
+            Self::SwitchThread { .. } => "zeta-tui-switch-thread",
+        }
+    }
+
+    pub(crate) fn execute(self) -> SessionCompletion {
+        match self {
+            Self::Resume {
+                mut client,
+                mut conversation,
+                subscription,
+                session_id,
+                preferred_thread_id,
+            } => {
+                let command = format!("/resume {session_id}");
+                let result = match conversation.resume_session(
+                    &mut client,
+                    &session_id,
+                    preferred_thread_id.as_ref(),
+                ) {
+                    Ok(ResumeOutcome::Changed(change)) => {
+                        finish_conversation_request(&mut client, conversation, subscription, change)
+                    }
+                    Ok(ResumeOutcome::Listed(_)) => {
+                        Err("resume selection did not identify a session".into())
+                    }
+                    Err(error) => Err(error.to_string()),
+                };
+                SessionCompletion::Changed { command, result }
+            }
+            Self::Archive {
+                mut client,
+                session_ids,
+            } => SessionCompletion::Catalog(
+                archive(&mut client, session_ids).map_err(|error| error.to_string()),
+            ),
+            Self::CreateAndEnter {
+                client,
+                conversation,
+                subscription,
+                submission,
+                approval_mode,
+            } => SessionCompletion::ManagerCreated(create_manager_session_and_start(
+                client,
+                conversation,
+                subscription,
+                submission,
+                approval_mode,
+            )),
+            Self::SwitchThread {
+                mut client,
+                mut conversation,
+                subscription,
+                thread_id,
+            } => {
+                let result = conversation
+                    .select_thread(&mut client, thread_id)
+                    .map_err(|error| error.to_string())
+                    .and_then(|change| {
+                        finish_conversation_request(&mut client, conversation, subscription, change)
+                    });
+                SessionCompletion::ThreadChanged(result)
+            }
+        }
+    }
+}
+
+pub(crate) fn prepare_command(
+    client: AppServerRequestHandle,
+    conversation: &ActiveConversation,
+    subscription: &ThreadSubscription,
+    approval_mode: ApprovalMode,
+    command: Command,
+) -> CommandRequest {
+    match command {
+        Command::Resume {
+            session_id,
+            preferred_thread_id,
+        } => CommandRequest::Resume {
+            client,
+            conversation: conversation.clone(),
+            subscription: subscription.clone(),
+            session_id,
+            preferred_thread_id,
+        },
+        Command::Archive { session_ids } => CommandRequest::Archive {
+            client,
+            session_ids,
+        },
+        Command::CreateAndEnter { submission } => CommandRequest::CreateAndEnter {
+            client,
+            conversation: conversation.clone(),
+            subscription: subscription.clone(),
+            submission,
+            approval_mode,
+        },
+        Command::SwitchThread { thread_id } => CommandRequest::SwitchThread {
+            client,
+            conversation: conversation.clone(),
+            subscription: subscription.clone(),
+            thread_id,
+        },
+    }
 }
 
 pub(crate) fn finish_conversation_request(

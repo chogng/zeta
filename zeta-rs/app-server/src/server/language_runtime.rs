@@ -8,7 +8,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use zeta_async_utils::CancellationToken;
-use zeta_config::LanguageServerConfig;
 use zeta_config::LanguageServerModeConfig;
 use zeta_config::LanguageServersConfig;
 use zeta_install_context::InstallContext;
@@ -637,15 +636,15 @@ impl Drop for AppServerLanguageRuntime {
 }
 
 fn preference(configuration: &LanguageServersConfig, server_id: &str) -> LanguageServerPreference {
-    let configured = configuration
+    let Some(configured) = configuration
         .servers
         .iter()
-        .find_map(|(id, config)| (id.as_str() == server_id).then_some(config));
-    let default = LanguageServerConfig::default();
-    let configured = configured.unwrap_or(&default);
+        .find_map(|(id, config)| (id.as_str() == server_id).then_some(config))
+    else {
+        return LanguageServerPreference::disabled();
+    };
     let preference = match configured.mode {
         LanguageServerModeConfig::Disabled => LanguageServerPreference::disabled(),
-        LanguageServerModeConfig::Automatic => LanguageServerPreference::automatic(),
         LanguageServerModeConfig::Enabled => LanguageServerPreference::enabled(),
     };
     configured

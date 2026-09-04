@@ -1,5 +1,6 @@
 use super::App;
 use super::AppCommand;
+use super::AppEvent;
 use super::completion::Completion;
 use crate::client;
 use crate::config::Command as ConfigCommand;
@@ -70,6 +71,23 @@ impl RequestTasks {
                 "could not start background request: {error}"
             ))),
         }
+    }
+
+    pub(super) fn spawn_presentation<E>(
+        &mut self,
+        key: Option<RequestKey>,
+        name: &'static str,
+        request: impl FnOnce() -> Result<E, String> + Send + 'static,
+        app: &mut App,
+    ) where
+        E: Into<AppEvent>,
+    {
+        self.spawn(
+            key,
+            name,
+            move || Completion::Presentation(request().map(Into::into)),
+            app,
+        );
     }
 
     pub(super) fn poll(&mut self) -> Vec<Result<Completion, std::io::Error>> {

@@ -1,0 +1,447 @@
+mod command;
+#[cfg(test)]
+mod tests;
+
+use super::App;
+use super::AppCommand;
+use super::AppEvent;
+use super::completion::Completion;
+use super::completion::apply_request_completion;
+use super::requests::RequestKey;
+use super::requests::RequestTasks;
+use super::requests::request_key;
+use crate::client;
+use crate::connectors;
+use crate::host::Command as HostCommand;
+use crate::sessions;
+use crate::sessions::ActiveConversation;
+use crate::sessions::Event as SessionEvent;
+use crate::skills;
+use crate::skills::finish_refresh;
+use crate::status::Event as StatusEvent;
+use crate::theme::ThemeResource;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
+use crate::thread::ThreadCompletion;
+use crate::thread::ThreadRequestScope;
+use crate::thread::ThreadSubscription;
+use crate::thread::ThreadUpdateDisposition;
+use crate::thread::TranscriptUpdateDisposition;
+use crate::thread::composer::file_search::FileSearchManager;
+use crate::thread::interaction::approval::Approval;
+use crate::thread::interaction::query::Query;
+use crate::thread::read_thread_history;
+use std::collections::VecDeque;
+use std::path::PathBuf;
+use zeta_app_server_client::AppServerRequestHandle;
+use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
+
+pub(super) enum CommandEffect {
+    None,
+    Quit,
+    Suspend,
+}
+
+#[derive(Default)]
+struct ServerRefresh {
+    config: bool,
+    connectors: bool,
+    sessions: bool,
+    thread: bool,
+    skills: bool,
+}
+
+impl ServerRefresh {
+    fn merge(&mut self, refresh: Self) {
+        self.config |= refresh.config;
+        self.connectors |= refresh.connectors;
+        self.sessions |= refresh.sessions;
+        self.thread |= refresh.thread;
+        self.skills |= refresh.skills;
+    }
+}
+
+/// Owns the client-bound state and background work for one visible TUI session.
+pub(super) struct AppDriver {
+    app: App,
+    client: AppServerRequestHandle,
+    conversation: ActiveConversation,
+    thread_subscription: ThreadSubscription,
+    requests: RequestTasks,
+    queued_commands: VecDeque<AppCommand>,
+    refresh: ServerRefresh,
+    queued_turn_dispatch_requested: bool,
+    file_search: Option<FileSearchManager>,
+    host_dir_root: PathBuf,
+    theme_resource: ThemeResource,
+    server_slash_commands: Vec<SlashCommandDefinition>,
+    plugins_enabled: bool,
+}
+
+pub(super) struct AppDriverResources {
+    pub(super) file_search: Option<FileSearchManager>,
+    pub(super) host_dir_root: PathBuf,
+    pub(super) theme_resource: ThemeResource,
+    pub(super) server_slash_commands: Vec<SlashCommandDefinition>,
+    pub(super) plugins_enabled: bool,
+}
+
+impl AppDriver {
+    pub(super) fn new(
+        app: App,
+        client: AppServerRequestHandle,
+        conversation: ActiveConversation,
+        thread_subscription: ThreadSubscription,
+        resources: AppDriverResources,
+    ) -> Self {
+        Self {
+            app,
+            client,
+            conversation,
+            thread_subscription,
+            requests: RequestTasks::default(),
+            queued_commands: VecDeque::from([AppCommand::from(
+                HostCommand::RefreshClipboardImageAvailability,
+            )]),
+            refresh: ServerRefresh::default(),
+            queued_turn_dispatch_requested: false,
+            file_search: resources.file_search,
+            host_dir_root: resources.host_dir_root,
+            theme_resource: resources.theme_resource,
+            server_slash_commands: resources.server_slash_commands,
+            plugins_enabled: resources.plugins_enabled,
+        }
+    }
+
+    pub(super) fn app(&self) -> &App {
+        &self.app
+    }
+
+    pub(super) fn app_mut(&mut self) -> &mut App {
+        &mut self.app
+    }
+
+    pub(super) fn session_id(&self) -> &zeta_protocol::SessionId {
+        self.conversation.session_id()
+    }
+
+    pub(super) fn thread_id(&self) -> &zeta_protocol::ThreadId {
+        self.conversation.thread_id()
+    }
+
+    pub(super) fn handle_client_event(&mut self, event: client::ClientEvent) {
+        let refresh = refresh_server_event(
+            event,
+            &mut self.conversation,
+            &mut self.thread_subscription,
+            &mut self.app,
+        );
+        self.refresh.merge(refresh);
+    }
+
+    pub(super) fn poll_request_completions(&mut self) -> bool {
+        let completions = self.requests.poll();
+        let changed = !completions.is_empty();
+        for completion in completions {
+            match completion {
+                Ok(completion) => apply_request_completion(
+                    completion,
+                    &mut self.conversation,
+                    &mut self.thread_subscription,
+                    &mut self.app,
+                ),
+                Err(error) => self
+                    .app
+                    .update(ThreadEvent::FailureReported(error.to_string())),
+            }
+        }
+        changed
+    }
+
+    pub(super) fn next_command(
+        &mut self,
+        command: Option<AppCommand>,
+        had_active_turn: bool,
+    ) -> Option<AppCommand> {
+        self.queued_turn_dispatch_requested |= had_active_turn && self.app.active_turn().is_none();
+
+        let mut command = schedule_command(command, &self.requests, &mut self.queued_commands);
+        if command.is_none()
+            && self.requests.is_idle(Some(RequestKey::Thread))
+            && self.queued_commands.is_empty()
+            && self.queued_turn_dispatch_requested
+        {
+            command = self.app.dispatch_next_queued_turn();
+            self.queued_turn_dispatch_requested = false;
+        }
+        command
+    }
+
+    pub(super) fn poll_file_search(&mut self) -> bool {
+        let Some(file_search) = self.file_search.as_mut() else {
+            return false;
+        };
+        sync_file_search_query(&self.app, file_search);
+        let snapshots = file_search.poll();
+        let changed = !snapshots.is_empty();
+        for snapshot in snapshots {
+            self.app
+                .update(ThreadEvent::FileSearchSnapshotReceived(snapshot));
+        }
+        changed
+    }
+
+    pub(super) fn schedule_refreshes(&mut self) {
+        if self.requests.is_idle(Some(RequestKey::Config)) && self.refresh.config {
+            let mut client = self.client.clone();
+            self.requests.spawn(
+                Some(RequestKey::Config),
+                "zeta-tui-refresh-config",
+                move || {
+                    Completion::ConfigRefreshed(
+                        client.read_config().map_err(|error| error.to_string()),
+                    )
+                },
+                &mut self.app,
+            );
+            if !self.requests.is_idle(Some(RequestKey::Config)) {
+                self.refresh.config = false;
+            }
+        }
+        if self.requests.is_idle(Some(RequestKey::Thread)) && self.refresh.thread {
+            let mut client = self.client.clone();
+            let scope = self.thread_request_scope();
+            let session_id = scope.session_id().clone();
+            let thread_id = scope.thread_id().clone();
+            let history = self.thread_subscription.history();
+            self.requests.spawn(
+                Some(RequestKey::Thread),
+                "zeta-tui-refresh-thread",
+                move || {
+                    Completion::Thread(ThreadCompletion::Refreshed {
+                        scope,
+                        result: read_thread_history(&mut client, &session_id, &thread_id, history),
+                    })
+                },
+                &mut self.app,
+            );
+            if !self.requests.is_idle(Some(RequestKey::Thread)) {
+                self.refresh.thread = false;
+            }
+        }
+        if self.requests.is_idle(Some(RequestKey::Skills)) && self.refresh.skills {
+            let client = self.client.clone();
+            let server_slash_commands = self.server_slash_commands.clone();
+            let session_id = self.conversation.session_id().clone();
+            let plugins_enabled = self.plugins_enabled;
+            self.requests.spawn(
+                Some(RequestKey::Skills),
+                "zeta-tui-refresh-skills",
+                move || {
+                    Completion::Skills(
+                        skills::refresh(client, session_id, plugins_enabled)
+                            .and_then(|refresh| finish_refresh(refresh, &server_slash_commands)),
+                    )
+                },
+                &mut self.app,
+            );
+            if !self.requests.is_idle(Some(RequestKey::Skills)) {
+                self.refresh.skills = false;
+            }
+        }
+        if self.requests.is_idle(Some(RequestKey::Sessions)) && self.refresh.sessions {
+            let mut client = self.client.clone();
+            self.requests.spawn(
+                Some(RequestKey::Sessions),
+                "zeta-tui-refresh-sessions",
+                move || {
+                    Completion::Presentation(
+                        sessions::load_catalog(&mut client)
+                            .map(SessionEvent::CatalogReceived)
+                            .map(AppEvent::from)
+                            .map_err(|error| error.to_string()),
+                    )
+                },
+                &mut self.app,
+            );
+            if !self.requests.is_idle(Some(RequestKey::Sessions)) {
+                self.refresh.sessions = false;
+            }
+        }
+        if self.requests.is_idle(Some(RequestKey::Connectors)) && self.refresh.connectors {
+            let mut client = self.client.clone();
+            self.requests.spawn(
+                Some(RequestKey::Connectors),
+                "zeta-tui-refresh-connectors",
+                move || {
+                    Completion::Presentation(
+                        connectors::load_selection(&mut client)
+                            .map(connectors::Event::PickerUpdated)
+                            .map(AppEvent::from)
+                            .map_err(|error| error.to_string()),
+                    )
+                },
+                &mut self.app,
+            );
+            if !self.requests.is_idle(Some(RequestKey::Connectors)) {
+                self.refresh.connectors = false;
+            }
+        }
+        if self.requests.is_idle(Some(RequestKey::Git)) && self.app.request_git_text_diff() {
+            let mut client = self.client.clone();
+            self.requests.spawn(
+                Some(RequestKey::Git),
+                "zeta-tui-refresh-git-text-diff",
+                move || {
+                    Completion::Presentation(
+                        client
+                            .git_text_diff()
+                            .map(|result| {
+                                AppEvent::from(StatusEvent::GitTextDiffReceived {
+                                    status: result.status,
+                                    statistics: result.statistics,
+                                })
+                            })
+                            .map_err(|error| error.to_string()),
+                    )
+                },
+                &mut self.app,
+            );
+        }
+    }
+
+    fn thread_request_scope(&self) -> ThreadRequestScope {
+        ThreadRequestScope::new(
+            self.conversation.session_id(),
+            self.conversation.thread_id(),
+            self.conversation.thread_sequence(),
+        )
+    }
+}
+
+pub(super) fn schedule_command(
+    command: Option<AppCommand>,
+    requests: &RequestTasks,
+    queued: &mut VecDeque<AppCommand>,
+) -> Option<AppCommand> {
+    if let Some(command) = command {
+        let duplicate = match &command {
+            AppCommand::Host(HostCommand::RefreshClipboardImageAvailability) => {
+                queued.iter().any(|queued| {
+                    matches!(
+                        queued,
+                        AppCommand::Host(HostCommand::RefreshClipboardImageAvailability)
+                    )
+                })
+            }
+            AppCommand::Thread(ThreadCommand::LoadOlderHistory) => queued.iter().any(|queued| {
+                matches!(queued, AppCommand::Thread(ThreadCommand::LoadOlderHistory))
+            }),
+            _ => false,
+        };
+        if !duplicate {
+            queued.push_back(command);
+        }
+    }
+    let runnable = queued
+        .iter()
+        .position(|command| requests.is_idle(request_key(command)))?;
+    queued.remove(runnable)
+}
+
+fn refresh_server_event(
+    event: client::ClientEvent,
+    conversation: &mut ActiveConversation,
+    thread_subscription: &mut ThreadSubscription,
+    app: &mut App,
+) -> ServerRefresh {
+    match event {
+        client::ClientEvent::ConfigChanged => ServerRefresh {
+            config: true,
+            ..ServerRefresh::default()
+        },
+        client::ClientEvent::AgentRequest(request) => {
+            if request.session_id == *conversation.session_id()
+                && request.thread_id == *conversation.thread_id()
+            {
+                app.set_active_turn(request.turn_id.clone());
+                let envelope = *request;
+                let turn_id = envelope.turn_id;
+                let request_id = envelope.interaction.request_id;
+                match envelope.interaction.request {
+                    zeta_protocol::AgentRequest::Approval { request } => {
+                        app.update(ThreadEvent::ApprovalRequested(Approval::open(
+                            turn_id, request_id, request,
+                        )));
+                    }
+                    zeta_protocol::AgentRequest::UserInput { request } => {
+                        match Query::open(turn_id, request_id, request) {
+                            Ok(query) => app.update(ThreadEvent::QueryRequested(query)),
+                            Err(error) => app.update(ThreadEvent::FailureReported(error)),
+                        }
+                    }
+                    zeta_protocol::AgentRequest::DynamicTool { .. } => {
+                        app.update(ThreadEvent::FailureReported(
+                            "dynamic Tool request is not supported by this TUI".into(),
+                        ));
+                    }
+                }
+            }
+            ServerRefresh::default()
+        }
+        client::ClientEvent::SkillsChanged => ServerRefresh {
+            skills: true,
+            ..ServerRefresh::default()
+        },
+        client::ClientEvent::ConnectorsChanged => ServerRefresh {
+            connectors: app.connector_picker_open(),
+            ..ServerRefresh::default()
+        },
+        client::ClientEvent::PackageSourcesChanged => ServerRefresh {
+            connectors: app.connector_picker_open(),
+            skills: true,
+            ..ServerRefresh::default()
+        },
+        client::ClientEvent::ConnectionClosed(_) => {
+            unreachable!("connection failures leave through the recovery boundary")
+        }
+        client::ClientEvent::GitStatusChanged(status) => {
+            app.update(StatusEvent::GitStatusReceived(status));
+            ServerRefresh::default()
+        }
+        client::ClientEvent::SessionChanged(_) => ServerRefresh {
+            sessions: true,
+            ..ServerRefresh::default()
+        },
+        client::ClientEvent::ThreadUpdated(update) => {
+            match thread_subscription.classify_update(&update) {
+                ThreadUpdateDisposition::Ignore => ServerRefresh::default(),
+                ThreadUpdateDisposition::RefreshSnapshot => ServerRefresh {
+                    thread: true,
+                    ..ServerRefresh::default()
+                },
+            }
+        }
+        client::ClientEvent::ThreadTranscriptUpdated(update) => {
+            match thread_subscription.classify_transcript_update(&update) {
+                TranscriptUpdateDisposition::Ignore => ServerRefresh::default(),
+                TranscriptUpdateDisposition::Apply => {
+                    app.update(ThreadEvent::TranscriptUpdateReceived(update));
+                    ServerRefresh::default()
+                }
+                TranscriptUpdateDisposition::RefreshSnapshot => ServerRefresh {
+                    thread: true,
+                    ..ServerRefresh::default()
+                },
+            }
+        }
+    }
+}
+
+fn sync_file_search_query(app: &App, file_search: &mut FileSearchManager) {
+    if let Some(query) = app.mention_query() {
+        file_search.update_query(query);
+    } else {
+        file_search.stop();
+    }
+}

@@ -134,7 +134,7 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
     config.language_servers.insert(
         "rust-analyzer".into(),
         LanguageServerConfigDto {
-            mode: LanguageServerModeDto::Automatic,
+            mode: LanguageServerModeDto::Enabled,
             executable: None,
         },
     );
@@ -159,10 +159,7 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
     assert_eq!(state.active_tab().label(), "Language servers");
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "rust-analyzer");
-    assert_eq!(
-        state.visible_items()[0].description(),
-        Some("automatic [ ✔ ]")
-    );
+    assert_eq!(state.visible_items()[0].description(), Some(" [ ✔ ]"));
     assert!(matches!(
         view.actions
             .get(state.visible_items()[0].id().unwrap())
@@ -179,7 +176,7 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
     );
     assert_eq!(
         state.visible_items()[1].description(),
-        Some("disabled  ·  C:\\tools\\typescript-language-server.exe [   ]")
+        Some("C:\\tools\\typescript-language-server.exe [   ]")
     );
     assert!(matches!(
         view.actions

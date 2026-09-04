@@ -19267,7 +19267,6 @@
       "description": "Durable user intent for one language server.",
       "enum": [
         "disabled",
-        "automatic",
         "enabled"
       ],
       "type": "string"

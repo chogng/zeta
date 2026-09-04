@@ -226,7 +226,7 @@ enum AppCommand {
 }
 ```
 
-代码不要求逐字使用这些类型名，但必须保持“一种能力一个顶层分支”，具体事件和命令留在对应目录。能力可以直接把自己的 `Event` 转成 `AppEvent`，但不能在顶层重新建立同义的平级 variant。
+代码不要求逐字使用这些类型名，但必须保持“一种能力一个顶层分支”，具体事件和命令留在对应目录。能力可以直接把自己的 `Event` 转成 `AppEvent`，但不能在顶层重新建立同义的平级 variant。Config、Connectors、Directories、Keymap、MCP、Models、Sessions、Skills、Status、Theme 和 Thread 同时负责解释自己的 `Command`、后台任务名称、请求参数与完成结果；`AppDriver` 持有 client、当前 Session/Thread、订阅和后台任务，按请求通道启动任务。`event_loop` 只决定终端事件、服务端事件、任务完成和绘制的处理顺序。
 
 ### 输入位置
 
@@ -458,8 +458,7 @@ UI state，不解释产品能力结果，也不建立覆盖所有 RPC 的第二�
 所有可见状态只有主事件循环写入。后台 task、transport callback、host 操作和 renderer 只能产生 event 或
 completion，不能持有并修改共享状态。进程资源事件只保留尚未处理的最新读数，避免终端输入繁忙时累积采样事件；`status/` 聚合 TUI 与本地 App Server 的内存和 CPU，并最多保存 301 个本机内存合计读数，用于计算 1 分钟与 5 分钟变化。
 
-单写者不等于所有工作同步执行。RPC、文件读取、目录搜索、大型正文计算和剪贴板操作必须在后台完成，
-结果回到事件循环后由负责人判断是否仍然有效。
+单写者不等于所有工作同步执行。RPC、文件读取、目录搜索、大型正文计算和剪贴板操作必须在后台完成，结果回到事件循环后由负责人判断是否仍然有效。`AppDriver` 统一保存请求通道、待执行命令和刷新需求；`RequestTasks::spawn_presentation` 只把能力完成事件送回单写者。命令分支、请求名称、RPC 顺序和结果转换留在能力目录，不能重新堆回 `event_loop`。
 
 每个状态只能有一个明确负责人。允许 App Server 权威事实与 TUI 可重建副本同时存在，但不允许在
 `event_loop`、`App` 和产品能力中保存多份互相驱动的当前 Turn 或当前 Thread 状态。

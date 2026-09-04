@@ -65,7 +65,7 @@ fn json_and_shell_builtins_resolve_with_canonical_routes_and_launch_arguments() 
 }
 
 #[test]
-fn automatic_rust_analyzer_resolves_from_the_frozen_host_path() {
+fn enabled_rust_analyzer_resolves_from_the_frozen_host_path() {
     let directory = tempfile::tempdir().expect("directory");
     let executable = directory.path().join(executable_name());
     fs::write(&executable, b"test server").expect("executable");

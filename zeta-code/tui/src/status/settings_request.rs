@@ -3,11 +3,32 @@ use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
 use zeta_protocol::Patch;
 
+use super::Command;
+use super::Event;
 use super::StatusLineChoices;
 use super::StatusLineItem;
 use super::StatusLineSettings;
 use super::setup::list_selection;
 use crate::client::new_command_id;
+
+impl Command {
+    pub(crate) const fn request_name(&self) -> &'static str {
+        match self {
+            Self::OpenLineEditor => "zeta-tui-read-status-line",
+            Self::EditLine(_) => "zeta-tui-set-status-line",
+        }
+    }
+}
+
+pub(crate) fn execute<T>(client: &mut AppServerClient<T>, command: Command) -> Result<Event, String>
+where
+    T: JsonRpcTransport,
+{
+    match command {
+        Command::OpenLineEditor => read_status_line(client).map(Event::LineEditorOpened),
+        Command::EditLine(edit) => set_status_line(client, edit).map(Event::LineEditorUpdated),
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct StatusLineEdit {

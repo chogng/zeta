@@ -1,6 +1,8 @@
+use super::Command;
 use super::ConfigChoices;
 use super::ConfigEdit;
 use super::ConfigEditResult;
+use super::Event;
 use super::LanguageServerEdit;
 use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
@@ -9,7 +11,6 @@ use crate::client::new_command_id;
 use crate::status::StatusLineSettings;
 use std::fmt;
 use zeta_app_server_client::AppServerClient;
-use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_client::ProviderApiKeySetRequest;
@@ -22,9 +23,43 @@ pub(crate) struct ProviderApiKeyUpdate {
     pub(crate) choices: ConfigChoices,
 }
 
-pub(crate) fn read_config_choices(
-    client: &mut AppServerRequestHandle,
-) -> Result<ConfigChoices, ConfigCommandError> {
+impl Command {
+    pub(crate) const fn request_name(&self) -> &'static str {
+        match self {
+            Self::OpenEditor => "zeta-tui-read-config",
+            Self::Edit(_) => "zeta-tui-set-config",
+            Self::SetLanguageServerMode(_) => "zeta-tui-set-language-server-mode",
+            Self::SetProviderApiKey(_) => "zeta-tui-set-provider-api-key",
+        }
+    }
+}
+
+pub(crate) fn execute<T>(client: &mut AppServerClient<T>, command: Command) -> Result<Event, String>
+where
+    T: JsonRpcTransport,
+{
+    match command {
+        Command::OpenEditor => read_config_choices(client).map(Event::EditorOpened),
+        Command::Edit(edit) => set_settings(client, edit).map(Event::Updated),
+        Command::SetLanguageServerMode(edit) => {
+            set_language_server_mode(client, edit).map(Event::Updated)
+        }
+        Command::SetProviderApiKey(edit) => {
+            set_provider_api_key(client, edit).map(|update| Event::ApiKeySaved {
+                provider: update.provider,
+                choices: update.choices,
+            })
+        }
+    }
+    .map_err(|error| error.to_string())
+}
+
+pub(crate) fn read_config_choices<T>(
+    client: &mut AppServerClient<T>,
+) -> Result<ConfigChoices, ConfigCommandError>
+where
+    T: JsonRpcTransport,
+{
     let server_config = client.read_config()?;
     let terminal = TerminalSettings::from_tui(&server_config.tui).map_err(ConfigCommandError)?;
     let status_line =
@@ -38,10 +73,13 @@ pub(crate) fn read_config_choices(
     ))
 }
 
-pub(crate) fn set_provider_api_key(
-    client: &mut AppServerRequestHandle,
+pub(crate) fn set_provider_api_key<T>(
+    client: &mut AppServerClient<T>,
     edit: ProviderApiKeyEdit,
-) -> Result<ProviderApiKeyUpdate, ConfigCommandError> {
+) -> Result<ProviderApiKeyUpdate, ConfigCommandError>
+where
+    T: JsonRpcTransport,
+{
     let (provider, api_key) = edit.into_parts();
     client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
     let choices = read_config_choices(client)?;

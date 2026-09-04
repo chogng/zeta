@@ -1846,11 +1846,22 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
         command: UserConfigCommand::ConfigureLanguageServer {
             server_id,
             config: LanguageServerConfig {
-                mode: LanguageServerModeConfig::Automatic,
+                mode: LanguageServerModeConfig::Enabled,
                 executable: Some("relative/rust-analyzer".into()),
             },
         },
     });
     assert!(matches!(invalid, Err(ConfigCommandError::Config(_))));
     remove_config_files(&path);
+}
+
+#[test]
+fn language_server_mode_accepts_only_enabled_or_disabled() {
+    assert_eq!(
+        LanguageServerConfig::default().mode,
+        LanguageServerModeConfig::Enabled
+    );
+    assert!(
+        serde_json::from_value::<LanguageServerModeConfig>(serde_json::json!("automatic")).is_err()
+    );
 }

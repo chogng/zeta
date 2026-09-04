@@ -32,6 +32,15 @@ pub(crate) enum Command {
     Remove { path: std::path::PathBuf },
     SetPermissions(SessionDirPermissionsSetParams),
 }
+
+impl Command {
+    pub(crate) const fn request_name(&self) -> &'static str {
+        match self {
+            Self::Remove { .. } => "zeta-tui-remove-directory",
+            Self::SetPermissions(_) => "zeta-tui-set-directory-permissions",
+        }
+    }
+}
 use zeta_app_server_protocol::protocol::environment::SessionDirRemoveParams;
 use zeta_protocol::SessionId;
 
@@ -113,6 +122,29 @@ where
             },
         )
     })
+}
+
+pub(crate) fn execute<T>(
+    client: &mut AppServerClient<T>,
+    session_id: &SessionId,
+    command: Command,
+) -> Result<Event, String>
+where
+    T: JsonRpcTransport,
+{
+    match command {
+        Command::Remove { path } => {
+            let event_path = path.clone();
+            remove(client, session_id, path).map(|choices| Event::Removed {
+                path: event_path,
+                choices,
+            })
+        }
+        Command::SetPermissions(params) => {
+            set_permissions(client, params).map(Event::PermissionsUpdated)
+        }
+    }
+    .map_err(|error| error.to_string())
 }
 
 pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> DirChoices {

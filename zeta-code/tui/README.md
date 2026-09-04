@@ -222,8 +222,10 @@ src/
 | `App` | crate-private | presentation `Status`、产品能力与局部交互协调和单写者 state transition | 不保存 worker/channel、不复制能力状态或编辑器细节 |
 | `app::chat_panel::ChatPanel` | private | 持有 Session 页面底部聊天交互区的 ChatComposer、输入目标、CommandPanel、Approval、Query、TopTip 和 StatusLine，并统一路由其键盘与粘贴生命周期 | 不保存 Transcript、Queue、Agent/Session Manager、Overlay 或外部副作用 |
 | `AppCommand` | crate-private | 把各能力的 `Command` 与应用级 Quit/Suspend 汇入事件循环 | 顶层只做领域路由；具体命令由对应能力目录定义，不携带任意闭包或执行 I/O |
+| `app::AppDriver` | private | 持有 client、当前 Session/Thread、订阅、后台请求、待执行命令、刷新需求和目录搜索，并把完成结果交给唯一的 `App` 写入口 | 不接收终端事件、不绘制、不解释各能力内部命令或复制界面状态 |
 | `AppEvent` | crate-private | 把各能力完成的 `Event` 汇入单写者状态入口 | 顶层只做领域路由；具体事实由对应能力目录定义 |
 | `config/thread/sessions/...::{Command,Event}` | crate-private | 各能力自己的副作用意图与已完成事实 | 不引用 `App`，不把其他能力的行为塞进自己的分支 |
+| `config/connectors/dirs/keymap/mcp/models/skills/status/theme::execute`、`thread/sessions::CommandRequest`、`host::Operation` | crate-private | 解释对应 `Command`，拥有后台任务名称、请求顺序和领域结果转换 | 不修改 `App`、不决定请求通道或调度顺序 |
 | `TurnActivity` | crate-private | canonical Turn status 到 Working/waiting/Cancelling presentation state 的窄映射 | 不复制完整 Turn reducer |
 | `ThreadState` | crate-private | 当前执行队首与正文状态 | snapshot 更新执行队首和正文；不执行 RPC、不复制服务端状态机 |
 | `ThreadPresentationEvent` | crate-private | snapshot/transient/reset/user/notice/failure/interrupted/clear 的 Thread 内部事实 | 只改变 active Thread presentation owner |
@@ -275,7 +277,7 @@ src/
 | `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::{image_availability,read_image}` | crate-private | 从本机剪贴板文件列表或 RGBA 图片读取可用性，并在粘贴时统一编码为 PNG | 不改变 `ChatInput`、不发 RPC、不持久化临时文件；可用性检查失败只表示不可用 |
 | `host::clipboard::write_text` / `host::transcript_export::write` | crate-private | response/屏幕选区文字写入系统剪贴板，以及目录边界内的 Markdown export | 不拥有 transcript 或屏幕选区状态、不覆盖文件 |
-| `FileSearchManager` | crate-private | event loop 持有的目录搜索 runtime；非阻塞 drain snapshot 并丢弃旧 query 结果 | 不进入 `App` state、不解析输入、不保存 popup state |
+| `FileSearchManager` | crate-private | `AppDriver` 持有的目录搜索资源；非阻塞读取结果并丢弃旧 query 结果 | 不进入 `App` state、不解析输入、不保存 popup state |
 | `Mentions` / `MentionPopup` | private | `@token` query/range、File/Plugin 混合结果、选择/关闭和原子补全 | 不扫描目录、不读 Plugin 文件系统、不拥有 worker |
 | `SkillCompletionState` | private | `$token` query/range、metadata 过滤、选择/关闭、原子 `$name` 与 exact `SkillRef` 绑定 | 不读取 Skill filesystem、不加载 `SKILL.md`、不占用 `/` 或 `@` |
 | `PendingPastes` | private | 超过 1000 字符的 text-paste payload、唯一占位符与提交时展开 | 不识别或保存图片，不解释 slash、不渲染、不直接提交 |
@@ -328,7 +330,7 @@ run(session, options)
    │  └─ termination request → orderly TUI exit
    ├─ App::mention_query → FileSearchManager::{update_query,stop}
    ├─ FileSearchManager::poll → thread::Event::FileSearchSnapshotReceived → App::update
-   ├─ RequestTasks::poll → keyed completion → app::completion → App::update
+   ├─ AppDriver → RequestTasks::poll → keyed completion → app::completion → App::update
    ├─ skills changed → queued background skills refresh
    ├─ newer active Thread durable update → queued session/thread/read snapshot resync
    ├─ transient update → cursor validation → bounded Thread model
@@ -365,11 +367,7 @@ run(session, options)
 Session create 和 Thread branch mutation 使用独立 `CommandId`。Turn start/interrupt 使用当前 `thread_sequence` 作为 expected sequence；下一次批准模式由 TUI 放进 `StartTurn`，不修改 Session。client error 会进入 visible error message/status，不退出 terminal session。
 
 创建后通过 `session/thread/read`/`session/thread/subscribe` 返回的 canonical snapshot 设置 initial sequence，
-不存在硬编码的初始 sequence。所有可能等待 App Server 的 product command、Turn mutation、文件
-浏览、配置 mutation、剪贴板和导出都在 `RequestTask` 中执行；控制、写入、读取和本机操作分别有一个
-有界通道，同通道保序，空闲通道可以并行。Quit 不被后台任务阻塞。Thread/Session 变更在后台先建立新
-subscription，再把新 `ActiveConversation`、`ThreadSubscription` 与 snapshot 作为一个 completion
-安装；旧 scope completion 不能直接修改 `App`。
+不存在硬编码的初始 sequence。所有可能等待 App Server 的 product command、Turn mutation、文件浏览、配置 mutation、剪贴板和导出都在 `RequestTask` 中执行；控制、写入、读取和本机操作分别有一个有界通道，同通道保序，空闲通道可以并行。各能力解释自己的命令并构造完成结果，`AppDriver` 选择通道、提供运行资源和启动任务；`event_loop` 只安排事件和绘制顺序。Quit 不被后台任务阻塞。Thread/Session 变更在后台先建立新 subscription，再把新 `ActiveConversation`、`ThreadSubscription` 与 snapshot 作为一个 completion 安装；旧 scope completion 不能直接修改 `App`。
 
 `Event::Paste` 与普通 key editing 使用不同入口。`PendingPastes` 先把 CRLF/CR 规范化为 LF，
 再以 Rust `char`（Unicode scalar value）数量判断大小：不超过 1000 时直接写入 `TextArea`；超过阈值时写入

@@ -9,10 +9,10 @@ use crate::keymap;
 use crate::keymap::Event as KeymapEvent;
 use crate::models;
 use crate::models::Event as ModelEvent;
-use crate::render::RenderTheme;
 use crate::sessions::ConversationChange;
 use crate::sessions::ConversationCompletion;
 use crate::sessions::ConversationTranscript;
+use crate::sessions::Event as SessionEvent;
 use crate::sessions::ManagerSessionCompletion;
 use crate::sessions::SessionCompletion;
 use crate::skills::Event as SkillEvent;
@@ -47,12 +47,7 @@ pub(super) enum Completion {
         result: Result<models::PreferredModelUpdate, String>,
     },
     Skills(Result<SkillRefreshCompletion, String>),
-    ThemeUpdated {
-        command: String,
-        label: String,
-        theme: RenderTheme,
-        result: Result<(), String>,
-    },
+    Theme(Result<crate::theme::CommandCompletion, String>),
     Thread(ThreadCompletion),
 }
 
@@ -110,6 +105,12 @@ pub(super) fn apply_request_completion(
     match completion {
         Completion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, None, app),
         Completion::ConfigRefreshed(Err(error)) => {
+            app.update(ThreadEvent::FailureReported(error));
+        }
+        Completion::Sessions(SessionCompletion::Catalog(Ok(sessions))) => {
+            app.update(SessionEvent::CatalogReceived(sessions));
+        }
+        Completion::Sessions(SessionCompletion::Catalog(Err(error))) => {
             app.update(ThreadEvent::FailureReported(error));
         }
         Completion::Sessions(SessionCompletion::ManagerCreated(Ok(ManagerSessionCompletion {
@@ -224,21 +225,26 @@ pub(super) fn apply_request_completion(
         Completion::PreferredModelUpdated {
             result: Err(error), ..
         } => app.update(ThreadEvent::FailureReported(error)),
-        Completion::ThemeUpdated {
+        Completion::Theme(Ok(crate::theme::CommandCompletion::Presentation(event))) => {
+            app.update(event);
+        }
+        Completion::Theme(Ok(crate::theme::CommandCompletion::Updated {
             command,
             label,
             theme,
             result: Ok(()),
-        } => {
+        })) => {
             app.update(crate::theme::Event::RenderChanged(theme));
             app.update(ThreadEvent::CommandCompleted {
                 command,
                 result: format!("Theme set to {label}"),
             });
         }
-        Completion::ThemeUpdated {
-            result: Err(error), ..
-        } => app.update(ThreadEvent::FailureReported(error)),
+        Completion::Theme(Ok(crate::theme::CommandCompletion::Updated {
+            result: Err(error),
+            ..
+        }))
+        | Completion::Theme(Err(error)) => app.update(ThreadEvent::FailureReported(error)),
         Completion::Skills(Ok(refresh)) => {
             app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {
@@ -252,6 +258,13 @@ pub(super) fn apply_request_completion(
                 app.update(ThreadEvent::FailureReported(error));
             }
         }
+        Completion::Thread(ThreadCompletion::RewindPickerLoaded {
+            result: Ok(choices),
+            ..
+        }) => app.update(ThreadEvent::RewindPickerOpened(choices)),
+        Completion::Thread(ThreadCompletion::RewindPickerLoaded {
+            result: Err(error), ..
+        }) => app.update(ThreadEvent::FailureReported(error)),
         Completion::Thread(ThreadCompletion::Started { result, .. }) => {
             apply_turn_start_completion(result, None, conversation, thread_subscription, app)
         }

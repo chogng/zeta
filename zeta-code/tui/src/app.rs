@@ -9,6 +9,7 @@ mod completion;
 #[path = "app/conversation_flow_tests.rs"]
 mod conversation_flow_tests;
 mod dispatch;
+mod driver;
 mod escape;
 mod event;
 mod event_loop;

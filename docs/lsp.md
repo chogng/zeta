@@ -15,9 +15,8 @@
 
 Zeta 通过独立的 server provider、LSP manager 和 LSP 运行时连接现有语言服务器，而不是把语言分析逻辑
 写进编辑器。Desktop 已接入文档生命周期和事件循环；App Server Config authority 持久化
-三个内置服务器的 Disabled/Automatic/Enabled 与可选绝对 executable path。Settings 中每个 server
-都有独立的 Enable switch，默认关闭；开启时默认选择 Automatic，仍可用 Launch mode 选择
-Automatic 或 Enabled。未配置的 PATH server 默认 Disabled，不会自动拉起；用户显式开启后才从进程
+三个内置服务器的 Disabled/Enabled 与可选绝对 executable path。Settings 中每个 server
+都有独立的 Enable switch，默认关闭。未配置的 PATH server 默认 Disabled，不会自动拉起；用户显式开启后才从进程
 启动时冻结的 PATH 解析。Marketplace package 的安装确认同时写入 activation receipt，因此其 packaged
 route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执行时保持无语言服务器。
 
