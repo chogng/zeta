@@ -434,12 +434,15 @@ impl ListSelectionState {
             .min(self.visible_len().saturating_sub(visible_rows))
     }
 
-    pub(crate) fn desired_height(&self, width: u16) -> u16 {
-        let tab_rows = if self.show_tabs() {
-            tab_list::desired_height(self.tabs(), width.saturating_sub(4))
+    pub(crate) fn tab_rows(&self, width: u16) -> u16 {
+        if self.show_tabs() {
+            tab_list::desired_height(self.tabs(), width)
         } else {
             0
-        };
+        }
+    }
+
+    pub(crate) fn body_rows(&self) -> u16 {
         let search_rows = self.search.as_ref().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
         let list_rows = self.visible_len().clamp(1, MAX_VISIBLE_ROWS);
         let preview_rows = self
@@ -447,8 +450,7 @@ impl ListSelectionState {
             .and_then(ListSelectionItem::preview)
             .map(ListSelectionPreview::desired_height)
             .unwrap_or_default();
-        tab_rows
-            .saturating_add(search_rows)
+        search_rows
             .saturating_add(list_rows.min(u16::MAX as usize) as u16)
             .saturating_add(preview_rows.min(u16::MAX as usize) as u16)
     }

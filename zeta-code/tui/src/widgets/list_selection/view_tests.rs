@@ -1,5 +1,6 @@
-use super::draw;
-use super::draw_with_pointer;
+use super::draw_body_with_pointer;
+use super::draw_tabs;
+use crate::render::horizontal_margin;
 use crate::render::test_context;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
@@ -27,31 +28,38 @@ fn state() -> ListSelectionState {
 }
 
 fn render(state: &ListSelectionState) -> Buffer {
-    let backend = TestBackend::new(40, 10);
-    let mut terminal = Terminal::new(backend).unwrap();
-    terminal
-        .draw(|frame| draw(frame, frame.area(), state, test_context()))
-        .unwrap();
-    terminal.backend().buffer().clone()
+    render_with_pointer(state, None)
 }
 
 fn render_with_item_hover(state: &ListSelectionState, hovered_item: usize) -> Buffer {
+    render_with_pointer(state, Some(hovered_item))
+}
+
+fn render_with_pointer(state: &ListSelectionState, hovered_item: Option<usize>) -> Buffer {
     let backend = TestBackend::new(40, 10);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
-            draw_with_pointer(
+            let content = horizontal_margin(frame.area(), 2);
+            let tab_rows = state.tab_rows(content.width);
+            let tabs = ratatui::layout::Rect::new(content.x, content.y, content.width, tab_rows);
+            let body = ratatui::layout::Rect::new(
+                content.x,
+                content.y.saturating_add(tab_rows),
+                content.width,
+                content.height.saturating_sub(tab_rows),
+            );
+            draw_tabs(frame, tabs, state, None, None, test_context());
+            draw_body_with_pointer(
                 frame,
-                frame.area(),
+                body,
                 state,
-                None,
-                None,
                 false,
                 false,
-                Some(hovered_item),
+                hovered_item,
                 None,
                 test_context(),
-            )
+            );
         })
         .unwrap();
     terminal.backend().buffer().clone()

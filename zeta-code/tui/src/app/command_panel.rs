@@ -2,6 +2,7 @@ use crate::TuiStartupContext;
 use crate::config::ConfigChoices;
 use crate::config::ConfigEditor;
 use crate::config::ConfigEditorOutcome;
+use crate::config::ConfigEditorPage;
 use crate::connectors::ConnectorChoices;
 use crate::connectors::ConnectorSelectionAction;
 use crate::dirs::DirChoices;
@@ -9,6 +10,7 @@ use crate::dirs::DirSelectionAction;
 use crate::keymap::KeymapChoices;
 use crate::keymap::KeymapEditor;
 use crate::keymap::KeymapEditorOutcome;
+use crate::keymap::KeymapEditorPage;
 use crate::mcp::McpChoices;
 use crate::mcp::McpSelectionAction;
 use crate::models::ModelChoices;
@@ -39,6 +41,7 @@ use crate::widgets::text_prompt::TextPrompt;
 use crossterm::event::KeyEvent;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -49,12 +52,58 @@ use std::collections::BTreeMap;
 const TITLE_BAR_ROWS: u16 = 1;
 const TITLE_BODY_GAP_ROWS: u16 = 1;
 const HEADER_ROWS: u16 = TITLE_BAR_ROWS + TITLE_BODY_GAP_ROWS;
+const CONTENT_HORIZONTAL_MARGIN: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum CommandPanelPointerTarget {
     Tab(usize),
     Search,
     Item(usize),
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CommandPanelBody<'a> {
+    Selection(&'a ListSelectionState),
+    Prompt(&'a TextPrompt),
+    KeyCapture(&'a KeyCapture),
+    Status(&'a StatusPanel),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CommandPanelLayout {
+    tabs: Rect,
+    body: Rect,
+}
+
+impl CommandPanelLayout {
+    fn new(area: Rect, tab_rows: u16) -> Self {
+        let header_rows = HEADER_ROWS.min(area.height);
+        let available_rows = area.height.saturating_sub(header_rows);
+        let tab_rows = tab_rows.min(available_rows);
+        let tabs = crate::render::horizontal_margin(
+            Rect::new(
+                area.x,
+                area.y.saturating_add(header_rows),
+                area.width,
+                tab_rows,
+            ),
+            CONTENT_HORIZONTAL_MARGIN,
+        );
+        let body = crate::render::horizontal_margin(
+            Rect::new(
+                area.x,
+                area.y.saturating_add(header_rows).saturating_add(tab_rows),
+                area.width,
+                available_rows.saturating_sub(tab_rows),
+            ),
+            CONTENT_HORIZONTAL_MARGIN,
+        );
+        Self { tabs, body }
+    }
+
+    fn content_width(width: u16) -> u16 {
+        width.saturating_sub(CONTENT_HORIZONTAL_MARGIN.saturating_mul(2))
+    }
 }
 
 #[derive(Debug)]
@@ -156,7 +205,11 @@ impl CommandPanel {
 
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
         match self {
-            Self::Status(panel) => panel.process_resources_visible(body_area(area)),
+            Self::Status(panel) => {
+                let content_width = CommandPanelLayout::content_width(area.width);
+                let layout = CommandPanelLayout::new(area, panel.tab_rows(content_width));
+                panel.process_resources_visible(layout.body)
+            }
             _ => false,
         }
     }
@@ -239,25 +292,6 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn text_prompt(&self) -> Option<&TextPrompt> {
-        match self {
-            Self::Config(editor) => editor.prompt(),
-            Self::Help(_)
-            | Self::Dirs(_)
-            | Self::Connectors(_)
-            | Self::Keymap(_)
-            | Self::Mcp(_)
-            | Self::Model(_)
-            | Self::Rewind(_)
-            | Self::Sessions(_)
-            | Self::Skills(_)
-            | Self::Startup(_)
-            | Self::Status(_)
-            | Self::StatusLine(_)
-            | Self::Theme(_) => None,
-        }
-    }
-
     pub(crate) fn key_capture(&self) -> Option<&KeyCapture> {
         match self {
             Self::Keymap(editor) => editor.capture(),
@@ -277,19 +311,37 @@ impl CommandPanel {
         }
     }
 
+    fn body(&self) -> CommandPanelBody<'_> {
+        match self {
+            Self::Help(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Dirs(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Config(editor) => match editor.page() {
+                ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
+                ConfigEditorPage::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
+            },
+            Self::Connectors(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Keymap(editor) => match editor.page() {
+                KeymapEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
+                KeymapEditorPage::Capture(capture) => CommandPanelBody::KeyCapture(capture),
+            },
+            Self::Mcp(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Rewind(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Sessions(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Skills(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Startup(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Status(panel) => CommandPanelBody::Status(panel),
+            Self::StatusLine(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Theme(picker) => CommandPanelBody::Selection(picker.selection()),
+        }
+    }
+
     pub(crate) fn desired_height(&self, width: u16) -> u16 {
-        let body_rows = if let Self::Status(panel) = self {
-            panel.desired_height(width)
-        } else if let Some(selection) = self.list_selection() {
-            selection.desired_height(width)
-        } else if let Some(prompt) = self.text_prompt() {
-            prompt.desired_height()
-        } else if let Some(capture) = self.key_capture() {
-            capture.desired_height()
-        } else {
-            0
-        };
-        body_rows.saturating_add(HEADER_ROWS)
+        let body = self.body();
+        let content_width = CommandPanelLayout::content_width(width);
+        HEADER_ROWS
+            .saturating_add(body.tab_rows(content_width))
+            .saturating_add(body.body_rows(content_width))
     }
 
     pub(crate) fn draw(
@@ -300,50 +352,31 @@ impl CommandPanel {
         pressed: Option<CommandPanelPointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
-        let body = body_area(area);
-        let presentation_focus = self
-            .list_selection()
-            .and_then(ListSelectionState::presentation_focus)
-            .unwrap_or_else(|| context.focus());
-        let title_style = crate::render::interaction_style(
-            context,
-            crate::render::InteractionState {
-                target: crate::render::InteractionTarget::Active,
-                selected: false,
-                hovered: false,
-                pressed: false,
-            },
-        );
+        let body = self.body();
+        let content_width = CommandPanelLayout::content_width(area.width);
+        let layout = CommandPanelLayout::new(area, body.tab_rows(content_width));
+        let presentation_focus = body.presentation_focus().unwrap_or_else(|| context.focus());
+        let title_style = Style::default()
+            .fg(presentation_focus)
+            .add_modifier(Modifier::BOLD);
         frame.render_widget(
             Block::default()
                 .borders(Borders::TOP)
                 .border_style(Style::default().fg(presentation_focus))
                 .title(Line::from(vec![
                     Span::styled("─", Style::default().fg(presentation_focus)),
-                    Span::styled(format!(" {} ", self.title()), title_style),
+                    Span::styled(format!(" {} ", body.title()), title_style),
                 ])),
             area,
         );
-        if let Self::Status(panel) = self {
-            panel.draw(frame, body, tab_index(hovered), tab_index(pressed), context);
-        } else if let Some(selection) = self.list_selection() {
-            list_selection::draw_with_pointer(
-                frame,
-                body,
-                selection,
-                tab_index(hovered),
-                tab_index(pressed),
-                hovered == Some(CommandPanelPointerTarget::Search),
-                pressed == Some(CommandPanelPointerTarget::Search),
-                item_index(hovered),
-                item_index(pressed),
-                context,
-            );
-        } else if let Some(prompt) = self.text_prompt() {
-            text_prompt::draw(frame, body, prompt, context);
-        } else if let Some(capture) = self.key_capture() {
-            key_capture::draw(frame, body, capture, context);
-        }
+        body.draw_tabs(
+            frame,
+            layout.tabs,
+            tab_index(hovered),
+            tab_index(pressed),
+            context,
+        );
+        body.draw_body(frame, layout.body, hovered, pressed, context);
     }
 
     pub(crate) fn pointer_target_at(
@@ -352,40 +385,10 @@ impl CommandPanel {
         column: u16,
         row: u16,
     ) -> Option<CommandPanelPointerTarget> {
-        let body = body_area(area);
-        if let Self::Status(panel) = self {
-            return panel
-                .tab_index_at(body, column, row)
-                .map(CommandPanelPointerTarget::Tab);
-        }
-        let selection = self.list_selection()?;
-        selection
-            .tab_index_at(body, column, row)
-            .map(CommandPanelPointerTarget::Tab)
-            .or_else(|| {
-                selection
-                    .search_contains(body, column, row)
-                    .then_some(CommandPanelPointerTarget::Search)
-            })
-            .or_else(|| {
-                selection
-                    .item_index_at(body, column, row)
-                    .map(CommandPanelPointerTarget::Item)
-            })
-    }
-
-    fn title(&self) -> &str {
-        if let Self::Status(panel) = self {
-            panel.title()
-        } else if let Some(selection) = self.list_selection() {
-            selection.title()
-        } else if let Some(prompt) = self.text_prompt() {
-            prompt.title()
-        } else if let Some(capture) = self.key_capture() {
-            capture.title()
-        } else {
-            ""
-        }
+        let body = self.body();
+        let content_width = CommandPanelLayout::content_width(area.width);
+        let layout = CommandPanelLayout::new(area, body.tab_rows(content_width));
+        body.pointer_target_at(layout, column, row)
     }
 
     pub(crate) fn key_hints(&self) -> &str {
@@ -590,12 +593,107 @@ fn map_selection<A>(
     }
 }
 
-fn body_area(area: Rect) -> Rect {
-    let header_rows = HEADER_ROWS.min(area.height);
-    Rect {
-        y: area.y.saturating_add(header_rows),
-        height: area.height.saturating_sub(header_rows),
-        ..area
+impl<'a> CommandPanelBody<'a> {
+    fn title(self) -> &'a str {
+        match self {
+            Self::Selection(selection) => selection.title(),
+            Self::Prompt(prompt) => prompt.title(),
+            Self::KeyCapture(capture) => capture.title(),
+            Self::Status(panel) => panel.title(),
+        }
+    }
+
+    fn tab_rows(self, width: u16) -> u16 {
+        match self {
+            Self::Selection(selection) => selection.tab_rows(width),
+            Self::Status(panel) => panel.tab_rows(width),
+            Self::Prompt(_) | Self::KeyCapture(_) => 0,
+        }
+    }
+
+    fn body_rows(self, width: u16) -> u16 {
+        match self {
+            Self::Selection(selection) => selection.body_rows(),
+            Self::Prompt(prompt) => prompt.desired_height(),
+            Self::KeyCapture(capture) => capture.desired_height(),
+            Self::Status(panel) => panel.body_rows(width),
+        }
+    }
+
+    fn presentation_focus(self) -> Option<ratatui::style::Color> {
+        match self {
+            Self::Selection(selection) => selection.presentation_focus(),
+            Self::Prompt(_) | Self::KeyCapture(_) | Self::Status(_) => None,
+        }
+    }
+
+    fn draw_tabs(
+        self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        hovered_tab: Option<usize>,
+        pressed_tab: Option<usize>,
+        context: crate::render::RenderContext<'_>,
+    ) {
+        match self {
+            Self::Selection(selection) => {
+                list_selection::draw_tabs(frame, area, selection, hovered_tab, pressed_tab, context)
+            }
+            Self::Status(panel) => panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context),
+            Self::Prompt(_) | Self::KeyCapture(_) => {}
+        }
+    }
+
+    fn draw_body(
+        self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        hovered: Option<CommandPanelPointerTarget>,
+        pressed: Option<CommandPanelPointerTarget>,
+        context: crate::render::RenderContext<'_>,
+    ) {
+        match self {
+            Self::Selection(selection) => list_selection::draw_body_with_pointer(
+                frame,
+                area,
+                selection,
+                hovered == Some(CommandPanelPointerTarget::Search),
+                pressed == Some(CommandPanelPointerTarget::Search),
+                item_index(hovered),
+                item_index(pressed),
+                context,
+            ),
+            Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
+            Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
+            Self::Status(panel) => panel.draw_body(frame, area, context),
+        }
+    }
+
+    fn pointer_target_at(
+        self,
+        layout: CommandPanelLayout,
+        column: u16,
+        row: u16,
+    ) -> Option<CommandPanelPointerTarget> {
+        match self {
+            Self::Selection(selection) => selection
+                .tab_index_in(layout.tabs, column, row)
+                .map(CommandPanelPointerTarget::Tab)
+                .or_else(|| {
+                    selection
+                        .search_contains_in(layout.body, column, row)
+                        .then_some(CommandPanelPointerTarget::Search)
+                })
+                .or_else(|| {
+                    selection
+                        .item_index_in(layout.body, column, row)
+                        .map(CommandPanelPointerTarget::Item)
+                }),
+            Self::Status(panel) => panel
+                .tab_index_in(layout.tabs, column, row)
+                .map(CommandPanelPointerTarget::Tab),
+            Self::Prompt(_) | Self::KeyCapture(_) => None,
+        }
     }
 }
 

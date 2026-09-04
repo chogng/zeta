@@ -8,6 +8,7 @@ use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::CommandPanel;
+use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::host::clipboard::ClipboardImageAvailability;
 use crate::host::process_resources::ProcessResourceDemand;
 use crate::host::process_resources::ProcessResourceMetrics;
@@ -166,7 +167,59 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
     assert_eq!(buffer[(0, 0)].symbol(), "─");
     assert_eq!(buffer[(2, 0)].symbol(), "S");
     assert_eq!(buffer[(9, 0)].symbol(), "─");
+    assert_eq!(buffer[(2, 0)].fg, test_context().focus());
+    assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
+    assert_ne!(
+        buffer[(2, 0)].bg,
+        test_context().accent_surface_background()
+    );
+    assert_eq!(buffer[(3, 2)].symbol(), "S");
+    assert_eq!(
+        buffer[(3, 2)].bg,
+        test_context().accent_surface_background()
+    );
+    assert_eq!(buffer[(2, 3)].symbol(), "M");
     assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
+}
+
+#[test]
+fn command_panel_layout_keeps_wrapped_tabs_between_title_and_body() {
+    let panel = CommandPanel::help(ListSelectionModel::new(
+        "Panel",
+        vec![
+            ListSelectionGroup::new("First tab", vec![ListSelectionItem::new("First item")]),
+            ListSelectionGroup::new("Second tab", vec![ListSelectionItem::new("Second item")]),
+        ],
+    ));
+    let area = Rect::new(0, 0, 20, panel.desired_height(20));
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+
+    terminal
+        .draw(|frame| panel.draw(frame, area, None, None, test_context()))
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(2, 2)].bg,
+        test_context().accent_surface_background()
+    );
+    assert_eq!(buffer[(0, 4)].symbol(), ">");
+    assert_eq!(buffer[(2, 4)].symbol(), "F");
+    let rows = terminal.backend().to_string();
+    let rows = rows.lines().collect::<Vec<_>>();
+    assert!(rows[0].contains("Panel"));
+    assert!(rows[1].trim_matches('"').trim().is_empty());
+    assert!(rows[2].contains("First tab"));
+    assert!(rows[3].contains("Second tab"));
+    assert!(rows[4].contains("First item"));
+    assert_eq!(
+        panel.pointer_target_at(area, 3, 3),
+        Some(CommandPanelPointerTarget::Tab(1))
+    );
+    assert_eq!(
+        panel.pointer_target_at(area, 3, 4),
+        Some(CommandPanelPointerTarget::Item(0))
+    );
 }
 
 #[test]
@@ -256,7 +309,7 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
             .session
             .composer
             .height,
-        21
+        18
     );
     assert_eq!(layout(&app, terminal_area).session.composer.height, 13);
     assert_eq!(layout(&app, terminal_area).session.bottom.height, 2);
@@ -943,12 +996,10 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
         .y;
     assert_eq!(first[(3, 1)].fg, Color::Rgb(0x40, 0x85, 0xac));
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
-    assert_eq!(
-        first[(1, interaction_y)].fg,
-        test_context().accent_surface_foreground()
-    );
-    assert_eq!(
-        first[(1, interaction_y)].bg,
+    assert_eq!(first[(2, interaction_y)].fg, Color::Red);
+    assert!(first[(2, interaction_y)].modifier.contains(Modifier::BOLD));
+    assert_ne!(
+        first[(2, interaction_y)].bg,
         test_context().accent_surface_background()
     );
 
@@ -956,12 +1007,10 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
     let second = render_buffer(&app, 80, 24);
     assert_eq!(second[(4, 1)].fg, first[(4, 1)].fg);
     assert_eq!(second[(0, interaction_y)].fg, Color::Green);
-    assert_eq!(
-        second[(1, interaction_y)].fg,
-        test_context().accent_surface_foreground()
-    );
-    assert_eq!(
-        second[(1, interaction_y)].bg,
+    assert_eq!(second[(2, interaction_y)].fg, Color::Green);
+    assert!(second[(2, interaction_y)].modifier.contains(Modifier::BOLD));
+    assert_ne!(
+        second[(2, interaction_y)].bg,
         test_context().accent_surface_background()
     );
 }

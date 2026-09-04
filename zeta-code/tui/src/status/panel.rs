@@ -93,12 +93,16 @@ impl StatusPanel {
         self.processes = DetailList::new("Processes", process_rows(resources));
     }
 
-    pub(crate) fn desired_height(&self, width: u16) -> u16 {
-        let content_width = width.saturating_sub(4);
-        self.session
-            .desired_height_for_width(content_width)
-            .max(self.processes.desired_height_for_width(content_width))
-            .saturating_add(tab_list::desired_height(self.tabs.tabs(), content_width))
+    pub(crate) fn tab_rows(&self, width: u16) -> u16 {
+        tab_list::desired_height(self.tabs.tabs(), width)
+    }
+
+    pub(crate) fn body_rows(&self, width: u16) -> u16 {
+        let rows = self
+            .session
+            .content_height(width)
+            .max(self.processes.content_height(width));
+        u16::try_from(rows).unwrap_or(u16::MAX)
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> StatusPanelOutcome {
@@ -134,12 +138,11 @@ impl StatusPanel {
         !matches!(outcome, TabListInputOutcome::Unhandled)
     }
 
-    pub(crate) fn tab_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
-        let tab_area = self.tab_area(area);
-        self.tabs.index_at(tab_area, column, row)
+    pub(crate) fn tab_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
+        self.tabs.index_at(area, column, row)
     }
 
-    pub(crate) fn draw(
+    pub(crate) fn draw_tabs(
         &self,
         frame: &mut Frame<'_>,
         area: Rect,
@@ -147,30 +150,25 @@ impl StatusPanel {
         pressed_tab: Option<usize>,
         context: RenderContext<'_>,
     ) {
-        let tab_area = self.tab_area(area);
         tab_list::draw(
             frame,
-            tab_area,
+            area,
             &self.tabs,
             false,
             hovered_tab,
             pressed_tab,
             context,
         );
-        let detail_area = Rect {
-            y: tab_area.bottom(),
-            height: area.bottom().saturating_sub(tab_area.bottom()),
-            ..area
-        };
+    }
+
+    pub(crate) fn draw_body(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
         let detail = self.active_detail();
-        let visible_rows = detail_area.height;
-        let content_height =
-            u16::try_from(detail.content_height(detail_area.width.saturating_sub(4)))
-                .unwrap_or(u16::MAX);
+        let visible_rows = area.height;
+        let content_height = u16::try_from(detail.content_height(area.width)).unwrap_or(u16::MAX);
         let allocated_max_scroll = content_height.saturating_sub(visible_rows);
         detail_list::draw_body_scrolled(
             frame,
-            detail_area,
+            area,
             detail,
             self.scroll[self.tabs.active_index()].min(allocated_max_scroll),
             context,
@@ -185,23 +183,13 @@ impl StatusPanel {
         if !matches!(self.tabs.active_tab().section, StatusSection::Processes) {
             return false;
         }
-        let content = crate::render::horizontal_margin(area, 2);
-        let tab_area = self.tab_area(area);
-        content.width > 0 && area.bottom() > tab_area.bottom()
+        area.width > 0 && area.height > 0
     }
 
     fn active_detail(&self) -> &DetailList {
         match self.tabs.active_tab().section {
             StatusSection::Session => &self.session,
             StatusSection::Processes => &self.processes,
-        }
-    }
-
-    fn tab_area(&self, area: Rect) -> Rect {
-        let content = crate::render::horizontal_margin(area, 2);
-        Rect {
-            height: tab_list::desired_height(self.tabs.tabs(), content.width).min(content.height),
-            ..content
         }
     }
 }

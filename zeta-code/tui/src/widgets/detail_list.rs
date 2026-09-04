@@ -52,10 +52,6 @@ impl DetailList {
         u16::try_from(content_rows.saturating_add(3)).unwrap_or(u16::MAX)
     }
 
-    pub(crate) fn desired_height_for_width(&self, content_width: u16) -> u16 {
-        u16::try_from(self.content_height(content_width).saturating_add(3)).unwrap_or(u16::MAX)
-    }
-
     pub(crate) fn content_height(&self, content_width: u16) -> usize {
         crate::render::wrapped_height(
             &detail_lines(self, Style::default(), Style::default()),
@@ -122,7 +118,7 @@ pub(crate) fn draw_body_scrolled(
         Paragraph::new(lines)
             .wrap(Wrap { trim: false })
             .scroll((scroll, 0)),
-        horizontal_margin(area, 2),
+        area,
     );
 }
 

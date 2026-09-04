@@ -1,7 +1,5 @@
 use super::ListSelectionState;
 use super::state::ListSelectionItem;
-use crate::render::Insets;
-use crate::render::RectExt;
 use crate::render::RenderContext;
 use crate::render::line_to_borrowed;
 use crate::render::selection_marker;
@@ -27,61 +25,66 @@ const ITEM_STATE_COLUMN_WIDTH: u16 = 2;
 const ITEM_COLUMN_GAP: u16 = 4;
 
 #[cfg(test)]
-pub(crate) fn draw(
+pub(crate) fn draw_test_surface(
     frame: &mut Frame<'_>,
     area: Rect,
     view: &ListSelectionState,
     context: RenderContext<'_>,
 ) {
-    draw_with_pointer(
-        frame, area, view, None, None, false, false, None, None, context,
+    let content = crate::render::horizontal_margin(area, 2);
+    let tab_rows = view.tab_rows(content.width);
+    let tabs = Rect::new(content.x, content.y, content.width, tab_rows);
+    let body = Rect::new(
+        content.x,
+        content.y.saturating_add(tab_rows),
+        content.width,
+        content.height.saturating_sub(tab_rows),
     );
+    draw_tabs(frame, tabs, view, None, None, context);
+    draw_body_with_pointer(frame, body, view, false, false, None, None, context);
 }
 
-pub(crate) fn draw_with_pointer(
+pub(crate) fn draw_tabs(
     frame: &mut Frame<'_>,
     area: Rect,
     view: &ListSelectionState,
     hovered_tab: Option<usize>,
     pressed_tab: Option<usize>,
+    context: RenderContext<'_>,
+) {
+    if !view.show_tabs() {
+        return;
+    }
+    tab_list::draw(
+        frame,
+        area,
+        view.tab_list(),
+        view.tabs_focused(),
+        hovered_tab,
+        pressed_tab,
+        context,
+    );
+}
+
+pub(crate) fn draw_body_with_pointer(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: &ListSelectionState,
     hovered_search: bool,
     pressed_search: bool,
     hovered_item: Option<usize>,
     pressed_item: Option<usize>,
     context: RenderContext<'_>,
 ) {
-    let content = content_area(area);
-    if content.is_empty() {
+    if area.is_empty() {
         return;
     }
-
-    let tab_height = if view.show_tabs() {
-        tab_list::desired_height(
-            view.tabs(),
-            content.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH),
-        )
-    } else {
-        0
-    };
-    let areas = selection_areas(content, view, tab_height);
-
-    if view.show_tabs() {
-        let tab_area = content_after_state_column(areas[0]);
-        tab_list::draw(
-            frame,
-            tab_area,
-            view.tab_list(),
-            view.tabs_focused(),
-            hovered_tab,
-            pressed_tab,
-            context,
-        );
-    }
+    let areas = body_areas(area, view);
 
     if let Some(search) = view.search() {
         search_box::draw(
             frame,
-            content_after_state_column(areas[1]),
+            areas[0],
             search,
             hovered_search,
             pressed_search,
@@ -90,7 +93,7 @@ pub(crate) fn draw_with_pointer(
     }
 
     let visible_items = view.visible_items();
-    let rendered_rows = usize::from(areas[2].height).min(visible_items.len());
+    let rendered_rows = usize::from(areas[1].height).min(visible_items.len());
     let first_row = view.first_rendered_row(rendered_rows);
     if visible_items.is_empty() {
         frame.render_widget(
@@ -98,10 +101,11 @@ pub(crate) fn draw_with_pointer(
                 view.empty_message(),
                 Style::default().fg(context.muted()),
             ))),
-            content_after_state_column(areas[2]),
+            areas[1],
         );
     } else {
-        let column_layout = ItemColumnLayout::new(areas[2].width, &visible_items);
+        let list_area = with_state_column(areas[1]);
+        let column_layout = ItemColumnLayout::new(list_area.width, &visible_items);
         for (row, (index, item)) in visible_items
             .iter()
             .enumerate()
@@ -110,9 +114,9 @@ pub(crate) fn draw_with_pointer(
             .enumerate()
         {
             let row_area = Rect::new(
-                areas[2].x,
-                areas[2].y.saturating_add(row as u16),
-                areas[2].width,
+                list_area.x,
+                areas[1].y.saturating_add(row as u16),
+                list_area.width,
                 1,
             );
             draw_item(
@@ -144,7 +148,7 @@ pub(crate) fn draw_with_pointer(
                 Constraint::Length(caption_height),
                 Constraint::Length(bottom_margin),
             ])
-            .split(content_after_state_column(areas[3]));
+            .split(areas[2]);
         let separator_color = preview.separator_color().unwrap_or_else(|| context.muted());
         frame.render_widget(
             Paragraph::new(dashed_rule(
@@ -180,85 +184,54 @@ pub(crate) fn draw_with_pointer(
 }
 
 impl ListSelectionState {
-    pub(crate) fn tab_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
+    pub(crate) fn tab_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
         if !self.show_tabs() {
             return None;
         }
-        let content = content_area(area);
-        if content.is_empty() {
-            return None;
-        }
-        let tab_area = content_after_state_column(content);
-        let tab_height = tab_list::desired_height(self.tabs(), tab_area.width);
-        let areas = selection_areas(content, self, tab_height);
-        self.tab_list()
-            .index_at(content_after_state_column(areas[0]), column, row)
+        self.tab_list().index_at(area, column, row)
     }
 
-    pub(crate) fn item_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
-        let content = content_area(area);
-        if content.is_empty() {
+    pub(crate) fn item_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
+        if area.is_empty() {
             return None;
         }
-        let tab_height = if self.show_tabs() {
-            tab_list::desired_height(
-                self.tabs(),
-                content.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH),
-            )
-        } else {
-            0
-        };
-        let areas = selection_areas(content, self, tab_height);
+        let areas = body_areas(area, self);
+        let list_area = with_state_column(areas[1]);
         let visible_items = self.visible_items();
-        let rendered_rows = usize::from(areas[2].height).min(visible_items.len());
+        let rendered_rows = usize::from(areas[1].height).min(visible_items.len());
         let first_row = self.first_rendered_row(rendered_rows);
-        if column < areas[2].x
-            || column >= areas[2].right()
-            || row < areas[2].y
-            || row >= areas[2].y.saturating_add(rendered_rows as u16)
+        if column < list_area.x
+            || column >= list_area.right()
+            || row < areas[1].y
+            || row >= areas[1].y.saturating_add(rendered_rows as u16)
         {
             return None;
         }
-        let index = first_row.saturating_add(usize::from(row - areas[2].y));
+        let index = first_row.saturating_add(usize::from(row - areas[1].y));
         (index < visible_items.len()).then_some(index)
     }
 
-    pub(crate) fn search_contains(&self, area: Rect, column: u16, row: u16) -> bool {
+    pub(crate) fn search_contains_in(&self, area: Rect, column: u16, row: u16) -> bool {
         if self.search().is_none() {
             return false;
         }
-        let content = content_area(area);
-        if content.is_empty() {
+        if area.is_empty() {
             return false;
         }
-        let tab_height = if self.show_tabs() {
-            tab_list::desired_height(
-                self.tabs(),
-                content.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH),
-            )
-        } else {
-            0
-        };
-        content_after_state_column(selection_areas(content, self, tab_height)[1])
-            .contains(ratatui::layout::Position::new(column, row))
+        body_areas(area, self)[0].contains(ratatui::layout::Position::new(column, row))
     }
 }
 
-fn content_area(area: Rect) -> Rect {
-    area.inset(Insets::tlbr(0, 0, 0, 2))
-}
-
-fn content_after_state_column(area: Rect) -> Rect {
+fn with_state_column(area: Rect) -> Rect {
+    let state_column_width = ITEM_STATE_COLUMN_WIDTH.min(area.x);
     Rect {
-        x: area
-            .x
-            .saturating_add(ITEM_STATE_COLUMN_WIDTH.min(area.width)),
-        width: area.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH),
+        x: area.x.saturating_sub(state_column_width),
+        width: area.width.saturating_add(state_column_width),
         ..area
     }
 }
 
-fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) -> Rc<[Rect]> {
+fn body_areas(content: Rect, view: &ListSelectionState) -> Rc<[Rect]> {
     let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
     let preview_height = view
         .selected_item()
@@ -269,7 +242,6 @@ fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) ->
     Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(tab_height),
             Constraint::Length(search_height),
             Constraint::Min(1),
             Constraint::Length(preview_height),

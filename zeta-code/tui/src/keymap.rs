@@ -27,6 +27,7 @@ use chords::KEY_CHORD_TIMEOUT;
 pub(crate) use editor::KeymapChoices;
 pub(crate) use editor::KeymapEditor;
 pub(crate) use editor::KeymapEditorOutcome;
+pub(crate) use editor::KeymapEditorPage;
 #[cfg(test)]
 pub(crate) use editor::keymap_choices;
 pub(crate) use input::compose_config_chord;

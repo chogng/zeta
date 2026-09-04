@@ -5,14 +5,17 @@ use super::RemainingContextWindow;
 use super::StatusPanelOutcome;
 use super::StatusViewData;
 use super::status_panel;
+use crate::render::horizontal_margin;
 use crate::render::test_context;
 use crate::status::ProcessCpuCurrent;
 use crate::status::ProcessUsageView;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::Frame;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use zeta_protocol::ModelMoneyAmount;
 use zeta_protocol::ModelReferenceCostSummary;
@@ -58,14 +61,12 @@ fn status_panel_requests_full_content_height_and_renders_bold_labels() {
     let usage = usage();
     let reference_cost = reference_cost();
     let panel = panel(&usage, &reference_cost);
-    assert_eq!(panel.desired_height(100), 19);
-    assert!(panel.desired_height(24) > panel.desired_height(100));
-    let backend = TestBackend::new(100, panel.desired_height(100));
+    assert_eq!(desired_height(&panel, 100), 16);
+    assert!(desired_height(&panel, 24) > desired_height(&panel, 100));
+    let backend = TestBackend::new(100, desired_height(&panel, 100));
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| panel.draw(frame, frame.area(), None, None, test_context()))
-        .unwrap();
+    terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
 
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(3, 0)].symbol(), "S");
@@ -159,9 +160,7 @@ fn process_tab_renders_local_total_and_owned_process_details() {
     let backend = TestBackend::new(80, 10);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| panel.draw(frame, frame.area(), None, None, test_context()))
-        .unwrap();
+    terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
 
     insta::assert_snapshot!("status_processes_tab", terminal.backend().to_string());
 }
@@ -178,9 +177,7 @@ fn status_panel_scrolls_when_allocated_height_is_shorter_than_content() {
         panel.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE)),
         StatusPanelOutcome::Consumed
     );
-    terminal
-        .draw(|frame| panel.draw(frame, frame.area(), None, None, test_context()))
-        .unwrap();
+    terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
 
     let rendered = terminal.backend().to_string();
     assert!(rendered.contains("Thread version:"));
@@ -200,11 +197,11 @@ fn status_panel_switches_tabs_with_keyboard_and_exposes_mouse_targets() {
     let usage = usage();
     let reference_cost = reference_cost();
     let mut panel = panel(&usage, &reference_cost);
-    let desired_height = panel.desired_height(80);
+    let height_before = desired_height(&panel, 80);
 
     assert_eq!(panel.tabs.active_index(), 0);
     assert_eq!(
-        panel.tab_index_at(ratatui::layout::Rect::new(0, 0, 80, 20), 16, 0),
+        panel.tab_index_in(ratatui::layout::Rect::new(2, 0, 76, 1), 16, 0),
         Some(1)
     );
     assert_eq!(
@@ -227,7 +224,7 @@ fn status_panel_switches_tabs_with_keyboard_and_exposes_mouse_targets() {
         StatusPanelOutcome::Consumed
     );
     assert_eq!(panel.tabs.active_index(), 0);
-    assert_eq!(panel.desired_height(80), desired_height);
+    assert_eq!(desired_height(&panel, 80), height_before);
     assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
 }
 
@@ -268,6 +265,27 @@ fn panel<'a>(
         thread_id: "thread-2",
         thread_sequence: 3,
     })
+}
+
+fn desired_height(panel: &super::StatusPanel, width: u16) -> u16 {
+    let content_width = width.saturating_sub(4);
+    panel
+        .tab_rows(content_width)
+        .saturating_add(panel.body_rows(content_width))
+}
+
+fn draw_panel(frame: &mut Frame<'_>, panel: &super::StatusPanel) {
+    let content = horizontal_margin(frame.area(), 2);
+    let tab_rows = panel.tab_rows(content.width).min(content.height);
+    let tabs = Rect::new(content.x, content.y, content.width, tab_rows);
+    let body = Rect::new(
+        content.x,
+        content.y.saturating_add(tab_rows),
+        content.width,
+        content.height.saturating_sub(tab_rows),
+    );
+    panel.draw_tabs(frame, tabs, None, None, test_context());
+    panel.draw_body(frame, body, test_context());
 }
 
 fn row_value<'a>(rows: &'a [crate::widgets::detail_list::DetailListRow], label: &str) -> &'a str {

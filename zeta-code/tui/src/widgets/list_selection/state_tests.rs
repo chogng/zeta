@@ -62,11 +62,11 @@ fn actionable_rows_expose_pointer_hit_testing_and_activation() {
         )
         .without_tab_bar(),
     );
-    let area = Rect::new(0, 0, 80, 10);
+    let area = Rect::new(2, 0, 76, 10);
 
-    assert_eq!(state.item_index_at(area, 0, 0), Some(0));
-    assert_eq!(state.item_index_at(area, 2, 1), Some(1));
-    assert_eq!(state.item_index_at(area, 78, 1), None);
+    assert_eq!(state.item_index_in(area, 0, 0), Some(0));
+    assert_eq!(state.item_index_in(area, 2, 1), Some(1));
+    assert_eq!(state.item_index_in(area, 78, 1), None);
     assert_eq!(state.activate_visible_item(1), Some(second_id));
     assert_eq!(state.selected_visible_index(), Some(0));
 }
@@ -88,9 +88,9 @@ fn read_only_rows_cannot_be_activated() {
 #[test]
 fn mouse_click_switches_tabs() {
     let mut state = state();
-    let area = Rect::new(0, 0, 80, 10);
+    let area = Rect::new(2, 0, 76, 10);
 
-    assert_eq!(state.tab_index_at(area, 14, 0), Some(1));
+    assert_eq!(state.tab_index_in(area, 14, 0), Some(1));
     assert!(state.select_tab(1));
     assert_eq!(active_tab_label(&state), "Keys");
     assert_eq!(state.selected_visible_index(), Some(0));
@@ -99,10 +99,10 @@ fn mouse_click_switches_tabs() {
 #[test]
 fn search_hit_testing_and_explicit_focus_share_the_search_geometry() {
     let mut state = state();
-    let area = Rect::new(0, 0, 80, 10);
+    let area = Rect::new(2, 1, 76, 9);
 
-    assert!(state.search_contains(area, 2, 1));
-    assert!(!state.search_contains(area, 1, 1));
+    assert!(state.search_contains_in(area, 2, 1));
+    assert!(!state.search_contains_in(area, 1, 1));
     assert!(state.focus_search());
     state.handle_key(key(KeyCode::Char('m')));
 

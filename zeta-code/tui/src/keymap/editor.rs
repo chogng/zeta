@@ -65,6 +65,12 @@ pub(crate) enum KeymapEditorOutcome {
     Dismiss,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum KeymapEditorPage<'a> {
+    Selection(&'a crate::widgets::list_selection::ListSelectionState),
+    Capture(&'a KeyCapture),
+}
+
 impl KeymapEditor {
     pub(crate) fn new(spec: KeymapChoices) -> Self {
         Self {
@@ -104,6 +110,18 @@ impl KeymapEditor {
 
     pub(crate) fn capture(&self) -> Option<&KeyCapture> {
         self.capture.as_ref().map(|capture| &capture.view)
+    }
+
+    pub(crate) fn page(&self) -> KeymapEditorPage<'_> {
+        match &self.capture {
+            Some(capture) => KeymapEditorPage::Capture(&capture.view),
+            None => KeymapEditorPage::Selection(
+                self.pages
+                    .last()
+                    .expect("a keymap editor always has a selection page")
+                    .state(),
+            ),
+        }
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {

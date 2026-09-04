@@ -14,8 +14,6 @@ pub(crate) use interaction::InteractionTarget;
 pub(crate) use interaction::action_style;
 pub(crate) use interaction::interaction_style;
 pub(crate) use interaction::selection_marker;
-pub(crate) use layout::Insets;
-pub(crate) use layout::RectExt;
 pub(crate) use layout::bottom_anchored_area;
 pub(crate) use layout::horizontal_margin;
 pub(crate) use palette::RenderContext;

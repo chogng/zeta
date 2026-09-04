@@ -17,6 +17,7 @@ use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
+use ratatui::style::Modifier;
 
 fn palette(focus: Color) -> ThemePreviewPalette {
     ThemePreviewPalette {
@@ -190,12 +191,10 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         .unwrap();
     assert_eq!(preview_row - custom_row, 2);
     assert_eq!(key_hint_row - palette_row, 1);
-    assert_eq!(
-        buffer[(1, 0)].fg,
-        test_context().accent_surface_foreground()
-    );
-    assert_eq!(
-        buffer[(1, 0)].bg,
+    assert_eq!(buffer[(2, 0)].fg, Color::Indexed(1));
+    assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
+    assert_ne!(
+        buffer[(2, 0)].bg,
         test_context().accent_surface_background()
     );
     assert_eq!(buffer[(2, preview_row as u16)].fg, Color::DarkGray);

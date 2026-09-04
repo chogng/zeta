@@ -15,6 +15,7 @@ pub(crate) use state::ListSelectionItem;
 pub(crate) use state::ListSelectionItemId;
 pub(crate) use state::ListSelectionModel;
 pub(crate) use state::ListSelectionState;
+pub(crate) use view::draw_body_with_pointer;
+pub(crate) use view::draw_tabs;
 #[cfg(test)]
-pub(crate) use view::draw;
-pub(crate) use view::draw_with_pointer;
+pub(crate) use view::draw_test_surface;

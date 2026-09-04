@@ -104,6 +104,12 @@ pub(crate) enum ConfigEditorOutcome {
     Dismiss,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ConfigEditorPage<'a> {
+    Selection(&'a crate::widgets::list_selection::ListSelectionState),
+    Prompt(&'a TextPrompt),
+}
+
 impl ConfigEditor {
     pub(crate) fn new(spec: ConfigChoices) -> Self {
         Self {
@@ -157,8 +163,11 @@ impl ConfigEditor {
         }
     }
 
-    pub(crate) fn prompt(&self) -> Option<&TextPrompt> {
-        self.prompt.as_ref().map(|prompt| &prompt.prompt)
+    pub(crate) fn page(&self) -> ConfigEditorPage<'_> {
+        match &self.prompt {
+            Some(prompt) => ConfigEditorPage::Prompt(&prompt.prompt),
+            None => ConfigEditorPage::Selection(self.selection.state()),
+        }
     }
 
     pub(crate) fn key_hints(&self) -> &str {

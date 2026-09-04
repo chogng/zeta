@@ -6,6 +6,7 @@ pub(crate) use editor::ConfigChoices;
 pub(crate) use editor::ConfigEdit;
 pub(crate) use editor::ConfigEditor;
 pub(crate) use editor::ConfigEditorOutcome;
+pub(crate) use editor::ConfigEditorPage;
 pub(crate) use editor::ConfigSelectionAction;
 pub(crate) use editor::ProviderApiKeyEdit;
 pub(crate) use editor::config_choices;
