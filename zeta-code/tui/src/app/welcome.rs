@@ -21,6 +21,8 @@ use zeta_protocol::ModelAccess;
 const INFO_ROWS: u16 = 3;
 const PET_GAP: u16 = 3;
 const MIN_INFO_WIDTH_WITH_PET: u16 = 12;
+const PET_VIEWPORT_WIDTH: u16 = 8;
+const PET_VIEWPORT_HEIGHT: u16 = 5;
 
 /// Display-only context for the Thread identity header.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,7 +61,7 @@ impl WelcomeModel {
 }
 
 pub(crate) fn desired_height(_available_width: u16) -> u16 {
-    pet::sprite().height().max(INFO_ROWS)
+    PET_VIEWPORT_HEIGHT.max(INFO_ROWS)
 }
 
 pub(crate) fn history_height(available_height: u16) -> u16 {
@@ -93,13 +95,16 @@ fn render(buffer: &mut Buffer, area: Rect, model: &WelcomeModel, context: Render
         return;
     }
     let sprite = pet::sprite();
-    let show_pet = available.height >= sprite.height()
+    let show_pet = available.height >= PET_VIEWPORT_HEIGHT
         && available.width
-            >= sprite
-                .width()
+            >= PET_VIEWPORT_WIDTH
                 .saturating_add(PET_GAP)
                 .saturating_add(MIN_INFO_WIDTH_WITH_PET);
-    let content_height = if show_pet { sprite.height() } else { INFO_ROWS };
+    let content_height = if show_pet {
+        PET_VIEWPORT_HEIGHT
+    } else {
+        INFO_ROWS
+    };
     let content_y = available
         .y
         .saturating_add(u16::from(available.height > content_height));

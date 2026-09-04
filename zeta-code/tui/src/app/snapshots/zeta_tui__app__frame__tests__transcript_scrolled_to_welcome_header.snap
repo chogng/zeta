@@ -3,11 +3,11 @@ source: zeta-code/tui/src/app/frame_tests.rs
 expression: scrolled_to_start
 ---
                                                                                 
-   ▐▖  ▗▌    Zeta Code v0.1.0                                                   
-   ▗█▄▄█▖    Automatic model · Access unknown                                   
-  ▗█▝██▘█▖   /work/zeta                                                         
-   ▜▌  ▐▛                                                                       
-   ▝    ▘                                                                       
+   𜴧▂  ▂𜴧    Zeta Code v0.1.0                                                   
+  𜴧██████𜴧   Automatic model · Access unknown                                   
+             /work/zeta                                                         
+                                                                                
+                                                                                
 ● Conversation started.                                                         
                                                                                 
 ● Model invocation failed 0                                                     

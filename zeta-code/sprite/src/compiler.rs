@@ -2,7 +2,7 @@
 
 use crate::SpriteCell;
 use crate::TerminalSprite;
-use crate::grid::read_sprite_grid;
+use crate::sheet::read_sprite_sheet;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
@@ -35,7 +35,7 @@ pub fn source_dimensions(path: &Path) -> Result<(u32, u32)> {
         "png" => image::image_dimensions(path)
             .with_context(|| format!("read PNG dimensions {}", path.display())),
         "sprite" => {
-            let source = read_sprite_grid(path)?;
+            let source = read_sprite_sheet(path)?;
             Ok((source.width, source.height))
         }
         value => bail!("unsupported image extension '.{value}'; expected .svg, .png, or .sprite"),
@@ -84,11 +84,21 @@ fn rasterize_svg(path: &Path, width: u32, height: u32) -> Result<Vec<[u8; 4]>> {
             "SVG intrinsic dimensions {source_width}x{source_height} exceed the 4096-pixel compiler limit"
         );
     }
-    let mut pixmap = Pixmap::new(source_width, source_height)
-        .with_context(|| format!("allocate {source_width}x{source_height} SVG raster"))?;
+    let scale = width
+        .div_ceil(source_width)
+        .max(height.div_ceil(source_height))
+        .max(1);
+    let raster_width = source_width
+        .checked_mul(scale)
+        .context("SVG raster width is too large")?;
+    let raster_height = source_height
+        .checked_mul(scale)
+        .context("SVG raster height is too large")?;
+    let mut pixmap = Pixmap::new(raster_width, raster_height)
+        .with_context(|| format!("allocate {raster_width}x{raster_height} SVG raster"))?;
     let transform = Transform::from_scale(
-        source_width as f32 / source.width(),
-        source_height as f32 / source.height(),
+        raster_width as f32 / source.width(),
+        raster_height as f32 / source.height(),
     );
     resvg::render(&tree, transform, &mut pixmap.as_mut());
     let source_pixels = pixmap
@@ -100,8 +110,8 @@ fn rasterize_svg(path: &Path, width: u32, height: u32) -> Result<Vec<[u8; 4]>> {
         })
         .collect::<Vec<_>>();
     let source_image = image::RgbaImage::from_raw(
-        source_width,
-        source_height,
+        raster_width,
+        raster_height,
         source_pixels.into_iter().flatten().collect(),
     )
     .context("SVG raster pixel count did not match its dimensions")?;
@@ -118,11 +128,11 @@ fn rasterize_png(path: &Path, width: u32, height: u32) -> Result<Vec<[u8; 4]>> {
 }
 
 fn rasterize_sprite_grid(path: &Path, width: u32, height: u32) -> Result<Vec<[u8; 4]>> {
-    let source = read_sprite_grid(path)?;
+    let source = read_sprite_sheet(path)?;
     let image = image::RgbaImage::from_raw(
         source.width,
         source.height,
-        source.pixels.into_iter().flatten().collect(),
+        source.idle().pixels.iter().copied().flatten().collect(),
     )
     .context("sprite grid pixel count did not match its dimensions")?;
     let image = resize_pixel_art(&image, width, height);

@@ -56,9 +56,9 @@ generate-protocol:
 zeta *args:
     {{ python }} -B scripts/zeta-code/run.py {args}
 
-# Preview the Welcome pet's final terminal cells.
-pet:
-    @{{ python }} -B scripts/cargo.py run --quiet -p zeta-sprite -- zeta-code/tui/assets/welcome/pet.sprite --columns 8 --rows 5
+# Preview the Welcome pet's idle frame, all frames, or one named action.
+pet *args:
+    @{{ python }} -B scripts/cargo.py run --quiet -p zeta-sprite -- zeta-code/tui/assets/welcome/pet.sprite {{ args }}
 
 # Assemble the complete immutable development package shared by Zeta products.
 zeta-package *args:

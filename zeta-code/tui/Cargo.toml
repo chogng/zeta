@@ -60,7 +60,7 @@ tempfile = { workspace = true }
 zeta-client = { workspace = true }
 
 [build-dependencies]
-zeta-sprite = { workspace = true, features = ["grid", "rust-source"] }
+zeta-sprite = { workspace = true, features = ["rust-source", "sheet"] }
 
 [lints.rust]
 # Keep unsafe code denied outside the explicitly scoped Windows console adapter.

@@ -115,10 +115,12 @@ TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，�
 just zeta
 ```
 
-调整 Welcome 区域的终端 Logo 时，只需编辑 [`assets/welcome/pet.sprite`](assets/welcome/pet.sprite)；网格保留 `16×9` 的逐逻辑像素精度，[`build.rs`](build.rs) 会在普通编译中调用 `zeta-sprite`，把每组 `2×2` 逻辑像素打包为象限字符，生成到 Cargo `OUT_DIR` 并嵌入 TUI。`just pet` 只用于快速查看最终的 `8×5` 彩色预览。尺寸、网格格式、设计原则和验收步骤由 [`Zeta Code 终端 Logo 开发`](../docs/logo.md)统一说明。
+调整 Welcome 区域的终端 Pet 时，只需编辑 [`assets/welcome/pet.sprite`](assets/welcome/pet.sprite)；设计空间为 `8×8`，源网格为 `16×16`，[`build.rs`](build.rs) 会把每组 `2×4` 源像素组合为一个 Block Octant 终端字符，Pet 输出固定为 `8×4`，Welcome 预留 `8×5` viewport，并将完整 Sprite 嵌入 Cargo `OUT_DIR`。`just pet` 查看静止帧，`just pet frames` 查看所有帧，`just pet click` 按实际时序预览点击动作。格式、绘制规则和验收步骤由 [`Zeta Code Pet Sprite 与点击动作`](../docs/logo.md)统一说明。
 
 ```bash
 just pet
+just pet frames
+just pet click
 ```
 
 等价的 Cargo 命令是：

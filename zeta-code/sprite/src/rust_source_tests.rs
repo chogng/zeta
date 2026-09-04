@@ -1,5 +1,8 @@
 use super::terminal_sprite_rust_source;
+use super::terminal_sprite_sheet_rust_source;
+use crate::compile_sprite_sheet;
 use crate::pack_half_blocks_rgba;
+use std::fs;
 
 #[test]
 fn rust_assets_use_the_packed_cell_data() {
@@ -8,13 +11,32 @@ fn rust_assets_use_the_packed_cell_data() {
 
     let source = terminal_sprite_rust_source("PET", &sprite);
 
-    assert!(
-        source.contains("pub(super) static PET: TerminalSprite<'static> = TerminalSprite::new(")
-    );
+    assert!(source.contains("pub(super) static PET: TerminalSprite<'static> ="));
     assert!(source.contains("    2,"));
     assert!(source.contains("    1,"));
     assert!(source.contains("SpriteCell::new('█', Some(Rgb::new(0x40, 0x85, 0xac)), None)"));
     assert!(source.contains("use zeta_sprite::TerminalSprite;"));
+}
+
+#[test]
+fn named_frames_and_actions_are_embedded_in_one_static_sheet() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("pet.sprite");
+    fs::write(
+        &path,
+        "version 1\nsize 2 2\ncolor B #4085AC\n\nframe idle\nBB\nBB\nend\n\nframe press\nBB\n..\nend\n\naction click\npress 75\nend\n",
+    )
+    .unwrap();
+    let sheet = compile_sprite_sheet(&path, 128).unwrap();
+
+    let source = terminal_sprite_sheet_rust_source("PET", &sheet);
+
+    assert!(source.contains("static PET_IDLE_CELLS: &[SpriteCell]"));
+    assert!(source.contains("static PET_PRESS_CELLS: &[SpriteCell]"));
+    assert!(source.contains("TerminalSpriteFrame::new(\"idle\", TerminalSprite::new(1, 1"));
+    assert!(source.contains("TerminalSpriteActionStep::new(1, 75)"));
+    assert!(source.contains("TerminalSpriteAction::new(\"click\", PET_CLICK_STEPS)"));
+    assert!(source.contains("pub(super) static PET: TerminalSpriteSheet<'static>"));
 }
 
 #[test]

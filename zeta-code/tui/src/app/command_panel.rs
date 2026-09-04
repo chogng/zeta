@@ -292,6 +292,25 @@ impl CommandPanel {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn key_capture(&self) -> Option<&KeyCapture> {
+        match self {
+            Self::Keymap(editor) => editor.capture(),
+            Self::Help(_)
+            | Self::Dirs(_)
+            | Self::Config(_)
+            | Self::Connectors(_)
+            | Self::Mcp(_)
+            | Self::Model(_)
+            | Self::Rewind(_)
+            | Self::Sessions(_)
+            | Self::Skills(_)
+            | Self::Startup(_)
+            | Self::Status(_)
+            | Self::StatusLine(_)
+            | Self::Theme(_) => None,
+        }
+    }
     fn body(&self) -> CommandPanelBody<'_> {
         match self {
             Self::Help(selection) => CommandPanelBody::Selection(selection.state()),

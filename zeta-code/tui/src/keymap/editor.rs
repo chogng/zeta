@@ -106,6 +106,10 @@ impl KeymapEditor {
         self.apply_selection_outcome(outcome)
     }
 
+    #[cfg(test)]
+    pub(crate) fn capture(&self) -> Option<&KeyCapture> {
+        self.capture.as_ref().map(|capture| &capture.view)
+    }
     pub(crate) fn page(&self) -> KeymapEditorPage<'_> {
         match &self.capture {
             Some(capture) => KeymapEditorPage::Capture(&capture.view),

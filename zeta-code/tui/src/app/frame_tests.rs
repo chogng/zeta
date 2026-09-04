@@ -77,7 +77,6 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
 
     assert!(!rendered.contains("dir assistant"));
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
-    assert!(rendered.contains(" ▐▖  ▗▌ "));
     assert!(rendered.contains("Automatic model · Access unknown"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));

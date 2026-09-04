@@ -1,6 +1,8 @@
 use super::PackError;
 use super::Rgb;
+use super::octant_mask;
 use super::pack_half_blocks_rgba;
+use super::pack_octants_rgba;
 use super::pack_quadrants_rgba;
 use super::quadrant_symbol;
 
@@ -134,5 +136,60 @@ fn quadrant_masks_cover_every_unicode_block_combination() {
     assert_eq!(
         (0..16).map(quadrant_symbol).collect::<String>(),
         " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█"
+    );
+}
+
+#[test]
+fn octant_cells_keep_a_16_by_16_source_at_8_by_4_terminal_cells() {
+    let sprite = pack_octants_rgba(16, 16, &vec![BLUE; 16 * 16], 128).unwrap();
+
+    assert_eq!(sprite.as_sprite().width(), 8);
+    assert_eq!(sprite.as_sprite().height(), 4);
+}
+
+#[test]
+fn octant_cells_round_trip_every_2_by_4_mask() {
+    for mask in 0..=u8::MAX {
+        let mut source = [CLEAR; 8];
+        for (index, pixel) in source.iter_mut().enumerate() {
+            if mask & (1 << index) != 0 {
+                *pixel = BLUE;
+            }
+        }
+        let sprite = pack_octants_rgba(2, 4, &source, 128).unwrap();
+        let cell = sprite.as_sprite().cells()[0];
+
+        assert_eq!(octant_mask(cell.symbol()), Some(mask), "mask {mask:#010b}");
+    }
+}
+
+#[test]
+fn octant_cells_use_foreground_and_background_for_two_opaque_colors() {
+    let source = [BLACK, BLUE, BLUE, BLACK, BLACK, BLUE, BLUE, BLACK];
+    let sprite = pack_octants_rgba(2, 4, &source, 128).unwrap();
+    let cell = sprite.as_sprite().cells()[0];
+
+    assert_eq!(octant_mask(cell.symbol()), Some(0b10011001));
+    assert_eq!(cell.foreground(), Some(Rgb::new(0, 0, 0)));
+    assert_eq!(cell.background(), Some(Rgb::new(0x40, 0x85, 0xac)));
+}
+
+#[test]
+fn octant_cells_reject_two_opaque_colors_mixed_with_transparency() {
+    let error = pack_octants_rgba(
+        2,
+        4,
+        &[BLACK, BLUE, CLEAR, CLEAR, CLEAR, CLEAR, CLEAR, CLEAR],
+        128,
+    )
+    .unwrap_err();
+
+    assert_eq!(
+        error,
+        PackError::CellPalette {
+            x: 0,
+            y: 0,
+            colors: 2,
+        }
     );
 }

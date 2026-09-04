@@ -10,13 +10,15 @@ use ratatui::style::Color;
 use ratatui::widgets::Widget;
 use zeta_sprite::Rgb;
 use zeta_sprite::TerminalSprite;
+#[cfg(test)]
+use zeta_sprite::TerminalSpriteSheet;
 
 pub(super) struct PetWidget<'a> {
-    sprite: &'a TerminalSprite<'static>,
+    sprite: TerminalSprite<'a>,
 }
 
 impl<'a> PetWidget<'a> {
-    pub(super) const fn new(sprite: &'a TerminalSprite<'static>) -> Self {
+    pub(super) const fn new(sprite: TerminalSprite<'a>) -> Self {
         Self { sprite }
     }
 }
@@ -50,6 +52,11 @@ fn ratatui_color(color: Rgb) -> Color {
     Color::Rgb(red, green, blue)
 }
 
-pub(super) fn sprite() -> &'static TerminalSprite<'static> {
-    &asset::PET
+pub(super) fn sprite() -> TerminalSprite<'static> {
+    asset::PET.idle()
+}
+
+#[cfg(test)]
+pub(super) fn sheet() -> TerminalSpriteSheet<'static> {
+    asset::PET
 }

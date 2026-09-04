@@ -28,13 +28,19 @@ fn wide_header_keeps_pet_and_identity_information_together() {
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
     assert!(rendered.contains("openai-chatgpt/gpt-5.6 · Subscription"));
     assert!(rendered.contains("/work/zeta"));
-    assert!(rendered.contains(" ▐▖  ▗▌ "));
+    assert_eq!(
+        (super::pet::sprite().width(), super::pet::sprite().height()),
+        (8, 4)
+    );
     assert_eq!(super::desired_height(80), 5);
     assert_eq!(
         buffer[(3, 1)].fg,
         ratatui::style::Color::Rgb(0x40, 0x85, 0xac)
     );
-    assert_eq!(buffer[(4, 3)].fg, ratatui::style::Color::Rgb(0, 0, 0));
+    assert_eq!(
+        buffer[(4, 1)].fg,
+        ratatui::style::Color::Rgb(0x40, 0x85, 0xac)
+    );
     assert_eq!(buffer[(13, 1)].symbol(), "Z");
     assert!(buffer[(13, 1)].modifier.contains(Modifier::BOLD));
     assert_snapshot!("welcome_pet_identity_header", rendered);
@@ -53,26 +59,59 @@ fn narrow_header_keeps_the_text_alternative_when_the_pet_does_not_fit() {
 }
 
 #[test]
-fn generated_pet_cells_match_the_source_pixel_grid() {
-    assert_snapshot!("welcome_pet_source_pixel_grid", pet_pixel_map());
+fn generated_pet_cells_match_the_terminal_raster() {
+    assert_snapshot!(
+        "welcome_pet_terminal_raster",
+        pet_pixel_map(super::pet::sprite())
+    );
 }
 
-fn pet_pixel_map() -> String {
-    let sprite = super::pet::sprite();
+#[test]
+fn generated_pet_frames_and_click_timing_match_the_design() {
+    let sheet = super::pet::sheet();
+    let frames = sheet
+        .frames()
+        .iter()
+        .map(|frame| format!("{}\n{}", frame.name(), pet_pixel_map(frame.sprite())))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let click = sheet
+        .actions()
+        .iter()
+        .find(|action| action.name() == "click")
+        .unwrap();
+    let timing = click
+        .steps()
+        .iter()
+        .map(|step| {
+            format!(
+                "{} {}ms",
+                sheet.frames()[usize::from(step.frame_index())].name(),
+                step.duration_ms()
+            )
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(timing, ["press 75ms", "rise 100ms", "land 100ms"]);
+    assert_snapshot!("welcome_pet_animation_frames", frames);
+}
+
+fn pet_pixel_map(sprite: zeta_sprite::TerminalSprite<'_>) -> String {
     let width = usize::from(sprite.width()) * 2;
-    let height = usize::from(sprite.height()) * 2;
+    let height = usize::from(sprite.height()) * 4;
     let mut rows = vec![vec!['.'; width]; height];
     for (index, cell) in sprite.cells().iter().copied().enumerate() {
         let cell_x = index % usize::from(sprite.width());
         let cell_y = index / usize::from(sprite.width());
-        let mask = quadrant_mask(cell.symbol());
-        for quadrant in 0..4 {
-            let color = if mask & (1 << quadrant) != 0 {
+        let mask = zeta_sprite::octant_mask(cell.symbol())
+            .unwrap_or_else(|| panic!("unexpected block-octant symbol {:?}", cell.symbol()));
+        for octant in 0..8 {
+            let color = if mask & (1 << octant) != 0 {
                 cell.foreground()
             } else {
                 cell.background()
             };
-            rows[cell_y * 2 + quadrant / 2][cell_x * 2 + quadrant % 2] = match color {
+            rows[cell_y * 4 + octant / 2][cell_x * 2 + octant % 2] = match color {
                 None => '.',
                 Some(color) if color.components() == [0x40, 0x85, 0xac] => 'B',
                 Some(color) if color.components() == [0, 0, 0] => 'K',
@@ -84,28 +123,6 @@ fn pet_pixel_map() -> String {
         .map(|row| row.into_iter().collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn quadrant_mask(symbol: char) -> u8 {
-    match symbol {
-        ' ' => 0,
-        '▘' => 1,
-        '▝' => 2,
-        '▀' => 3,
-        '▖' => 4,
-        '▌' => 5,
-        '▞' => 6,
-        '▛' => 7,
-        '▗' => 8,
-        '▚' => 9,
-        '▐' => 10,
-        '▜' => 11,
-        '▄' => 12,
-        '▙' => 13,
-        '▟' => 14,
-        '█' => 15,
-        symbol => panic!("unexpected quadrant symbol {symbol}"),
-    }
 }
 
 fn render(width: u16, height: u16, model: &WelcomeModel) -> Buffer {
