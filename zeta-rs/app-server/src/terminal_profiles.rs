@@ -44,6 +44,13 @@ impl TerminalProfileCatalog {
                 .find(|profile| profile.profile_id == *profile_id),
         }
     }
+
+    pub(crate) fn default_command(&self, command: &str) -> (String, Vec<String>) {
+        let profile = self
+            .resolve(&TerminalProfileSelection::Default)
+            .expect("discovery always installs one default Terminal profile");
+        (profile.program.clone(), profile.command_args(command))
+    }
 }
 
 pub(crate) struct TerminalProfileSpec {
@@ -84,6 +91,22 @@ impl TerminalProfileSpec {
             self.profile_id.as_str(),
             "powershell" | "windows-powershell" | "command-prompt"
         )
+    }
+
+    fn command_args(&self, command: &str) -> Vec<String> {
+        match self.profile_id.as_str() {
+            "powershell" | "windows-powershell" => vec![
+                "-NoLogo".into(),
+                "-NoProfile".into(),
+                "-NonInteractive".into(),
+                "-Command".into(),
+                command.into(),
+            ],
+            "command-prompt" => {
+                vec!["/D".into(), "/S".into(), "/C".into(), command.into()]
+            }
+            _ => vec!["-lc".into(), command.into()],
+        }
     }
 }
 

@@ -104,7 +104,13 @@ fn fast_regex_backend_uses_the_private_worker_client() {
         )
         .unwrap();
 
-    assert!(matches!(output, ToolExecutionOutput::Success(text) if text.contains("worker_marker")));
+    let ToolExecutionOutput::Success(output) = output else {
+        panic!("worker-backed search failed: {output:?}");
+    };
+    assert!(
+        output.contains("worker_marker"),
+        "worker-backed search returned: {output}"
+    );
     assert!(service.has_active_index(&root));
 }
 

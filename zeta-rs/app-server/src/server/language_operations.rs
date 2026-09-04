@@ -6,6 +6,8 @@ use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::fs::FsDeleteMode;
 use zeta_app_server_protocol::protocol::fs::FsExistingTargetBehavior;
 use zeta_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
+use zeta_app_server_protocol::protocol::language::LanguageCancelParams;
+use zeta_app_server_protocol::protocol::language::LanguageCancelResult;
 use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionDto;
@@ -51,6 +53,7 @@ use zeta_app_server_protocol::protocol::language::LanguageLocationDto;
 use zeta_app_server_protocol::protocol::language::LanguageLocationKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsResult;
+use zeta_app_server_protocol::protocol::language::LanguageOperationParams;
 use zeta_app_server_protocol::protocol::language::LanguageParameterInformationDto;
 use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
 use zeta_app_server_protocol::protocol::language::LanguagePrepareRenameParams;
@@ -135,6 +138,20 @@ fn diagnostic_severity_to_dto(
 }
 
 impl AppServer {
+    pub(super) fn language_cancel(
+        &self,
+        connection: &super::ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: LanguageCancelParams = decode(params)?;
+        validate_operation_id(&params.operation_id)?;
+        result(&LanguageCancelResult {
+            status: self
+                .request_cancellations
+                .cancel_operation(connection.connection_id, params.operation_id),
+        })
+    }
+
     pub(super) fn language_synchronize(
         &self,
         params: &Value,
@@ -177,7 +194,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDocumentDiagnosticsParams = decode(params)?;
+        let params: LanguageDocumentDiagnosticsParams = decode_language_operation(params)?;
         let dir = self.language_dir_root_for(
             params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
@@ -225,7 +242,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDirectoryDiagnosticsParams = decode(params)?;
+        let params: LanguageDirectoryDiagnosticsParams = decode_language_operation(params)?;
         let dir = self
             .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
         let snapshot = self
@@ -386,7 +403,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageHoverParams = decode(params)?;
+        let params: LanguageHoverParams = decode_language_operation(params)?;
         let (_, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
@@ -420,7 +437,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageResolveCompletionParams = decode(params)?;
+        let params: LanguageResolveCompletionParams = decode_language_operation(params)?;
         let dir = self.language_dir_root_for(
             params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
@@ -493,7 +510,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageCompletionsParams = decode(params)?;
+        let params: LanguageCompletionsParams = decode_language_operation(params)?;
         let (_, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let trigger = completion_trigger(params.trigger_kind, params.trigger_character.as_deref())?;
@@ -536,7 +553,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDocumentFormattingParams = decode(params)?;
+        let params: LanguageDocumentFormattingParams = decode_language_operation(params)?;
         self.language_formatting(&params.document, None, params.options, cancellation)
     }
 
@@ -545,7 +562,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageRangeFormattingParams = decode(params)?;
+        let params: LanguageRangeFormattingParams = decode_language_operation(params)?;
         let range = utf8_byte_range(&params.document.text, params.range)
             .map(LanguageTextRange::new)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -611,7 +628,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageSignatureHelpParams = decode(params)?;
+        let params: LanguageSignatureHelpParams = decode_language_operation(params)?;
         let (_, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let trigger = match (params.trigger_kind, params.trigger_character) {
@@ -677,7 +694,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageInlayHintsParams = decode(params)?;
+        let params: LanguageInlayHintsParams = decode_language_operation(params)?;
         let dir = self.language_dir_root_for(
             params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
@@ -743,7 +760,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageLinkedEditingRangesParams = decode(params)?;
+        let params: LanguageLinkedEditingRangesParams = decode_language_operation(params)?;
         let (_, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
@@ -783,7 +800,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageSemanticTokensParams = decode(params)?;
+        let params: LanguageSemanticTokensParams = decode_language_operation(params)?;
         let dir = self.language_dir_root_for(
             params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
@@ -831,7 +848,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageLocationsParams = decode(params)?;
+        let params: LanguageLocationsParams = decode_language_operation(params)?;
         let dir = self.language_dir_root_for(
             params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
@@ -937,7 +954,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageHierarchyParams = decode(params)?;
+        let params: LanguageHierarchyParams = decode_language_operation(params)?;
         let dir = self.language_dir_root_for(
             params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
@@ -1041,7 +1058,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDirectorySymbolsParams = decode(params)?;
+        let params: LanguageDirectorySymbolsParams = decode_language_operation(params)?;
         let dir = self
             .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
         let snapshot = self
@@ -1107,7 +1124,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguagePrepareRenameParams = decode(params)?;
+        let params: LanguagePrepareRenameParams = decode_language_operation(params)?;
         let (dir, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
@@ -1144,7 +1161,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageRenameParams = decode(params)?;
+        let params: LanguageRenameParams = decode_language_operation(params)?;
         let (dir, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
@@ -1175,7 +1192,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageCodeActionsParams = decode(params)?;
+        let params: LanguageCodeActionsParams = decode_language_operation(params)?;
         let dir = self.language_dir_root_for(
             params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
@@ -1252,7 +1269,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageResolveCodeActionParams = decode(params)?;
+        let params: LanguageResolveCodeActionParams = decode_language_operation(params)?;
         let dir = self.language_dir_root_for(
             params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
@@ -1820,6 +1837,22 @@ fn utf16_target_position(
 fn source_line(text: &str, requested: u32) -> Option<&str> {
     let line = text.split('\n').nth(usize::try_from(requested).ok()?)?;
     Some(line.strip_suffix('\r').unwrap_or(line))
+}
+
+pub(super) fn decode_language_operation<P: for<'a> serde::Deserialize<'a>>(
+    params: &Value,
+) -> Result<P, RpcError> {
+    let operation: LanguageOperationParams<P> = decode(params)?;
+    validate_operation_id(&operation.operation_id)?;
+    Ok(operation.request)
+}
+
+fn validate_operation_id(operation_id: &str) -> Result<(), RpcError> {
+    let length = operation_id.chars().count();
+    if length == 0 || length > 128 {
+        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+    }
+    Ok(())
 }
 
 pub(super) fn language_error(name: AppServerErrorName) -> RpcError {

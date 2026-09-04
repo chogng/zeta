@@ -68,7 +68,10 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             Permission::InspectRepository,
         )
         .unwrap();
-    assert_eq!(resolved.absolute, session_file.canonicalize().unwrap());
+    assert_eq!(
+        resolved.absolute,
+        dunce::canonicalize(&session_file).unwrap()
+    );
     let read = suite
         .read_file(
             &tool_call(
@@ -214,7 +217,7 @@ fn work_attempt_scope_routes_every_source_root_and_excludes_session_dirs() {
         .unwrap();
     assert_eq!(
         primary.absolute,
-        managed_b.join("b.txt").canonicalize().unwrap()
+        dunce::canonicalize(managed_b.join("b.txt")).unwrap()
     );
     let sandbox_scope = primary
         .thread_scope
@@ -229,7 +232,7 @@ fn work_attempt_scope_routes_every_source_root_and_excludes_session_dirs() {
         sandbox_scope
             .hidden_dirs()
             .iter()
-            .any(|dir| dir.canonical_path() == temporary.path().canonicalize().unwrap())
+            .any(|dir| dir.canonical_path() == dunce::canonicalize(temporary.path()).unwrap())
     );
     let aliased = suite
         .resolve(
@@ -242,7 +245,7 @@ fn work_attempt_scope_routes_every_source_root_and_excludes_session_dirs() {
         .unwrap();
     assert_eq!(
         aliased.absolute,
-        managed_a.join("a.txt").canonicalize().unwrap()
+        dunce::canonicalize(managed_a.join("a.txt")).unwrap()
     );
     assert!(
         suite

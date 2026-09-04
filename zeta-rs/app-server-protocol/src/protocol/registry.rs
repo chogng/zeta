@@ -325,6 +325,9 @@ use crate::protocol::initialize::InitializeParams;
 use crate::protocol::initialize::InitializeResult;
 use crate::protocol::initialize::ProtocolVersion;
 use crate::protocol::initialize::ServerCapabilities;
+use crate::protocol::language::LanguageCancelParams;
+use crate::protocol::language::LanguageCancelResult;
+use crate::protocol::language::LanguageCancelStatusDto;
 use crate::protocol::language::LanguageCloseParams;
 use crate::protocol::language::LanguageCodeActionDiagnosticDto;
 use crate::protocol::language::LanguageCodeActionDto;
@@ -389,6 +392,7 @@ use crate::protocol::language::LanguageLocationDto;
 use crate::protocol::language::LanguageLocationKindDto;
 use crate::protocol::language::LanguageLocationsParams;
 use crate::protocol::language::LanguageLocationsResult;
+use crate::protocol::language::LanguageOperationParams;
 use crate::protocol::language::LanguageParameterInformationDto;
 use crate::protocol::language::LanguagePositionDto;
 use crate::protocol::language::LanguagePrepareRenameParams;
@@ -883,11 +887,19 @@ pub enum SerializationScopeDefinition {
     ConnectionExclusive(&'static str),
 }
 
+/// Declares whether a request carries a stable identity for domain cancellation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CancellationDefinition {
+    None,
+    OperationId(&'static str),
+}
+
 #[derive(Clone, Copy)]
 pub struct ClientMethodDefinition {
     pub kind: ClientMethod,
     pub method: &'static str,
     pub serialization: SerializationScopeDefinition,
+    pub cancellation: CancellationDefinition,
     params_type: fn() -> String,
     result_type: fn() -> String,
 }
@@ -899,6 +911,26 @@ impl ClientMethodDefinition {
 
     pub fn result_type(&self) -> String {
         (self.result_type)()
+    }
+
+    /// Resolves the client-generated operation identity declared by this method.
+    pub fn cancellation_operation_id(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<Option<String>, CancellationScopeResolutionError> {
+        let CancellationDefinition::OperationId(parameter) = self.cancellation else {
+            return Ok(None);
+        };
+        let operation_id = params
+            .as_object()
+            .and_then(|params| params.get(parameter))
+            .and_then(serde_json::Value::as_str)
+            .filter(|operation_id| {
+                let length = operation_id.chars().count();
+                length > 0 && length <= 128
+            })
+            .ok_or(CancellationScopeResolutionError)?;
+        Ok(Some(operation_id.to_owned()))
     }
 
     /// Resolves this method's scheduling key from its wire parameters.
@@ -964,6 +996,18 @@ impl std::fmt::Display for SerializationScopeResolutionError {
 }
 
 impl std::error::Error for SerializationScopeResolutionError {}
+
+/// Returned when cancellable request parameters omit or invalidate their operation identity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CancellationScopeResolutionError;
+
+impl std::fmt::Display for CancellationScopeResolutionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("request parameters do not contain a valid cancellation operation ID")
+    }
+}
+
+impl std::error::Error for CancellationScopeResolutionError {}
 
 fn serialization_parameter(
     params: &serde_json::Value,
@@ -1057,6 +1101,7 @@ macro_rules! client_methods {
                 params: $params:ty,
                 response: $response:ty,
                 serialization: $serialization:ident $(($serialization_key:literal))?,
+                $(cancellation: $cancellation_parameter:literal,)?
             }
         ),+ $(,)?
     ) => {
@@ -1086,6 +1131,7 @@ macro_rules! client_methods {
                     kind: ClientMethod::$variant,
                     method: $method,
                     serialization: SerializationScopeDefinition::$serialization$(($serialization_key))?,
+                    cancellation: cancellation_definition!($($cancellation_parameter)?),
                     params_type: type_name::<$params>,
                     result_type: type_name::<$response>,
                 },
@@ -1111,6 +1157,15 @@ macro_rules! client_methods {
                 $variant(Box<$response>),
             )+
         }
+    };
+}
+
+macro_rules! cancellation_definition {
+    () => {
+        CancellationDefinition::None
+    };
+    ($parameter:literal) => {
+        CancellationDefinition::OperationId($parameter)
     };
 }
 
@@ -1890,20 +1945,28 @@ client_methods! {
         response: (),
         serialization: GlobalSharedRead,
     },
+    LanguageCancel => "language/cancel" {
+        params: LanguageCancelParams,
+        response: LanguageCancelResult,
+        serialization: GlobalSharedRead,
+    },
     LanguageHover => "language/hover" {
-        params: LanguageHoverParams,
+        params: LanguageOperationParams<LanguageHoverParams>,
         response: LanguageHoverResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageCompletions => "language/completions" {
-        params: LanguageCompletionsParams,
+        params: LanguageOperationParams<LanguageCompletionsParams>,
         response: LanguageCompletionsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageResolveCompletion => "language/resolveCompletion" {
-        params: LanguageResolveCompletionParams,
+        params: LanguageOperationParams<LanguageResolveCompletionParams>,
         response: LanguageCompletionDetailsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageExecuteCommand => "language/executeCommand" {
         params: LanguageExecuteCommandParams,
@@ -1911,119 +1974,142 @@ client_methods! {
         serialization: GlobalSharedRead,
     },
     LanguageDocumentDiagnostics => "language/documentDiagnostics" {
-        params: LanguageDocumentDiagnosticsParams,
+        params: LanguageOperationParams<LanguageDocumentDiagnosticsParams>,
         response: LanguageDocumentDiagnosticsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageDirectoryDiagnostics => "language/directoryDiagnostics" {
-        params: LanguageDirectoryDiagnosticsParams,
+        params: LanguageOperationParams<LanguageDirectoryDiagnosticsParams>,
         response: LanguageDirectoryDiagnosticsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageLocations => "language/locations" {
-        params: LanguageLocationsParams,
+        params: LanguageOperationParams<LanguageLocationsParams>,
         response: LanguageLocationsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageHierarchy => "language/hierarchy" {
-        params: LanguageHierarchyParams,
+        params: LanguageOperationParams<LanguageHierarchyParams>,
         response: LanguageHierarchyResultDto,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageDirectorySymbols => "language/directorySymbols" {
-        params: LanguageDirectorySymbolsParams,
+        params: LanguageOperationParams<LanguageDirectorySymbolsParams>,
         response: LanguageDirectorySymbolsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguagePrepareRename => "language/prepareRename" {
-        params: LanguagePrepareRenameParams,
+        params: LanguageOperationParams<LanguagePrepareRenameParams>,
         response: LanguagePrepareRenameResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageRename => "language/rename" {
-        params: LanguageRenameParams,
+        params: LanguageOperationParams<LanguageRenameParams>,
         response: LanguageDirectoryEditDto,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageCodeActions => "language/codeActions" {
-        params: LanguageCodeActionsParams,
+        params: LanguageOperationParams<LanguageCodeActionsParams>,
         response: LanguageCodeActionsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageResolveCodeAction => "language/resolveCodeAction" {
-        params: LanguageResolveCodeActionParams,
+        params: LanguageOperationParams<LanguageResolveCodeActionParams>,
         response: LanguageCodeActionDto,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageDocumentFormatting => "language/formatDocument" {
-        params: LanguageDocumentFormattingParams,
+        params: LanguageOperationParams<LanguageDocumentFormattingParams>,
         response: LanguageFormattingResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageRangeFormatting => "language/formatRange" {
-        params: LanguageRangeFormattingParams,
+        params: LanguageOperationParams<LanguageRangeFormattingParams>,
         response: LanguageFormattingResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageSignatureHelp => "language/signatureHelp" {
-        params: LanguageSignatureHelpParams,
+        params: LanguageOperationParams<LanguageSignatureHelpParams>,
         response: LanguageSignatureHelpResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageInlayHints => "language/inlayHints" {
-        params: LanguageInlayHintsParams,
+        params: LanguageOperationParams<LanguageInlayHintsParams>,
         response: LanguageInlayHintsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageLinkedEditingRanges => "language/linkedEditingRanges" {
-        params: LanguageLinkedEditingRangesParams,
+        params: LanguageOperationParams<LanguageLinkedEditingRangesParams>,
         response: LanguageLinkedEditingRangesResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageSemanticTokens => "language/semanticTokens" {
-        params: LanguageSemanticTokensParams,
+        params: LanguageOperationParams<LanguageSemanticTokensParams>,
         response: LanguageSemanticTokensResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageDocumentSymbols => "language/documentSymbols" {
-        params: LanguageDocumentFeaturesParams,
+        params: LanguageOperationParams<LanguageDocumentFeaturesParams>,
         response: LanguageDocumentSymbolsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageCodeLenses => "language/codeLenses" {
-        params: LanguageDocumentFeaturesParams,
+        params: LanguageOperationParams<LanguageDocumentFeaturesParams>,
         response: LanguageCodeLensesResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageResolveCodeLens => "language/resolveCodeLens" {
-        params: LanguageResolveCodeLensParams,
+        params: LanguageOperationParams<LanguageResolveCodeLensParams>,
         response: LanguageCodeLensesResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageDocumentLinks => "language/documentLinks" {
-        params: LanguageDocumentFeaturesParams,
+        params: LanguageOperationParams<LanguageDocumentFeaturesParams>,
         response: LanguageDocumentLinksResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageResolveDocumentLink => "language/resolveDocumentLink" {
-        params: LanguageResolveDocumentLinkParams,
+        params: LanguageOperationParams<LanguageResolveDocumentLinkParams>,
         response: LanguageDocumentLinksResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageDocumentColors => "language/documentColors" {
-        params: LanguageDocumentFeaturesParams,
+        params: LanguageOperationParams<LanguageDocumentFeaturesParams>,
         response: LanguageDocumentColorsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageColorPresentations => "language/colorPresentations" {
-        params: LanguageColorPresentationsParams,
+        params: LanguageOperationParams<LanguageColorPresentationsParams>,
         response: LanguageColorPresentationsResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     LanguageFoldingRanges => "language/foldingRanges" {
-        params: LanguageDocumentFeaturesParams,
+        params: LanguageOperationParams<LanguageDocumentFeaturesParams>,
         response: LanguageFoldingRangesResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId",
     },
     FsWriteFile => "fs/writeFile" {
         params: FsWriteFileParams,
@@ -3215,6 +3301,10 @@ typescript_bindings! {
     LanguageDocumentDto,
     LanguageSynchronizeParams,
     LanguageCloseParams,
+    LanguageOperationParams<()>,
+    LanguageCancelParams,
+    LanguageCancelStatusDto,
+    LanguageCancelResult,
     LanguageHoverParams,
     LanguageHoverResult,
     LanguageCompletionTriggerKindDto,

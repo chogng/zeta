@@ -142,7 +142,8 @@ pub(crate) struct PrepareModelInvocationRequest<'a> {
 /// Concrete host invocation used to execute one explicit Shell Turn.
 pub struct ShellTurnInvocation {
     pub command: String,
-    pub shell_program: String,
+    pub program: String,
+    pub arguments: Vec<String>,
     pub working_directory: String,
 }
 
@@ -1315,9 +1316,14 @@ impl ThreadController {
                 "Shell Turn command must not be empty".into(),
             ));
         }
-        if request.invocation.shell_program.trim().is_empty() {
+        if request.invocation.program.trim().is_empty() {
             return Err(CoreError::InvalidInput(
                 "Shell Turn program must not be empty".into(),
+            ));
+        }
+        if request.invocation.arguments.is_empty() {
+            return Err(CoreError::InvalidInput(
+                "Shell Turn arguments must contain the command invocation".into(),
             ));
         }
         if request.invocation.working_directory.trim().is_empty() {
@@ -1353,8 +1359,8 @@ impl ThreadController {
             let turn_id =
                 TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
             let arguments_json = serde_json::to_string(&serde_json::json!({
-                "program": request.invocation.shell_program,
-                "arguments": ["-lc", request.invocation.command],
+                "program": request.invocation.program,
+                "arguments": request.invocation.arguments,
                 "working_directory": request.invocation.working_directory,
             }))
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;

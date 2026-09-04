@@ -670,6 +670,70 @@ fn closed_connections_reject_future_requests() {
 }
 
 #[test]
+fn language_cancel_uses_the_declared_operation_identity() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let requested = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"language/cancel",
+            "params":{"operationId":"hover-1"}
+        }),
+    );
+    assert_eq!(requested["result"]["status"], "requested");
+
+    let cancelled = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"language/hover",
+            "params":{"operationId":"hover-1","request":{}}
+        }),
+    );
+    assert_eq!(cancelled["error"]["message"], "RequestCancelled");
+
+    let completed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"language/cancel",
+            "params":{"operationId":"hover-1"}
+        }),
+    );
+    assert_eq!(completed["result"]["status"], "completed");
+    assert!(server.drain_notifications(&mut connection).is_empty());
+}
+
+#[test]
+fn cancellable_language_request_requires_an_operation_identity() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let rejected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"language/hover","params":{"request":{}}
+        }),
+    );
+
+    assert_eq!(rejected["error"]["message"], "InvalidParams");
+
+    let invalid_cancel = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"language/cancel","params":{"operationId":""}
+        }),
+    );
+    assert_eq!(invalid_cancel["error"]["message"], "InvalidParams");
+}
+
+#[test]
 fn dynamic_interaction_capability_requires_exact_hosted_tool_names() {
     let server = server();
     let mut connection = server.connection();
@@ -2179,7 +2243,13 @@ fn shell_test_sandbox() -> SandboxPolicy {
 #[test]
 fn shell_turn_runs_without_a_model_and_publishes_typed_output() {
     let model = Arc::new(CountingModel::default());
+    let terminal_root = tempfile::tempdir().unwrap();
     let server = server_with_model(model.clone())
+        .with_terminal_root(dir_authorization(
+            terminal_root.path(),
+            DirPermission::ExecuteCommands,
+        ))
+        .unwrap()
         .with_tool_service(Arc::new(ShellTestTool), Arc::new(ShellTestPolicy));
     let mut connection = server.connection();
     initialize(&server, &mut connection);

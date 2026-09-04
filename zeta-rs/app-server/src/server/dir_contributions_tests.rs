@@ -134,7 +134,11 @@ fn dirs_are_rendered_only_for_the_matching_session() {
         .render();
     let second_snapshot = instruction_snapshot(customizations.as_ref(), second.as_str());
 
-    assert!(first_environment.contains(&dir.path().canonicalize().unwrap().display().to_string()));
+    let dir_path = dunce::canonicalize(dir.path())
+        .unwrap()
+        .display()
+        .to_string();
+    assert!(first_environment.contains(&dir_path));
     assert!(first_environment.contains("<filesystem>"));
     assert!(first_environment.contains("<accessible_dirs>"));
     assert!(first_environment.contains("Relative paths resolve from cwd"));
@@ -143,7 +147,7 @@ fn dirs_are_rendered_only_for_the_matching_session() {
             .environment()
             .unwrap()
             .render()
-            .contains(&dir.path().canonicalize().unwrap().display().to_string())
+            .contains(&dir_path)
     );
 
     access.clear_session(&first);
@@ -152,7 +156,7 @@ fn dirs_are_rendered_only_for_the_matching_session() {
             .environment()
             .unwrap()
             .render()
-            .contains(&dir.path().canonicalize().unwrap().display().to_string())
+            .contains(&dir_path)
     );
 }
 

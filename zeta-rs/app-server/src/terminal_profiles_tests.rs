@@ -37,6 +37,20 @@ fn tracked_windows_shells_launch_with_shell_integration_markers() {
     };
     assert!(powershell.command_status_enabled());
     assert!(powershell.launch_args().join(" ").contains("633;A"));
+    assert_eq!(
+        powershell.command_args("Get-Location"),
+        [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-Location"
+        ]
+    );
+    assert_eq!(
+        command_prompt.command_args("echo ready"),
+        ["/D", "/S", "/C", "echo ready"]
+    );
 }
 
 #[cfg(windows)]

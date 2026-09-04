@@ -75,6 +75,39 @@ pub struct LanguageCloseParams {
     pub path: PathBuf,
 }
 
+/// Binds one cancellable language request to a client-generated operation identity.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageOperationParams<P> {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+    pub request: P,
+}
+
+/// Requests cancellation of one connection-owned language operation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageCancelParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+}
+
+/// Observable outcome of a language cancellation request.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageCancelStatusDto {
+    Requested,
+    AlreadyRequested,
+    Completed,
+}
+
+/// Stable terminal classification for one language cancellation command.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageCancelResult {
+    pub status: LanguageCancelStatusDto,
+}
+
 /// Hover request against exactly one submitted document revision.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

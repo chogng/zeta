@@ -30,7 +30,6 @@ use zeta_app_server_protocol::protocol::registry::client_method;
 use zeta_app_server_protocol::protocol::registry::client_method_definition;
 use zeta_app_server_protocol::rpc::JsonRpcFailure;
 use zeta_app_server_protocol::rpc::JsonRpcId;
-use zeta_app_server_protocol::rpc::JsonRpcNotification;
 use zeta_app_server_protocol::rpc::JsonRpcRequest;
 use zeta_app_server_protocol::rpc::JsonRpcSuccess;
 use zeta_app_server_protocol::rpc::JsonRpcVersion;
@@ -1478,25 +1477,6 @@ impl AppServer {
             .map_err(resource_error)
     }
 
-    fn handle_cancel_notification(&self, connection_id: u64, raw_request: &Value) -> bool {
-        if raw_request.get("method").and_then(Value::as_str) != Some("$/cancelRequest")
-            || raw_request
-                .as_object()
-                .is_some_and(|request| request.contains_key("id"))
-        {
-            return false;
-        }
-        if let Ok(notification) =
-            serde_json::from_value::<JsonRpcNotification<CancelRequestParams>>(raw_request.clone())
-        {
-            if notification.jsonrpc == JsonRpcVersion::V2 && notification.params.id > 0 {
-                self.request_cancellations
-                    .cancel(connection_id, notification.params.id);
-            }
-        }
-        true
-    }
-
     pub fn handle_json(&self, connection: &mut ConnectionState, raw: &str) -> String {
         let raw_request: Value = match serde_json::from_str(raw) {
             Ok(request) => request,
@@ -1508,9 +1488,6 @@ impl AppServer {
                 ));
             }
         };
-        if self.handle_cancel_notification(connection.connection_id, &raw_request) {
-            return String::new();
-        }
         let mut request = match serde_json::from_value::<JsonRpcRequest<Value>>(raw_request) {
             Ok(request)
                 if request.jsonrpc == JsonRpcVersion::V2
@@ -1545,6 +1522,19 @@ impl AppServer {
                 AppServerErrorName::InvalidRequest,
             ));
         }
+        let operation_id = match client_method_definition(&request.method)
+            .map(|definition| definition.cancellation_operation_id(&request.params))
+            .transpose()
+        {
+            Ok(operation_id) => operation_id.flatten(),
+            Err(_) => {
+                return serialize_response(error_response(
+                    request.id,
+                    -32602,
+                    AppServerErrorName::InvalidParams,
+                ));
+            }
+        };
         let serialization_scope = if client_method(&request.method)
             != Some(ClientMethod::Initialize)
             && !connection.is_initialized()
@@ -1565,9 +1555,20 @@ impl AppServer {
                 }
             }
         };
-        let cancellation = self
-            .request_cancellations
-            .start(connection.connection_id, request_id);
+        let cancellation = match self.request_cancellations.start(
+            connection.connection_id,
+            request_id,
+            operation_id,
+        ) {
+            Ok(cancellation) => cancellation,
+            Err(_) => {
+                return serialize_response(error_response(
+                    request.id,
+                    -32602,
+                    AppServerErrorName::InvalidParams,
+                ));
+            }
+        };
         let _permit = match serialization_scope {
             Some(scope) => match self.request_scheduler.acquire_with_cancellation(
                 connection.connection_id,
@@ -1714,12 +1715,6 @@ impl AppServer {
                             format!("invalid App Server inbound JSON: {error}"),
                         )
                     })?;
-                    if connection.is_initialized()
-                        && self.handle_cancel_notification(connection.connection_id, &envelope)
-                    {
-                        line.zeroize();
-                        continue;
-                    }
                     if envelope.get("method").is_none() {
                         let handled = self
                             .browser_host
@@ -2108,6 +2103,7 @@ impl AppServer {
                 self.language_synchronize(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageClose) => self.language_close(&request.params, cancellation),
+            Some(ClientMethod::LanguageCancel) => self.language_cancel(connection, &request.params),
             Some(ClientMethod::LanguageHover) => self.language_hover(&request.params, cancellation),
             Some(ClientMethod::LanguageCompletions) => {
                 self.language_completions(&request.params, cancellation)
@@ -2338,12 +2334,6 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
             None => {}
         }
     }
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CancelRequestParams {
-    id: u64,
 }
 
 pub(super) struct RpcError {

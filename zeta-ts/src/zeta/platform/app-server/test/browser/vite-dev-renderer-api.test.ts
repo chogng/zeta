@@ -1,6 +1,8 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import { isRecord } from "../../../../base/common/types.js";
+import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../../generated/app-server/types.js";
 import { connectViteDevRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type ViteDevHotContext } from "../../../../platform/app-server/browser/viteDevConnection.js";
@@ -97,6 +99,18 @@ class FakeHotContext implements ViteDevHotContext {
 		this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message });
 	}
 
+	respondAt(index: number, result: unknown): void {
+		const request = this.requests.at(index);
+		if (!request) throw new Error(`No request at index ${index}`);
+		this.respond(request, result);
+	}
+
+	rejectAt(index: number, error: unknown): void {
+		const request = this.requests.at(index);
+		if (!request) throw new Error(`No request at index ${index}`);
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, error }) });
+	}
+
 	private respond(request: Record<string, unknown>, result: unknown): void {
 		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) });
 	}
@@ -149,5 +163,67 @@ test("routes bounded syntax analysis through the connected renderer host", async
 
 	assert.deepEqual(await connected.api.syntax.selectionRanges({ language: "rust", revision: 4, text: "fn main() {}\n", ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
 	assert.equal(hot.requests.at(-1)?.method, "syntax/selectionRanges");
+	connected.dispose();
+});
+
+test("uses a stable operation ID to cancel a language request", async () => {
+	const hot = new FakeHotContext();
+	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const cancellation = new AbortController();
+	const pending = connected.api.language.hover({
+		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
+		position: { lineIndex: 0, columnIndex: 3 },
+	}, { signal: cancellation.signal });
+
+	const hoverRequest = hot.requests.at(-1);
+	assert.equal(hoverRequest?.method, "language/hover");
+	const hoverParams = hoverRequest?.params;
+	assert.ok(isRecord(hoverParams));
+	assert.equal(typeof hoverParams.operationId, "string");
+	assert.ok(isRecord(hoverParams.request));
+	assert.ok(isRecord(hoverParams.request.document));
+	assert.equal(hoverParams.request.document.path, "src/main.rs");
+
+	cancellation.abort();
+	const cancelRequest = hot.requests.at(-1);
+	assert.equal(cancelRequest?.method, "language/cancel");
+	assert.deepEqual(cancelRequest?.params, { operationId: hoverParams.operationId });
+	hot.respondAt(-1, { status: "requested" });
+
+	await assert.rejects(pending, isCancellationError);
+	connected.dispose();
+});
+
+test("keeps the language result when completion wins the cancel race", async () => {
+	const hot = new FakeHotContext();
+	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const cancellation = new AbortController();
+	const pending = connected.api.language.hover({
+		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
+		position: { lineIndex: 0, columnIndex: 3 },
+	}, { signal: cancellation.signal });
+
+	cancellation.abort();
+	hot.respondAt(-2, { revision: 1, contents: "main", range: null });
+	hot.respondAt(-1, { status: "completed" });
+
+	assert.deepEqual(await pending, { revision: 1, contents: "main", range: null });
+	connected.dispose();
+});
+
+test("keeps the language failure when completion wins the cancel race", async () => {
+	const hot = new FakeHotContext();
+	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const cancellation = new AbortController();
+	const pending = connected.api.language.hover({
+		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
+		position: { lineIndex: 0, columnIndex: 3 },
+	}, { signal: cancellation.signal });
+
+	cancellation.abort();
+	hot.rejectAt(-2, { code: -32072, message: "LanguageRequestFailed", data: { kind: "LanguageRequestFailed" } });
+	hot.respondAt(-1, { status: "completed" });
+
+	await assert.rejects(pending, (error: unknown) => error instanceof AppServerRemoteError && error.errorName === "LanguageRequestFailed");
 	connected.dispose();
 });

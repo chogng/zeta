@@ -251,6 +251,27 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         }),
     );
     assert!(initialized["result"].is_object());
+    let shell_rule = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1000,"method":"execPolicy/rule/upsert",
+            "params":{
+                "commandId":"allow-shell-turn","expectedRevision":0,
+                "rule":{
+                    "id":"allow-shell-turn",
+                    "selector":{
+                        "type":"source",
+                        "source":"built_in_tool",
+                        "sourceId":"shell-command"
+                    },
+                    "effect":{"type":"allowUnsandboxed"},
+                    "justification":"test authorizes the isolated temporary repository"
+                }
+            }
+        }),
+    );
+    assert_eq!(shell_rule["result"]["revision"], 1);
     let session = local_call(
         &server,
         &mut connection,
@@ -272,6 +293,11 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         }),
     );
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let write_command = if cfg!(windows) {
+        "echo sealed turn contents>turn.txt"
+    } else {
+        "printf 'sealed turn contents\\n' > turn.txt"
+    };
     let started = local_call(
         &server,
         &mut connection,
@@ -282,7 +308,7 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
                 "request":{
                     "type":"startShellTurn","threadId":thread_id,
                     "expectedSequence":1,"approvalMode":"bypassPermissions",
-                    "command":"printf 'sealed turn contents\\n' > turn.txt","workingDirectory":"."
+                    "command":write_command,"workingDirectory":"."
                 }
             }
         }),
@@ -317,10 +343,19 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
             break listed["result"]["changeSets"][0].clone();
         }
         request_id += 1;
-        assert!(request_id < 206, "ChangeSet did not seal: {listed}");
+        assert!(
+            request_id < 206,
+            "ChangeSet did not seal: {listed}; thread: {:#?}",
+            server.threads().read_thread(&thread_id_typed).unwrap()
+        );
         std::thread::sleep(Duration::from_millis(10));
     };
-    assert_eq!(change_set["statistics"]["files"], 1);
+    assert_eq!(
+        change_set["statistics"]["files"],
+        1,
+        "unexpected ChangeSet: {change_set}; thread: {:#?}",
+        server.threads().read_thread(&thread_id_typed).unwrap()
+    );
     assert_eq!(change_set["messageState"], "unconfigured");
     let change_set_id = change_set["changeSetId"].as_str().unwrap();
     request_id += 1;
@@ -379,8 +414,11 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         initial_head
     );
     assert_eq!(
-        std::fs::read_to_string(dir.path().join("turn.txt")).unwrap(),
-        "sealed turn contents\n"
+        std::fs::read_to_string(dir.path().join("turn.txt"))
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        ["sealed turn contents"]
     );
     assert_eq!(
         run_local_git(dir.path(), &["show", "-s", "--format=%s", "HEAD"]),

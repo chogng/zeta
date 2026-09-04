@@ -44,3 +44,33 @@ fn declared_key_is_required_before_dispatch() {
             .is_err()
     );
 }
+
+#[test]
+fn cancellable_method_resolves_its_declared_operation_identity() {
+    let operation_id = definition("language/hover")
+        .cancellation_operation_id(&serde_json::json!({
+            "operationId": "hover-1",
+            "request": {
+                "resourceId": "resource-1",
+                "position": { "line": 0, "character": 0 }
+            }
+        }))
+        .unwrap();
+
+    assert_eq!(operation_id.as_deref(), Some("hover-1"));
+    assert!(
+        definition("language/hover")
+            .cancellation_operation_id(&serde_json::json!({ "request": {} }))
+            .is_err()
+    );
+}
+
+#[test]
+fn non_cancellable_method_has_no_operation_identity() {
+    assert_eq!(
+        definition("language/synchronize")
+            .cancellation_operation_id(&serde_json::json!({}))
+            .unwrap(),
+        None
+    );
+}

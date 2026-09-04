@@ -4617,11 +4617,27 @@
         {
           "properties": {
             "method": {
+              "const": "language/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "language/hover",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageHoverParams"
+              "$ref": "#/$defs/LanguageOperationParams"
             }
           },
           "required": [
@@ -4637,7 +4653,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageCompletionsParams"
+              "$ref": "#/$defs/LanguageOperationParams2"
             }
           },
           "required": [
@@ -4653,7 +4669,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageResolveCompletionParams"
+              "$ref": "#/$defs/LanguageOperationParams3"
             }
           },
           "required": [
@@ -4685,7 +4701,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDocumentDiagnosticsParams"
+              "$ref": "#/$defs/LanguageOperationParams4"
             }
           },
           "required": [
@@ -4701,7 +4717,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDirectoryDiagnosticsParams"
+              "$ref": "#/$defs/LanguageOperationParams5"
             }
           },
           "required": [
@@ -4717,7 +4733,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageLocationsParams"
+              "$ref": "#/$defs/LanguageOperationParams6"
             }
           },
           "required": [
@@ -4733,7 +4749,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageHierarchyParams"
+              "$ref": "#/$defs/LanguageOperationParams7"
             }
           },
           "required": [
@@ -4749,7 +4765,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDirectorySymbolsParams"
+              "$ref": "#/$defs/LanguageOperationParams8"
             }
           },
           "required": [
@@ -4765,7 +4781,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguagePrepareRenameParams"
+              "$ref": "#/$defs/LanguageOperationParams9"
             }
           },
           "required": [
@@ -4781,7 +4797,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageRenameParams"
+              "$ref": "#/$defs/LanguageOperationParams10"
             }
           },
           "required": [
@@ -4797,7 +4813,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageCodeActionsParams"
+              "$ref": "#/$defs/LanguageOperationParams11"
             }
           },
           "required": [
@@ -4813,7 +4829,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageResolveCodeActionParams"
+              "$ref": "#/$defs/LanguageOperationParams12"
             }
           },
           "required": [
@@ -4829,7 +4845,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDocumentFormattingParams"
+              "$ref": "#/$defs/LanguageOperationParams13"
             }
           },
           "required": [
@@ -4845,7 +4861,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageRangeFormattingParams"
+              "$ref": "#/$defs/LanguageOperationParams14"
             }
           },
           "required": [
@@ -4861,7 +4877,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageSignatureHelpParams"
+              "$ref": "#/$defs/LanguageOperationParams15"
             }
           },
           "required": [
@@ -4877,7 +4893,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageInlayHintsParams"
+              "$ref": "#/$defs/LanguageOperationParams16"
             }
           },
           "required": [
@@ -4893,7 +4909,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageLinkedEditingRangesParams"
+              "$ref": "#/$defs/LanguageOperationParams17"
             }
           },
           "required": [
@@ -4909,7 +4925,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageSemanticTokensParams"
+              "$ref": "#/$defs/LanguageOperationParams18"
             }
           },
           "required": [
@@ -4925,7 +4941,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+              "$ref": "#/$defs/LanguageOperationParams19"
             }
           },
           "required": [
@@ -4941,7 +4957,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+              "$ref": "#/$defs/LanguageOperationParams19"
             }
           },
           "required": [
@@ -4957,7 +4973,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageResolveCodeLensParams"
+              "$ref": "#/$defs/LanguageOperationParams20"
             }
           },
           "required": [
@@ -4973,7 +4989,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+              "$ref": "#/$defs/LanguageOperationParams19"
             }
           },
           "required": [
@@ -4989,7 +5005,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageResolveDocumentLinkParams"
+              "$ref": "#/$defs/LanguageOperationParams21"
             }
           },
           "required": [
@@ -5005,7 +5021,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+              "$ref": "#/$defs/LanguageOperationParams19"
             }
           },
           "required": [
@@ -5021,7 +5037,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageColorPresentationsParams"
+              "$ref": "#/$defs/LanguageOperationParams22"
             }
           },
           "required": [
@@ -5037,7 +5053,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+              "$ref": "#/$defs/LanguageOperationParams19"
             }
           },
           "required": [
@@ -8354,6 +8370,22 @@
             },
             "result": {
               "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "language/cancel",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageCancelResult"
             }
           },
           "required": [
@@ -16863,6 +16895,43 @@
       ],
       "type": "string"
     },
+    "LanguageCancelParams": {
+      "additionalProperties": false,
+      "description": "Requests cancellation of one connection-owned language operation.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "type": "object"
+    },
+    "LanguageCancelResult": {
+      "additionalProperties": false,
+      "description": "Stable terminal classification for one language cancellation command.",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/LanguageCancelStatusDto"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "LanguageCancelStatusDto": {
+      "description": "Observable outcome of a language cancellation request.",
+      "enum": [
+        "requested",
+        "alreadyRequested",
+        "completed"
+      ],
+      "type": "string"
+    },
     "LanguageCloseParams": {
       "description": "Releases one directory document from the language-server session.",
       "properties": {
@@ -18412,6 +18481,424 @@
       "required": [
         "revision",
         "locations"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageHoverParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams10": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageRenameParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams11": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageCodeActionsParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams12": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageResolveCodeActionParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams13": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageDocumentFormattingParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams14": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageRangeFormattingParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams15": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageSignatureHelpParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams16": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageInlayHintsParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams17": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageLinkedEditingRangesParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams18": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageSemanticTokensParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams19": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageDocumentFeaturesParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams2": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageCompletionsParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams20": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageResolveCodeLensParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams21": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageResolveDocumentLinkParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams22": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageColorPresentationsParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams3": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageResolveCompletionParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams4": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageDocumentDiagnosticsParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams5": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageDirectoryDiagnosticsParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams6": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageLocationsParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams7": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageHierarchyParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams8": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguageDirectorySymbolsParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
+      ],
+      "type": "object"
+    },
+    "LanguageOperationParams9": {
+      "additionalProperties": false,
+      "description": "Binds one cancellable language request to a client-generated operation identity.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/LanguagePrepareRenameParams"
+        }
+      },
+      "required": [
+        "operationId",
+        "request"
       ],
       "type": "object"
     },

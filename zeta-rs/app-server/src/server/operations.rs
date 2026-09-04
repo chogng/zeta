@@ -931,13 +931,14 @@ impl AppServer {
         let tool_call_id =
             zeta_protocol::ToolCallId::new(format!("shell-turn-{}", mutation.command_id))
                 .expect("validated command identity produces a valid Tool Call ID");
+        let (program, arguments) = self.terminal_service()?.default_shell_command(&command);
         let shell_call = zeta_protocol::ToolCall {
             id: tool_call_id.clone(),
             name: zeta_protocol::ToolName::new("shell-command")
                 .expect("static shell-command name is valid"),
             arguments: serde_json::json!({
-                "program": "/bin/sh",
-                "arguments": ["-lc", command],
+                "program": program,
+                "arguments": arguments,
                 "working_directory": working_directory,
             }),
         };
@@ -957,7 +958,8 @@ impl AppServer {
                     binding,
                     invocation: ShellTurnInvocation {
                         command,
-                        shell_program: "/bin/sh".into(),
+                        program,
+                        arguments,
                         working_directory,
                     },
                 },

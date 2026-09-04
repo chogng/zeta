@@ -1414,7 +1414,8 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
         },
         invocation: ShellTurnInvocation {
             command: "cargo test -p zeta-core".into(),
-            shell_program: "/bin/sh".into(),
+            program: "/bin/sh".into(),
+            arguments: vec!["-lc".into(), "cargo test -p zeta-core".into()],
             working_directory: ".".into(),
         },
     };

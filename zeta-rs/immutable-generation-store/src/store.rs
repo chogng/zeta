@@ -725,9 +725,22 @@ fn try_lock_generation_exclusive(directory: &Path) -> io::Result<GenerationLock>
     };
     match fs2::FileExt::try_lock_exclusive(&file) {
         Ok(()) => Ok(GenerationLock::Acquired(Some(file))),
-        Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(GenerationLock::Busy),
+        Err(error) if is_lock_contention(&error) => Ok(GenerationLock::Busy),
         Err(error) => Err(error),
     }
+}
+
+fn is_lock_contention(error: &io::Error) -> bool {
+    if error.kind() == io::ErrorKind::WouldBlock {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        // LockFileEx reports overlapping locks held by this process as ERROR_LOCK_VIOLATION.
+        return error.raw_os_error() == Some(33);
+    }
+    #[cfg(not(windows))]
+    false
 }
 
 fn validate_files(files: &[GenerationFile<'_>]) -> io::Result<()> {
@@ -822,6 +835,7 @@ fn sync_directory(path: &Path) -> io::Result<()> {
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
     fs::OpenOptions::new()
         .read(true)
+        .write(true)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)?
         .sync_all()

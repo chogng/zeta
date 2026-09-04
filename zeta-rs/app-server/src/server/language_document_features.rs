@@ -38,8 +38,8 @@ use zeta_lsp_manager::LspManagerRequestResult;
 
 use super::AppServer;
 use super::RpcError;
-use super::decode;
 use super::language_operations::byte_range_to_utf16;
+use super::language_operations::decode_language_operation;
 use super::language_operations::language_error;
 use super::language_operations::utf8_byte_range;
 use super::language_runtime::AppServerLanguageRuntime;
@@ -51,7 +51,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDocumentFeaturesParams = decode(params)?;
+        let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
@@ -82,7 +82,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDocumentFeaturesParams = decode(params)?;
+        let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
@@ -113,7 +113,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageResolveCodeLensParams = decode(params)?;
+        let params: LanguageResolveCodeLensParams = decode_language_operation(params)?;
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let lens = code_lens_from_dto(&params.document.text, params.lens)?;
@@ -146,7 +146,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDocumentFeaturesParams = decode(params)?;
+        let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
@@ -177,7 +177,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageResolveDocumentLinkParams = decode(params)?;
+        let params: LanguageResolveDocumentLinkParams = decode_language_operation(params)?;
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let link = document_link_from_dto(&params.document.text, params.link)?;
@@ -210,7 +210,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDocumentFeaturesParams = decode(params)?;
+        let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
@@ -246,7 +246,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageColorPresentationsParams = decode(params)?;
+        let params: LanguageColorPresentationsParams = decode_language_operation(params)?;
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let range = LanguageTextRange::new(
@@ -296,7 +296,7 @@ impl AppServer {
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageDocumentFeaturesParams = decode(params)?;
+        let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime

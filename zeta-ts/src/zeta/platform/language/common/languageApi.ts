@@ -1,8 +1,81 @@
 import type { LanguageCloseParams, LanguageCodeActionDto, LanguageCodeActionsParams, LanguageCodeActionsResult, LanguageCodeLensesResult, LanguageColorPresentationsParams, LanguageColorPresentationsResult, LanguageCompletionDetailsResult, LanguageCompletionsParams, LanguageCompletionsResult, LanguageDirectoryDiagnosticsParams, LanguageDirectoryDiagnosticsResult, LanguageDirectoryEditDto, LanguageDirectorySymbolsParams, LanguageDirectorySymbolsResult, LanguageDocumentColorsResult, LanguageDocumentDiagnosticsParams, LanguageDocumentDiagnosticsResult, LanguageDocumentFeaturesParams, LanguageDocumentFormattingParams, LanguageDocumentLinksResult, LanguageDocumentSymbolsResult, LanguageExecuteCommandParams, LanguageFoldingRangesResult, LanguageFormattingResult, LanguageHierarchyParams, LanguageHierarchyResultDto, LanguageHoverParams, LanguageHoverResult, LanguageInlayHintsParams, LanguageInlayHintsResult, LanguageLinkedEditingRangesParams, LanguageLinkedEditingRangesResult, LanguageLocationsParams, LanguageLocationsResult, LanguagePrepareRenameParams, LanguagePrepareRenameResult, LanguageRangeFormattingParams, LanguageRenameParams, LanguageResolveCodeActionParams, LanguageResolveCodeLensParams, LanguageResolveCompletionParams, LanguageResolveDocumentLinkParams, LanguageSemanticTokensParams, LanguageSemanticTokensResult, LanguageSignatureHelpParams, LanguageSignatureHelpResult, LanguageSynchronizeParams } from "../../../../../generated/app-server/types.js";
+import { CancellationError } from "../../../base/common/errors.js";
 
 /** Transport-neutral entry point for workspace language-server locations. */
 export interface LanguageRequestOptions {
 	readonly signal?: AbortSignal;
+}
+
+export interface LanguageCancelOutcome {
+	readonly status: "requested" | "alreadyRequested" | "completed";
+}
+
+/** Runs one language operation and resolves cancellation against its terminal result. */
+export function runCancellableLanguageRequest<TResult>(
+	options: LanguageRequestOptions | undefined,
+	start: (operationId: string) => Promise<TResult>,
+	cancel: (operationId: string) => Promise<LanguageCancelOutcome>,
+): Promise<TResult> {
+	const signal = options?.signal;
+	if (signal?.aborted) return Promise.reject(new CancellationError("Language request cancelled", signal.reason));
+	const operationId = globalThis.crypto.randomUUID();
+	const pending = start(operationId);
+	if (!signal) return pending;
+	return new Promise<TResult>((resolve, reject) => {
+		let settled = false;
+		let cancelling = false;
+		let pendingRejected = false;
+		let pendingError: unknown;
+		const cleanup = (): void => signal.removeEventListener("abort", abort);
+		const abort = (): void => {
+			if (settled || cancelling) return;
+			cancelling = true;
+			void cancel(operationId).then(
+				result => {
+					if (settled) return;
+					if (result.status === "completed") {
+						cancelling = false;
+						if (pendingRejected) {
+							settled = true;
+							cleanup();
+							reject(pendingError);
+						}
+						return;
+					}
+					settled = true;
+					cleanup();
+					reject(new CancellationError("Language request cancelled", signal.reason));
+				},
+				error => {
+					if (settled) return;
+					settled = true;
+					cleanup();
+					reject(error);
+				},
+			);
+		};
+		signal.addEventListener("abort", abort, { once: true });
+		if (signal.aborted) abort();
+		pending.then(
+			value => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				resolve(value);
+			},
+			error => {
+				if (settled) return;
+				if (cancelling) {
+					pendingRejected = true;
+					pendingError = error;
+					return;
+				}
+				settled = true;
+				cleanup();
+				reject(error);
+			},
+		);
+	});
 }
 
 export interface ILanguageApi {

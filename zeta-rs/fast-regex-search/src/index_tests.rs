@@ -530,7 +530,8 @@ fn persisted_paths_that_escape_the_dir_are_rejected() {
     let documents_path = base_file(&storage, built.generation, "documents.bin");
     let mut documents = fs::read(&documents_path).expect("documents");
     let path_offset = crate::storage::header_length() + 8 + 8 + 4;
-    documents[path_offset..path_offset + 9].copy_from_slice(b"../bad.rs");
+    let escaping_path = crate::path_codec::encode(Path::new("../bad.rs"));
+    documents[path_offset..path_offset + escaping_path.len()].copy_from_slice(&escaping_path);
     fs::write(documents_path, documents).expect("corrupt stored path");
 
     let result = FastRegexSearch::open(
@@ -539,7 +540,11 @@ fn persisted_paths_that_escape_the_dir_are_rejected() {
         FastRegexSearchLimits::default(),
     );
 
-    assert!(matches!(result, Err(FastRegexError::CorruptIndex(_))));
+    match result {
+        Err(FastRegexError::CorruptIndex(_)) => {}
+        Err(error) => panic!("unexpected error for an escaping stored path: {error:?}"),
+        Ok(_) => panic!("an escaping stored path opened successfully"),
+    }
 }
 
 #[test]

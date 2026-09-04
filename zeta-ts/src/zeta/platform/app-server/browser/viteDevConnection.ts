@@ -1,7 +1,7 @@
 import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
 import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../../../../../generated/app-server/AppServerProtocolDecoder.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
-import { CancellationError, toError } from "../../../base/common/errors.js";
+import { toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
 import { AppServerRemoteError } from "../common/appServerError.js";
@@ -37,17 +37,11 @@ export interface ViteDevAppServerConnectionOptions {
 	readonly requestTimeoutMs?: number;
 }
 
-export interface ViteDevRequestOptions {
-	readonly signal?: AbortSignal;
-}
-
 interface PendingRequest {
 	readonly method: AppServerMethod;
 	readonly resolve: (value: unknown) => void;
 	readonly reject: (error: Error) => void;
 	readonly timeout: ReturnType<typeof setTimeout>;
-	readonly signal?: AbortSignal;
-	abortListener?: () => void;
 }
 
 /** Owns one Vite WebSocket-backed development App Server connection. */
@@ -120,9 +114,9 @@ export class ViteDevAppServerConnection {
 		}
 	}
 
-	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options: ViteDevRequestOptions = {}): Promise<MethodResult<M>> {
+	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>): Promise<MethodResult<M>> {
 		if (this._state !== "ready") return Promise.reject(new Error(`Web App Server is not ready: ${this._state}`));
-		return this.requestRaw(definition, params, this.options.requestTimeoutMs, options.signal);
+		return this.requestRaw(definition, params, this.options.requestTimeoutMs);
 	}
 
 	onStateChange(listener: (state: AppServerConnectionState) => void): DisposableHandle {
@@ -150,36 +144,20 @@ export class ViteDevAppServerConnection {
 		}
 	}
 
-	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number, signal?: AbortSignal): Promise<MethodResult<M>> {
-		if (signal?.aborted) return Promise.reject(new CancellationError(`Web App Server request cancelled: ${definition.method}`, signal.reason));
+	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number): Promise<MethodResult<M>> {
 		const id = this.nextRequestId++;
 		const promise = new Promise<MethodResult<M>>((resolve, reject) => {
 			const timeout = setTimeout(() => {
 				const pending = this.pending.get(id);
 				if (!pending) return;
-				this.rejectPending(id, new Error(`Web App Server request timed out: ${definition.method}`));
+				this.fail(new Error(`Web App Server request timed out: ${definition.method}`));
 			}, timeoutMs);
 			const pending: PendingRequest = {
 				method: definition.method,
 				resolve: (value) => resolve(value as MethodResult<M>),
 				reject,
 				timeout,
-				signal,
 			};
-			if (signal) {
-				const onAbort = (): void => {
-					if (!this.rejectPending(id, new CancellationError(`Web App Server request cancelled: ${definition.method}`, signal.reason))) return;
-					try {
-						this.hot.send(WEB_APP_SERVER_FRAME_EVENT, {
-							frame: JSON.stringify({ jsonrpc: "2.0", method: "$/cancelRequest", params: { id } }),
-						});
-					} catch {
-						// The local request is already settled; connection shutdown owns transport failures.
-					}
-				};
-				pending.abortListener = onAbort;
-				signal.addEventListener("abort", onAbort, { once: true });
-			}
 			this.pending.set(id, pending);
 		});
 		const frame = JSON.stringify({ jsonrpc: "2.0", id, method: definition.method, params });
@@ -235,7 +213,6 @@ export class ViteDevAppServerConnection {
 		if (!pending) return;
 		this.pending.delete(id);
 		clearTimeout(pending.timeout);
-		if (pending.abortListener) pending.signal?.removeEventListener("abort", pending.abortListener);
 		const response = decodeAppServerResponse(pending.method, message);
 		if ("error" in response) {
 			pending.reject(new AppServerRemoteError(response.error.code, response.error.message, response.error.data));
@@ -267,7 +244,6 @@ export class ViteDevAppServerConnection {
 		if (!pending) return false;
 		this.pending.delete(id);
 		clearTimeout(pending.timeout);
-		if (pending.abortListener) pending.signal?.removeEventListener("abort", pending.abortListener);
 		pending.reject(error);
 		return true;
 	}

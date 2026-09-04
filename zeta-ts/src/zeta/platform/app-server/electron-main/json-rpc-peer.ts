@@ -1,7 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../../../../../generated/app-server/AppServerProtocolDecoder.js";
 import type { AppServerMethod, AppServerMethodDefinition, MethodParams, MethodResult } from "../../../../../generated/app-server/types.js";
-import { CancellationError } from "../../../base/common/errors.js";
 import { getOrSet } from "../../../base/common/map.js";
 import {
 	DisposableStore,
@@ -28,7 +27,6 @@ export interface RpcNotificationDefinition<P> {
 }
 
 export interface RpcRequestOptions {
-	signal?: AbortSignal;
 	timeoutMs?: number;
 }
 
@@ -41,29 +39,16 @@ export interface JsonRpcPeerOptions {
 	retiredRequestLimit?: number;
 }
 
-export class RpcRequestCancelledError extends CancellationError {
-	constructor(
-		readonly method: string,
-		reason?: unknown,
-	) {
-		super(`JSON-RPC request cancelled: ${method}`, reason);
-		this.name = "RpcRequestCancelledError";
-	}
-}
-
 interface PendingRequest {
 	readonly method: AppServerMethod;
 	resolve(value: unknown): void;
 	reject(error: Error): void;
 	timeout?: NodeJS.Timeout;
-	abortListener?: IDisposable;
 }
 
 interface RequestHandler {
 	(params: unknown, context: RpcRequestContext): unknown | Promise<unknown>;
 }
-
-type RetiredRequest = "completed" | "abandoned";
 
 /**
  * Implements transport-independent JSON-RPC pairing, lifecycle, and bidirectional dispatch.
@@ -74,7 +59,7 @@ export class JsonRpcPeer implements IDisposable {
 	private readonly maxPendingRequests: number;
 	private readonly retiredRequestLimit: number;
 	private readonly pending = new Map<number, PendingRequest>();
-	private readonly retired = new Map<number, RetiredRequest>();
+	private readonly retired = new Set<number>();
 	private readonly notificationListeners = new Map<string, Set<(params: unknown) => void>>();
 	private readonly requestHandlers = new Map<string, RequestHandler>();
 	private readonly inboundRequests = new Map<JsonRpcId, AbortController>();
@@ -113,11 +98,6 @@ export class JsonRpcPeer implements IDisposable {
 		options: RpcRequestOptions = {},
 	): Promise<MethodResult<M>> {
 		if (this.closedError) return Promise.reject(this.closedError);
-		if (options.signal?.aborted) {
-			return Promise.reject(
-				new RpcRequestCancelledError(definition.method, options.signal.reason),
-			);
-		}
 		if (this.pending.size >= this.maxPendingRequests) {
 			return Promise.reject(new Error("JSON-RPC pending request limit reached"));
 		}
@@ -137,19 +117,9 @@ export class JsonRpcPeer implements IDisposable {
 			};
 			if (options.timeoutMs !== undefined) {
 				pending.timeout = setTimeout(() => {
-					this.abandon(id, new Error(`JSON-RPC request timed out: ${definition.method}`));
+					this.protocolFailure(`JSON-RPC request timed out: ${definition.method}`);
 				}, options.timeoutMs);
 				pending.timeout.unref();
-			}
-			if (options.signal) {
-				const signal = options.signal;
-				const onAbort = (): void => {
-					this.cancelOutbound(id, definition.method, signal.reason);
-				};
-				signal.addEventListener("abort", onAbort, { once: true });
-				pending.abortListener = toDisposable(() => {
-					signal.removeEventListener("abort", onAbort);
-				});
 			}
 			this.pending.set(id, pending);
 		});
@@ -161,7 +131,7 @@ export class JsonRpcPeer implements IDisposable {
 			params,
 		});
 		this.transport.send(frame).catch((error: Error) => {
-			this.abandon(id, error);
+			this.protocolFailure(error.message);
 		});
 		return promise;
 	}
@@ -260,10 +230,8 @@ export class JsonRpcPeer implements IDisposable {
 
 		const pending = this.pending.get(id);
 		if (!pending) {
-			const retired = this.retired.get(id);
-			if (retired === "abandoned") return;
 			this.protocolFailure(
-				retired === "completed"
+				this.retired.has(id)
 					? `App Server emitted a duplicate response for request ${id}`
 					: `App Server emitted a response for unknown request ${id}`,
 			);
@@ -271,7 +239,7 @@ export class JsonRpcPeer implements IDisposable {
 		}
 		this.pending.delete(id);
 		cleanupPending(pending);
-		this.retire(id, "completed");
+		this.retire(id);
 
 		try {
 			const response = decodeAppServerResponse(pending.method, message);
@@ -399,31 +367,10 @@ export class JsonRpcPeer implements IDisposable {
 		);
 	}
 
-	private cancelOutbound(id: number, method: string, reason?: unknown): void {
-		if (!this.abandon(id, new RpcRequestCancelledError(method, reason))) return;
-		void this.transport.send(JSON.stringify({
-			jsonrpc: "2.0",
-			method: "$/cancelRequest",
-			params: { id },
-		})).catch(() => {
-			// The local request is already settled; transport shutdown owns failures.
-		});
-	}
-
-	private abandon(id: number, error: Error): boolean {
-		const pending = this.pending.get(id);
-		if (!pending) return false;
-		this.pending.delete(id);
-		cleanupPending(pending);
-		this.retire(id, "abandoned");
-		pending.reject(error);
-		return true;
-	}
-
-	private retire(id: number, outcome: RetiredRequest): void {
-		this.retired.set(id, outcome);
+	private retire(id: number): void {
+		this.retired.add(id);
 		while (this.retired.size > this.retiredRequestLimit) {
-			const oldest = this.retired.keys().next().value as number | undefined;
+			const oldest = this.retired.values().next().value as number | undefined;
 			if (oldest === undefined) break;
 			this.retired.delete(oldest);
 		}
@@ -456,7 +403,6 @@ export class JsonRpcPeer implements IDisposable {
 
 function cleanupPending(pending: PendingRequest): void {
 	if (pending.timeout) clearTimeout(pending.timeout);
-	pending.abortListener?.dispose();
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

@@ -707,12 +707,18 @@ fn work_attempt_recovers_and_captures_every_root_with_exact_provenance() {
         WorkAttemptIntegrationStatus::Integrated
     );
     assert_eq!(
-        std::fs::read_to_string(first.path().join("attempt-0.txt")).unwrap(),
-        "root 0\n"
+        std::fs::read_to_string(first.path().join("attempt-0.txt"))
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        ["root 0"]
     );
     assert_eq!(
-        std::fs::read_to_string(second.path().join("attempt-1.txt")).unwrap(),
-        "root 1\n"
+        std::fs::read_to_string(second.path().join("attempt-1.txt"))
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        ["root 1"]
     );
     assert_eq!(
         server

@@ -3,15 +3,11 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import test from "node:test";
 import { PassThrough, Writable } from "node:stream";
-import { isCancellationError } from "../../../../base/common/errors.js";
 import {
 	ChildProcessJsonlTransport,
 	type ChildProcessJsonlTransportOptions,
 } from "../../../../platform/app-server/electron-main/child-process-jsonl-transport.js";
-import {
-	JsonRpcPeer,
-	RpcRequestCancelledError,
-} from "../../../../platform/app-server/electron-main/json-rpc-peer.js";
+import { JsonRpcPeer } from "../../../../platform/app-server/electron-main/json-rpc-peer.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { AppServerProtocolDecodeError } from "../../../../../../generated/app-server/AppServerProtocolDecoder.js";
 import {
@@ -174,7 +170,7 @@ test("rejects App Server errors without structured protocol data", async () => {
 	peer.dispose();
 });
 
-test("times out locally and ignores the retired request's late response", async () => {
+test("request timeout closes the protocol connection", async () => {
 	const child = new FakeChildProcess();
 	const peer = new JsonRpcPeer(child as unknown as ChildProcessWithoutNullStreams);
 	const firstFrame = once(child.stdin, "data");
@@ -188,58 +184,33 @@ test("times out locally and ignores the retired request's late response", async 
 	);
 
 	await assert.rejects(timedOut, /timed out/);
-	child.stdout.write(
-		`${JSON.stringify({ jsonrpc: "2.0", id, result: { thread: { threadId: "slow" } } })}\n`,
+	assert.equal(typeof id, "number");
+	await assert.rejects(
+		peer.request(APP_SERVER_METHODS["resource/release"], { resourceId: "resource_1" }),
+		/timed out/,
 	);
-
-	const nextFrame = once(child.stdin, "data");
-	const next = peer.request(APP_SERVER_METHODS["resource/release"], { resourceId: "resource_1" });
-	const [{ id: nextId }] = (await nextFrame).map((chunk) =>
-		JSON.parse((chunk as Buffer).toString("utf8")),
-	);
-	child.stdout.write(
-		`${JSON.stringify({ jsonrpc: "2.0", id: nextId, result: null })}\n`,
-	);
-	assert.equal(await next, null);
 	await peer.close();
 });
 
-test("cancels requests and enforces the pending request bound", async () => {
+test("enforces the pending request bound without abandoning the active request", async () => {
 	const child = new FakeChildProcess();
 	const peer = new JsonRpcPeer(
 		child as unknown as ChildProcessWithoutNullStreams,
 		{ maxPendingRequests: 1 },
 	);
-	const cancellation = new AbortController();
 	const requestFrame = once(child.stdin, "data");
 	const first = peer.request(
-		APP_SERVER_METHODS["session/thread/read"],
-		{ sessionId: "session_1", threadId: "thread_1" },
-		{ signal: cancellation.signal },
+		APP_SERVER_METHODS["resource/release"],
+		{ resourceId: "resource_1" },
 	);
 	const [requestChunk] = await requestFrame;
 	const requestId = JSON.parse((requestChunk as Buffer).toString("utf8")).id;
 	await assert.rejects(
-		peer.request(APP_SERVER_METHODS["session/thread/read"], { sessionId: "session_1", threadId: "thread_2" }),
+		peer.request(APP_SERVER_METHODS["resource/release"], { resourceId: "resource_2" }),
 		/pending request limit/,
 	);
-
-	const cancellationFrame = once(child.stdin, "data");
-	cancellation.abort();
-	await assert.rejects(first, (error: unknown) => {
-		assert.ok(error instanceof RpcRequestCancelledError);
-		assert.equal(isCancellationError(error), true);
-		return true;
-	});
-	const [cancellationChunk] = await cancellationFrame;
-	assert.deepEqual(
-		JSON.parse((cancellationChunk as Buffer).toString("utf8")),
-		{
-			jsonrpc: "2.0",
-			method: "$/cancelRequest",
-			params: { id: requestId },
-		},
-	);
+	child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: requestId, result: null })}\n`);
+	assert.equal(await first, null);
 	await peer.close();
 });
 

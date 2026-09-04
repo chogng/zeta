@@ -186,6 +186,40 @@ fn open_reader_keeps_an_old_base_until_its_lease_is_dropped() {
 }
 
 #[test]
+fn multiple_readers_keep_an_old_base_until_every_lease_is_dropped() {
+    let directory = tempfile::tempdir().expect("store directory");
+    let store = ImmutableGenerationStore::open(directory.path()).expect("store");
+    store
+        .publish_base(
+            ExpectedCurrent::Empty,
+            1,
+            &[GenerationFile::new("lookup.bin", b"old lookup")],
+            &[GenerationFile::new("delta.bin", b"old delta")],
+        )
+        .expect("old base");
+    let first_reader = store.open_current().unwrap().unwrap();
+    let second_reader = store.open_current().unwrap().unwrap();
+
+    let report = store
+        .publish_base(
+            ExpectedCurrent::Snapshot(1),
+            2,
+            &[GenerationFile::new("lookup.bin", b"new lookup")],
+            &[GenerationFile::new("delta.bin", b"new delta")],
+        )
+        .expect("new base");
+
+    assert!(report.cleanup_error.is_none());
+    assert!(directory.path().join("bases/00000000000000000001").exists());
+    drop(first_reader);
+    store.cleanup_stale().expect("first cleanup");
+    assert!(directory.path().join("bases/00000000000000000001").exists());
+    drop(second_reader);
+    store.cleanup_stale().expect("second cleanup");
+    assert!(!directory.path().join("bases/00000000000000000001").exists());
+}
+
+#[test]
 fn cleanup_removes_manifest_before_unleased_data() {
     let directory = tempfile::tempdir().expect("store directory");
     let store = ImmutableGenerationStore::open(directory.path()).expect("store");

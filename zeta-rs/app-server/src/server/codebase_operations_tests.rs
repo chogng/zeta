@@ -131,13 +131,26 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
     );
     assert_eq!(initialize["result"]["capabilities"]["codebase"], true);
 
-    let status = call(
+    let mut status = call(
         &server,
         &mut connection,
         2,
         "codebase/status",
         serde_json::json!({}),
     );
+    for request_id in 100..200 {
+        if status["result"]["state"] != "indexing" {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        status = call(
+            &server,
+            &mut connection,
+            request_id,
+            "codebase/status",
+            serde_json::json!({}),
+        );
+    }
     assert_eq!(status["result"]["state"], "ready");
     assert!(status["result"]["generation"].as_u64().unwrap() >= 1);
     assert!(status["result"].get("semantic").is_none());
@@ -263,7 +276,10 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         "agentGrep/fastRegex/rebuild",
         serde_json::json!({}),
     );
-    assert_eq!(rebuilt["result"]["active"], true);
+    assert_eq!(
+        rebuilt["result"]["active"], true,
+        "unexpected rebuild response: {rebuilt}"
+    );
     assert!(rebuilt["result"]["generation"].as_u64().unwrap() >= 1);
     assert!(index_directory.join("manifests").is_dir());
 

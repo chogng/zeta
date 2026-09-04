@@ -4,7 +4,9 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+use super::RequestCancellationRegistry;
 use super::RequestScheduler;
+use zeta_app_server_protocol::protocol::language::LanguageCancelStatusDto;
 use zeta_app_server_protocol::protocol::registry::ClientRequestSerializationScope;
 use zeta_app_server_protocol::protocol::registry::SerializationAccess;
 
@@ -135,4 +137,61 @@ fn closing_a_connection_cancels_its_queued_requests() {
     assert!(queued.join().unwrap().is_err());
     scheduler.finish_connection(2);
     drop(first);
+}
+
+#[test]
+fn cancellation_requested_before_start_reaches_the_operation() {
+    let registry = RequestCancellationRegistry::default();
+
+    assert_eq!(
+        registry.cancel_operation(1, "operation-1".into()),
+        LanguageCancelStatusDto::Requested
+    );
+    let cancellation = registry.start(1, 10, Some("operation-1".into())).unwrap();
+
+    assert!(cancellation.is_cancelled());
+    assert_eq!(
+        registry.cancel_operation(1, "operation-1".into()),
+        LanguageCancelStatusDto::AlreadyRequested
+    );
+    registry.finish(1, 10);
+    assert_eq!(
+        registry.cancel_operation(1, "operation-1".into()),
+        LanguageCancelStatusDto::Completed
+    );
+}
+
+#[test]
+fn equal_operation_ids_on_different_connections_are_isolated() {
+    let registry = RequestCancellationRegistry::default();
+    let first = registry.start(1, 10, Some("same".into())).unwrap();
+    let second = registry.start(2, 10, Some("same".into())).unwrap();
+
+    assert_eq!(
+        registry.cancel_operation(1, "same".into()),
+        LanguageCancelStatusDto::Requested
+    );
+    assert!(first.is_cancelled());
+    assert!(!second.is_cancelled());
+}
+
+#[test]
+fn operation_identity_cannot_be_reused_on_a_connection() {
+    let registry = RequestCancellationRegistry::default();
+    registry.start(1, 10, Some("same".into())).unwrap();
+
+    assert!(registry.start(1, 11, Some("same".into())).is_err());
+    registry.finish(1, 10);
+    assert!(registry.start(1, 12, Some("same".into())).is_err());
+}
+
+#[test]
+fn closing_a_connection_cancels_and_forgets_its_operations() {
+    let registry = RequestCancellationRegistry::default();
+    let cancellation = registry.start(1, 10, Some("operation-1".into())).unwrap();
+
+    registry.cancel_connection(1);
+
+    assert!(cancellation.is_cancelled());
+    assert!(registry.start(1, 11, Some("operation-1".into())).is_ok());
 }

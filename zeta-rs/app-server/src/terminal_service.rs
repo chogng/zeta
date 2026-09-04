@@ -83,6 +83,10 @@ impl TerminalService {
         self.profiles.list()
     }
 
+    pub(crate) fn default_shell_command(&self, command: &str) -> (String, Vec<String>) {
+        self.profiles.default_command(command)
+    }
+
     pub(crate) fn create(
         &self,
         owner_connection_id: u64,

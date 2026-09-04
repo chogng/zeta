@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 
+use zeta_app_server_protocol::protocol::language::LanguageCancelStatusDto;
 use zeta_app_server_protocol::protocol::registry::ClientRequestSerializationScope;
 use zeta_app_server_protocol::protocol::registry::SerializationAccess;
 use zeta_async_utils::CancellationSource;
@@ -264,41 +266,101 @@ pub(super) struct RequestCancellationRegistry {
 #[derive(Default)]
 struct CancellationRegistryState {
     active: HashMap<(u64, u64), CancellationSource>,
-    cancelled_before_start: std::collections::BTreeSet<(u64, u64)>,
+    request_operations: HashMap<(u64, u64), String>,
+    active_operations: HashMap<(u64, String), CancellationSource>,
+    requested_before_start: HashSet<(u64, String)>,
+    requested_before_start_order: VecDeque<(u64, String)>,
+    completed_operations: HashSet<(u64, String)>,
+    completed_operation_order: VecDeque<(u64, String)>,
 }
 
+const RETAINED_OPERATION_LIMIT: usize = 1_024;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct DuplicateOperationId;
+
 impl RequestCancellationRegistry {
-    pub(super) fn start(&self, connection_id: u64, request_id: u64) -> CancellationToken {
+    pub(super) fn start(
+        &self,
+        connection_id: u64,
+        request_id: u64,
+        operation_id: Option<String>,
+    ) -> Result<CancellationToken, DuplicateOperationId> {
         let source = CancellationSource::new();
         let token = source.token();
         let mut state = lock(&self.state);
-        if state
-            .cancelled_before_start
-            .remove(&(connection_id, request_id))
-        {
-            source.cancel();
+        if let Some(operation_id) = operation_id {
+            let operation = (connection_id, operation_id.clone());
+            if state.active_operations.contains_key(&operation)
+                || state.completed_operations.contains(&operation)
+            {
+                return Err(DuplicateOperationId);
+            }
+            if state.requested_before_start.remove(&operation) {
+                state
+                    .requested_before_start_order
+                    .retain(|queued| queued != &operation);
+                source.cancel();
+            }
+            state.active_operations.insert(operation, source.clone());
+            state
+                .request_operations
+                .insert((connection_id, request_id), operation_id);
         }
         state.active.insert((connection_id, request_id), source);
-        token
+        Ok(token)
     }
 
-    pub(super) fn cancel(&self, connection_id: u64, request_id: u64) {
+    pub(super) fn cancel_operation(
+        &self,
+        connection_id: u64,
+        operation_id: String,
+    ) -> LanguageCancelStatusDto {
         let mut state = lock(&self.state);
-        if let Some(source) = state.active.get(&(connection_id, request_id)) {
+        let operation = (connection_id, operation_id);
+        if let Some(source) = state.active_operations.get(&operation) {
+            if source.token().is_cancelled() {
+                return LanguageCancelStatusDto::AlreadyRequested;
+            }
             source.cancel();
-        } else {
-            state
-                .cancelled_before_start
-                .insert((connection_id, request_id));
+            return LanguageCancelStatusDto::Requested;
         }
+        if state.completed_operations.contains(&operation) {
+            return LanguageCancelStatusDto::Completed;
+        }
+        if state.requested_before_start.contains(&operation) {
+            return LanguageCancelStatusDto::AlreadyRequested;
+        }
+        let CancellationRegistryState {
+            requested_before_start,
+            requested_before_start_order,
+            ..
+        } = &mut *state;
+        remember_bounded(
+            requested_before_start,
+            requested_before_start_order,
+            operation,
+        );
+        LanguageCancelStatusDto::Requested
     }
 
     pub(super) fn finish(&self, connection_id: u64, request_id: u64) {
         let mut state = lock(&self.state);
         state.active.remove(&(connection_id, request_id));
-        state
-            .cancelled_before_start
-            .remove(&(connection_id, request_id));
+        let Some(operation_id) = state
+            .request_operations
+            .remove(&(connection_id, request_id))
+        else {
+            return;
+        };
+        let operation = (connection_id, operation_id);
+        state.active_operations.remove(&operation);
+        let CancellationRegistryState {
+            completed_operations,
+            completed_operation_order,
+            ..
+        } = &mut *state;
+        remember_bounded(completed_operations, completed_operation_order, operation);
     }
 
     pub(super) fn cancel_connection(&self, connection_id: u64) {
@@ -309,8 +371,39 @@ impl RequestCancellationRegistry {
             }
         }
         state
-            .cancelled_before_start
+            .request_operations
+            .retain(|(active_connection_id, _), _| *active_connection_id != connection_id);
+        state
+            .active_operations
+            .retain(|(active_connection_id, _), _| *active_connection_id != connection_id);
+        state
+            .requested_before_start
             .retain(|(active_connection_id, _)| *active_connection_id != connection_id);
+        state
+            .requested_before_start_order
+            .retain(|(active_connection_id, _)| *active_connection_id != connection_id);
+        state
+            .completed_operations
+            .retain(|(active_connection_id, _)| *active_connection_id != connection_id);
+        state
+            .completed_operation_order
+            .retain(|(active_connection_id, _)| *active_connection_id != connection_id);
+    }
+}
+
+fn remember_bounded(
+    retained: &mut HashSet<(u64, String)>,
+    order: &mut VecDeque<(u64, String)>,
+    operation: (u64, String),
+) {
+    if retained.insert(operation.clone()) {
+        order.push_back(operation);
+    }
+    while retained.len() > RETAINED_OPERATION_LIMIT {
+        let Some(oldest) = order.pop_front() else {
+            break;
+        };
+        retained.remove(&oldest);
     }
 }
 
