@@ -190,7 +190,7 @@ fn tab_lines<T: TabListItem>(
         let state = InteractionState {
             target,
             selected: focused && index == active,
-            hovered: hovered == Some(index),
+            hovered: target == InteractionTarget::Rest && hovered == Some(index),
             pressed: pressed == Some(index),
         };
         let mut style = interaction_style(context, state);

@@ -100,7 +100,7 @@ fn narrow_width_wraps_tabs_without_hiding_them() {
 }
 
 #[test]
-fn draw_marks_the_active_tab_with_the_accent_surface() {
+fn draw_keeps_the_active_tab_accent_surface_while_hovered() {
     let mut tabs = TabListState::new(vec![TestTab("One"), TestTab("Two")]);
     tabs.handle_key(key(KeyCode::Tab));
     let backend = TestBackend::new(20, 1);
@@ -113,7 +113,7 @@ fn draw_marks_the_active_tab_with_the_accent_surface() {
                 frame.area(),
                 &tabs,
                 false,
-                None,
+                Some(1),
                 None,
                 test_context(),
             )
