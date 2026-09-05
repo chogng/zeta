@@ -6,7 +6,7 @@ pub(crate) mod transcript_export;
 
 /// A completed host operation delivered to the TUI state owner.
 pub(crate) enum Event {
-    ClipboardImageRead(Result<Vec<u8>, String>),
+    ClipboardImageRead(Result<clipboard::ClipboardImage, String>),
     ClipboardImageAvailabilityChanged(clipboard::ClipboardImageAvailability),
     OperationCompleted(Result<String, String>),
     ProcessResourcesSampled(process_resources::ProcessResourcesReading),
@@ -54,9 +54,7 @@ impl Operation {
                 requested_path,
                 markdown,
             } => export_transcript(root, requested_path, markdown),
-            Self::ReadClipboardImage => {
-                Event::ClipboardImageRead(clipboard::read_image().map(|image| image.png))
-            }
+            Self::ReadClipboardImage => Event::ClipboardImageRead(clipboard::read_image()),
             Self::RefreshClipboardImageAvailability => {
                 Event::ClipboardImageAvailabilityChanged(clipboard::image_availability())
             }

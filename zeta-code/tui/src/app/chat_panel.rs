@@ -4,6 +4,7 @@ use super::top_tip::TopTip;
 use crate::config::ConfigChoices;
 use crate::connectors::ConnectorChoices;
 use crate::dirs::DirChoices;
+use crate::host::clipboard::ClipboardImageFingerprint;
 use crate::keymap::KeymapChoices;
 use crate::mcp::McpChoices;
 use crate::skills::SkillChoices;
@@ -426,8 +427,16 @@ impl ChatPanel {
         self.top_tip.show_notice(notice, now);
     }
 
-    pub(crate) fn show_clipboard_image(&mut self, now: Instant) {
-        self.top_tip.show_clipboard_image(now);
+    pub(crate) fn show_clipboard_image(
+        &mut self,
+        fingerprint: ClipboardImageFingerprint,
+        now: Instant,
+    ) {
+        self.top_tip.show_clipboard_image(fingerprint, now);
+    }
+
+    pub(crate) fn clipboard_image_pasted(&mut self, fingerprint: ClipboardImageFingerprint) {
+        self.top_tip.clipboard_image_pasted(fingerprint);
     }
 
     pub(crate) fn hide_clipboard_image(&mut self) {

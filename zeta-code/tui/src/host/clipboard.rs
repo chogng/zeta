@@ -3,13 +3,18 @@
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct ClipboardImage {
     pub(crate) png: Vec<u8>,
+    pub(crate) fingerprint: ClipboardImageFingerprint,
     pub(crate) width: u32,
     pub(crate) height: u32,
 }
 
+/// Identifies decoded image content for in-process clipboard tip deduplication.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ClipboardImageFingerprint(pub(crate) u64);
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ClipboardImageAvailability {
-    Available,
+    Available(ClipboardImageFingerprint),
     Unavailable,
 }
 
@@ -35,7 +40,7 @@ pub(crate) fn read_image() -> Result<ClipboardImage, String> {
 #[cfg(not(target_os = "android"))]
 pub(crate) fn image_availability() -> ClipboardImageAvailability {
     match read_dynamic_image() {
-        Ok(_) => ClipboardImageAvailability::Available,
+        Ok(image) => ClipboardImageAvailability::Available(image_fingerprint(&image)),
         Err(_) => ClipboardImageAvailability::Unavailable,
     }
 }
@@ -89,13 +94,32 @@ pub(crate) fn image_availability() -> ClipboardImageAvailability {
 
 #[cfg(not(target_os = "android"))]
 fn encode_dynamic_image(image: image::DynamicImage) -> Result<ClipboardImage, String> {
+    let fingerprint = image_fingerprint(&image);
     let width = image.width();
     let height = image.height();
     let mut png = Vec::new();
     image
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|error| format!("could not encode clipboard image as PNG: {error}"))?;
-    Ok(ClipboardImage { png, width, height })
+    Ok(ClipboardImage {
+        png,
+        fingerprint,
+        width,
+        height,
+    })
+}
+
+#[cfg(not(target_os = "android"))]
+fn image_fingerprint(image: &image::DynamicImage) -> ClipboardImageFingerprint {
+    use std::hash::DefaultHasher;
+    use std::hash::Hash;
+    use std::hash::Hasher;
+
+    let mut hasher = DefaultHasher::new();
+    image.width().hash(&mut hasher);
+    image.height().hash(&mut hasher);
+    image.to_rgba8().as_raw().hash(&mut hasher);
+    ClipboardImageFingerprint(hasher.finish())
 }
 
 #[cfg(test)]

@@ -10,7 +10,9 @@ use crate::app::AppEvent;
 use crate::app::CommandPanel;
 use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::host::Event as HostEvent;
+use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
+use crate::host::clipboard::ClipboardImageFingerprint;
 use crate::host::process_resources::ProcessResourceDemand;
 use crate::host::process_resources::ProcessResourceMetrics;
 use crate::models::Event as ModelEvent;
@@ -118,7 +120,7 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     let areas_before = layout(&app, terminal_area).session;
 
     app.update(HostEvent::ClipboardImageAvailabilityChanged(
-        ClipboardImageAvailability::Available,
+        ClipboardImageAvailability::Available(ClipboardImageFingerprint(1)),
     ));
 
     let areas_after = layout(&app, terminal_area).session;
@@ -135,9 +137,12 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     );
     assert_snapshot!("clipboard_image_top_tip", rendered);
 
-    app.update(HostEvent::ClipboardImageRead(Ok(
-        b"\x89PNG\r\n\x1a\npayload".to_vec(),
-    )));
+    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
+        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+        fingerprint: ClipboardImageFingerprint(1),
+        width: 1,
+        height: 1,
+    })));
     let rendered_after_paste = render(&app, terminal_area.width, terminal_area.height);
     assert!(!rendered_after_paste.contains("image in clipboard"));
     assert!(rendered_after_paste.contains("[Image #1]"));
@@ -145,6 +150,54 @@ fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
         "clipboard_image_pasted_into_chat_input",
         rendered_after_paste
     );
+}
+
+#[test]
+fn clipboard_image_refresh_after_paste_stays_quiet_until_content_changes() {
+    let mut app = App::new();
+    // Pasting can finish before the first availability refresh.
+    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
+        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+        fingerprint: ClipboardImageFingerprint(1),
+        width: 1,
+        height: 1,
+    })));
+    app.update(HostEvent::ClipboardImageAvailabilityChanged(
+        ClipboardImageAvailability::Available(ClipboardImageFingerprint(1)),
+    ));
+    assert!(!render(&app, 80, 20).contains("image in clipboard"));
+    assert_eq!(app.input(), "[Image #1] ");
+
+    app.update(HostEvent::ClipboardImageAvailabilityChanged(
+        ClipboardImageAvailability::Available(ClipboardImageFingerprint(2)),
+    ));
+    assert!(render(&app, 80, 20).contains("image in clipboard"));
+
+    app.update(HostEvent::ClipboardImageAvailabilityChanged(
+        ClipboardImageAvailability::Unavailable,
+    ));
+    assert!(!render(&app, 80, 20).contains("image in clipboard"));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL)),
+        Some(AppCommand::Host(crate::host::Command::ReadClipboardImage))
+    );
+}
+
+#[test]
+fn failed_clipboard_image_paste_keeps_the_tip_visible() {
+    let mut app = App::new();
+    app.update(HostEvent::ClipboardImageAvailabilityChanged(
+        ClipboardImageAvailability::Available(ClipboardImageFingerprint(1)),
+    ));
+    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
+        png: b"invalid image".to_vec(),
+        fingerprint: ClipboardImageFingerprint(1),
+        width: 1,
+        height: 1,
+    })));
+
+    assert!(render(&app, 80, 20).contains("image in clipboard"));
+    assert_eq!(app.input(), "");
 }
 
 #[test]

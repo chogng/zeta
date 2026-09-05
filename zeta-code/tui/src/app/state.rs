@@ -26,6 +26,7 @@ use crate::dirs::DirSelectionAction;
 use crate::dirs::Event as DirEvent;
 use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
+use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
 use crate::host::process_resources::ProcessResourceRequest;
 use crate::keymap::AppChordMatch;
@@ -728,13 +729,13 @@ impl App {
         }
     }
 
-    fn attach_image_bytes(&mut self, bytes: Vec<u8>) {
+    fn attach_clipboard_image(&mut self, image: ClipboardImage) {
         if self.accepts_input() && !self.queue_focused() {
             match self
                 .chat_panel
-                .attach_image_bytes(&mut self.thread_presentations.active_mut().input, bytes)
+                .attach_image_bytes(&mut self.thread_presentations.active_mut().input, image.png)
             {
-                Ok(()) => self.chat_panel.hide_clipboard_image(),
+                Ok(()) => self.chat_panel.clipboard_image_pasted(image.fingerprint),
                 Err(error) => self
                     .thread
                     .update(ThreadPresentationEvent::FailureReported(error)),
@@ -1645,11 +1646,12 @@ impl App {
 
     fn apply_host_event(&mut self, event: HostEvent) {
         match event {
-            HostEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
+            HostEvent::ClipboardImageRead(Ok(image)) => self.attach_clipboard_image(image),
             HostEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
             HostEvent::ClipboardImageAvailabilityChanged(availability) => match availability {
-                ClipboardImageAvailability::Available => {
-                    self.chat_panel.show_clipboard_image(Instant::now());
+                ClipboardImageAvailability::Available(fingerprint) => {
+                    self.chat_panel
+                        .show_clipboard_image(fingerprint, Instant::now());
                 }
                 ClipboardImageAvailability::Unavailable => self.chat_panel.hide_clipboard_image(),
             },

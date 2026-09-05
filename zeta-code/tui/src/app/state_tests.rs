@@ -9,6 +9,8 @@ use crate::config::config_choices;
 use crate::dirs::Command as DirCommand;
 use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
+use crate::host::clipboard::ClipboardImage;
+use crate::host::clipboard::ClipboardImageFingerprint;
 use crate::host::process_resources::ProcessResourceDemand;
 use crate::host::process_resources::ProcessResourceRequest;
 use crate::host::process_resources::ProcessResourceUsage;
@@ -535,9 +537,12 @@ fn export_slash_command_stays_in_the_terminal_host() {
 fn export_rejects_image_arguments_before_host_io() {
     let mut app = App::new();
     app.insert_text("/export ");
-    app.update(HostEvent::ClipboardImageRead(Ok(
-        b"\x89PNG\r\n\x1a\npayload".to_vec(),
-    )));
+    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
+        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+        fingerprint: ClipboardImageFingerprint(1),
+        width: 1,
+        height: 1,
+    })));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -618,9 +623,12 @@ fn submitting_after_manual_scroll_restores_follow_latest() {
 #[test]
 fn clipboard_png_submits_through_the_existing_attachment_path() {
     let mut app = App::new();
-    app.update(HostEvent::ClipboardImageRead(Ok(
-        b"\x89PNG\r\n\x1a\npayload".to_vec(),
-    )));
+    app.update(HostEvent::ClipboardImageRead(Ok(ClipboardImage {
+        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+        fingerprint: ClipboardImageFingerprint(1),
+        width: 1,
+        height: 1,
+    })));
 
     assert_eq!(app.input(), "[Image #1] ");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));

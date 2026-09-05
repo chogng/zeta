@@ -1,3 +1,4 @@
+use crate::host::clipboard::ClipboardImageFingerprint;
 use crate::render::RenderContext;
 use crate::widgets::key_hint;
 use ratatui::Frame;
@@ -14,6 +15,7 @@ pub(crate) struct TopTip {
     phase: TopTipPhase,
     notice: Option<Notice>,
     clipboard_image_expires_at: Option<Instant>,
+    last_clipboard_image: Option<ClipboardImageFingerprint>,
 }
 
 #[derive(Debug)]
@@ -35,6 +37,7 @@ impl TopTip {
             phase: TopTipPhase::Navigation,
             notice: None,
             clipboard_image_expires_at: None,
+            last_clipboard_image: None,
         }
     }
 
@@ -61,8 +64,21 @@ impl TopTip {
         });
     }
 
-    pub(crate) fn show_clipboard_image(&mut self, now: Instant) {
+    pub(crate) fn show_clipboard_image(
+        &mut self,
+        fingerprint: ClipboardImageFingerprint,
+        now: Instant,
+    ) {
+        if self.last_clipboard_image == Some(fingerprint) {
+            return;
+        }
+        self.last_clipboard_image = Some(fingerprint);
         self.clipboard_image_expires_at = Some(now + TRANSIENT_TIP_DURATION);
+    }
+
+    pub(crate) fn clipboard_image_pasted(&mut self, fingerprint: ClipboardImageFingerprint) {
+        self.last_clipboard_image = Some(fingerprint);
+        self.hide_clipboard_image();
     }
 
     pub(crate) fn hide_clipboard_image(&mut self) {
