@@ -426,6 +426,28 @@ async fn thread_provision_supports_an_unborn_target_without_creating_its_branch(
         .unwrap();
 }
 
+#[tokio::test]
+async fn thread_recovery_ignores_checkouts_owned_by_another_profile() {
+    let fixture = RepositoryFixture::new();
+    let manager = fixture.manager();
+    let binding = manager.provision(&ManagedDirProvisionRequest {
+        source: ManagedDirSource::DirSnapshot { source_directory: fixture.repository.clone() },
+        target: ManagedDirTarget::SourceHead,
+        repository_targets: BTreeMap::new(),
+        source_dir_id: "repository".into(),
+        owner: thread_owner("other-profile-thread"),
+    }).await.unwrap();
+    let profile = TempDir::new().unwrap();
+    let settings = WorktreeSettings::defaults(profile.path());
+    let root = settings.root.clone();
+    let other = WorktreeManager::new(settings);
+    assert!(other.recover_threads(&fixture.repository, "repository").await.unwrap().is_empty());
+    fs::create_dir_all(root).unwrap();
+    assert!(other.recover_threads(&fixture.repository, "repository").await.unwrap().is_empty());
+    assert_eq!(manager.recover_threads(&fixture.repository, "repository").await.unwrap().len(), 1);
+    manager.cleanup(&binding, ManagedDirCleanupEligibility::AllChangeSetsSettled).await.unwrap();
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn thread_provision_maps_nested_repositories_to_independent_linked_worktrees() {
     let fixture = RepositoryFixture::new();

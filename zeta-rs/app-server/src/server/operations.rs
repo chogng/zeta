@@ -92,10 +92,10 @@ pub(super) struct SessionMutation {
     pub(super) session_id: zeta_protocol::SessionId,
 }
 
-struct ThreadMutation {
-    command_id: zeta_protocol::CommandId,
-    session_id: zeta_protocol::SessionId,
-    expected_sequence: u64,
+pub(super) struct ThreadMutation {
+    pub(super) command_id: zeta_protocol::CommandId,
+    pub(super) session_id: zeta_protocol::SessionId,
+    pub(super) expected_sequence: u64,
 }
 
 struct RewriteSessionMutation {
@@ -257,6 +257,12 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
+        if self.automation.is_some() {
+            capabilities.contracts.insert(
+                "automation".into(),
+                zeta_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         result(&InitializeResult {
             server_info: ServerInfo {
                 name: "zeta-app-server".into(),
@@ -295,6 +301,9 @@ impl AppServer {
         match request {
             SessionRequest::Archive => result(&SessionRequestResult::Session(
                 self.archive_session_request(mutation)?,
+            )),
+            SessionRequest::Restore => result(&SessionRequestResult::Session(
+                self.restore_session_request(mutation)?,
             )),
             SessionRequest::Delete => result(&SessionRequestResult::Deleted(
                 self.delete_session_request(mutation)?,
@@ -443,11 +452,14 @@ impl AppServer {
     ) -> Result<SessionThreadResult, RpcError> {
         let created = self
             .threads
-            .create_branch(CreateBranchRequest {
-                command_id: mutation.command_id,
-                session_id: mutation.session_id.clone(),
-                title,
-            })
+            .create_branch(
+                self.thread_worktree_binder.as_ref(),
+                CreateBranchRequest {
+                    command_id: mutation.command_id,
+                    session_id: mutation.session_id.clone(),
+                    title,
+                },
+            )
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
             connection_id,
@@ -472,11 +484,14 @@ impl AppServer {
     ) -> Result<SessionThreadResult, RpcError> {
         let forked = self
             .threads
-            .fork_thread(ForkThreadRequest {
-                command_id: mutation.command_id,
-                source_thread_id: parent_thread_id,
-                title,
-            })
+            .fork_thread(
+                self.thread_worktree_binder.as_ref(),
+                ForkThreadRequest {
+                    command_id: mutation.command_id,
+                    source_thread_id: parent_thread_id,
+                    title,
+                },
+            )
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
             connection_id,
@@ -502,12 +517,15 @@ impl AppServer {
     ) -> Result<SessionThreadResult, RpcError> {
         let rewound = self
             .threads
-            .rewind_thread(RewindThreadRequest {
-                command_id: mutation.command_id,
-                source_thread_id: parent_thread_id,
-                before_turn_id,
-                title,
-            })
+            .rewind_thread(
+                self.thread_worktree_binder.as_ref(),
+                RewindThreadRequest {
+                    command_id: mutation.command_id,
+                    source_thread_id: parent_thread_id,
+                    before_turn_id,
+                    title,
+                },
+            )
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
             connection_id,
@@ -532,12 +550,18 @@ impl AppServer {
         let normalized_input = normalize_input(rewrite.input.clone());
         let rewound = self
             .threads
-            .rewind_thread(RewindThreadRequest {
-                command_id: rewrite_phase_command_id(&mutation.command_id, RewritePhase::Rewind)?,
-                source_thread_id: rewrite.parent_thread_id,
-                before_turn_id: rewrite.before_turn_id,
-                title: rewrite.title,
-            })
+            .rewind_thread(
+                self.thread_worktree_binder.as_ref(),
+                RewindThreadRequest {
+                    command_id: rewrite_phase_command_id(
+                        &mutation.command_id,
+                        RewritePhase::Rewind,
+                    )?,
+                    source_thread_id: rewrite.parent_thread_id,
+                    before_turn_id: rewrite.before_turn_id,
+                    title: rewrite.title,
+                },
+            )
             .map_err(core_error)?;
         let thread_id = rewound.thread_id;
         let thread_before = self.threads.read_thread(&thread_id).map_err(core_error)?;
@@ -772,7 +796,7 @@ impl AppServer {
         }
     }
 
-    fn start_turn_request(
+    pub(super) fn start_turn_request(
         &self,
         mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
@@ -1048,7 +1072,7 @@ impl AppServer {
         })
     }
 
-    fn interrupt_turn_request(
+    pub(super) fn interrupt_turn_request(
         &self,
         mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,

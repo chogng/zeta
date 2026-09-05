@@ -68,6 +68,7 @@ pub struct SessionDeleted {
 )]
 pub enum SessionRequest {
     Archive,
+    Restore,
     Delete,
     Stop,
     CreateThread {

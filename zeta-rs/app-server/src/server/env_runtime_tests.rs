@@ -302,14 +302,12 @@ fn dirs_are_session_scoped_and_removable() {
         .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
         .unwrap();
     let first = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-add-dir-session").unwrap(),
             title: "first".into(),
         })
         .unwrap();
     let second = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-other-add-dir-session").unwrap(),
             title: "second".into(),
@@ -355,7 +353,6 @@ fn cwd_directory_can_be_added_explicitly() {
         .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
         .unwrap();
     let session = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-primary-add-dir-session").unwrap(),
             title: "session".into(),
@@ -384,7 +381,6 @@ fn dir_mutation_requires_a_dir_permissions_host_connection() {
         .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
         .unwrap();
     let session = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-capability-add-dir-session").unwrap(),
             title: "session".into(),
@@ -435,7 +431,6 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
         .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
         .unwrap();
     let session = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-permission-add-dir-session").unwrap(),
             title: "session".into(),
@@ -937,7 +932,6 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
     server.switch_local_dir_root(dir.path.clone()).unwrap();
     assert!(server.terminal_service().is_ok());
     let thread = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-revocation-thread").unwrap(),
             title: "revocation".into(),
@@ -1192,7 +1186,6 @@ fn active_turn_blocks_env_cwd_set_without_changing_authority() {
         .commit_full_env_runtime(first.authorization(), test_local_tools(), host)
         .unwrap();
     let thread = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-thread").unwrap(),
             title: "thread".into(),
@@ -1248,7 +1241,6 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
         .unwrap();
     let thread = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-active-add-dir-thread").unwrap(),
             title: "thread".into(),

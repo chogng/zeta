@@ -28,7 +28,6 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: SessionCreateParams = decode(params)?;
         let created = self
-            .threads
             .start_thread(StartThreadRequest {
                 command_id: params.command_id,
                 title: params.title,
@@ -128,6 +127,21 @@ impl AppServer {
         let result = self.lifecycle_request(mutation)?;
         self.clear_session_dirs(&session_id);
         Ok(result)
+    }
+
+    pub(super) fn restore_session_request(
+        &self,
+        mutation: SessionMutation,
+    ) -> Result<SessionResult, RpcError> {
+        let restored = self
+            .threads
+            .restore_session(&mutation.session_id)
+            .map_err(core_error)?;
+        self.notify_thread_updates(&restored.thread_id, restored.sequence.saturating_sub(1))?;
+        self.updates.publish_session_changed(&mutation.session_id);
+        Ok(SessionResult {
+            session: self.session_view(&mutation.session_id)?,
+        })
     }
 
     pub(super) fn stop_session_request(

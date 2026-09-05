@@ -1,4 +1,4 @@
-import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
+import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { isRemoteWorkspaceIdentifier } from "../../workspace/common/workspace.js";
@@ -11,14 +11,14 @@ export interface IRemoteAgentRecoveryMainService {
 }
 
 /** Projects connection metadata without exposing SSH credentials or native process details. */
-export function remoteAgentConnection(supervisor: AppServerSupervisor, workspace: IAnyWorkspaceIdentifier): RemoteAgentConnection {
+export function remoteAgentConnection(supervisor: AppServerConnectionRelay, workspace: IAnyWorkspaceIdentifier): RemoteAgentConnection {
 	if (!isRemoteWorkspaceIdentifier(workspace)) return Object.freeze({ kind: "local", generation: supervisor.generation });
 	const authority = getRemoteAuthority(workspace.uri);
 	if (!authority || authority.type !== "ssh") throw new Error("Remote Workspace does not provide a supported connection authority");
 	return Object.freeze({ kind: "ssh", generation: supervisor.generation, authority: authority.authority, host: authority.host });
 }
 
-export function remoteAgentIpcRoutes(supervisor: AppServerSupervisor, getWorkspace: () => IAnyWorkspaceIdentifier, recovery?: IRemoteAgentRecoveryMainService): readonly IpcRoute<unknown, unknown>[] {
+export function remoteAgentIpcRoutes(supervisor: AppServerConnectionRelay, getWorkspace: () => IAnyWorkspaceIdentifier, recovery?: IRemoteAgentRecoveryMainService): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: REMOTE_AGENT_CONNECTION_READ_CHANNEL,

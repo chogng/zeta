@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { ICodebaseApi } from "../common/codebaseApi.js";
 
@@ -12,11 +12,11 @@ export function createDisconnectedCodebaseApi(unavailable: UnavailableOperation)
 	};
 }
 
-export function createViteDevCodebaseApi(connection: ViteDevAppServerConnection): ICodebaseApi {
+export function createAppServerCodebaseApi(connection: AppServerProtocolClient): ICodebaseApi {
 	return {
-		readConfig: () => viteDevRequest(connection, "config/read", {}),
-		configureProvider: params => viteDevRequest(connection, "provider/configure", params),
-		configure: params => viteDevRequest(connection, "codebase/configure", params),
-		status: () => viteDevRequest(connection, "codebase/status", {}),
+		readConfig: () => appServerRequest(connection, "config/read", {}),
+		configureProvider: params => appServerRequest(connection, "provider/configure", params),
+		configure: params => appServerRequest(connection, "codebase/configure", params),
+		status: () => appServerRequest(connection, "codebase/status", {}),
 	};
 }

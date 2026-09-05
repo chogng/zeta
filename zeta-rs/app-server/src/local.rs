@@ -696,6 +696,7 @@ impl std::error::Error for OpenAppServerError {}
 /// terminal, Git, language, and execution services remain in separately composed [`AppServer`]
 /// instances.
 pub struct LocalProfileRuntime {
+    automation: Arc<zeta_automation::AutomationStore>,
     profile_root: PathBuf,
     state: Arc<zeta_state::StateRuntime>,
     threads: Arc<ThreadController>,
@@ -756,6 +757,7 @@ impl LocalProfileRuntime {
         );
         Ok(Self {
             profile_root,
+            automation: Arc::new(zeta_automation::AutomationStore::open(&database_path).map_err(open_error)?),
             state,
             threads,
             config,
@@ -769,6 +771,16 @@ impl LocalProfileRuntime {
     /// Returns the one secret store used by every Directory runtime in this profile authority.
     pub fn secret_store(&self) -> Arc<dyn SecretStore> {
         Arc::clone(&self.secrets)
+    }
+
+    /// Shared plan and run store; the profile host owns its single scheduling loop.
+    pub fn automation_store(&self) -> Arc<zeta_automation::AutomationStore> {
+        Arc::clone(&self.automation)
+    }
+
+    /// Invalidates automation views across all directory connections in this profile.
+    pub fn automation_changed(&self) {
+        self.updates.publish_automation_changed();
     }
 
     fn state_runtime(&self) -> Arc<zeta_state::StateRuntime> {
@@ -1192,6 +1204,9 @@ pub fn open_local_app_server_with_codebase_providers(
     server = server
         .with_local_projects(&database_path)
         .map_err(OpenAppServerError)?;
+    if let Some(profile) = &profile_runtime {
+        server = server.with_automation_store(profile.automation_store());
+    }
     if let Some(command) = fast_regex_worker_command {
         server = server.with_fast_regex_worker_command(command);
     }

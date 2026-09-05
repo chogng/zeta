@@ -217,6 +217,7 @@ impl TranscriptAccumulator {
             }
             ThreadEvent::ThreadCreated { .. }
             | ThreadEvent::ThreadArchived { .. }
+            | ThreadEvent::ThreadRestored { .. }
             | ThreadEvent::GoalCreated { .. }
             | ThreadEvent::GoalUpdated { .. }
             | ThreadEvent::GoalCleared { .. }

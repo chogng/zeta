@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 1 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 27 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 3 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:3b23da1578f502d7b333c4faa82b6f3634b5dd95bd3dafde532fa5728bdabe98" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:2ffb97aa2b62e6d0e8eb145d795f2e52f38c04aa890224e471134cbfa9df2a38" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -388,7 +388,7 @@ export type SessionSubscribeParams = { sessionId: SessionId, };
 export type SessionUnsubscribeParams = { sessionId: SessionId, };
 export type SessionChanged = { sessionId: SessionId, };
 export type SessionDeleted = { sessionId: SessionId, };
-export type SessionRequest = { "type": "archive" } | { "type": "delete" } | { "type": "stop" } | { "type": "createThread", title: string, } | { "type": "forkThread", parentThreadId: ThreadId, title: string, } | { "type": "rewindThread", parentThreadId: ThreadId, beforeTurnId: TurnId, title: string, } | { "type": "rewriteThread", parentThreadId: ThreadId, beforeTurnId: TurnId, title: string, toolMode?: ToolMode | null, input: Array<InputItem>, } | { "type": "startTurn", threadId: ThreadId, expectedSequence: number, approvalMode: ApprovalMode, toolMode?: ToolMode | null, input: Array<InputItem>, } | { "type": "startReview", threadId: ThreadId, expectedSequence: number, target: ReviewTarget, } | { "type": "startShellTurn", threadId: ThreadId, expectedSequence: number, approvalMode: ApprovalMode, command: string, workingDirectory: string, } | { "type": "compactContext", threadId: ThreadId, expectedSequence: number, retentionPrompt?: string | null, } | { "type": "steerTurn", threadId: ThreadId, expectedSequence: number, turnId: TurnId, input: Array<InputItem>, } | { "type": "interruptTurn", threadId: ThreadId, expectedSequence: number, turnId: TurnId, } | { "type": "resolveInteraction", threadId: ThreadId, expectedSequence: number, turnId: TurnId, requestId: RequestId, response: AgentResponse, };
+export type SessionRequest = { "type": "archive" } | { "type": "restore" } | { "type": "delete" } | { "type": "stop" } | { "type": "createThread", title: string, } | { "type": "forkThread", parentThreadId: ThreadId, title: string, } | { "type": "rewindThread", parentThreadId: ThreadId, beforeTurnId: TurnId, title: string, } | { "type": "rewriteThread", parentThreadId: ThreadId, beforeTurnId: TurnId, title: string, toolMode?: ToolMode | null, input: Array<InputItem>, } | { "type": "startTurn", threadId: ThreadId, expectedSequence: number, approvalMode: ApprovalMode, toolMode?: ToolMode | null, input: Array<InputItem>, } | { "type": "startReview", threadId: ThreadId, expectedSequence: number, target: ReviewTarget, } | { "type": "startShellTurn", threadId: ThreadId, expectedSequence: number, approvalMode: ApprovalMode, command: string, workingDirectory: string, } | { "type": "compactContext", threadId: ThreadId, expectedSequence: number, retentionPrompt?: string | null, } | { "type": "steerTurn", threadId: ThreadId, expectedSequence: number, turnId: TurnId, input: Array<InputItem>, } | { "type": "interruptTurn", threadId: ThreadId, expectedSequence: number, turnId: TurnId, } | { "type": "resolveInteraction", threadId: ThreadId, expectedSequence: number, turnId: TurnId, requestId: RequestId, response: AgentResponse, };
 export type SessionRequestParams = { commandId: CommandId, sessionId: SessionId, request: SessionRequest, };
 export type SessionRequestResult = { "type": "session", "value": SessionResult } | { "type": "deleted", "value": SessionId } | { "type": "thread", "value": SessionThreadResult } | { "type": "rewrite", "value": SessionRewriteResult } | { "type": "turn", "value": TurnStartResult } | { "type": "turnSteer", "value": TurnSteerResult } | { "type": "turnInterrupt", "value": TurnInterruptResult } | { "type": "interaction", "value": TurnInteractionResolveResult };
 export type SessionThreadReadParams = { sessionId: SessionId, threadId: ThreadId, history?: ThreadSnapshotHistory, };
@@ -536,7 +536,7 @@ export type TurnExecutionBinding = { backend: string, remoteThreadId: string,
  * excludes filesystem paths and credentials while preventing cross-environment reuse.
  */
 executionScope: string, };
-export type ThreadEvent = { "type": "threadCreated", sessionId: SessionId, threadId: ThreadId, title: string, } | { "type": "threadArchived", threadId: ThreadId, reason: ThreadArchiveReason, } | { "type": "goalCreated", threadId: ThreadId, goal: ThreadGoal, } | { "type": "goalUpdated", threadId: ThreadId, goal: ThreadGoal, } | { "type": "goalCleared", threadId: ThreadId, goalId: string, } | { "type": "turnExecutionBound", threadId: ThreadId, binding: TurnExecutionBinding, } | { "type": "agentContextSeedCommitted", threadId: ThreadId, seed: AgentContextSeed, } | { "type": "historyImported", threadId: ThreadId, sourceThreadId: ThreadId, beforeTurnId: TurnId, turns: Array<Turn>, } | { "type": "forkHistoryImported", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, turns: Array<Turn>, } | { "type": "forkTurnImported", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, turnIndex: number, turn: Turn, } | { "type": "forkHistoryImportCompleted", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, importedTurnCount: number, contextCheckpoint?: ContextCheckpoint | null, } | { "type": "contextCheckpointCommitted", threadId: ThreadId, checkpoint: ContextCheckpoint, } | { "type": "contextOverflowRecoveryCommitted", threadId: ThreadId, turnId: TurnId, checkpoint: ContextCheckpoint, } | { "type": "turnAccepted", threadId: ThreadId, turnId: TurnId, kind: TurnKind,
+export type ThreadEvent = { "type": "threadCreated", sessionId: SessionId, threadId: ThreadId, title: string, } | { "type": "threadArchived", threadId: ThreadId, reason: ThreadArchiveReason, } | { "type": "threadRestored", threadId: ThreadId, } | { "type": "goalCreated", threadId: ThreadId, goal: ThreadGoal, } | { "type": "goalUpdated", threadId: ThreadId, goal: ThreadGoal, } | { "type": "goalCleared", threadId: ThreadId, goalId: string, } | { "type": "turnExecutionBound", threadId: ThreadId, binding: TurnExecutionBinding, } | { "type": "agentContextSeedCommitted", threadId: ThreadId, seed: AgentContextSeed, } | { "type": "historyImported", threadId: ThreadId, sourceThreadId: ThreadId, beforeTurnId: TurnId, turns: Array<Turn>, } | { "type": "forkHistoryImported", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, turns: Array<Turn>, } | { "type": "forkTurnImported", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, turnIndex: number, turn: Turn, } | { "type": "forkHistoryImportCompleted", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, importedTurnCount: number, contextCheckpoint?: ContextCheckpoint | null, } | { "type": "contextCheckpointCommitted", threadId: ThreadId, checkpoint: ContextCheckpoint, } | { "type": "contextOverflowRecoveryCommitted", threadId: ThreadId, turnId: TurnId, checkpoint: ContextCheckpoint, } | { "type": "turnAccepted", threadId: ThreadId, turnId: TurnId, kind: TurnKind,
 /**
  * Exact instructions selected before this Turn was durably accepted.
  *
@@ -659,6 +659,29 @@ export type WorkRunCommandDispositionDto = "committed" | "replayed";
 export type WorkRunMutationResult = { disposition: WorkRunCommandDispositionDto, workRun: WorkRunDto, };
 export type WorkRunChanged = { workRun: WorkRunDto, };
 export type ProjectStatusDto = "active" | "archived";
+export type UnixMillis = number;
+export type Automation = { id: string, revision: number, definition: AutomationDefinition, status: AutomationStatus, createdAt: UnixMillis, updatedAt: UnixMillis, nextRunAt: UnixMillis | null, };
+export type AutomationDefinition = { title: string, prompt: string,
+/**
+ * Explicit local execution directory; never resolved from the active window.
+ */
+directory: string, session: AutomationSession, schedule: AutomationSchedule, };
+export type AutomationSchedule = { "type": "once", at: UnixMillis, } | { "type": "interval", anchor: UnixMillis, minutes: number, } | { "type": "weekly", timezone: string,
+/**
+ * ISO weekdays: Monday is 1, Sunday is 7. All seven days means daily.
+ */
+weekdays: Array<number>, hour: number, minute: number, };
+export type AutomationSession = { "type": "new" } | { "type": "continue", sessionId: SessionId, threadId: ThreadId, };
+export type AutomationStatus = "enabled" | "paused";
+export type AutomationRun = { id: string, automationId: string, revision: number, definition: AutomationDefinition, scheduledAt: UnixMillis, createdAt: UnixMillis, startedAt: UnixMillis | null, finishedAt: UnixMillis | null, status: AutomationRunStatus, sessionId: SessionId | null, threadId: ThreadId | null, turnId: TurnId | null, message: string | null, };
+export type AutomationRunStatus = "pending" | "running" | "needsInput" | "stopping" | "completed" | "failed" | "stopped" | "skipped";
+export type AutomationListResult = { automations: Array<Automation>, };
+export type AutomationWriteParams = { commandId: string, id: string, expectedRevision: number, definition: AutomationDefinition, status: AutomationStatus, };
+export type AutomationDeleteParams = { id: string, expectedRevision: number, };
+export type AutomationRunParams = { id: string, commandId: string, };
+export type AutomationRunsParams = { id: string, limit: number, };
+export type AutomationRunsResult = { runs: Array<AutomationRun>, };
+export type AutomationStopParams = { runId: string, };
 export type ProjectRootDto = { environmentId: EnvId, dirId: DirId, path: string, name: string, purpose: string, };
 export type ProjectDto = { projectId: ProjectId, revision: number, status: ProjectStatusDto, name: string, description: string, roots: Array<ProjectRootDto>, sessionIds: Array<SessionId>, workRunIds: Array<WorkRunId>, };
 export type ProjectSummaryDto = { projectId: ProjectId, revision: number, status: ProjectStatusDto, name: string, rootCount: number, sessionCount: number, workRunCount: number, };
@@ -963,7 +986,7 @@ export type DebugAdapterReadParams = { dirId?: string, sessionId: string, afterS
 export type DebugAdapterMessageDto = { sequence: number, message: unknown, };
 export type DebugAdapterReadResult = { messages: Array<DebugAdapterMessageDto>, nextSequence: number, outputGap: boolean, stderr: string, exited: boolean, exitCode: number | null, protocolError: string | null, };
 export type DebugAdapterCloseParams = { dirId?: string, sessionId: string, };
-export type AppServerErrorName = "ParseError" | "InvalidRequest" | "MethodNotFound" | "InvalidParams" | "InternalError" | "ServerOverloaded" | "RequestCancelled" | "NotInitialized" | "AlreadyInitialized" | "CommandConflict" | "CoreOperationFailed" | "AgentInteractionNotOwner" | "AgentInteractionExpired" | "ResourceNotFound" | "ResourceNotOwner" | "ResourceTooLarge" | "InvalidResourceChunkSize" | "InvalidResourceOffset" | "FileSystemUnavailable" | "FileSystemOperationFailed" | "FileSystemNotFound" | "FileSystemRevisionConflict" | "GitUnavailable" | "GitNotRepository" | "GitOperationFailed" | "TurnChangesUnavailable" | "TurnChangesRevisionConflict" | "TurnChangesOperationFailed" | "WorkCoordinationUnavailable" | "WorkCoordinationNotFound" | "WorkCoordinationRevisionConflict" | "WorkCoordinationOperationFailed" | "ProjectsUnavailable" | "ProjectNotFound" | "ProjectRevisionConflict" | "ProjectOperationFailed" | "DiffOperationFailed" | "SyntaxAnalysisFailed" | "CodebaseUnavailable" | "CodebaseNotReady" | "CodebaseOperationFailed" | "CodebaseSymbolsUnavailable" | "CodebaseSymbolsNotReady" | "CodebaseSymbolsOperationFailed" | "CodebaseRetrievalOperationFailed" | "CloudCodebaseUnavailable" | "CloudCodebaseInvalidGrant" | "CloudCodebaseConsentConflict" | "CloudCodebaseEgressLimitExceeded" | "CloudCodebaseProviderUnavailable" | "CloudCodebaseOperationFailed" | "LanguageServiceUnavailable" | "LanguageRequestFailed" | "MarketplaceUnavailable" | "MarketplaceNotFound" | "MarketplaceUntrusted" | "MarketplaceIncompatible" | "MarketplaceInstallationInUse" | "MarketplaceOperationFailed" | "SearchUnavailable" | "SearchNotFound" | "SearchNotOwner" | "SearchBusy" | "TerminalUnavailable" | "TerminalNotFound" | "TerminalNotOwner" | "TerminalAttachRejected" | "TerminalBusy" | "TerminalOperationFailed" | "DebugAdapterUnavailable" | "DebugAdapterNotFound" | "DebugAdapterNotOwner" | "DebugAdapterBusy" | "DebugAdapterOperationFailed" | "ConfigUnavailable" | "ConfigRevisionConflict" | "ProviderCredentialsUnavailable" | "ProviderCredentialOperationFailed" | "McpRuntimeUnavailable" | "McpServerNotFound" | "McpOAuthUnavailable" | "McpOAuthInvalidCallback" | "McpOAuthExpired" | "McpOAuthOperationFailed" | "AccountUnavailable" | "AccountLoginNotFound" | "AccountLoginConflict" | "AccountOperationFailed" | "ConnectorsUnavailable" | "ConnectorGenerationConflict" | "ConnectorOperationFailed" | "ConnectorOAuthUnavailable" | "ConnectorOAuthInvalidCallback" | "ConnectorOAuthExpired" | "PluginsUnavailable" | "PluginRevisionConflict" | "PluginOperationFailed" | "ToolSearchUnavailable" | "SkillsUnavailable" | "SkillOperationFailed" | "SkillNotFound" | "EnvCwdSetUnavailable" | "EnvCwdSetBusy" | "EnvCwdSetFailed" | "RevisionConflict" | "PermissionRequired" | "ExtensionsUnavailable" | "ExtensionGenerationConflict" | "ExtensionNotFound" | "ExtensionResourceNotFound" | "ExtensionResourceInvalidPath" | "ExtensionOperationFailed" | "ExtensionHostUnavailable" | "ExtensionHostStale" | "ExtensionHostInvocationNotFound" | "ExtensionHostQuotaExceeded";
+export type AppServerErrorName = "ParseError" | "InvalidRequest" | "MethodNotFound" | "InvalidParams" | "InternalError" | "AutomationUnavailable" | "AutomationNotFound" | "AutomationConflict" | "AutomationBusy" | "AutomationOperationFailed" | "ServerOverloaded" | "RequestCancelled" | "NotInitialized" | "AlreadyInitialized" | "CommandConflict" | "CoreOperationFailed" | "AgentInteractionNotOwner" | "AgentInteractionExpired" | "ResourceNotFound" | "ResourceNotOwner" | "ResourceTooLarge" | "InvalidResourceChunkSize" | "InvalidResourceOffset" | "FileSystemUnavailable" | "FileSystemOperationFailed" | "FileSystemNotFound" | "FileSystemRevisionConflict" | "GitUnavailable" | "GitNotRepository" | "GitOperationFailed" | "TurnChangesUnavailable" | "TurnChangesRevisionConflict" | "TurnChangesOperationFailed" | "WorkCoordinationUnavailable" | "WorkCoordinationNotFound" | "WorkCoordinationRevisionConflict" | "WorkCoordinationOperationFailed" | "ProjectsUnavailable" | "ProjectNotFound" | "ProjectRevisionConflict" | "ProjectOperationFailed" | "DiffOperationFailed" | "SyntaxAnalysisFailed" | "CodebaseUnavailable" | "CodebaseNotReady" | "CodebaseOperationFailed" | "CodebaseSymbolsUnavailable" | "CodebaseSymbolsNotReady" | "CodebaseSymbolsOperationFailed" | "CodebaseRetrievalOperationFailed" | "CloudCodebaseUnavailable" | "CloudCodebaseInvalidGrant" | "CloudCodebaseConsentConflict" | "CloudCodebaseEgressLimitExceeded" | "CloudCodebaseProviderUnavailable" | "CloudCodebaseOperationFailed" | "LanguageServiceUnavailable" | "LanguageRequestFailed" | "MarketplaceUnavailable" | "MarketplaceNotFound" | "MarketplaceUntrusted" | "MarketplaceIncompatible" | "MarketplaceInstallationInUse" | "MarketplaceOperationFailed" | "SearchUnavailable" | "SearchNotFound" | "SearchNotOwner" | "SearchBusy" | "TerminalUnavailable" | "TerminalNotFound" | "TerminalNotOwner" | "TerminalAttachRejected" | "TerminalBusy" | "TerminalOperationFailed" | "DebugAdapterUnavailable" | "DebugAdapterNotFound" | "DebugAdapterNotOwner" | "DebugAdapterBusy" | "DebugAdapterOperationFailed" | "ConfigUnavailable" | "ConfigRevisionConflict" | "ProviderCredentialsUnavailable" | "ProviderCredentialOperationFailed" | "McpRuntimeUnavailable" | "McpServerNotFound" | "McpOAuthUnavailable" | "McpOAuthInvalidCallback" | "McpOAuthExpired" | "McpOAuthOperationFailed" | "AccountUnavailable" | "AccountLoginNotFound" | "AccountLoginConflict" | "AccountOperationFailed" | "ConnectorsUnavailable" | "ConnectorGenerationConflict" | "ConnectorOperationFailed" | "ConnectorOAuthUnavailable" | "ConnectorOAuthInvalidCallback" | "ConnectorOAuthExpired" | "PluginsUnavailable" | "PluginRevisionConflict" | "PluginOperationFailed" | "ToolSearchUnavailable" | "SkillsUnavailable" | "SkillOperationFailed" | "SkillNotFound" | "EnvCwdSetUnavailable" | "EnvCwdSetBusy" | "EnvCwdSetFailed" | "RevisionConflict" | "PermissionRequired" | "ExtensionsUnavailable" | "ExtensionGenerationConflict" | "ExtensionNotFound" | "ExtensionResourceNotFound" | "ExtensionResourceInvalidPath" | "ExtensionOperationFailed" | "ExtensionHostUnavailable" | "ExtensionHostStale" | "ExtensionHostInvocationNotFound" | "ExtensionHostQuotaExceeded";
 export type AppServerErrorData = { kind: AppServerErrorName, };
 export type AppServerError = { code: number, message: string, data: AppServerErrorData, };
 export interface AppServerNotificationMap {
@@ -988,6 +1011,7 @@ export interface AppServerNotificationMap {
   "turnChanges/changed": TurnChangesChanged;
   "workRun/changed": WorkRunChanged;
   "project/changed": ProjectChanged;
+  "automation/changed": Record<string, never>;
   "fs/changed": FsChanged;
   "language/diagnostics": LanguageDiagnosticsNotification;
   "language/serverMessage": LanguageServerMessageNotification;
@@ -1003,6 +1027,12 @@ export type AppServerWireNotification = {
 [M in AppServerNotificationMethod]: { jsonrpc: JsonRpcVersion; method: M; params: NotificationParams<M> }
 }[AppServerNotificationMethod];
 export interface AppServerRequestMap {
+  "automation/list": { params: Record<string, never>; response: AutomationListResult };
+  "automation/write": { params: AutomationWriteParams; response: Automation };
+  "automation/delete": { params: AutomationDeleteParams; response: null };
+  "automation/run": { params: AutomationRunParams; response: AutomationRun };
+  "automation/runs": { params: AutomationRunsParams; response: AutomationRunsResult };
+  "automation/stop": { params: AutomationStopParams; response: AutomationRun };
   "initialize": { params: InitializeParams; response: InitializeResult };
   "env/cwd/set": { params: EnvCwdSetParams; response: EnvCwdSetResult };
   "env/dirs/set": { params: EnvDirsSetParams; response: EnvDirsSetResult };
@@ -1250,6 +1280,12 @@ readonly __params?: MethodParams<M>;
 readonly __result?: MethodResult<M>;
 };
 export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefinition<M> } = {
+  "automation/list": { method: "automation/list" },
+  "automation/write": { method: "automation/write" },
+  "automation/delete": { method: "automation/delete" },
+  "automation/run": { method: "automation/run" },
+  "automation/runs": { method: "automation/runs" },
+  "automation/stop": { method: "automation/stop" },
   "initialize": { method: "initialize" },
   "env/cwd/set": { method: "env/cwd/set" },
   "env/dirs/set": { method: "env/dirs/set" },
@@ -1514,6 +1550,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "turnChanges/changed": { method: "turnChanges/changed" },
   "workRun/changed": { method: "workRun/changed" },
   "project/changed": { method: "project/changed" },
+  "automation/changed": { method: "automation/changed" },
   "fs/changed": { method: "fs/changed" },
   "language/diagnostics": { method: "language/diagnostics" },
   "language/serverMessage": { method: "language/serverMessage" },

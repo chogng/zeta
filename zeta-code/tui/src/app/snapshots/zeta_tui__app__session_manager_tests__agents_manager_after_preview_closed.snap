@@ -1,16 +1,17 @@
 ---
 source: zeta-code/tui/src/app/session_manager_tests.rs
+assertion_line: 49
 expression: render(&app)
 ---
-   ▐▖  ▗▌    Zeta Code v0.1.0
-   ▗█▄▄█▖    Automatic model · Access unknown
-  ▗█▝██▘█▖   .
-   ▜▌  ▐▛
-   ▝    ▘
+    ▄  ▄     Zeta Code v0.1.0
+  ▗█▛██▜█▖   Automatic model · Access unknown
+  ▝▜████▛▘   .
+    ▝  ▘
+
 
 Idle (1)
 > ○ Snapshot session
-
+Archived (0)
 
 
 
@@ -33,4 +34,4 @@ Idle (1)
 >
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  Space to preview · Ctrl+X to archive
+  Enter to open · Space to preview · Ctrl+X to archive · i to details

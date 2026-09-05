@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IGitApi } from "../common/gitApi.js";
 
@@ -24,23 +24,23 @@ export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGi
 	};
 }
 
-export function createViteDevGitApi(connection: ViteDevAppServerConnection): IGitApi {
+export function createAppServerGitApi(connection: AppServerProtocolClient): IGitApi {
 	return {
-		repositories: () => viteDevRequest(connection, "git/repositories", {}),
-		status: (params) => viteDevRequest(connection, "git/status", params),
-		history: (params) => viteDevRequest(connection, "git/history", params),
-		branches: (params) => viteDevRequest(connection, "git/branch/list", params),
-		switchBranch: (params) => viteDevRequest(connection, "git/branch/switch", params),
-		graph: (params) => viteDevRequest(connection, "git/graph", params),
-		commitChanges: (params) => viteDevRequest(connection, "git/commitChanges", params),
-		commitFile: (params) => viteDevRequest(connection, "git/commitFile", params),
-		changeFile: (params) => viteDevRequest(connection, "git/changeFile", params),
-		stage: (params) => viteDevRequest(connection, "git/stage", params),
-		unstage: (params) => viteDevRequest(connection, "git/unstage", params),
-		discardWorktree: (params) => viteDevRequest(connection, "git/discardWorktree", params),
-		commit: (params) => viteDevRequest(connection, "git/commit", params),
-		fetch: (params) => viteDevRequest(connection, "git/fetch", params),
-		pull: (params) => viteDevRequest(connection, "git/pull", params),
-		push: (params) => viteDevRequest(connection, "git/push", params),
+		repositories: () => appServerRequest(connection, "git/repositories", {}),
+		status: (params) => appServerRequest(connection, "git/status", params),
+		history: (params) => appServerRequest(connection, "git/history", params),
+		branches: (params) => appServerRequest(connection, "git/branch/list", params),
+		switchBranch: (params) => appServerRequest(connection, "git/branch/switch", params),
+		graph: (params) => appServerRequest(connection, "git/graph", params),
+		commitChanges: (params) => appServerRequest(connection, "git/commitChanges", params),
+		commitFile: (params) => appServerRequest(connection, "git/commitFile", params),
+		changeFile: (params) => appServerRequest(connection, "git/changeFile", params),
+		stage: (params) => appServerRequest(connection, "git/stage", params),
+		unstage: (params) => appServerRequest(connection, "git/unstage", params),
+		discardWorktree: (params) => appServerRequest(connection, "git/discardWorktree", params),
+		commit: (params) => appServerRequest(connection, "git/commit", params),
+		fetch: (params) => appServerRequest(connection, "git/fetch", params),
+		pull: (params) => appServerRequest(connection, "git/pull", params),
+		push: (params) => appServerRequest(connection, "git/push", params),
 	};
 }

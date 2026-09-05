@@ -2,7 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 import type { Plugin, WebSocket, WebSocketClient } from "vite";
 import { desktopBuildPath, developmentZetaPackagePath } from "../lib/paths.ts";
@@ -37,7 +37,7 @@ interface AppServerEnvironmentOptions {
 
 /**
  * Creates the loopback-only development bridge between Vite's authenticated
- * HMR WebSocket and one stdio App Server child per browser connection.
+ * HMR WebSocket and one connection carrier per browser, sharing the profile daemon.
  */
 export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}): Plugin {
   const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../zeta-ts"));
@@ -117,9 +117,9 @@ export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}):
           throw new Error(`Packaged ripgrep binary is missing: ${ripgrep}`);
         }
         await mkdir(profileRoot, { recursive: true });
-        const child = spawn(executable, ["app-server", "--listen", "stdio://"], {
+        const child = spawn(executable, ["app-server", "connect"], {
           cwd: workspaceRoot,
-          env: appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }),
+          env: { ...appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }), ZETA_APP_SERVER_DAEMON_PATH: join(dirname(executable), process.platform === 'win32' ? 'zeta-app-server-daemon.exe' : 'zeta-app-server-daemon') },
           shell: false,
           stdio: "pipe",
           windowsHide: true,
@@ -351,10 +351,7 @@ function readFrame(payload: unknown): string {
 function validateFrame(frame: string): void {
   if (frame.includes("\n") || frame.includes("\r")) throw new Error("JSONL frame must not contain CR or LF");
   if (Buffer.byteLength(frame, "utf8") > MAX_FRAME_BYTES) throw new Error(`JSONL frame exceeds ${MAX_FRAME_BYTES} bytes`);
-  const message: unknown = JSON.parse(frame);
-  if (!message || typeof message !== "object" || Array.isArray(message) || !("jsonrpc" in message) || message.jsonrpc !== "2.0") {
-    throw new Error("Browser emitted an invalid JSON-RPC frame");
-  }
+
 }
 
 function writeFrame(stream: Writable, frame: string): Promise<void> {

@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest, voidResult } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IContentSearchApi } from "../common/searchApi.js";
 
@@ -11,10 +11,10 @@ export function createDisconnectedContentSearchApi(unavailable: UnavailableOpera
 	};
 }
 
-export function createViteDevContentSearchApi(connection: ViteDevAppServerConnection): IContentSearchApi {
+export function createAppServerContentSearchApi(connection: AppServerProtocolClient): IContentSearchApi {
 	return {
-		start: (params) => viteDevRequest(connection, "content/search/start", params),
-		read: (params) => viteDevRequest(connection, "content/search/read", params),
-		cancel: (params) => voidResult(viteDevRequest(connection, "content/search/cancel", params)),
+		start: (params) => appServerRequest(connection, "content/search/start", params),
+		read: (params) => appServerRequest(connection, "content/search/read", params),
+		cancel: (params) => voidResult(appServerRequest(connection, "content/search/cancel", params)),
 	};
 }

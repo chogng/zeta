@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IPluginApi } from "../common/pluginApi.js";
 
@@ -14,13 +14,13 @@ export function createDisconnectedPluginApi(unavailable: UnavailableOperation): 
 	};
 }
 
-export function createViteDevPluginApi(connection: ViteDevAppServerConnection): IPluginApi {
+export function createAppServerPluginApi(connection: AppServerProtocolClient): IPluginApi {
 	return {
-		list: () => viteDevRequest(connection, "plugin/list", {}),
-		enable: params => viteDevRequest(connection, "plugin/enable", params),
-		disable: params => viteDevRequest(connection, "plugin/disable", params),
-		grant: params => viteDevRequest(connection, "plugin/grant", params),
-		revokeGrant: params => viteDevRequest(connection, "plugin/revokeGrant", params),
-		uninstall: params => viteDevRequest(connection, "plugin/uninstall", params),
+		list: () => appServerRequest(connection, "plugin/list", {}),
+		enable: params => appServerRequest(connection, "plugin/enable", params),
+		disable: params => appServerRequest(connection, "plugin/disable", params),
+		grant: params => appServerRequest(connection, "plugin/grant", params),
+		revokeGrant: params => appServerRequest(connection, "plugin/revokeGrant", params),
+		uninstall: params => appServerRequest(connection, "plugin/uninstall", params),
 	};
 }

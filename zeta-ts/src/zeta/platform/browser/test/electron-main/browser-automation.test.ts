@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BrowserAutomationMainService, registerBrowserAutomationHost, type BrowserHostRequestRegistrar } from "../../../../platform/browser/electron-main/browserAutomationMainService.js";
+import { BrowserAutomationMainService } from "../../../../platform/browser/electron-main/browserAutomationMainService.js";
 import type { IBrowserViewMainService } from "../../../../platform/browser/electron-main/browserViewIpc.js";
 import { BrowserTargetRegistry, type BrowserTargetView } from "../../../../platform/browser/electron-main/browserTargetRegistry.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
@@ -56,19 +56,6 @@ test("browser automation observes and operates the registered WebContents target
 	assert.deepEqual(commands.filter(command => command.method === "Input.dispatchMouseEvent").map(command => (command.params as { type: string }).type), ["mousePressed", "mouseReleased"]);
 	assert.equal(attached, false);
 	binding.dispose();
-});
-
-test("browser host registrations use every generated reverse-RPC method", () => {
-	const methods: string[] = [];
-	const registrar: BrowserHostRequestRegistrar = {
-		registerRequestHandler: definition => {
-			methods.push(definition.method);
-			return disposable();
-		},
-	};
-	const registration = registerBrowserAutomationHost(registrar, new BrowserAutomationMainService());
-	assert.deepEqual(methods, ["browser/create", "browser/observe", "browser/perform", "browser/close"]);
-	registration.dispose();
 });
 
 test("browser host reset closes only targets created through the host capability", async () => {

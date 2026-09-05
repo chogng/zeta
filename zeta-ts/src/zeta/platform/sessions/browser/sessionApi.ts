@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest, voidResult } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult, turnSteerResult } from "../common/sessionApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/sessionApi.js";
@@ -47,27 +47,27 @@ export function createDisconnectedTurnApi(unavailable: UnavailableOperation): IT
 	};
 }
 
-export function createViteDevSessionApi(connection: ViteDevAppServerConnection): ISessionApi {
+export function createAppServerSessionApi(connection: AppServerProtocolClient): ISessionApi {
 	return {
-		create: (params) => viteDevRequest(connection, "session/create", params),
-		read: (params) => viteDevRequest(connection, "session/read", params),
-		list: () => viteDevRequest(connection, "session/list", {}),
-		subscribe: (params) => viteDevRequest(connection, "session/subscribe", params),
-		unsubscribe: (params) => voidResult(viteDevRequest(connection, "session/unsubscribe", params)),
-		createThread: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "createThread", title: params.title })).then(sessionThreadResult),
-		forkThread: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "forkThread", parentThreadId: params.parentThreadId, title: params.title })).then(sessionThreadResult),
-		archive: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "archive" })).then(sessionResult),
-		stop: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "stop" })).then(sessionResult),
+		create: (params) => appServerRequest(connection, "session/create", params),
+		read: (params) => appServerRequest(connection, "session/read", params),
+		list: () => appServerRequest(connection, "session/list", {}),
+		subscribe: (params) => appServerRequest(connection, "session/subscribe", params),
+		unsubscribe: (params) => voidResult(appServerRequest(connection, "session/unsubscribe", params)),
+		createThread: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "createThread", title: params.title })).then(sessionThreadResult),
+		forkThread: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "forkThread", parentThreadId: params.parentThreadId, title: params.title })).then(sessionThreadResult),
+		archive: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "archive" })).then(sessionResult),
+		stop: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "stop" })).then(sessionResult),
 	};
 }
 
-export function createViteDevModelApi(connection: ViteDevAppServerConnection): IModelApi {
+export function createAppServerModelApi(connection: AppServerProtocolClient): IModelApi {
 	return {
-		list: () => viteDevRequest(connection, "model/list", {}),
-		readPreferred: async () => (await viteDevRequest(connection, "config/read", {})).preferredModel,
+		list: () => appServerRequest(connection, "model/list", {}),
+		readPreferred: async () => (await appServerRequest(connection, "config/read", {})).preferredModel,
 		setPreferred: async ({ commandId, model }) => {
-			const config = await viteDevRequest(connection, "config/read", {});
-			await viteDevRequest(connection, "config/update", {
+			const config = await appServerRequest(connection, "config/read", {});
+			await appServerRequest(connection, "config/update", {
 				commandId,
 				expectedRevision: config.revision,
 				preferredModel: model,
@@ -76,23 +76,23 @@ export function createViteDevModelApi(connection: ViteDevAppServerConnection): I
 	};
 }
 
-export function createViteDevThreadApi(connection: ViteDevAppServerConnection): IThreadApi {
+export function createAppServerThreadApi(connection: AppServerProtocolClient): IThreadApi {
 	return {
-		read: (params) => viteDevRequest(connection, "session/thread/read", params),
-		subscribe: (params) => viteDevRequest(connection, "session/thread/subscribe", params),
-		unsubscribe: (params) => voidResult(viteDevRequest(connection, "session/thread/unsubscribe", params)),
-		getGoal: (params) => viteDevRequest(connection, "thread/goal/get", params),
-		setGoal: (params) => viteDevRequest(connection, "thread/goal/set", params),
-		clearGoal: (params) => viteDevRequest(connection, "thread/goal/clear", params),
+		read: (params) => appServerRequest(connection, "session/thread/read", params),
+		subscribe: (params) => appServerRequest(connection, "session/thread/subscribe", params),
+		unsubscribe: (params) => voidResult(appServerRequest(connection, "session/thread/unsubscribe", params)),
+		getGoal: (params) => appServerRequest(connection, "thread/goal/get", params),
+		setGoal: (params) => appServerRequest(connection, "thread/goal/set", params),
+		clearGoal: (params) => appServerRequest(connection, "thread/goal/clear", params),
 	};
 }
 
-export function createViteDevTurnApi(connection: ViteDevAppServerConnection): ITurnApi {
+export function createAppServerTurnApi(connection: AppServerProtocolClient): ITurnApi {
 	return {
-		start: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "startTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, approvalMode: params.approvalMode, toolMode: params.toolMode, input: params.input })).then(turnStartResult),
-		compact: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "compactContext", threadId: params.threadId, expectedSequence: params.expectedSequence, retentionPrompt: params.retentionPrompt })).then(turnStartResult),
-		steer: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "steerTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId, input: params.input })).then(turnSteerResult),
-		interrupt: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId })).then(turnInterruptResult),
-		resolveInteraction: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "resolveInteraction", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId, requestId: params.requestId, response: params.response })).then(turnInteractionResolveResult),
+		start: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "startTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, approvalMode: params.approvalMode, toolMode: params.toolMode, input: params.input })).then(turnStartResult),
+		compact: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "compactContext", threadId: params.threadId, expectedSequence: params.expectedSequence, retentionPrompt: params.retentionPrompt })).then(turnStartResult),
+		steer: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "steerTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId, input: params.input })).then(turnSteerResult),
+		interrupt: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId })).then(turnInterruptResult),
+		resolveInteraction: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "resolveInteraction", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId, requestId: params.requestId, response: params.response })).then(turnInteractionResolveResult),
 	};
 }

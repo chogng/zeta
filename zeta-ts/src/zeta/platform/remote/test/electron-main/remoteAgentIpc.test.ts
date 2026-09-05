@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { URI } from "../../../../base/common/uri.js";
-import type { AppServerSupervisor } from "../../../../platform/app-server/electron-main/app-server-supervisor.js";
+import type { AppServerConnectionRelay } from "../../../../platform/app-server/electron-main/appServerConnectionRelay.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { REMOTE_AGENT_RECONNECT_CHANNEL } from "../../../../platform/remote/common/remoteAgentApi.js";
 import { REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL } from "../../../../platform/remote/common/remoteAgentApi.js";
@@ -9,7 +9,7 @@ import { remoteAgentConnection, remoteAgentIpcRoutes } from "../../../../platfor
 import type { IAnyWorkspaceIdentifier } from "../../../../platform/workspace/common/workspace.js";
 
 test("Remote Agent IPC projects only sanitized authority and connection generation", () => {
-	const supervisor = { generation: 7 } as AppServerSupervisor;
+	const supervisor = { generation: 7 } as AppServerConnectionRelay;
 
 	assert.deepEqual(remoteAgentConnection(supervisor, { id: "local", uri: URI.file("/tmp") }), { kind: "local", generation: 7 });
 	assert.deepEqual(remoteAgentConnection(supervisor, {
@@ -24,7 +24,7 @@ test("Remote Agent IPC projects only sanitized authority and connection generati
 });
 
 test("Remote Agent IPC delegates path-free reconnect and rollback only for a Remote Workspace", async () => {
-	const supervisor = { generation: 7 } as AppServerSupervisor;
+	const supervisor = { generation: 7 } as AppServerConnectionRelay;
 	let reconnects = 0;
 	let rollbacks = 0;
 	let workspace: IAnyWorkspaceIdentifier = { id: "remote", uri: createSshRemoteWorkspaceUri("work-server", "/home/zeta/project") };
@@ -56,7 +56,7 @@ test("Remote Agent IPC delegates path-free reconnect and rollback only for a Rem
 });
 
 test("Remote Agent IPC fails closed when the product host has no rollback policy", async () => {
-	const supervisor = { generation: 7 } as AppServerSupervisor;
+	const supervisor = { generation: 7 } as AppServerConnectionRelay;
 	const routes = remoteAgentIpcRoutes(supervisor, () => ({
 		id: "remote",
 		uri: createSshRemoteWorkspaceUri("work-server", "/home/zeta/project"),

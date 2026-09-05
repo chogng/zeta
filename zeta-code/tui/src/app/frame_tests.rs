@@ -539,16 +539,19 @@ fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
         .lines()
         .find(|line| line.contains("Running targeted tests"))
         .unwrap();
-    let completed = rendered.lines().find(|line| line.contains("done")).unwrap();
+    assert!(!rendered.lines().any(|line| line.contains("done")));
 
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
     assert!(rendered.contains("Needs input"));
     assert!(rendered.contains("Working"));
-    assert!(rendered.contains("Completed"));
+    assert!(
+        rendered
+            .lines()
+            .any(|line| line.trim_end() == "Archived (1)")
+    );
     assert!(needs_input.starts_with("  ? needs-input"));
     assert!(needs_input.contains("Which API should I use?"));
     assert!(working.starts_with("  ⠋ working"));
-    assert!(completed.starts_with("  ● done"));
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
         "  Enter to return"

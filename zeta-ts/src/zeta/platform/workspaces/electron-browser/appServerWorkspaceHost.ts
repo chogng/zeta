@@ -1,0 +1,64 @@
+import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import { APP_SERVER_METHODS } from '../../../../../generated/app-server/types.js';
+import { decodeAppServerRequestParams } from '../../../../../generated/app-server/AppServerProtocolDecoder.js';
+import { generateUuid } from '../../../base/common/uuid.js';
+import { isRecord } from '../../../base/common/types.js';
+import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
+import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
+import { parseWorkspace } from '../../workspace/common/workspace.js';
+import { createWorkspaceContextApi } from '../../workspace/electron-browser/workspaceContextApi.js';
+import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
+import type { EnvDirSetEntry, PermissionDto } from '../../../../../generated/app-server/types.js';
+
+export async function initializeWorkspace(client: AppServerProtocolClient): Promise<void> {
+	const workspace = parseWorkspace(await createWorkspaceContextApi().getWorkspace());
+	const dirs: EnvDirSetEntry[] = [];
+	for (const folder of workspace.folders) {
+		const path = isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath;
+		const existing = await client.request(APP_SERVER_METHODS['config/dirPermissions/read'], { path });
+		if (existing.permissions !== null && existing.permissions !== undefined) {
+			dirs.push({ id: folder.id, path, grant: { type: 'config' } });
+			continue;
+		}
+		const choice = await invoke<unknown>('zeta:host:selectDirectoryPermissions', path);
+		if (choice !== 0 && choice !== 1) { throw new Error('Directory permission selection cancelled'); }
+		const read: PermissionDto[] = ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'];
+		const permissions: PermissionDto[] = choice === 1 ? read : [...read, 'writeFiles', 'executeCommands', 'loadInstructions', 'loadConfig', 'discoverSkills', 'discoverMcp', 'useLanguageServices', 'discoverHooks', 'discoverPlugins', 'mutateRepository'];
+		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+		const grant = { type: 'user' as const, commandId: generateUuid(), expectedRevision: config.revision, permissions };
+		await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs: [...dirs, { id: folder.id, path, grant }] });
+		dirs.push({ id: folder.id, path, grant: { type: 'config' } });
+	}
+	if (dirs.length) { await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs }); }
+}
+
+export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>): IDisposable {
+	const subscription = subscribe('zeta:workspace:operation', (value: unknown) => {
+		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) { return; }
+		const { nonce, operation, params } = value;
+		const execute = async (): Promise<unknown> => {
+			await ready();
+			switch (operation) {
+				case 'readPermissions': {
+					const request = decodeAppServerRequestParams('config/dirPermissions/read', params);
+					return (await client.request(APP_SERVER_METHODS['config/dirPermissions/read'], request)).permissions ?? undefined;
+				}
+				case 'createGrant': {
+					const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+					const checked = decodeAppServerRequestParams('config/dirPermissions/set', { commandId: generateUuid(), expectedRevision: config.revision, path: params.path, permissions: params.permissions });
+					return { type: 'user', commandId: checked.commandId, expectedRevision: checked.expectedRevision, permissions: checked.permissions };
+				}
+				case 'switchWorkspace': {
+					const request = decodeAppServerRequestParams('env/dirs/set', { dirs: [{ id: 'root', path: params.path, grant: params.grant }] });
+					await client.request(APP_SERVER_METHODS['env/cwd/set'], decodeAppServerRequestParams('env/cwd/set', { cwd: params.path }));
+					return client.request(APP_SERVER_METHODS['env/dirs/set'], request);
+				}
+				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
+				default: throw new Error('Unknown workspace operation');
+			}
+		};
+		void execute().then(result => invoke('zeta:workspace:completed', { nonce, result }), error => invoke('zeta:workspace:completed', { nonce, error: error instanceof Error ? error.message : 'Workspace operation failed', failure: error instanceof AppServerRemoteError ? error.errorName : undefined })).catch(console.error);
+	});
+	return toDisposable(() => subscription.dispose());
+}

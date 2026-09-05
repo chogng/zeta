@@ -165,7 +165,6 @@ fn work_run_rpc_replays_without_emitting_a_second_change() {
 struct Fixture {
     _directory: tempfile::TempDir,
     server: AppServer,
-    threads: Arc<ThreadController>,
 }
 
 impl Fixture {
@@ -183,12 +182,11 @@ impl Fixture {
         Self {
             _directory: directory,
             server,
-            threads,
         }
     }
 
     fn start_root(&self, command_id: &str) -> zeta_core::ThreadSnapshot {
-        self.threads
+        self.server
             .start_thread(StartThreadRequest {
                 command_id: CommandId::new(command_id).unwrap(),
                 title: command_id.into(),

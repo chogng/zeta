@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { ITurnChangesApi } from "../common/turnChangesApi.js";
 
@@ -15,14 +15,14 @@ export function createDisconnectedTurnChangesApi(unavailable: UnavailableOperati
 	};
 }
 
-export function createViteDevTurnChangesApi(connection: ViteDevAppServerConnection): ITurnChangesApi {
+export function createAppServerTurnChangesApi(connection: AppServerProtocolClient): ITurnChangesApi {
 	return {
-		list: (params) => viteDevRequest(connection, "turnChanges/list", params),
-		read: (params) => viteDevRequest(connection, "turnChanges/read", params),
-		readFile: (params) => viteDevRequest(connection, "turnChanges/readFile", params),
-		generateMessage: (params) => viteDevRequest(connection, "turnChanges/generateMessage", params),
-		updateDraft: (params) => viteDevRequest(connection, "turnChanges/updateDraft", params),
-		commit: (params) => viteDevRequest(connection, "turnChanges/commit", params),
-		discardThread: (params) => viteDevRequest(connection, "turnChanges/discardThread", params),
+		list: (params) => appServerRequest(connection, "turnChanges/list", params),
+		read: (params) => appServerRequest(connection, "turnChanges/read", params),
+		readFile: (params) => appServerRequest(connection, "turnChanges/readFile", params),
+		generateMessage: (params) => appServerRequest(connection, "turnChanges/generateMessage", params),
+		updateDraft: (params) => appServerRequest(connection, "turnChanges/updateDraft", params),
+		commit: (params) => appServerRequest(connection, "turnChanges/commit", params),
+		discardThread: (params) => appServerRequest(connection, "turnChanges/discardThread", params),
 	};
 }

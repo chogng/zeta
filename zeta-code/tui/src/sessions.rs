@@ -1,3 +1,5 @@
+use zeta_app_server_protocol::protocol::session::SessionRequestResult;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 mod active;
 mod completion;
 #[cfg(test)]
@@ -42,6 +44,16 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    Preview {
+        generation: u64,
+        params: SessionThreadReadParams,
+    },
+    Restore {
+        session_id: SessionId,
+    },
+    Delete {
+        session_id: SessionId,
+    },
     Resume {
         session_id: String,
         preferred_thread_id: Option<zeta_protocol::ThreadId>,
@@ -93,6 +105,37 @@ where
                 request: SessionRequest::Archive,
             })
             .and_then(active::expect_session_result)?;
+    }
+    load_catalog(client)
+}
+
+pub(crate) fn restore<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    session_id: SessionId,
+) -> Result<Vec<Session>, ClientError> {
+    client
+        .request_session(SessionRequestParams {
+            command_id: crate::client::new_command_id("restore"),
+            session_id,
+            request: SessionRequest::Restore,
+        })
+        .and_then(active::expect_session_result)?;
+    load_catalog(client)
+}
+
+pub(crate) fn delete<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    session_id: SessionId,
+) -> Result<Vec<Session>, ClientError> {
+    let result = client.request_session(SessionRequestParams {
+        command_id: crate::client::new_command_id("delete"),
+        session_id: session_id.clone(),
+        request: SessionRequest::Delete,
+    })?;
+    if !matches!(result, SessionRequestResult::Deleted(ref deleted) if deleted == &session_id) {
+        return Err(ClientError::Protocol(
+            "delete returned an unexpected Session result".into(),
+        ));
     }
     load_catalog(client)
 }

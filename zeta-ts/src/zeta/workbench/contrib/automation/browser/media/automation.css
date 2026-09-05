@@ -1,0 +1,62 @@
+.zeta-automation {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	padding: 12px;
+}
+
+.zeta-automation .automation-actions,
+.zeta-automation .automation-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.zeta-automation .automation-row {
+	padding-block: 8px;
+	border-bottom: 1px solid var(--zeta-input-border);
+}
+
+.zeta-automation .automation-row span {
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
+
+.zeta-automation .automation-form {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+	gap: 12px;
+}
+
+.zeta-automation label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 8px;
+	min-width: 0;
+}
+
+.zeta-automation input,
+.zeta-automation textarea,
+.zeta-automation select,
+.zeta-automation button {
+	box-sizing: border-box;
+	min-width: 0;
+	padding: 6px 8px;
+	font: inherit;
+	color: var(--zeta-input-foreground);
+	background: var(--zeta-input-background);
+	border: 1px solid var(--zeta-input-border);
+	border-radius: 4px;
+}
+
+.zeta-automation textarea { resize: vertical; }
+.zeta-automation button { cursor: pointer; }
+.zeta-automation button.selected { border-color: var(--zeta-focus-border); }
+.zeta-automation :focus-visible { outline: 1px solid var(--zeta-focus-border); outline-offset: 2px; }
+.zeta-automation fieldset { display: flex; flex-wrap: wrap; gap: 8px; border: 1px solid var(--zeta-input-border); }
+.zeta-automation [hidden] { display: none; }

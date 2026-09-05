@@ -1,7 +1,7 @@
 import type { IAppServerApi, IResourceApi, IServerEventApi } from "../common/appServerApi.js";
 import { inertSubscription, type UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { ViteDevAppServerConnection } from "./viteDevConnection.js";
-import { viteDevRequest, voidResult } from "./viteDevRequest.js";
+import type { AppServerProtocolClient } from "./appServerProtocolClient.js";
+import { appServerRequest, voidResult } from "./appServerRequest.js";
 
 export function createDisconnectedAppServerApi(unavailable: UnavailableOperation): IAppServerApi {
 	return {
@@ -23,7 +23,7 @@ export function createDisconnectedServerEventApi(): IServerEventApi {
 	return { subscribe: inertSubscription };
 }
 
-export function createViteDevAppServerApi(connection: ViteDevAppServerConnection): IAppServerApi {
+export function createAppServerAppServerApi(connection: AppServerProtocolClient): IAppServerApi {
 	return {
 		getConnectionState: () => Promise.resolve(connection.state),
 		getSlashCommands: () => Promise.resolve(connection.slashCommands),
@@ -31,14 +31,14 @@ export function createViteDevAppServerApi(connection: ViteDevAppServerConnection
 	};
 }
 
-export function createViteDevResourceApi(connection: ViteDevAppServerConnection): IResourceApi {
+export function createAppServerResourceApi(connection: AppServerProtocolClient): IResourceApi {
 	return {
-		metadata: (params) => viteDevRequest(connection, "resource/metadata", params),
-		read: (params) => viteDevRequest(connection, "resource/read", params),
-		release: (params) => voidResult(viteDevRequest(connection, "resource/release", params)),
+		metadata: (params) => appServerRequest(connection, "resource/metadata", params),
+		read: (params) => appServerRequest(connection, "resource/read", params),
+		release: (params) => voidResult(appServerRequest(connection, "resource/release", params)),
 	};
 }
 
-export function createViteDevServerEventApi(connection: ViteDevAppServerConnection): IServerEventApi {
+export function createAppServerServerEventApi(connection: AppServerProtocolClient): IServerEventApi {
 	return { subscribe: (listener) => connection.onNotification(listener) };
 }

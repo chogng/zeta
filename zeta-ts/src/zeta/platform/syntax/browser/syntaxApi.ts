@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { ISyntaxApi } from "../common/syntaxApi.js";
 
@@ -10,9 +10,9 @@ export function createDisconnectedSyntaxApi(unavailable: UnavailableOperation): 
 	};
 }
 
-export function createViteDevSyntaxApi(connection: ViteDevAppServerConnection): ISyntaxApi {
+export function createAppServerSyntaxApi(connection: AppServerProtocolClient): ISyntaxApi {
 	return {
-		analyze: params => viteDevRequest(connection, "syntax/analyze", params),
-		selectionRanges: params => viteDevRequest(connection, "syntax/selectionRanges", { ...params, ranges: [...params.ranges] }),
+		analyze: params => appServerRequest(connection, "syntax/analyze", params),
+		selectionRanges: params => appServerRequest(connection, "syntax/selectionRanges", { ...params, ranges: [...params.ranges] }),
 	};
 }

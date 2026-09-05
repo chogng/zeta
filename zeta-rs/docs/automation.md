@@ -1,6 +1,6 @@
 # 自动化任务：时间、调度与执行边界
 
-> 状态：计划设计。职责与时间边界已确认；本文的调度规则是后续实现和验收依据，尚未实现。
+> 状态：已接入本机 profile 后台宿主和 Workbench 管理界面。系统登录启动、宿主异常退出后的系统级拉起尚未接入；远程宿主未发布 automation capability。
 > 本文由共享 Rust 后端拥有，面向 automation、App Server 和产品界面的实现者。关联架构见 [Rust 后端架构](../../docs/zeta-rs-architecture.md)、[App Server](../app-server/README.md) 和 [后台宿主](../app-server-daemon/README.md)。
 
 ## 快速理解
@@ -42,22 +42,24 @@ flowchart TD
 
 ## 谁决定、谁执行、谁保存
 
-以下为目标归属，标注“新增”的路径尚不存在。crate 用于隔离能力和依赖，不按每个内部步骤拆分 crate。
+以下为实现归属。crate 用于隔离能力和依赖，不按每个内部步骤拆分 crate。
 
 | 位置 | 职责 | 边界 |
 | --- | --- | --- |
-| `zeta-rs/automation`（新增） | 计划校验、下次执行时间计算、调度、运行记录和恢复；拥有持久化规则 | 日期、时区、调度依赖留在这里；不实现模型调用或工具执行 |
+| `zeta-rs/automation` | 计划校验、下次执行时间计算、调度、运行记录和恢复；拥有持久化规则 | 日期、时区、调度依赖留在这里；不实现模型调用或工具执行 |
 | `zeta-rs/protocol` | automation 跨模块共享的稳定身份、时间戳和领域值对象 | 不引入日期时间库，不保存进程内计时器 |
 | `zeta-rs/app-server-protocol` | automation 请求、响应、通知和生成类型 | 协议不暴露日期库类型或内部调度器 |
 | `zeta-rs/app-server` | 请求分派、订阅、协调 automation 与 Agent 执行 | 不保存第二份计划状态，不自行计算日历规则 |
 | `zeta-rs/core` | 执行 Thread、Turn、模型调用和工具操作 | 不计算“下一次周一几点运行” |
 | `zeta-rs/app-server-daemon` | 每个 profile 的后台进程生命周期与保活 | 不解释计划规则；不得因窗口连接清空而丢失调度能力 |
 | `zeta-rs/server-host` | 产品无关的后端命令入口和进程装配 | 不依赖 `zeta-code` 的产品入口 |
-| `zeta-ts/src/zeta/workbench/contrib/automation/`（新增） | 创建、编辑、暂停、立即运行、运行历史和可访问交互 | 不持久化权威计划，不持有执行计时器 |
-| `zeta-ts/src/zeta/workbench/services/automation/`（新增） | 前端领域接口、订阅状态和 App Server adapter | 生成协议类型止于 adapter，不传入普通界面代码 |
+| `zeta-ts/src/zeta/workbench/contrib/automation/` | 创建、编辑、暂停、立即运行、运行历史和可访问交互 | 不持久化权威计划，不持有执行计时器 |
+| `zeta-ts/src/zeta/platform/automation/` | 前端领域接口、订阅通知和 App Server adapter | 生成协议类型止于 adapter，不传入普通界面代码 |
 | `app`、`zeta-code` 的对应产品界面 | 消费同一后端能力并呈现产品交互 | 不另建调度器或计划存储 |
 
 automation 通过窄的执行请求和结果契约与现有 Agent 能力协作，App Server 完成装配。core 不反向依赖 automation；automation 不导入 App Server 传输实现。没有独立消费者前，不另建通用 scheduler、calendar 或 clock crate。
+
+同一 profile 的 Thread 状态由一个 `ThreadController` 共享；工作目录绑定器由每个 App Server 环境拥有，并在创建 Thread 时明确传入。子 Agent 使用其所属环境的 coordinator 绑定器。新开窗口或另一个目录不能替换已有计划的执行目录与文件访问服务。
 
 ## 时间分别如何表达
 
@@ -78,15 +80,15 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 
 ## 计划保存什么
 
-下表固定数据含义，具体类型与线上字段在实现协议时确定。
+下表固定当前数据含义；线上字段由生成协议定义。
 
 | 数据 | 内容与约束 |
 | --- | --- |
 | 计划身份与版本 | 稳定计划 ID、revision、启用或暂停状态；修改使用期望版本防止覆盖并发修改 |
-| 执行内容 | 提示词、明确的项目与执行环境、模型选择及已有执行策略的引用；不依赖当前窗口 |
+| 执行内容 | 提示词和明确的执行目录；执行时使用该目录已有的模型与权限配置，不依赖当前窗口 |
 | 会话目标 | 明确选择新建会话或继续指定会话；继续会话必须绑定稳定身份，不能使用“当前会话” |
 | 时间规则 | 一次性执行时刻、固定间隔或日历重复规则，三种含义明确区分 |
-| 日历上下文 | IANA 时区、规则版本，以及夏令时处理规则；不能只保存一个 UTC 偏移 |
+| 日历上下文 | IANA 时区、星期与当地时分；夏令时采用本文定义的固定处理规则，不能只保存一个 UTC 偏移 |
 | 调度策略 | 错过执行时间与重叠运行的处理规则 |
 | 下次执行时间 | 从规则计算并保存的 Unix 毫秒；它不能替代原始规则与时区 |
 | 运行记录 | 运行 ID、计划版本、计划触发时刻、触发来源、实际开始与结束、状态及关联 Thread/Turn |
@@ -101,10 +103,10 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 
 | 情况 | 处理规则 |
 | --- | --- |
-| 一次性计划在离线期间到期 | 宿主恢复后补执行一次，记录原定时间和迟到原因 |
-| 重复计划在离线期间错过多次 | 默认跳过错过的时刻并记录时间范围与数量，计算下一次；不集中启动大量历史运行 |
+| 一次性计划在离线期间到期 | 宿主恢复后补执行一次，保留原定时间与实际开始时间 |
+| 重复计划在离线期间错过多次 | 跳过错过的时刻并合并为一条跳过记录，计算下一次；不集中启动大量历史运行 |
 | 同一计划已有未结束运行 | 默认跳过定时触发；“立即运行”返回正在运行的明确结果，不偷偷并发启动 |
-| 夏令时导致钟点不存在 | 跳过该次日历触发并记录原因 |
+| 夏令时导致钟点不存在 | 跳过该次日历触发，不另外生成运行记录 |
 | 夏令时导致钟点出现两次 | 只采用较早的一次，运行身份保证不会再次启动 |
 | 暂停或修改与触发同时发生 | 由持久化事务中的版本检查决定；暂停提交后不能再创建该计划的新运行 |
 | 停止某次运行 | 调用现有执行取消能力，等待真实终态；不能只取消界面等待 |
@@ -129,17 +131,24 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 
 ## 当前实现与接入入口
 
-截至本次源码核对，automation 领域 crate、管理 contribution 与计划协议尚未建立。已有工具执行调度器和界面重绘调度器各自服务原有能力，不作为自动化计划的所有者。
+| 入口 | 当前职责 |
+| --- | --- |
+| [automation crate](../automation/README.md) | SQLite 事务保存计划与运行；每秒检查到期规则；保留幂等命令结果 |
+| [时间协议](../protocol/src/automation.rs) | 使用有界 Unix 毫秒整数；不依赖日期库 |
+| [管理协议](../app-server-protocol/src/protocol/automation.rs) | list、write、delete、run、runs、stop 六个方法；`automation/changed` 通知 |
+| [Agent 执行接入](../app-server/src/server/automation_execution.rs) | 稳定命令身份查找原 Thread/Turn，使用已有执行和中断入口；结果未确认时不新建另一次执行 |
+| [后台宿主](../app-server-daemon/src/daemon.rs) | 启用中且有下次运行的计划，以及未结束运行，均阻止空闲退出 |
+| [管理面板](../../zeta-ts/src/zeta/workbench/contrib/automation/browser/automationViewPane.ts) | 创建、编辑、暂停、立即运行、停止、历史及打开关联 Chat |
+| [Renderer 协议客户端](../../zeta-ts/src/zeta/platform/app-server/browser/appServerProtocolClient.ts) | 每个窗口独立连接，负责初始化、生成协议解码、请求表、通知和反向请求 |
+| [Main 连接载体](../../zeta-ts/src/zeta/platform/app-server/electron-main/appServerConnectionRelay.ts) | 启动连接进程、传递 MessagePort、限制帧大小与队列；不分派后端方法 |
 
-| 当前代码 | 已有能力 | automation 接入缺口 |
-| --- | --- | --- |
-| [Resume 列表](../../zeta-code/tui/src/sessions/picker.rs)与[测试](../../zeta-code/tui/src/sessions/picker_tests.rs) | 未归档会话筛选、整数相对时间、本地绝对日期 | 属于 UI 显示，不承担计划计算 |
-| [会话管理事实](../protocol/src/session/manager.rs) | 使用 `status_changed_at_unix_ms: u64` 表示状态变化时刻 | 不等于 automation 的计划或运行模型 |
-| [daemon 生命周期](../app-server-daemon/src/daemon.rs) | 没有活动连接和终端时按空闲超时退出 | 退出条件尚未包含 automation；不能直接宣称关闭窗口后定时执行已具备 |
-| [产品无关宿主入口](../server-host/src/lib.rs) | 提供后端进程与管理命令入口 | 需要配合调度恢复和后台生命周期，不把入口移到 TUI |
-| [工具执行调度](../core/src/turn/tool_scheduler.rs) | 当前 turn 内的工具执行协调 | 保持原职责，不并入日历与周期计划 |
+Workbench 使用命令面板的 **Open Automations** 打开管理面板。后端通过 `contracts.automation.version = 1` 发布能力；没有该能力的宿主不显示管理入口。计划明确保存执行目录和新建或继续对话的目标，不随活动窗口改变。
 
-本次只落下架构文档，不新增空 crate、占位协议或 contribution 注册。既有 `chrono` 依赖边界和 Resume 行为保持原样。
+固定间隔最多为 525600 分钟；每个 profile 最多保存 1000 个计划。历史每次最多读取 100 条，当前面板显示最近 50 条。计划暂停与停止当前运行分开；删除仍有运行的计划会返回冲突。删除的计划身份不可重新使用，已有运行历史仍保留在存储中。
+
+当前夏令时策略是跳过不存在的本地时间，并选择重复本地时间的第一次；夏令时空缺本身不另外生成运行记录。关机或长时间休眠错过的周期触发合并为一条跳过记录；一次性计划恢复后补执行。日期库仅在 automation 日历计算和 TUI 绝对日期展示中使用，不改变 Agent loop 的计时类型。
+
+本机 daemon 已运行时，关闭所有窗口不会取消启用的计划。系统登录启动和进程意外退出后的自动拉起仍需宿主与操作系统集成；显式停止 daemon 后要重新启动它才继续调度。无法读取既有执行结果时，运行保留原身份和错误原因，等待再次核对。
 
 ## 实现顺序与验收
 
@@ -162,4 +171,4 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 
 运行记录区分计划触发时间、实际开始时间和结束时间，保留跳过、失败和恢复原因。运行期间的延迟与耗时指标使用单调时钟；跨进程只关联持久时间戳与运行身份。通知仅在完成、失败、需要用户输入或其他有意义的变化时发出，状态不变时保持安静。
 
-实现验证从能力所属 package 开始，使用仓库的 `just test <crate>` 和 `just check <crate>`；新建 automation crate 后再采用其实际包名执行。本文记录验收要求，不代表这些测试已经存在或通过。
+实现验证从能力所属 package 开始，使用仓库的 `just test <crate>` 和 `just check <crate>`；automation 使用 `just test zeta-automation --lib`，执行接入使用 `just test zeta-app-server automation_ --lib`。具体检查结果以本次工作记录为准。

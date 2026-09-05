@@ -93,6 +93,27 @@ impl ProfileAppServerRegistry {
             })
             .unwrap_or(1)
     }
+
+    pub(crate) fn start_automation(self: &Arc<Self>) -> Result<zeta_automation::AutomationRuntime, String> {
+        zeta_automation::AutomationRuntime::start(self.profile_runtime.automation_store(), self.clone())
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn automation_needs_host(&self) -> Result<bool, String> {
+        self.profile_runtime.automation_store().needs_host().map_err(|error| error.to_string())
+    }
+}
+
+impl zeta_automation::AutomationExecutor for ProfileAppServerRegistry {
+    fn advance(&self, run: &zeta_protocol::AutomationRun, now: zeta_protocol::UnixMillis) -> Result<zeta_protocol::AutomationRun, String> {
+        let options = ConnectionOptions::new(self.host.profile_root(), Some(PathBuf::from(&run.definition.directory)),
+            crate::GrantSource::UserConfig, self.host.product_services().map(Path::to_path_buf));
+        self.server_for(ConnectionPrelude::from_options(&options))?.advance_automation_run(run, now)
+    }
+
+    fn changed(&self) { self.profile_runtime.automation_changed(); }
+
+    fn report_error(&self, message: &str) { eprintln!("automation: {message}"); }
 }
 
 fn open_server_with_profile_runtime(

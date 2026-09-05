@@ -44,6 +44,7 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
     let process_record = ProcessRecordGuard::publish(&endpoint.pid, &record)?;
     let stop_requested = Arc::new(AtomicBool::new(false));
     register_shutdown_signals(&stop_requested)?;
+    let mut automation = Some(registry.start_automation()?);
     eprintln!(
         "local App Server daemon endpoint ready: {} (pid {})",
         endpoint.socket.display(),
@@ -62,6 +63,7 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
             last_log_maintenance = Instant::now();
         }
         if stop_requested.load(Ordering::Acquire) {
+            drop(automation.take());
             let stopping_since = stopping_since.get_or_insert_with(Instant::now);
             let active_connection_count = active_connections.len();
             let active_terminal_count = registry.active_terminal_count();
@@ -192,7 +194,8 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                 }
             }
             Ok(LocalSocketAccept::Pending) => {
-                if active_connections.is_empty() && registry.active_terminal_count() == 0 {
+                if active_connections.is_empty() && registry.active_terminal_count() == 0
+                    && !registry.automation_needs_host()? {
                     let idle_since = idle_since.get_or_insert_with(Instant::now);
                     if idle_since.elapsed() >= idle_timeout {
                         eprintln!("local App Server daemon exited after its idle timeout");

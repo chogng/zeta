@@ -107,11 +107,19 @@ pub(super) fn apply_request_completion(
         Completion::ConfigRefreshed(Err(error)) => {
             app.update(ThreadEvent::FailureReported(error));
         }
+        Completion::Sessions(SessionCompletion::Preview { generation, result }) => {
+            app.finish_session_preview(generation, result);
+        }
         Completion::Sessions(SessionCompletion::Catalog(Ok(sessions))) => {
             app.update(SessionEvent::CatalogReceived(sessions));
         }
         Completion::Sessions(SessionCompletion::Catalog(Err(error))) => {
-            app.update(ThreadEvent::FailureReported(error));
+            app.show_overlay(crate::widgets::detail_list::DetailList::new(
+                "Session operation failed",
+                vec![crate::widgets::detail_list::DetailListRow::new(
+                    "Error", error,
+                )],
+            ));
         }
         Completion::Sessions(SessionCompletion::ManagerCreated(Ok(ManagerSessionCompletion {
             conversation:

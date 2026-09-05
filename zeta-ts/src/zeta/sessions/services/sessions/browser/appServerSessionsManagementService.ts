@@ -41,6 +41,13 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 		return this.initializePromise;
 	}
 
+	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+		await this.initialize();
+		const session = await this.provider.subscribe(await this.provider.read(sessionId));
+		this.replaceSession(session);
+		this.selectThread(sessionId, threadId);
+	}
+
 	selectThread(sessionId: SessionId, threadId: ThreadId): void {
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
 		const thread = session?.chats.find(candidate => candidate.threadId === threadId && candidate.status === "active");
@@ -184,8 +191,7 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	private async refreshSession(sessionId: SessionId): Promise<void> {
 		try {
 			while (this.pendingRefreshes.delete(sessionId)) {
-				const current = this._sessions.find(candidate => candidate.sessionId === sessionId);
-				if (!current) return;
+				const current = this._sessions.find(candidate => candidate.sessionId === sessionId) ?? await this.provider.read(sessionId);
 				const refreshed = await this.provider.subscribe(current);
 				this.replaceSession(refreshed);
 				if (this._active?.session.sessionId === sessionId) {
@@ -206,7 +212,9 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	}
 
 	private replaceSession(session: ISession): void {
-		this._sessions = this._sessions.map(candidate => candidate.sessionId === session.sessionId ? session : candidate);
+		this._sessions = this._sessions.some(candidate => candidate.sessionId === session.sessionId)
+			? this._sessions.map(candidate => candidate.sessionId === session.sessionId ? session : candidate)
+			: [session, ...this._sessions];
 	}
 
 	private firstActiveThread(): IActiveSessionThread | undefined { return firstActiveThread(this._sessions); }

@@ -84,6 +84,9 @@ pub enum ThreadEvent {
         #[serde(default)]
         reason: ThreadArchiveReason,
     },
+    ThreadRestored {
+        thread_id: ThreadId,
+    },
     GoalCreated {
         thread_id: ThreadId,
         goal: crate::ThreadGoal,
@@ -326,6 +329,7 @@ impl ThreadEvent {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
             Self::ThreadArchived { .. } => "thread.archived",
+            Self::ThreadRestored { .. } => "thread.restored",
             Self::GoalCreated { .. } => "thread.goal_created",
             Self::GoalUpdated { .. } => "thread.goal_updated",
             Self::GoalCleared { .. } => "thread.goal_cleared",
@@ -374,6 +378,7 @@ impl ThreadEvent {
         match self {
             Self::ThreadCreated { thread_id, .. }
             | Self::ThreadArchived { thread_id, .. }
+            | Self::ThreadRestored { thread_id }
             | Self::GoalCreated { thread_id, .. }
             | Self::GoalUpdated { thread_id, .. }
             | Self::GoalCleared { thread_id, .. }

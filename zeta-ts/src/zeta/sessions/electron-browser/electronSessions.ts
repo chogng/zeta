@@ -7,12 +7,16 @@ import { createElectronWorkbenchContextMenuService } from "../../workbench/servi
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { startSessionsWorkbench } from "../browser/sessionsWorkbench.js";
 import { createSessionsWindowApi } from "./sessionsWindowApi.js";
+import { showStartupError } from "../../workbench/browser/startupError.js";
 
 /** Starts the Code-specific Electron Sessions page. */
-export function startElectronSessions(modeId: WorkbenchModeId, profile: SessionsProfile): IDisposable {
+export async function startElectronSessions(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<IDisposable> {
 	installBaseUiStyles();
-	const api = createElectronRendererApi();
+	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
+	try { api = await createElectronRendererApi([], { browser: false }); }
+	catch (error) { return showStartupError(error); }
 	const sessions = new DisposableStore();
+	sessions.add(api);
 	const container = document.querySelector<HTMLElement>("#app");
 	if (!container) throw new Error("Sessions renderer requires an #app container");
 	sessions.add(startSessionsWorkbench({

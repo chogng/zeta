@@ -1,14 +1,13 @@
+import { ZetaApplication, type AppServerStartupMode } from "./app.js";
 import { app } from 'electron/main';
 import { join } from 'node:path';
 import { ZetaApplicationId, ZetaApplicationName, ZetaRendererDirectory } from '../common/application.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import type { WorkbenchModeId } from '../../workbench/common/workbenchMode.js';
 import { resolveApplicationDataPaths, resolvePackagedRendererRoot } from './applicationPaths.js';
-import { type AppServerStartupMode, type ElectronMainIpcRouteContribution, ZetaApplication } from './app.js';
 
 export interface StartElectronApplicationOptions {
 	readonly initialModeId: WorkbenchModeId;
-	readonly ipcRouteContributions?: readonly ElectronMainIpcRouteContribution[];
 }
 
 /** Starts the shared Electron application with one selected initial Workbench mode. */
@@ -35,7 +34,6 @@ export function startElectronApplication(options: StartElectronApplicationOption
 		initialModeId: options.initialModeId,
 		rendererRoot,
 		appServerStartupMode,
-		ipcRouteContributions: options.ipcRouteContributions,
 	});
 
 	app.on('second-instance', (_event, arguments_, cwd) => application.handleSecondInstance(arguments_, cwd));

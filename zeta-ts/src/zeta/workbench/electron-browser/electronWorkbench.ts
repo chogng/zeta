@@ -14,6 +14,7 @@ import {
 	parseWorkspace,
 } from "../../platform/workspace/common/workspace.js";
 import { type Workbench, startWorkbench } from "../browser/workbench.js";
+import { showStartupError } from "../browser/startupError.js";
 import {
 	createElectronTitlebarPartFactory,
 } from "./parts/titlebar/titlebarPart.js";
@@ -37,7 +38,14 @@ export async function startElectronWorkbench(
 	const tracking = disposableTracker
 		? installDisposableTracker(disposableTracker)
 		: undefined;
-	const api = createElectronRendererApi(rendererCapabilities);
+	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
+	try {
+		api = await createElectronRendererApi(rendererCapabilities);
+	} catch (error) {
+		tracking?.[Symbol.dispose]();
+		showStartupError(error);
+		return;
+	}
 	const userThemes = await loadUserThemes(api.userThemes);
 	const workbench = startWorkbench({
 		modeId,
@@ -61,6 +69,7 @@ export async function startElectronWorkbench(
 		switchWorkbenchMode: switchElectronWorkbenchMode,
 	});
 	const lifecycle = new DisposableStore();
+	lifecycle.add(api);
 	const workspaceSubscription = api.workspace.onDidChange((workspace) => {
 		void applyWorkspaceChange(workbench, workspace);
 	});
@@ -68,8 +77,8 @@ export async function startElectronWorkbench(
 	lifecycle.add(addDisposableListener(window, "pagehide", () => {
 		void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => {
 			try {
-				lifecycle.dispose();
 				workbench.dispose();
+				lifecycle.dispose();
 				userThemes.dispose();
 				disposableTracker?.assertNoLeaks();
 			} finally {

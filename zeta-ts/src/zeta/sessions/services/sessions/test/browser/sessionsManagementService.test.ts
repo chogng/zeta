@@ -18,6 +18,31 @@ test("management initializes the catalog from provider-owned Session mapping", a
 	assert.equal(service.sessions[0]?.chats[0]?.origin.type, "root");
 });
 
+test("opening a background-created conversation reads and subscribes it without reloading the window", async () => {
+	const fake = sessionHost([]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+	fake.sessions.push(session("automation-session", "automation-thread"));
+
+	await service.openThread("automation-session", "automation-thread");
+
+	assert.equal(service.active?.threadId, "automation-thread");
+	assert.equal(service.sessions.length, 1);
+	assert.equal(fake.subscribeCount, 1);
+});
+
+test("session/changed adds a conversation created by another client without changing selection", async () => {
+	const fake = sessionHost([session("session-1", "thread-1")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+	fake.sessions.push(session("automation-session", "automation-thread"));
+	fake.emit({ method: "session/changed", params: { sessionId: "automation-session" } });
+	await waitFor(() => service.sessions.length === 2);
+
+	assert.equal(service.sessions[0]?.sessionId, "automation-session");
+	assert.equal(service.active?.threadId, "thread-1");
+});
+
 test("session/changed invalidates the frontend Session without inventing a Session sequence", async () => {
 	const fake = sessionHost([session("session-1", "thread-1")]);
 	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));

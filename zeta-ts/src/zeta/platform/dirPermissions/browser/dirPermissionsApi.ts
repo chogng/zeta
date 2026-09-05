@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IDirPermissionsApi } from "../common/dirPermissionsApi.js";
 
@@ -11,11 +11,11 @@ export function createDisconnectedDirPermissionsApi(unavailable: UnavailableOper
 		forget: () => unavailable("dirPermissions.forget"),
 	};
 }
-export function createViteDevDirPermissionsApi(connection: ViteDevAppServerConnection): IDirPermissionsApi {
+export function createAppServerDirPermissionsApi(connection: AppServerProtocolClient): IDirPermissionsApi {
 	return {
-		list: () => viteDevRequest(connection, "config/dirPermissions/list", {}),
-		read: params => viteDevRequest(connection, "config/dirPermissions/read", params),
-		set: params => viteDevRequest(connection, "config/dirPermissions/set", params),
-		forget: params => viteDevRequest(connection, "config/dirPermissions/forget", params),
+		list: () => appServerRequest(connection, "config/dirPermissions/list", {}),
+		read: params => appServerRequest(connection, "config/dirPermissions/read", params),
+		set: params => appServerRequest(connection, "config/dirPermissions/set", params),
+		forget: params => appServerRequest(connection, "config/dirPermissions/forget", params),
 	};
 }

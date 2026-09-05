@@ -1179,11 +1179,20 @@ impl WorktreeManager {
             return Ok(bindings);
         }
         let worktrees = self.list(source_directory).await?;
+        let managed_root = match dunce::canonicalize(&self.settings.root) {
+            Ok(root) => root,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(bindings),
+            Err(error) => return Err(error.into()),
+        };
         for worktree in worktrees {
             let Some(thread_id) = worktree.owner_thread_id() else {
                 continue;
             };
             if worktree.kind() != WorktreeKind::Linked || !worktree.availability().is_available() {
+                continue;
+            }
+            // A repository may also have managed checkouts owned by other profiles.
+            if !has_managed_layout(&managed_root, worktree.checkout_root()) {
                 continue;
             }
             let owner = ManagedDirOwner::Thread {

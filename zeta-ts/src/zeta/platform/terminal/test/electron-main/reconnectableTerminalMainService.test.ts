@@ -3,18 +3,18 @@ import test from "node:test";
 import { APP_SERVER_METHODS } from "../../../../../../generated/app-server/types.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
-import type { AppServerSupervisor } from "../../../../platform/app-server/electron-main/app-server-supervisor.js";
-import { ReconnectableTerminalMainService } from "../../../../platform/terminal/electron-main/reconnectableTerminalMainService.js";
+import type { AppServerProtocolClient } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
+import { ReconnectableTerminalProcessService } from "../../../../platform/terminal/browser/reconnectableTerminalProcessService.js";
 
 const FIRST_TOKEN = "a".repeat(64);
 const SECOND_TOKEN = "b".repeat(64);
 const THIRD_TOKEN = "c".repeat(64);
 
-test("Remote terminal leases stay in Main and rotate across connection generations", async () => {
+test("Remote terminal leases stay in the renderer and rotate across connection generations", async () => {
 	const supervisor = new TestSupervisor();
 	const failures: unknown[] = [];
-	using service = new ReconnectableTerminalMainService({
-		supervisor: supervisor as unknown as AppServerSupervisor,
+	using service = new ReconnectableTerminalProcessService({
+		supervisor: supervisor as unknown as AppServerProtocolClient,
 		wait: async () => {},
 		reportError: (_message, error) => failures.push(error),
 	});
@@ -79,8 +79,8 @@ test("Remote terminal leases stay in Main and rotate across connection generatio
 test("Remote terminal creation rejects malformed leases before exposing a terminal", async () => {
 	const supervisor = new TestSupervisor();
 	supervisor.invalidCreateLease = true;
-	using service = new ReconnectableTerminalMainService({
-		supervisor: supervisor as unknown as AppServerSupervisor,
+	using service = new ReconnectableTerminalProcessService({
+		supervisor: supervisor as unknown as AppServerProtocolClient,
 	});
 
 	await assert.rejects(() => service.create({
@@ -94,8 +94,8 @@ test("Remote terminal creation rejects malformed leases before exposing a termin
 
 test("intentional server replacement abandons old broker leases without recovery retries", async () => {
 	const supervisor = new TestSupervisor();
-	using service = new ReconnectableTerminalMainService({
-		supervisor: supervisor as unknown as AppServerSupervisor,
+	using service = new ReconnectableTerminalProcessService({
+		supervisor: supervisor as unknown as AppServerProtocolClient,
 	});
 	await service.create({
 		rows: 24,

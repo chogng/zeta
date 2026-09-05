@@ -92,6 +92,7 @@ use crate::thread::composer::ChatComposerView;
 use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::SteerSource;
+use crate::thread::preview::ConversationPreview;
 use crate::thread::queue::QueueId;
 use crate::thread::queue::QueueKeyOutcome;
 use crate::thread::queue::QueueView;
@@ -118,6 +119,7 @@ use ratatui::layout::Rect;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadResult;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
@@ -306,6 +308,46 @@ impl App {
                 self.close_overlay();
             }
             return None;
+        }
+        if self.sessions.preview.is_some() {
+            if key.kind == KeyEventKind::Release
+                || (key.kind == KeyEventKind::Repeat && key.code == KeyCode::Esc)
+            {
+                return None;
+            }
+            return match (key.modifiers, key.code) {
+                (KeyModifiers::NONE, KeyCode::Esc) => {
+                    self.sessions.preview = None;
+                    self.pointer.clear();
+                    None
+                }
+                (KeyModifiers::NONE, KeyCode::Up | KeyCode::PageUp | KeyCode::Char('k')) => {
+                    self.navigate_preview(TranscriptScrollDirection::Up, terminal_area)
+                }
+                (KeyModifiers::NONE, KeyCode::Down | KeyCode::PageDown | KeyCode::Char('j')) => {
+                    self.navigate_preview(TranscriptScrollDirection::Down, terminal_area)
+                }
+                (KeyModifiers::NONE | KeyModifiers::CONTROL, KeyCode::Home) => {
+                    let preview = self.sessions.preview.as_mut().unwrap();
+                    preview.first().map(|params| {
+                        SessionCommand::Preview {
+                            generation: preview.generation,
+                            params,
+                        }
+                        .into()
+                    })
+                }
+                (KeyModifiers::NONE | KeyModifiers::CONTROL, KeyCode::End) => {
+                    self.follow_latest_transcript();
+                    None
+                }
+                _ => None,
+            };
+        }
+        if matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
+            && self.sessions.manager().focused()
+        {
+            return self.handle_screen_navigation_key(key).flatten();
         }
         if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_))) {
             if let Some(command) = self.handle_thread_request_key(key) {
@@ -705,7 +747,7 @@ impl App {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         self.pointer.clear();
-        if self.overlay.is_some() {
+        if self.overlay.is_some() || self.sessions.preview.is_some() {
             return;
         }
         if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
@@ -913,7 +955,7 @@ impl App {
         self.pointer.clear();
     }
 
-    fn show_overlay(&mut self, detail: DetailList) {
+    pub(super) fn show_overlay(&mut self, detail: DetailList) {
         self.screen_escape_sequence.reset();
         self.overlay = Some(DetailOverlay::new(detail));
         self.pointer.clear();
@@ -1113,6 +1155,9 @@ impl App {
         direction: TranscriptScrollDirection,
         terminal_area: Rect,
     ) -> Option<AppCommand> {
+        if self.sessions.preview.is_some() {
+            return self.navigate_preview(direction, terminal_area);
+        }
         if self.scroll_transcript(direction, terminal_area)
             || direction == TranscriptScrollDirection::Down
         {
@@ -1126,6 +1171,10 @@ impl App {
     }
 
     pub(crate) fn follow_latest_transcript(&mut self) {
+        if let Some(preview) = self.sessions.preview.as_mut() {
+            preview.scroll.follow_latest();
+            return;
+        }
         self.thread_presentations
             .active_mut()
             .scroll
@@ -1203,14 +1252,19 @@ impl App {
     }
 
     pub(crate) fn session_manager_view(&self) -> Option<SessionManagerView<'_>> {
+        (self.sessions.preview.is_none()
+            && matches!(self.sessions.screen(), Some(TerminalScreen::Manager)))
+        .then(|| self.sessions.manager().view(self.sessions.catalog()))
+    }
+
+    fn session_manager_focused_internal(&self) -> bool {
         matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
-            .then(|| self.sessions.manager().view(self.sessions.catalog()))
+            && self.sessions.manager().focused()
     }
 
     #[cfg(test)]
     pub(crate) fn session_manager_focused(&self) -> bool {
-        matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
-            && self.sessions.manager().focused()
+        self.session_manager_focused_internal()
     }
 
     pub(crate) fn session_manager_hint(&self) -> &'static str {
@@ -1220,19 +1274,58 @@ impl App {
     pub(crate) fn activate_session_manager_pointer_target(
         &mut self,
         target: SessionManagerPointerTarget,
-    ) {
-        let catalog = self.sessions.catalog().to_vec();
-        if let Some(preview) = self
-            .sessions
-            .manager_mut()
-            .activate_pointer_target(target, &catalog)
-        {
-            self.show_overlay(preview);
+    ) -> Option<AppCommand> {
+        match target {
+            SessionManagerPointerTarget::Archived => {
+                self.sessions.manager_mut().toggle_archived();
+                None
+            }
+            SessionManagerPointerTarget::Session(id) => {
+                self.sessions.open_preview(&id).map(Into::into)
+            }
         }
     }
 
+    pub(crate) fn session_preview(&self) -> Option<&ConversationPreview> {
+        self.sessions.preview.as_ref()
+    }
+
+    pub(crate) fn finish_session_preview(
+        &mut self,
+        generation: u64,
+        result: Result<SessionThreadReadResult, String>,
+    ) {
+        self.sessions.finish_preview(generation, result);
+    }
+
+    fn navigate_preview(
+        &mut self,
+        direction: TranscriptScrollDirection,
+        terminal_area: Rect,
+    ) -> Option<AppCommand> {
+        let area = frame::layout(self, terminal_area).session.transcript;
+        let mut preview = self.sessions.preview.take()?;
+        let params = preview.navigate(
+            direction,
+            area,
+            usize::from(welcome::history_height(area.height)),
+            self.render_context(),
+        );
+        let command = params.map(|params| {
+            SessionCommand::Preview {
+                generation: preview.generation,
+                params,
+            }
+            .into()
+        });
+        self.sessions.preview = Some(preview);
+        command
+    }
+
     pub(crate) fn scroll_session_manager(&mut self, up: bool) -> bool {
-        if !matches!(self.sessions.screen(), Some(TerminalScreen::Manager)) {
+        if self.sessions.preview.is_some()
+            || !matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
+        {
             return false;
         }
         let catalog = self.sessions.catalog().to_vec();
@@ -1375,7 +1468,9 @@ impl App {
     }
 
     pub(crate) fn accepts_input(&self) -> bool {
-        self.approval_view().is_none()
+        self.sessions.preview.is_none()
+            && !self.session_manager_focused_internal()
+            && self.approval_view().is_none()
             && self.query_view().is_none()
             && self.viewed_thread_accepts_input()
             && matches!(
@@ -1838,7 +1933,10 @@ impl App {
     }
 
     fn handle_screen_navigation_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
-        if key.kind != KeyEventKind::Press {
+        if key.kind == KeyEventKind::Release
+            || (key.kind == KeyEventKind::Repeat
+                && !matches!(key.code, KeyCode::Up | KeyCode::Down))
+        {
             return None;
         }
         if matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
@@ -1846,6 +1944,15 @@ impl App {
         {
             let catalog = self.sessions.catalog().to_vec();
             if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('x') {
+                if self.sessions.manager().selected_is_archived() {
+                    return Some(
+                        self.sessions
+                            .manager()
+                            .selected_session()
+                            .cloned()
+                            .map(|session_id| SessionCommand::Delete { session_id }.into()),
+                    );
+                }
                 let session_ids = self.sessions.manager().selected_archive_ids(&catalog);
                 return Some(
                     (!session_ids.is_empty())
@@ -1866,23 +1973,57 @@ impl App {
                     }
                     Some(None)
                 }
-                KeyCode::Enter => Some(self.sessions.manager().selected_session().map(
-                    |session_id| {
-                        SessionCommand::Resume {
-                            session_id: session_id.to_string(),
-                            preferred_thread_id: self
-                                .sessions
-                                .remembered_thread(session_id)
-                                .cloned(),
-                        }
-                        .into()
-                    },
-                )),
-                KeyCode::Char(' ') => {
-                    let preview = self.sessions.manager().preview_selected(&catalog);
-                    if let Some(preview) = preview {
-                        self.show_overlay(preview);
+                KeyCode::Enter => {
+                    if self.sessions.manager().archived_selected() {
+                        self.sessions.manager_mut().toggle_archived();
+                        Some(None)
+                    } else {
+                        Some(
+                            self.sessions
+                                .manager()
+                                .selected_session()
+                                .map(|session_id| {
+                                    if self.sessions.manager().selected_is_archived() {
+                                        SessionCommand::Restore {
+                                            session_id: session_id.clone(),
+                                        }
+                                        .into()
+                                    } else {
+                                        SessionCommand::Resume {
+                                            session_id: session_id.to_string(),
+                                            preferred_thread_id: self
+                                                .sessions
+                                                .remembered_thread(session_id)
+                                                .cloned(),
+                                        }
+                                        .into()
+                                    }
+                                }),
+                        )
                     }
+                }
+                KeyCode::Char(' ') => {
+                    if self.sessions.manager().archived_selected() {
+                        self.sessions.manager_mut().toggle_archived();
+                        Some(None)
+                    } else {
+                        let id = self.sessions.manager().selected_session().cloned();
+                        Some(
+                            id.and_then(|id| self.sessions.open_preview(&id))
+                                .map(Into::into),
+                        )
+                    }
+                }
+                KeyCode::Char('i') => {
+                    if let Some(details) = self.sessions.manager().details_selected(&catalog) {
+                        self.show_overlay(details);
+                    }
+                    Some(None)
+                }
+                KeyCode::Left | KeyCode::Right if self.sessions.manager().archived_selected() => {
+                    self.sessions
+                        .manager_mut()
+                        .set_archived_expanded(key.code == KeyCode::Right);
                     Some(None)
                 }
                 KeyCode::Char('p') => {

@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import test from "node:test";
-import { AppServerProtocolIncompatibleError } from "../../../../platform/app-server/electron-main/app-server-session.js";
+import { AppServerProtocolIncompatibleError } from "../../../../platform/app-server/common/appServerProtocolCompatibility.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { SshAppServerProcessLauncher, SshRuntimeProbeError, remoteAppServerCommand, sshRuntimeProbeArguments } from "../../../../platform/remote/electron-main/sshAppServerProcessLauncher.js";
 

@@ -14,6 +14,7 @@ use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::sync::RwLock;
 use zeta_protocol::AgentContextContent;
 use zeta_protocol::AgentContextMode;
 use zeta_protocol::AgentContextSeed;
@@ -125,11 +126,29 @@ pub struct JoinedAgents {
 pub struct MultiAgentCoordinator {
     threads: Arc<ThreadController>,
     limits: AgentTreeLimits,
+    thread_worktree_binder: RwLock<Arc<dyn crate::ThreadWorktreeBinder>>,
 }
 
 impl MultiAgentCoordinator {
     pub fn new(threads: Arc<ThreadController>, limits: AgentTreeLimits) -> Self {
-        Self { threads, limits }
+        Self {
+            threads,
+            limits,
+            thread_worktree_binder: RwLock::new(Arc::new(crate::NoThreadWorktreeBinder)),
+        }
+    }
+
+    /// Installs this coordinator's environment authority before accepting Agent spawns.
+    pub fn install_thread_worktree_binder(
+        &self,
+        binder: Arc<dyn crate::ThreadWorktreeBinder>,
+    ) -> Result<(), CoreError> {
+        *self
+            .thread_worktree_binder
+            .write()
+            .map_err(|_| CoreError::Journal("Agent Worktree binder lock poisoned".into()))? =
+            binder;
+        Ok(())
     }
 
     /// Commits a parent request, creates and seeds its child Thread, then accepts the initial Turn.
@@ -452,12 +471,20 @@ impl MultiAgentCoordinator {
                 parent_turn.turn_id
             ))
         })?;
-        let spawned = self.threads.create_agent_thread(CreateAgentThreadRequest {
-            session_id: parent.session_id.clone(),
-            thread_id: agent_thread_id(&seed.delegation_id)?,
-            title: seed.task.title.clone(),
-            context_seed: seed.clone(),
-        })?;
+        let binder = self
+            .thread_worktree_binder
+            .read()
+            .map_err(|_| CoreError::Journal("Agent Worktree binder lock poisoned".into()))?
+            .clone();
+        let spawned = self.threads.create_agent_thread(
+            binder.as_ref(),
+            CreateAgentThreadRequest {
+                session_id: parent.session_id.clone(),
+                thread_id: agent_thread_id(&seed.delegation_id)?,
+                title: seed.task.title.clone(),
+                context_seed: seed.clone(),
+            },
+        )?;
         self.threads.record_delegation_started(
             &seed.parent_thread_id,
             seed.delegation_id.clone(),

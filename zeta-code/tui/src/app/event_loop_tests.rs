@@ -220,9 +220,15 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
 
     app.insert_text("/sessions");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
-    assert_eq!(app.overlay().unwrap().title(), "Session preview");
-    assert!(app.session_manager_view().is_some());
+    assert!(matches!(
+        activate_pointer_item(&mut app, area, column, row),
+        Some(AppCommand::Sessions(
+            crate::sessions::Command::Preview { .. }
+        ))
+    ));
+    assert!(app.overlay().is_none());
+    assert!(app.session_preview().is_some());
+    assert!(app.session_manager_view().is_none());
 }
 
 #[test]

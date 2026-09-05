@@ -148,7 +148,6 @@ impl MultiAgentEvaluationHost<'_> {
         let ids = EvaluationIds::new(&request.run_key)?;
         let root = self
             .server
-            .threads
             .start_thread(StartThreadRequest {
                 command_id: ids.root_thread_command.clone(),
                 title: format!("Evaluation coordinator {}", request.run_key),
@@ -761,7 +760,6 @@ pub(super) fn create_root_agent(
     tool_profile: &zeta_protocol::ToolProfileSnapshot,
 ) -> Result<EvaluationRootAgent, String> {
     let thread = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: thread_command_id,
             title,

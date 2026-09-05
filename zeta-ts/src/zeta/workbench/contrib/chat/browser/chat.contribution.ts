@@ -1,3 +1,4 @@
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import "./actions/chatActions.js";
 import "./actions/chatLayoutActions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
@@ -5,7 +6,7 @@ import { IMenuService } from "../../../../platform/actions/common/menuService.js
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService, ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { IChatService } from "../../../services/chat/common/chatService.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
@@ -18,9 +19,9 @@ import { IChatContextPickService } from "../../../services/chat/common/chatConte
 import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 
-ChatInputEditors.registerStatic({
-	id: "stanza",
-	create: options => new ChatInputEditor(options),
+registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
+	const instantiationService = accessor.get(IInstantiationService);
+	return ChatInputEditors.register({ id: 'stanza', create: options => new ChatInputEditor({ ...options, instantiationService }) });
 });
 
 /** Registers the fixed Chat view. */

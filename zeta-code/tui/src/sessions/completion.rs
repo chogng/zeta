@@ -11,8 +11,12 @@ use crate::thread::composer::ChatSubmission;
 use crate::thread::start_turn_and_read;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadResult;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::Session;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
 
 pub(crate) struct ConversationCompletion {
     pub(crate) conversation: ActiveConversation,
@@ -28,6 +32,10 @@ pub(crate) struct ManagerSessionCompletion {
 
 /// Result of one asynchronous Session or active-conversation operation.
 pub(crate) enum SessionCompletion {
+    Preview {
+        generation: u64,
+        result: Result<SessionThreadReadResult, String>,
+    },
     Catalog(Result<Vec<Session>, String>),
     Changed {
         command: String,
@@ -38,19 +46,30 @@ pub(crate) enum SessionCompletion {
 }
 
 pub(crate) enum CommandRequest {
+    Preview {
+        generation: u64,
+        params: SessionThreadReadParams,
+    },
+    Restore {
+        session_id: SessionId,
+    },
+    Delete {
+        session_id: SessionId,
+    },
+
     Resume {
         session_id: String,
-        preferred_thread_id: Option<zeta_protocol::ThreadId>,
+        preferred_thread_id: Option<ThreadId>,
     },
     Archive {
-        session_ids: Vec<zeta_protocol::SessionId>,
+        session_ids: Vec<SessionId>,
     },
     CreateAndEnter {
         submission: ChatSubmission,
         approval_mode: ApprovalMode,
     },
     SwitchThread {
-        thread_id: zeta_protocol::ThreadId,
+        thread_id: ThreadId,
     },
 }
 
@@ -58,7 +77,12 @@ impl Command {
     pub(crate) fn command_line(&self) -> Option<String> {
         match self {
             Self::Resume { session_id, .. } => Some(format!("/resume {session_id}")),
-            Self::Archive { .. } | Self::CreateAndEnter { .. } | Self::SwitchThread { .. } => None,
+            Self::Preview { .. }
+            | Self::Restore { .. }
+            | Self::Delete { .. }
+            | Self::Archive { .. }
+            | Self::CreateAndEnter { .. }
+            | Self::SwitchThread { .. } => None,
         }
     }
 }
@@ -66,6 +90,9 @@ impl Command {
 impl CommandRequest {
     pub(crate) const fn name(&self) -> &'static str {
         match self {
+            Self::Preview { .. } => "zeta-tui-preview-session",
+            Self::Restore { .. } => "zeta-tui-restore-session",
+            Self::Delete { .. } => "zeta-tui-delete-session",
             Self::Resume { .. } => "zeta-tui-resume-session",
             Self::Archive { .. } => "zeta-tui-archive-sessions",
             Self::CreateAndEnter { .. } => "zeta-tui-create-manager-session",
@@ -80,6 +107,18 @@ impl CommandRequest {
         subscription: ThreadSubscription,
     ) -> SessionCompletion {
         match self {
+            Self::Preview { generation, params } => SessionCompletion::Preview {
+                generation,
+                result: client
+                    .read_session_thread(params)
+                    .map_err(|error| error.to_string()),
+            },
+            Self::Restore { session_id } => SessionCompletion::Catalog(
+                super::restore(&mut client, session_id).map_err(|error| error.to_string()),
+            ),
+            Self::Delete { session_id } => SessionCompletion::Catalog(
+                super::delete(&mut client, session_id).map_err(|error| error.to_string()),
+            ),
             Self::Resume {
                 session_id,
                 preferred_thread_id,
@@ -128,6 +167,9 @@ impl CommandRequest {
 
 pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> CommandRequest {
     match command {
+        Command::Preview { generation, params } => CommandRequest::Preview { generation, params },
+        Command::Restore { session_id } => CommandRequest::Restore { session_id },
+        Command::Delete { session_id } => CommandRequest::Delete { session_id },
         Command::Resume {
             session_id,
             preferred_thread_id,

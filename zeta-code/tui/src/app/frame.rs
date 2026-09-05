@@ -54,6 +54,49 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         frame.area(),
     );
     let areas = layout(app, frame.area());
+    if let Some(preview) = app.session_preview() {
+        let messages = preview.messages();
+        let header = welcome::history_buffer(
+            areas.session.transcript.width,
+            areas.session.transcript.height,
+            app.welcome(),
+            context,
+        );
+        ChatHistoryView {
+            header: Some(&header),
+            messages: &messages,
+            scroll: &preview.scroll,
+            render_cache: &preview.cache,
+            pointer: Default::default(),
+        }
+        .render(frame, areas.session.transcript, context);
+        let title = format!("  Preview · {} · read only", preview.title);
+        frame.render_widget(
+            Paragraph::new(title).style(Style::default().fg(context.muted())),
+            areas.session.composer,
+        );
+        if let Some(notice) = preview.notice() {
+            frame.render_widget(
+                Paragraph::new(notice).style(Style::default().fg(context.muted())),
+                areas.session.top_tip,
+            );
+        }
+        frame.render_widget(
+            Paragraph::new("  ↑↓ to scroll · Home/End to jump · Esc to close")
+                .style(Style::default().fg(context.muted())),
+            areas.session.bottom,
+        );
+        if let Some(overlay) = app.overlay() {
+            crate::widgets::overlay::draw(
+                frame,
+                transient_area_from_layout(&areas),
+                overlay,
+                context,
+            );
+        }
+        app.screen_selection().draw(frame.buffer_mut(), context);
+        return;
+    }
     let hovered = app.hovered_pointer_target();
     let pressed = app.pressed_pointer_target();
     if let Some(manager) = app.session_manager_view() {
@@ -292,6 +335,23 @@ pub(crate) fn input_pointer_target_at(
     if app.overlay().is_some() {
         return None;
     }
+    if let Some(preview) = app.session_preview() {
+        return match chat_history::pointer_target_at(
+            areas.session.transcript,
+            usize::from(welcome::history_height(areas.session.transcript.height)),
+            &preview.messages(),
+            &preview.scroll,
+            &preview.cache,
+            app.render_context(),
+            column,
+            row,
+        ) {
+            Some(chat_history::ChatHistoryPointerTarget::JumpToBottom) => {
+                Some(InputPointerTarget::TranscriptJumpToBottom)
+            }
+            _ => None,
+        };
+    }
     let input_view = app.chat_composer_view();
     if completion_visible(app)
         && let Some(target) = chat_composer::pointer_target_at(
@@ -380,6 +440,13 @@ pub(crate) struct FrameLayout {
 }
 
 pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
+    if app.session_preview().is_some() {
+        let session = super::layout::session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0);
+        return FrameLayout {
+            input: Rect::default(),
+            session,
+        };
+    }
     let input_view = app.chat_composer_view();
     let input_rows = ChatComposerSurface {
         view: &input_view,

@@ -1,4 +1,7 @@
 use super::*;
+
+#[path = "automation_tests.rs"]
+mod automation_tests;
 use base64::Engine;
 use std::io::Cursor;
 use std::io::Write;
@@ -1489,6 +1492,25 @@ fn session_archive_is_distinct_from_stop_in_the_manager_view() {
         archived["result"]["value"]["session"]["manager"]["status"],
         "completed"
     );
+}
+
+#[test]
+fn session_restore_reopens_archived_conversation_and_updates_catalog() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "restore-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    for (id, operation, expected) in [(3, "archive", "archived"), (4, "restore", "active"), (5, "restore", "active")] {
+        let response = call(&server, &mut connection, serde_json::json!({
+            "jsonrpc":"2.0", "id":id, "method":"session/request",
+            "params":{"commandId":format!("restore-test-{id}"), "sessionId":session_id, "request":{"type":operation}}
+        }));
+        assert_eq!(response["result"]["value"]["session"]["status"], expected, "{response}");
+    }
+    let listed = call(&server, &mut connection, serde_json::json!({"jsonrpc":"2.0","id":6,"method":"session/list","params":{}}));
+    assert_eq!(listed["result"]["sessions"][0]["status"], "active");
+    assert!(server.drain_notifications(&mut connection).iter().any(|notification| notification.contains("session/changed")));
 }
 
 #[test]

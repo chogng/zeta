@@ -1,46 +1,48 @@
-import { createViteDevAppServerApi, createViteDevResourceApi, createViteDevServerEventApi } from "./appServerApi.js";
-import { ViteDevAppServerConnection, type ViteDevAppServerConnectionOptions, type ViteDevAppServerMetadata, type ViteDevHotContext } from "./viteDevConnection.js";
-import { createViteDevFileApi } from "../../files/browser/fileApi.js";
-import { createViteDevExtensionApi } from "../../extensions/browser/extensionApi.js";
-import { createViteDevDiffApi } from "../../diff/browser/diffApi.js";
-import { createViteDevSyntaxApi } from "../../syntax/browser/syntaxApi.js";
-import { createViteDevGitApi } from "../../git/browser/gitApi.js";
+import { createAppServerAppServerApi, createAppServerResourceApi, createAppServerServerEventApi } from "./appServerApi.js";
+import { AppServerProtocolClient, type AppServerProtocolClientOptions, type AppServerConnectionMetadata, type AppServerTransport } from "./appServerProtocolClient.js";
+import { createAppServerFileApi } from "../../files/browser/fileApi.js";
+import { createAppServerExtensionApi } from "../../extensions/browser/extensionApi.js";
+import { createAppServerDiffApi } from "../../diff/browser/diffApi.js";
+import { createAppServerSyntaxApi } from "../../syntax/browser/syntaxApi.js";
+import { createAppServerGitApi } from "../../git/browser/gitApi.js";
 import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
-import { createViteDevContentSearchApi } from "../../search/browser/searchApi.js";
-import { createViteDevModelApi, createViteDevSessionApi, createViteDevThreadApi, createViteDevTurnApi } from "../../sessions/browser/sessionApi.js";
-import { createViteDevSkillApi } from "../../skills/browser/skillApi.js";
-import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTerminalProcessService.js";
-import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
-import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
-import { createViteDevCodebaseApi } from "../../codebase/browser/codebaseApi.js";
-import { createViteDevCodebaseSymbolsApi } from "../../codebaseSymbols/browser/codebaseSymbolsApi.js";
-import { createViteDevConnectorApi, type BrowserConnectorHostServices } from "../../connectors/browser/connectorApi.js";
-import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
-import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
-import { createViteDevPluginApi } from "../../plugins/browser/pluginApi.js";
-import { createViteDevExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
-import { createViteDevMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
-import { createViteDevDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
-import { createViteDevAccountApi } from "../../accounts/browser/accountApi.js";
-import { createViteDevTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
+import { createAppServerContentSearchApi } from "../../search/browser/searchApi.js";
+import { createAppServerModelApi, createAppServerSessionApi, createAppServerThreadApi, createAppServerTurnApi } from "../../sessions/browser/sessionApi.js";
+import { createAppServerSkillApi } from "../../skills/browser/skillApi.js";
+import { AppServerTerminalProcessService } from "../../terminal/browser/appServerTerminalProcessService.js";
+import { createAppServerTypstApi } from "../../typst/browser/typstApi.js";
+import { createAppServerDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
+import { createAppServerCodebaseApi } from "../../codebase/browser/codebaseApi.js";
+import { createAppServerCodebaseSymbolsApi } from "../../codebaseSymbols/browser/codebaseSymbolsApi.js";
+import { createAppServerConnectorApi, type BrowserConnectorHostServices } from "../../connectors/browser/connectorApi.js";
+import { createAppServerToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
+import { createAppServerLanguageApi } from "../../language/browser/languageApi.js";
+import { createAppServerPluginApi } from "../../plugins/browser/pluginApi.js";
+import { createAppServerExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
+import { createAppServerMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
+import { createAppServerDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
+import { createAppServerAccountApi } from "../../accounts/browser/accountApi.js";
+import { createAppServerTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
+import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
 
-export type ViteDevRendererCapabilityContribution = (connection: ViteDevAppServerConnection, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
+export type RendererCapabilityContribution = (connection: AppServerProtocolClient, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
 
 export interface ConnectedWebRendererApi {
 	readonly api: IRendererHost;
-	readonly metadata: ViteDevAppServerMetadata;
+	readonly metadata: AppServerConnectionMetadata;
 	dispose(): void;
 }
 
 /** Connects a browser Renderer host to the loopback Vite development bridge. */
-export async function connectViteDevRendererApi(hot: ViteDevHotContext, connectorHostServices: BrowserConnectorHostServices, options: ViteDevAppServerConnectionOptions = {}, contributions: readonly ViteDevRendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
-	const connection = new ViteDevAppServerConnection(hot, options);
+export async function connectViteDevRendererApi(hot: AppServerTransport, connectorHostServices: BrowserConnectorHostServices, options: AppServerProtocolClientOptions = {}, contributions: readonly RendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
+	const connection = new AppServerProtocolClient(hot, { ...options, capabilities: { ...options.capabilities, dirPermissionsHost: { version: 1 } } });
 	try {
 		const metadata = await connection.connect();
+		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
 		return {
-			api: createRendererHost(connection, connectorHostServices, contributions),
+			api: { ...createRendererHost(connection, connectorHostServices, contributions), automation },
 			metadata,
-			dispose: () => connection.dispose(),
+			dispose: () => { automation?.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		connection.dispose();
@@ -48,39 +50,39 @@ export async function connectViteDevRendererApi(hot: ViteDevHotContext, connecto
 	}
 }
 
-function createRendererHost(connection: ViteDevAppServerConnection, connectorHostServices: BrowserConnectorHostServices, contributions: readonly ViteDevRendererCapabilityContribution[]): IRendererHost {
-	const appServer = createViteDevAppServerApi(connection);
-	const resource = createViteDevResourceApi(connection);
+export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[]): IRendererHost {
+	const appServer = createAppServerAppServerApi(connection);
+	const resource = createAppServerResourceApi(connection);
 	const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
 	return {
 		appServer,
-		accounts: createViteDevAccountApi(connection, connectorHostServices),
-		session: createViteDevSessionApi(connection),
-		model: createViteDevModelApi(connection),
-		thread: createViteDevThreadApi(connection),
-		turn: createViteDevTurnApi(connection),
-		turnChanges: createViteDevTurnChangesApi(connection),
-		skills: createViteDevSkillApi(connection),
-		typst: createViteDevTypstApi(connection),
-		documentCollaboration: createViteDevDocumentCollaborationApi(connection),
+		accounts: createAppServerAccountApi(connection, connectorHostServices),
+		session: createAppServerSessionApi(connection),
+		model: createAppServerModelApi(connection),
+		thread: createAppServerThreadApi(connection),
+		turn: createAppServerTurnApi(connection),
+		turnChanges: createAppServerTurnChangesApi(connection),
+		skills: createAppServerSkillApi(connection),
+		typst: createAppServerTypstApi(connection),
+		documentCollaboration: createAppServerDocumentCollaborationApi(connection),
 		resource,
-		extensions: createViteDevExtensionApi(connection, resource),
-		extensionHost: createViteDevExtensionHostApi(connection),
-		fs: createViteDevFileApi(connection),
-		diff: createViteDevDiffApi(connection),
-		syntax: createViteDevSyntaxApi(connection),
-		language: createViteDevLanguageApi(connection),
-		git: createViteDevGitApi(connection),
-		contentSearch: createViteDevContentSearchApi(connection),
-		terminal: new ViteDevTerminalProcessService(connection, appServer),
+		extensions: createAppServerExtensionApi(connection, resource),
+		extensionHost: createAppServerExtensionHostApi(connection),
+		fs: createAppServerFileApi(connection),
+		diff: createAppServerDiffApi(connection),
+		syntax: createAppServerSyntaxApi(connection),
+		language: createAppServerLanguageApi(connection),
+		git: createAppServerGitApi(connection),
+		contentSearch: createAppServerContentSearchApi(connection),
+		terminal: new AppServerTerminalProcessService(connection, appServer),
 		...capabilities,
-		events: createViteDevServerEventApi(connection),
-		codebase: createViteDevCodebaseApi(connection),
-		codebaseSymbols: createViteDevCodebaseSymbolsApi(connection),
-		connectors: createViteDevConnectorApi(connection, connectorHostServices),
-		plugins: createViteDevPluginApi(connection),
-		marketplace: createViteDevMarketplaceApi(connection),
-		toolSearch: createViteDevToolSearchApi(connection),
-		dirPermissions: createViteDevDirPermissionsApi(connection),
+		events: createAppServerServerEventApi(connection),
+		codebase: createAppServerCodebaseApi(connection),
+		codebaseSymbols: createAppServerCodebaseSymbolsApi(connection),
+		connectors: createAppServerConnectorApi(connection, connectorHostServices),
+		plugins: createAppServerPluginApi(connection),
+		marketplace: createAppServerMarketplaceApi(connection),
+		toolSearch: createAppServerToolSearchApi(connection),
+		dirPermissions: createAppServerDirPermissionsApi(connection),
 	};
 }

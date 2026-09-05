@@ -46,6 +46,14 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		return result.sessions.map(session => ({ ...toSession(session), model: preferredModel }));
 	}
 
+	async read(sessionId: SessionId): Promise<ISession> {
+		const [result, preferredModel] = await Promise.all([
+			this.host.session.read({ sessionId }),
+			this.host.model?.readPreferred() ?? Promise.resolve(null),
+		]);
+		return { ...toSession(result.session), model: preferredModel };
+	}
+
 	async subscribe(session: ISession): Promise<ISession> {
 		if (session.status !== "active") return session;
 		const result = await this.host.session.subscribe({ sessionId: session.sessionId });

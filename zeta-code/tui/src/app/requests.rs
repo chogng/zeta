@@ -27,6 +27,7 @@ pub(super) enum RequestKey {
     Connectors,
     Directories,
     Sessions,
+    Preview,
     Mcp,
     Skills,
     Clipboard,
@@ -153,8 +154,11 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Dirs(DirCommand::Remove { .. } | DirCommand::SetPermissions(_)) => {
             Some(RequestKey::Directories)
         }
+        AppCommand::Sessions(SessionCommand::Preview { .. }) => Some(RequestKey::Preview),
         AppCommand::Sessions(
-            SessionCommand::Resume { .. }
+            SessionCommand::Restore { .. }
+            | SessionCommand::Delete { .. }
+            | SessionCommand::Resume { .. }
             | SessionCommand::Archive { .. }
             | SessionCommand::CreateAndEnter { .. },
         ) => Some(RequestKey::Sessions),

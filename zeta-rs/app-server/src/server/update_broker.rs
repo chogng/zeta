@@ -834,6 +834,10 @@ impl UpdateBroker {
         });
     }
 
+    pub(crate) fn publish_automation_changed(&self) {
+        self.broadcast_notification(ServerNotificationMethod::AutomationChanged, &serde_json::json!({}));
+    }
+
     pub(super) fn publish_project_changed(&self, changed: ProjectChanged) {
         let Ok(mut state) = self.state.lock() else {
             return;

@@ -3,16 +3,16 @@ import test from "node:test";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
-import { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../../generated/app-server/types.js";
 import { connectViteDevRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
-import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type ViteDevHotContext } from "../../../../platform/app-server/browser/viteDevConnection.js";
+import { AppServerProtocolClient, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
 
 const connectorHostServices = {
 	openerService: { openExternal: async () => undefined },
 	clipboardService: { readText: async () => '', writeText: async () => undefined },
 };
 
-class FakeHotContext implements ViteDevHotContext {
+class FakeHotContext implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Array<Record<string, unknown>> = [];
 	readonly sentEvents: string[] = [];
@@ -115,7 +115,7 @@ class FakeHotContext implements ViteDevHotContext {
 		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) });
 	}
 
-	private emit(event: string, payload: unknown): void {
+	public emit(event: string, payload: unknown): void {
 		for (const listener of this.listeners.get(event) ?? []) listener(payload);
 	}
 }
@@ -226,4 +226,42 @@ test("keeps the language failure when completion wins the cancel race", async ()
 
 	await assert.rejects(pending, (error: unknown) => error instanceof AppServerRemoteError && error.errorName === "LanguageRequestFailed");
 	connected.dispose();
+});
+
+test('renderer dispatches host requests and rejects late results after disconnect', async () => {
+	const hot = new FakeHotContext();
+	const client = new AppServerProtocolClient(hot);
+	let signal: AbortSignal | undefined;
+	let finish!: (value: { targetId: string }) => void;
+	const handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
+		signal = context.signal;
+		return new Promise(resolve => { finish = resolve; });
+	});
+	await client.connect();
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'host-1', method: 'browser/create', params: { url: 'https://example.test' } }) });
+	await Promise.resolve();
+	assert.equal(signal?.aborted, false);
+	client.disconnect();
+	assert.equal(signal?.aborted, true);
+	finish({ targetId: 'retired-target' });
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(hot.requests.some(request => request.id === 'host-1'), false);
+	await client.connect();
+	assert.equal(client.generation, 2);
+	handler.dispose();
+	client.dispose();
+});
+
+test('invalid response rejects its pending request and unknown host methods receive method-not-found', async () => {
+	const hot = new FakeHotContext();
+	const client = new AppServerProtocolClient(hot);
+	await client.connect();
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'unknown-1', method: 'host/unknown', params: {} }) });
+	assert.deepEqual(hot.requests.at(-1)?.error, { code: -32601, message: 'Method not found' });
+	assert.equal(client.state, 'ready');
+	const pending = client.request(APP_SERVER_METHODS['automation/list'], {});
+	hot.respondAt(-1, { automations: 'invalid' });
+	await assert.rejects(pending);
+	assert.equal(client.state, 'crashed');
+	client.dispose();
 });

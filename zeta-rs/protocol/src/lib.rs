@@ -1,6 +1,7 @@
 //! Provider-independent data contracts shared by Zeta runtimes, processes, and adapters.
 
 mod attachment;
+mod automation;
 mod config;
 mod error;
 mod ids;
@@ -21,6 +22,14 @@ mod turn_execution;
 
 pub use attachment::ImageAttachmentRef;
 pub use attachment::ImageMediaType;
+pub use automation::Automation;
+pub use automation::AutomationDefinition;
+pub use automation::AutomationRun;
+pub use automation::AutomationRunStatus;
+pub use automation::AutomationSchedule;
+pub use automation::AutomationSession;
+pub use automation::AutomationStatus;
+pub use automation::UnixMillis;
 pub use config::ApprovalMode;
 pub use config::Patch;
 pub use config::Personality;

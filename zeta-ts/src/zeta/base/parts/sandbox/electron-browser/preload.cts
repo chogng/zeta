@@ -38,4 +38,8 @@
 	};
 
 	contextBridge.exposeInMainWorld("zeta", globals);
+	ipcRenderer.on('zeta:app-server:port', (_event, value: unknown) => {
+		if (typeof value !== 'object' || value === null || !('nonce' in value) || typeof value.nonce !== 'string' || _event.ports.length !== 1) { return; }
+		window.postMessage({ type: 'zeta:app-server:port', nonce: value.nonce }, '*', _event.ports);
+	});
 })();

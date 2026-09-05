@@ -175,7 +175,7 @@ export class BrowserViewMainService extends Disposable
 		const preventDownload = (event: ElectronEvent): void =>
 			event.preventDefault();
 		browserSession.on("will-download", preventDownload);
-		target.disposables.add(toDisposable(() =>
+		target.disposables.use(toDisposable(() =>
 			browserSession.removeListener("will-download", preventDownload)
 		));
 
@@ -345,7 +345,7 @@ export class BrowserViewMainService extends Disposable
 	): void {
 		const emitter = contents as unknown as EventEmitter;
 		emitter.on(event, listener);
-		target.disposables.add(toDisposable(() => emitter.removeListener(event, listener)));
+		target.disposables.use(toDisposable(() => emitter.removeListener(event, listener)));
 	}
 
 	private state(target: BrowserTarget): IBrowserViewState {

@@ -880,10 +880,13 @@ fn fixture() -> Fixture {
         InMemoryThreadStore::default(),
     )));
     let parent = threads
-        .start_thread(StartThreadRequest {
-            command_id: CommandId::new("create-parent").unwrap(),
-            title: "parent".into(),
-        })
+        .start_thread(
+            &crate::NoThreadWorktreeBinder,
+            StartThreadRequest {
+                command_id: CommandId::new("create-parent").unwrap(),
+                title: "parent".into(),
+            },
+        )
         .unwrap();
     let turn = threads
         .start_turn(

@@ -1,6 +1,5 @@
-import { APP_SERVER_SERVER_REQUESTS, type BrowserCloseParams, type BrowserCreateParams, type BrowserCreateResult, type BrowserObserveParams, type BrowserObserveResult, type BrowserPerformParams, type BrowserPerformResult } from "../../../../../generated/app-server/types.js";
-import { DisposableStore, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { RpcMethodDefinition, RpcRequestContext } from "../../app-server/electron-main/json-rpc-peer.js";
+import { type BrowserCloseParams, type BrowserCreateParams, type BrowserCreateResult, type BrowserObserveParams, type BrowserObserveResult, type BrowserPerformParams, type BrowserPerformResult } from "../../../../../generated/app-server/types.js";
+import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IBrowserViewMainService } from "./browserViewIpc.js";
 import { BrowserTargetRegistry, type BrowserDebuggerClient, type BrowserTargetHandle } from "./browserTargetRegistry.js";
 
@@ -12,9 +11,7 @@ interface BrowserAutomationRuntime {
 	readonly targets: BrowserTargetRegistry;
 }
 
-export interface BrowserHostRequestRegistrar {
-	registerRequestHandler<P, R>(definition: RpcMethodDefinition<P, R>, handler: (params: P, context: RpcRequestContext) => R | Promise<R>): IDisposable;
-}
+interface BrowserHostRequestContext { readonly signal: AbortSignal; }
 
 /** Electron Main implementation of App Server's semantic browser host contract. */
 export class BrowserAutomationMainService {
@@ -33,7 +30,7 @@ export class BrowserAutomationMainService {
 		});
 	}
 
-	async create(params: BrowserCreateParams, context: RpcRequestContext): Promise<BrowserCreateResult> {
+	async create(params: BrowserCreateParams, context: BrowserHostRequestContext): Promise<BrowserCreateResult> {
 		const runtime = this.requireRuntime();
 		throwIfAborted(context.signal);
 		const state = await runtime.browserViews.createTarget({ url: params.url });
@@ -50,7 +47,7 @@ export class BrowserAutomationMainService {
 		return { targetId: state.targetId };
 	}
 
-	async observe(params: BrowserObserveParams, context: RpcRequestContext): Promise<BrowserObserveResult> {
+	async observe(params: BrowserObserveParams, context: BrowserHostRequestContext): Promise<BrowserObserveResult> {
 		const runtime = this.requireRuntime();
 		const target = runtime.targets.target(params.targetId);
 		const state = runtime.browserViews.observe(params.targetId);
@@ -77,7 +74,7 @@ export class BrowserAutomationMainService {
 		};
 	}
 
-	async perform(params: BrowserPerformParams, context: RpcRequestContext): Promise<BrowserPerformResult> {
+	async perform(params: BrowserPerformParams, context: BrowserHostRequestContext): Promise<BrowserPerformResult> {
 		const runtime = this.requireRuntime();
 		const action = params.action;
 		const targetId = action.targetId;
@@ -179,16 +176,6 @@ export class BrowserAutomationMainService {
 			});
 		}
 	}
-}
-
-/** Registers all generated browser host methods on the restart-safe App Server supervisor. */
-export function registerBrowserAutomationHost(registrar: BrowserHostRequestRegistrar, service: BrowserAutomationMainService): IDisposable {
-	const registrations = new DisposableStore();
-	registrations.add(registrar.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/create"], (params, context) => service.create(params, context)));
-	registrations.add(registrar.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/observe"], (params, context) => service.observe(params, context)));
-	registrations.add(registrar.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/perform"], (params, context) => service.perform(params, context)));
-	registrations.add(registrar.registerRequestHandler(APP_SERVER_SERVER_REQUESTS["browser/close"], params => service.close(params)));
-	return registrations;
 }
 
 async function captureScreenshot(target: BrowserTargetHandle, signal: AbortSignal): Promise<NonNullable<BrowserObserveResult["screenshot"]>> {

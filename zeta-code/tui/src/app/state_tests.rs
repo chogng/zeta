@@ -1795,7 +1795,7 @@ fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
 
     assert_eq!(
         app.session_manager_hint(),
-        "Space to preview · Ctrl+X to archive"
+        "Enter to open · Space to preview · Ctrl+X to archive · i to details"
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
@@ -1805,16 +1805,16 @@ fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
     );
 
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
+        app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE)),
         None
     );
-    assert_eq!(app.overlay().unwrap().title(), "Session preview");
+    assert_eq!(app.overlay().unwrap().title(), "Session details");
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.overlay().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.session_manager_hint(),
-        "Space to preview · Ctrl+X to archive"
+        "Enter to open · Space to preview · Ctrl+X to archive · i to details"
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),

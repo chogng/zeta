@@ -64,6 +64,8 @@ use zeta_typst::TypstCompiler;
 mod account_operations;
 mod agent_environment_source;
 mod attachment_operations;
+mod automation_execution;
+mod automation_operations;
 mod cloud_codebase_operations;
 mod codebase_operations;
 mod codebase_retrieval_operations;
@@ -213,6 +215,7 @@ pub use zeta_codebase::CodebaseModels;
 
 pub struct AppServer {
     pub(super) threads: Arc<ThreadController>,
+    thread_worktree_binder: Arc<dyn zeta_core::ThreadWorktreeBinder>,
     pub(super) multi_agent: Arc<MultiAgentCoordinator>,
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
@@ -275,6 +278,7 @@ pub struct AppServer {
     turn_changes: Option<Arc<turn_changes_runtime::TurnChangesRuntime>>,
     work_coordination: Option<Arc<work_coordination_runtime::WorkCoordinationRuntime>>,
     projects: Option<Arc<zeta_projects::ProjectCoordinator>>,
+    automation: Option<Arc<zeta_automation::AutomationStore>>,
     updates: Arc<UpdateBroker>,
 }
 
@@ -527,6 +531,7 @@ impl AppServer {
         let env_runtime = Arc::new(RwLock::new(EnvRuntime::empty(turn_executor)));
         Self {
             threads,
+            thread_worktree_binder: Arc::new(zeta_core::NoThreadWorktreeBinder),
             multi_agent,
             model,
             model_catalog: unavailable_model_catalog(),
@@ -592,6 +597,7 @@ impl AppServer {
             turn_changes: None,
             work_coordination: None,
             projects: None,
+            automation: None,
             updates,
         }
     }
@@ -600,9 +606,9 @@ impl AppServer {
         mut self,
         runtime: Arc<turn_changes_runtime::TurnChangesRuntime>,
     ) -> Result<Self, String> {
-        let provisioner: Arc<dyn zeta_core::ThreadWorktreeBinder> = runtime.clone();
-        self.threads
-            .install_thread_worktree_binder(provisioner)
+        self.thread_worktree_binder = runtime.clone();
+        self.multi_agent
+            .install_thread_worktree_binder(runtime.clone())
             .map_err(|error| error.to_string())?;
         let observer: Arc<dyn zeta_core::TurnExecutionObserver> = runtime.clone();
         let executor = self
@@ -1375,6 +1381,16 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// Creates a root Thread using this environment's directory authority.
+    /// The profile-wide Thread controller must not retain a mutable environment binder.
+    pub fn start_thread(
+        &self,
+        request: zeta_core::StartThreadRequest,
+    ) -> Result<zeta_core::ThreadSnapshot, zeta_core::CoreError> {
+        self.threads
+            .start_thread(self.thread_worktree_binder.as_ref(), request)
+    }
+
     pub fn threads(&self) -> &Arc<ThreadController> {
         &self.threads
     }
@@ -1903,6 +1919,12 @@ impl AppServer {
                 self.work_run_integration_request(connection, &request.params)
             }
             Some(ClientMethod::ProjectList) => self.project_list(connection, &request.params),
+            Some(ClientMethod::AutomationList) => self.automation_list(),
+            Some(ClientMethod::AutomationWrite) => self.automation_write(&request.params),
+            Some(ClientMethod::AutomationDelete) => self.automation_delete(&request.params),
+            Some(ClientMethod::AutomationRun) => self.automation_run(&request.params),
+            Some(ClientMethod::AutomationRuns) => self.automation_runs(&request.params),
+            Some(ClientMethod::AutomationStop) => self.automation_stop(&request.params),
             Some(ClientMethod::ProjectRead) => self.project_read(connection, &request.params),
             Some(ClientMethod::ProjectCreate) => self.project_create(connection, &request.params),
             Some(ClientMethod::ProjectDetailsUpdate) => {

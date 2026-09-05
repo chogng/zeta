@@ -74,7 +74,6 @@ fn work_attempt_recovers_and_captures_every_root_with_exact_provenance() {
     let primary_root_dir_id = first_dir.id();
     let server = open_server(profile.path(), first.path());
     let thread = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("start-work-attempt-thread").unwrap(),
             title: "multi-root attempt".into(),

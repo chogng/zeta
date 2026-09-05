@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
-import type { AppServerSupervisor } from "../../../../platform/app-server/electron-main/app-server-supervisor.js";
+import type { AppServerConnectionRelay } from "../../../../platform/app-server/electron-main/appServerConnectionRelay.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
@@ -35,7 +35,7 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 			stateListeners.add(listener);
 			return toDisposable(() => stateListeners.delete(listener));
 		},
-	} as unknown as AppServerSupervisor;
+	} as unknown as AppServerConnectionRelay;
 	const workspaceContext = new WorkspaceContextMainService({
 		id: "remote-one",
 		uri: URI.parse("zeta-remote://ssh+build-linux/workspace/one"),
@@ -138,7 +138,7 @@ test("Remote window context scopes verified rollback to its own supervisor", asy
 		},
 		stop: async () => { calls.push("stop"); },
 		start: async () => { calls.push("start"); },
-	} as unknown as AppServerSupervisor;
+	} as unknown as AppServerConnectionRelay;
 	const workspaceContext = new WorkspaceContextMainService({ id: "remote-one", uri: workspace });
 	const tunnels: IRemoteTunnelService & IDisposable = {
 		list: async () => [],

@@ -159,10 +159,13 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         AgentTreeLimits::default(),
     ));
     let parent = threads
-        .start_thread(StartThreadRequest {
-            command_id: CommandId::new("timeout-parent").unwrap(),
-            title: "parent".into(),
-        })
+        .start_thread(
+            &zeta_core::NoThreadWorktreeBinder,
+            StartThreadRequest {
+                command_id: CommandId::new("timeout-parent").unwrap(),
+                title: "parent".into(),
+            },
+        )
         .unwrap();
     let parent_turn = threads
         .start_turn(
@@ -247,10 +250,13 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
     )));
     let server = crate::AppServer::new(Arc::clone(&threads), Arc::new(TextModel));
     let parent = threads
-        .start_thread(StartThreadRequest {
-            command_id: CommandId::new("create-parent").unwrap(),
-            title: "parent".into(),
-        })
+        .start_thread(
+            &zeta_core::NoThreadWorktreeBinder,
+            StartThreadRequest {
+                command_id: CommandId::new("create-parent").unwrap(),
+                title: "parent".into(),
+            },
+        )
         .unwrap();
     let parent_turn = threads
         .start_turn(

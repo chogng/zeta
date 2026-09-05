@@ -1,4 +1,6 @@
 import "./style.js";
+import { IAutomationService } from '../../platform/automation/common/automationService.js';
+import { IChatSessionNavigationService } from '../services/chat/common/chatSessionNavigationService.js';
 import type { FsChanged } from "../../../../generated/app-server/types.js";
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
@@ -344,6 +346,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
 		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
+		if (api.automation) {
+			services.registerInstance(IAutomationService, api.automation);
+		}
 		const remoteAgentService = this._register(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
 		services.registerInstance(IRemoteAgentService, remoteAgentService);
 		services.registerInstance(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
@@ -597,6 +602,11 @@ export class Workbench extends Disposable {
 			events: api.events,
 		})));
 		services.registerInstance(ISessionsManagementService, sessionService);
+		services.registerInstance(IChatSessionNavigationService, {
+			getConversations: () => sessionService.sessions.filter(session => session.status === 'active').flatMap(session =>
+				session.chats.filter(chat => chat.status === 'active').map(chat => ({ sessionId: session.sessionId, threadId: chat.threadId, title: `${session.title} · ${chat.title ?? 'Conversation'}` }))),
+			openConversation: (sessionId, threadId) => sessionService.openThread(sessionId, threadId),
+		});
 		const keybindings = interactionServices.keybindingService;
 		const contributions = this._register(
 			WorkbenchContributionsRegistry.createHost(services),

@@ -1,7 +1,7 @@
 import type { IDocumentCollaborationApi } from "../common/documentCollaborationApi.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 
 export function createDisconnectedDocumentCollaborationApi(unavailable: UnavailableOperation): IDocumentCollaborationApi {
 	return {
@@ -12,11 +12,11 @@ export function createDisconnectedDocumentCollaborationApi(unavailable: Unavaila
 	};
 }
 
-export function createViteDevDocumentCollaborationApi(connection: ViteDevAppServerConnection): IDocumentCollaborationApi {
+export function createAppServerDocumentCollaborationApi(connection: AppServerProtocolClient): IDocumentCollaborationApi {
 	return {
-		open: params => viteDevRequest(connection, "document/collaboration/open", params),
-		submit: params => viteDevRequest(connection, "document/collaboration/submit", params),
-		publishPresence: params => viteDevRequest(connection, "document/collaboration/presence/publish", params),
-		readPresence: params => viteDevRequest(connection, "document/collaboration/presence/read", params),
+		open: params => appServerRequest(connection, "document/collaboration/open", params),
+		submit: params => appServerRequest(connection, "document/collaboration/submit", params),
+		publishPresence: params => appServerRequest(connection, "document/collaboration/presence/publish", params),
+		readPresence: params => appServerRequest(connection, "document/collaboration/presence/read", params),
 	};
 }

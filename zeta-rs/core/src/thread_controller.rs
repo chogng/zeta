@@ -430,7 +430,6 @@ pub struct ThreadController {
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
     pub(crate) live_interactions: live_interaction::LiveInteractionWaiters,
     extensions: RwLock<ExtensionRegistries>,
-    thread_worktree_binder: RwLock<Arc<dyn ThreadWorktreeBinder>>,
     image_attachments: Arc<ImageAttachments>,
     next_id: AtomicU64,
 }
@@ -452,7 +451,6 @@ impl ThreadController {
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
             extensions: RwLock::new(ExtensionRegistries::default()),
-            thread_worktree_binder: RwLock::new(Arc::new(crate::NoThreadWorktreeBinder)),
             image_attachments,
             loaded_threads,
             next_id: AtomicU64::new(1),
@@ -485,7 +483,6 @@ impl ThreadController {
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
             extensions: RwLock::new(ExtensionRegistries::default()),
-            thread_worktree_binder: RwLock::new(Arc::new(crate::NoThreadWorktreeBinder)),
             image_attachments,
             loaded_threads,
             next_id: AtomicU64::new(1),
@@ -495,19 +492,6 @@ impl ThreadController {
     /// Returns the canonical service used by this Thread authority and its model executors.
     pub fn image_attachments(&self) -> Arc<ImageAttachments> {
         Arc::clone(&self.image_attachments)
-    }
-
-    /// Installs the host authority that binds a Worktree before a Thread is created.
-    pub fn install_thread_worktree_binder(
-        &self,
-        binder: Arc<dyn ThreadWorktreeBinder>,
-    ) -> Result<(), CoreError> {
-        *self
-            .thread_worktree_binder
-            .write()
-            .map_err(|_| CoreError::Journal("Thread Worktree binder lock poisoned".into()))? =
-            binder;
-        Ok(())
     }
 
     /// Installs the shared agent extension registry before product Turns are accepted.
@@ -576,13 +560,34 @@ impl ThreadController {
         Ok(snapshot)
     }
 
+    /// Looks up durable root Thread creation without provisioning or starting execution.
+    pub fn read_started_thread(
+        &self,
+        command_id: &CommandId,
+    ) -> Result<Option<ThreadSnapshot>, CoreError> {
+        let thread_id = command_thread_id("thread", command_id)?;
+        match self.read_thread(&thread_id) {
+            Ok(snapshot) => Ok(Some(snapshot)),
+            Err(CoreError::NotFound(_)) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     /// Starts one root Thread. Its Thread ID is also the Session tree identity.
-    pub fn start_thread(&self, request: StartThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+    pub fn start_thread(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: StartThreadRequest,
+    ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
         let thread_id = command_thread_id("thread", &request.command_id)?;
         let session_id = SessionId::new(thread_id.as_str().to_owned())
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
-        self.bind_thread_worktree(session_id.clone(), thread_id.clone(), ThreadOrigin::Root)?;
+        binder.provision(&ThreadWorktreeBindingRequest {
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+            origin: ThreadOrigin::Root,
+        })?;
         self.create_thread(CreateThreadRequest {
             session_id,
             thread_id,
@@ -591,17 +596,21 @@ impl ThreadController {
     }
 
     /// Creates an empty branch in an existing Session tree.
-    pub fn create_branch(&self, request: CreateBranchRequest) -> Result<ThreadSnapshot, CoreError> {
+    pub fn create_branch(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: CreateBranchRequest,
+    ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
         if self.list_session_threads(&request.session_id)?.is_empty() {
             return Err(CoreError::NotFound(request.session_id.to_string()));
         }
         let thread_id = command_thread_id("branch", &request.command_id)?;
-        self.bind_thread_worktree(
-            request.session_id.clone(),
-            thread_id.clone(),
-            ThreadOrigin::Root,
-        )?;
+        binder.provision(&ThreadWorktreeBindingRequest {
+            session_id: request.session_id.clone(),
+            thread_id: thread_id.clone(),
+            origin: ThreadOrigin::Root,
+        })?;
         self.create_thread(CreateThreadRequest {
             session_id: request.session_id,
             thread_id,
@@ -610,18 +619,22 @@ impl ThreadController {
     }
 
     /// Forks one durable Thread at its current sequence while preserving its Session tree ID.
-    pub fn fork_thread(&self, request: ForkThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+    pub fn fork_thread(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: ForkThreadRequest,
+    ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
         let source = self.read_thread(&request.source_thread_id)?;
         let thread_id = command_thread_id("fork", &request.command_id)?;
-        self.bind_thread_worktree(
-            source.session_id.clone(),
-            thread_id.clone(),
-            ThreadOrigin::Fork {
+        binder.provision(&ThreadWorktreeBindingRequest {
+            session_id: source.session_id.clone(),
+            thread_id: thread_id.clone(),
+            origin: ThreadOrigin::Fork {
                 parent_thread_id: source.thread_id.clone(),
                 parent_sequence: source.sequence,
             },
-        )?;
+        })?;
         self.create_forked_thread(CreateForkedThreadRequest {
             session_id: source.session_id,
             thread_id,
@@ -632,7 +645,11 @@ impl ThreadController {
     }
 
     /// Rewinds one durable Thread into a new branch before the selected Turn.
-    pub fn rewind_thread(&self, request: RewindThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+    pub fn rewind_thread(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: RewindThreadRequest,
+    ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
         let source = self.read_thread(&request.source_thread_id)?;
         if !source
@@ -643,15 +660,15 @@ impl ThreadController {
             return Err(CoreError::NotFound(request.before_turn_id.to_string()));
         }
         let thread_id = command_thread_id("rewind", &request.command_id)?;
-        self.bind_thread_worktree(
-            source.session_id.clone(),
-            thread_id.clone(),
-            ThreadOrigin::Rewind {
+        binder.provision(&ThreadWorktreeBindingRequest {
+            session_id: source.session_id.clone(),
+            thread_id: thread_id.clone(),
+            origin: ThreadOrigin::Rewind {
                 parent_thread_id: source.thread_id.clone(),
                 parent_sequence: source.sequence,
                 before_turn_id: request.before_turn_id.clone(),
             },
-        )?;
+        })?;
         self.create_rewound_thread(CreateRewoundThreadRequest {
             session_id: source.session_id,
             thread_id,
@@ -1936,6 +1953,28 @@ impl ThreadController {
         Ok(deleted)
     }
 
+    /// Restores the Session's root conversation without restarting Turns or completed agents.
+    pub fn restore_session(&self, session_id: &SessionId) -> Result<ThreadSnapshot, CoreError> {
+        let thread_id = ThreadId::new(session_id.as_str())
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        self.mutate_thread(&thread_id, |snapshot| {
+            if &snapshot.session_id != session_id {
+                return Err(CoreError::InvalidInput(
+                    "restore requires the Session root Thread".into(),
+                ));
+            }
+            if snapshot.status == zeta_protocol::ThreadStatus::Archived {
+                self.record_batch(
+                    snapshot,
+                    vec![ThreadEvent::ThreadRestored {
+                        thread_id: thread_id.clone(),
+                    }],
+                )?;
+            }
+            Ok(snapshot.clone())
+        })
+    }
+
     pub fn archive_thread(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
         self.archive_thread_with_reason(thread_id, zeta_protocol::ThreadArchiveReason::Completed)
     }
@@ -2241,22 +2280,6 @@ impl ThreadController {
             .as_ref()
             .map(|lease| lease.acquire(thread_id))
             .transpose()
-    }
-
-    fn bind_thread_worktree(
-        &self,
-        session_id: SessionId,
-        thread_id: ThreadId,
-        origin: ThreadOrigin,
-    ) -> Result<(), CoreError> {
-        self.thread_worktree_binder
-            .read()
-            .map_err(|_| CoreError::Journal("Thread Worktree binder lock poisoned".into()))?
-            .provision(&ThreadWorktreeBindingRequest {
-                session_id,
-                thread_id,
-                origin,
-            })
     }
 
     fn next_identifier(&self, prefix: &str) -> String {

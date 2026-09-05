@@ -357,7 +357,6 @@ fn conflicts_require_exact_versions_and_resolutions_make_old_attempts_stale() {
 struct Fixture {
     _directory: tempfile::TempDir,
     server: AppServer,
-    threads: Arc<ThreadController>,
 }
 
 impl Fixture {
@@ -375,12 +374,11 @@ impl Fixture {
         Self {
             _directory: directory,
             server,
-            threads,
         }
     }
 
     fn start_root(&self, command_id: &str) -> zeta_core::ThreadSnapshot {
-        self.threads
+        self.server
             .start_thread(StartThreadRequest {
                 command_id: CommandId::new(command_id).unwrap(),
                 title: command_id.into(),

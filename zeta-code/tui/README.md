@@ -49,6 +49,7 @@ Tool、approval policy 或 persistence。
 - `/rewind` 或主界面输入为空时在 500 ms 内连续按两次 Esc 打开可搜索的 Rewind 面板；非空草稿不响应这组手势，也不会被清空；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
+- Session 管理页面提供默认收起的 Archived 分组；Enter 取消归档、Ctrl+X 永久删除，Space 打开可滚动的只读会话预览、`i` 查看元数据详情。`sessions/` 拥有列表与预览请求生命周期，`thread/preview.rs` 复用正文状态和滚动，Esc 释放预览并恢复管理列表。
 - `/resume` 提供 Session 面板；`/archive` 通过 typed `session/request` 归档当前 Session，成功后创建并切换到新 Session，TUI 继续运行；失败时显示错误；
 - `/config` 异步读取 TUI 设置和供应商目录；Config 标签页包含 Mouse interactions、Vim mode 与 Show Git changes as diff。Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore。目录权限由 `/add-dir` 界面负责；`/model` 使用 expected revision 更新 preferred model；
 - `/startup` 打开只读的 Startup 面板，显示本次 TUI 的真实启动上下文：New/Resume、Workspace、Profile、Local/Remote App Server；恢复 Session 时额外显示 Session 和 Thread，不会修改配置；

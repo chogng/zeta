@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { ITypstApi } from "../common/typstApi.js";
 
@@ -7,6 +7,6 @@ export function createDisconnectedTypstApi(unavailable: UnavailableOperation): I
 	return { compile: () => unavailable("typst.compile") };
 }
 
-export function createViteDevTypstApi(connection: ViteDevAppServerConnection): ITypstApi {
-	return { compile: (params) => viteDevRequest(connection, "document/typst/compile", params) };
+export function createAppServerTypstApi(connection: AppServerProtocolClient): ITypstApi {
+	return { compile: (params) => appServerRequest(connection, "document/typst/compile", params) };
 }

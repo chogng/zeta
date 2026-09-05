@@ -3,8 +3,8 @@ import type { ExtensionCatalogReload, ExtensionResourceRequest, IExtensionApi } 
 import { normalizeExtensionCatalog, normalizeExtensionResourceChunk, normalizeExtensionResourceOpenResult, verifyExtensionResourceDigest } from "../common/extensionApi.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 
 export function createDisconnectedExtensionApi(unavailable: UnavailableOperation): IExtensionApi {
 	return {
@@ -13,15 +13,15 @@ export function createDisconnectedExtensionApi(unavailable: UnavailableOperation
 	};
 }
 
-export function createViteDevExtensionApi(connection: ViteDevAppServerConnection, resourceApi: IResourceApi): IExtensionApi {
+export function createAppServerExtensionApi(connection: AppServerProtocolClient, resourceApi: IResourceApi): IExtensionApi {
 	return {
-		list: async (reload: ExtensionCatalogReload) => normalizeExtensionCatalog(await viteDevRequest(connection, "extensions/list", { reload })),
+		list: async (reload: ExtensionCatalogReload) => normalizeExtensionCatalog(await appServerRequest(connection, "extensions/list", { reload })),
 		readResource: request => readExtensionResource(connection, resourceApi, request),
 	};
 }
 
-async function readExtensionResource(connection: ViteDevAppServerConnection, resourceApi: IResourceApi, request: ExtensionResourceRequest): Promise<Uint8Array> {
-	const resource = normalizeExtensionResourceOpenResult(await viteDevRequest(connection, "extensions/resource/open", request));
+async function readExtensionResource(connection: AppServerProtocolClient, resourceApi: IResourceApi, request: ExtensionResourceRequest): Promise<Uint8Array> {
+	const resource = normalizeExtensionResourceOpenResult(await appServerRequest(connection, "extensions/resource/open", request));
 	const chunks: VSBuffer[] = [];
 	let offset = 0;
 	try {

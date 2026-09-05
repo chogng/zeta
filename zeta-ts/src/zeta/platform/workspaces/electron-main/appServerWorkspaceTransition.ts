@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
-import { APP_SERVER_METHODS, type PermissionDto, type DirGrantDto, type EnvDirSetEntry } from "../../../../../generated/app-server/types.js";
+import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';
+import { type PermissionDto, type DirGrantDto, type EnvDirSetEntry } from "../../../../../generated/app-server/types.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
-import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
+import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
 import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";
 
 export const READ_DIR_PERMISSIONS: readonly PermissionDto[] = [
@@ -105,9 +105,10 @@ interface IWaitUntilReadyOptions {
 }
 
 export function createAppServerWorkspaceTransitionAdapter(
-	supervisor: AppServerSupervisor,
+	supervisor: AppServerConnectionRelay,
+	workspace: RendererWorkspaceHost,
 	switchWorkspace: (root: string, grant: DirGrantDto) => Promise<void> = async (root, grant) => {
-		await switchAppServerWorkspace(supervisor, root, grant);
+		await switchAppServerWorkspace(workspace, root, grant);
 	},
 ): AppServerWorkspaceTransitionAdapter {
 	return new AppServerWorkspaceTransitionAdapter({
@@ -117,24 +118,17 @@ export function createAppServerWorkspaceTransitionAdapter(
 	});
 }
 
-export async function readAppServerDirPermissions(supervisor: AppServerSupervisor, path: string): Promise<readonly PermissionDto[] | undefined> {
-	const result = await supervisor.request(APP_SERVER_METHODS["config/dirPermissions/read"], { path });
+export async function readAppServerDirPermissions(workspace: RendererWorkspaceHost, path: string): Promise<readonly PermissionDto[] | undefined> {
+	const result = { permissions: await workspace.readPermissions(path) };
 	return result.permissions ?? undefined;
 }
 
-export async function createUserDirGrant(supervisor: AppServerSupervisor, permissions: readonly PermissionDto[]): Promise<DirGrantDto> {
-	const config = await supervisor.request(APP_SERVER_METHODS["config/read"], {});
-	return {
-		type: "user",
-		commandId: `desktop-dir-permissions-${randomUUID()}`,
-		expectedRevision: config.revision,
-		permissions: [...permissions],
-	};
+export async function createUserDirGrant(workspace: RendererWorkspaceHost, path: string, permissions: readonly PermissionDto[]): Promise<DirGrantDto> {
+	return workspace.createGrant(path, permissions);
 }
 
-export async function switchAppServerWorkspace(supervisor: AppServerSupervisor, path: string, grant: DirGrantDto): Promise<void> {
-	await supervisor.request(APP_SERVER_METHODS["env/cwd/set"], { cwd: path });
-	await supervisor.request(APP_SERVER_METHODS["env/dirs/set"], { dirs: [{ id: "root", path, grant }] });
+export async function switchAppServerWorkspace(workspace: RendererWorkspaceHost, path: string, grant: DirGrantDto): Promise<void> {
+	await workspace.switchWorkspace(path, grant);
 }
 
 export interface IAppServerWorkspaceFolder {
@@ -144,10 +138,10 @@ export interface IAppServerWorkspaceFolder {
 }
 
 /** Atomically replaces the App Server's ordered workspace-folder collection. */
-export async function setAppServerWorkspaceFolders(supervisor: AppServerSupervisor, folders: readonly IAppServerWorkspaceFolder[]): Promise<void> {
+export async function setAppServerWorkspaceFolders(workspace: RendererWorkspaceHost, folders: readonly IAppServerWorkspaceFolder[]): Promise<void> {
 	const entries: EnvDirSetEntry[] = [];
 	for (const folder of folders) {
 		entries.push({ id: folder.id, path: folder.path, grant: folder.grant });
 	}
-	await supervisor.request(APP_SERVER_METHODS["env/dirs/set"], { dirs: entries });
+	await workspace.setFolders(entries);
 }

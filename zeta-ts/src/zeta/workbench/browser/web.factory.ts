@@ -51,9 +51,11 @@ export function createWebWorkbench(
  */
 export function startWebWorkbench(
 	modeId: WorkbenchModeId,
+	hostLifetime?: IDisposable,
 ): IDisposable {
 	const host = readWebWorkbenchHost();
 	const workbench = new DisposableStore();
+	workbench.add(hostLifetime);
 	const instance = createWebWorkbench(modeId, {
 		api: host?.api ?? createDisconnectedRendererApi(),
 		defaultLayout: host?.defaultLayout,

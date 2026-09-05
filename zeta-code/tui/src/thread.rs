@@ -136,3 +136,4 @@ pub(crate) enum Command {
         submission: composer::ChatSubmission,
     },
 }
+pub(crate) mod preview;

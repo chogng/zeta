@@ -1364,6 +1364,11 @@
         "MethodNotFound",
         "InvalidParams",
         "InternalError",
+        "AutomationUnavailable",
+        "AutomationNotFound",
+        "AutomationConflict",
+        "AutomationBusy",
+        "AutomationOperationFailed",
         "ServerOverloaded",
         "RequestCancelled",
         "NotInitialized",
@@ -1687,6 +1692,426 @@
         "policyRevision",
         "grantSetDigest",
         "grantedEffectsDigest"
+      ],
+      "type": "object"
+    },
+    "Automation": {
+      "properties": {
+        "createdAt": {
+          "$ref": "#/$defs/UnixMillis"
+        },
+        "definition": {
+          "$ref": "#/$defs/AutomationDefinition"
+        },
+        "id": {
+          "type": "string"
+        },
+        "nextRunAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnixMillis"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/AutomationStatus"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/UnixMillis"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "definition",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "type": "object"
+    },
+    "AutomationDefinition": {
+      "properties": {
+        "directory": {
+          "description": "Explicit local execution directory; never resolved from the active window.",
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/$defs/AutomationSchedule"
+        },
+        "session": {
+          "$ref": "#/$defs/AutomationSession"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "prompt",
+        "directory",
+        "session",
+        "schedule"
+      ],
+      "type": "object"
+    },
+    "AutomationDeleteParams": {
+      "properties": {
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "AutomationListResult": {
+      "properties": {
+        "automations": {
+          "items": {
+            "$ref": "#/$defs/Automation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "automations"
+      ],
+      "type": "object"
+    },
+    "AutomationRun": {
+      "properties": {
+        "automationId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/UnixMillis"
+        },
+        "definition": {
+          "$ref": "#/$defs/AutomationDefinition"
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnixMillis"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scheduledAt": {
+          "$ref": "#/$defs/UnixMillis"
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnixMillis"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/AutomationRunStatus"
+        },
+        "threadId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "automationId",
+        "revision",
+        "definition",
+        "scheduledAt",
+        "createdAt",
+        "status"
+      ],
+      "type": "object"
+    },
+    "AutomationRunParams": {
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "commandId"
+      ],
+      "type": "object"
+    },
+    "AutomationRunStatus": {
+      "enum": [
+        "pending",
+        "running",
+        "needsInput",
+        "stopping",
+        "completed",
+        "failed",
+        "stopped",
+        "skipped"
+      ],
+      "type": "string"
+    },
+    "AutomationRunsParams": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "limit"
+      ],
+      "type": "object"
+    },
+    "AutomationRunsResult": {
+      "properties": {
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/AutomationRun"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "runs"
+      ],
+      "type": "object"
+    },
+    "AutomationSchedule": {
+      "oneOf": [
+        {
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/UnixMillis"
+            },
+            "type": {
+              "const": "once",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "anchor": {
+              "$ref": "#/$defs/UnixMillis"
+            },
+            "minutes": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "interval",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "anchor",
+            "minutes"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "hour": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "minute": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "type": {
+              "const": "weekly",
+              "type": "string"
+            },
+            "weekdays": {
+              "description": "ISO weekdays: Monday is 1, Sunday is 7. All seven days means daily.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "type",
+            "timezone",
+            "weekdays",
+            "hour",
+            "minute"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AutomationSession": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "new",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "continue",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "threadId"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AutomationStatus": {
+      "enum": [
+        "enabled",
+        "paused"
+      ],
+      "type": "string"
+    },
+    "AutomationStopParams": {
+      "properties": {
+        "runId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "type": "object"
+    },
+    "AutomationWriteParams": {
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "definition": {
+          "$ref": "#/$defs/AutomationDefinition"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AutomationStatus"
+        }
+      },
+      "required": [
+        "commandId",
+        "id",
+        "expectedRevision",
+        "definition",
+        "status"
       ],
       "type": "object"
     },
@@ -2134,6 +2559,102 @@
     },
     "ClientRequestSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "automation/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/write",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AutomationWriteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/delete",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AutomationDeleteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/run",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AutomationRunParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/runs",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AutomationRunsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/stop",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AutomationStopParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -5898,6 +6419,102 @@
     },
     "ClientResultSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "automation/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AutomationListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/write",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/Automation"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/delete",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/run",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AutomationRun"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/runs",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AutomationRunsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "automation/stop",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AutomationRun"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -23478,6 +24095,22 @@
         {
           "properties": {
             "method": {
+              "const": "automation/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/changed",
               "type": "string"
             },
@@ -23940,6 +24573,18 @@
           "properties": {
             "type": {
               "const": "archive",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "restore",
               "type": "string"
             }
           },
@@ -26345,6 +26990,22 @@
             },
             "type": {
               "const": "threadArchived",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "threadRestored",
               "type": "string"
             }
           },
@@ -29772,6 +30433,13 @@
         "end"
       ],
       "type": "object"
+    },
+    "UnixMillis": {
+      "description": "Non-negative Unix milliseconds, restricted to dates through year 9999.",
+      "format": "uint64",
+      "maximum": 253402300799999,
+      "minimum": 0,
+      "type": "integer"
     },
     "UserInputAnswer": {
       "properties": {

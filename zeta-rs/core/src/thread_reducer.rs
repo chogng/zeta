@@ -449,6 +449,17 @@ pub fn reduce_thread_event(
             snapshot.archived_at_unix_ms = Some(recorded_at_unix_ms(envelope)?);
             snapshot.archive_reason = Some(*reason);
         }
+        ThreadEvent::ThreadRestored { thread_id } => {
+            require_no_command(envelope)?;
+            if thread_id != &snapshot.thread_id || snapshot.status != ThreadStatus::Archived {
+                return Err(CoreError::Journal(
+                    "restore requires the archived Thread identity".into(),
+                ));
+            }
+            snapshot.status = ThreadStatus::Active;
+            snapshot.archived_at_unix_ms = None;
+            snapshot.archive_reason = None;
+        }
         ThreadEvent::GoalCreated { thread_id, goal } => {
             require_no_command(envelope)?;
             validate_goal_identity(&snapshot, thread_id, goal)?;

@@ -1,3 +1,7 @@
+import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
+import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
+import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
+import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { shell } from "electron";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 import type { DirGrantDto } from "../../../../generated/app-server/types.js";
@@ -9,9 +13,8 @@ import { assertDefined } from "../../base/common/types.js";
 import { ZetaApplicationName } from '../common/application.js';
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
-import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
-import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
+import { AppServerConnectionRelay } from "../../platform/app-server/electron-main/appServerConnectionRelay.js";
 import { appServerDaemonExecutablePath, developmentServerHostGenerationPath, packagedServerHostSha256, serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
 import { DevelopmentServerHostReloader, readDevelopmentServerHostGenerationSync, selectDevelopmentServerHostExecutable } from "../../platform/server-host/electron-main/developmentServerHostReloader.js";
 import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
@@ -19,30 +22,14 @@ import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platfo
 import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browser/common/browserView.js";
 import { browserViewIpcRoutes } from "../../platform/browser/electron-main/browserViewIpc.js";
 import { BrowserViewMainService } from "../../platform/browser/electron-main/browserViewMainService.js";
-import { BrowserAutomationMainService, registerBrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationMainService.js";
+import { BrowserAutomationMainService } from "../../platform/browser/electron-main/browserAutomationMainService.js";
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
 import { CONFIGURATION_CHANGED_CHANNEL } from "../../platform/configuration/common/configurationIpc.js";
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
 import { editJsonObjectProperty } from '../../base/common/json.js';
 import { ConfigurationMainService, configurationIpcRoutes } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
-import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
-import { extensionIpcRoutes } from "../../platform/extensions/electron-main/extensionIpcRoutes.js";
-import { extensionHostIpcRoutes } from "../../platform/extensionHost/electron-main/extensionHostIpcRoutes.js";
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
-import { diffIpcRoutes } from "../../platform/diff/electron-main/diffIpcRoutes.js";
-import { documentCollaborationIpcRoutes } from "../../platform/collaboration/electron-main/documentCollaborationIpcRoutes.js";
-import { syntaxIpcRoutes } from "../../platform/syntax/electron-main/syntaxIpcRoutes.js";
-import { languageIpcRoutes } from "../../platform/language/electron-main/languageIpcRoutes.js";
-import { gitIpcRoutes } from "../../platform/git/electron-main/gitIpcRoutes.js";
-import { codebaseIpcRoutes } from "../../platform/codebase/electron-main/codebaseIpcRoutes.js";
-import { codebaseSymbolsIpcRoutes } from "../../platform/codebaseSymbols/electron-main/codebaseSymbolsIpcRoutes.js";
-import { connectorIpcRoutes } from "../../platform/connectors/electron-main/connectorIpcRoutes.js";
-import { pluginIpcRoutes } from "../../platform/plugins/electron-main/pluginIpcRoutes.js";
-import { marketplaceIpcRoutes } from "../../platform/marketplace/electron-main/marketplaceIpcRoutes.js";
-import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
-import { dirPermissionsIpcRoutes } from "../../platform/dirPermissions/electron-main/dirPermissionsIpcRoutes.js";
-import { accountIpcRoutes } from "../../platform/accounts/electron-main/accountIpcRoutes.js";
 import { ElectronClipboardService } from "../../platform/clipboard/electron-main/electronClipboardService.js";
 import { ElectronOpenerService } from "../../platform/opener/electron-main/electronOpenerService.js";
 import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from "../../platform/keybinding/common/keybindingsResource.js";
@@ -54,17 +41,11 @@ import { UserKeyboardLayoutMainService, userKeyboardLayoutIpcRoutes } from "../.
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { nativeHostIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
-import { searchIpcRoutes } from "../../platform/search/electron-main/searchIpcRoutes.js";
-import { sessionIpcRoutes } from "../../platform/sessions/electron-main/sessionIpcRoutes.js";
-import { skillIpcRoutes } from "../../platform/skills/electron-main/skillIpcRoutes.js";
 import { sessionsWindowIpcRoutes } from "../../sessions/electron-main/sessionsWindowIpc.js";
 import { StateService } from "../../platform/state/node/stateService.js";
 import { localProfileRoot, migrateLegacyLocalProfile } from "../../platform/profile/node/localProfile.js";
-import { terminalIpcRoutes } from "../../platform/terminal/electron-main/terminalIpcRoutes.js";
-import { ReconnectableTerminalMainService } from "../../platform/terminal/electron-main/reconnectableTerminalMainService.js";
 import { userThemeIpcRoutes } from "../../platform/theme/electron-main/userThemeIpc.js";
 import { UserThemeFileService } from "../../platform/theme/node/userThemeFileService.js";
-import { typstIpcRoutes } from "../../platform/typst/electron-main/typstIpcRoutes.js";
 import { applyWindowState, resolveBrowserWindowOptions } from "../../platform/windows/electron-main/windows.js";
 import { WindowMode } from "../../platform/window/electron-main/window.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
@@ -93,7 +74,6 @@ import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
 import { electronWorkspaceLaunchArguments } from "./electronWindowLaunch.js";
 import { workbenchModeIpcRoutes } from "../../workbench/services/workbenchMode/electron-main/workbenchModeIpc.js";
 export type AppServerStartupMode = "required" | "disabled";
-export type ElectronMainIpcRouteContribution = (supervisor: AppServerSupervisor) => readonly IpcRoute<unknown, unknown>[];
 
 export interface ZetaApplicationOptions {
 	readonly initialModeId: WorkbenchModeId;
@@ -101,7 +81,6 @@ export interface ZetaApplicationOptions {
 	/** Selects whether this Electron process starts the App Server before opening its window. */
 	readonly appServerStartupMode: AppServerStartupMode;
 	/** Host-selected IPC capabilities installed for every Workbench window. */
-	readonly ipcRouteContributions?: readonly ElectronMainIpcRouteContribution[];
 }
 
 interface PersistentServices {
@@ -120,7 +99,7 @@ interface RendererEntry {
 interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
 	readonly window: BrowserWindow;
 	readonly workspaceContext: WorkspaceContextMainService;
-	readonly supervisor: AppServerSupervisor;
+	readonly supervisor: AppServerConnectionRelay;
 	readonly resources: DisposableStore;
 	modeId: WorkbenchModeId;
 	windowsStateHandler: WindowsStateHandler;
@@ -141,9 +120,8 @@ export class ZetaApplication extends Disposable {
 	private defaultModeId: WorkbenchModeId;
 	private readonly rendererRoot: string;
 	private readonly appServerStartupMode: AppServerStartupMode;
-	private readonly ipcRouteContributions: readonly ElectronMainIpcRouteContribution[];
 	private readonly disposableTracker: DisposableTracker | undefined;
-	private readonly tracking: Disposable | undefined;
+	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
@@ -161,13 +139,12 @@ export class ZetaApplication extends Disposable {
 	private constructor(
 		options: ZetaApplicationOptions,
 		disposableTracker: DisposableTracker | undefined,
-		tracking: Disposable | undefined,
+		tracking: globalThis.Disposable | undefined,
 	) {
 		super();
 		this.defaultModeId = options.initialModeId;
 		this.rendererRoot = options.rendererRoot;
 		this.appServerStartupMode = options.appServerStartupMode;
-		this.ipcRouteContributions = options.ipcRouteContributions ?? [];
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
 		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
@@ -349,27 +326,14 @@ export class ZetaApplication extends Disposable {
 		try {
 			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
 			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace, resolvedWorkspace));
-			const supervisor = resources.add(this.createAppServerSupervisor(workspace, resources));
+			const supervisor = resources.add(this.createAppServerConnectionRelay(workspace, resources));
 			const browserAutomation = new BrowserAutomationMainService();
-			resources.add(registerBrowserAutomationHost(supervisor, browserAutomation));
 			resources.add(supervisor.onStateChange(state => {
 				if (state === "crashed" || state === "restarting" || state === "stopping" || state === "stopped") browserAutomation.reset();
 			}));
 			if (this.appServerStartupMode === "required" && !await this.startAppServerWithRecovery(supervisor)) {
 				resources.dispose();
 				return undefined;
-			}
-			if (this.appServerStartupMode === "required" && resolvedWorkspace.folders.length > 0 && resolvedWorkspace.folders.every(folder => !isRemoteResource(folder.uri))) {
-				const folders = [];
-				for (const folder of resolvedWorkspace.folders) {
-					const grant = await this.resolveDirGrant(supervisor, folder.uri.fsPath);
-					if (grant === undefined) {
-						resources.dispose();
-						return undefined;
-					}
-					folders.push({ id: folder.id, path: folder.uri.fsPath, grant });
-				}
-				await setAppServerWorkspaceFolders(supervisor, folders);
 			}
 			const existing = this.workbenchWindows.findWorkspace(workspace.id);
 			if (existing) {
@@ -384,10 +348,10 @@ export class ZetaApplication extends Disposable {
 		}
 	}
 
-	private createAppServerSupervisor(
+	private createAppServerConnectionRelay(
 		workspace: IAnyWorkspaceIdentifier,
 		resources: DisposableStore,
-	): AppServerSupervisor {
+	): AppServerConnectionRelay {
 		const packageLocation = {
 			appPath: app.getAppPath(),
 			expectedVersion: app.getVersion(),
@@ -416,18 +380,9 @@ export class ZetaApplication extends Disposable {
 				args: ["app-server", "connect"],
 				environment: this.appServerEnvironment(workspace),
 			});
-		const supervisor = new AppServerSupervisor({
+		const supervisor = new AppServerConnectionRelay({
 			processLauncher,
-			session: {
-				clientName: "zeta-desktop",
-				clientVersion: app.getVersion(),
-				initializeTimeoutMs: 10_000,
-				expectedServerName: "zeta-app-server",
-				capabilities: {
-					browser: { version: 1, observe: true, input: true },
-					dirPermissionsHost: { version: 1 },
-				},
-			},
+
 		});
 		if (generationFile && processLauncher instanceof LocalAppServerProcessLauncher) {
 			resources.add(new DevelopmentServerHostReloader({ generationFile, launcher: processLauncher, supervisor }));
@@ -488,7 +443,7 @@ export class ZetaApplication extends Disposable {
 	}
 
 	private async startAppServerWithRecovery(
-		supervisor: AppServerSupervisor,
+		supervisor: AppServerConnectionRelay,
 	): Promise<boolean> {
 		while (!this.quitRequested) {
 			try {
@@ -532,7 +487,7 @@ export class ZetaApplication extends Disposable {
 	private async openWorkbenchWindow(
 		workspaceContext: WorkspaceContextMainService,
 		workspaces: WorkspacesMainService,
-		supervisor: AppServerSupervisor,
+		supervisor: AppServerConnectionRelay,
 		browserAutomationMainService: BrowserAutomationMainService,
 		resources: DisposableStore,
 	): Promise<WorkbenchWindowRecord> {
@@ -585,6 +540,7 @@ export class ZetaApplication extends Disposable {
 		const rendererEntry = this.resolveRendererEntry("workbench");
 
 		const windowDisposables = resources;
+		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
 		const remoteTunnelService = new SshRemoteTunnelService({
 			getWorkspace: () => workspaceContext.getWorkspace(),
@@ -626,23 +582,20 @@ export class ZetaApplication extends Disposable {
 		const workspaceTransitions = windowDisposables.add(new WorkspaceTransitionMainService({
 			workspaces,
 			context: workspaceContext,
-			...this.createWorkspaceTransitionRuntime(supervisor),
+			...this.createWorkspaceTransitionRuntime(supervisor, workspaceHost),
 		}));
 		const remoteConnections = new ServerHostRemoteConnections({
 			serverHostExecutable: serverHostExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
 			environment: { ...process.env, ZETA_PROFILE_ROOT: this.profileRoot },
 			scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
 		});
-		const reconnectableTerminals = isRemoteWorkspaceIdentifier(workspaceContext.getWorkspace())
-			? windowDisposables.add(new ReconnectableTerminalMainService({ supervisor }))
-			: undefined;
 		const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 			supervisor,
 			workspaceContext,
 			connections: remoteConnections,
 			tunnels: remoteTunnelService,
 			host: electronRemoteWindowMainHost(window),
-			...(reconnectableTerminals ? { prepareForRuntimeReplacement: () => reconnectableTerminals.prepareForServerReplacement() } : {}),
+			prepareForRuntimeReplacement: () => window.webContents.send("zeta:terminal:prepareReplacement"),
 		}));
 		const transitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
 			const currentWorkspace = workspaceContext.getWorkspace();
@@ -650,13 +603,13 @@ export class ZetaApplication extends Disposable {
 				? await this.resolveRemoteFolderWorkspace(currentWorkspace, folderPath, workspaces)
 				: await workspaces.resolveFolder(folderPath);
 			if (nextWorkspace.id === currentWorkspace.id) return;
-			const grant = await this.resolveDirGrant(supervisor, folderPath, window);
+			const grant = await this.resolveDirGrant(workspaceHost, folderPath, window);
 			if (grant === undefined) {
 				if (selectionRequired) throw new Error(`Directory permissions were not selected for '${folderPath}'`);
 				return;
 			}
 			await record.windowsStateHandler.saveWindowState(window);
-			reconnectableTerminals?.prepareForServerReplacement();
+			window.webContents.send("zeta:terminal:prepareReplacement");
 			const transition = isRemoteWorkspaceIdentifier(nextWorkspace)
 				? await workspaceTransitions.transitionToWorkspace({ workspace: nextWorkspace, root: folderPath }, grant)
 				: await workspaceTransitions.transitionToFolder(folderPath, grant);
@@ -669,33 +622,12 @@ export class ZetaApplication extends Disposable {
 		};
 		record.openWorkspace = (root) => transitionToFolder(root, true);
 		const ipcRoutes = [
-			...appServerIpcRoutes(supervisor),
-			...accountIpcRoutes(supervisor, {
-				openerService: new ElectronOpenerService(),
-				clipboardService: new ElectronClipboardService(),
-			}),
+			...workspaceHost.routes(),
+			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
+			...windowDisposables.add(new BrowserAutomationHost(browserAutomationMainService)).routes(),
+			...windowDisposables.add(new OAuthCallbackHost()).routes(),
+			...rendererSystemHostRoutes(window),
 			...remoteWindowContext.ipcRoutes,
-			...sessionIpcRoutes(supervisor),
-			...skillIpcRoutes(supervisor),
-			...typstIpcRoutes(supervisor),
-			...fileIpcRoutes(supervisor),
-			...extensionIpcRoutes(supervisor),
-			...extensionHostIpcRoutes(supervisor),
-			...diffIpcRoutes(supervisor),
-			...documentCollaborationIpcRoutes(supervisor),
-			...syntaxIpcRoutes(supervisor),
-			...languageIpcRoutes(supervisor),
-			...gitIpcRoutes(supervisor),
-			...codebaseIpcRoutes(supervisor),
-			...codebaseSymbolsIpcRoutes(supervisor),
-			...connectorIpcRoutes(supervisor),
-			...pluginIpcRoutes(supervisor),
-			...marketplaceIpcRoutes(supervisor),
-			...toolSearchIpcRoutes(supervisor),
-			...dirPermissionsIpcRoutes(supervisor),
-			...searchIpcRoutes(supervisor),
-			...terminalIpcRoutes(supervisor, reconnectableTerminals),
-			...this.ipcRouteContributions.flatMap(contribution => contribution(supervisor)),
 			...browserViewIpcRoutes(browserViewMainService),
 			...configurationIpcRoutes(configuration),
 			...keybindingsResourceIpcRoutes(keybindings),
@@ -769,12 +701,6 @@ export class ZetaApplication extends Disposable {
 			},
 			ipcRoutes,
 		));
-		windowDisposables.add(supervisor.onNotification((notification) =>
-			window.webContents.send("zeta:event", notification)
-		));
-		windowDisposables.add(supervisor.onStateChange((state) => {
-			window.webContents.send("zeta:app-server:stateChanged", state);
-		}));
 		windowDisposables.add(configuration.onDidChange((snapshot) =>
 			window.webContents.send(CONFIGURATION_CHANGED_CHANNEL, snapshot)
 		));
@@ -831,6 +757,7 @@ export class ZetaApplication extends Disposable {
 		});
 
 		const windowDisposables = record.resources.add(new DisposableStore());
+		const sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(record.workspaceContext.getWorkspace(), windowDisposables));
 		windowDisposables.add(this.trustedIpcRouter.register(
 			{
 				webContents: window.webContents,
@@ -839,9 +766,8 @@ export class ZetaApplication extends Disposable {
 				]),
 			},
 			[
-				...appServerIpcRoutes(record.supervisor),
-				...sessionIpcRoutes(record.supervisor),
-				...skillIpcRoutes(record.supervisor),
+				...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
+				...rendererSystemHostRoutes(window),
 				...workspaceContextIpcRoutes(record.workspaceContext),
 				...sessionsWindowIpcRoutes({
 					openSessionsWindow: () => this.openSessionsWindow(record),
@@ -849,19 +775,9 @@ export class ZetaApplication extends Disposable {
 				}),
 			],
 		));
-		windowDisposables.add(record.supervisor.onNotification((notification) => {
-			if (!window.isDestroyed()) {
-				window.webContents.send("zeta:event", notification);
-			}
-		}));
 		windowDisposables.add(record.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
 			if (!window.isDestroyed()) {
 				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
-			}
-		}));
-		windowDisposables.add(record.supervisor.onStateChange((state) => {
-			if (!window.isDestroyed()) {
-				window.webContents.send("zeta:app-server:stateChanged", state);
 			}
 		}));
 		window.once("closed", () => {
@@ -1007,7 +923,8 @@ export class ZetaApplication extends Disposable {
 	}
 
 	private createWorkspaceTransitionRuntime(
-		supervisor: AppServerSupervisor,
+		supervisor: AppServerConnectionRelay,
+		workspaceHost: RendererWorkspaceHost,
 	): Pick<WorkspaceTransitionMainServiceOptions, "runtime" | "classifyRuntimeError" | "recovery"> {
 		if (this.appServerStartupMode === "disabled") {
 			return {
@@ -1022,10 +939,11 @@ export class ZetaApplication extends Disposable {
 		const launcher = supervisor.options.processLauncher;
 		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(
 			supervisor,
+			workspaceHost,
 			launcher instanceof LocalAppServerProcessLauncher
-				? (root, grant) => this.reconnectLocalAppServerWorkspace(supervisor, launcher, root, grant)
+				? (root, grant) => this.reconnectLocalAppServerWorkspace(supervisor, launcher, root, grant, workspaceHost)
 				: launcher instanceof SshAppServerProcessLauncher
-					? (root, grant) => this.reconnectRemoteAppServerWorkspace(supervisor, launcher, root, grant)
+					? (root, grant) => this.reconnectRemoteAppServerWorkspace(supervisor, launcher, root, grant, workspaceHost)
 				: undefined,
 		);
 		return {
@@ -1036,10 +954,11 @@ export class ZetaApplication extends Disposable {
 	}
 
 	private async reconnectLocalAppServerWorkspace(
-		supervisor: AppServerSupervisor,
+		supervisor: AppServerConnectionRelay,
 		launcher: LocalAppServerProcessLauncher,
 		root: string,
 		grant: DirGrantDto,
+		workspaceHost: RendererWorkspaceHost,
 	): Promise<void> {
 		const previousEnvironment = launcher.environment;
 		const nextEnvironment = {
@@ -1051,7 +970,7 @@ export class ZetaApplication extends Disposable {
 		launcher.replaceEnvironment(nextEnvironment);
 		try {
 			await supervisor.start();
-			await switchAppServerWorkspace(supervisor, root, grant);
+			await switchAppServerWorkspace(workspaceHost, root, grant);
 		} catch (error) {
 			await supervisor.stop();
 			launcher.replaceEnvironment(previousEnvironment);
@@ -1065,17 +984,18 @@ export class ZetaApplication extends Disposable {
 	}
 
 	private async reconnectRemoteAppServerWorkspace(
-		supervisor: AppServerSupervisor,
+		supervisor: AppServerConnectionRelay,
 		launcher: SshAppServerProcessLauncher,
 		root: string,
 		grant: DirGrantDto,
+		workspaceHost: RendererWorkspaceHost,
 	): Promise<void> {
 		const previousRoot = launcher.workspaceRoot;
 		await supervisor.stop();
 		launcher.replaceWorkspaceRoot(root);
 		try {
 			await supervisor.start();
-			await switchAppServerWorkspace(supervisor, root, grant);
+			await switchAppServerWorkspace(workspaceHost, root, grant);
 		} catch (error) {
 			await supervisor.stop();
 			launcher.replaceWorkspaceRoot(previousRoot);
@@ -1191,8 +1111,9 @@ export class ZetaApplication extends Disposable {
 		return this.closePersistentServicesPromise;
 	}
 
-	private async resolveDirGrant(supervisor: AppServerSupervisor, path: string, window?: BrowserWindow): Promise<DirGrantDto | undefined> {
-		const persisted = await readAppServerDirPermissions(supervisor, path);
+	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string, window?: BrowserWindow): Promise<DirGrantDto | undefined> {
+		if (this.appServerStartupMode === "disabled") return { type: "config" };
+		const persisted = await readAppServerDirPermissions(workspaceHost, path);
 		if (persisted !== undefined) return { type: "config" };
 		const options = {
 			type: "question" as const,
@@ -1207,7 +1128,7 @@ export class ZetaApplication extends Disposable {
 			? await dialog.showMessageBox(window, options)
 			: await dialog.showMessageBox(options);
 		if (prompt.response === 2) return undefined;
-		return createUserDirGrant(supervisor, prompt.response === 0 ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
+		return createUserDirGrant(workspaceHost, path, prompt.response === 0 ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
 	}
 
 	private appServerEnvironment(workspace: IAnyWorkspaceIdentifier): Readonly<Record<string, string>> {

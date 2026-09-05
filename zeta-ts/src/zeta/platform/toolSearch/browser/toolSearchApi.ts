@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IToolSearchApi } from "../common/toolSearchApi.js";
 
@@ -10,9 +10,9 @@ export function createDisconnectedToolSearchApi(unavailable: UnavailableOperatio
 	};
 }
 
-export function createViteDevToolSearchApi(connection: ViteDevAppServerConnection): IToolSearchApi {
+export function createAppServerToolSearchApi(connection: AppServerProtocolClient): IToolSearchApi {
 	return {
-		readConfig: () => viteDevRequest(connection, "config/read", {}),
-		configure: params => viteDevRequest(connection, "toolSearch/configure", params),
+		readConfig: () => appServerRequest(connection, "config/read", {}),
+		configure: params => appServerRequest(connection, "toolSearch/configure", params),
 	};
 }

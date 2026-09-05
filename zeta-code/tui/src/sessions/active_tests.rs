@@ -21,6 +21,48 @@ use super::ActiveConversation;
 use crate::TuiRecoveryState;
 
 #[test]
+fn manager_restore_and_delete_update_the_durable_catalog() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let (mut client, state_root) = client();
+    let conversation =
+        ActiveConversation::start(&mut client, "restore then delete".into()).unwrap();
+    let id = conversation.session_id().clone();
+    super::super::archive(&mut client, vec![id.clone()]).unwrap();
+    let restored = super::super::restore(&mut client, id.clone()).unwrap();
+    assert_eq!(
+        restored
+            .iter()
+            .find(|session| session.session_id == id)
+            .unwrap()
+            .status,
+        SessionStatus::Active
+    );
+    assert!(
+        ActiveConversation::recover(
+            &mut client,
+            TuiRecoveryState::new(id.clone(), conversation.thread_id().clone())
+        )
+        .is_ok()
+    );
+    super::super::archive(&mut client, vec![id.clone()]).unwrap();
+    assert!(
+        !super::super::delete(&mut client, id.clone())
+            .unwrap()
+            .iter()
+            .any(|session| session.session_id == id)
+    );
+    assert!(
+        client
+            .read_session(
+                zeta_app_server_protocol::protocol::session::SessionReadParams { session_id: id }
+            )
+            .is_err()
+    );
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
 fn thread_sequence_never_moves_backwards() {
     let _guard = crate::test_support::in_process_test_guard();
     let (mut client, state_root) = client();

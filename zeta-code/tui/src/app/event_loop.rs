@@ -333,8 +333,7 @@ fn activate_pointer_item(
             app.activate_thread_request_choice(index)
         }
         InputPointerTarget::SessionManager(target) => {
-            app.activate_session_manager_pointer_target(target);
-            None
+            app.activate_session_manager_pointer_target(target)
         }
         InputPointerTarget::Queue(queue_id) => {
             app.activate_queue_pointer_target(queue_id);

@@ -25,6 +25,7 @@ import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js
 import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
+import type { IAutomationService } from '../../automation/common/automationService.js';
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -46,6 +47,7 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
+	readonly automation?: IAutomationService;
 	readonly appServer: IAppServerApi;
 	readonly accounts: IAccountApi;
 	readonly remote?: IRemoteAgentApi;

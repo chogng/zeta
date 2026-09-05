@@ -1,7 +1,7 @@
 import type { Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
+import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import type { IWorkspaceContextMainChangeEvent } from "../../workspaces/electron-main/workspacesMainService.js";
@@ -33,7 +33,7 @@ export interface IRemoteWindowWorkspaceContext {
 }
 
 export interface RemoteWindowMainContextOptions {
-	readonly supervisor: AppServerSupervisor;
+	readonly supervisor: AppServerConnectionRelay;
 	readonly workspaceContext: IRemoteWindowWorkspaceContext;
 	readonly connections: IRemoteConnectionService;
 	readonly tunnels: IRemoteTunnelService & IDisposable;

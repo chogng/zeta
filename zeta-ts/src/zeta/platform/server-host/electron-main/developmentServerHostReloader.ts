@@ -2,16 +2,16 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, watch } from 
 import { readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
+import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
 import type { LocalAppServerProcessLauncher } from "../../app-server/electron-main/localAppServerProcessLauncher.js";
 
 const MAX_GENERATION_BYTES = 4_096;
-type DevelopmentAppServerSupervisor = Pick<AppServerSupervisor, "onStateChange" | "start" | "state" | "stop">;
+type DevelopmentAppServerConnectionRelay = Pick<AppServerConnectionRelay, "onStateChange" | "start" | "state" | "stop">;
 
 export interface DevelopmentServerHostReloaderOptions {
 	readonly generationFile: string;
 	readonly launcher: LocalAppServerProcessLauncher;
-	readonly supervisor: DevelopmentAppServerSupervisor;
+	readonly supervisor: DevelopmentAppServerConnectionRelay;
 	readonly debounceMs?: number;
 	readonly watchGeneration?: (generationFile: string, listener: () => void) => IDisposable;
 	readonly readGeneration?: (generationFile: string) => Promise<string | undefined>;
@@ -131,7 +131,7 @@ export function selectDevelopmentServerHostExecutable(packagedExecutable: string
 }
 
 export async function restartDevelopmentServerHost(
-	supervisor: Pick<AppServerSupervisor, "start" | "stop">,
+	supervisor: Pick<AppServerConnectionRelay, "start" | "stop">,
 	launcher: LocalAppServerProcessLauncher,
 	executable: string,
 ): Promise<void> {
@@ -198,6 +198,6 @@ function positiveInteger(value: number | undefined, fallback: number, name: stri
 	return resolved;
 }
 
-function isStableState(state: DevelopmentAppServerSupervisor["state"]): boolean {
+function isStableState(state: DevelopmentAppServerConnectionRelay["state"]): boolean {
 	return state === "ready" || state === "crashed" || state === "stopped";
 }

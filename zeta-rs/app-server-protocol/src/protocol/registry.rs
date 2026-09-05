@@ -1,4 +1,19 @@
 use crate::protocol::account::AccountDto;
+use crate::protocol::automation::AutomationListResult;
+use crate::protocol::automation::AutomationWriteParams;
+use crate::protocol::automation::AutomationDeleteParams;
+use crate::protocol::automation::AutomationRunParams;
+use crate::protocol::automation::AutomationRunsParams;
+use crate::protocol::automation::AutomationRunsResult;
+use crate::protocol::automation::AutomationStopParams;
+use zeta_protocol::Automation;
+use zeta_protocol::AutomationDefinition;
+use zeta_protocol::AutomationSchedule;
+use zeta_protocol::AutomationSession;
+use zeta_protocol::AutomationStatus;
+use zeta_protocol::AutomationRun;
+use zeta_protocol::AutomationRunStatus;
+use zeta_protocol::UnixMillis;
 use crate::protocol::account::AccountLoginCancelParams;
 use crate::protocol::account::AccountLoginCancelResult;
 use crate::protocol::account::AccountLoginCancelStatusDto;
@@ -1170,6 +1185,24 @@ macro_rules! cancellation_definition {
 }
 
 client_methods! {
+    AutomationList => "automation/list" {
+        params: EmptyParams, response: AutomationListResult, serialization: None,
+    },
+    AutomationWrite => "automation/write" {
+        params: AutomationWriteParams, response: Automation, serialization: None,
+    },
+    AutomationDelete => "automation/delete" {
+        params: AutomationDeleteParams, response: (), serialization: None,
+    },
+    AutomationRun => "automation/run" {
+        params: AutomationRunParams, response: AutomationRun, serialization: None,
+    },
+    AutomationRuns => "automation/runs" {
+        params: AutomationRunsParams, response: AutomationRunsResult, serialization: None,
+    },
+    AutomationStop => "automation/stop" {
+        params: AutomationStopParams, response: AutomationRun, serialization: None,
+    },
     Initialize => "initialize" {
         params: InitializeParams,
         response: InitializeResult,
@@ -2630,6 +2663,9 @@ server_notifications! {
     ProjectChanged => "project/changed" {
         params: ProjectChanged,
     },
+    AutomationChanged => "automation/changed" {
+        params: EmptyParams,
+    },
     FsChanged => "fs/changed" {
         params: FsChanged,
     },
@@ -3228,6 +3264,21 @@ typescript_bindings! {
     WorkRunMutationResult,
     WorkRunChanged,
     ProjectStatusDto,
+    UnixMillis,
+    Automation,
+    AutomationDefinition,
+    AutomationSchedule,
+    AutomationSession,
+    AutomationStatus,
+    AutomationRun,
+    AutomationRunStatus,
+    AutomationListResult,
+    AutomationWriteParams,
+    AutomationDeleteParams,
+    AutomationRunParams,
+    AutomationRunsParams,
+    AutomationRunsResult,
+    AutomationStopParams,
     ProjectRootDto,
     ProjectDto,
     ProjectSummaryDto,

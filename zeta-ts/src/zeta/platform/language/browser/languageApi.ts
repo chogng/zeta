@@ -1,6 +1,6 @@
 import type { AppServerMethod, LanguageOperationParams, MethodParams, MethodResult } from "../../../../../generated/app-server/types.js";
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest, voidResult } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import { runCancellableLanguageRequest, type ILanguageApi, type LanguageRequestOptions } from "../common/languageApi.js";
 
@@ -8,14 +8,14 @@ export function createDisconnectedLanguageApi(unavailable: UnavailableOperation)
 	return { synchronize: () => unavailable("language.synchronize"), close: () => unavailable("language.close"), hover: () => unavailable("language.hover"), completions: () => unavailable("language.completions"), resolveCompletion: () => unavailable("language.resolveCompletion"), executeCommand: () => unavailable("language.executeCommand"), documentDiagnostics: () => unavailable("language.documentDiagnostics"), directoryDiagnostics: () => unavailable("language.directoryDiagnostics"), formatDocument: () => unavailable("language.formatDocument"), formatRange: () => unavailable("language.formatRange"), signatureHelp: () => unavailable("language.signatureHelp"), inlayHints: () => unavailable("language.inlayHints"), linkedEditingRanges: () => unavailable("language.linkedEditingRanges"), semanticTokens: () => unavailable("language.semanticTokens"), documentSymbols: () => unavailable("language.documentSymbols"), codeLenses: () => unavailable("language.codeLenses"), resolveCodeLens: () => unavailable("language.resolveCodeLens"), documentLinks: () => unavailable("language.documentLinks"), resolveDocumentLink: () => unavailable("language.resolveDocumentLink"), documentColors: () => unavailable("language.documentColors"), colorPresentations: () => unavailable("language.colorPresentations"), foldingRanges: () => unavailable("language.foldingRanges"), locations: () => unavailable("language.locations"), hierarchy: () => unavailable("language.hierarchy"), directorySymbols: () => unavailable("language.directorySymbols"), prepareRename: () => unavailable("language.prepareRename"), rename: () => unavailable("language.rename"), codeActions: () => unavailable("language.codeActions"), resolveCodeAction: () => unavailable("language.resolveCodeAction") };
 }
 
-export function createViteDevLanguageApi(connection: ViteDevAppServerConnection): ILanguageApi {
+export function createAppServerLanguageApi(connection: AppServerProtocolClient): ILanguageApi {
 	return {
-		synchronize: params => voidResult(viteDevRequest(connection, "language/synchronize", params)),
-		close: params => voidResult(viteDevRequest(connection, "language/close", params)),
+		synchronize: params => voidResult(appServerRequest(connection, "language/synchronize", params)),
+		close: params => voidResult(appServerRequest(connection, "language/close", params)),
 		hover: (params, options) => languageRequest(connection, "language/hover", params, options, languageOperationParams),
 		completions: (params, options) => languageRequest(connection, "language/completions", params, options, languageOperationParams),
 		resolveCompletion: (params, options) => languageRequest(connection, "language/resolveCompletion", params, options, languageOperationParams),
-		executeCommand: params => voidResult(viteDevRequest(connection, "language/executeCommand", params)),
+		executeCommand: params => voidResult(appServerRequest(connection, "language/executeCommand", params)),
 		documentDiagnostics: (params, options) => languageRequest(connection, "language/documentDiagnostics", params, options, languageOperationParams),
 		directoryDiagnostics: (params, options) => languageRequest(connection, "language/directoryDiagnostics", params, options, languageOperationParams),
 		formatDocument: (params, options) => languageRequest(connection, "language/formatDocument", params, options, languageOperationParams),
@@ -43,7 +43,7 @@ export function createViteDevLanguageApi(connection: ViteDevAppServerConnection)
 }
 
 function languageRequest<M extends AppServerMethod, P>(
-	connection: ViteDevAppServerConnection,
+	connection: AppServerProtocolClient,
 	method: M,
 	request: P,
 	options: LanguageRequestOptions | undefined,
@@ -51,8 +51,8 @@ function languageRequest<M extends AppServerMethod, P>(
 ): Promise<MethodResult<M>> {
 	return runCancellableLanguageRequest(
 		options,
-		operationId => viteDevRequest(connection, method, wrap(operationId, request)),
-		operationId => viteDevRequest(connection, "language/cancel", { operationId }),
+		operationId => appServerRequest(connection, method, wrap(operationId, request)),
+		operationId => appServerRequest(connection, "language/cancel", { operationId }),
 	);
 }
 

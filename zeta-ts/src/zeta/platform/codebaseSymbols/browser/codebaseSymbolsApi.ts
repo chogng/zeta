@@ -1,5 +1,5 @@
-import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
-import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
+import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { ICodebaseSymbolsApi } from "../common/codebaseSymbolsApi.js";
 
@@ -12,11 +12,11 @@ export function createDisconnectedCodebaseSymbolsApi(unavailable: UnavailableOpe
 	};
 }
 
-export function createViteDevCodebaseSymbolsApi(connection: ViteDevAppServerConnection): ICodebaseSymbolsApi {
+export function createAppServerCodebaseSymbolsApi(connection: AppServerProtocolClient): ICodebaseSymbolsApi {
 	return {
-		status: () => viteDevRequest(connection, "codebase/symbols/status", {}),
-		search: params => viteDevRequest(connection, "codebase/symbols/search", params),
-		synchronize: params => viteDevRequest(connection, "codeIntelligence/document/synchronize", params),
-		close: params => viteDevRequest(connection, "codeIntelligence/document/close", params),
+		status: () => appServerRequest(connection, "codebase/symbols/status", {}),
+		search: params => appServerRequest(connection, "codebase/symbols/search", params),
+		synchronize: params => appServerRequest(connection, "codeIntelligence/document/synchronize", params),
+		close: params => appServerRequest(connection, "codeIntelligence/document/close", params),
 	};
 }

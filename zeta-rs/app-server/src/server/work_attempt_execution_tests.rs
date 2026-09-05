@@ -68,7 +68,6 @@ fn scope_expansion_cancels_a_stale_model_response_before_it_can_write() {
     )
     .unwrap();
     let thread = server
-        .threads
         .start_thread(StartThreadRequest {
             command_id: CommandId::new("eval-start-thread").unwrap(),
             title: "scope revocation evaluation".into(),

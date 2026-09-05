@@ -125,6 +125,59 @@ fn create_thread(controller: &ThreadController, title: &str) -> ThreadId {
 }
 
 #[test]
+fn restoring_a_session_replays_durably_without_reopening_children() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let session_id = SessionId::new("restore-session").unwrap();
+    let root = ThreadId::new(session_id.as_str()).unwrap();
+    let child = ThreadId::new("restore-child").unwrap();
+    for id in [&root, &child] {
+        threads
+            .create_thread(CreateThreadRequest {
+                session_id: session_id.clone(),
+                thread_id: id.clone(),
+                title: id.to_string(),
+            })
+            .unwrap();
+    }
+    threads
+        .start_turn(&root, start_request("before-archive"))
+        .unwrap();
+    threads
+        .archive_session_threads(
+            &session_id,
+            &CommandId::new("archive").unwrap(),
+            zeta_protocol::ThreadArchiveReason::Completed,
+        )
+        .unwrap();
+    let before = threads.read_thread(&root).unwrap();
+    let restored = threads.restore_session(&session_id).unwrap();
+    assert_eq!(restored.status, zeta_protocol::ThreadStatus::Active);
+    assert_eq!(restored.turns, before.turns);
+    assert_eq!(restored.archived_at_unix_ms, None);
+    assert_eq!(restored.archive_reason, None);
+    assert_eq!(
+        threads.restore_session(&session_id).unwrap().sequence,
+        restored.sequence
+    );
+    drop(threads);
+    let reopened = ThreadController::with_store(store);
+    assert_eq!(
+        reopened.read_thread(&root).unwrap().status,
+        zeta_protocol::ThreadStatus::Active
+    );
+    assert_eq!(
+        reopened.read_thread(&child).unwrap().status,
+        zeta_protocol::ThreadStatus::Archived
+    );
+    assert!(
+        reopened
+            .start_turn(&root, start_request("after-restore"))
+            .is_ok()
+    );
+}
+
+#[test]
 fn deleting_a_session_forgets_loaded_threads_and_keeps_other_sessions() {
     let store = Arc::new(InMemoryThreadStore::default());
     let threads = ThreadController::with_store(store);

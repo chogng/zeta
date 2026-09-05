@@ -28,17 +28,18 @@ impl ThreadController {
     /// different seed is rejected so recovery cannot silently change delegated context.
     pub fn create_agent_thread(
         &self,
+        binder: &dyn crate::ThreadWorktreeBinder,
         request: CreateAgentThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
-        self.bind_thread_worktree(
-            request.session_id.clone(),
-            request.thread_id.clone(),
-            ThreadOrigin::AgentSpawn {
+        binder.provision(&crate::ThreadWorktreeBindingRequest {
+            session_id: request.session_id.clone(),
+            thread_id: request.thread_id.clone(),
+            origin: ThreadOrigin::AgentSpawn {
                 parent_thread_id: request.context_seed.parent_thread_id.clone(),
                 parent_sequence: request.context_seed.parent_sequence,
                 delegation_id: request.context_seed.delegation_id.clone(),
             },
-        )?;
+        })?;
         let slot = self.loaded_threads.slot(&request.thread_id)?;
         let _permit = slot.enter_mutation()?;
         let _lease = self.acquire_writer_lease(&request.thread_id)?;
