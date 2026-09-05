@@ -108,6 +108,7 @@ use crate::thread::transcript::scroll_target;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::list_selection::ListSelectionState;
+use crate::widgets::navigation::Navigation;
 use crate::widgets::overlay::DetailOverlay;
 use crate::widgets::overlay::OverlayInputOutcome;
 use crossterm::event::KeyCode;
@@ -310,24 +311,41 @@ impl App {
             return None;
         }
         if self.sessions.preview.is_some() {
-            if key.kind == KeyEventKind::Release
-                || (key.kind == KeyEventKind::Repeat && key.code == KeyCode::Esc)
+            if key.kind == KeyEventKind::Press
+                && key.modifiers.is_empty()
+                && key.code == KeyCode::Esc
             {
+                self.sessions.preview = None;
+                self.pointer.clear();
                 return None;
             }
-            return match (key.modifiers, key.code) {
-                (KeyModifiers::NONE, KeyCode::Esc) => {
-                    self.sessions.preview = None;
-                    self.pointer.clear();
-                    None
+            return match Navigation::from_key(key) {
+                Some(
+                    navigation @ (Navigation::Previous
+                    | Navigation::Next
+                    | Navigation::PagePrevious
+                    | Navigation::PageNext),
+                ) => {
+                    let rows = match navigation {
+                        Navigation::PagePrevious | Navigation::PageNext => usize::from(
+                            frame::layout(self, terminal_area)
+                                .session
+                                .transcript
+                                .height
+                                .saturating_sub(1)
+                                .max(1),
+                        ),
+                        _ => 1,
+                    };
+                    let direction =
+                        if matches!(navigation, Navigation::Previous | Navigation::PagePrevious) {
+                            TranscriptScrollDirection::Up
+                        } else {
+                            TranscriptScrollDirection::Down
+                        };
+                    self.navigate_preview(direction, rows, terminal_area)
                 }
-                (KeyModifiers::NONE, KeyCode::Up | KeyCode::PageUp | KeyCode::Char('k')) => {
-                    self.navigate_preview(TranscriptScrollDirection::Up, terminal_area)
-                }
-                (KeyModifiers::NONE, KeyCode::Down | KeyCode::PageDown | KeyCode::Char('j')) => {
-                    self.navigate_preview(TranscriptScrollDirection::Down, terminal_area)
-                }
-                (KeyModifiers::NONE | KeyModifiers::CONTROL, KeyCode::Home) => {
+                Some(Navigation::First) => {
                     let preview = self.sessions.preview.as_mut().unwrap();
                     preview.first().map(|params| {
                         SessionCommand::Preview {
@@ -337,11 +355,11 @@ impl App {
                         .into()
                     })
                 }
-                (KeyModifiers::NONE | KeyModifiers::CONTROL, KeyCode::End) => {
+                Some(Navigation::Last) => {
                     self.follow_latest_transcript();
                     None
                 }
-                _ => None,
+                None => None,
             };
         }
         if matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
@@ -357,11 +375,15 @@ impl App {
                 return None;
             }
         }
-        if let Some(outcome) = self.chat_panel.handle_command_key(key) {
+        let composer_area = frame::layout(self, terminal_area).session.composer;
+        if let Some(outcome) = self.chat_panel.handle_command_key(key, composer_area) {
             return self.handle_command_panel_outcome(outcome);
         }
         if let Some(command) = self.handle_queue_key(key) {
             return command;
+        }
+        if self.agent_thread_switcher.focused() {
+            return self.handle_screen_navigation_key(key).flatten();
         }
         let temporary_interaction_active = self.completion().is_some();
         let is_screen_escape_press = key.kind == KeyEventKind::Press
@@ -842,7 +864,7 @@ impl App {
     }
 
     pub(crate) fn queue_key_hints(&self) -> &'static str {
-        "↑↓ to select · Enter to edit · Ctrl+Enter to send now · Ctrl+↑/↓ to move · Delete to remove · Esc to return to input"
+        "↑↓/jk to select · Enter to edit · Ctrl+Enter to send now · Ctrl+↑/↓ to move · Delete to remove · Esc to return to input"
     }
 
     pub(crate) fn activate_queue_pointer_target(&mut self, queue_id: QueueId) -> bool {
@@ -1146,6 +1168,7 @@ impl App {
             self.transcript_render_cache(),
             self.render_context(),
             direction,
+            5,
         );
         target.is_some_and(|target| self.thread_presentations.active_mut().scroll.apply(target))
     }
@@ -1156,7 +1179,7 @@ impl App {
         terminal_area: Rect,
     ) -> Option<AppCommand> {
         if self.sessions.preview.is_some() {
-            return self.navigate_preview(direction, terminal_area);
+            return self.navigate_preview(direction, 5, terminal_area);
         }
         if self.scroll_transcript(direction, terminal_area)
             || direction == TranscriptScrollDirection::Down
@@ -1301,12 +1324,14 @@ impl App {
     fn navigate_preview(
         &mut self,
         direction: TranscriptScrollDirection,
+        rows: usize,
         terminal_area: Rect,
     ) -> Option<AppCommand> {
         let area = frame::layout(self, terminal_area).session.transcript;
         let mut preview = self.sessions.preview.take()?;
         let params = preview.navigate(
             direction,
+            rows,
             area,
             usize::from(welcome::history_height(area.height)),
             self.render_context(),
@@ -1934,8 +1959,7 @@ impl App {
 
     fn handle_screen_navigation_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
         if key.kind == KeyEventKind::Release
-            || (key.kind == KeyEventKind::Repeat
-                && !matches!(key.code, KeyCode::Up | KeyCode::Down))
+            || (key.kind == KeyEventKind::Repeat && Navigation::from_key(key).is_none())
         {
             return None;
         }
@@ -1943,6 +1967,10 @@ impl App {
             && self.sessions.manager().focused()
         {
             let catalog = self.sessions.catalog().to_vec();
+            if let Some(navigation) = Navigation::from_key(key) {
+                self.sessions.manager_mut().navigate(&catalog, navigation);
+                return Some(None);
+            }
             if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('x') {
                 if self.sessions.manager().selected_is_archived() {
                     return Some(
@@ -1963,16 +1991,6 @@ impl App {
                 return None;
             }
             return match key.code {
-                KeyCode::Up => {
-                    self.sessions.manager_mut().select_previous(&catalog);
-                    Some(None)
-                }
-                KeyCode::Down => {
-                    if !self.sessions.manager_mut().select_next(&catalog) {
-                        self.sessions.manager_mut().blur();
-                    }
-                    Some(None)
-                }
                 KeyCode::Enter => {
                     if self.sessions.manager().archived_selected() {
                         self.sessions.manager_mut().toggle_archived();
@@ -2037,21 +2055,15 @@ impl App {
                 _ => None,
             };
         }
-        if !key.modifiers.is_empty() {
-            return None;
-        }
         if self.agent_thread_switcher.focused() {
+            if let Some(navigation) = Navigation::from_key(key) {
+                self.agent_thread_switcher.navigate(navigation);
+                return Some(None);
+            }
+            if !key.modifiers.is_empty() {
+                return Some(None);
+            }
             return match key.code {
-                KeyCode::Up => {
-                    if !self.agent_thread_switcher.select_previous() {
-                        self.agent_thread_switcher.blur();
-                    }
-                    Some(None)
-                }
-                KeyCode::Down => {
-                    self.agent_thread_switcher.select_next();
-                    Some(None)
-                }
                 KeyCode::Enter => Some(
                     self.agent_thread_switcher
                         .selected()
@@ -2065,7 +2077,7 @@ impl App {
                 _ => None,
             };
         }
-        if !self.chat_input_focused() || !self.input().is_empty() {
+        if !key.modifiers.is_empty() || !self.chat_input_focused() || !self.input().is_empty() {
             return None;
         }
         let target = match empty_input_navigation(self.sessions.screen(), key.code)? {
@@ -2213,7 +2225,7 @@ impl App {
     }
 
     fn handle_transcript_selection_key(&mut self, key: KeyEvent) -> bool {
-        if key.kind != KeyEventKind::Press
+        if key.kind == KeyEventKind::Release
             || !matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
             || self.chat_panel.command_active()
             || self.completion().is_some()
@@ -2227,6 +2239,27 @@ impl App {
             .iter()
             .map(|cell| cell.cell_id().clone())
             .collect::<Vec<_>>();
+        let navigation_key = if key.modifiers == KeyModifiers::CONTROL
+            && matches!(key.code, KeyCode::Up | KeyCode::Down)
+        {
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                ..key
+            }
+        } else {
+            key
+        };
+        if self.thread_presentations.active().selected_cell.is_some()
+            && let Some(navigation) = Navigation::from_key(navigation_key)
+        {
+            self.thread_presentations
+                .active_mut()
+                .navigate_cell(&cell_ids, navigation);
+            return true;
+        }
+        if key.kind != KeyEventKind::Press {
+            return self.thread_presentations.active().selected_cell.is_some();
+        }
         match (key.modifiers, key.code) {
             (KeyModifiers::CONTROL, KeyCode::Up) => self
                 .thread_presentations
@@ -2236,22 +2269,6 @@ impl App {
                 .thread_presentations
                 .active_mut()
                 .select_next_cell(&cell_ids),
-            (KeyModifiers::NONE, KeyCode::Up)
-                if self.thread_presentations.active().selected_cell.is_some() =>
-            {
-                self.thread_presentations
-                    .active_mut()
-                    .select_previous_cell(&cell_ids);
-                true
-            }
-            (KeyModifiers::NONE, KeyCode::Down)
-                if self.thread_presentations.active().selected_cell.is_some() =>
-            {
-                self.thread_presentations
-                    .active_mut()
-                    .select_next_cell(&cell_ids);
-                true
-            }
             (KeyModifiers::NONE, KeyCode::Char(' ')) => {
                 let Some(selected) = self.thread_presentations.active().selected_cell.clone()
                 else {

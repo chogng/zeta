@@ -7,6 +7,7 @@ use ratatui::style::Color;
 use super::ListSelectionPreview;
 use super::matcher::selection_match_score;
 use crate::widgets::key_hint::KeyHints;
+use crate::widgets::navigation::Navigation;
 use crate::widgets::search_box::SEARCH_BOX_HEIGHT;
 use crate::widgets::search_box::SearchBoxInputOutcome;
 use crate::widgets::search_box::SearchBoxModel;
@@ -172,6 +173,7 @@ struct ListSelectionPresentation {
     empty_message: String,
     activation_mode: ListSelectionActivationMode,
     activation_action: Option<String>,
+    dismiss_action: &'static str,
     key_hints: KeyHints,
     show_tabs: bool,
     initial_selected: usize,
@@ -191,6 +193,7 @@ impl ListSelectionModel {
                 empty_message: "No matching items".into(),
                 activation_mode: ListSelectionActivationMode::Enter,
                 activation_action: None,
+                dismiss_action: "close",
                 key_hints: KeyHints::new(),
                 show_tabs: true,
                 initial_selected: 0,
@@ -208,12 +211,8 @@ impl ListSelectionModel {
         self
     }
 
-    pub(crate) fn with_key_action(
-        mut self,
-        keys: impl Into<String>,
-        action: impl Into<String>,
-    ) -> Self {
-        self.presentation.key_hints = self.presentation.key_hints.with_action(keys, action);
+    pub(crate) fn with_dismiss_action(mut self, action: &'static str) -> Self {
+        self.presentation.dismiss_action = action;
         self
     }
 
@@ -252,7 +251,16 @@ impl ListSelectionModel {
             };
             hints = hints.with_action(keys, action);
         }
-        hints.extend(presentation.key_hints.clone())
+        hints = hints.with_action("↑↓/jk", "choose");
+        if presentation.search.is_some() {
+            hints = hints.with_action("/", "search");
+        }
+        if presentation.show_tabs && self.tabs.len() > 1 {
+            hints = hints.with_action("Tab", "switch");
+        }
+        hints
+            .with_action("Esc", presentation.dismiss_action)
+            .extend(presentation.key_hints.clone())
     }
 
     fn into_parts(self) -> (ListSelectionPresentation, Vec<ListSelectionGroup>) {
@@ -456,53 +464,84 @@ impl ListSelectionState {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ListSelectionInputOutcome {
-        if key.code == KeyCode::Esc && key.modifiers.is_empty() {
+        if key.kind == KeyEventKind::Release {
+            return ListSelectionInputOutcome::Consumed;
+        }
+        if (key.code == KeyCode::Esc && key.modifiers.is_empty())
+            || (key.code == KeyCode::Char('c') && key.modifiers == KeyModifiers::CONTROL)
+        {
             if key.kind != KeyEventKind::Press {
+                return ListSelectionInputOutcome::Consumed;
+            }
+            if self.search_focused() {
+                self.set_focus(ListSelectionFocus::Items);
                 return ListSelectionInputOutcome::Consumed;
             }
             return ListSelectionInputOutcome::Dismiss;
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            return ListSelectionInputOutcome::Dismiss;
+        if self.search_focused() {
+            if key.kind == KeyEventKind::Press
+                && key.code == KeyCode::Enter
+                && key.modifiers.is_empty()
+            {
+                self.set_focus(ListSelectionFocus::Items);
+                return ListSelectionInputOutcome::Consumed;
+            }
+            if let Some(search) = self.search.as_mut()
+                && search.handle_key(key) == SearchBoxInputOutcome::QueryChanged
+            {
+                self.select_first_visible();
+                return ListSelectionInputOutcome::Consumed;
+            }
+            // Search keeps its characters; only explicit arrows leave the field.
+            if !matches!(
+                key.code,
+                KeyCode::Up | KeyCode::Down | KeyCode::Tab | KeyCode::BackTab
+            ) {
+                return ListSelectionInputOutcome::Consumed;
+            }
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            || key.modifiers.contains(KeyModifiers::ALT)
+        if let Some(navigation) = Navigation::from_key(key) {
+            match navigation {
+                Navigation::Previous => self.move_focus_up(),
+                Navigation::Next => self.move_focus_down(),
+                _ => {
+                    self.set_focus(ListSelectionFocus::Items);
+                    self.selected_visible = self.visible_len().checked_sub(1).map(|last| {
+                        navigation.offset(
+                            self.selected_visible.unwrap_or(0),
+                            last,
+                            MAX_VISIBLE_ROWS,
+                        )
+                    });
+                }
+            }
+            return ListSelectionInputOutcome::Consumed;
+        }
+        // Adjusting values, opening an item and changing focus are one-shot actions.
+        if key.kind != KeyEventKind::Press
+            || key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
         {
             return ListSelectionInputOutcome::Consumed;
         }
-
-        if self.focus == ListSelectionFocus::Search
-            && let Some(search) = self.search.as_mut()
-        {
-            match search.handle_key(key) {
-                SearchBoxInputOutcome::QueryChanged => {
-                    self.select_first_visible();
-                    return ListSelectionInputOutcome::Consumed;
-                }
-                SearchBoxInputOutcome::Ignored => {}
-            }
-        }
-
         match key.code {
+            KeyCode::Char('/') if key.modifiers.is_empty() => {
+                self.focus_search();
+            }
             KeyCode::Tab | KeyCode::BackTab if self.show_tabs() => {
                 self.set_focus(ListSelectionFocus::Tabs);
                 self.switch_tab(key);
             }
-            KeyCode::Up => self.move_focus_up(),
-            KeyCode::Down => self.move_focus_down(),
-            KeyCode::Home => {
-                self.set_focus(ListSelectionFocus::Items);
-                self.select_first_visible();
-            }
-            KeyCode::End => {
-                self.set_focus(ListSelectionFocus::Items);
-                self.select_last_visible();
-            }
-            KeyCode::Enter => {
+            KeyCode::Enter if key.modifiers.is_empty() => {
                 if self.focus == ListSelectionFocus::Items
                     && let Some(id) = self.selected_item_id()
                 {
                     return ListSelectionInputOutcome::Activate(id);
+                }
+                if self.focus == ListSelectionFocus::Tabs {
+                    self.set_focus(ListSelectionFocus::Items);
                 }
             }
             KeyCode::Left | KeyCode::Right => match self.focus {
@@ -519,7 +558,9 @@ impl ListSelectionState {
                 }
                 ListSelectionFocus::Search => {}
             },
-            KeyCode::Char(' ') if self.focus == ListSelectionFocus::Items => {
+            KeyCode::Char(' ')
+                if self.focus == ListSelectionFocus::Items && key.modifiers.is_empty() =>
+            {
                 if self.model.activation_mode == ListSelectionActivationMode::EnterOrSpace
                     && let Some(id) = self.selected_item_id()
                 {
@@ -528,7 +569,6 @@ impl ListSelectionState {
             }
             _ => {}
         }
-
         ListSelectionInputOutcome::Consumed
     }
 
@@ -558,27 +598,13 @@ impl ListSelectionState {
                     self.set_focus(ListSelectionFocus::Tabs);
                 }
             }
-            ListSelectionFocus::Items => {
-                if self.selected_visible.unwrap_or_default() > 0 {
-                    self.move_selection(ListSelectionDirection::Previous);
-                } else if self.search.is_some() {
-                    self.set_focus(ListSelectionFocus::Search);
-                } else if self.show_tabs() {
-                    self.set_focus(ListSelectionFocus::Tabs);
-                }
-            }
+            ListSelectionFocus::Items => self.move_selection(ListSelectionDirection::Previous),
         }
     }
 
     fn move_focus_down(&mut self) {
         match self.focus {
-            ListSelectionFocus::Tabs => {
-                if self.search.is_some() {
-                    self.set_focus(ListSelectionFocus::Search);
-                } else {
-                    self.set_focus(ListSelectionFocus::Items);
-                }
-            }
+            ListSelectionFocus::Tabs => self.set_focus(ListSelectionFocus::Items),
             ListSelectionFocus::Search => self.set_focus(ListSelectionFocus::Items),
             ListSelectionFocus::Items => self.move_selection(ListSelectionDirection::Next),
         }
@@ -650,10 +676,6 @@ impl ListSelectionState {
 
     fn select_first_visible(&mut self) {
         self.selected_visible = (self.visible_len() > 0).then_some(0);
-    }
-
-    fn select_last_visible(&mut self) {
-        self.selected_visible = self.visible_len().checked_sub(1);
     }
 
     fn reconcile_selection(&mut self) {

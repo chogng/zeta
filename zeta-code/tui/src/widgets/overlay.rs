@@ -6,10 +6,10 @@ use crate::render::horizontal_margin;
 use crate::widgets::detail_list;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::key_hint;
+use crate::widgets::navigation::Navigation;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -43,37 +43,18 @@ impl DetailOverlay {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, available: Rect) -> OverlayInputOutcome {
-        if key.kind != KeyEventKind::Press {
-            return OverlayInputOutcome::Consumed;
+        if let Some(navigation) = Navigation::from_key(key) {
+            let layout = overlay_layout(available, &self.detail);
+            self.scroll = navigation.offset(
+                usize::from(self.scroll),
+                usize::from(layout.max_scroll),
+                usize::from(layout.body.height.saturating_sub(TITLE_ROWS)),
+            ) as u16;
         }
-        let max_scroll = overlay_layout(available, &self.detail).max_scroll;
-        match (key.modifiers, key.code) {
-            (KeyModifiers::NONE, KeyCode::Esc) => OverlayInputOutcome::Dismiss,
-            (KeyModifiers::NONE, KeyCode::Up) => {
-                self.scroll = self.scroll.saturating_sub(1);
-                OverlayInputOutcome::Consumed
-            }
-            (KeyModifiers::NONE, KeyCode::Down) => {
-                self.scroll = self.scroll.saturating_add(1).min(max_scroll);
-                OverlayInputOutcome::Consumed
-            }
-            (KeyModifiers::NONE, KeyCode::PageUp) => {
-                self.scroll = self.scroll.saturating_sub(10);
-                OverlayInputOutcome::Consumed
-            }
-            (KeyModifiers::NONE, KeyCode::PageDown) => {
-                self.scroll = self.scroll.saturating_add(10).min(max_scroll);
-                OverlayInputOutcome::Consumed
-            }
-            (KeyModifiers::CONTROL, KeyCode::Home) => {
-                self.scroll = 0;
-                OverlayInputOutcome::Consumed
-            }
-            (KeyModifiers::CONTROL, KeyCode::End) => {
-                self.scroll = max_scroll;
-                OverlayInputOutcome::Consumed
-            }
-            _ => OverlayInputOutcome::Consumed,
+        if key.kind == KeyEventKind::Press && key.modifiers.is_empty() && key.code == KeyCode::Esc {
+            OverlayInputOutcome::Dismiss
+        } else {
+            OverlayInputOutcome::Consumed
         }
     }
 }
@@ -135,7 +116,12 @@ pub(crate) fn draw(
         state.scroll.min(layout.max_scroll),
         context,
     );
-    key_hint::draw(frame, layout.hints, "Esc to close", context);
+    key_hint::draw(
+        frame,
+        layout.hints,
+        "↑↓/jk to scroll · Home/End to jump · Esc to close",
+        context,
+    );
 }
 
 #[cfg(test)]

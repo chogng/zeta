@@ -337,6 +337,7 @@ pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) ->
             vec![ListSelectionGroup::new("Actions", items)],
         )
         .with_activation_action("choose")
+        .with_dismiss_action("return")
         .with_key_hint_note(summary)
         .without_tab_bar(),
         actions,
@@ -436,11 +437,13 @@ impl KeymapCaptureState {
         }
         (
             KeyCapture::new("Record shortcut", lines),
-            crate::widgets::key_hint::KeyHints::new().with_note(format!(
-                "{}  ·  {}",
-                self.action.label,
-                binding_summary(&self.action)
-            )),
+            crate::widgets::key_hint::KeyHints::new()
+                .with_action("Esc", "cancel")
+                .with_note(format!(
+                    "{}  ·  {}",
+                    self.action.label,
+                    binding_summary(&self.action)
+                )),
         )
     }
 }

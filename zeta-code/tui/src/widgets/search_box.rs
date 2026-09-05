@@ -1,5 +1,7 @@
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use std::fmt;
 
 pub(crate) const SEARCH_BOX_HEIGHT: u16 = 3;
@@ -78,7 +80,12 @@ impl SearchBoxState {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> SearchBoxInputOutcome {
-        if !self.input_active {
+        if !self.input_active
+            || key.kind == KeyEventKind::Release
+            || key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
             return SearchBoxInputOutcome::Ignored;
         }
 

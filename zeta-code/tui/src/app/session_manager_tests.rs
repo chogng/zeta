@@ -366,3 +366,45 @@ fn render(app: &App) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[test]
+fn manager_navigation_stays_focused_and_repeated_keys_cannot_open_or_modify_sessions() {
+    let mut app = active_session_app();
+    app.handle_key(key(KeyCode::Left));
+    app.handle_key(key(KeyCode::Up));
+    app.handle_key(key(KeyCode::Char('j')));
+    assert!(app.session_manager_hint().contains("expand"));
+    for _ in 0..3 {
+        app.handle_key(key(KeyCode::Char('j')));
+    }
+    assert!(app.session_manager_focused());
+    app.handle_key(key(KeyCode::Home));
+    for code in [
+        KeyCode::Enter,
+        KeyCode::Char(' '),
+        KeyCode::Char('p'),
+        KeyCode::Char('i'),
+        KeyCode::Esc,
+    ] {
+        assert_eq!(
+            app.handle_key(KeyEvent::new_with_kind(
+                code,
+                KeyModifiers::NONE,
+                crossterm::event::KeyEventKind::Repeat
+            )),
+            None
+        );
+    }
+    assert_eq!(
+        app.handle_key(KeyEvent::new_with_kind(
+            KeyCode::Char('x'),
+            KeyModifiers::CONTROL,
+            crossterm::event::KeyEventKind::Repeat
+        )),
+        None
+    );
+    assert!(app.session_preview().is_none());
+    assert!(app.overlay().is_none());
+    assert!(app.session_manager_focused());
+    assert_eq!(app.input(), "");
+}

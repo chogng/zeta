@@ -48,7 +48,10 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     );
-    assert_eq!(view.model.key_hints().text(), "Enter/Space to change");
+    assert_eq!(
+        view.model.key_hints().text(),
+        "Enter/Space to change  ·  ↑↓/jk to choose  ·  / to search  ·  Tab to switch  ·  Esc to close"
+    );
     let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Config");

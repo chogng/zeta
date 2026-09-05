@@ -35,7 +35,7 @@ fn selection_drives_a_bounded_viewport() {
     switcher.reconcile(Some(&session), Some(&thread_id("root")));
     switcher.focus();
     for _ in 0..6 {
-        switcher.select_next();
+        switcher.navigate(crate::widgets::navigation::Navigation::Next);
     }
 
     assert_eq!(switcher.view().rows.len(), 4);
@@ -88,7 +88,7 @@ fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
     let mut switcher = AgentThreadSwitcher::default();
     switcher.reconcile(Some(&session), Some(&thread_id("child-a")));
     switcher.focus();
-    switcher.select_next();
+    switcher.navigate(crate::widgets::navigation::Navigation::Next);
     let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
 
     terminal

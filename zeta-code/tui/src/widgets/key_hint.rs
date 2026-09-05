@@ -74,6 +74,7 @@ impl KeyHints {
 
 pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, hints: &str, context: RenderContext<'_>) {
     let content = horizontal_margin(area, 2);
+    let hints = visible_hints(hints, usize::from(content.width));
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             hints,
@@ -83,6 +84,32 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, hints: &str, context: Rend
         ))),
         content,
     );
+}
+
+fn visible_hints(hints: &str, width: usize) -> std::borrow::Cow<'_, str> {
+    if hints.width() <= width {
+        return std::borrow::Cow::Borrowed(hints);
+    }
+    let mut entries = hints.split('·').map(str::trim).collect::<Vec<_>>();
+    while entries.len() > 1 {
+        let index = entries
+            .iter()
+            .position(|entry| entry.starts_with("↑↓"))
+            .or_else(|| {
+                entries
+                    .iter()
+                    .rposition(|entry| !entry.starts_with("Esc to "))
+            });
+        let Some(index) = index else {
+            break;
+        };
+        entries.remove(index);
+        let text = entries.join(" · ");
+        if text.width() <= width {
+            return std::borrow::Cow::Owned(text);
+        }
+    }
+    std::borrow::Cow::Owned(entries.join(" · "))
 }
 
 pub(crate) fn draw_right(

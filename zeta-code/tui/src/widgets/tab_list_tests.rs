@@ -125,3 +125,21 @@ fn draw_keeps_the_active_tab_accent_surface_while_hovered() {
     assert_eq!(active_label.fg, test_context().accent_surface_foreground());
     assert_eq!(active_label.bg, test_context().accent_surface_background());
 }
+
+#[test]
+fn held_tab_does_not_skip_pages_and_shift_tab_moves_back() {
+    let mut tabs = TabListState::new(vec![TestTab("One"), TestTab("Two"), TestTab("Three")]);
+    tabs.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT));
+    assert_eq!(tabs.active_index(), 2);
+    for kind in [
+        crossterm::event::KeyEventKind::Repeat,
+        crossterm::event::KeyEventKind::Release,
+    ] {
+        tabs.handle_key(KeyEvent::new_with_kind(
+            KeyCode::Tab,
+            KeyModifiers::NONE,
+            kind,
+        ));
+    }
+    assert_eq!(tabs.active_index(), 2);
+}

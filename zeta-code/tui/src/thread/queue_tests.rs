@@ -138,7 +138,7 @@ fn focused_queue_supports_selection_reordering_and_actions() {
 }
 
 #[test]
-fn down_after_the_last_message_returns_focus_to_the_composer() {
+fn down_after_the_last_message_stays_in_the_queue_until_escape() {
     let mut queue = Queue::default();
     queue.push(queued_input("only"));
 
@@ -147,6 +147,8 @@ fn down_after_the_last_message_returns_focus_to_the_composer() {
         queue.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
         QueueKeyOutcome::Consumed
     );
+    assert!(queue.focused());
+    queue.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(!queue.focused());
 }
 

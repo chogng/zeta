@@ -39,7 +39,7 @@ fn custom_answer_keeps_the_question_until_text_is_submitted() {
 
     assert_eq!(query.activate(1), Some(QueryOutcome::Consumed));
     assert_eq!(query.view().current, 0);
-    for character in "Custom".chars() {
+    for character in "jk/i p".chars() {
         assert_eq!(
             query.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE,)),
             QueryOutcome::Consumed
@@ -50,7 +50,7 @@ fn custom_answer_keeps_the_question_until_text_is_submitted() {
     else {
         panic!("expected completed query");
     };
-    assert_eq!(answers[0].value, "Custom");
+    assert_eq!(answers[0].value, "jk/i p");
 }
 
 #[test]

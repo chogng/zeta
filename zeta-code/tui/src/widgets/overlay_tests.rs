@@ -85,3 +85,42 @@ fn overlay_fills_each_wide_row_and_aligns_content_with_the_page() {
     assert_eq!(terminal.backend().buffer()[(2, 2)].symbol(), "O");
     assert_snapshot!("wide_detail_overlay_uses_full_rows", terminal.backend());
 }
+
+#[test]
+fn detail_navigation_uses_reading_aliases_and_does_not_repeat_close() {
+    let mut overlay = DetailOverlay::new(DetailList::new(
+        "Output",
+        vec![DetailListRow::new(
+            "stdout",
+            (0..30)
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )],
+    ));
+    let area = ratatui::layout::Rect::new(0, 0, 40, 10);
+    overlay.handle_key(
+        KeyEvent::new_with_kind(
+            KeyCode::Char('j'),
+            KeyModifiers::NONE,
+            crossterm::event::KeyEventKind::Repeat,
+        ),
+        area,
+    );
+    assert_eq!(overlay.scroll, 1);
+    overlay.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE), area);
+    assert_eq!(overlay.scroll, 9);
+    overlay.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE), area);
+    assert_eq!(overlay.scroll, 0);
+    assert_eq!(
+        overlay.handle_key(
+            KeyEvent::new_with_kind(
+                KeyCode::Esc,
+                KeyModifiers::NONE,
+                crossterm::event::KeyEventKind::Repeat
+            ),
+            area
+        ),
+        super::OverlayInputOutcome::Consumed
+    );
+}

@@ -1,5 +1,6 @@
 ---
 source: zeta-code/tui/src/widgets/overlay_tests.rs
+assertion_line: 86
 expression: terminal.backend()
 ---
 "underlying text underlying text underlying text underlying text underlying text underlying text underlying text underlyi"
@@ -9,4 +10,4 @@ expression: terminal.backend()
 "                                                                                                                        "
 "                                                                                                                        "
 "                                                                                                                        "
-"  Esc to close                                                                                                          "
+"  ↑↓/jk to scroll · Home/End to jump · Esc to close                                                                     "

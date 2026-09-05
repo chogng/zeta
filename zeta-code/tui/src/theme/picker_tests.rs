@@ -123,7 +123,10 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     assert_eq!(caption, "Syntax palette: Palette 1");
     let panel = crate::app::CommandPanel::theme(view);
     let key_hints = panel.key_hints().to_owned();
-    assert_eq!(key_hints, "Enter to apply");
+    assert_eq!(
+        key_hints,
+        "Enter to apply  ·  ↑↓/jk to choose  ·  Esc to close"
+    );
     let panel_height = panel.desired_height(80);
     let height = panel_height.saturating_add(1);
     let backend = TestBackend::new(80, height);
@@ -187,7 +190,7 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         .unwrap();
     let key_hint_row = rows
         .iter()
-        .position(|row| row.contains("Enter to apply"))
+        .position(|row| row.contains("Enter to apply  ·  ↑↓/jk to choose  ·  Esc to close"))
         .unwrap();
     assert_eq!(preview_row - custom_row, 2);
     assert_eq!(key_hint_row - palette_row, 1);

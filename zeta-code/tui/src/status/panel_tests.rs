@@ -212,7 +212,10 @@ fn status_panel_scrolls_when_allocated_height_is_shorter_than_content() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE)),
+        panel.handle_key(
+            KeyEvent::new(KeyCode::End, KeyModifiers::NONE),
+            Rect::new(2, 1, 76, 7)
+        ),
         StatusPanelOutcome::Consumed
     );
     terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
@@ -221,11 +224,17 @@ fn status_panel_scrolls_when_allocated_height_is_shorter_than_content() {
     assert!(rendered.contains("Thread version:"));
     assert!(!rendered.contains("Full context window"));
     assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE)),
+        panel.handle_key(
+            KeyEvent::new(KeyCode::Home, KeyModifiers::NONE),
+            Rect::new(2, 1, 76, 7)
+        ),
         StatusPanelOutcome::Consumed
     );
     assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        panel.handle_key(
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            Rect::new(2, 1, 76, 7)
+        ),
         StatusPanelOutcome::Dismiss
     );
 }
@@ -243,27 +252,42 @@ fn status_panel_switches_tabs_with_keyboard_and_exposes_mouse_targets() {
         Some(1)
     );
     assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+        panel.handle_key(
+            KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+            Rect::new(2, 1, 76, 7)
+        ),
         StatusPanelOutcome::Consumed
     );
     assert_eq!(panel.tabs.active_index(), 1);
     assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+        panel.handle_key(
+            KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
+            Rect::new(2, 1, 76, 7)
+        ),
         StatusPanelOutcome::Consumed
     );
     assert_eq!(panel.tabs.active_index(), 0);
     assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        panel.handle_key(
+            KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
+            Rect::new(2, 1, 76, 7)
+        ),
         StatusPanelOutcome::Consumed
     );
     assert_eq!(panel.tabs.active_index(), 1);
     assert_eq!(
-        panel.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        panel.handle_key(
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+            Rect::new(2, 1, 76, 7)
+        ),
         StatusPanelOutcome::Consumed
     );
     assert_eq!(panel.tabs.active_index(), 0);
     assert_eq!(desired_height(&panel, 80), height_before);
-    assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
+    assert_eq!(
+        panel.key_hints(),
+        "↑↓/jk to scroll · Tab to switch · Esc to close"
+    );
 }
 
 #[test]
@@ -367,4 +391,35 @@ fn usage() -> ModelUsageSummary {
             complete: false,
         },
     }
+}
+
+#[test]
+fn status_navigation_repeats_pages_by_the_viewport_and_keeps_each_tab_position() {
+    let mut panel = panel(&usage(), &reference_cost());
+    let area = Rect::new(0, 0, 80, 4);
+    panel.handle_key(
+        KeyEvent::new_with_kind(
+            KeyCode::Char('j'),
+            KeyModifiers::NONE,
+            crossterm::event::KeyEventKind::Repeat,
+        ),
+        area,
+    );
+    assert_eq!(panel.scroll[0], 1);
+    panel.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE), area);
+    assert_eq!(panel.scroll[0], 5);
+    panel.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), area);
+    panel.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT), area);
+    assert_eq!(panel.scroll[0], 5);
+    assert_eq!(
+        panel.handle_key(
+            KeyEvent::new_with_kind(
+                KeyCode::Esc,
+                KeyModifiers::NONE,
+                crossterm::event::KeyEventKind::Repeat
+            ),
+            area
+        ),
+        StatusPanelOutcome::Consumed
+    );
 }

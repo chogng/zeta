@@ -218,7 +218,12 @@ impl CommandPanel {
         Self::Theme(ThemePicker::new(spec))
     }
 
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> CommandPanelOutcome {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> CommandPanelOutcome {
+        let body = self.body();
+        let layout = CommandPanelLayout::new(
+            area,
+            body.tab_rows(CommandPanelLayout::content_width(area.width)),
+        );
         match self {
             Self::Help(content) => map_read_only(content.handle_key(key)),
             Self::Dirs(content) => {
@@ -243,7 +248,7 @@ impl CommandPanel {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Skills)
             }
             Self::Startup(content) => map_read_only(content.handle_key(key)),
-            Self::Status(content) => match content.handle_key(key) {
+            Self::Status(content) => match content.handle_key(key, layout.body) {
                 StatusPanelOutcome::Consumed => CommandPanelOutcome::Consumed,
                 StatusPanelOutcome::Dismiss => CommandPanelOutcome::Dismiss,
             },

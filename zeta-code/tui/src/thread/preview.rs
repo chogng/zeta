@@ -101,6 +101,7 @@ impl ConversationPreview {
     pub(crate) fn navigate(
         &mut self,
         direction: TranscriptScrollDirection,
+        rows: usize,
         area: Rect,
         header_rows: usize,
         context: RenderContext<'_>,
@@ -114,6 +115,7 @@ impl ConversationPreview {
             &self.cache,
             context,
             direction,
+            rows,
         ) && self.scroll.apply(target)
         {
             return None;

@@ -168,8 +168,14 @@ impl ChatPanel {
         self.command = None;
     }
 
-    pub(crate) fn handle_command_key(&mut self, key: KeyEvent) -> Option<CommandPanelOutcome> {
-        self.command.as_mut().map(|command| command.handle_key(key))
+    pub(crate) fn handle_command_key(
+        &mut self,
+        key: KeyEvent,
+        area: ratatui::layout::Rect,
+    ) -> Option<CommandPanelOutcome> {
+        self.command
+            .as_mut()
+            .map(|command| command.handle_key(key, area))
     }
 
     pub(crate) fn handle_command_paste(&mut self, pasted: String) -> bool {

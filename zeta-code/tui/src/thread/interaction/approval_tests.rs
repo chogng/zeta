@@ -54,3 +54,34 @@ fn approval() -> Approval {
         details: vec!["Process spawn  ·  cargo test".into()],
     })
 }
+
+#[test]
+fn navigation_repeats_never_submit_or_wrap_the_approval_choice() {
+    let mut approval = approval();
+    for _ in 0..3 {
+        assert_eq!(
+            approval.handle_key(KeyEvent::new_with_kind(
+                KeyCode::Char('j'),
+                KeyModifiers::NONE,
+                crossterm::event::KeyEventKind::Repeat
+            )),
+            ApprovalOutcome::Consumed
+        );
+    }
+    assert_eq!(approval.view().selected, ApprovalDecision::Decline);
+    assert_eq!(
+        approval.handle_key(KeyEvent::new_with_kind(
+            KeyCode::Enter,
+            KeyModifiers::NONE,
+            crossterm::event::KeyEventKind::Repeat
+        )),
+        ApprovalOutcome::Consumed
+    );
+    assert!(!approval.view().submitting);
+    approval.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+    assert_eq!(
+        approval.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        ApprovalOutcome::Consumed
+    );
+    assert_eq!(approval.view().selected, ApprovalDecision::ApproveOnce);
+}

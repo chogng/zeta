@@ -63,6 +63,30 @@ impl ThreadPresentationState {
         self.expanded_cells.contains(cell_id)
     }
 
+    pub(crate) fn navigate_cell(
+        &mut self,
+        cell_ids: &[TranscriptCellId],
+        navigation: crate::widgets::navigation::Navigation,
+    ) {
+        let Some(last) = cell_ids.len().checked_sub(1) else {
+            return;
+        };
+        let current = self
+            .selected_cell
+            .as_ref()
+            .and_then(|id| cell_ids.iter().position(|cell| cell == id))
+            .unwrap_or(last);
+        let index = navigation.offset(current, last, 12);
+        let cell_id = cell_ids[index].clone();
+        self.scroll.apply(TranscriptScrollTarget::Anchor(
+            TranscriptScrollAnchor::Cell {
+                cell_id: cell_id.as_str().to_owned(),
+                line_offset: 0,
+            },
+        ));
+        self.selected_cell = Some(cell_id);
+    }
+
     pub(crate) fn select_previous_cell(&mut self, cell_ids: &[TranscriptCellId]) -> bool {
         let next = self
             .selected_cell

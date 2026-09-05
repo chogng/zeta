@@ -6,6 +6,7 @@ use crate::render::selection_marker;
 use crate::thread::composer::ChatInput;
 use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::QueuedChatInput;
+use crate::widgets::navigation::Navigation;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -279,21 +280,27 @@ impl Queue {
         if !self.focused {
             return QueueKeyOutcome::Unhandled;
         }
+        if let Some(navigation) = Navigation::from_key(key) {
+            let ids = self
+                .entries
+                .iter()
+                .filter(|entry| !entry.sending && entry.input.is_some())
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>();
+            if let Some(last) = ids.len().checked_sub(1) {
+                let current = ids
+                    .iter()
+                    .position(|id| Some(*id) == self.selected)
+                    .unwrap_or(0);
+                self.selected = Some(ids[navigation.offset(current, last, 3)]);
+            }
+            return QueueKeyOutcome::Consumed;
+        }
         if key.kind != KeyEventKind::Press {
             return QueueKeyOutcome::Consumed;
         }
         let selected = self.selected;
         match (key.modifiers, key.code) {
-            (KeyModifiers::NONE, KeyCode::Up) => {
-                self.select_previous();
-                QueueKeyOutcome::Consumed
-            }
-            (KeyModifiers::NONE, KeyCode::Down) => {
-                if !self.select_next() {
-                    self.blur();
-                }
-                QueueKeyOutcome::Consumed
-            }
             (KeyModifiers::CONTROL, KeyCode::Up) => {
                 if let Some(id) = selected {
                     self.move_up(id);
@@ -322,43 +329,9 @@ impl Queue {
                 self.blur();
                 QueueKeyOutcome::Consumed
             }
-            _ if key.modifiers.contains(KeyModifiers::CONTROL) => QueueKeyOutcome::Unhandled,
+            (KeyModifiers::CONTROL, KeyCode::Char('c')) => QueueKeyOutcome::Unhandled,
             _ => QueueKeyOutcome::Consumed,
         }
-    }
-
-    fn select_previous(&mut self) -> bool {
-        let Some(index) = self.selected_index() else {
-            return self.focus_latest();
-        };
-        let Some(entry) = self.entries[..index]
-            .iter()
-            .rev()
-            .find(|entry| !entry.sending && entry.input.is_some())
-        else {
-            return false;
-        };
-        self.selected = Some(entry.id);
-        true
-    }
-
-    fn select_next(&mut self) -> bool {
-        let Some(index) = self.selected_index() else {
-            return self.focus_latest();
-        };
-        let Some(entry) = self.entries[index.saturating_add(1)..]
-            .iter()
-            .find(|entry| !entry.sending && entry.input.is_some())
-        else {
-            return false;
-        };
-        self.selected = Some(entry.id);
-        true
-    }
-
-    fn selected_index(&self) -> Option<usize> {
-        let selected = self.selected?;
-        self.entries.iter().position(|entry| entry.id == selected)
     }
 
     fn reconcile_selection(&mut self) {

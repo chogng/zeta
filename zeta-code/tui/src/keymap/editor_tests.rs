@@ -88,6 +88,11 @@ fn keymap_choices_lists_keys_before_responsibilities() {
             "ctrl+o",
             "ctrl+z",
             "Esc Esc",
+            "↑/k · ↓/j",
+            "Home/End · PageUp/PageDown",
+            "/",
+            "Tab/Shift+Tab",
+            "Esc",
         ]
     );
 }
@@ -146,4 +151,24 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
     assert_eq!(user_row.find("user"), default_row.find("default"));
     assert!(!rows.join("\n").contains("zetaCode."));
     assert!(!rows.join("\n").contains("Built in"));
+}
+
+#[test]
+fn capture_records_navigation_letters_instead_of_interpreting_them() {
+    for character in ['j', 'k', '/', 'i', 'p'] {
+        let mut capture = keymap_capture(
+            copy_action(),
+            4,
+            KeymapEditIntent::AddAlternate,
+            KeymapCaptureMode::SingleKey,
+        );
+        let KeymapCaptureOutcome::Edit(edit) =
+            capture.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
+        else {
+            panic!("expected a captured key");
+        };
+        assert!(
+            matches!(edit.kind, KeymapEditKind::Set { key, .. } if key == character.to_string())
+        );
+    }
 }

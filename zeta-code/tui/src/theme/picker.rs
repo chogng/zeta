@@ -170,6 +170,10 @@ fn list_selection(
         model: ListSelectionModel::new(title, vec![ListSelectionGroup::new("Themes", items)])
             .with_activation_mode(ListSelectionActivationMode::Enter)
             .with_activation_action("apply")
+            .with_dismiss_action(match level {
+                ThemePickerLevel::Main => "close",
+                ThemePickerLevel::Custom => "return",
+            })
             .without_tab_bar()
             .with_initial_selected(selected)
             .with_empty_message("No color themes available"),

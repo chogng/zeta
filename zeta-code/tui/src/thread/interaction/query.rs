@@ -5,6 +5,7 @@ use crate::render::interaction_style;
 use crate::render::selection_marker;
 use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadRequestResponse;
+use crate::widgets::navigation::Navigation;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -140,6 +141,17 @@ impl Query {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> QueryOutcome {
+        if !self.submitting
+            && self.custom_answer.is_none()
+            && let Some(navigation) = Navigation::from_key(key)
+        {
+            self.selected = navigation.offset(
+                self.selected,
+                self.option_count().saturating_sub(1),
+                self.option_count(),
+            );
+            return QueryOutcome::Consumed;
+        }
         if key.kind != KeyEventKind::Press || self.submitting {
             return QueryOutcome::Consumed;
         }
@@ -167,16 +179,7 @@ impl Query {
                 _ => QueryOutcome::Consumed,
             };
         }
-        let option_count = self.option_count();
         match key.code {
-            KeyCode::Up => {
-                self.selected = self.selected.checked_sub(1).unwrap_or(option_count - 1);
-                QueryOutcome::Consumed
-            }
-            KeyCode::Down => {
-                self.selected = (self.selected + 1) % option_count;
-                QueryOutcome::Consumed
-            }
             KeyCode::Enter if key.modifiers.is_empty() => self.activate_selected(),
             KeyCode::Esc => QueryOutcome::Consumed,
             _ => QueryOutcome::Unhandled,

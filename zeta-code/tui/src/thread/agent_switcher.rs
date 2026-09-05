@@ -81,28 +81,13 @@ impl AgentThreadSwitcher {
         self.focused
     }
 
-    pub(crate) fn select_previous(&mut self) -> bool {
-        let Some(index) = self.selected_index() else {
-            return false;
+    pub(crate) fn navigate(&mut self, navigation: crate::widgets::navigation::Navigation) {
+        let Some(last) = self.rows.len().checked_sub(1) else {
+            return;
         };
-        if index == 0 {
-            return false;
-        }
-        self.selected = Some(self.rows[index - 1].thread_id.clone());
+        let index = navigation.offset(self.selected_index().unwrap_or(0), last, DEFAULT_MAX_ROWS);
+        self.selected = Some(self.rows[index].thread_id.clone());
         self.keep_selection_visible(DEFAULT_MAX_ROWS);
-        true
-    }
-
-    pub(crate) fn select_next(&mut self) -> bool {
-        let Some(index) = self.selected_index() else {
-            return false;
-        };
-        let Some(row) = self.rows.get(index.saturating_add(1)) else {
-            return false;
-        };
-        self.selected = Some(row.thread_id.clone());
-        self.keep_selection_visible(DEFAULT_MAX_ROWS);
-        true
     }
 
     pub(crate) fn selected(&self) -> Option<&ThreadId> {

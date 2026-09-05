@@ -82,7 +82,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             );
         }
         frame.render_widget(
-            Paragraph::new("  ↑↓ to scroll · Home/End to jump · Esc to close")
+            Paragraph::new("  ↑↓/jk to scroll · Home/End to jump · Esc to close")
                 .style(Style::default().fg(context.muted())),
             areas.session.bottom,
         );
@@ -613,13 +613,17 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     }
     if app.approval_view().is_some() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓ to choose · Enter to confirm"),
+            text: Cow::Borrowed("↑↓/jk to choose · Enter to confirm"),
             style: HitBarStyle::Keys,
         };
     }
-    if app.query_view().is_some() {
+    if let Some(query) = app.query_view() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓ to choose · Enter to answer · Esc to cancel custom input"),
+            text: Cow::Borrowed(if query.custom_answer.is_some() {
+                "Enter to answer · Esc to cancel"
+            } else {
+                "↑↓/jk to choose · Enter to answer"
+            }),
             style: HitBarStyle::Keys,
         };
     }
@@ -632,14 +636,14 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     if app.transcript_selection_active() {
         return BottomContent::HitBar {
             text: Cow::Borrowed(
-                "↑↓ to select · Space to expand · Enter to view details · Esc to return to input",
+                "↑↓/jk to select · Space to expand · Enter to view details · Esc to return to input",
             ),
             style: HitBarStyle::Keys,
         };
     }
     if app.agent_thread_switcher_focused() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓ to select · Enter to switch · Esc to return to input"),
+            text: Cow::Borrowed("↑↓/jk to select · Enter to switch · Esc to return to input"),
             style: HitBarStyle::Keys,
         };
     }

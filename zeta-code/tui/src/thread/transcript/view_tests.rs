@@ -390,6 +390,7 @@ fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
         &render_cache,
         test_context(),
         TranscriptScrollDirection::Up,
+        5,
     )
     .unwrap();
     assert!(scroll.apply(target));
@@ -491,6 +492,7 @@ fn transcript_changes_do_not_move_a_manually_scrolled_viewport() {
         &render_cache,
         test_context(),
         TranscriptScrollDirection::Up,
+        5,
     )
     .unwrap();
     assert!(scroll.apply(target));
@@ -545,6 +547,7 @@ fn manual_scroll_keeps_the_anchored_line_visible_during_streaming_growth() {
         &render_cache,
         test_context(),
         TranscriptScrollDirection::Up,
+        5,
     )
     .unwrap();
     assert!(scroll.apply(target));

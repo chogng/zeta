@@ -101,6 +101,23 @@ impl SessionManagerState {
         self.select_offset(sessions, 1)
     }
 
+    pub(crate) fn navigate(
+        &mut self,
+        sessions: &[Session],
+        navigation: crate::widgets::navigation::Navigation,
+    ) {
+        use crate::widgets::navigation::Navigation;
+        let delta = match navigation {
+            Navigation::Previous => -1,
+            Navigation::Next => 1,
+            Navigation::PagePrevious => -12,
+            Navigation::PageNext => 12,
+            Navigation::First => isize::MIN,
+            Navigation::Last => isize::MAX,
+        };
+        self.select_offset(sessions, delta);
+    }
+
     pub(crate) fn selected_session(&self) -> Option<&SessionId> {
         match self.selected.as_ref() {
             Some(SessionManagerPointerTarget::Session(id)) => Some(id),

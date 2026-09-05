@@ -54,7 +54,13 @@ impl<A> ListSelection<A> {
     }
 
     pub(crate) fn key_hints(&self) -> &str {
-        self.key_hints.text()
+        if self.state.search_focused() {
+            "Enter to return to list · Esc to return to list"
+        } else if self.state.tabs_focused() {
+            "Tab/Shift+Tab to switch · Enter to return to list · Esc to close"
+        } else {
+            self.key_hints.text()
+        }
     }
 
     pub(crate) fn state(&self) -> &ListSelectionState {

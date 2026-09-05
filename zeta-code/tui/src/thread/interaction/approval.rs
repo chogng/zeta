@@ -1,5 +1,6 @@
 use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadRequestResponse;
+use crate::widgets::navigation::Navigation;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -98,17 +99,22 @@ impl Approval {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ApprovalOutcome {
-        if key.kind != KeyEventKind::Press || self.submitting {
+        if self.submitting {
+            return ApprovalOutcome::Consumed;
+        }
+        if let Some(navigation) = Navigation::from_key(key) {
+            let index = usize::from(self.selected == ApprovalDecision::Decline);
+            self.selected = if navigation.offset(index, 1, 2) == 0 {
+                ApprovalDecision::ApproveOnce
+            } else {
+                ApprovalDecision::Decline
+            };
+            return ApprovalOutcome::Consumed;
+        }
+        if key.kind != KeyEventKind::Press {
             return ApprovalOutcome::Consumed;
         }
         match key.code {
-            KeyCode::Up | KeyCode::Down => {
-                self.selected = match self.selected {
-                    ApprovalDecision::ApproveOnce => ApprovalDecision::Decline,
-                    ApprovalDecision::Decline => ApprovalDecision::ApproveOnce,
-                };
-                ApprovalOutcome::Consumed
-            }
             KeyCode::Enter if key.modifiers.is_empty() => {
                 self.submitting = true;
                 self.error = None;

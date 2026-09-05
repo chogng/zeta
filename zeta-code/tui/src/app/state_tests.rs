@@ -735,7 +735,10 @@ fn startup_slash_command_opens_a_read_only_context_panel() {
         app.list_selection().map(|selection| selection.title()),
         Some("Startup")
     );
-    assert_eq!(app.command_panel_key_hints(), Some("Esc to close"));
+    assert_eq!(
+        app.command_panel_key_hints(),
+        Some("↑↓/jk to choose  ·  Esc to close")
+    );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
@@ -2029,4 +2032,64 @@ fn manager_state_session(id: &str) -> Session {
         manager: Default::default(),
         threads: Vec::new(),
     }
+}
+
+#[test]
+fn panel_search_owns_letters_and_paste_then_returns_to_the_list_and_original_draft() {
+    let mut app = App::new();
+    app.insert_text("original draft");
+    app.update(AppEvent::HelpOpened(
+        crate::widgets::list_selection::ListSelectionModel::new(
+            "Help",
+            vec![crate::widgets::list_selection::ListSelectionGroup::new(
+                "All",
+                vec![
+                    crate::widgets::list_selection::ListSelectionItem::new("first"),
+                    crate::widgets::list_selection::ListSelectionItem::new("jk/i p pasted"),
+                ],
+            )],
+        )
+        .with_search(crate::widgets::search_box::SearchBoxModel::new("Search")),
+    ));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(1)
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    for character in "jk/i p".chars() {
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)),
+            None
+        );
+    }
+    app.handle_paste(" pasted".into());
+    assert_eq!(app.input(), "original draft");
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .search()
+            .unwrap()
+            .input_active()
+    );
+    assert!(
+        app.command_panel_key_hints()
+            .unwrap()
+            .contains("return to list")
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(
+        !app.list_selection()
+            .unwrap()
+            .search()
+            .unwrap()
+            .input_active()
+    );
+    assert!(app.command_panel().is_some());
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert_eq!(app.input(), "original draft");
 }

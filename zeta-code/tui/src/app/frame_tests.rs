@@ -237,7 +237,10 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
         test_context().accent_surface_background()
     );
     assert_eq!(buffer[(2, 3)].symbol(), "M");
-    assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
+    assert_eq!(
+        panel.key_hints(),
+        "↑↓/jk to scroll · Tab to switch · Esc to close"
+    );
 }
 
 #[test]
@@ -383,7 +386,10 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
     assert!(rows[6].trim().is_empty());
     assert!(rows[7].starts_with("   Session    Processes"));
     assert!(rows[18].trim().is_empty());
-    assert_eq!(rows[19].trim_end(), "  Tab to switch · Esc to close");
+    assert_eq!(
+        rows[19].trim_end(),
+        "  ↑↓/jk to scroll · Tab to switch · Esc to close"
+    );
     assert_snapshot!("status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -977,7 +983,7 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn command_panel_without_actions_keeps_the_two_bottom_rows_empty() {
+fn read_only_command_panel_shows_navigation_and_close_hints() {
     let mut app = App::new();
     app.update(ThreadEvent::ProductNotice(
         "Conversation remains visible.".into(),
@@ -991,7 +997,7 @@ fn command_panel_without_actions_keeps_the_two_bottom_rows_empty() {
     assert!(rendered.contains("Commands"));
     assert!(rendered.contains("Keys"));
     assert!(rendered.contains("Search commands and shortcuts"));
-    assert!(!rendered.contains("Esc to close"));
+    assert!(rendered.contains("Esc to close"));
     assert!(!rendered.contains("←/→/Tab to switch"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ask permissions on"));
@@ -1000,7 +1006,7 @@ fn command_panel_without_actions_keeps_the_two_bottom_rows_empty() {
     assert_eq!(layout.session.bottom.height, 2);
     let rows = rendered.lines().collect::<Vec<_>>();
     assert!(rows[22].trim().is_empty());
-    assert!(rows[23].trim().is_empty());
+    assert!(rows[23].contains("/ to search"));
     assert_eq!(layout.session.composer.bottom(), layout.session.bottom.y);
 }
 
@@ -1010,7 +1016,7 @@ fn command_panel_supports_keyboard_tab_switching_and_search() {
     app.update(AppEvent::HelpOpened(help_view()));
 
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
@@ -1019,6 +1025,8 @@ fn command_panel_supports_keyboard_tab_switching_and_search() {
     assert!(rendered.contains("Esc"));
     assert!(rendered.find("Esc") < rendered.find("move selection"));
 
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.list_selection().is_some());
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.list_selection().is_none());
 }
@@ -1055,7 +1063,7 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
         .session
         .composer
         .y;
-    assert_eq!(first[(3, 1)].fg, Color::Rgb(0x40, 0x85, 0xac));
+
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
     assert_eq!(first[(2, interaction_y)].fg, Color::Red);
     assert!(first[(2, interaction_y)].modifier.contains(Modifier::BOLD));
@@ -1066,7 +1074,15 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
 
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let second = render_buffer(&app, 80, 24);
-    assert_eq!(second[(4, 1)].fg, first[(4, 1)].fg);
+    for y in 0..interaction_y {
+        for x in 0..80 {
+            assert_eq!(
+                second[(x, y)],
+                first[(x, y)],
+                "background changed at {x},{y}"
+            );
+        }
+    }
     assert_eq!(second[(0, interaction_y)].fg, Color::Green);
     assert_eq!(second[(2, interaction_y)].fg, Color::Green);
     assert!(second[(2, interaction_y)].modifier.contains(Modifier::BOLD));

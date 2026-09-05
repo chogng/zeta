@@ -6,6 +6,17 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 #[test]
+fn narrow_hints_keep_the_exit_action_whole() {
+    let hints =
+        "Enter/Space to change · ↑↓/jk to choose · / to search · Tab to switch · Esc to close";
+    assert_eq!(
+        super::visible_hints(hints, 76),
+        "Enter/Space to change · / to search · Tab to switch · Esc to close"
+    );
+    assert_eq!(super::visible_hints(hints, 32), "Esc to close");
+}
+
+#[test]
 fn key_hints_format_actions_and_notes_in_order() {
     let hints = KeyHints::new()
         .with_action("Enter", "apply")

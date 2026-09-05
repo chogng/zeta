@@ -17,7 +17,30 @@ use super::editor::keymap_choices;
 const CONFIG_KEY: &str = "keybindings";
 
 pub(crate) fn fixed_shortcuts() -> impl Iterator<Item = (&'static str, &'static str)> {
-    [("Esc Esc", "open rewind checkpoints when the input is empty")].into_iter()
+    [
+        ("Esc Esc", "open rewind checkpoints when the input is empty"),
+        (
+            "↑/k · ↓/j",
+            "navigate focused lists or read-only content; letters remain text in editors",
+        ),
+        (
+            "Home/End · PageUp/PageDown",
+            "jump or page within the focused list or reading view",
+        ),
+        (
+            "/",
+            "focus search in a searchable panel; Enter or Esc returns to its list",
+        ),
+        (
+            "Tab/Shift+Tab",
+            "switch panel tabs; Enter enters the active list",
+        ),
+        (
+            "Esc",
+            "return one interaction level; pending approval/query requires an explicit answer",
+        ),
+    ]
+    .into_iter()
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

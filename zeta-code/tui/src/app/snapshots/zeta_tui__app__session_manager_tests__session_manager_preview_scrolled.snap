@@ -3,35 +3,35 @@ source: zeta-code/tui/src/app/session_manager_tests.rs
 assertion_line: 139
 expression: render(&app)
 ---
+● Conversation message 07: content stays readable in preview.
+
+● Conversation message 08: content stays readable in preview.
+
+● Conversation message 09: content stays readable in preview.
+
+● Conversation message 10: content stays readable in preview.
+
+● Conversation message 11: content stays readable in preview.
+
+● Conversation message 12: content stays readable in preview.
+
+● Conversation message 13: content stays readable in preview.
+
+● Conversation message 14: content stays readable in preview.
+
+● Conversation message 15: content stays readable in preview.
+
+● Conversation message 16: content stays readable in preview.
+
+● Conversation message 17: content stays readable in preview.
+
 ● Conversation message 18: content stays readable in preview.
 
 ● Conversation message 19: content stays readable in preview.
 
 ● Conversation message 20: content stays readable in preview.
 
-● Conversation message 21: content stays readable in preview.
-
-● Conversation message 22: content stays readable in preview.
-
-● Conversation message 23: content stays readable in preview.
-
-● Conversation message 24: content stays readable in preview.
-
-● Conversation message 25: content stays readable in preview.
-
-● Conversation message 26: content stays readable in preview.
-
-● Conversation message 27: content stays readable in preview.
-
-● Conversation message 28: content stays readable in preview.
-
-● Conversation message 29: content stays readable in preview.
-
-● Conversation message 30: content stays readable in preview.
-
-● Conversation message 31: content stays readable in preview.
-
                                       Jump to bottom (click) ↓
 
   Preview · Snapshot session · read only
-  ↑↓ to scroll · Home/End to jump · Esc to close
+  ↑↓/jk to scroll · Home/End to jump · Esc to close

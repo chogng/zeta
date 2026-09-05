@@ -27,7 +27,6 @@ pub(crate) fn choices(context: &TuiStartupContext) -> ListSelectionModel {
 
     ListSelectionModel::new("Startup", vec![ListSelectionGroup::new("Startup", items)])
         .without_tab_bar()
-        .with_key_action("Esc", "close")
 }
 
 fn profile_label(profile_root: Option<&Path>) -> String {

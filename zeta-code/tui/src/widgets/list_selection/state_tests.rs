@@ -149,7 +149,7 @@ fn arrow_keys_adjust_the_selected_actionable_item() {
 fn tab_switching_preserves_the_search_query() {
     let mut state = state();
 
-    state.handle_key(key(KeyCode::Up));
+    state.handle_key(key(KeyCode::Char('/')));
     for character in "esc".chars() {
         state.handle_key(key(KeyCode::Char(character)));
     }
@@ -168,7 +168,7 @@ fn filtering_and_navigation_keep_selection_in_visible_range() {
     state.handle_key(key(KeyCode::Down));
     assert_eq!(state.selected_visible_index(), Some(1));
     state.handle_key(key(KeyCode::Home));
-    state.handle_key(key(KeyCode::Up));
+    state.handle_key(key(KeyCode::Char('/')));
     for character in "status".chars() {
         state.handle_key(key(KeyCode::Char(character)));
     }
@@ -206,7 +206,7 @@ fn candidate_ranking_uses_match_quality_and_preserves_equal_model_order() {
     );
 
     state.handle_key(key(KeyCode::Home));
-    state.handle_key(key(KeyCode::Up));
+    state.handle_key(key(KeyCode::Char('/')));
     for character in "status".chars() {
         state.handle_key(key(KeyCode::Char(character)));
     }
@@ -276,25 +276,18 @@ fn enter_and_space_activate_actionable_items() {
 }
 
 #[test]
-fn up_moves_focus_from_the_first_item_to_search_and_then_tabs() {
-    let mut read_only = state();
-
-    assert!(read_only.search().is_some());
-    assert!(read_only.items_focused());
-    assert_eq!(
-        read_only.handle_key(key(KeyCode::Up)),
-        ListSelectionInputOutcome::Consumed
-    );
-    assert!(read_only.search_focused());
-    assert_eq!(read_only.query(), "");
-    read_only.handle_key(key(KeyCode::Char(' ')));
-    assert_eq!(read_only.query(), " ");
-    read_only.handle_key(key(KeyCode::Up));
-    assert!(read_only.tabs_focused());
-    read_only.handle_key(key(KeyCode::Down));
-    assert!(read_only.search_focused());
-    read_only.handle_key(key(KeyCode::Down));
-    assert!(read_only.items_focused());
+fn search_and_tabs_have_explicit_focus_entry_and_return_to_items() {
+    let mut view = state();
+    view.handle_key(key(KeyCode::Up));
+    assert!(view.items_focused());
+    view.handle_key(key(KeyCode::Char('/')));
+    assert!(view.search_focused());
+    view.handle_key(key(KeyCode::Char(' ')));
+    assert_eq!(view.query(), " ");
+    view.handle_key(key(KeyCode::Up));
+    assert!(view.tabs_focused());
+    view.handle_key(key(KeyCode::Down));
+    assert!(view.items_focused());
 }
 
 #[test]
@@ -313,7 +306,7 @@ fn enter_only_actions_keep_space_available_for_search() {
         .with_search(SearchBoxModel::new("Search themes")),
     );
 
-    state.handle_key(key(KeyCode::Up));
+    state.handle_key(key(KeyCode::Char('/')));
     for character in "zeta code".chars() {
         state.handle_key(key(KeyCode::Char(character)));
     }
@@ -340,17 +333,24 @@ fn selection_without_search_ignores_text_and_space() {
 }
 
 #[test]
-fn escape_dismisses_the_view_while_search_is_active() {
+fn escape_returns_from_search_before_dismissing_the_view() {
     let mut state = state();
-    state.handle_key(key(KeyCode::Up));
-    state.handle_key(key(KeyCode::Char('s')));
-
+    state.handle_key(key(KeyCode::Char('/')));
+    for character in "jk/i p".chars() {
+        state.handle_key(key(KeyCode::Char(character)));
+    }
+    assert_eq!(state.query(), "jk/i p");
+    assert!(state.search_focused());
+    assert_eq!(
+        state.handle_key(key(KeyCode::Esc)),
+        ListSelectionInputOutcome::Consumed
+    );
+    assert!(!state.search_focused());
+    assert_eq!(state.query(), "jk/i p");
     assert_eq!(
         state.handle_key(key(KeyCode::Esc)),
         ListSelectionInputOutcome::Dismiss
     );
-    assert!(state.search_focused());
-    assert_eq!(state.query(), "s");
 }
 
 #[test]
@@ -359,7 +359,7 @@ fn paste_only_filters_while_search_is_focused() {
 
     state.handle_paste("status".into());
     assert_eq!(state.query(), "");
-    state.handle_key(key(KeyCode::Up));
+    state.handle_key(key(KeyCode::Char('/')));
     state.handle_paste("status".into());
 
     assert_eq!(state.query(), "status");
@@ -375,4 +375,57 @@ fn view_model_can_name_its_empty_state() {
 
     assert_eq!(state.empty_message(), "No configured skill sources");
     assert!(state.visible_items().is_empty());
+}
+
+#[test]
+fn navigation_clamps_at_list_boundaries_and_only_press_activates() {
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Items",
+            vec![ListSelectionGroup::new(
+                "All",
+                (0..20)
+                    .map(|i| {
+                        ListSelectionItem::new(format!("Item {i}"))
+                            .with_id(ListSelectionItemId::new(i.to_string()))
+                    })
+                    .collect(),
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search")),
+    );
+    state.handle_key(key(KeyCode::Char('k')));
+    assert!(!state.search_focused());
+    state.handle_key(KeyEvent::new_with_kind(
+        KeyCode::Char('j'),
+        KeyModifiers::NONE,
+        crossterm::event::KeyEventKind::Repeat,
+    ));
+    assert_eq!(state.selected_visible_index(), Some(1));
+    state.handle_key(key(KeyCode::PageDown));
+    assert_eq!(state.selected_visible_index(), Some(13));
+    state.handle_key(key(KeyCode::End));
+    state.handle_key(key(KeyCode::Char('j')));
+    assert_eq!(state.selected_visible_index(), Some(19));
+    for kind in [
+        crossterm::event::KeyEventKind::Repeat,
+        crossterm::event::KeyEventKind::Release,
+    ] {
+        for code in [
+            KeyCode::Enter,
+            KeyCode::Char(' '),
+            KeyCode::Right,
+            KeyCode::Esc,
+            KeyCode::Char('/'),
+        ] {
+            assert_eq!(
+                state.handle_key(KeyEvent::new_with_kind(code, KeyModifiers::NONE, kind)),
+                ListSelectionInputOutcome::Consumed
+            );
+        }
+    }
+    assert!(matches!(
+        state.handle_key(key(KeyCode::Enter)),
+        ListSelectionInputOutcome::Activate(_)
+    ));
 }

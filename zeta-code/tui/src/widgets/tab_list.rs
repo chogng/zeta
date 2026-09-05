@@ -4,6 +4,7 @@ use crate::render::RenderContext;
 use crate::render::interaction_style;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -78,9 +79,22 @@ impl<T> TabListState<T> {
         {
             return TabListInputOutcome::Unhandled;
         }
+        if key.kind != KeyEventKind::Press {
+            return if matches!(
+                key.code,
+                KeyCode::Tab | KeyCode::BackTab | KeyCode::Left | KeyCode::Right
+            ) {
+                TabListInputOutcome::Consumed
+            } else {
+                TabListInputOutcome::Unhandled
+            };
+        }
         let previous = self.active;
         match key.code {
             KeyCode::BackTab | KeyCode::Left => {
+                self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1);
+            }
+            KeyCode::Tab if key.modifiers == KeyModifiers::SHIFT => {
                 self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1);
             }
             KeyCode::Tab | KeyCode::Right => {

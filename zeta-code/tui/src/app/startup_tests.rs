@@ -16,7 +16,7 @@ fn startup_choices_show_the_effective_new_session_context() {
 
     assert_eq!(state.title(), "Startup");
     assert!(!state.show_tabs());
-    assert_eq!(key_hints, "Esc to close");
+    assert_eq!(key_hints, "↑↓/jk to choose  ·  Esc to close");
     assert_eq!(
         state
             .visible_items()

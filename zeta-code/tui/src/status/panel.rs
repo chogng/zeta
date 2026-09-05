@@ -11,6 +11,7 @@ use crate::render::RenderContext;
 use crate::widgets::detail_list;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
+use crate::widgets::navigation::Navigation;
 use crate::widgets::tab_list;
 use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
@@ -18,14 +19,11 @@ use crate::widgets::tab_list::TabListState;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use zeta_protocol::ModelReferenceCostSummary;
 use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::ModelUsageTotal;
-
-const PAGE_ROWS: u16 = 5;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum StatusSection {
@@ -105,30 +103,19 @@ impl StatusPanel {
         u16::try_from(rows).unwrap_or(u16::MAX)
     }
 
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> StatusPanelOutcome {
-        if key.kind != KeyEventKind::Press {
-            return StatusPanelOutcome::Consumed;
-        }
-
-        if key.code == KeyCode::Esc && key.modifiers == KeyModifiers::NONE {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent, body: Rect) -> StatusPanelOutcome {
+        if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc && key.modifiers.is_empty() {
             return StatusPanelOutcome::Dismiss;
         }
-        let tab_outcome = self.tabs.handle_key(key);
-        if !matches!(tab_outcome, TabListInputOutcome::Unhandled) {
-            return StatusPanelOutcome::Consumed;
-        }
-        if key.modifiers != KeyModifiers::NONE {
-            return StatusPanelOutcome::Consumed;
-        }
-        let scroll = &mut self.scroll[self.tabs.active_index()];
-        match key.code {
-            KeyCode::Up => *scroll = scroll.saturating_sub(1),
-            KeyCode::Down => *scroll = scroll.saturating_add(1),
-            KeyCode::PageUp => *scroll = scroll.saturating_sub(PAGE_ROWS),
-            KeyCode::PageDown => *scroll = scroll.saturating_add(PAGE_ROWS),
-            KeyCode::Home => *scroll = 0,
-            KeyCode::End => *scroll = u16::MAX,
-            _ => {}
+        if let Some(navigation) = Navigation::from_key(key) {
+            let content_rows = self.active_detail().content_height(body.width);
+            let last = content_rows.saturating_sub(usize::from(body.height));
+            let scroll = &mut self.scroll[self.tabs.active_index()];
+            *scroll = navigation
+                .offset(usize::from(*scroll), last, usize::from(body.height))
+                .min(usize::from(u16::MAX)) as u16;
+        } else {
+            self.tabs.handle_key(key);
         }
         StatusPanelOutcome::Consumed
     }
@@ -176,7 +163,7 @@ impl StatusPanel {
     }
 
     pub(crate) const fn key_hints(&self) -> &'static str {
-        "Tab to switch · Esc to close"
+        "↑↓/jk to scroll · Tab to switch · Esc to close"
     }
 
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {

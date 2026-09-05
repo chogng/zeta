@@ -27,7 +27,6 @@ use unicode_width::UnicodeWidthStr;
 use zeta_ansi_escape::ansi_text;
 
 const JUMP_TO_BOTTOM_LABEL: &str = "Jump to bottom (click) ↓";
-const SCROLL_STEP: usize = 5;
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) header: Option<&'a Buffer>,
@@ -153,6 +152,7 @@ pub(crate) fn scroll_target(
     render_cache: &ChatHistoryRenderCache,
     context: RenderContext<'_>,
     direction: TranscriptScrollDirection,
+    rows: usize,
 ) -> Option<TranscriptScrollTarget> {
     let heights = measured_heights(messages, render_cache, area.width, context);
     let (content_area, _) = scroll_areas(area, header_rows, &heights, scroll);
@@ -161,8 +161,8 @@ pub(crate) fn scroll_target(
         .saturating_sub(usize::from(content_area.height));
     let current = viewport_offset(messages, header_rows, &heights, scroll, bottom_offset);
     let target = match direction {
-        TranscriptScrollDirection::Up => current.saturating_sub(SCROLL_STEP),
-        TranscriptScrollDirection::Down => current.saturating_add(SCROLL_STEP),
+        TranscriptScrollDirection::Up => current.saturating_sub(rows),
+        TranscriptScrollDirection::Down => current.saturating_add(rows),
     };
     if target >= bottom_offset {
         return scroll
