@@ -1,40 +1,36 @@
-//! Parsing and compilation for editable named sprite frames and actions.
+//! Parsing and compilation for terminal-cell sprite frames and actions.
 
 use crate::OwnedTerminalSprite;
-use crate::pack_octants_rgba;
+use crate::Rgb;
+use crate::SpriteCell;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-const FORMAT_VERSION: &str = "version 1";
-const MAX_DIMENSION: u32 = 4096;
+const FORMAT_VERSION: &str = "version 2";
+const MAX_DIMENSION: u16 = 256;
 const MAX_ACTION_STEPS: usize = 8;
 const MAX_ACTION_DURATION_MS: u16 = 600;
 const MIN_STEP_DURATION_MS: u16 = 25;
 const MAX_STEP_DURATION_MS: u16 = 250;
+const TRANSPARENT_CELL: SpriteCell = SpriteCell::new(' ', None, None);
+const BLOCK_SYMBOLS: &str = "▘▝▀▖▌▞▛▗▚▐▜▄▙▟█▂▆";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SpriteFrameSource {
     pub(crate) name: String,
-    pub(crate) pixels: Vec<[u8; 4]>,
+    pub(crate) cells: Vec<SpriteCell>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SpriteSheetSource {
-    pub(crate) width: u32,
-    pub(crate) height: u32,
+    pub(crate) width: u16,
+    pub(crate) height: u16,
     pub(crate) frames: Vec<SpriteFrameSource>,
     pub(crate) actions: Vec<SpriteActionSource>,
     pub(crate) idle_frame_index: u16,
-}
-
-impl SpriteSheetSource {
-    #[cfg(feature = "compiler")]
-    pub(crate) fn idle(&self) -> &SpriteFrameSource {
-        &self.frames[usize::from(self.idle_frame_index)]
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -94,19 +90,19 @@ impl CompiledSpriteAction {
     }
 }
 
-/// Fully validated frames and action timings from one `.sprite` source.
+/// Fully validated terminal-cell frames and action timings from one `.sprite` source.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompiledSpriteSheet {
-    source_width: u32,
-    source_height: u32,
+    width: u16,
+    height: u16,
     frames: Vec<CompiledSpriteFrame>,
     actions: Vec<CompiledSpriteAction>,
     idle_frame_index: u16,
 }
 
 impl CompiledSpriteSheet {
-    pub fn source_dimensions(&self) -> (u32, u32) {
-        (self.source_width, self.source_height)
+    pub fn dimensions(&self) -> (u16, u16) {
+        (self.width, self.height)
     }
 
     pub fn frames(&self) -> &[CompiledSpriteFrame] {
@@ -130,22 +126,21 @@ impl CompiledSpriteSheet {
     }
 }
 
-/// Parses and packs every named frame and action in a `.sprite` design source.
-pub fn compile_sprite_sheet(path: &Path, alpha_threshold: u8) -> Result<CompiledSpriteSheet> {
+/// Parses every terminal cell, named frame, and action in a `.sprite` design source.
+pub fn compile_sprite_sheet(path: &Path) -> Result<CompiledSpriteSheet> {
     let source = read_sprite_sheet(path)?;
     let frames = source
         .frames
         .into_iter()
-        .map(|frame| {
-            let sprite =
-                pack_octants_rgba(source.width, source.height, &frame.pixels, alpha_threshold)
-                    .with_context(|| format!("compile frame '{}'", frame.name))?;
-            Ok(CompiledSpriteFrame {
-                name: frame.name,
-                sprite,
-            })
+        .map(|frame| CompiledSpriteFrame {
+            name: frame.name,
+            sprite: OwnedTerminalSprite {
+                width: source.width,
+                height: source.height,
+                cells: frame.cells,
+            },
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect();
     let actions = source
         .actions
         .into_iter()
@@ -155,8 +150,8 @@ pub fn compile_sprite_sheet(path: &Path, alpha_threshold: u8) -> Result<Compiled
         })
         .collect();
     Ok(CompiledSpriteSheet {
-        source_width: source.width,
-        source_height: source.height,
+        width: source.width,
+        height: source.height,
         frames,
         actions,
         idle_frame_index: source.idle_frame_index,
@@ -186,6 +181,7 @@ fn parse_sprite_sheet(path: &Path, contents: &str) -> Result<SpriteSheetSource> 
         parse_size(size).with_context(|| format!("parse {} line {size_line}", path.display()))?;
 
     let mut colors = BTreeMap::new();
+    let mut cell_kinds = BTreeMap::new();
     let mut frames = Vec::new();
     let mut frame_indices = BTreeMap::new();
     let mut unresolved_actions = Vec::new();
@@ -198,9 +194,9 @@ fn parse_sprite_sheet(path: &Path, contents: &str) -> Result<SpriteSheetSource> 
             continue;
         }
         if let Some(entry) = line.strip_prefix("color ") {
-            if !frames.is_empty() || actions_started {
+            if !cell_kinds.is_empty() || !frames.is_empty() || actions_started {
                 bail!(
-                    "sprite sheet {} line {line_number} defines a color after its frames",
+                    "sprite sheet {} line {line_number} defines a color after its cells or frames",
                     path.display()
                 );
             }
@@ -208,7 +204,24 @@ fn parse_sprite_sheet(path: &Path, contents: &str) -> Result<SpriteSheetSource> 
                 .with_context(|| format!("parse {} line {line_number}", path.display()))?;
             if colors.insert(symbol, color).is_some() {
                 bail!(
-                    "sprite sheet {} line {line_number} defines '{symbol}' more than once",
+                    "sprite sheet {} line {line_number} defines color '{symbol}' more than once",
+                    path.display()
+                );
+            }
+            continue;
+        }
+        if let Some(entry) = line.strip_prefix("cell ") {
+            if !frames.is_empty() || actions_started {
+                bail!(
+                    "sprite sheet {} line {line_number} defines a cell after its frames",
+                    path.display()
+                );
+            }
+            let (alias, cell) = parse_cell(entry, &colors)
+                .with_context(|| format!("parse {} line {line_number}", path.display()))?;
+            if cell_kinds.insert(alias, cell).is_some() {
+                bail!(
+                    "sprite sheet {} line {line_number} defines cell '{alias}' more than once",
                     path.display()
                 );
             }
@@ -229,13 +242,13 @@ fn parse_sprite_sheet(path: &Path, contents: &str) -> Result<SpriteSheetSource> 
                     path.display()
                 );
             }
-            let pixels = parse_frame(path, &mut lines, name, width, height, &colors)?;
+            let cells = parse_frame(path, &mut lines, name, width, height, &cell_kinds)?;
             let frame_index =
                 u16::try_from(frames.len()).context("sprite frame count exceeds u16")?;
             frame_indices.insert(name.to_owned(), frame_index);
             frames.push(SpriteFrameSource {
                 name: name.to_owned(),
-                pixels,
+                cells,
             });
             continue;
         }
@@ -253,13 +266,13 @@ fn parse_sprite_sheet(path: &Path, contents: &str) -> Result<SpriteSheetSource> 
             continue;
         }
         bail!(
-            "sprite sheet {} line {line_number} must define a color, frame, or action",
+            "sprite sheet {} line {line_number} must define a color, cell, frame, or action",
             path.display()
         );
     }
 
-    if colors.is_empty() {
-        bail!("sprite sheet {} defines no colors", path.display());
+    if cell_kinds.is_empty() {
+        bail!("sprite sheet {} defines no terminal cells", path.display());
     }
     if frames.is_empty() {
         bail!("sprite sheet {} defines no frames", path.display());
@@ -286,34 +299,28 @@ where
         .map(|(index, line)| (index + 1, line))
 }
 
-fn parse_size(line: &str) -> Result<(u32, u32)> {
+fn parse_size(line: &str) -> Result<(u16, u16)> {
     let values = line.split_whitespace().collect::<Vec<_>>();
     if values.len() != 3 || values[0] != "size" {
         bail!("size must use 'size WIDTH HEIGHT'");
     }
-    let width = values[1].parse::<u32>().context("parse sprite width")?;
-    let height = values[2].parse::<u32>().context("parse sprite height")?;
+    let width = values[1].parse::<u16>().context("parse sprite width")?;
+    let height = values[2].parse::<u16>().context("parse sprite height")?;
     if width == 0 || height == 0 {
         bail!("sprite dimensions must be non-zero");
     }
     if width > MAX_DIMENSION || height > MAX_DIMENSION {
-        bail!("sprite dimensions {width}x{height} exceed the {MAX_DIMENSION}-pixel compiler limit");
+        bail!("sprite dimensions {width}x{height} exceed the {MAX_DIMENSION}-cell compiler limit");
     }
     Ok((width, height))
 }
 
-fn parse_color(entry: &str) -> Result<(char, [u8; 4])> {
+fn parse_color(entry: &str) -> Result<(char, Rgb)> {
     let values = entry.split_whitespace().collect::<Vec<_>>();
     if values.len() != 2 {
         bail!("color must use 'color SYMBOL #RRGGBB'");
     }
-    let mut symbols = values[0].chars();
-    let Some(symbol) = symbols.next() else {
-        bail!("color symbol must not be empty");
-    };
-    if symbols.next().is_some() || symbol == '.' || symbol.is_whitespace() || !symbol.is_ascii() {
-        bail!("color symbol must be one non-whitespace ASCII character other than '.'");
-    }
+    let symbol = parse_ascii_key(values[0], "color")?;
     let hex = values[1]
         .strip_prefix('#')
         .context("color must use #RRGGBB")?;
@@ -322,38 +329,89 @@ fn parse_color(entry: &str) -> Result<(char, [u8; 4])> {
     }
     Ok((
         symbol,
-        [
+        Rgb::new(
             u8::from_str_radix(&hex[0..2], 16).context("parse red color component")?,
             u8::from_str_radix(&hex[2..4], 16).context("parse green color component")?,
             u8::from_str_radix(&hex[4..6], 16).context("parse blue color component")?,
-            0xff,
-        ],
+        ),
     ))
+}
+
+fn parse_cell(entry: &str, colors: &BTreeMap<char, Rgb>) -> Result<(char, SpriteCell)> {
+    let values = entry.split_whitespace().collect::<Vec<_>>();
+    if values.len() != 4 {
+        bail!("cell must use 'cell ALIAS GLYPH FOREGROUND BACKGROUND'");
+    }
+    let alias = parse_ascii_key(values[0], "cell")?;
+    let symbol = if values[1] == "space" {
+        ' '
+    } else {
+        let mut symbols = values[1].chars();
+        let Some(symbol) = symbols.next() else {
+            bail!("cell glyph must not be empty");
+        };
+        if symbols.next().is_some() || !BLOCK_SYMBOLS.contains(symbol) {
+            bail!("cell glyph must be 'space' or one classic Unicode block character");
+        }
+        symbol
+    };
+    let foreground = parse_cell_color(values[2], colors, "foreground")?;
+    let background = parse_cell_color(values[3], colors, "background")?;
+    if symbol == ' ' && background.is_none() {
+        bail!("space cells must define a background color");
+    }
+    if symbol != ' ' && foreground.is_none() && background.is_none() {
+        bail!("visible block cells must define a foreground or background color");
+    }
+    Ok((alias, SpriteCell::new(symbol, foreground, background)))
+}
+
+fn parse_ascii_key(value: &str, kind: &str) -> Result<char> {
+    let mut symbols = value.chars();
+    let Some(symbol) = symbols.next() else {
+        bail!("{kind} symbol must not be empty");
+    };
+    if symbols.next().is_some() || symbol == '.' || symbol.is_whitespace() || !symbol.is_ascii() {
+        bail!("{kind} symbol must be one non-whitespace ASCII character other than '.'");
+    }
+    Ok(symbol)
+}
+
+fn parse_cell_color(value: &str, colors: &BTreeMap<char, Rgb>, role: &str) -> Result<Option<Rgb>> {
+    if value == "." {
+        return Ok(None);
+    }
+    let symbol = parse_ascii_key(value, role)?;
+    colors
+        .get(&symbol)
+        .copied()
+        .map(Some)
+        .with_context(|| format!("cell {role} uses undefined color '{symbol}'"))
 }
 
 fn parse_frame<'a, I>(
     path: &Path,
     lines: &mut std::iter::Peekable<I>,
     name: &str,
-    width: u32,
-    height: u32,
-    colors: &BTreeMap<char, [u8; 4]>,
-) -> Result<Vec<[u8; 4]>>
+    width: u16,
+    height: u16,
+    cell_kinds: &BTreeMap<char, SpriteCell>,
+) -> Result<Vec<SpriteCell>>
 where
     I: Iterator<Item = (usize, &'a str)>,
 {
-    let mut pixels = Vec::with_capacity(width as usize * height as usize);
+    let mut cells = Vec::with_capacity(usize::from(width) * usize::from(height));
     let mut row_count = 0usize;
     for (index, row) in lines.by_ref() {
         let line_number = index + 1;
         if row == "end" {
-            if row_count != height as usize {
+            if row_count != usize::from(height) {
                 bail!(
                     "sprite sheet {} frame '{name}' has {row_count} rows; expected {height}",
                     path.display()
                 );
             }
-            return Ok(pixels);
+            return Ok(cells);
         }
         if row.is_empty() {
             bail!(
@@ -361,27 +419,27 @@ where
                 path.display()
             );
         }
-        if row_count >= height as usize {
+        if row_count >= usize::from(height) {
             bail!(
                 "sprite sheet {} frame '{name}' has more than {height} rows",
                 path.display()
             );
         }
         let row_width = row.chars().count();
-        if row_width != width as usize {
+        if row_width != usize::from(width) {
             bail!(
                 "sprite sheet {} line {line_number} in frame '{name}' has width {row_width}; expected {width}",
                 path.display()
             );
         }
-        for symbol in row.chars() {
-            if symbol == '.' {
-                pixels.push([0, 0, 0, 0]);
-            } else if let Some(color) = colors.get(&symbol) {
-                pixels.push(*color);
+        for alias in row.chars() {
+            if alias == '.' {
+                cells.push(TRANSPARENT_CELL);
+            } else if let Some(cell) = cell_kinds.get(&alias) {
+                cells.push(*cell);
             } else {
                 bail!(
-                    "sprite sheet {} line {line_number} in frame '{name}' uses undefined symbol '{symbol}'",
+                    "sprite sheet {} line {line_number} in frame '{name}' uses undefined cell '{alias}'",
                     path.display()
                 );
             }

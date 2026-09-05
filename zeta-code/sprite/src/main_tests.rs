@@ -6,7 +6,6 @@ use super::terminal_dimensions;
 use super::write_action;
 use clap::Parser;
 use std::fs;
-use std::path::Path;
 use zeta_sprite::compile_sprite_sheet;
 
 #[test]
@@ -21,27 +20,9 @@ fn default_terminal_dimensions_compensate_for_tall_cells() {
 }
 
 #[test]
-fn matching_pixel_grid_preserves_an_odd_source_edge() {
-    assert_eq!(
-        raster_dimensions(Path::new("pet.svg"), 8, 8, 8, 4).unwrap(),
-        (16, 16)
-    );
-    assert_eq!(
-        raster_dimensions(Path::new("pet.sprite"), 16, 17, 8, 5).unwrap(),
-        (16, 17)
-    );
-    assert_eq!(
-        raster_dimensions(Path::new("pet.svg"), 16, 9, 8, 5).unwrap(),
-        (16, 20)
-    );
-    assert_eq!(
-        raster_dimensions(Path::new("pet.sprite"), 16, 9, 8, 3).unwrap(),
-        (16, 9)
-    );
-    assert_eq!(
-        raster_dimensions(Path::new("pet.sprite"), 16, 9, 8, 4).unwrap(),
-        (16, 16)
-    );
+fn image_raster_uses_two_by_four_source_samples_per_terminal_cell() {
+    assert_eq!(raster_dimensions(8, 4).unwrap(), (16, 16));
+    assert_eq!(raster_dimensions(8, 5).unwrap(), (16, 20));
 }
 
 #[test]
@@ -69,10 +50,10 @@ fn non_terminal_action_preview_lists_timing_and_returns_to_idle() {
     let path = directory.path().join("pet.sprite");
     fs::write(
         &path,
-        "version 1\nsize 2 2\ncolor B #4085AC\n\nframe idle\nBB\nBB\nend\n\nframe press\nBB\n..\nend\n\naction click\npress 75\nend\n",
+        "version 2\nsize 1 1\ncolor B #4085AC\ncell a █ B .\n\nframe idle\na\nend\n\nframe press\na\nend\n\naction click\npress 75\nend\n",
     )
     .unwrap();
-    let sheet = compile_sprite_sheet(&path, 128).unwrap();
+    let sheet = compile_sprite_sheet(&path).unwrap();
     let mut output = Vec::new();
 
     write_action(

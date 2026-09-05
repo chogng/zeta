@@ -18,9 +18,9 @@ use zeta_sprite::terminal_sprite_rust_source;
 use zeta_sprite::terminal_sprite_sheet_rust_source;
 
 #[derive(Debug, Parser)]
-#[command(about = "Convert an SVG, PNG, or pixel grid into a terminal Unicode sprite")]
+#[command(about = "Compile terminal-cell sprite sheets or convert images into Unicode sprites")]
 struct Args {
-    /// SVG, PNG, or .sprite pixel-grid design source.
+    /// SVG, PNG, or terminal-cell .sprite design source.
     input: PathBuf,
 
     /// For `.sprite`: `frames` prints every frame; an action name plays that action.
@@ -46,7 +46,7 @@ struct Args {
     #[arg(long, default_value = "PET", value_parser = constant_name)]
     name: String,
 
-    /// Alpha values below this threshold become transparent.
+    /// For SVG or PNG conversion, alpha values below this threshold become transparent.
     #[arg(long, default_value_t = 128, value_parser = clap::value_parser!(u8).range(1..))]
     alpha_threshold: u8,
 }
@@ -62,8 +62,7 @@ fn main() -> Result<()> {
     let (source_width, source_height) = source_dimensions(&args.input)?;
     let (columns, rows) =
         terminal_dimensions(source_width, source_height, args.columns, args.rows)?;
-    let (raster_width, raster_height) =
-        raster_dimensions(&args.input, source_width, source_height, columns, rows)?;
+    let (raster_width, raster_height) = raster_dimensions(columns, rows)?;
     let image = rasterize(&args.input, raster_width, raster_height)?;
     let sprite = pack_octants_rgba(
         image.width,
@@ -103,9 +102,9 @@ fn main() -> Result<()> {
 
 fn run_sprite_sheet(args: &Args) -> Result<()> {
     if args.columns.is_some() || args.rows.is_some() {
-        bail!("named .sprite sources use their exact logical grid and cannot be resized");
+        bail!("named .sprite sources use their exact terminal canvas and cannot be resized");
     }
-    let sheet = compile_sprite_sheet(&args.input, args.alpha_threshold)?;
+    let sheet = compile_sprite_sheet(&args.input)?;
     if !args.check {
         let stdout = io::stdout();
         let mut output = stdout.lock();
@@ -244,20 +243,7 @@ fn terminal_dimensions(
     Ok(dimensions)
 }
 
-fn raster_dimensions(
-    input: &Path,
-    source_width: u32,
-    source_height: u32,
-    columns: u32,
-    rows: u32,
-) -> Result<(u32, u32)> {
-    let is_pixel_grid = input
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("sprite"));
-    if is_pixel_grid && source_width.div_ceil(2) == columns && source_height.div_ceil(4) == rows {
-        return Ok((source_width, source_height));
-    }
+fn raster_dimensions(columns: u32, rows: u32) -> Result<(u32, u32)> {
     Ok((
         columns
             .checked_mul(2)

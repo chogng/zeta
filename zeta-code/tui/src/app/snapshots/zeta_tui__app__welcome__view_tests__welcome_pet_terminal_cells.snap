@@ -1,0 +1,19 @@
+---
+source: zeta-code/tui/src/app/welcome_view_tests.rs
+expression: "pet_cell_map(super::pet::sprite())"
+---
+symbols
+..▄..▄..
+▗█▛██▜█▖
+▝▜████▛▘
+..▝..▘..
+foreground
+..B..B..
+BBBBBBBB
+BBBBBBBB
+..B..B..
+background
+........
+.KKKKKK.
+........
+........

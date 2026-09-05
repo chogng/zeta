@@ -6,7 +6,7 @@ use image::RgbaImage;
 use std::fs;
 
 #[test]
-fn svg_png_and_sprite_sources_rasterize_to_the_requested_grid() {
+fn svg_and_png_sources_rasterize_to_the_requested_grid() {
     let directory = tempfile::tempdir().unwrap();
     let svg = directory.path().join("pet.svg");
     fs::write(
@@ -18,60 +18,30 @@ fn svg_png_and_sprite_sources_rasterize_to_the_requested_grid() {
     RgbaImage::from_pixel(4, 4, image::Rgba([0x40, 0x85, 0xac, 0xff]))
         .save(&png)
         .unwrap();
-    let sprite = directory.path().join("pet.sprite");
-    fs::write(
-        &sprite,
-        "version 1\nsize 2 2\ncolor B #4085AC\ncolor K #000000\n\nframe idle\nBK\n.B\nend\n",
-    )
-    .unwrap();
 
     assert_eq!(source_dimensions(&svg).unwrap(), (4, 4));
     assert_eq!(source_dimensions(&png).unwrap(), (4, 4));
-    assert_eq!(source_dimensions(&sprite).unwrap(), (2, 2));
-    for path in [&svg, &png, &sprite] {
+    for path in [&svg, &png] {
         let raster = rasterize(path, 2, 2).unwrap();
         assert_eq!((raster.width, raster.height), (2, 2));
         assert_eq!(raster.pixels.len(), 4);
     }
-    assert_eq!(
-        rasterize(&sprite, 2, 2).unwrap().pixels,
-        vec![
-            [0x40, 0x85, 0xac, 0xff],
-            [0x00, 0x00, 0x00, 0xff],
-            [0x00, 0x00, 0x00, 0x00],
-            [0x40, 0x85, 0xac, 0xff],
-        ]
-    );
 }
 
 #[test]
-fn sprite_sources_reject_unknown_pixels_and_uneven_rows() {
+fn terminal_sprite_sources_do_not_enter_the_image_rasterizer() {
     let directory = tempfile::tempdir().unwrap();
-    let unknown = directory.path().join("unknown.sprite");
-    fs::write(
-        &unknown,
-        "version 1\nsize 2 1\ncolor B #4085AC\n\nframe idle\nBX\nend\n",
-    )
-    .unwrap();
-    let uneven = directory.path().join("uneven.sprite");
-    fs::write(
-        &uneven,
-        "version 1\nsize 2 2\ncolor B #4085AC\n\nframe idle\nBB\nB\nend\n",
-    )
-    .unwrap();
+    let sprite = directory.path().join("pet.sprite");
+    fs::write(&sprite, "version 2\n").unwrap();
 
     assert!(
-        source_dimensions(&unknown)
+        source_dimensions(&sprite)
             .unwrap_err()
             .to_string()
-            .contains("undefined symbol 'X'")
+            .contains("expected .svg or .png")
     );
-    assert!(
-        source_dimensions(&uneven)
-            .unwrap_err()
-            .to_string()
-            .contains("expected 2")
-    );
+    let error = rasterize(&sprite, 1, 1).err().unwrap();
+    assert!(error.to_string().contains("expected .svg or .png"));
 }
 
 #[test]

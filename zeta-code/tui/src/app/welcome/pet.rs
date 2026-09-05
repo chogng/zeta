@@ -31,7 +31,10 @@ impl Widget for PetWidget<'_> {
             for x in 0..width {
                 let source = self.sprite.cells()
                     [usize::from(y) * usize::from(self.sprite.width()) + usize::from(x)];
-                if source.symbol() == ' ' {
+                if source.symbol() == ' '
+                    && source.foreground().is_none()
+                    && source.background().is_none()
+                {
                     continue;
                 }
                 let cell = &mut buffer[(area.x + x, area.y + y)];

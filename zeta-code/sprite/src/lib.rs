@@ -1,4 +1,4 @@
-//! Terminal sprites packed from logical pixels into Unicode block cells.
+//! Terminal-cell sprite assets and image-to-block conversion.
 
 #[cfg(feature = "compiler")]
 pub mod compiler;
@@ -26,7 +26,7 @@ pub use sheet::compile_sprite_sheet;
 use std::error::Error;
 use std::fmt;
 
-/// One opaque RGB color from a source image.
+/// One opaque RGB color used by a terminal sprite.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Rgb {
     red: u8,
@@ -105,7 +105,7 @@ impl<'a> TerminalSprite<'a> {
     }
 }
 
-/// Owned result produced by the image compiler.
+/// Owned terminal sprite produced by an image or sprite-sheet compiler.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OwnedTerminalSprite {
     width: u16,

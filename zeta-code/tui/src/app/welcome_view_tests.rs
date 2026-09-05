@@ -6,10 +6,16 @@ use insta::assert_snapshot;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::style::Modifier;
+use ratatui::widgets::Widget;
 use std::path::Path;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_protocol::ModelAccess;
+use zeta_sprite::Rgb;
+use zeta_sprite::SpriteCell;
+use zeta_sprite::TerminalSprite;
 
 #[test]
 fn wide_header_keeps_pet_and_identity_information_together() {
@@ -33,14 +39,9 @@ fn wide_header_keeps_pet_and_identity_information_together() {
         (8, 4)
     );
     assert_eq!(super::desired_height(80), 5);
-    assert_eq!(
-        buffer[(3, 1)].fg,
-        ratatui::style::Color::Rgb(0x40, 0x85, 0xac)
-    );
-    assert_eq!(
-        buffer[(4, 1)].fg,
-        ratatui::style::Color::Rgb(0x40, 0x85, 0xac)
-    );
+    assert_eq!(buffer[(4, 2)].symbol(), "▛");
+    assert_eq!(buffer[(4, 2)].fg, Color::Rgb(0x40, 0x85, 0xac));
+    assert_eq!(buffer[(4, 2)].bg, Color::Rgb(0, 0, 0));
     assert_eq!(buffer[(13, 1)].symbol(), "Z");
     assert!(buffer[(13, 1)].modifier.contains(Modifier::BOLD));
     assert_snapshot!("welcome_pet_identity_header", rendered);
@@ -59,11 +60,23 @@ fn narrow_header_keeps_the_text_alternative_when_the_pet_does_not_fit() {
 }
 
 #[test]
-fn generated_pet_cells_match_the_terminal_raster() {
+fn generated_pet_cells_preserve_the_authored_terminal_instructions() {
     assert_snapshot!(
-        "welcome_pet_terminal_raster",
-        pet_pixel_map(super::pet::sprite())
+        "welcome_pet_terminal_cells",
+        pet_cell_map(super::pet::sprite())
     );
+}
+
+#[test]
+fn background_colored_spaces_are_rendered() {
+    let cells = [SpriteCell::new(' ', None, Some(Rgb::new(0x40, 0x85, 0xac)))];
+    let sprite = TerminalSprite::new(1, 1, &cells);
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 1, 1));
+
+    super::pet::PetWidget::new(sprite).render(buffer.area, &mut buffer);
+
+    assert_eq!(buffer[(0, 0)].symbol(), " ");
+    assert_eq!(buffer[(0, 0)].bg, Color::Rgb(0x40, 0x85, 0xac));
 }
 
 #[test]
@@ -72,7 +85,7 @@ fn generated_pet_frames_and_click_timing_match_the_design() {
     let frames = sheet
         .frames()
         .iter()
-        .map(|frame| format!("{}\n{}", frame.name(), pet_pixel_map(frame.sprite())))
+        .map(|frame| format!("{}\n{}", frame.name(), pet_cell_map(frame.sprite())))
         .collect::<Vec<_>>()
         .join("\n\n");
     let click = sheet
@@ -96,33 +109,32 @@ fn generated_pet_frames_and_click_timing_match_the_design() {
     assert_snapshot!("welcome_pet_animation_frames", frames);
 }
 
-fn pet_pixel_map(sprite: zeta_sprite::TerminalSprite<'_>) -> String {
-    let width = usize::from(sprite.width()) * 2;
-    let height = usize::from(sprite.height()) * 4;
-    let mut rows = vec![vec!['.'; width]; height];
-    for (index, cell) in sprite.cells().iter().copied().enumerate() {
-        let cell_x = index % usize::from(sprite.width());
-        let cell_y = index / usize::from(sprite.width());
-        let mask = zeta_sprite::octant_mask(cell.symbol())
-            .unwrap_or_else(|| panic!("unexpected block-octant symbol {:?}", cell.symbol()));
-        for octant in 0..8 {
-            let color = if mask & (1 << octant) != 0 {
-                cell.foreground()
-            } else {
-                cell.background()
-            };
-            rows[cell_y * 4 + octant / 2][cell_x * 2 + octant % 2] = match color {
-                None => '.',
-                Some(color) if color.components() == [0x40, 0x85, 0xac] => 'B',
-                Some(color) if color.components() == [0, 0, 0] => 'K',
-                Some(color) => panic!("unexpected pet color {color:?}"),
-            };
-        }
-    }
-    rows.into_iter()
-        .map(|row| row.into_iter().collect::<String>())
+fn pet_cell_map(sprite: TerminalSprite<'_>) -> String {
+    let symbols = cell_rows(sprite, |cell| match cell.symbol() {
+        ' ' => '.',
+        symbol => symbol,
+    });
+    let foreground = cell_rows(sprite, |cell| color_symbol(cell.foreground()));
+    let background = cell_rows(sprite, |cell| color_symbol(cell.background()));
+    format!("symbols\n{symbols}\nforeground\n{foreground}\nbackground\n{background}")
+}
+
+fn cell_rows(sprite: TerminalSprite<'_>, value: impl Fn(SpriteCell) -> char) -> String {
+    sprite
+        .cells()
+        .chunks_exact(usize::from(sprite.width()))
+        .map(|row| row.iter().copied().map(&value).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn color_symbol(color: Option<Rgb>) -> char {
+    match color {
+        None => '.',
+        Some(color) if color.components() == [0x40, 0x85, 0xac] => 'B',
+        Some(color) if color.components() == [0, 0, 0] => 'K',
+        Some(color) => panic!("unexpected pet color {color:?}"),
+    }
 }
 
 fn render(width: u16, height: u16, model: &WelcomeModel) -> Buffer {

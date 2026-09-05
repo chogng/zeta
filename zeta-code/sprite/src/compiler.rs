@@ -1,8 +1,7 @@
-//! Design-time image/grid rasterization and ANSI terminal previews.
+//! Design-time image rasterization and ANSI terminal previews.
 
 use crate::SpriteCell;
 use crate::TerminalSprite;
-use crate::sheet::read_sprite_sheet;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
@@ -34,11 +33,7 @@ pub fn source_dimensions(path: &Path) -> Result<(u32, u32)> {
         }
         "png" => image::image_dimensions(path)
             .with_context(|| format!("read PNG dimensions {}", path.display())),
-        "sprite" => {
-            let source = read_sprite_sheet(path)?;
-            Ok((source.width, source.height))
-        }
-        value => bail!("unsupported image extension '.{value}'; expected .svg, .png, or .sprite"),
+        value => bail!("unsupported image extension '.{value}'; expected .svg or .png"),
     }
 }
 
@@ -50,8 +45,7 @@ pub fn rasterize(path: &Path, width: u32, height: u32) -> Result<RasterizedImage
     let pixels = match extension.as_str() {
         "svg" => rasterize_svg(path, width, height)?,
         "png" => rasterize_png(path, width, height)?,
-        "sprite" => rasterize_sprite_grid(path, width, height)?,
-        value => bail!("unsupported image extension '.{value}'; expected .svg, .png, or .sprite"),
+        value => bail!("unsupported image extension '.{value}'; expected .svg or .png"),
     };
     Ok(RasterizedImage {
         width,
@@ -124,18 +118,6 @@ fn rasterize_png(path: &Path, width: u32, height: u32) -> Result<Vec<[u8; 4]>> {
         .with_context(|| format!("decode PNG source {}", path.display()))?
         .into_rgba8();
     let image = resize_pixel_art(&source, width, height);
-    Ok(image.pixels().map(|pixel| pixel.0).collect())
-}
-
-fn rasterize_sprite_grid(path: &Path, width: u32, height: u32) -> Result<Vec<[u8; 4]>> {
-    let source = read_sprite_sheet(path)?;
-    let image = image::RgbaImage::from_raw(
-        source.width,
-        source.height,
-        source.idle().pixels.iter().copied().flatten().collect(),
-    )
-    .context("sprite grid pixel count did not match its dimensions")?;
-    let image = resize_pixel_art(&image, width, height);
     Ok(image.pixels().map(|pixel| pixel.0).collect())
 }
 
