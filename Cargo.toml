@@ -170,6 +170,7 @@ base64 = "0.22"
 block2 = "0.5.1"
 bm25 = "2.3.2"
 bytemuck = { version = "1", features = ["derive"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 candle-core = "0.9.2"
 candle-nn = "0.9.2"
 candle-onnx = "0.9.2"

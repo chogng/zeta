@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 base64 = { workspace = true }
+chrono = { workspace = true }
 crossterm = { workspace = true }
 dirs = { workspace = true }
 ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }

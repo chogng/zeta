@@ -1,0 +1,12 @@
+---
+source: zeta-code/tui/src/sessions/picker_tests.rs
+assertion_line: 207
+expression: text
+---
+  ┌────────────────────────────────────────────────────────────────────────────┐
+  │ Search saved sessions                                                      │
+  └────────────────────────────────────────────────────────────────────────────┘
+  Conversation 1  ·  <1m  ·  0 tokens
+  Conversation 2  ·  1m  ·  0 tokens
+> Conversation 3 ✓  ·  1h 01m  ·  0 tokens
+  Conversation 4  ·  1d 1h  ·  0 tokens
