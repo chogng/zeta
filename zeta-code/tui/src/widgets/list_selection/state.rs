@@ -375,7 +375,6 @@ impl ListSelectionState {
         self.focus == ListSelectionFocus::Tabs
     }
 
-    #[cfg(test)]
     pub(super) fn search_focused(&self) -> bool {
         self.focus == ListSelectionFocus::Search
     }
