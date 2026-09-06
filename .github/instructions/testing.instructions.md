@@ -28,4 +28,5 @@ Use the smallest command that covers the changed behavior. Report a pass only af
 
 ## Learnings
 
+* 修改代码前检查相关测试；行为或接口变化时同步更新测试，修复缺陷时补充能复现问题的回归测试，已有覆盖则复用。纯编译问题必须验证实际失败的非测试构建，涉及条件编译时检查受影响的构建配置，不能用单测通过代替正常构建通过。不要为凑改动机械新增测试、复制实现断言或削弱断言；交付时说明执行了哪些验证，未新增或修改测试时说明原因。
 * Keep one incremental setting throughout a Rust validation round, and after a failure rerun only the failed test or target; switching artifact modes or rebuilding whole packages creates avoidable duplicate outputs and disk pressure.
