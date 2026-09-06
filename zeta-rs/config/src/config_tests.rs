@@ -1730,7 +1730,7 @@ fn dir_resolution_overrides_only_a_user_configured_model_provider() {
     configure_provider(&store, 0, "openai");
     let user = store.read_snapshot().unwrap();
     let scope = dir_scope();
-    let document = dir_document(Some(model_ref("openai", "gpt-5.6")));
+    let document = dir_document(Some(model_ref("openai", "gpt-6-astra")));
 
     let resolved = resolve_scoped_config(
         &user,
@@ -1746,7 +1746,7 @@ fn dir_resolution_overrides_only_a_user_configured_model_provider() {
     assert_eq!(resolved.dir_revision, Some(DirConfigRevision::new(7)));
     assert_eq!(
         resolved.values.preferred_model,
-        Some(model_ref("openai", "gpt-5.6"))
+        Some(model_ref("openai", "gpt-6-astra"))
     );
     assert_eq!(
         resolved.provenance.preferred_model,

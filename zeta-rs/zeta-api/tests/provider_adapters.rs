@@ -427,6 +427,77 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
 }
 
 #[test]
+fn astra_preserves_supported_reasoning_and_round_trips_tool_results() {
+    for (effort, wire_effort) in [
+        (ReasoningEffort::Low, "low"),
+        (ReasoningEffort::Medium, "medium"),
+        (ReasoningEffort::High, "high"),
+        (ReasoningEffort::ExtraHigh, "xhigh"),
+        (ReasoningEffort::Max, "max"),
+    ] {
+        let transport = CapturingTransport::new(json!({
+            "id": "resp_astra",
+            "model": "gpt-6-astra",
+            "status": "completed",
+            "output": [{
+                "type": "function_call",
+                "call_id": "call_astra",
+                "name": "weather",
+                "arguments": "{\"city\":\"Paris\"}"
+            }]
+        }));
+        let mut request = tool_request();
+        request.reasoning.as_mut().unwrap().effort = effort;
+        request.prompt_cache_key = Some("astra-session".into());
+        let response = ApiEndpoint::OpenAiResponses
+            .complete_with_client(&target(), "gpt-6-astra", &request, &transport)
+            .unwrap();
+        let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
+        assert_eq!(body["model"], "gpt-6-astra");
+        assert_eq!(body["reasoning"]["effort"], wire_effort);
+        assert_eq!(body["tools"][0]["name"], "weather");
+        assert_eq!(body["prompt_cache_key"], "astra-session");
+        assert_eq!(body["include"], json!(["reasoning.encrypted_content"]));
+        for field in [
+            "temperature",
+            "top_p",
+            "top_logprobs",
+            "prompt_cache_retention",
+        ] {
+            assert!(body.get(field).is_none(), "unexpected {field}");
+        }
+        assert_eq!(response.stop_reason, StopReason::ToolUse);
+        let call = response.tool_calls().next().unwrap();
+        assert_eq!(call.arguments, json!({"city": "Paris"}));
+        request.input.push(InputItem::Message(Message {
+            role: MessageRole::Assistant,
+            content: Vec::new(),
+            tool_calls: vec![call.clone()],
+        }));
+        request.input.push(InputItem::ToolResult(ToolResult {
+            call_id: call.id.clone(),
+            name: call.name.clone(),
+            content: vec![ContentPart::Text("Sunny".into())],
+            is_error: false,
+        }));
+        ApiEndpoint::OpenAiResponses
+            .complete_with_client(&target(), "gpt-6-astra", &request, &transport)
+            .unwrap();
+        let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
+        assert_eq!(body["input"][1]["type"], "function_call");
+        assert_eq!(body["input"][1]["call_id"], "call_astra");
+        assert_eq!(
+            body["input"][2],
+            json!({
+                "type": "function_call_output",
+                "call_id": "call_astra",
+                "output": "Sunny"
+            })
+        );
+    }
+}
+
+#[test]
 fn openai_responses_streams_wire_deltas_and_returns_the_terminal_response() {
     let transport = StreamingResponsesTransport {
         request: Mutex::new(None),
@@ -436,7 +507,7 @@ fn openai_responses_streams_wire_deltas_and_returns_the_terminal_response() {
     let response = ApiEndpoint::OpenAiResponses
         .stream_with_client_and_cancellation(
             &target(),
-            "gpt-test",
+            "gpt-6-astra",
             &ModelRequest::text("hello"),
             &transport,
             &CancellationSource::new().token(),

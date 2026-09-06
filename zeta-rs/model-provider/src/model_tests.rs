@@ -547,7 +547,7 @@ fn openai_runtime_uses_the_responses_adapter_and_dynamic_endpoint() {
     let model = runtime
         .build_model(
             &provider_config_with_endpoint("openai", " https://example.test/v1/ "),
-            &model_ref("openai", "gpt-5.6"),
+            &model_ref("openai", "gpt-6-astra"),
         )
         .unwrap();
 
@@ -559,7 +559,9 @@ fn openai_runtime_uses_the_responses_adapter_and_dynamic_endpoint() {
             .iter()
             .all(|header| header.name() != "Authorization")
     );
-    assert_eq!(request["model"], "gpt-5.6");
+    assert_eq!(request["model"], "gpt-6-astra");
+    assert!(request.get("temperature").is_none());
+    assert!(request.get("prompt_cache_retention").is_none());
     assert_eq!(request["input"][0]["role"], "user");
     assert_eq!(request["input"][0]["content"][0]["type"], "input_text");
 }

@@ -53,6 +53,21 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
     // Direct API-key models.
     static_model! {
         provider: "openai",
+        id: "gpt-6-astra",
+        name: "GPT-6 Astra",
+        access: api_key,
+        context_window: 1_050_000,
+        capabilities: {
+            tools: supported,
+            reasoning: supported,
+            parallel_tool_calls: supported,
+            image_detail_original: supported,
+        },
+        reasoning: [low, medium, high, extra_high, max],
+        input_token_count: true,
+    },
+    static_model! {
+        provider: "openai",
         id: "gpt-5.6",
         name: "GPT-5.6",
         access: api_key,
