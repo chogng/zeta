@@ -244,6 +244,7 @@ use crate::protocol::environment::EnvDirsSetParams;
 use crate::protocol::environment::EnvDirsSetResult;
 use crate::protocol::environment::PermissionDto;
 use crate::protocol::environment::SessionDirAddParams;
+use crate::protocol::environment::SessionDirAddResult;
 use crate::protocol::environment::SessionDirDto;
 use crate::protocol::environment::SessionDirListParams;
 use crate::protocol::environment::SessionDirListResult;
@@ -3045,6 +3046,7 @@ typescript_bindings! {
     SessionDirAddParams,
     SessionDirRemoveParams,
     SessionDirMutationDto,
+    SessionDirAddResult,
     SessionDirMutationResult,
     PermissionDto,
     SessionDirPermissionsSetParams,

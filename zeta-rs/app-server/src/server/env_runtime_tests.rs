@@ -314,7 +314,7 @@ fn dirs_are_session_scoped_and_removable() {
         })
         .unwrap();
 
-    let (mutation, directories) = server
+    let (path, mutation, directories) = server
         .add_session_dir(
             &first.session_id,
             session_dir.path.clone(),
@@ -322,6 +322,7 @@ fn dirs_are_session_scoped_and_removable() {
         )
         .unwrap();
 
+    assert_eq!(path, session_dir.root().canonical_path());
     assert_eq!(mutation, Mutation::AddedDir);
     assert_eq!(directories.revision, 1);
     assert_eq!(directories.dirs.len(), 1);
@@ -359,7 +360,7 @@ fn cwd_directory_can_be_added_explicitly() {
         })
         .unwrap();
 
-    let (mutation, snapshot) = server
+    let (path, mutation, snapshot) = server
         .add_session_dir(
             &session.session_id,
             primary.path.clone(),
@@ -367,6 +368,7 @@ fn cwd_directory_can_be_added_explicitly() {
         )
         .unwrap();
 
+    assert_eq!(path, primary.root().canonical_path());
     assert_eq!(mutation, Mutation::AddedDir);
     assert_eq!(snapshot.dirs[0].path, primary.root().canonical_path());
 }
@@ -1268,13 +1270,14 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         )
         .unwrap();
 
-    let (mutation, _) = server
+    let (path, mutation, _) = server
         .add_session_dir(
             &thread.session_id,
             session_dir.path.clone(),
             host_dir_permissions(),
         )
         .unwrap();
+    assert_eq!(path, session_dir.root().canonical_path());
     assert_eq!(mutation, Mutation::AddedDir);
     let access = {
         let runtime = server

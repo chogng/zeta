@@ -6,6 +6,7 @@ use crate::config::ConfigEditorPage;
 use crate::connectors::ConnectorChoices;
 use crate::connectors::ConnectorSelectionAction;
 use crate::dirs::DirChoices;
+use crate::dirs::DirPanel;
 use crate::dirs::DirSelectionAction;
 use crate::keymap::KeymapChoices;
 use crate::keymap::KeymapEditor;
@@ -109,7 +110,7 @@ impl CommandPanelLayout {
 #[derive(Debug)]
 pub(crate) enum CommandPanel {
     Help(ListSelection<()>),
-    Dirs(ListSelection<DirSelectionAction>),
+    Dirs(DirPanel),
     Config(ConfigEditor),
     Connectors(ListSelection<ConnectorSelectionAction>),
     Keymap(KeymapEditor),
@@ -147,7 +148,7 @@ impl CommandPanel {
     }
 
     pub(crate) fn dirs(spec: DirChoices) -> Self {
-        Self::Dirs(ListSelection::new(spec.model, spec.actions))
+        Self::Dirs(DirPanel::new(spec))
     }
 
     pub(crate) fn config(spec: ConfigChoices) -> Self {
@@ -460,8 +461,18 @@ impl CommandPanel {
         let Self::Dirs(content) = self else {
             return false;
         };
-        content.replace(spec.model, spec.actions);
+        content.replace(spec);
         true
+    }
+
+    pub(crate) fn finish_dir_add(
+        &mut self,
+        request_id: u64,
+        result: Result<crate::dirs::AddedDir, String>,
+    ) {
+        if let Self::Dirs(content) = self {
+            content.finish_add(request_id, result);
+        }
     }
 
     pub(crate) fn replace_config(&mut self, spec: ConfigChoices) -> bool {

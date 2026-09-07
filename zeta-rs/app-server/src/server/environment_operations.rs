@@ -22,6 +22,7 @@ use zeta_app_server_protocol::protocol::environment::EnvDirsSetParams;
 use zeta_app_server_protocol::protocol::environment::EnvDirsSetResult;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirAddParams;
+use zeta_app_server_protocol::protocol::environment::SessionDirAddResult;
 use zeta_app_server_protocol::protocol::environment::SessionDirDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
 use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
@@ -65,10 +66,11 @@ impl AppServer {
         let params: SessionDirAddParams = decode(params)?;
         validate_path(&params.path, false)?;
         let permissions = permissions(params.permissions)?;
-        let (mutation, snapshot) = self
+        let (path, mutation, snapshot) = self
             .add_session_dir(&params.session_id, params.path, permissions)
             .map_err(environment_runtime_error)?;
-        result(&SessionDirMutationResult {
+        result(&SessionDirAddResult {
+            path,
             mutation: session_dir_mutation(mutation),
             revision: snapshot.revision,
             dirs: session_dir_dtos(snapshot.dirs),

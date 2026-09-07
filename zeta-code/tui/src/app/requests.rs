@@ -154,9 +154,9 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Connectors(
             ConnectorCommand::ConnectDeviceOAuth { .. } | ConnectorCommand::Disconnect { .. },
         ) => Some(RequestKey::Connectors),
-        AppCommand::Dirs(DirCommand::Remove { .. } | DirCommand::SetPermissions(_)) => {
-            Some(RequestKey::Directories)
-        }
+        AppCommand::Dirs(
+            DirCommand::Add { .. } | DirCommand::Remove { .. } | DirCommand::SetPermissions(_),
+        ) => Some(RequestKey::Directories),
         AppCommand::Sessions(SessionCommand::Preview { .. }) => Some(RequestKey::Preview),
         AppCommand::Sessions(
             SessionCommand::Restore { .. }

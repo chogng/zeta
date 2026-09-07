@@ -18,7 +18,6 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
-use std::rc::Rc;
 use unicode_width::UnicodeWidthStr;
 
 const ITEM_STATE_COLUMN_WIDTH: u16 = 2;
@@ -73,6 +72,12 @@ pub(crate) fn draw_body_with_pointer(
     }
 
     let visible_items = view.visible_items();
+    if let Some(message) = view.message() {
+        frame.render_widget(
+            Paragraph::new(message).style(Style::default().fg(context.muted())),
+            areas[3],
+        );
+    }
     let viewport = view.viewport(areas[1]);
     if visible_items.is_empty() {
         frame.render_widget(
@@ -316,7 +321,7 @@ fn with_state_column(area: Rect) -> Rect {
     }
 }
 
-fn body_areas(content: Rect, view: &ListSelectionState) -> Rc<[Rect]> {
+fn body_areas(content: Rect, view: &ListSelectionState) -> [Rect; 4] {
     let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
     let preview_height = view
         .selected_item()
@@ -324,14 +329,17 @@ fn body_areas(content: Rect, view: &ListSelectionState) -> Rc<[Rect]> {
         .map(|preview| preview.desired_height())
         .unwrap_or_default()
         .min(u16::MAX as usize) as u16;
-    Layout::default()
+    let areas = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(search_height),
+            Constraint::Length(u16::from(view.message().is_some())),
             Constraint::Min(1),
             Constraint::Length(preview_height),
         ])
-        .split(content)
+        .split(content);
+    // Keep the list and preview indices stable for hit testing and scrolling.
+    [areas[0], areas[2], areas[3], areas[1]]
 }
 
 #[derive(Clone, Copy)]

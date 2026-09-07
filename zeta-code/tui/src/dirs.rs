@@ -1,3 +1,6 @@
+mod panel;
+pub(crate) use panel::DirPanel;
+
 use crate::keymap::bindings;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
@@ -12,14 +15,19 @@ use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirAddParams;
+use zeta_app_server_protocol::protocol::environment::SessionDirAddResult;
 use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
 use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
-use zeta_app_server_protocol::protocol::environment::SessionDirMutationResult;
+use zeta_app_server_protocol::protocol::environment::SessionDirMutationDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
 
 /// A completed directory operation delivered to the TUI state owner.
 pub(crate) enum Event {
     PickerOpened(DirChoices),
+    AddCompleted {
+        request_id: u64,
+        result: Result<AddedDir, String>,
+    },
     Removed {
         path: std::path::PathBuf,
         choices: DirChoices,
@@ -29,6 +37,7 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    Add { request_id: u64, path: PathBuf },
     Remove { path: std::path::PathBuf },
     SetPermissions(SessionDirPermissionsSetParams),
 }
@@ -36,6 +45,7 @@ pub(crate) enum Command {
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
+            Self::Add { .. } => "zeta-tui-add-directory",
             Self::Remove { .. } => "zeta-tui-remove-directory",
             Self::SetPermissions(_) => "zeta-tui-set-directory-permissions",
         }
@@ -46,11 +56,19 @@ use zeta_protocol::SessionId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum DirSelectionAction {
+    Add { request_id: u64, path: PathBuf },
     Remove { path: PathBuf },
     SetPermissions(SessionDirPermissionsSetParams),
 }
 
 pub(crate) type DirChoices = ListSelectionSpec<DirSelectionAction>;
+
+#[derive(Debug)]
+pub(crate) struct AddedDir {
+    pub(crate) path: PathBuf,
+    pub(crate) already_present: bool,
+    pub(crate) choices: DirChoices,
+}
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
@@ -70,7 +88,7 @@ pub(crate) fn add<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
     path: PathBuf,
-) -> Result<SessionDirMutationResult, ClientError>
+) -> Result<SessionDirAddResult, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -133,6 +151,29 @@ where
     T: JsonRpcTransport,
 {
     match command {
+        Command::Add { request_id, path } => {
+            let result = add(client, session_id, path)
+                .map_err(|error| error.to_string())
+                .and_then(|result| {
+                    let already_present = match result.mutation {
+                        SessionDirMutationDto::Added => false,
+                        SessionDirMutationDto::AlreadyPresent => true,
+                        _ => return Err("add-dir returned an invalid mutation result".into()),
+                    };
+                    Ok(AddedDir {
+                        path: result.path,
+                        already_present,
+                        choices: choices(
+                            session_id,
+                            SessionDirListResult {
+                                revision: result.revision,
+                                dirs: result.dirs,
+                            },
+                        ),
+                    })
+                });
+            return Ok(Event::AddCompleted { request_id, result });
+        }
         Command::Remove { path } => {
             let event_path = path.clone();
             remove(client, session_id, path).map(|choices| Event::Removed {
@@ -200,7 +241,7 @@ pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> D
     let show_tabs = groups.len() > 1;
     let model = ListSelectionModel::new("Directories", groups)
         .with_activation(bindings::DIR_CHANGE)
-        .with_search(SearchBoxModel::new("Search directories"))
+        .with_input(SearchBoxModel::new("Enter directory path"))
         .with_empty_message("No directories");
     DirChoices {
         model: if show_tabs {

@@ -59,7 +59,7 @@ use zeta_app_server_protocol::protocol::diff::DiffComputeResult;
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
 use zeta_app_server_protocol::protocol::environment::{
     EnvCwdSetParams, EnvCwdSetResult, EnvDirsSetParams, EnvDirsSetResult, SessionDirAddParams,
-    SessionDirListParams, SessionDirListResult, SessionDirMutationResult,
+    SessionDirAddResult, SessionDirListParams, SessionDirListResult, SessionDirMutationResult,
     SessionDirPermissionsSetParams, SessionDirRemoveParams,
 };
 use zeta_app_server_protocol::protocol::fs::{
@@ -390,7 +390,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     pub fn add_session_dir(
         &mut self,
         params: SessionDirAddParams,
-    ) -> Result<SessionDirMutationResult, ClientError> {
+    ) -> Result<SessionDirAddResult, ClientError> {
         self.call(ClientMethod::SessionDirAdd, params)
     }
 

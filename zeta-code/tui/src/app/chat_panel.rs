@@ -200,6 +200,16 @@ impl ChatPanel {
         }
     }
 
+    pub(crate) fn finish_dir_add(
+        &mut self,
+        request_id: u64,
+        result: Result<crate::dirs::AddedDir, String>,
+    ) {
+        if let Some(command) = self.command.as_mut() {
+            command.finish_dir_add(request_id, result);
+        }
+    }
+
     pub(crate) fn replace_config(&mut self, choices: ConfigChoices) {
         if let Some(command) = self.command.as_mut() {
             command.replace_config(choices);

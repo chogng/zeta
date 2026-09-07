@@ -144,7 +144,7 @@ fn client_reads_directories_through_the_typed_contract() {
 fn client_manages_session_dirs_through_typed_contracts() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
         r#"{"jsonrpc":"2.0","id":1,"result":{"revision":0,"dirs":[]}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":2,"result":{"mutation":"added","revision":1,"dirs":[{"path":"/tmp/extra","permissions":["readFiles","writeFiles"],"contributions":{"skills":[],"mcpServers":[],"hooks":[],"plugins":[],"diagnostics":[]}}]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":2,"result":{"path":"/tmp/extra","mutation":"added","revision":1,"dirs":[{"path":"/tmp/extra","permissions":["readFiles","writeFiles"],"contributions":{"skills":[],"mcpServers":[],"hooks":[],"plugins":[],"diagnostics":[]}}]}}"#.into(),
         r#"{"jsonrpc":"2.0","id":3,"result":{"mutation":"updated","revision":2,"dirs":[{"path":"/tmp/extra","permissions":["readFiles"],"contributions":{"skills":[],"mcpServers":[],"hooks":[],"plugins":[],"diagnostics":[]}}]}}"#.into(),
         r#"{"jsonrpc":"2.0","id":4,"result":{"mutation":"removed","revision":3,"dirs":[]}}"#.into(),
     ])));
@@ -166,6 +166,7 @@ fn client_manages_session_dirs_through_typed_contracts() {
             permissions: vec![PermissionDto::ReadFiles, PermissionDto::WriteFiles],
         })
         .unwrap();
+    assert_eq!(added.path, PathBuf::from("/tmp/extra"));
     assert_eq!(added.mutation, SessionDirMutationDto::Added);
     assert_eq!(added.dirs[0].path, PathBuf::from("/tmp/extra"));
     let updated = client

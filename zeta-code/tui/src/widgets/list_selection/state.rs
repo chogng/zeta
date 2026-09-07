@@ -165,6 +165,7 @@ pub(crate) struct ListSelectionModel {
 struct ListSelectionPresentation {
     title: String,
     search: Option<SearchBoxModel>,
+    filter_input: bool,
     empty_message: String,
     activation: Keybinding,
     show_activation_hint: bool,
@@ -185,6 +186,7 @@ impl ListSelectionModel {
             presentation: ListSelectionPresentation {
                 title: title.into(),
                 search: None,
+                filter_input: true,
                 empty_message: "No matching items".into(),
                 activation: bindings::ACCEPT,
                 show_activation_hint: false,
@@ -224,6 +226,14 @@ impl ListSelectionModel {
 
     pub(crate) fn with_search(mut self, search: SearchBoxModel) -> Self {
         self.presentation.search = Some(search);
+        self.presentation.filter_input = true;
+        self
+    }
+
+    /// Displays an input field whose value does not filter the list.
+    pub(crate) fn with_input(mut self, input: SearchBoxModel) -> Self {
+        self.presentation.search = Some(input);
+        self.presentation.filter_input = false;
         self
     }
 
@@ -273,6 +283,7 @@ pub(crate) struct ListSelectionState {
     selected_visible: Option<usize>,
     search: Option<SearchBoxState>,
     focus: ListSelectionFocus,
+    message: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -293,6 +304,7 @@ impl ListSelectionState {
             selected_visible: None,
             search,
             focus: ListSelectionFocus::Items,
+            message: None,
         };
         state.selected_visible = (state.visible_len() > 0).then_some(
             state
@@ -328,6 +340,40 @@ impl ListSelectionState {
         &self.model.title
     }
 
+    pub(crate) fn set_message(&mut self, message: Option<String>) {
+        self.message = message;
+    }
+
+    pub(crate) fn message(&self) -> Option<&str> {
+        self.message.as_deref()
+    }
+
+    /// Selects a stable item across groups and moves keyboard focus to it.
+    pub(crate) fn focus_item(&mut self, id: &ListSelectionItemId) -> bool {
+        let Some((tab, item)) = self
+            .tabs
+            .tabs()
+            .iter()
+            .enumerate()
+            .find_map(|(tab, group)| {
+                group
+                    .items
+                    .iter()
+                    .position(|item| item.id() == Some(id))
+                    .map(|item| (tab, item))
+            })
+        else {
+            return false;
+        };
+        self.tabs.select(tab);
+        self.selected_visible = self
+            .visible_indices()
+            .iter()
+            .position(|index| *index == item);
+        self.set_focus(ListSelectionFocus::Items);
+        true
+    }
+
     pub(crate) fn tabs(&self) -> &[ListSelectionGroup] {
         self.tabs.tabs()
     }
@@ -356,7 +402,7 @@ impl ListSelectionState {
         &self.tabs
     }
 
-    pub(super) fn tabs_focused(&self) -> bool {
+    pub(crate) fn tabs_focused(&self) -> bool {
         self.focus == ListSelectionFocus::Tabs
     }
 
@@ -399,7 +445,6 @@ impl ListSelectionState {
         self.selected_visible
     }
 
-    #[cfg(test)]
     pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
         let selectable = self
             .visible_items()
@@ -433,6 +478,7 @@ impl ListSelectionState {
             .map(ListSelectionPreview::desired_height)
             .unwrap_or_default();
         search_rows
+            .saturating_add(u16::from(self.message.is_some()))
             .saturating_add(list_rows.min(u16::MAX as usize) as u16)
             .saturating_add(preview_rows.min(u16::MAX as usize) as u16)
     }
@@ -627,7 +673,7 @@ impl ListSelectionState {
 
     fn visible_indices(&self) -> Vec<usize> {
         let normalized_query = self.query().to_lowercase();
-        if normalized_query.is_empty() {
+        if !self.model.filter_input || normalized_query.is_empty() {
             return (0..self.active_tab().items.len()).collect();
         }
         let mut matches = self

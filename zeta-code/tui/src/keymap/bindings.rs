@@ -561,6 +561,13 @@ pub(crate) const LAST: Keybinding =
 
 // Each list panel declares its activation here, so changing one panel is local.
 pub(crate) const CONFIG_CHANGE: Keybinding = Keybinding::new(ENTER_SPACE, "change");
+pub(crate) const DIR_ADD: Keybinding = Keybinding::new(ENTER, "add");
+pub(crate) const DIR_INPUT: Keybinding =
+    Keybinding::new(&[(NONE, KeyCode::Char('/'))], "add directory");
+pub(crate) static DIR_INPUT_HINTS: LazyLock<String> =
+    LazyLock::new(|| hints(&[DIR_ADD, RETURN_LIST]));
+pub(crate) static DIR_HINTS: LazyLock<String> =
+    LazyLock::new(|| hints(&[DIR_CHANGE, DIR_INPUT, CLOSE]));
 pub(crate) const DIR_CHANGE: Keybinding = Keybinding::new(ENTER, "change");
 pub(crate) const THEME_APPLY: Keybinding = Keybinding::new(ENTER, "apply");
 pub(crate) const MODEL_APPLY: Keybinding = Keybinding::new(ENTER, "apply");

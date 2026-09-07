@@ -33009,6 +33009,35 @@
           "type": "object"
         }
       ]
+    },
+    "SessionDirAddResult": {
+      "properties": {
+        "dirs": {
+          "items": {
+            "$ref": "#/$defs/SessionDirDto"
+          },
+          "type": "array"
+        },
+        "mutation": {
+          "$ref": "#/$defs/SessionDirMutationDto"
+        },
+        "path": {
+          "description": "Canonical path resolved by the server, including for an existing directory.",
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "mutation",
+        "revision",
+        "dirs"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 1 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 28 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 3 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:6b129b1e456d631b22a75dd967108890705030540eaeff203dd8fe62add42b19" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:0be008d6b8f6ffce4ff7b1e665f1e8be8991ef70dbe95781a3371734f9656b7d" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -353,6 +353,11 @@ export type SessionDirListResult = { revision: number, dirs: Array<SessionDirDto
 export type SessionDirAddParams = { sessionId: SessionId, path: string, permissions: Array<PermissionDto>, };
 export type SessionDirRemoveParams = { sessionId: SessionId, path: string, };
 export type SessionDirMutationDto = "added" | "alreadyPresent" | "removed" | "updated" | "notPresent";
+export type SessionDirAddResult = {
+/**
+ * Canonical path resolved by the server, including for an existing directory.
+ */
+path: string, mutation: SessionDirMutationDto, revision: number, dirs: Array<SessionDirDto>, };
 export type SessionDirMutationResult = { mutation: SessionDirMutationDto, revision: number, dirs: Array<SessionDirDto>, };
 export type PermissionDto = "readFiles" | "writeFiles" | "executeCommands" | "watchFiles" | "browseFiles" | "searchFiles" | "loadInstructions" | "loadConfig" | "discoverSkills" | "discoverMcp" | "useLanguageServices" | "discoverHooks" | "discoverPlugins" | "inspectRepository" | "mutateRepository";
 export type SessionDirPermissionsSetParams = { sessionId: SessionId, path: string, expectedRevision: number, permissions: Array<PermissionDto>, };
@@ -1059,7 +1064,7 @@ export interface AppServerRequestMap {
   "env/cwd/set": { params: EnvCwdSetParams; response: EnvCwdSetResult };
   "env/dirs/set": { params: EnvDirsSetParams; response: EnvDirsSetResult };
   "session/dirs/list": { params: SessionDirListParams; response: SessionDirListResult };
-  "session/dirs/add": { params: SessionDirAddParams; response: SessionDirMutationResult };
+  "session/dirs/add": { params: SessionDirAddParams; response: SessionDirAddResult };
   "session/dirs/remove": { params: SessionDirRemoveParams; response: SessionDirMutationResult };
   "session/dirs/permissions/set": { params: SessionDirPermissionsSetParams; response: SessionDirMutationResult };
   "config/dirPermissions/read": { params: DirPermissionsReadParams; response: DirPermissionsReadResult };

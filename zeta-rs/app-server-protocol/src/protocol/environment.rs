@@ -224,6 +224,17 @@ pub enum SessionDirMutationDto {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct SessionDirAddResult {
+    /// Canonical path resolved by the server, including for an existing directory.
+    pub path: PathBuf,
+    pub mutation: SessionDirMutationDto,
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub dirs: Vec<SessionDirDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionDirMutationResult {
     pub mutation: SessionDirMutationDto,
     #[ts(type = "number")]

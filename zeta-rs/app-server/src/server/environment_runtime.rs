@@ -1511,7 +1511,7 @@ impl AppServer {
         session_id: &SessionId,
         root: PathBuf,
         permissions: zeta_file_access::Permissions,
-    ) -> Result<(Mutation, SessionDirEntrySnapshotSet), EnvRuntimeError> {
+    ) -> Result<(PathBuf, Mutation, SessionDirEntrySnapshotSet), EnvRuntimeError> {
         ensure_session_exists(&self.threads, session_id)?;
         let _env_runtime = self
             .env_runtime_gate
@@ -1536,6 +1536,7 @@ impl AppServer {
         };
         let dir = Dir::open_local(requested)
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        let path = dir.canonical_path().to_path_buf();
         let authorization = Grant::for_session_tree(
             session_id.clone(),
             dir,
@@ -1547,7 +1548,7 @@ impl AppServer {
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         self.reconcile_session_dir_consumers(session_id)?;
         let snapshots = session_dir_snapshots(&dir_grants, session_id);
-        Ok((mutation, snapshots))
+        Ok((path, mutation, snapshots))
     }
 
     pub(super) fn remove_session_dir(

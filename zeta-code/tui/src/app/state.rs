@@ -585,6 +585,9 @@ impl App {
 
     fn handle_command_panel_outcome(&mut self, outcome: CommandPanelOutcome) -> Option<AppCommand> {
         match outcome {
+            CommandPanelOutcome::Dirs(DirSelectionAction::Add { request_id, path }) => {
+                Some(DirCommand::Add { request_id, path }.into())
+            }
             CommandPanelOutcome::Dirs(DirSelectionAction::Remove { path }) => {
                 Some(DirCommand::Remove { path }.into())
             }
@@ -1793,6 +1796,9 @@ impl App {
     fn apply_dir_event(&mut self, event: DirEvent) {
         match event {
             DirEvent::PickerOpened(view) => self.show_dirs_picker(view),
+            DirEvent::AddCompleted { request_id, result } => {
+                self.chat_panel.finish_dir_add(request_id, result);
+            }
             DirEvent::Removed { path, choices } => {
                 self.update_dirs_picker(choices);
                 self.thread

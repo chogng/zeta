@@ -68,6 +68,10 @@ impl<A> ListSelection<A> {
         &self.state
     }
 
+    pub(crate) fn state_mut(&mut self) -> &mut ListSelectionState {
+        &mut self.state
+    }
+
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         self.state.handle_paste(pasted);
     }

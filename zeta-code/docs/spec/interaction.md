@@ -85,7 +85,7 @@ PageUp/PageDown 的目标统一为快速浏览当前区域，步长由内容决�
 | 界面 / 入口 | 导航与搜索 | 页签 / 左右键 | Enter | Space | Esc |
 | --- | --- | --- | --- | --- | --- |
 | Help `/help` | 列表导航；`/` 搜索帮助 | 页签获焦后 Tab/Shift+Tab 切 Shortcuts、Commands、Custom commands | 无业务动作 | 无 | 关闭 |
-| Directories `/add-dir` | 列表导航；`/` 搜索目录 | 单页 | 移除目录或更改目录权限 | 无 | 关闭 |
+| Directories `/add-dir` | 列表导航；`/` 输入目录路径 | 单页 | 输入框中添加目录；列表中移除目录或更改权限 | 无 | 输入框中返回列表；等待添加时关闭面板；列表中关闭 |
 | Model `/model` | 列表导航；`/` 搜索模型 | 单页 | 应用模型 | 无 | 关闭 |
 | Theme `/theme` | 列表导航；无搜索；编号只是标签 | 单页 | 应用主题，或进入 Custom color theme | 无 | 主列表关闭；自定义主题列表返回主列表 |
 | Config `/config` | 列表导航；`/` 搜索设置 | 页签获焦后 Tab/Shift+Tab 切分类；条目左右调整值 | 更改值或进入字段编辑 | 与 Enter 相同 | 关闭；字段编辑内取消并返回设置列表 |
@@ -98,6 +98,8 @@ PageUp/PageDown 的目标统一为快速浏览当前区域，步长由内容决�
 | Status line `/statusline` | 列表导航；无搜索 | 单页 | 切换状态行条目 | 与 Enter 相同 | 关闭 |
 | Startup `/startup` | 列表导航；无搜索 | 单页 | 无业务动作 | 无 | 关闭 |
 | Status `/status` | 阅读导航；无搜索 | Tab/Shift+Tab 或左右切 Thread / Processes；各页保留滚动位置 | 无 | 无 | 关闭 |
+
+目录路径输入不会筛选现有项。Enter 提交后显示 `Adding directory…` 并禁止重复提交；成功后使用服务端返回的规范路径刷新列表，清空输入，选中该目录的 `Read files` 权限项并移出输入焦点。重复目录显示 `Directory already added`，保留已有权限；失败在输入框下显示原因并保留原文和焦点。空路径不提交，多行粘贴被拒绝，路径中的连续空格保留。关闭或重新打开面板后，旧添加结果不会影响新面板。
 
 Config 的字段编辑只接受字段文字和粘贴，Enter 保存，Esc 取消；主列表的单键不生效。Keymap 的录制接受一个按键或连续两段键序列，Esc / Ctrl+C 取消；`j/k/i/p/空格` 都可以作为录制数据，不触发对应界面动作。列表中的 Ctrl+C 保留为 Esc 的等价退出操作；它不会执行后台对话的中断或退出命令。
 
