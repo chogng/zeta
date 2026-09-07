@@ -1,8 +1,8 @@
 use super::ThreadPresentationEvent;
 use super::ThreadState;
+use super::transcript::CellView;
 use super::transcript::ChatHistoryRenderCache;
 use super::transcript::ChatHistoryScroll;
-use super::transcript::Message;
 use super::transcript::TranscriptScrollDirection;
 use super::transcript::first_scroll_target;
 use super::transcript::scroll_target;
@@ -47,7 +47,7 @@ impl ConversationPreview {
         }
     }
 
-    pub(crate) fn messages(&self) -> Vec<Message> {
+    pub(crate) fn messages(&self) -> Vec<CellView<'_>> {
         self.thread.views(&BTreeSet::new(), None)
     }
 

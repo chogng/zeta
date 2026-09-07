@@ -1,10 +1,11 @@
-use super::Message;
+use super::CellLayout;
+use super::CellLines;
+use super::CellView;
 use crate::render::RenderContext;
 use crate::render::StreamingCodeHighlighter;
 use crate::render::code_within_limits;
 use crate::render::highlight_code;
 use crate::render::line_to_borrowed;
-use crate::render::push_owned_lines;
 use crate::render::wrapped_height;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -45,12 +46,12 @@ struct CacheKey {
 }
 
 impl CacheKey {
-    fn for_message(message: &Message, width: u16, context: RenderContext<'_>) -> Option<Self> {
-        let cell_id = message.cell_id.clone()?;
-        if message.render_revision == 0 {
+    fn for_cell(cell: &CellView<'_>, width: u16, context: RenderContext<'_>) -> Option<Self> {
+        let cell_id = cell.cell_id.clone()?;
+        if cell.render_revision == 0 {
             return None;
         }
-        let mode = match (message.expanded, message.selected) {
+        let mode = match (cell.expanded, cell.selected) {
             (false, false) => CellRenderMode::Normal,
             (false, true) => CellRenderMode::Selected,
             (true, false) => CellRenderMode::Expanded,
@@ -58,7 +59,7 @@ impl CacheKey {
         };
         Some(Self {
             cell_id,
-            render_revision: message.render_revision,
+            render_revision: cell.render_revision,
             width,
             theme_revision: context.theme_revision(),
             mode,
@@ -76,7 +77,7 @@ struct CacheEntry {
 #[derive(Debug)]
 struct LayoutEntry {
     key: CacheKey,
-    height: usize,
+    layout: CellLayout,
 }
 
 #[derive(Debug, Default)]
@@ -114,10 +115,10 @@ struct CodeBlockRender {
 }
 
 impl ChatHistoryRenderCache {
-    pub(crate) fn retain_messages(&self, messages: &[Message]) {
+    pub(crate) fn retain_cells(&self, messages: &[CellView<'_>]) {
         let ids = messages
             .iter()
-            .filter_map(|message| message.cell_id.as_ref())
+            .filter_map(|cell| cell.cell_id.as_ref())
             .collect::<HashSet<_>>();
         self.layouts
             .borrow_mut()
@@ -130,47 +131,51 @@ impl ChatHistoryRenderCache {
         self.code_blocks.borrow_mut().retain(&ids);
     }
 
-    pub(crate) fn measure<'a>(
+    pub(in crate::thread::transcript) fn measure(
         &self,
-        message: &Message,
+        cell: &CellView<'_>,
         width: u16,
         context: RenderContext<'_>,
-        render: impl FnOnce() -> Vec<Line<'a>>,
-    ) -> usize {
-        let key = CacheKey::for_message(message, width, context);
+        render: impl FnOnce() -> CellLines,
+    ) -> CellLayout {
+        let key = CacheKey::for_cell(cell, width, context);
         if let Some(key) = key.as_ref()
-            && let Some(height) = self.cached_height(key)
+            && let Some(height) = self.cached_layout(key)
         {
             return height;
         }
-        let height = wrapped_height(&render(), width);
+        let height = render().layout(width);
         if let Some(key) = key {
-            self.insert_height(key, height);
+            self.insert_layout(key, height);
         }
         height
     }
 
-    pub(crate) fn prepare<'a>(
+    pub(in crate::thread::transcript) fn prepare(
         &self,
-        message: &Message,
+        cell: &CellView<'_>,
         width: u16,
         context: RenderContext<'_>,
-        render: impl FnOnce() -> (Vec<Line<'a>>, usize),
+        render: impl FnOnce() -> CellLines,
     ) -> PreparedCell {
-        let key = CacheKey::for_message(message, width, context);
+        let key = CacheKey::for_cell(cell, width, context);
         if let Some(key) = key.as_ref()
             && let Some(cell) = self.cached(key)
         {
             return PreparedCell::Buffered(cell);
         }
 
-        let (borrowed, user_input_lines) = render();
-        let mut lines = Vec::with_capacity(borrowed.len());
-        push_owned_lines(&borrowed, &mut lines);
-        let height = wrapped_height(&lines, width);
+        let rendered = render();
+        let layout = rendered.layout(width);
+        let height = layout.height;
+        let CellLines {
+            lines,
+            user_input_lines,
+            ..
+        } = rendered;
         let user_input_rows = wrapped_height(&lines[..user_input_lines.min(lines.len())], width);
         if let Some(key) = key.as_ref() {
-            self.insert_height(key.clone(), height);
+            self.insert_layout(key.clone(), layout);
         }
         let Some(cost) = usize::from(width).checked_mul(height) else {
             return PreparedCell::Lines {
@@ -178,6 +183,7 @@ impl ChatHistoryRenderCache {
                 background: context.background(),
                 user_input_background: context.user_message_background(),
                 user_input_rows,
+                height,
             };
         };
         let Some(buffer_height) = u16::try_from(height).ok() else {
@@ -186,6 +192,7 @@ impl ChatHistoryRenderCache {
                 background: context.background(),
                 user_input_background: context.user_message_background(),
                 user_input_rows,
+                height,
             };
         };
         if key.is_none() || cost > MAX_CELL_CELLS {
@@ -194,6 +201,7 @@ impl ChatHistoryRenderCache {
                 background: context.background(),
                 user_input_background: context.user_message_background(),
                 user_input_rows,
+                height,
             };
         }
 
@@ -236,18 +244,18 @@ impl ChatHistoryRenderCache {
         Some(cell)
     }
 
-    fn cached_height(&self, key: &CacheKey) -> Option<usize> {
+    fn cached_layout(&self, key: &CacheKey) -> Option<CellLayout> {
         self.layouts
             .borrow()
             .get(&key.cell_id)
             .filter(|entry| entry.key == *key)
-            .map(|entry| entry.height)
+            .map(|entry| entry.layout)
     }
 
-    fn insert_height(&self, key: CacheKey, height: usize) {
+    fn insert_layout(&self, key: CacheKey, layout: CellLayout) {
         self.layouts
             .borrow_mut()
-            .insert(key.cell_id.clone(), LayoutEntry { key, height });
+            .insert(key.cell_id.clone(), LayoutEntry { key, layout });
     }
 
     pub(crate) fn clear(&self) {
@@ -258,16 +266,16 @@ impl ChatHistoryRenderCache {
 
     pub(crate) fn highlight_code_block(
         &self,
-        message: &Message,
+        cell_id: Option<&str>,
         block_index: usize,
         language: &str,
         source: &str,
         context: RenderContext<'_>,
     ) -> Vec<Line<'static>> {
-        let Some(cell_id) = message.cell_id.as_ref() else {
+        let Some(cell_id) = cell_id else {
             return highlight_code(source, language, context.into());
         };
-        let key = (cell_id.clone(), block_index);
+        let key = (cell_id.to_owned(), block_index);
         let mut blocks = self.code_blocks.borrow_mut();
         if !code_within_limits(source) {
             blocks.remove(&key);
@@ -451,10 +459,18 @@ pub(crate) enum PreparedCell {
         background: Color,
         user_input_background: Color,
         user_input_rows: usize,
+        height: usize,
     },
 }
 
 impl PreparedCell {
+    pub(crate) fn height(&self) -> usize {
+        match self {
+            Self::Buffered(cell) => usize::from(cell.buffer.area.height),
+            Self::Lines { height, .. } => *height,
+        }
+    }
+
     pub(crate) fn render(&self, target: &mut Buffer, area: Rect, source_row: usize) {
         match self {
             Self::Buffered(cell) => cell.render(target, area, source_row),

@@ -55,6 +55,10 @@ pub(crate) use update::ThreadPresentationEvent;
 /// A completed current-Thread operation delivered to the TUI state owner.
 pub(crate) enum Event {
     CommandStarted(String),
+    CommandFailed {
+        command: String,
+        error: String,
+    },
     CommandCompleted {
         command: String,
         result: String,

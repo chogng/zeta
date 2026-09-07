@@ -20,7 +20,7 @@ fn turn_start_failure_preserves_an_active_turn_that_appeared_during_the_request(
         app.messages()
             .last()
             .unwrap()
-            .text
+            .text()
             .contains("could not start the Turn: sequence conflict")
     );
 }

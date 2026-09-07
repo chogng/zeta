@@ -1,16 +1,13 @@
-use super::Message;
+use super::CellView;
 use super::TranscriptCell;
-use std::collections::BTreeMap;
-use std::hash::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
+use std::collections::BTreeSet;
 use std::io;
 
 /// Tracks successful terminal writes without keeping another copy of the conversation.
 #[derive(Debug, Default)]
 pub(crate) struct TranscriptHistory {
     scope: String,
-    written: BTreeMap<String, (u64, u64)>,
+    written: BTreeSet<String>,
 }
 
 impl TranscriptHistory {
@@ -18,7 +15,7 @@ impl TranscriptHistory {
         &mut self,
         scope: &str,
         cells: &[TranscriptCell],
-        output: &mut impl FnMut(&Message) -> io::Result<()>,
+        output: &mut impl FnMut(&CellView<'_>) -> io::Result<()>,
     ) -> io::Result<()> {
         if self.scope != scope {
             self.scope = scope.to_owned();
@@ -26,32 +23,12 @@ impl TranscriptHistory {
         }
         for cell in cells {
             let id = cell.cell_id().as_str();
-            let revision = cell.render_revision();
-            if self
-                .written
-                .get(id)
-                .is_some_and(|(written, _)| *written == revision)
-            {
+            if self.written.contains(id) {
                 continue;
             }
-            let message = cell.history_view();
-            let mut hash = DefaultHasher::new();
-            std::mem::discriminant(&message.role).hash(&mut hash);
-            message
-                .command_status
-                .map(|status| std::mem::discriminant(&status))
-                .hash(&mut hash);
-            message.text.hash(&mut hash);
-            message.detail.hash(&mut hash);
-            let fingerprint = hash.finish();
-            if let Some((written_revision, written_fingerprint)) = self.written.get_mut(id)
-                && *written_fingerprint == fingerprint
-            {
-                *written_revision = revision;
-                continue;
-            }
-            output(&message)?;
-            self.written.insert(id.to_owned(), (revision, fingerprint));
+            let cell = cell.history_view();
+            output(&cell)?;
+            self.written.insert(id.to_owned());
         }
         Ok(())
     }

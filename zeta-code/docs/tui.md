@@ -110,13 +110,22 @@ zeta-code/tui/
 │   │   │   ├── submission.rs
 │   │   │   └── surface.rs
 │   │   ├── transcript.rs / transcript/
-│   │   │   ├── cell.rs
-│   │   │   ├── exec.rs
+│   │   │   ├── history_cell.rs / history_cell/
+│   │   │   │   ├── content.rs
+│   │   │   │   ├── local_command.rs
+│   │   │   │   ├── text.rs
+│   │   │   │   ├── cache.rs
+│   │   │   │   └── cache_tests.rs
+│   │   │   ├── exec_cell.rs / exec_cell/
+│   │   │   │   ├── render.rs
+│   │   │   │   └── model_tests.rs
 │   │   │   ├── markdown.rs
-│   │   │   ├── cache.rs
+│   │   │   ├── history.rs
 │   │   │   ├── model.rs
-│   │   │   ├── state.rs
-│   │   │   ├── view.rs
+│   │   │   ├── view.rs / view/
+│   │   │   │   ├── scroll.rs
+│   │   │   │   ├── scroll_tests.rs
+│   │   │   │   └── render_tests.rs
 │   │   │   └── batch.rs
 │   │   ├── interaction.rs / interaction/
 │   │   │   ├── approval.rs
@@ -306,8 +315,8 @@ generation 和结果安装。
 
 | 用户看到的内容 | 内部单元 | 更新方式 | 输出责任 |
 | --- | --- | --- | --- |
-| 用户消息、Agent 回复、思考、Plan、提示和错误 | 内容单元（计划类型 `ContentCell`） | 根据稳定的正文条目标识插入或更新 | 输出角色标记、正文、可选的展开摘要和详情动作 |
-| 用户直接提交的本地命令 | 本地命令单元（计划类型 `LocalCommandCell`） | 在提交、运行和完成之间原位更新 | 输出命令、运行状态和结果，并保留“用户输入”身份 |
+| 用户消息、Agent 回复、思考、Plan、提示和错误 | 内容单元 `ContentCell` | 根据稳定的正文条目标识插入或更新 | 输出角色标记、正文、可选的展开摘要和详情动作 |
+| 用户直接提交的本地命令 | 本地命令单元 `LocalCommandCell` | 在提交、运行和完成之间原位更新 | 输出命令、运行状态和结果，并保留“用户输入”身份 |
 | Agent 发起的工具或命令执行 | 执行单元 `ExecCell` | 按 Tool Call 标识聚合开始、`stdout`、`stderr` 和结果，运行到完成始终更新同一单元 | 输出执行摘要、状态、有界预览、完整详情和可点击动作 |
 
 Welcome 是正文历史的产品页眉，不是 App Server 消息，也不是 `TranscriptCell`。`app/` 生成页眉格子，`Transcript` 把它放在所有正文单元之前并纳入同一滚动坐标；内容溢出后它自然离开视口，回到绝对顶部时重新出现。
@@ -342,7 +351,11 @@ flowchart TD
 
 每种正文类型、执行阶段、合并方式、截断方式和完整详情的可见输出见 [界面词典的“正文单元会输出什么”](LAYOUT.md#正文单元会输出什么)。
 
-当前实现已有统一的 `TranscriptCell`、独立的 `ExecCell`、有序单元集合、有界缓存、滚动和命中。当前限制是所有具体单元会先转成通用 `Message`，绘制时再根据 `MessageRole`、`ExecutionKind` 和多个可选字段恢复类型语义。计划设计是让 `ContentCell`、`LocalCommandCell` 和 `ExecCell` 直接生成自己的可缓存绘制结果，移除这个通用中间层。
+当前实现通过 `HistoryCell` 统一内容单元、本地命令单元和执行单元的输出契约。`CellView` 借用实际单元并携带展开、选择和缓存身份；通用 `Message` 中间层已经移除。具体单元生成 `CellLines`，缓存从同一结果计算行高、用户输入背景范围和详情动作所在行；正文视图只负责组合、滚动、裁剪和动作路由。Markdown 导出读取完整内容，与当前展开状态无关。
+
+文件按三个负责人归拢：`history_cell.rs` 定义单元契约，`history_cell/` 保存内容、本地命令、文本处理和缓存；`exec_cell.rs` 保存执行状态、调用分组和输出边界，`exec_cell/` 保存绘制和执行测试；`view.rs` 组合正文画面，`view/` 保存滚动状态和视图测试。入口文件直接承载主要实现，不使用 `mod.rs`。
+
+执行组只在同一个 Turn 内合并。当前 Turn 尚未结束时，末尾执行组仍属于可变尾部，即使已收到其中某次调用的结果也不提前写入回滚区。需要结果的本地命令从排队开始保持实时状态，成功或失败后才定稿；纯面板命令只提交一次命令输入，面板本身不进入正文历史。`TranscriptHistory` 在写入成功后记录单元身份，同一 Thread 连续显示期间的重绘或快照替换不会重复追加已写入单元；后续修订保留在正文模型中，进入正文浏览或导出时读取最新内容。
 
 每个缓存必须有明确上限。按 Thread 保存的草稿、附件、Queue、选择和缓存也必须定义总量与淘汰规则，
 不能让访问过的 Thread 永久累积。

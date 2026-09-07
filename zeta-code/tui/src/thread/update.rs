@@ -7,9 +7,19 @@ pub(crate) enum ThreadPresentationEvent {
     TranscriptHistoryPageReceived(ThreadTranscriptSnapshot),
     TranscriptUpdateReceived(Box<ThreadTranscriptUpdateEnvelope>),
     UserSubmitted(String),
-    CommandSubmitted(String),
+    CommandSubmitted {
+        command: String,
+        completion: super::transcript::LocalCommandCompletion,
+    },
     CommandStarted(String),
-    CommandCompleted { command: String, result: String },
+    CommandCompleted {
+        command: String,
+        result: String,
+    },
+    CommandFailed {
+        command: String,
+        error: String,
+    },
     NoticeReceived(String),
     FailureReported(String),
     Interrupted,

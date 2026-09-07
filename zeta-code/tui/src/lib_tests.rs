@@ -132,8 +132,8 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     assert_eq!(app.active_turn(), None);
     assert_eq!(app.status(), &Status::Ready);
     assert_eq!(app.messages().len(), 2);
-    assert_eq!(app.messages().last().unwrap().role, MessageRole::Agent);
-    assert_eq!(app.messages().last().unwrap().text, "complete response");
+    assert_eq!(app.messages().last().unwrap().role(), MessageRole::Agent);
+    assert_eq!(app.messages().last().unwrap().text(), "complete response");
 }
 
 #[test]
@@ -289,7 +289,7 @@ fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
 
     assert_eq!(app.status(), &Status::Error);
     let messages = app.messages();
-    let message = &messages.last().unwrap().text;
+    let message = &messages.last().unwrap().text();
     assert!(message.contains("configured model"));
     assert!(!message.contains("StableTurnError"));
     assert!(!message.contains("ModelInvocationFailed"));

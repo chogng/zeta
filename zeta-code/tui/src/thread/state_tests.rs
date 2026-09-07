@@ -1,7 +1,6 @@
 use super::ThreadState;
 use crate::thread::ThreadPresentationEvent;
 use crate::thread::transcript::CommandStatus;
-use crate::thread::transcript::ExecutionKind;
 use crate::thread::transcript::MessageRole;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
@@ -31,12 +30,12 @@ fn transcript_snapshot_replaces_local_rows_and_preserves_rendering() {
         state
             .messages()
             .iter()
-            .map(|message| (message.role, message.text.as_str()))
+            .map(|message| (message.role(), message.text().into_owned()))
             .collect::<Vec<_>>(),
         vec![
-            (MessageRole::User, "canonical prompt"),
-            (MessageRole::Reasoning, "Thought"),
-            (MessageRole::Agent, "canonical response"),
+            (MessageRole::User, "canonical prompt".to_owned()),
+            (MessageRole::Reasoning, "Thought".to_owned()),
+            (MessageRole::Agent, "canonical response".to_owned()),
         ]
     );
 }
@@ -51,7 +50,7 @@ fn history_snapshot_is_prepended_without_duplicate_entries() {
     state.update(ThreadPresentationEvent::TranscriptHistoryPageReceived(
         ThreadTranscriptSnapshot::from_thread(&older),
     ));
-    assert_eq!(state.messages()[0].text, "older prompt");
+    assert_eq!(state.messages()[0].text(), "older prompt");
     assert_eq!(state.messages().len(), 4);
 }
 
@@ -68,7 +67,7 @@ fn complete_upsert_replaces_one_stable_transcript_row() {
         update(vec![upsert_agent("complete text", true)]),
     )));
     assert_eq!(state.messages().len(), 1);
-    assert_eq!(state.messages()[0].text, "complete text");
+    assert_eq!(state.messages()[0].text(), "complete text");
     assert_eq!(
         state.messages()[0].cell_id.as_deref(),
         Some("entry:item:item_stream")
@@ -94,19 +93,19 @@ fn clear_transient_preserves_committed_and_local_rows() {
         state
             .messages()
             .iter()
-            .all(|message| message.text != "temporary")
+            .all(|message| message.text() != "temporary")
     );
     assert!(
         state
             .messages()
             .iter()
-            .any(|message| message.text == "canonical response")
+            .any(|message| message.text() == "canonical response")
     );
     assert!(
         state
             .messages()
             .iter()
-            .any(|message| message.text == "local notice")
+            .any(|message| message.text() == "local notice")
     );
 }
 
@@ -132,17 +131,18 @@ fn structured_turn_plan_is_rendered_by_the_tui() {
     ));
     let messages = state.messages();
     let plan = messages.last().unwrap();
-    assert_eq!(plan.role, MessageRole::Plan);
-    assert_eq!(plan.text, "Implementation plan\n[x] inspect\n[>] change");
+    assert_eq!(plan.role(), MessageRole::Plan);
+    assert_eq!(plan.text(), "Implementation plan\n[x] inspect\n[>] change");
     assert_eq!(plan.cell_id.as_deref(), Some("entry:turn-plan:turn_1"));
 }
 
 #[test]
 fn command_completion_groups_the_command_with_its_result() {
     let mut state = ThreadState::default();
-    state.update(ThreadPresentationEvent::CommandSubmitted(
-        "/theme light".into(),
-    ));
+    state.update(ThreadPresentationEvent::CommandSubmitted {
+        command: "/theme light".into(),
+        completion: crate::thread::transcript::LocalCommandCompletion::Deferred,
+    });
     state.update(ThreadPresentationEvent::CommandStarted(
         "/theme light".into(),
     ));
@@ -153,9 +153,8 @@ fn command_completion_groups_the_command_with_its_result() {
     let messages = state.messages();
     let message = messages.first().unwrap();
     assert_eq!(messages.len(), 1);
-    assert_eq!(message.command_status, Some(CommandStatus::Succeeded));
-    assert_eq!(message.execution_kind, ExecutionKind::LocalCommand);
-    assert_eq!(message.detail.as_deref(), Some("Theme set"));
+    assert_eq!(message.command_status(), Some(CommandStatus::Succeeded));
+    assert_eq!(message.detail().as_deref(), Some("Theme set"));
 }
 
 fn update(changes: Vec<ThreadTranscriptChange>) -> ThreadTranscriptUpdateEnvelope {

@@ -99,9 +99,9 @@ use crate::thread::queue::QueueKeyOutcome;
 use crate::thread::queue::QueueView;
 use crate::thread::rewind::RewindChoices;
 use crate::thread::rewind::RewindSelectionAction;
+use crate::thread::transcript::CellView;
 use crate::thread::transcript::ChatHistoryRenderCache;
 use crate::thread::transcript::ChatHistoryScroll;
-use crate::thread::transcript::Message;
 use crate::thread::transcript::TranscriptScrollAnchor;
 use crate::thread::transcript::TranscriptScrollDirection;
 use crate::thread::transcript::first_scroll_target;
@@ -1188,18 +1188,18 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(crate) fn messages(&self) -> Vec<Message> {
+    pub(crate) fn messages(&self) -> Vec<CellView<'_>> {
         self.thread.messages()
     }
 
-    pub(crate) fn transcript_views(&self) -> Vec<Message> {
+    pub(crate) fn transcript_views(&self) -> Vec<CellView<'_>> {
         self.thread.views(
             &self.thread_presentations.active().expanded_cells,
             self.thread_presentations.active().selected_cell.as_ref(),
         )
     }
 
-    pub(crate) fn visible_transcript_views(&self) -> Vec<Message> {
+    pub(crate) fn visible_transcript_views(&self) -> Vec<CellView<'_>> {
         if self.transcript_history_browsing() {
             return self.transcript_views();
         }
@@ -1215,7 +1215,7 @@ impl App {
 
     pub(crate) fn write_transcript_history(
         &mut self,
-        output: &mut impl FnMut(&Message, RenderContext<'_>) -> std::io::Result<()>,
+        output: &mut impl FnMut(&CellView<'_>, RenderContext<'_>) -> std::io::Result<()>,
     ) -> std::io::Result<()> {
         let context = RenderContext::new(&self.render_theme, self.render_theme_revision);
         self.transcript_history.write(
@@ -1632,6 +1632,10 @@ impl App {
 
     fn apply_thread_event(&mut self, event: ThreadEvent) {
         match event {
+            ThreadEvent::CommandFailed { command, error } => {
+                self.thread
+                    .update(ThreadPresentationEvent::CommandFailed { command, error });
+            }
             ThreadEvent::CommandStarted(command) => {
                 self.thread
                     .update(ThreadPresentationEvent::CommandStarted(command));
@@ -2449,13 +2453,14 @@ impl App {
             .parse::<TuiSlashCommandAction>()
             .ok();
         if invocation.origin == SlashCommandOrigin::Local
-            && local.is_some()
-            && !matches!(local, Some(TuiSlashCommandAction::Quit))
+            && let Some(action) = local
+            && action != TuiSlashCommandAction::Quit
         {
             self.thread
-                .update(ThreadPresentationEvent::CommandSubmitted(
-                    invocation.display_text(),
-                ));
+                .update(ThreadPresentationEvent::CommandSubmitted {
+                    command: invocation.display_text(),
+                    completion: action.completion(&invocation.arguments),
+                });
         }
         if invocation.origin == SlashCommandOrigin::Local && invocation.arguments.is_empty() {
             match local {
@@ -2487,11 +2492,10 @@ impl App {
             && invocation.origin == SlashCommandOrigin::Local
             && !matches!(local, Some(TuiSlashCommandAction::Export))
         {
-            self.thread
-                .update(ThreadPresentationEvent::FailureReported(format!(
-                    "/{} is unavailable while a turn is running; submit a follow-up prompt or wait for the turn to finish",
-                    invocation.command.name
-                )));
+            self.thread.update(ThreadPresentationEvent::CommandFailed {
+                command: invocation.display_text(),
+                error: format!("/{} is unavailable while a turn is running; submit a follow-up prompt or wait for the turn to finish", invocation.command.name),
+            });
             return None;
         }
         match (invocation.origin, local) {

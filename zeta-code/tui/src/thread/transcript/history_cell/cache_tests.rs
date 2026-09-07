@@ -1,16 +1,17 @@
+use super::CellLines;
 use super::ChatHistoryRenderCache;
 use super::MAX_CELL_CELLS;
 use super::PreparedCell;
 use crate::render::highlight_code;
 use crate::render::styled_text_lines;
 use crate::render::test_context;
-use crate::thread::transcript::Message;
+use crate::thread::transcript::CellView;
 use crate::thread::transcript::MessageRole;
 use ratatui::style::Style;
 use std::cell::Cell;
 
-fn message(revision: u64) -> Message {
-    Message::plain(MessageRole::Agent, "cached text".into())
+fn message(revision: u64) -> CellView<'static> {
+    CellView::plain(MessageRole::Agent, "cached text".into())
         .with_cell_id("agent")
         .with_render_revision(revision)
 }
@@ -21,7 +22,11 @@ fn unchanged_cell_reuses_the_rendered_buffer() {
     let renders = Cell::new(0);
     let render = || {
         renders.set(renders.get() + 1);
-        (styled_text_lines("cached text", Style::default()), 0)
+        CellLines {
+            lines: styled_text_lines("cached text", Style::default()),
+            user_input_lines: 0,
+            details_line: None,
+        }
     };
 
     let first = cache.prepare(&message(1), 20, test_context(), render);
@@ -37,7 +42,7 @@ fn unchanged_cell_reuses_the_rendered_buffer() {
 fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
     let cache = ChatHistoryRenderCache::default();
     let renders = Cell::new(0);
-    let prepare = |message: &Message, width, theme_revision| {
+    let prepare = |message: &CellView<'_>, width, theme_revision| {
         cache.prepare(
             message,
             width,
@@ -47,7 +52,11 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
             ),
             || {
                 renders.set(renders.get() + 1);
-                (styled_text_lines("cached text", Style::default()), 0)
+                CellLines {
+                    lines: styled_text_lines("cached text", Style::default()),
+                    user_input_lines: 0,
+                    details_line: None,
+                }
             },
         )
     };
@@ -56,7 +65,7 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
     prepare(&message(2), 20, 0);
     prepare(&message(2), 10, 0);
     prepare(&message(2), 10, 1);
-    let selected = message(2).with_cell_actions(false, false, false, true);
+    let selected = message(2).with_presentation(false, true);
     prepare(&selected, 10, 1);
 
     assert_eq!(renders.get(), 5);
@@ -67,11 +76,15 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
 fn messages_without_a_content_revision_are_not_cached() {
     let cache = ChatHistoryRenderCache::default();
     let renders = Cell::new(0);
-    let message = Message::plain(MessageRole::Agent, "temporary".into());
+    let message = CellView::plain(MessageRole::Agent, "temporary".into());
     for _ in 0..2 {
         cache.prepare(&message, 20, test_context(), || {
             renders.set(renders.get() + 1);
-            (styled_text_lines("temporary", Style::default()), 0)
+            CellLines {
+                lines: styled_text_lines("temporary", Style::default()),
+                user_input_lines: 0,
+                details_line: None,
+            }
         });
     }
 
@@ -83,12 +96,17 @@ fn messages_without_a_content_revision_are_not_cached() {
 fn oversized_cells_are_rendered_without_entering_the_cache() {
     let cache = ChatHistoryRenderCache::default();
     let text = "x\n".repeat(MAX_CELL_CELLS / 20 + 1);
-    let message = Message::plain(MessageRole::Agent, text.clone())
+    let message = CellView::plain(MessageRole::Agent, text.clone())
         .with_cell_id("oversized")
         .with_render_revision(1);
 
-    let prepared = cache.prepare(&message, 20, test_context(), || {
-        (styled_text_lines(&text, Style::default()), 0)
+    let prepared = cache.prepare(&message, 20, test_context(), || CellLines {
+        lines: text
+            .lines()
+            .map(|line| ratatui::text::Line::from(line.to_owned()))
+            .collect(),
+        user_input_lines: 0,
+        details_line: None,
     });
 
     assert!(matches!(prepared, PreparedCell::Lines { .. }));
@@ -99,14 +117,15 @@ fn oversized_cells_are_rendered_without_entering_the_cache() {
 fn transcript_code_blocks_reuse_incremental_parser_state() {
     let cache = ChatHistoryRenderCache::default();
     let context = test_context();
-    let message = Message::plain(MessageRole::Agent, String::new())
+    let message = CellView::plain(MessageRole::Agent, String::new())
         .with_cell_id("streaming-agent")
         .with_render_revision(1);
     let first = "fn main() {\n";
     let complete = "fn main() {\n    let value = 1;\n}\n";
 
-    cache.highlight_code_block(&message, 0, "rust", first, context);
-    let rendered = cache.highlight_code_block(&message, 0, "rust", complete, context);
+    cache.highlight_code_block(message.cell_id.as_deref(), 0, "rust", first, context);
+    let rendered =
+        cache.highlight_code_block(message.cell_id.as_deref(), 0, "rust", complete, context);
 
     assert_eq!(rendered, highlight_code(complete, "rust", context.into()));
 }

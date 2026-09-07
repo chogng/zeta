@@ -1,51 +1,46 @@
+mod scroll;
+
+pub(crate) use scroll::ChatHistoryScroll;
+pub(crate) use scroll::TranscriptScrollAnchor;
+pub(crate) use scroll::TranscriptScrollDirection;
+pub(crate) use scroll::TranscriptScrollTarget;
+
+use super::CellView;
 use super::ChatHistoryRenderCache;
-use super::ChatHistoryScroll;
-use super::CommandStatus;
-use super::ExecutionKind;
-use super::Message;
-use super::MessageRole;
-use super::TranscriptScrollAnchor;
-use super::TranscriptScrollDirection;
-use super::TranscriptScrollTarget;
+use super::history_cell::CellLines;
+use super::history_cell::SyntaxHighlighting;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::Renderable;
-use crate::render::action_style;
 use crate::render::interaction_style;
-use crate::render::prefix_lines;
-use crate::render::push_owned_lines;
-use crate::render::styled_text_lines;
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
+#[cfg(test)]
 use ratatui::text::Line;
-use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
-use zeta_ansi_escape::ansi_text;
 
 const JUMP_TO_BOTTOM_LABEL: &str = "Ctrl+End to jump to bottom ↓";
 
 pub(crate) fn prepare_history(
-    message: &Message,
+    cell: &CellView<'_>,
     width: u16,
     context: RenderContext<'_>,
-) -> (super::cache::PreparedCell, usize) {
+) -> (super::history_cell::PreparedCell, usize) {
     let cache = ChatHistoryRenderCache::default();
-    let height = cache.measure(message, width, context, || {
-        cell_lines_with_code(message, context, None, true).0
+    let cell = cache.prepare(cell, width, context, || {
+        cell_lines_with_code(cell, context, None, SyntaxHighlighting::Enabled)
     });
-    let cell = cache.prepare(message, width, context, || {
-        cell_lines_with_code(message, context, None, true)
-    });
+    let height = cell.height();
     (cell, height)
 }
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) header: Option<&'a Buffer>,
-    pub(crate) messages: &'a [Message],
+    pub(crate) messages: &'a [CellView<'a>],
     pub(crate) scroll: &'a ChatHistoryScroll,
     pub(crate) render_cache: &'a ChatHistoryRenderCache,
     pub(crate) pointer: ChatHistoryPointerState<'a>,
@@ -115,7 +110,7 @@ pub(crate) enum ChatHistoryPointerTarget {
 pub(crate) fn pointer_target_at(
     area: Rect,
     header_rows: usize,
-    messages: &[Message],
+    messages: &[CellView<'_>],
     scroll: &ChatHistoryScroll,
     render_cache: &ChatHistoryRenderCache,
     context: RenderContext<'_>,
@@ -140,17 +135,20 @@ pub(crate) fn pointer_target_at(
     let visible_offset = viewport_offset(messages, header_rows, &heights, scroll, bottom_offset);
     let target_row = visible_offset.saturating_add(usize::from(row - content_area.y));
     let mut start = header_rows;
-    for (message, rows) in messages.iter().zip(heights) {
-        let Some(cell_id) = message.cell_id.as_ref() else {
+    for (cell, rows) in messages.iter().zip(heights) {
+        let Some(cell_id) = cell.cell_id.as_ref() else {
             start = start.saturating_add(rows);
             continue;
         };
-        if message.can_expand && target_row == start && column < area.x.saturating_add(2) {
+        if cell.can_expand && target_row == start && column < area.x.saturating_add(2) {
             return Some(ChatHistoryPointerTarget::Toggle(cell_id.clone()));
         }
-        if message.expanded
-            && message.has_details
-            && target_row == start.saturating_add(rows).saturating_sub(2)
+        let layout = render_cache.measure(cell, area.width, context, || {
+            cell.lines(context, None, SyntaxHighlighting::Disabled)
+        });
+        if layout
+            .details_row
+            .is_some_and(|details_row| target_row == start.saturating_add(details_row))
         {
             return Some(ChatHistoryPointerTarget::Details(cell_id.clone()));
         }
@@ -162,7 +160,7 @@ pub(crate) fn pointer_target_at(
 pub(crate) fn scroll_target(
     area: Rect,
     header_rows: usize,
-    messages: &[Message],
+    messages: &[CellView<'_>],
     scroll: &ChatHistoryScroll,
     render_cache: &ChatHistoryRenderCache,
     context: RenderContext<'_>,
@@ -193,15 +191,15 @@ pub(crate) fn scroll_target(
 
 pub(crate) fn first_scroll_target(
     has_header: bool,
-    messages: &[Message],
+    messages: &[CellView<'_>],
 ) -> Option<TranscriptScrollTarget> {
     if has_header {
         return Some(TranscriptScrollTarget::Anchor(
             TranscriptScrollAnchor::Header { line_offset: 0 },
         ));
     }
-    messages.iter().find_map(|message| {
-        message.cell_id.as_ref().map(|cell_id| {
+    messages.iter().find_map(|cell| {
+        cell.cell_id.as_ref().map(|cell_id| {
             TranscriptScrollTarget::Anchor(TranscriptScrollAnchor::Cell {
                 cell_id: cell_id.clone(),
                 line_offset: 0,
@@ -246,7 +244,7 @@ fn scroll_areas(
 }
 
 fn viewport_offset(
-    messages: &[Message],
+    messages: &[CellView<'_>],
     header_rows: usize,
     heights: &[usize],
     scroll: &ChatHistoryScroll,
@@ -268,8 +266,8 @@ fn viewport_offset(
         unreachable!();
     };
     let mut start = header_rows;
-    for (message, height) in messages.iter().zip(heights) {
-        if message.cell_id.as_deref() == Some(cell_id.as_str()) {
+    for (cell, height) in messages.iter().zip(heights) {
+        if cell.cell_id.as_deref() == Some(cell_id.as_str()) {
             return start
                 .saturating_add((*line_offset).min(height.saturating_sub(1)))
                 .min(bottom_offset);
@@ -280,7 +278,7 @@ fn viewport_offset(
 }
 
 fn anchor_at(
-    messages: &[Message],
+    messages: &[CellView<'_>],
     header_rows: usize,
     heights: &[usize],
     target: usize,
@@ -291,21 +289,21 @@ fn anchor_at(
         });
     }
     let mut start = header_rows;
-    for (index, (message, height)) in messages.iter().zip(heights).enumerate() {
+    for (index, (cell, height)) in messages.iter().zip(heights).enumerate() {
         let end = start.saturating_add(*height);
         if target < end {
             let line_offset = target.saturating_sub(start);
             if line_offset == height.saturating_sub(1)
                 && let Some(cell_id) = messages
                     .get(index.saturating_add(1))
-                    .and_then(|message| message.cell_id.as_ref())
+                    .and_then(|cell| cell.cell_id.as_ref())
             {
                 return Some(TranscriptScrollAnchor::Cell {
                     cell_id: cell_id.clone(),
                     line_offset: 0,
                 });
             }
-            return message
+            return cell
                 .cell_id
                 .as_ref()
                 .map(|cell_id| TranscriptScrollAnchor::Cell {
@@ -352,288 +350,48 @@ fn render_jump_to_bottom(
 }
 
 #[cfg(test)]
-fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec<Line<'a>> {
-    message_lines_with_code(messages, context, None, true)
+fn message_lines<'a>(messages: &'a [CellView<'_>], context: RenderContext<'_>) -> Vec<Line<'a>> {
+    message_lines_with_code(messages, context, None, SyntaxHighlighting::Enabled)
 }
 
 #[cfg(test)]
 fn message_lines_with_code<'a>(
-    messages: &'a [Message],
+    messages: &'a [CellView<'_>],
     context: RenderContext<'_>,
     cache: Option<&ChatHistoryRenderCache>,
-    syntax_highlighting: bool,
+    syntax_highlighting: SyntaxHighlighting,
 ) -> Vec<Line<'a>> {
     let mut lines = Vec::new();
-    for message in messages {
-        lines.extend(cell_lines_with_code(message, context, cache, syntax_highlighting).0);
+    for cell in messages {
+        lines.extend(cell_lines_with_code(cell, context, cache, syntax_highlighting).lines);
     }
     lines
 }
 
-fn cell_lines_with_code<'a>(
-    message: &'a Message,
+fn cell_lines_with_code(
+    cell: &CellView<'_>,
     context: RenderContext<'_>,
     cache: Option<&ChatHistoryRenderCache>,
-    syntax_highlighting: bool,
-) -> (Vec<Line<'a>>, usize) {
-    let mut lines = Vec::new();
-    if message.role == MessageRole::Command {
-        let (marker, color) = command_marker(message, context);
-        let marker_style = Style::default().fg(color).add_modifier(Modifier::BOLD);
-        let command_lines = styled_body_lines(message, context, cache, syntax_highlighting);
-        let user_input_lines = if message.execution_kind == ExecutionKind::LocalCommand {
-            command_lines.len()
-        } else {
-            0
-        };
-        lines.extend(prefix_lines(
-            command_lines,
-            Span::styled(format!("{marker} "), marker_style),
-            Span::raw("  "),
-        ));
-        if let Some(detail) = &message.detail {
-            push_detail_lines(&mut lines, message.role, detail, context);
-        }
-        push_details_affordance(&mut lines, message, context);
-        lines.push(Line::default());
-        return (lines, user_input_lines);
-    }
-
-    let (role_marker, color) = match message.role {
-        MessageRole::User => (">", context.muted()),
-        MessageRole::Agent | MessageRole::Reasoning | MessageRole::Plan => ("●", context.muted()),
-        MessageRole::Notice => ("●", context.warning()),
-        MessageRole::Error => ("●", context.danger()),
-        MessageRole::Command => unreachable!("command messages render as a grouped surface"),
-    };
-    let marker_style = Style::default().fg(color).add_modifier(Modifier::BOLD);
-    let body_lines = styled_body_lines(message, context, cache, syntax_highlighting);
-    let user_input_lines = if message.role == MessageRole::User {
-        body_lines.len()
-    } else {
-        0
-    };
-    lines.extend(prefix_lines(
-        body_lines,
-        Span::styled(format!("{role_marker} "), marker_style),
-        Span::raw("  "),
-    ));
-    if let Some(detail) = &message.detail {
-        push_detail_lines(&mut lines, message.role, detail, context);
-    }
-    push_details_affordance(&mut lines, message, context);
-    lines.push(Line::default());
-    (lines, user_input_lines)
-}
-
-fn styled_body_lines<'a>(
-    message: &'a Message,
-    context: RenderContext<'_>,
-    cache: Option<&ChatHistoryRenderCache>,
-    syntax_highlighting: bool,
-) -> Vec<Line<'a>> {
-    if !message
-        .text
-        .lines()
-        .any(|line| line.trim_start().starts_with("```"))
-    {
-        return styled_text_lines(&message.text, selected_style(message, context));
-    }
-
-    let mut output = Vec::new();
-    let mut plain = String::new();
-    let mut code = String::new();
-    let mut language = String::new();
-    let mut in_code = false;
-    let mut block_index = 0;
-    for source_line in message.text.split_inclusive('\n') {
-        let visible = source_line.strip_suffix('\n').unwrap_or(source_line);
-        let visible = visible.strip_suffix('\r').unwrap_or(visible);
-        if !in_code {
-            if let Some(opening) = visible.trim_start().strip_prefix("```") {
-                push_plain_block(&mut output, &mut plain, selected_style(message, context));
-                language = opening.trim().to_owned();
-                in_code = true;
-            } else {
-                plain.push_str(source_line);
-            }
-            continue;
-        }
-
-        if visible.trim() == "```" {
-            push_code_block(
-                &mut output,
-                message,
-                block_index,
-                &language,
-                &code,
-                context,
-                cache,
-                syntax_highlighting,
-            );
-            code.clear();
-            block_index += 1;
-            in_code = false;
-        } else {
-            code.push_str(source_line);
-        }
-    }
-    if in_code {
-        push_code_block(
-            &mut output,
-            message,
-            block_index,
-            &language,
-            &code,
-            context,
-            cache,
-            syntax_highlighting,
-        );
-    } else {
-        push_plain_block(&mut output, &mut plain, selected_style(message, context));
-    }
-    if output.is_empty() {
-        output.push(Line::default());
-    }
-    output
-}
-
-fn push_plain_block(output: &mut Vec<Line<'static>>, text: &mut String, style: Style) {
-    if text.is_empty() {
-        return;
-    }
-    let lines = styled_text_lines(text.trim_end_matches('\n'), style);
-    push_owned_lines(&lines, output);
-    text.clear();
-}
-
-#[allow(clippy::too_many_arguments)]
-fn push_code_block(
-    output: &mut Vec<Line<'static>>,
-    message: &Message,
-    block_index: usize,
-    language: &str,
-    code: &str,
-    context: RenderContext<'_>,
-    cache: Option<&ChatHistoryRenderCache>,
-    syntax_highlighting: bool,
-) {
-    if !syntax_highlighting {
-        let lines = styled_text_lines(
-            code.strip_suffix('\n').unwrap_or(code),
-            Style::default().fg(context.foreground()),
-        );
-        push_owned_lines(&lines, output);
-        return;
-    }
-    let lines = cache.map_or_else(
-        || crate::render::highlight_code(code, language, context.into()),
-        |cache| cache.highlight_code_block(message, block_index, language, code, context),
-    );
-    output.extend(lines);
-}
-
-fn command_marker(
-    message: &Message,
-    context: RenderContext<'_>,
-) -> (&'static str, ratatui::style::Color) {
-    if message.execution_kind == ExecutionKind::LocalCommand
-        && message.command_status != Some(CommandStatus::Running)
-    {
-        return (">", context.muted());
-    }
-    ("●", execution_color(message, context))
-}
-
-fn execution_color(message: &Message, context: RenderContext<'_>) -> ratatui::style::Color {
-    match message.command_status {
-        Some(CommandStatus::Submitted | CommandStatus::Running) => context.warning(),
-        Some(CommandStatus::Failed) => context.danger(),
-        Some(CommandStatus::Succeeded) => match message.execution_kind {
-            ExecutionKind::LocalCommand => context.muted(),
-            ExecutionKind::Command => context.success(),
-            ExecutionKind::Mutation => context.accent(),
-            ExecutionKind::Neutral => context.muted(),
-        },
-        None => context.muted(),
-    }
-}
-
-fn selected_style(message: &Message, context: RenderContext<'_>) -> Style {
-    if message.selected {
-        interaction_style(
-            context,
-            InteractionState {
-                target: InteractionTarget::Rest,
-                selected: true,
-                hovered: false,
-                pressed: false,
-            },
-        )
-    } else {
-        Style::default()
-    }
-}
-
-fn push_details_affordance<'a>(
-    lines: &mut Vec<Line<'a>>,
-    message: &Message,
-    context: RenderContext<'_>,
-) {
-    if message.expanded && message.has_details {
-        lines.push(Line::from(Span::styled(
-            "   view full",
-            action_style(context),
-        )));
-    }
-}
-
-fn push_detail_lines<'a>(
-    lines: &mut Vec<Line<'a>>,
-    role: MessageRole,
-    detail: &'a str,
-    context: RenderContext<'_>,
-) {
-    if role != MessageRole::Command {
-        lines.extend(prefix_lines(
-            styled_text_lines(detail, Style::default().fg(context.muted())),
-            Span::styled("└─ ", Style::default().fg(context.muted())),
-            Span::raw("   "),
-        ));
-        return;
-    }
-
-    let mut output = ansi_text(detail).lines;
-    if output.is_empty() {
-        output.push(Line::default());
-    }
-    for line in &mut output {
-        for span in &mut line.spans {
-            if span.style.fg.is_none() {
-                span.style.fg = Some(context.muted());
-            }
-        }
-    }
-    lines.extend(prefix_lines(
-        output,
-        Span::styled("└─ ", Style::default().fg(context.muted())),
-        Span::raw("   "),
-    ));
+    syntax_highlighting: SyntaxHighlighting,
+) -> CellLines {
+    cell.lines(context, cache, syntax_highlighting)
 }
 
 fn measured_heights(
-    messages: &[Message],
+    messages: &[CellView<'_>],
     cache: &ChatHistoryRenderCache,
     width: u16,
     context: RenderContext<'_>,
 ) -> Vec<usize> {
-    cache.retain_messages(messages);
+    cache.retain_cells(messages);
     messages
         .iter()
-        .map(|message| {
-            cache.measure(message, width, context, || {
-                cell_lines_with_code(message, context, None, false).0
-            })
+        .map(|cell| {
+            cache
+                .measure(cell, width, context, || {
+                    cell_lines_with_code(cell, context, None, SyntaxHighlighting::Disabled)
+                })
+                .height
         })
         .collect()
 }
@@ -674,7 +432,7 @@ fn render_cells(
     area: Rect,
     header_rows: usize,
     viewport_start: usize,
-    messages: &[Message],
+    messages: &[CellView<'_>],
     heights: &[usize],
     cache: &ChatHistoryRenderCache,
     pointer: ChatHistoryPointerState<'_>,
@@ -682,7 +440,7 @@ fn render_cells(
 ) {
     let viewport_end = viewport_start.saturating_add(usize::from(area.height));
     let mut cell_start = header_rows;
-    for (message, height) in messages.iter().zip(heights) {
+    for (cell, height) in messages.iter().zip(heights) {
         let cell_end = cell_start.saturating_add(*height);
         let visible_start = cell_start.max(viewport_start);
         let visible_end = cell_end.min(viewport_end);
@@ -692,10 +450,10 @@ fn render_cells(
                 .saturating_add((visible_start - viewport_start) as u16);
             let target_height = (visible_end - visible_start) as u16;
             let source_row = visible_start - cell_start;
-            let cell = cache.prepare(message, area.width, context, || {
-                cell_lines_with_code(message, context, Some(cache), true)
+            let prepared = cache.prepare(cell, area.width, context, || {
+                cell_lines_with_code(cell, context, Some(cache), SyntaxHighlighting::Enabled)
             });
-            cell.render(
+            prepared.render(
                 frame.buffer_mut(),
                 Rect::new(area.x, target_y, area.width, target_height),
                 source_row,
@@ -703,9 +461,13 @@ fn render_cells(
             render_pointer_feedback(
                 frame,
                 area,
-                message,
+                cell,
                 cell_start,
-                cell_end,
+                cache
+                    .measure(cell, area.width, context, || {
+                        cell.lines(context, None, SyntaxHighlighting::Disabled)
+                    })
+                    .details_row,
                 viewport_start,
                 pointer,
                 context,
@@ -722,19 +484,19 @@ fn render_cells(
 fn render_pointer_feedback(
     frame: &mut Frame<'_>,
     area: Rect,
-    message: &Message,
+    cell: &CellView<'_>,
     cell_start: usize,
-    cell_end: usize,
+    details_row: Option<usize>,
     viewport_start: usize,
     pointer: ChatHistoryPointerState<'_>,
     context: RenderContext<'_>,
 ) {
-    let Some(cell_id) = message.cell_id.as_deref() else {
+    let Some(cell_id) = cell.cell_id.as_deref() else {
         return;
     };
     let toggle_hovered = pointer.hovered_toggle == Some(cell_id);
     let toggle_pressed = pointer.pressed_toggle == Some(cell_id);
-    if message.can_expand && (toggle_hovered || toggle_pressed) {
+    if cell.can_expand && (toggle_hovered || toggle_pressed) {
         render_action_feedback(
             frame,
             area,
@@ -748,11 +510,13 @@ fn render_pointer_feedback(
     }
     let details_hovered = pointer.hovered_details == Some(cell_id);
     let details_pressed = pointer.pressed_details == Some(cell_id);
-    if message.expanded && message.has_details && (details_hovered || details_pressed) {
+    if let Some(details_row) = details_row
+        && (details_hovered || details_pressed)
+    {
         render_action_feedback(
             frame,
             area,
-            cell_end.saturating_sub(2),
+            cell_start.saturating_add(details_row),
             viewport_start,
             "   view full".len() as u16,
             details_hovered,
@@ -801,5 +565,5 @@ fn render_action_feedback(
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "view/render_tests.rs"]
 mod tests;

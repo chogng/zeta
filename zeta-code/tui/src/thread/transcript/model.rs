@@ -1,8 +1,12 @@
-use super::exec::ExecCell;
+use super::exec_cell::ExecCell;
+use super::history_cell::CellMode;
+use super::history_cell::CellView;
+use super::history_cell::ContentCell;
+use super::history_cell::HistoryCell;
+use super::history_cell::LocalCommandCell;
 use crate::thread::transcript::CommandStatus;
-use crate::thread::transcript::ExecutionKind;
-use crate::thread::transcript::Message;
 use crate::thread::transcript::MessageRole;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
@@ -12,6 +16,7 @@ use zeta_protocol::PlanStepStatus;
 use zeta_protocol::PlanUpdate;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ToolCallId;
+use zeta_protocol::TurnId;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) struct TranscriptCellId(String);
@@ -45,49 +50,29 @@ pub(crate) enum CellLifecycle {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum TranscriptCellBody {
-    Message {
-        role: MessageRole,
-        text: String,
-    },
-    Reasoning(String),
+pub(super) enum TranscriptCellBody {
+    Content(ContentCell),
     Exec(ExecCell),
-    Plan(String),
-    Error(String),
-    Notice(String),
-    Command {
-        command: String,
-        result: Option<String>,
-        status: CommandStatus,
-    },
+    LocalCommand(LocalCommandCell),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TranscriptCell {
     cell_id: TranscriptCellId,
     source_entry_id: Option<String>,
+    turn_id: Option<TurnId>,
     lifecycle: CellLifecycle,
     render_revision: u64,
     body: TranscriptCellBody,
 }
 
 impl TranscriptCell {
-    pub(crate) fn render_revision(&self) -> u64 {
-        self.render_revision
-    }
-
-    pub(crate) fn history_view(&self) -> Message {
-        let mut message = self.view(false, false);
-        match &self.body {
-            TranscriptCellBody::Reasoning(text) | TranscriptCellBody::Error(text) => {
-                message.text = text.clone();
-            }
-            TranscriptCellBody::Exec(exec) => message.detail = Some(exec.full_details()),
-            _ => {}
-        }
-        message.can_expand = false;
-        message.has_details = false;
-        message
+    pub(crate) fn history_view(&self) -> CellView<'_> {
+        let mut view = self.view(false, false);
+        view.mode = CellMode::History;
+        view.can_expand = false;
+        view.has_details = false;
+        view
     }
 
     pub(crate) fn cell_id(&self) -> &TranscriptCellId {
@@ -102,80 +87,39 @@ impl TranscriptCell {
         }
     }
 
+    pub(super) fn history_cell(&self) -> &dyn HistoryCell {
+        match &self.body {
+            TranscriptCellBody::Content(cell) => cell,
+            TranscriptCellBody::Exec(cell) => cell,
+            TranscriptCellBody::LocalCommand(cell) => cell,
+        }
+    }
+
     pub(crate) fn can_expand(&self) -> bool {
-        match &self.body {
-            TranscriptCellBody::Exec(exec) => exec.can_expand(),
-            TranscriptCellBody::Reasoning(text) | TranscriptCellBody::Error(text) => {
-                text.lines().count() > 1 || text.chars().count() > 120
-            }
-            _ => false,
-        }
+        self.history_cell().can_expand()
     }
-
     pub(crate) fn has_details(&self) -> bool {
-        match &self.body {
-            TranscriptCellBody::Exec(exec) => exec.has_details(),
-            TranscriptCellBody::Reasoning(text) | TranscriptCellBody::Error(text) => {
-                text.lines().count() > 12
-            }
-            _ => false,
-        }
+        self.history_cell().has_details()
     }
-
     pub(crate) fn details(&self) -> Option<String> {
-        match &self.body {
-            TranscriptCellBody::Exec(exec) if exec.has_details() => Some(exec.full_details()),
-            TranscriptCellBody::Reasoning(text) | TranscriptCellBody::Error(text)
-                if self.has_details() =>
-            {
-                Some(text.clone())
-            }
-            _ => None,
-        }
+        self.history_cell().full_details()
     }
 
-    fn view(&self, expanded: bool, selected: bool) -> Message {
-        let message = match &self.body {
-            TranscriptCellBody::Message { role, text } => {
-                Message::plain(*role, text.clone()).with_cell_id(self.cell_id.as_str())
-            }
-            TranscriptCellBody::Reasoning(text) => {
-                if expanded {
-                    Message::plain(MessageRole::Reasoning, "Thought".into())
-                        .with_detail(bounded_preview(text, 12))
-                        .with_cell_id(self.cell_id.as_str())
-                } else {
-                    Message::plain(MessageRole::Reasoning, "Thought".into())
-                        .with_cell_id(self.cell_id.as_str())
-                }
-            }
-            TranscriptCellBody::Exec(exec) => exec.view(expanded),
-            TranscriptCellBody::Plan(text) => {
-                Message::plain(MessageRole::Plan, text.clone()).with_cell_id(self.cell_id.as_str())
-            }
-            TranscriptCellBody::Error(text) => {
-                let summary = text.lines().next().unwrap_or("Error").to_owned();
-                let message =
-                    Message::plain(MessageRole::Error, summary).with_cell_id(self.cell_id.as_str());
-                if expanded {
-                    message.with_detail(bounded_preview(text, 12))
-                } else {
-                    message
-                }
-            }
-            TranscriptCellBody::Notice(text) => Message::plain(MessageRole::Notice, text.clone())
-                .with_cell_id(self.cell_id.as_str()),
-            TranscriptCellBody::Command {
-                command,
-                result,
-                status,
-            } => Message::command(command.clone(), *status, result.clone())
-                .with_execution_kind(ExecutionKind::LocalCommand)
-                .with_cell_id(self.cell_id.as_str()),
-        };
-        message
-            .with_render_revision(self.render_revision)
-            .with_cell_actions(self.can_expand(), expanded, self.has_details(), selected)
+    fn view(&self, expanded: bool, selected: bool) -> CellView<'_> {
+        CellView {
+            cell: Cow::Borrowed(self),
+            cell_id: Some(self.cell_id.as_str().to_owned()),
+            render_revision: self.render_revision,
+            can_expand: self.can_expand(),
+            expanded,
+            has_details: self.has_details(),
+            selected,
+            mode: if expanded {
+                CellMode::Expanded
+            } else {
+                CellMode::Collapsed
+            },
+        }
     }
 
     fn source_ids(&self) -> Vec<&str> {
@@ -235,7 +179,7 @@ impl TranscriptModel {
         &self,
         expanded: &BTreeSet<TranscriptCellId>,
         selected: Option<&TranscriptCellId>,
-    ) -> Vec<Message> {
+    ) -> Vec<CellView<'_>> {
         self.cells
             .iter()
             .map(|cell| {
@@ -249,10 +193,11 @@ impl TranscriptModel {
 
     pub(in crate::thread) fn active_views(
         &self,
+        active_turn: Option<&TurnId>,
         expanded: &BTreeSet<TranscriptCellId>,
         selected: Option<&TranscriptCellId>,
-    ) -> Vec<Message> {
-        self.active_cells()
+    ) -> Vec<CellView<'_>> {
+        self.active_cells(active_turn)
             .iter()
             .map(|cell| {
                 cell.view(
@@ -267,20 +212,20 @@ impl TranscriptModel {
         self.cells.iter().any(|cell| {
             matches!(
                 &cell.body,
-                TranscriptCellBody::Message {
+                TranscriptCellBody::Content(ContentCell {
                     role: MessageRole::User,
                     ..
-                }
+                })
             )
         })
     }
 
     pub(in crate::thread) fn latest_agent_response(&self) -> Option<&str> {
         self.cells.iter().rev().find_map(|cell| match &cell.body {
-            TranscriptCellBody::Message {
+            TranscriptCellBody::Content(ContentCell {
                 role: MessageRole::Agent,
                 text,
-            } => Some(text.as_str()),
+            }) => Some(text.as_str()),
             _ => None,
         })
     }
@@ -289,16 +234,22 @@ impl TranscriptModel {
         &self.cells
     }
 
-    pub(in crate::thread) fn committed_cells(&self) -> &[TranscriptCell] {
-        &self.cells[..self.active_start()]
+    pub(in crate::thread) fn committed_cells(
+        &self,
+        active_turn: Option<&TurnId>,
+    ) -> &[TranscriptCell] {
+        &self.cells[..self.active_start(active_turn)]
     }
 
-    pub(in crate::thread) fn active_cells(&self) -> &[TranscriptCell] {
-        &self.cells[self.active_start()..]
+    pub(in crate::thread) fn active_cells(
+        &self,
+        active_turn: Option<&TurnId>,
+    ) -> &[TranscriptCell] {
+        &self.cells[self.active_start(active_turn)..]
     }
 
-    pub(in crate::thread) fn has_committed_cells(&self) -> bool {
-        self.active_start() > 0
+    pub(in crate::thread) fn has_committed_cells(&self, active_turn: Option<&TurnId>) -> bool {
+        self.active_start(active_turn) > 0
     }
 
     pub(in crate::thread) fn details(&self, cell_id: &TranscriptCellId) -> Option<String> {
@@ -314,9 +265,10 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision,
-            body: TranscriptCellBody::Message { role, text },
+            body: TranscriptCellBody::Content(ContentCell { role, text }),
         });
     }
 
@@ -326,9 +278,10 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision,
-            body: TranscriptCellBody::Notice(text),
+            body: TranscriptCellBody::Content(ContentCell::new(MessageRole::Notice, text)),
         });
     }
 
@@ -338,25 +291,34 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision,
-            body: TranscriptCellBody::Error(text),
+            body: TranscriptCellBody::Content(ContentCell::new(MessageRole::Error, text)),
         });
     }
 
-    pub(in crate::thread) fn command_submitted(&mut self, command: String) {
+    pub(in crate::thread) fn command_submitted(
+        &mut self,
+        command: String,
+        completion: super::LocalCommandCompletion,
+    ) {
         let cell_id = self.local_id("command");
         let render_revision = self.render_revision();
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
-            lifecycle: CellLifecycle::Final,
+            turn_id: None,
+            lifecycle: match completion {
+                super::LocalCommandCompletion::Immediate => CellLifecycle::Final,
+                super::LocalCommandCompletion::Deferred => CellLifecycle::Live,
+            },
             render_revision,
-            body: TranscriptCellBody::Command {
+            body: TranscriptCellBody::LocalCommand(LocalCommandCell {
                 command,
                 result: None,
                 status: CommandStatus::Submitted,
-            },
+            }),
         });
     }
 
@@ -365,70 +327,91 @@ impl TranscriptModel {
         if let Some(cell) = self.cells.iter_mut().rev().find(|cell| {
             matches!(
                 &cell.body,
-                TranscriptCellBody::Command {
+                TranscriptCellBody::LocalCommand(LocalCommandCell {
                     command: submitted,
                     result: None,
                     status: CommandStatus::Submitted,
-                } if submitted == &command
+                }) if submitted == &command
             )
         }) {
             cell.lifecycle = CellLifecycle::Live;
             cell.render_revision = render_revision;
-            cell.body = TranscriptCellBody::Command {
+            cell.body = TranscriptCellBody::LocalCommand(LocalCommandCell {
                 command,
                 result: None,
                 status: CommandStatus::Running,
-            };
+            });
             return;
         }
         let cell_id = self.local_id("command");
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            turn_id: None,
             lifecycle: CellLifecycle::Live,
             render_revision,
-            body: TranscriptCellBody::Command {
+            body: TranscriptCellBody::LocalCommand(LocalCommandCell {
                 command,
                 result: None,
                 status: CommandStatus::Running,
-            },
+            }),
         });
     }
 
-    pub(in crate::thread) fn command_completed(&mut self, command: String, result: String) {
+    pub(in crate::thread) fn command_completed(
+        &mut self,
+        command: String,
+        result: String,
+        status: CommandStatus,
+    ) {
         let render_revision = self.render_revision();
         if let Some(cell) = self.cells.iter_mut().rev().find(|cell| {
             matches!(
                 &cell.body,
-                TranscriptCellBody::Command {
+                TranscriptCellBody::LocalCommand(LocalCommandCell {
                     command: active,
                     result: None,
                     status: CommandStatus::Submitted | CommandStatus::Running,
                     ..
-                } if active == &command
+                }) if active == &command
             )
         }) {
             cell.lifecycle = CellLifecycle::Final;
             cell.render_revision = render_revision;
-            cell.body = TranscriptCellBody::Command {
+            cell.body = TranscriptCellBody::LocalCommand(LocalCommandCell {
                 command,
                 result: Some(result),
-                status: CommandStatus::Succeeded,
-            };
+                status,
+            });
             return;
         }
         let cell_id = self.local_id("command");
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision,
-            body: TranscriptCellBody::Command {
+            body: TranscriptCellBody::LocalCommand(LocalCommandCell {
                 command,
                 result: Some(result),
-                status: CommandStatus::Succeeded,
-            },
+                status,
+            }),
         });
+    }
+
+    pub(in crate::thread) fn command_failed(&mut self, command: String, error: String) {
+        let pending = self.cells.iter().any(|cell| {
+            cell.lifecycle() == CellLifecycle::Live
+                && matches!(&cell.body, TranscriptCellBody::LocalCommand(local) if local.command == command)
+        });
+        if pending {
+            self.command_completed(command, error, CommandStatus::Failed);
+        } else {
+            // Panel requests have already acknowledged their input. Their failure is
+            // new content, not a revision of the command already in scrollback.
+            self.push_error(error);
+        }
     }
 
     fn upsert(&mut self, entry: ThreadTranscriptEntry) {
@@ -436,6 +419,7 @@ impl TranscriptModel {
         match entry {
             ThreadTranscriptEntry::Item {
                 entry_id,
+                turn_id,
                 item:
                     ThreadItem::ToolCall {
                         tool_call_id,
@@ -446,6 +430,7 @@ impl TranscriptModel {
                 ..
             } => self.upsert_tool_call(
                 entry_id,
+                turn_id,
                 tool_call_id,
                 name,
                 pretty_json(&arguments_json),
@@ -453,6 +438,7 @@ impl TranscriptModel {
             ),
             ThreadTranscriptEntry::Item {
                 entry_id,
+                turn_id,
                 item:
                     ThreadItem::ToolResult {
                         tool_call_id,
@@ -461,14 +447,29 @@ impl TranscriptModel {
                         ..
                     },
                 ..
-            } => self.complete_tool(entry_id, tool_call_id, text, is_error, render_revision),
+            } => self.complete_tool(
+                entry_id,
+                turn_id,
+                tool_call_id,
+                text,
+                is_error,
+                render_revision,
+            ),
             ThreadTranscriptEntry::ToolOutput {
                 entry_id,
+                turn_id,
                 tool_call_id,
                 stream,
                 text,
                 ..
-            } => self.apply_tool_output(entry_id, tool_call_id, stream, text, render_revision),
+            } => self.apply_tool_output(
+                entry_id,
+                turn_id,
+                tool_call_id,
+                stream,
+                text,
+                render_revision,
+            ),
             entry => self.upsert_regular(cell_from_entry(&entry, render_revision)),
         }
     }
@@ -488,6 +489,7 @@ impl TranscriptModel {
     fn upsert_tool_call(
         &mut self,
         entry_id: String,
+        turn_id: TurnId,
         tool_call_id: ToolCallId,
         name: zeta_protocol::ToolName,
         arguments: String,
@@ -503,8 +505,10 @@ impl TranscriptModel {
         }
         if let Some(TranscriptCell {
             body: TranscriptCellBody::Exec(exec),
+            turn_id: group_turn,
             ..
         }) = self.cells.last_mut()
+            && group_turn.as_ref() == Some(&turn_id)
             && exec.can_accept(&name)
         {
             exec.push_call(entry_id, tool_call_id, &name, arguments);
@@ -518,6 +522,7 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
             source_entry_id: None,
+            turn_id: Some(turn_id.clone()),
             lifecycle: CellLifecycle::Live,
             render_revision,
             body: TranscriptCellBody::Exec(ExecCell::start(
@@ -532,6 +537,7 @@ impl TranscriptModel {
     fn apply_tool_output(
         &mut self,
         entry_id: String,
+        turn_id: TurnId,
         tool_call_id: ToolCallId,
         stream: zeta_protocol::ToolOutputStream,
         text: String,
@@ -541,6 +547,7 @@ impl TranscriptModel {
             self.cells.push(TranscriptCell {
                 cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
                 source_entry_id: None,
+                turn_id: Some(turn_id.clone()),
                 lifecycle: CellLifecycle::Live,
                 render_revision,
                 body: TranscriptCellBody::Exec(ExecCell::recovered(tool_call_id.clone())),
@@ -559,6 +566,7 @@ impl TranscriptModel {
     fn complete_tool(
         &mut self,
         entry_id: String,
+        turn_id: TurnId,
         tool_call_id: ToolCallId,
         result: String,
         failed: bool,
@@ -568,6 +576,7 @@ impl TranscriptModel {
             self.cells.push(TranscriptCell {
                 cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
                 source_entry_id: None,
+                turn_id: Some(turn_id.clone()),
                 lifecycle: CellLifecycle::Final,
                 render_revision,
                 body: TranscriptCellBody::Exec(ExecCell::recovered(tool_call_id.clone())),
@@ -641,11 +650,22 @@ impl TranscriptModel {
         self.next_render_revision
     }
 
-    fn active_start(&self) -> usize {
-        self.cells
+    fn active_start(&self, active_turn: Option<&TurnId>) -> usize {
+        let first_live = self
+            .cells
             .iter()
             .position(|cell| cell.lifecycle() == CellLifecycle::Live)
-            .unwrap_or(self.cells.len())
+            .unwrap_or(self.cells.len());
+        // A final tool result does not close a group while its turn can add more calls.
+        let tail = self.cells.len().saturating_sub(1);
+        if let Some(cell) = self.cells.last()
+            && active_turn.is_some()
+            && cell.turn_id.as_ref() == active_turn
+            && matches!(cell.body, TranscriptCellBody::Exec(_))
+        {
+            return first_live.min(tail);
+        }
+        first_live
     }
 }
 
@@ -658,35 +678,41 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
     };
     let body = match entry {
         ThreadTranscriptEntry::Item { item, .. } => match item {
-            ThreadItem::UserMessage { text, .. } => TranscriptCellBody::Message {
+            ThreadItem::UserMessage { text, .. } => TranscriptCellBody::Content(ContentCell {
                 role: MessageRole::User,
                 text: text.clone(),
-            },
-            ThreadItem::UserContext { name, content, .. } => TranscriptCellBody::Message {
-                role: MessageRole::User,
-                text: format!("Context · {name}\n{content}"),
-            },
+            }),
+            ThreadItem::UserContext { name, content, .. } => {
+                TranscriptCellBody::Content(ContentCell {
+                    role: MessageRole::User,
+                    text: format!("Context · {name}\n{content}"),
+                })
+            }
             ThreadItem::UserImage { .. } | ThreadItem::UserImageAttachment { .. } => {
-                TranscriptCellBody::Message {
+                TranscriptCellBody::Content(ContentCell {
                     role: MessageRole::User,
                     text: "[Image]".into(),
-                }
+                })
             }
-            ThreadItem::AgentMessage { text, .. } => TranscriptCellBody::Message {
+            ThreadItem::AgentMessage { text, .. } => TranscriptCellBody::Content(ContentCell {
                 role: MessageRole::Agent,
                 text: text.clone(),
-            },
-            ThreadItem::Reasoning { text, .. } => TranscriptCellBody::Reasoning(text.clone()),
-            ThreadItem::Plan { text, .. } => TranscriptCellBody::Plan(text.clone()),
+            }),
+            ThreadItem::Reasoning { text, .. } => {
+                TranscriptCellBody::Content(ContentCell::new(MessageRole::Reasoning, text.clone()))
+            }
+            ThreadItem::Plan { text, .. } => {
+                TranscriptCellBody::Content(ContentCell::new(MessageRole::Plan, text.clone()))
+            }
             ThreadItem::ToolCall { .. } | ThreadItem::ToolResult { .. } => {
                 unreachable!("Tool entries are routed into ExecCell")
             }
         },
         ThreadTranscriptEntry::TurnPlan { plan, .. } => {
-            TranscriptCellBody::Plan(present_plan(plan))
+            TranscriptCellBody::Content(ContentCell::new(MessageRole::Plan, present_plan(plan)))
         }
         ThreadTranscriptEntry::TurnError { error, .. } => {
-            TranscriptCellBody::Error(error.message.clone())
+            TranscriptCellBody::Content(ContentCell::new(MessageRole::Error, error.message.clone()))
         }
         ThreadTranscriptEntry::ToolOutput { .. } => {
             unreachable!("Tool output is routed into ExecCell")
@@ -695,6 +721,7 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
     TranscriptCell {
         cell_id: TranscriptCellId::for_entry(&entry_id),
         source_entry_id: Some(entry_id),
+        turn_id: Some(entry.turn_id().clone()),
         lifecycle,
         render_revision,
         body,
@@ -725,18 +752,10 @@ fn present_plan(plan: &PlanUpdate) -> String {
     }
 }
 
-fn bounded_preview(text: &str, max_lines: usize) -> String {
-    let lines = text.lines().collect::<Vec<_>>();
-    if lines.len() <= max_lines {
-        return text.to_owned();
-    }
-    let omitted = lines.len().saturating_sub(max_lines);
-    format!(
-        "{}\n… {omitted} lines omitted",
-        lines[..max_lines].join("\n")
-    )
-}
-
 #[cfg(test)]
 #[path = "model_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "fixtures.rs"]
+mod fixtures;

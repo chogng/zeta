@@ -42,6 +42,20 @@ pub(crate) enum TuiSlashCommandAction {
 }
 
 impl TuiSlashCommandAction {
+    pub(crate) fn completion(
+        self,
+        arguments: &[ChatInputItem],
+    ) -> crate::thread::transcript::LocalCommandCompletion {
+        use crate::thread::transcript::LocalCommandCompletion;
+        match self {
+            Self::New | Self::Fork | Self::Archive => LocalCommandCompletion::Deferred,
+            Self::Theme | Self::AddDir | Self::Resume | Self::Rewind if !arguments.is_empty() => {
+                LocalCommandCompletion::Deferred
+            }
+            _ => LocalCommandCompletion::Immediate,
+        }
+    }
+
     pub(crate) fn command(self) -> &'static str {
         self.into()
     }

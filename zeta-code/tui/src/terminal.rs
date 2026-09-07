@@ -1,3 +1,4 @@
+mod backend;
 mod event_source;
 pub(crate) mod mouse;
 pub(crate) mod screen_selection;

@@ -1,3 +1,4 @@
+use crate::terminal::backend::MainScreenBackend;
 use crate::terminal::mouse::MouseMode;
 use crate::terminal::screen_selection::ScreenSelectionRange;
 use crate::terminal::screen_selection::line_range_at;
@@ -29,7 +30,7 @@ use zeta_terminal_detection::detect_host_terminal;
 
 pub(crate) struct TerminalSession {
     background_color: Option<TerminalRgb>,
-    terminal: Terminal<CrosstermBackend<Stdout>>,
+    terminal: Terminal<MainScreenBackend<CrosstermBackend<Stdout>>>,
     modes: TerminalModeGuard<CrosstermModeOperations>,
     rendered_frame: Option<Buffer>,
     cursor_color: CursorColor,
@@ -40,7 +41,9 @@ impl TerminalSession {
         let host_terminal = detect_host_terminal();
         let modes = TerminalModeGuard::acquire(CrosstermModeOperations)?;
         let background_color = super::terminal_probe::query_background(&host_terminal);
-        let terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+        let terminal = Terminal::new(MainScreenBackend {
+            inner: CrosstermBackend::new(io::stdout()),
+        })?;
         let mut session = Self {
             background_color,
             terminal,
@@ -356,6 +359,12 @@ fn append_history<B: HistoryBackend>(
 /// operation directly.
 trait HistoryBackend: Backend {
     fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()>;
+}
+
+impl<B: HistoryBackend> HistoryBackend for MainScreenBackend<B> {
+    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()> {
+        self.inner.commit_top_row(borrowed_rows)
+    }
 }
 
 impl<W: Write> HistoryBackend for CrosstermBackend<W> {

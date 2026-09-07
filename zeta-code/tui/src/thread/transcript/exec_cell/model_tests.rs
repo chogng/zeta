@@ -1,7 +1,7 @@
 use super::ExecCell;
 use super::ExecGroup;
+use super::ExecutionKind;
 use crate::thread::transcript::CommandStatus;
-use crate::thread::transcript::ExecutionKind;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolName;
 use zeta_protocol::ToolOutputStream;
@@ -23,7 +23,7 @@ fn exploration_calls_group_by_stable_tool_classification() {
     );
 
     assert_eq!(cell.group, ExecGroup::ExploreGroup);
-    assert_eq!(cell.view(false).text, "Explored 2 operations");
+    assert_eq!(cell.summary(), "Explored 2 operations");
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn output_and_result_route_to_the_exact_tool_call() {
     cell.complete("first-result".into(), &first, "first done".into(), false);
     cell.complete("second-result".into(), &second, "second done".into(), true);
 
-    assert_eq!(cell.view(false).command_status, Some(CommandStatus::Failed));
+    assert_eq!(cell.status(), CommandStatus::Failed);
     let detail = cell.full_details();
     assert!(detail.contains("second only"));
     assert!(detail.contains("first done"));
@@ -99,9 +99,9 @@ fn execution_kind_distinguishes_commands_mutations_and_neutral_tools() {
         "{}".into(),
     );
 
-    assert_eq!(command.view(false).execution_kind, ExecutionKind::Command);
-    assert_eq!(mutation.view(false).execution_kind, ExecutionKind::Mutation);
-    assert_eq!(read.view(false).execution_kind, ExecutionKind::Neutral);
+    assert_eq!(command.execution_kind(), ExecutionKind::Command);
+    assert_eq!(mutation.execution_kind(), ExecutionKind::Mutation);
+    assert_eq!(read.execution_kind(), ExecutionKind::Neutral);
 }
 
 fn call_id(value: &str) -> ToolCallId {

@@ -5,7 +5,7 @@ use super::presentation::recover_active_turn;
 use super::transcript::TranscriptCell;
 use super::transcript::TranscriptCellId;
 use super::transcript::TranscriptModel;
-use crate::thread::transcript::Message;
+use crate::thread::transcript::CellView;
 use crate::thread::transcript::MessageRole;
 use std::collections::BTreeSet;
 use zeta_protocol::ApprovalMode;
@@ -103,7 +103,7 @@ impl ThreadState {
     }
 
     #[cfg(test)]
-    pub(crate) fn messages(&self) -> Vec<Message> {
+    pub(crate) fn messages(&self) -> Vec<CellView<'_>> {
         self.transcript.views(&BTreeSet::new(), None)
     }
 
@@ -119,7 +119,7 @@ impl ThreadState {
         &self,
         expanded: &BTreeSet<TranscriptCellId>,
         selected: Option<&TranscriptCellId>,
-    ) -> Vec<Message> {
+    ) -> Vec<CellView<'_>> {
         self.transcript.views(expanded, selected)
     }
 
@@ -127,8 +127,9 @@ impl ThreadState {
         &self,
         expanded: &BTreeSet<TranscriptCellId>,
         selected: Option<&TranscriptCellId>,
-    ) -> Vec<Message> {
-        self.transcript.active_views(expanded, selected)
+    ) -> Vec<CellView<'_>> {
+        self.transcript
+            .active_views(self.active_turn.as_ref(), expanded, selected)
     }
 
     pub(crate) fn cells(&self) -> &[TranscriptCell] {
@@ -136,11 +137,12 @@ impl ThreadState {
     }
 
     pub(crate) fn committed_cells(&self) -> &[TranscriptCell] {
-        self.transcript.committed_cells()
+        self.transcript.committed_cells(self.active_turn.as_ref())
     }
 
     pub(crate) fn has_committed_cells(&self) -> bool {
-        self.transcript.has_committed_cells()
+        self.transcript
+            .has_committed_cells(self.active_turn.as_ref())
     }
 
     pub(crate) fn details(&self, cell_id: &TranscriptCellId) -> Option<String> {
@@ -161,14 +163,24 @@ impl ThreadState {
             ThreadPresentationEvent::UserSubmitted(text) => {
                 self.transcript.push_message(MessageRole::User, text);
             }
-            ThreadPresentationEvent::CommandSubmitted(command) => {
-                self.transcript.command_submitted(command);
+            ThreadPresentationEvent::CommandSubmitted {
+                command,
+                completion,
+            } => {
+                self.transcript.command_submitted(command, completion);
             }
             ThreadPresentationEvent::CommandStarted(command) => {
                 self.transcript.command_started(command);
             }
             ThreadPresentationEvent::CommandCompleted { command, result } => {
-                self.transcript.command_completed(command, result);
+                self.transcript.command_completed(
+                    command,
+                    result,
+                    super::transcript::CommandStatus::Succeeded,
+                );
+            }
+            ThreadPresentationEvent::CommandFailed { command, error } => {
+                self.transcript.command_failed(command, error);
             }
             ThreadPresentationEvent::NoticeReceived(text) => {
                 self.transcript.push_notice(text);

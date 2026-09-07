@@ -25,14 +25,14 @@ const DISABLE_RAW_MODE: &str = "disable raw mode";
 
 #[test]
 fn transcript_output_protocol_keeps_the_main_buffer_and_existing_history() {
-    use crate::thread::transcript::Message;
+    use crate::thread::transcript::CellView;
     use crate::thread::transcript::MessageRole;
     use ratatui::Terminal;
     use ratatui::TerminalOptions;
     use ratatui::Viewport;
     use ratatui::backend::CrosstermBackend;
     let mut output = Vec::new();
-    let message = Message::plain(
+    let message = CellView::plain(
         MessageRole::Agent,
         (0..120).map(|i| format!("history {i:03}\n")).collect(),
     );
@@ -141,12 +141,12 @@ fn inserting_history_never_commits_the_interactive_frame() {
 
 #[test]
 fn complete_styled_answer_is_written_to_scrollback_in_small_chunks() {
-    use crate::thread::transcript::Message;
+    use crate::thread::transcript::CellView;
     use crate::thread::transcript::MessageRole;
     let text = (0..200)
         .map(|row| format!("line {row:03} 中文\n"))
         .collect::<String>();
-    let message = Message::plain(MessageRole::Agent, text);
+    let message = CellView::plain(MessageRole::Agent, text);
     let (cell, rows) =
         crate::thread::transcript::prepare_history(&message, 40, crate::render::test_context());
     let mut terminal = fullscreen_terminal(40, 5);

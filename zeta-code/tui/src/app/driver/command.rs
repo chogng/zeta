@@ -131,11 +131,20 @@ impl AppDriver {
                     request_key,
                     name,
                     move || {
-                        Completion::Theme(theme_feature::execute(
-                            &mut client,
-                            &theme_resource,
-                            command,
-                        ))
+                        let command_line = command.command_line();
+                        match (
+                            command_line,
+                            theme_feature::execute(&mut client, &theme_resource, command),
+                        ) {
+                            (Some(command), Err(error)) => {
+                                Completion::Presentation(Ok(ThreadEvent::CommandFailed {
+                                    command,
+                                    error,
+                                }
+                                .into()))
+                            }
+                            (_, result) => Completion::Theme(result),
+                        }
                     },
                     &mut self.app,
                 );
@@ -244,12 +253,11 @@ impl AppDriver {
         self.requests.spawn(
             request_key,
             "zeta-tui-product-command",
-            move || {
-                Completion::ProductCommand(
-                    execute_product_command(conversation, &mut client, invocation).and_then(
-                        |output| finish_product_command_request(&mut client, subscription, output),
-                    ),
-                )
+            move || Completion::ProductCommand {
+                command: invocation.display_text(),
+                result: execute_product_command(conversation, &mut client, invocation).and_then(
+                    |output| finish_product_command_request(&mut client, subscription, output),
+                ),
             },
             &mut self.app,
         );

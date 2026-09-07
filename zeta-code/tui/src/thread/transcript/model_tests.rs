@@ -58,8 +58,8 @@ fn tool_call_output_and_result_form_one_exec_cell() {
     assert_eq!(model.cells().len(), 1);
     assert_eq!(model.cells()[0].lifecycle(), CellLifecycle::Final);
     let views = model.views(&BTreeSet::new(), None);
-    assert_eq!(views[0].command_status, Some(CommandStatus::Succeeded));
-    assert_eq!(views[0].text, "Ran exec");
+    assert_eq!(views[0].command_status(), Some(CommandStatus::Succeeded));
+    assert_eq!(views[0].text(), "Ran exec");
 }
 
 #[test]
@@ -180,16 +180,90 @@ fn first_live_cell_splits_committed_history_from_the_rendered_tail() {
         },
     ]));
 
-    assert_eq!(model.committed_cells().len(), 1);
-    assert_eq!(model.active_cells().len(), 2);
+    assert_eq!(model.committed_cells(None).len(), 1);
+    assert_eq!(model.active_cells(None).len(), 2);
     assert_eq!(
         model
-            .active_views(&BTreeSet::new(), None)
+            .active_views(None, &BTreeSet::new(), None)
             .last()
             .unwrap()
-            .text,
+            .text(),
         "ordered behind live work"
     );
+}
+
+#[test]
+fn a_completed_execution_group_stays_live_until_the_turn_closes() {
+    let turn = turn_id("group-turn");
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![
+        tool_call("one", &turn),
+        tool_result("one", &turn),
+    ]));
+    assert!(model.committed_cells(Some(&turn)).is_empty());
+    assert_eq!(model.active_cells(Some(&turn)).len(), 1);
+    let id = model.cells()[0].cell_id().clone();
+    model.upsert(tool_call("two", &turn));
+    model.upsert(tool_result("two", &turn));
+    assert_eq!(model.cells().len(), 1);
+    assert_eq!(model.cells()[0].cell_id(), &id);
+    assert!(model.committed_cells(Some(&turn)).is_empty());
+    let completed = model.committed_cells(None);
+    assert_eq!(completed.len(), 1);
+    let detail = completed[0].history_view().detail().unwrap().into_owned();
+    assert!(detail.contains("result one"));
+    assert!(detail.contains("result two"));
+}
+
+#[test]
+fn execution_groups_never_merge_across_turns() {
+    let first = turn_id("first");
+    let second = turn_id("second");
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![
+        tool_call("one", &first),
+        tool_result("one", &first),
+        tool_call("two", &second),
+    ]));
+    assert_eq!(model.cells().len(), 2);
+    assert_eq!(model.committed_cells(Some(&second)).len(), 1);
+    assert_eq!(model.active_cells(Some(&second)).len(), 1);
+    assert_eq!(
+        model.cells()[1].cell_id(),
+        &TranscriptCellId::for_tool_call(&call_id("two"))
+    );
+}
+
+fn tool_call(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
+    ThreadTranscriptEntry::Item {
+        entry_id: format!("call-{name}"),
+        turn_id: turn.clone(),
+        transient: false,
+        item: ThreadItem::ToolCall {
+            item_id: item_id(&format!("item-{name}")),
+            turn_id: turn.clone(),
+            tool_call_id: call_id(name),
+            name: ToolName::new("read_file").unwrap(),
+            arguments_json: "{}".into(),
+            binding: None,
+        },
+    }
+}
+
+fn tool_result(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
+    ThreadTranscriptEntry::Item {
+        entry_id: format!("result-{name}"),
+        turn_id: turn.clone(),
+        transient: false,
+        item: ThreadItem::ToolResult {
+            item_id: item_id(&format!("result-item-{name}")),
+            turn_id: turn.clone(),
+            tool_call_id: call_id(name),
+            text: format!("result {name}"),
+            content: None,
+            is_error: false,
+        },
+    }
 }
 
 fn snapshot(entries: Vec<ThreadTranscriptEntry>) -> ThreadTranscriptSnapshot {

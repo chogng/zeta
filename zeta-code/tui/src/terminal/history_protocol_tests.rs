@@ -1,4 +1,5 @@
-use crate::thread::transcript::Message;
+use crate::terminal::backend::MainScreenBackend;
+use crate::thread::transcript::CellView;
 use crate::thread::transcript::MessageRole;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
@@ -91,7 +92,7 @@ fn history_compatibility_corpus_uses_production_cell_insertion_output() {
         let markers = (0..count)
             .map(|i| format!("ZETA{i:04}中🚀END"))
             .collect::<Vec<_>>();
-        let message = Message::plain(MessageRole::Agent, markers.join("\n"));
+        let message = CellView::plain(MessageRole::Agent, markers.join("\n"));
         let (cell, rows) = crate::thread::transcript::prepare_history(
             &message,
             width,
@@ -123,7 +124,7 @@ fn history_compatibility_corpus_uses_production_cell_insertion_output() {
                 output: CrosstermBackend::new(&mut output),
                 size: Size::new(width, height),
             };
-            let mut terminal = Terminal::new(backend).unwrap();
+            let mut terminal = Terminal::new(MainScreenBackend { inner: backend }).unwrap();
             let rendered = terminal
                 .draw(|frame| draw_transient_frame(frame.buffer_mut()))
                 .unwrap()
@@ -174,5 +175,68 @@ fn draw_transient_frame(buffer: &mut ratatui::buffer::Buffer) {
     }
     if buffer.area.height > 2 {
         buffer.set_string(0, 2, "ZETA-TRANSIENT-INPUT", style);
+    }
+}
+
+#[test]
+fn history_compatibility_status_repaint_never_pushes_the_panel_into_history() {
+    let panel = crate::status::status_panel(crate::status::StatusViewData {
+        model: "not configured",
+        full_context_window: None,
+        available_context_window: None,
+        remaining_context_window: crate::status::RemainingContextWindow::Unknown,
+        usage: &zeta_protocol::ModelUsageSummary::default(),
+        reference_cost: &zeta_protocol::ModelReferenceCostSummary::default(),
+        session_id: "ZETA-STATUS-SESSION",
+        thread_id: "thread-1",
+    });
+    let mut output = b"ZETA-SHELL-SENTINEL\r\n".to_vec();
+    super::begin_screen(&mut output, 40).unwrap();
+    let backend = RecordingBackend {
+        output: CrosstermBackend::new(&mut output),
+        size: Size::new(80, 40),
+    };
+    let mut terminal = Terminal::new(MainScreenBackend { inner: backend }).unwrap();
+    terminal.clear().unwrap();
+    let mut steps = Vec::new();
+    for stage in ["opened", "repainted", "resized", "cleared", "closed"] {
+        match stage {
+            "resized" => terminal.backend_mut().inner.size = Size::new(100, 40),
+            "cleared" => terminal.clear().unwrap(),
+            _ => {}
+        }
+        terminal
+            .draw(|frame| {
+                if stage != "closed" {
+                    let area = frame.area();
+                    let tabs = ratatui::layout::Rect::new(0, 0, area.width, 1);
+                    let body = ratatui::layout::Rect::new(0, 1, area.width, area.height - 1);
+                    panel.draw_tabs(frame, tabs, None, None, crate::render::test_context());
+                    panel.draw_body(frame, body, crate::render::test_context());
+                }
+            })
+            .unwrap();
+        let size = terminal.size().unwrap();
+        let bytes = std::mem::take(*terminal.backend_mut().inner.output.writer_mut());
+        steps.push(serde_json::json!({
+            "stage": stage, "width": size.width, "height": size.height,
+            "output": String::from_utf8(bytes).unwrap(),
+        }));
+    }
+    if let Some(directory) = std::env::var_os("ZETA_TUI_HISTORY_FIXTURES") {
+        let directory = PathBuf::from(directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("status-repaint.json"),
+            serde_json::to_vec_pretty(&steps).unwrap(),
+        )
+        .unwrap();
+    }
+    for step in steps {
+        assert!(
+            !step["output"].as_str().unwrap().contains("\x1b[2J"),
+            "{}: clearing must not archive the interactive panel",
+            step["stage"]
+        );
     }
 }

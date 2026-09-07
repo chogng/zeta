@@ -54,5 +54,5 @@ impl ChatHistoryScroll {
 }
 
 #[cfg(test)]
-#[path = "state_tests.rs"]
+#[path = "scroll_tests.rs"]
 mod tests;

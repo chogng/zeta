@@ -7,11 +7,10 @@ use super::pointer_target_at;
 use super::scroll_target;
 use crate::render::Renderable;
 use crate::render::test_context;
+use crate::thread::transcript::CellView;
 use crate::thread::transcript::ChatHistoryRenderCache;
 use crate::thread::transcript::ChatHistoryScroll;
 use crate::thread::transcript::CommandStatus;
-use crate::thread::transcript::ExecutionKind;
-use crate::thread::transcript::Message;
 use crate::thread::transcript::MessageRole;
 use crate::thread::transcript::TranscriptScrollAnchor;
 use crate::thread::transcript::TranscriptScrollDirection;
@@ -25,7 +24,7 @@ use ratatui::style::Color;
 #[test]
 fn tool_output_renders_ansi_as_styled_spans() {
     let messages = vec![
-        Message::command("shell · stdout".into(), CommandStatus::Running, None)
+        CellView::local_command("shell · stdout".into(), CommandStatus::Running, None)
             .with_detail("plain \x1b[31mred\x1b[0m"),
     ];
 
@@ -49,7 +48,7 @@ fn tool_output_renders_ansi_as_styled_spans() {
 
 #[test]
 fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
-    let messages = vec![Message::plain(
+    let messages = vec![CellView::plain(
         MessageRole::Agent,
         "a response that wraps at narrow widths".into(),
     )];
@@ -68,7 +67,7 @@ fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
 
 #[test]
 fn multiline_content_uses_the_same_continuation_prefix_for_measurement_and_drawing() {
-    let messages = vec![Message::plain(
+    let messages = vec![CellView::plain(
         MessageRole::Agent,
         "first line\nsecond line".into(),
     )];
@@ -83,25 +82,23 @@ fn multiline_content_uses_the_same_continuation_prefix_for_measurement_and_drawi
 fn execution_output_uses_a_solid_circle_with_semantic_color() {
     let cases = [
         (
-            Message::plain(MessageRole::Agent, "answer".into()),
+            CellView::plain(MessageRole::Agent, "answer".into()),
             test_context().muted(),
         ),
         (
-            Message::command("Ran shell".into(), CommandStatus::Succeeded, None),
+            CellView::exec("shell", CommandStatus::Succeeded),
             test_context().success(),
         ),
         (
-            Message::command("write_file failed".into(), CommandStatus::Failed, None)
-                .with_execution_kind(ExecutionKind::Mutation),
+            CellView::exec("write_file", CommandStatus::Failed),
             test_context().danger(),
         ),
         (
-            Message::command("Ran write_file".into(), CommandStatus::Succeeded, None)
-                .with_execution_kind(ExecutionKind::Mutation),
+            CellView::exec("write_file", CommandStatus::Succeeded),
             test_context().accent(),
         ),
         (
-            Message::command("Running shell".into(), CommandStatus::Running, None),
+            CellView::exec("shell", CommandStatus::Running),
             test_context().warning(),
         ),
     ];
@@ -123,8 +120,7 @@ fn local_command_uses_the_user_marker_except_while_running() {
     ];
 
     for (status, marker, color) in cases {
-        let message = Message::command("/theme zeta-code-dark".into(), status, None)
-            .with_execution_kind(ExecutionKind::LocalCommand);
+        let message = CellView::local_command("/theme zeta-code-dark".into(), status, None);
         let messages = [message];
         let lines = message_lines(&messages, test_context());
 
@@ -135,22 +131,21 @@ fn local_command_uses_the_user_marker_except_while_running() {
 
 #[test]
 fn expanded_output_uses_its_detail_branch_instead_of_a_disclosure_marker() {
-    let message = Message::command("Ran write_file".into(), CommandStatus::Succeeded, None)
-        .with_execution_kind(ExecutionKind::Mutation)
+    let message = CellView::local_command("write_file".into(), CommandStatus::Succeeded, None)
         .with_detail("write_file [call]")
-        .with_cell_actions(true, true, true, false);
+        .with_presentation(true, false);
 
     let messages = [message];
     let lines = message_lines(&messages, test_context());
 
-    assert_eq!(lines[0].to_string(), "● Ran write_file");
+    assert_eq!(lines[0].to_string(), "> write_file");
     assert_eq!(lines[1].to_string(), "└─ write_file [call]");
 }
 
 #[test]
 fn user_message_starts_in_the_symbol_column_and_fills_the_content_row() {
     let messages = vec![
-        Message::plain(MessageRole::User, "hello".into())
+        CellView::plain(MessageRole::User, "hello".into())
             .with_cell_id("user-message")
             .with_render_revision(1),
     ];
@@ -182,8 +177,7 @@ fn user_message_starts_in_the_symbol_column_and_fills_the_content_row() {
 #[test]
 fn local_command_fills_only_its_input_rows() {
     let messages = vec![
-        Message::command("/config".into(), CommandStatus::Succeeded, None)
-            .with_execution_kind(ExecutionKind::LocalCommand)
+        CellView::local_command("/config".into(), CommandStatus::Succeeded, None)
             .with_detail("done")
             .with_cell_id("local-command")
             .with_render_revision(1),
@@ -215,10 +209,8 @@ fn local_command_fills_only_its_input_rows() {
 
 #[test]
 fn selected_transcript_cell_uses_the_shared_selection_style() {
-    let messages = vec![
-        Message::plain(MessageRole::Agent, "selected".into())
-            .with_cell_actions(false, false, false, true),
-    ];
+    let messages =
+        vec![CellView::plain(MessageRole::Agent, "selected".into()).with_presentation(false, true)];
 
     let lines = message_lines(&messages, test_context());
     let body = &lines[0].spans[1];
@@ -230,10 +222,13 @@ fn selected_transcript_cell_uses_the_shared_selection_style() {
 #[test]
 fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
     let messages = vec![
-        Message::plain(MessageRole::Reasoning, "Thought".into())
-            .with_cell_id("reasoning")
-            .with_render_revision(1)
-            .with_cell_actions(true, false, false, false),
+        CellView::plain(
+            MessageRole::Reasoning,
+            "first thought\nsecond thought".into(),
+        )
+        .with_cell_id("reasoning")
+        .with_render_revision(1)
+        .with_presentation(false, false),
     ];
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
@@ -276,7 +271,7 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
 #[test]
 fn multiline_command_output_keeps_detail_prefix_alignment() {
     let messages = vec![
-        Message::command("printf hi".into(), CommandStatus::Succeeded, None)
+        CellView::local_command("printf hi".into(), CommandStatus::Succeeded, None)
             .with_detail("one\ntwo"),
     ];
 
@@ -289,10 +284,13 @@ fn multiline_command_output_keeps_detail_prefix_alignment() {
 #[test]
 fn pointer_rows_follow_the_same_multiline_height_as_rendering() {
     let messages = vec![
-        Message::plain(MessageRole::Agent, "first\nsecond".into()),
-        Message::plain(MessageRole::Reasoning, "Thought".into())
-            .with_cell_id("reasoning")
-            .with_cell_actions(true, false, false, false),
+        CellView::plain(MessageRole::Agent, "first\nsecond".into()),
+        CellView::plain(
+            MessageRole::Reasoning,
+            "first thought\nsecond thought".into(),
+        )
+        .with_cell_id("reasoning")
+        .with_presentation(false, false),
     ];
 
     assert_eq!(
@@ -311,10 +309,46 @@ fn pointer_rows_follow_the_same_multiline_height_as_rendering() {
 }
 
 #[test]
+fn wrapped_details_link_is_clickable_on_its_first_visible_row() {
+    let messages = vec![
+        CellView::plain(MessageRole::Reasoning, "line\n".repeat(14))
+            .with_cell_id("reasoning")
+            .with_render_revision(1)
+            .with_presentation(true, false),
+    ];
+    let area = Rect::new(0, 0, 8, 60);
+    let scroll = ChatHistoryScroll::default();
+    let cache = ChatHistoryRenderCache::default();
+    let view = ChatHistoryView {
+        header: None,
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &cache,
+        pointer: Default::default(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| view.render(frame, area, test_context()))
+        .unwrap();
+    let row = (0..area.height)
+        .find(|&row| {
+            (0..area.width)
+                .map(|column| terminal.backend().buffer()[(column, row)].symbol())
+                .collect::<String>()
+                .starts_with("   view")
+        })
+        .expect("the details link is visible");
+    assert_eq!(
+        pointer_target_at(area, 0, &messages, &scroll, &cache, test_context(), 0, row),
+        Some(ChatHistoryPointerTarget::Details("reasoning".into()))
+    );
+}
+
+#[test]
 fn long_transcripts_buffer_only_visible_cells() {
     let messages = (0..300)
         .map(|index| {
-            Message::plain(MessageRole::Agent, format!("message {index}"))
+            CellView::plain(MessageRole::Agent, format!("message {index}"))
                 .with_cell_id(format!("agent-{index}"))
                 .with_render_revision(1)
         })
@@ -342,7 +376,7 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
     let mut text = "line\n".repeat(usize::from(u16::MAX) + 10);
     text.push_str("visible tail");
     let messages = vec![
-        Message::plain(MessageRole::Agent, text)
+        CellView::plain(MessageRole::Agent, text)
             .with_cell_id("long-agent")
             .with_render_revision(1),
     ];
@@ -375,7 +409,7 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
 fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
     let messages = (0..8)
         .map(|index| {
-            Message::plain(MessageRole::Agent, format!("message {index}"))
+            CellView::plain(MessageRole::Agent, format!("message {index}"))
                 .with_cell_id(format!("message-{index}"))
         })
         .collect::<Vec<_>>();
@@ -440,7 +474,7 @@ fn scrolling_to_the_start_reveals_the_history_header_before_messages() {
     header.set_string(0, 0, "welcome header", Color::Reset);
     let messages = (0..8)
         .map(|index| {
-            Message::plain(MessageRole::Agent, format!("message {index}"))
+            CellView::plain(MessageRole::Agent, format!("message {index}"))
                 .with_cell_id(format!("message-{index}"))
         })
         .collect::<Vec<_>>();
@@ -477,7 +511,7 @@ fn scrolling_to_the_start_reveals_the_history_header_before_messages() {
 fn transcript_changes_do_not_move_a_manually_scrolled_viewport() {
     let mut messages = (0..12)
         .map(|index| {
-            Message::plain(MessageRole::Agent, format!("message {index}"))
+            CellView::plain(MessageRole::Agent, format!("message {index}"))
                 .with_cell_id(format!("message-{index}"))
         })
         .collect::<Vec<_>>();
@@ -499,14 +533,14 @@ fn transcript_changes_do_not_move_a_manually_scrolled_viewport() {
 
     let first_row = render_first_row(area, &messages, &scroll, &render_cache);
     messages.extend((12..16).map(|index| {
-        Message::plain(MessageRole::Agent, format!("message {index}"))
+        CellView::plain(MessageRole::Agent, format!("message {index}"))
             .with_cell_id(format!("message-{index}"))
     }));
     let first_row_after_append = render_first_row(area, &messages, &scroll, &render_cache);
     messages.splice(
         0..0,
         (0..4).map(|index| {
-            Message::plain(MessageRole::Agent, format!("older {index}"))
+            CellView::plain(MessageRole::Agent, format!("older {index}"))
                 .with_cell_id(format!("older-{index}"))
         }),
     );
@@ -530,7 +564,7 @@ fn manual_scroll_keeps_the_anchored_line_visible_during_streaming_growth() {
     let render_cache = ChatHistoryRenderCache::default();
     let mut scroll = ChatHistoryScroll::default();
     let mut messages = vec![
-        Message::plain(
+        CellView::plain(
             MessageRole::Agent,
             (0..20)
                 .map(|index| format!("line {index}"))
@@ -553,7 +587,7 @@ fn manual_scroll_keeps_the_anchored_line_visible_during_streaming_growth() {
     assert!(scroll.apply(target));
 
     let first_row = render_first_row(area, &messages, &scroll, &render_cache);
-    messages[0] = Message::plain(
+    messages[0] = CellView::plain(
         MessageRole::Agent,
         (0..30)
             .map(|index| format!("line {index}"))
@@ -572,7 +606,7 @@ fn manual_scroll_keeps_the_anchored_line_visible_during_streaming_growth() {
 #[test]
 fn jump_control_is_hidden_while_following_the_latest_content() {
     let messages = (0..8)
-        .map(|index| Message::plain(MessageRole::Agent, format!("message {index}")))
+        .map(|index| CellView::plain(MessageRole::Agent, format!("message {index}")))
         .collect::<Vec<_>>();
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
@@ -595,7 +629,7 @@ fn jump_control_is_hidden_while_following_the_latest_content() {
 
 fn render_first_row(
     area: Rect,
-    messages: &[Message],
+    messages: &[CellView<'_>],
     scroll: &ChatHistoryScroll,
     render_cache: &ChatHistoryRenderCache,
 ) -> String {

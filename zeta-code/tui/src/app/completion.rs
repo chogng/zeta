@@ -40,7 +40,10 @@ use zeta_protocol::TurnId;
 pub(super) enum Completion {
     ConfigRefreshed(Result<ConfigReadResult, String>),
     Sessions(SessionCompletion),
-    ProductCommand(Result<ProductCommandCompletion, String>),
+    ProductCommand {
+        command: String,
+        result: Result<ProductCommandCompletion, String>,
+    },
     Presentation(Result<AppEvent, String>),
     PreferredModelUpdated {
         command: String,
@@ -186,16 +189,24 @@ pub(super) fn apply_request_completion(
             );
         }
         Completion::Sessions(SessionCompletion::Changed {
-            result: Err(error), ..
+            command,
+            result: Err(error),
         })
-        | Completion::ProductCommand(Err(error))
-        | Completion::Presentation(Err(error)) => {
-            app.update(ThreadEvent::FailureReported(error));
+        | Completion::ProductCommand {
+            command,
+            result: Err(error),
+        } => {
+            app.update(ThreadEvent::CommandFailed { command, error });
         }
-        Completion::ProductCommand(Ok(ProductCommandCompletion {
-            mut output,
-            switched,
-        })) => {
+        Completion::Presentation(Err(error)) => app.update(ThreadEvent::FailureReported(error)),
+        Completion::ProductCommand {
+            result:
+                Ok(ProductCommandCompletion {
+                    mut output,
+                    switched,
+                }),
+            ..
+        } => {
             for event in output.events.drain(..) {
                 app.update(event);
             }
@@ -231,8 +242,9 @@ pub(super) fn apply_request_completion(
             app.update(AppEvent::CommandPanelClosed);
         }
         Completion::PreferredModelUpdated {
-            result: Err(error), ..
-        } => app.update(ThreadEvent::FailureReported(error)),
+            command,
+            result: Err(error),
+        } => app.update(ThreadEvent::CommandFailed { command, error }),
         Completion::Theme(Ok(crate::theme::CommandCompletion::Presentation(event))) => {
             app.update(event);
         }
@@ -249,10 +261,11 @@ pub(super) fn apply_request_completion(
             });
         }
         Completion::Theme(Ok(crate::theme::CommandCompletion::Updated {
+            command,
             result: Err(error),
             ..
-        }))
-        | Completion::Theme(Err(error)) => app.update(ThreadEvent::FailureReported(error)),
+        })) => app.update(ThreadEvent::CommandFailed { command, error }),
+        Completion::Theme(Err(error)) => app.update(ThreadEvent::FailureReported(error)),
         Completion::Skills(Ok(refresh)) => {
             app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {

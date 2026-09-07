@@ -322,7 +322,7 @@ IDE、文件或其他用户上下文仍属于用户内容；第一行说明上�
 
 ```text
 > Context · Active file
-  zeta-code/tui/src/thread/transcript/exec.rs
+  zeta-code/tui/src/thread/transcript/exec_cell.rs
 ```
 
 当前图片和图片附件在正文中显示为占位文本：

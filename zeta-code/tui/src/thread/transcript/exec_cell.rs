@@ -1,18 +1,24 @@
+mod render;
+
 use crate::thread::transcript::CommandStatus;
-use crate::thread::transcript::ExecutionKind;
-use crate::thread::transcript::Message;
 use crate::thread::transcript::TranscriptCellId;
 use std::collections::BTreeSet;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolName;
 use zeta_protocol::ToolOutputStream;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ExecutionKind {
+    Command,
+    Mutation,
+    Neutral,
+}
+
 const MAX_GROUP_CALLS: usize = 16;
 const MAX_LIVE_BYTES: usize = 64 * 1024;
 const MAX_LIVE_LINES: usize = 200;
 const MAX_LINE_BYTES: usize = 4 * 1024;
 const MAX_FINAL_BYTES: usize = 256 * 1024;
-const EXPANDED_LINES: usize = 12;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ExecGroup {
@@ -290,18 +296,14 @@ impl ExecCell {
         self.can_expand()
     }
 
-    pub(super) fn view(&self, expanded: bool) -> Message {
-        let status = if self.is_live() {
+    pub(super) fn status(&self) -> CommandStatus {
+        if self.is_live() {
             CommandStatus::Running
         } else if self.calls.iter().any(|call| call.failed) {
             CommandStatus::Failed
         } else {
             CommandStatus::Succeeded
-        };
-        let detail = expanded.then(|| first_lines(&self.full_details(), EXPANDED_LINES));
-        Message::command(self.summary(), status, detail)
-            .with_execution_kind(self.execution_kind())
-            .with_cell_id(self.cell_id.as_str())
+        }
     }
 
     pub(super) fn full_details(&self) -> String {
@@ -427,18 +429,6 @@ fn next_char_boundary(text: &str, start: usize) -> usize {
     index
 }
 
-fn first_lines(text: &str, limit: usize) -> String {
-    let lines = text.lines().collect::<Vec<_>>();
-    if lines.len() <= limit {
-        return text.to_owned();
-    }
-    let omitted = lines.len().saturating_sub(limit);
-    format!(
-        "{}\n… {omitted} lines omitted; view full",
-        lines[..limit].join("\n")
-    )
-}
-
 #[cfg(test)]
-#[path = "exec_tests.rs"]
+#[path = "exec_cell/model_tests.rs"]
 mod tests;

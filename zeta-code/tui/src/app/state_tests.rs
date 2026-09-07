@@ -122,10 +122,10 @@ fn skill_diagnostics_are_notices_and_are_suppressed_until_they_clear() {
     assert!(
         app.messages()
             .iter()
-            .all(|message| message.role == MessageRole::Notice)
+            .all(|message| message.role() == MessageRole::Notice)
     );
     assert_eq!(
-        app.messages()[1].text,
+        app.messages()[1].text(),
         "broken/SKILL.md: frontmatter is invalid"
     );
 
@@ -161,8 +161,8 @@ fn enter_submits_trimmed_input_and_records_the_user_message() {
     assert_text_submission(action, "explain this");
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 1);
-    assert_eq!(app.messages()[0].role, MessageRole::User);
-    assert_eq!(app.messages()[0].text, "explain this");
+    assert_eq!(app.messages()[0].role(), MessageRole::User);
+    assert_eq!(app.messages()[0].text(), "explain this");
     assert_eq!(app.status(), &Status::Working);
 }
 
@@ -411,7 +411,7 @@ fn large_paste_uses_a_placeholder_and_expands_on_submit() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_text_submission(action, &pasted);
-    assert_eq!(app.messages()[0].text, pasted);
+    assert_eq!(app.messages()[0].text(), pasted);
     assert_eq!(app.input(), "");
 }
 
@@ -490,7 +490,7 @@ fn pasted_image_path_submits_a_structured_image() {
         &submission.input[0],
         ChatInputItem::Image { url } if url.starts_with("data:image/png;base64,")
     ));
-    assert_eq!(app.messages()[0].text, "[Image #1]");
+    assert_eq!(app.messages()[0].text(), "[Image #1]");
     let _ = fs::remove_file(path);
 }
 
@@ -552,7 +552,7 @@ fn export_rejects_image_arguments_before_host_io() {
         app.messages()
             .last()
             .unwrap()
-            .text
+            .text()
             .contains("relative text path")
     );
 }
@@ -572,7 +572,8 @@ fn local_conversation_commands_do_not_replace_a_running_turn() {
         app.messages()
             .last()
             .unwrap()
-            .text
+            .detail()
+            .unwrap()
             .contains("is unavailable")
     );
 }
@@ -693,10 +694,10 @@ fn product_command_is_delegated_to_the_typed_dispatcher() {
     assert!(invocation.arguments.is_empty());
     assert_eq!(app.status(), &Status::Ready);
     assert_eq!(app.messages().len(), 1);
-    assert_eq!(app.messages()[0].role, MessageRole::Command);
-    assert_eq!(app.messages()[0].text, "/status");
+    assert_eq!(app.messages()[0].role(), MessageRole::Command);
+    assert_eq!(app.messages()[0].text(), "/status");
     assert_eq!(
-        app.messages()[0].command_status,
+        app.messages()[0].command_status(),
         Some(CommandStatus::Submitted)
     );
 }
@@ -709,7 +710,7 @@ fn shortcut_slash_command_is_owned_by_the_local_host() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(action, Some(AppCommand::Keymap(KeymapCommand::OpenEditor)));
-    assert_eq!(app.messages()[0].text, "/shortcuts");
+    assert_eq!(app.messages()[0].text(), "/shortcuts");
 }
 
 #[test]
@@ -720,7 +721,7 @@ fn config_slash_command_is_owned_by_the_local_host() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(action, Some(AppCommand::Config(ConfigCommand::OpenEditor)));
-    assert_eq!(app.messages()[0].text, "/config");
+    assert_eq!(app.messages()[0].text(), "/config");
 }
 
 #[test]
@@ -1006,7 +1007,7 @@ fn statusline_slash_command_is_owned_by_the_local_host() {
         action,
         Some(AppCommand::Status(StatusCommand::OpenLineEditor))
     );
-    assert_eq!(app.messages()[0].text, "/statusline");
+    assert_eq!(app.messages()[0].text(), "/statusline");
 }
 
 #[test]
@@ -1173,7 +1174,7 @@ fn inline_product_arguments_reach_the_typed_dispatcher() {
         vec![ChatInputItem::Text("provider/model".into())]
     );
     assert_eq!(app.status(), &Status::Ready);
-    assert_eq!(app.messages()[0].text, "/model provider/model");
+    assert_eq!(app.messages()[0].text(), "/model provider/model");
 }
 
 #[test]
@@ -1206,8 +1207,8 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
         }))
     );
     assert_eq!(app.status(), &Status::Working);
-    assert_eq!(app.messages()[0].role, MessageRole::User);
-    assert_eq!(app.messages()[0].text, "/diagnose logs");
+    assert_eq!(app.messages()[0].role(), MessageRole::User);
+    assert_eq!(app.messages()[0].text(), "/diagnose logs");
     let _ = fs::remove_dir_all(dir);
 }
 
@@ -1337,7 +1338,7 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
             },
         }))
     );
-    assert_eq!(app.messages()[0].text, "$commit staged changes");
+    assert_eq!(app.messages()[0].text(), "$commit staged changes");
     let _ = fs::remove_dir_all(dir);
 }
 
@@ -1362,7 +1363,7 @@ fn unknown_slash_input_remains_a_prompt() {
 
     assert_text_submission(action, "/explain");
     assert_eq!(app.status(), &Status::Working);
-    assert_eq!(app.messages()[0].text, "/explain");
+    assert_eq!(app.messages()[0].text(), "/explain");
 }
 
 #[test]
@@ -1680,7 +1681,7 @@ fn control_enter_steers_the_working_turn_and_tracks_delivery() {
     assert_eq!(submission.display_text, "secondthird");
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
-    assert_eq!(app.messages()[1].text, "secondthird");
+    assert_eq!(app.messages()[1].text(), "secondthird");
     assert!(app.command_panel().is_none());
 
     app.update(ThreadEvent::SteerCompleted { source, steer_id });
@@ -1917,7 +1918,7 @@ fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
         app.messages()
             .last()
             .unwrap()
-            .text
+            .text()
             .contains("could not steer the active Turn: sequence conflict")
     );
 }
@@ -1931,8 +1932,8 @@ fn completion_returns_the_app_to_ready_without_appending_transcript_content() {
     app.update(ThreadEvent::TurnCompleted);
 
     assert_eq!(app.messages().len(), 1);
-    assert_eq!(app.messages()[0].role, MessageRole::User);
-    assert_eq!(app.messages()[0].text, "hello");
+    assert_eq!(app.messages()[0].role(), MessageRole::User);
+    assert_eq!(app.messages()[0].text(), "hello");
     assert_eq!(app.status(), &Status::Ready);
 }
 
@@ -1943,8 +1944,8 @@ fn client_error_is_visible_in_history_and_status() {
     app.update(ThreadEvent::FailureReported("provider unavailable".into()));
 
     assert_eq!(app.messages().len(), 1);
-    assert_eq!(app.messages()[0].role, MessageRole::Error);
-    assert_eq!(app.messages()[0].text, "provider unavailable");
+    assert_eq!(app.messages()[0].role(), MessageRole::Error);
+    assert_eq!(app.messages()[0].text(), "provider unavailable");
     assert_eq!(app.status(), &Status::Error);
 }
 
@@ -1958,8 +1959,8 @@ fn interrupted_turn_returns_to_ready_with_a_notice() {
     app.update(ThreadEvent::TurnInterrupted);
 
     assert_eq!(app.status(), &Status::Ready);
-    assert_eq!(app.messages().last().unwrap().role, MessageRole::Notice);
-    assert_eq!(app.messages().last().unwrap().text, "turn interrupted");
+    assert_eq!(app.messages().last().unwrap().role(), MessageRole::Notice);
+    assert_eq!(app.messages().last().unwrap().text(), "turn interrupted");
 }
 
 fn assert_text_submission(action: Option<AppCommand>, expected: &str) {

@@ -93,7 +93,7 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
     );
     assert_ne!(conversation.session_id(), &original_session);
     assert_eq!(
-        app.messages().last().unwrap().text,
+        app.messages().last().unwrap().text(),
         "Started a new session."
     );
 
@@ -103,12 +103,12 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
         &mut app,
     );
     assert_eq!(conversation.session_id(), &original_session);
-    assert_eq!(app.messages().last().unwrap().role, MessageRole::Notice);
+    assert_eq!(app.messages().last().unwrap().role(), MessageRole::Notice);
     assert!(
         app.messages()
             .last()
             .unwrap()
-            .text
+            .text()
             .starts_with("Resumed session")
     );
     assert_eq!(model.calls(), 0);
@@ -147,7 +147,7 @@ fn archive_persists_status_starts_a_new_session_and_does_not_call_the_model() {
         .session;
     assert_eq!(next.status, SessionStatus::Active);
     assert_eq!(
-        app.messages().last().unwrap().text,
+        app.messages().last().unwrap().text(),
         "Archived the previous session and started a new session."
     );
     assert_eq!(model.calls(), 0);
@@ -612,12 +612,12 @@ fn product_commands_reject_image_arguments_instead_of_silently_dropping_them() {
     conversation.execute(&mut client, invocation, &mut app);
 
     assert_eq!(app.status(), &Status::Error);
-    assert_eq!(app.messages().last().unwrap().role, MessageRole::Error);
+    assert_eq!(app.messages().last().unwrap().role(), MessageRole::Error);
     assert!(
         app.messages()
             .last()
             .unwrap()
-            .text
+            .text()
             .contains("do not accept image arguments")
     );
 

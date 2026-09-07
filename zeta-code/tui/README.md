@@ -269,7 +269,9 @@ src/
 | `thread::interaction::approval::Approval` | crate-private | 保存一次 Approval 的请求身份、选择、提交和错误状态，并生成准确响应 | 不拥有 ChatInput 草稿、不决定 policy 或 owner |
 | `thread::interaction::query::Query` | crate-private | 保存一次 Query 的问题、选择、自定义文本、提交和错误状态，并生成准确响应 | 不借用 ChatInput 编辑答案、不决定 owner |
 | `thread::TranscriptModel` | crate-private | 用稳定 `TranscriptCellId` 维护有序 `TranscriptCell`，单条 entry 和 Exec 分组采用确定性身份，并为每次可见内容变化分配单调 render revision | 不成为持久化层、不把 TUI 身份写成 Core 领域 ID、不从显示文字推断产品事实 |
-| `thread::ExecCell` | crate-private | 按 `ToolCallId` 路由调用、流式输出和结果，执行稳定分组与有界保留 | 不把输出接到“当前命令”、不推测缺失的退出码或时长 |
+| `transcript::history_cell::HistoryCell` | 模块内部 | 入口 `history_cell.rs` 定义契约；`history_cell/` 下的内容、本地命令、文本处理和缓存共同提供 `CellLines`，`CellView` 借用实际单元 | 不再转换成通用 `Message`，不在正文视图中判断具体单元类型 |
+| `transcript::exec_cell::ExecCell` | 模块内部 | `exec_cell.rs` 按 `ToolCallId` 路由调用、流式输出和结果；`exec_cell/render.rs` 实现单元绘制；仅在同一 Turn 内合并，当前 Turn 的末尾执行组完成后统一提交历史 | 不把输出接到“当前命令”、不推测缺失的退出码或时长 |
+| `transcript::history_cell::CellLayout` / `TranscriptHistory` | 模块内部 / crate-private | 前者从单元输出计算折行高度和详情动作位置，`view.rs` 与 `view/scroll.rs` 消费这些结果；后者在成功写入后记录单元身份，快照替换不重复追加 | 不从固定倒数行猜测点击位置，不把命令面板写进回滚区 |
 | `ChatComposer` | crate-private | 在 `ChatPanel` 委托的 `ChatInput` 上执行 Start/Queue/Steer 提交 | 不保存输入目标、`CommandPanel`、Overlay、补全、Approval、Query、Turn 或 Plan，不执行外部副作用 |
 | `widgets::list_selection::ListSelection<A>` | crate-private | 组合列表状态与不透明 typed action，复用搜索、Tab、选择和 pointer 命中 | 不管理跨能力页面栈，不拥有 RPC 或应用级生命周期 |
 | `app::command_panel::CommandPanel` | private | 记录 Session 输入位置当前打开的命令面板，并机械委托高度、绘制和输入 | 不保存 ChatInput completion，不解释能力内部多步页面 |

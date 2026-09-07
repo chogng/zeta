@@ -118,12 +118,12 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     assert!(
         app.messages()
             .iter()
-            .any(|message| message.text == FIRST_PROMPT)
+            .any(|message| message.text() == FIRST_PROMPT)
     );
     assert!(
         app.messages()
             .iter()
-            .any(|message| message.text.contains(FIRST_PARTIAL))
+            .any(|message| message.text().contains(FIRST_PARTIAL))
     );
     assert_eq!(app.status(), &Status::Working);
     assert_snapshot!("conversation_streaming", render(&app));
@@ -139,7 +139,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     assert!(!completed_frame.contains("fn main()"));
     let mut committed = Vec::new();
     app.write_transcript_history(&mut |message, _| {
-        committed.push(message.text.clone());
+        committed.push(message.text().into_owned());
         Ok(())
     })
     .unwrap();
@@ -167,7 +167,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     assert!(
         app.messages()
             .iter()
-            .any(|message| message.text == SECOND_PROMPT)
+            .any(|message| message.text() == SECOND_PROMPT)
     );
     assert_eq!(app.latest_agent_response(), Some(SECOND_RESPONSE));
     assert_eq!(app.status(), &Status::Ready);

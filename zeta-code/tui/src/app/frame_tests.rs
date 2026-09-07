@@ -1191,11 +1191,46 @@ fn submitted_slash_command_moves_out_of_the_current_frame() {
     assert!(!rendered.lines().any(|line| line.contains("> /status")));
     let mut history = Vec::new();
     app.write_transcript_history(&mut |message, _| {
-        history.push(message.text.clone());
+        history.push(message.text().into_owned());
         Ok(())
     })
     .unwrap();
     assert_eq!(history, ["/status"]);
+}
+
+#[test]
+fn queued_local_command_waits_for_completion_before_entering_history() {
+    let mut app = App::new();
+    app.insert_text("/theme zeta-code-light");
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .is_some()
+    );
+    app.write_transcript_history(&mut |_, _| panic!("queued command is not final"))
+        .unwrap();
+    app.update(ThreadEvent::CommandStarted("/theme zeta-code-light".into()));
+    app.update(ThreadEvent::CommandCompleted {
+        command: "/theme zeta-code-light".into(),
+        result: "Theme set to Light".into(),
+    });
+    let mut history = Vec::new();
+    for _ in 0..2 {
+        app.write_transcript_history(&mut |cell, _| {
+            history.push((
+                cell.text().into_owned(),
+                cell.detail().unwrap().into_owned(),
+            ));
+            Ok(())
+        })
+        .unwrap();
+    }
+    assert_eq!(
+        history,
+        [(
+            "/theme zeta-code-light".to_owned(),
+            "Theme set to Light".to_owned()
+        )]
+    );
 }
 
 #[test]
