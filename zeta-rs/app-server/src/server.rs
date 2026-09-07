@@ -2023,6 +2023,7 @@ impl AppServer {
             Some(ClientMethod::PluginRevokeGrant) => self.plugin_revoke_grant(&request.params),
             Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(),
+            Some(ClientMethod::ProviderModelsList) => self.provider_models_list(&request.params),
             Some(ClientMethod::ProviderList) => self.provider_list(),
             Some(ClientMethod::ProviderApiKeySet) => {
                 self.provider_api_key_set(std::mem::take(&mut request.params))

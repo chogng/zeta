@@ -450,6 +450,7 @@ impl Provider {
 }
 
 /// Process-local runtime that instantiates declarative provider configuration.
+#[derive(Clone)]
 pub struct ModelProviderRuntime {
     configs: ProviderConfigRegistry,
     models: ModelsManager,
@@ -461,6 +462,21 @@ pub struct ModelProviderRuntime {
 }
 
 impl ModelProviderRuntime {
+    /// Creates an immutable runtime for the exact persisted connection definitions.
+    pub fn with_configs<'a>(
+        &self,
+        configs: impl IntoIterator<Item = &'a ModelProviderConfig>,
+    ) -> Result<Self, ModelProviderError> {
+        let configs = self.configs.with_configs(configs)?;
+        let mut runtime = self.clone();
+        runtime.models = self.models.with_registry(configs.clone());
+        runtime.credentials = self
+            .credentials
+            .as_ref()
+            .map(|credentials| credentials.with_registry(configs.clone()));
+        runtime.configs = configs;
+        Ok(runtime)
+    }
     pub fn new(configs: ProviderConfigRegistry) -> Self {
         Self::with_client(
             configs,
@@ -549,12 +565,29 @@ impl ModelProviderRuntime {
         &self,
         config: &ModelProviderConfig,
     ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
-        let normalized = self.configs.normalize(config)?;
-        let definition = self
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize(config)?;
+        let definition = runtime
             .configs
             .get(&normalized.provider)
             .expect("normalization only succeeds for registered providers");
         match definition.adapter {
+            zeta_model_provider_config::ProviderAdapter::OpenAi
+            | zeta_model_provider_config::ProviderAdapter::OpenAiCompatible => {
+                let headers = runtime
+                    .credentials
+                    .as_ref()
+                    .map(|credentials| credentials.request_headers(&config.provider))
+                    .transpose()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                    .unwrap_or_default();
+                crate::catalog::openai_catalog_binding(
+                    &normalized,
+                    headers,
+                    Arc::clone(&self.client),
+                )
+                .map(Some)
+            }
             zeta_model_provider_config::ProviderAdapter::Ollama => {
                 crate::catalog::ollama_catalog_binding(
                     normalized.provider,
@@ -572,8 +605,9 @@ impl ModelProviderRuntime {
         &self,
         config: &ModelProviderConfig,
     ) -> Result<Provider, ModelProviderError> {
-        let normalized = self.configs.normalize(config)?;
-        self.instantiate_normalized(normalized)
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize(config)?;
+        runtime.instantiate_normalized(normalized)
     }
 
     pub fn build_model(
@@ -581,9 +615,11 @@ impl ModelProviderRuntime {
         config: &ModelProviderConfig,
         model_ref: &ModelRef,
     ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
-        let normalized = self.configs.normalize_for(config, &model_ref.provider)?;
-        let connection = self.connection(model_ref)?;
-        self.instantiate_normalized_with_connection(normalized, connection)?
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model_ref.provider)?;
+        let connection = runtime.connection(model_ref)?;
+        runtime
+            .instantiate_normalized_with_connection(normalized, connection)?
             .build_model(&model_ref.model)
     }
 
@@ -593,9 +629,11 @@ impl ModelProviderRuntime {
         model_ref: &ModelRef,
         request: &ModelRequest,
     ) -> Result<ModelResponse, ModelProviderError> {
-        let normalized = self.configs.normalize_for(config, &model_ref.provider)?;
-        let connection = self.connection(model_ref)?;
-        self.instantiate_normalized_with_connection(normalized, connection)?
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model_ref.provider)?;
+        let connection = runtime.connection(model_ref)?;
+        runtime
+            .instantiate_normalized_with_connection(normalized, connection)?
             .complete(&model_ref.model, request)
     }
 

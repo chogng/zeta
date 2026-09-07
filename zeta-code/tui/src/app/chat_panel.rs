@@ -222,6 +222,12 @@ impl ChatPanel {
         }
     }
 
+    pub(crate) fn complete_connection(&mut self, reply: crate::config::openai::Reply) {
+        if let Some(CommandPanel::Config(editor)) = self.command.as_mut() {
+            editor.complete_connection(reply);
+        }
+    }
+
     pub(crate) fn update_subscription(&mut self, choices: ConfigChoices) {
         if let Some(command) = self.command.as_mut() {
             command.update_subscription(choices);

@@ -292,26 +292,27 @@ fn openai_editor() -> super::ConfigEditor {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     ));
-    for key in [KeyCode::Up, KeyCode::Up, KeyCode::Tab] {
+    for key in [
+        KeyCode::Up,
+        KeyCode::Up,
+        KeyCode::Tab,
+        KeyCode::Down,
+        KeyCode::Down,
+        KeyCode::Enter,
+    ] {
         editor.handle_key(KeyEvent::new(key, KeyModifiers::NONE));
     }
-    editor.activate_visible_item(0).unwrap();
     editor
 }
 
 #[test]
-fn openai_key_cancel_returns_one_level_and_mouse_cannot_activate_behind_input() {
+fn openai_form_owns_keyboard_input_and_esc_returns_to_providers() {
     let mut editor = openai_editor();
-    assert_eq!(editor.selection().unwrap().title(), "OpenAI");
-    editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(
-        matches!(editor.page(), super::ConfigEditorPage::Prompt(prompt) if prompt.input().masked())
-    );
-    assert!(editor.activate_visible_item(3).is_none());
-    editor.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(editor.selection().unwrap().title(), "OpenAI");
-    editor.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(editor.selection().unwrap().title(), "Config");
+    assert!(matches!(editor.page(), super::ConfigEditorPage::OpenAi(_)));
+    editor.handle_paste("unconfirmed-key".into());
+    for _ in 0..3 {
+        editor.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    }
     assert_eq!(
         editor.selection().unwrap().active_tab().label(),
         "Providers"
@@ -319,55 +320,49 @@ fn openai_key_cancel_returns_one_level_and_mouse_cannot_activate_behind_input() 
 }
 
 #[test]
-fn custom_address_and_key_use_the_separate_provider_and_refresh_without_leaving_openai() {
+fn created_provider_remains_available_after_closing_and_reopening_openai() {
     let mut editor = openai_editor();
-    editor.activate_visible_item(1).unwrap();
-    editor.handle_paste("https://gateway.example/v1".into());
-    let outcome = editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::ConfigureProvider(params)) =
-        outcome
-    else {
-        panic!("expected endpoint update")
-    };
-    assert_eq!(params.config.provider, "openai-compatible");
-    assert_eq!(
-        params.config.base_url.as_deref(),
-        Some("https://gateway.example/v1")
-    );
-    // Until success arrives, a rejected request leaves its input available for correction.
-    assert!(matches!(editor.page(), super::ConfigEditorPage::Prompt(_)));
-    let mut config = empty_config_snapshot();
-    config.revision = 8;
-    config
-        .providers
-        .insert(params.config.provider.clone(), params.config);
-    editor.close_prompt_and_replace(config_choices(
-        &config,
-        &providers(),
-        TerminalSettings::default(),
-        StatusLineSettings::default(),
-    ));
-    assert_eq!(editor.selection().unwrap().title(), "OpenAI");
-    assert_eq!(
-        editor.selection().unwrap().visible_items()[1].description(),
-        Some("https://gateway.example/v1")
-    );
-    editor.activate_visible_item(1).unwrap();
-    let outcome = editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(
-        matches!(outcome, super::ConfigEditorOutcome::Action(ConfigSelectionAction::ConfigureProvider(params)) if params.expected_revision == 8)
-    );
-    editor.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    editor.activate_visible_item(2).unwrap();
-    editor.handle_paste("custom-secret".into());
-    let super::ConfigEditorOutcome::SaveApiKey(edit) =
+    editor.openai.as_mut().unwrap().select_tab(2);
+    for value in ["Example", "https://example.test/v1", ""] {
+        editor.handle_paste(value.into());
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    }
+    editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) =
         editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
-        panic!("expected key update")
+        panic!("expected creation")
     };
-    assert!(!format!("{edit:?}").contains("custom-secret"));
-    assert_eq!(
-        edit.into_parts(),
-        ("openai-compatible".into(), "custom-secret".into())
-    );
+    let mut config = empty_config_snapshot();
+    config.revision = 1;
+    config
+        .providers
+        .insert(request.config.provider.clone(), request.config.clone());
+    editor.complete_connection(crate::config::openai::Reply {
+        id: request.id,
+        result: Ok((
+            config_choices(
+                &config,
+                &providers(),
+                TerminalSettings::default(),
+                StatusLineSettings::default(),
+            ),
+            None,
+        )),
+    });
+    for code in [KeyCode::Esc, KeyCode::Esc, KeyCode::Enter] {
+        editor.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+    assert!(matches!(editor.page(), super::ConfigEditorPage::OpenAi(_)));
+    for _ in 0..2 {
+        editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
+    }
+    editor.handle_paste(" renamed".into());
+    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(renamed)) =
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected existing connection edit")
+    };
+    assert_eq!(renamed.config.provider, request.config.provider);
+    assert_eq!(renamed.revision, 1);
 }

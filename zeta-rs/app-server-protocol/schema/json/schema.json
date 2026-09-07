@@ -200,6 +200,22 @@
       "oneOf": [
         {
           "properties": {
+            "loginId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "connected",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "loginId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "authorizationUrl": {
               "type": "string"
             },
@@ -4328,6 +4344,22 @@
         {
           "properties": {
             "method": {
+              "const": "provider/models/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProviderModelsListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "provider/apiKey/set",
               "type": "string"
             },
@@ -6752,7 +6784,7 @@
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/SessionDirMutationResult"
+              "$ref": "#/$defs/SessionDirAddResult"
             }
           },
           "required": [
@@ -8257,6 +8289,22 @@
             },
             "result": {
               "$ref": "#/$defs/ProviderListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "provider/models/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ModelListResult"
             }
           },
           "required": [
@@ -12553,6 +12601,29 @@
         "validationProfile",
         "permissionPolicy",
         "coordinationPolicy"
+      ],
+      "type": "string"
+    },
+    "CustomProviderConfigDto": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/CustomProviderProtocolDto"
+        }
+      },
+      "required": [
+        "name",
+        "protocol"
+      ],
+      "type": "object"
+    },
+    "CustomProviderProtocolDto": {
+      "enum": [
+        "responses",
+        "chatCompletions"
       ],
       "type": "string"
     },
@@ -23749,6 +23820,16 @@
             "null"
           ]
         },
+        "custom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CustomProviderConfigDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "maxOutputTokens": {
           "format": "uint32",
           "minimum": 0,
@@ -23809,6 +23890,17 @@
       },
       "required": [
         "providers"
+      ],
+      "type": "object"
+    },
+    "ProviderModelsListParams": {
+      "properties": {
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider"
       ],
       "type": "object"
     },
@@ -24829,6 +24921,35 @@
         "sessionId",
         "path",
         "permissions"
+      ],
+      "type": "object"
+    },
+    "SessionDirAddResult": {
+      "properties": {
+        "dirs": {
+          "items": {
+            "$ref": "#/$defs/SessionDirDto"
+          },
+          "type": "array"
+        },
+        "mutation": {
+          "$ref": "#/$defs/SessionDirMutationDto"
+        },
+        "path": {
+          "description": "Canonical path resolved by the server, including for an existing directory.",
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "mutation",
+        "revision",
+        "dirs"
       ],
       "type": "object"
     },
@@ -33009,35 +33130,6 @@
           "type": "object"
         }
       ]
-    },
-    "SessionDirAddResult": {
-      "properties": {
-        "dirs": {
-          "items": {
-            "$ref": "#/$defs/SessionDirDto"
-          },
-          "type": "array"
-        },
-        "mutation": {
-          "$ref": "#/$defs/SessionDirMutationDto"
-        },
-        "path": {
-          "description": "Canonical path resolved by the server, including for an existing directory.",
-          "type": "string"
-        },
-        "revision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "path",
-        "mutation",
-        "revision",
-        "dirs"
-      ],
-      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

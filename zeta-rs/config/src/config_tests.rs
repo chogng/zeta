@@ -154,6 +154,45 @@ fn configure_provider(store: &ConfigStore, revision: u64, provider: &str) -> Con
         .unwrap()
 }
 
+#[test]
+fn custom_provider_survives_restart_and_rejects_stale_update() {
+    let path = config_path("custom-provider");
+    let store = ConfigStore::open(&path).unwrap();
+    let mut config = ModelProviderConfig::new(provider_id("custom-test"));
+    config.base_url = Some("https://example.test/v1".into());
+    config.custom = Some(zeta_model_provider_config::CustomProviderConfig {
+        name: "Example".into(),
+        protocol: zeta_model_provider_config::CustomProviderProtocol::Responses,
+    });
+    let command = |id: &str, config: ModelProviderConfig| ConfigCommandRequest {
+        command_id: CommandId::new(id).unwrap(),
+        expected_revision: ConfigRevision::INITIAL,
+        command: UserConfigCommand::ConfigureProvider {
+            provider: config.provider.clone(),
+            config,
+        },
+    };
+    store.apply(command("create", config.clone())).unwrap();
+    let mut changed = config.clone();
+    changed.custom.as_mut().unwrap().protocol =
+        zeta_model_provider_config::CustomProviderProtocol::ChatCompletions;
+    assert!(store.apply(command("stale", changed)).is_err());
+    drop(store);
+    let reopened = ConfigStore::open(&path).unwrap();
+    assert_eq!(
+        reopened
+            .read_snapshot()
+            .unwrap()
+            .values
+            .providers
+            .get(&config.provider),
+        Some(&config)
+    );
+    assert!(!persisted_config_document(&path).contains("api_key"));
+    drop(reopened);
+    remove_config_files(&path);
+}
+
 fn update_preferences(
     command_id: &str,
     revision: u64,
@@ -184,11 +223,11 @@ fn unversioned_config_is_migrated_and_rewritten_once() {
     let document_path = database_path.with_extension("toml");
     let trusted_dir = database_path.with_extension("trusted-dir");
     std::fs::create_dir(&trusted_dir).unwrap();
-    let trusted_path = std::fs::canonicalize(&trusted_dir).unwrap();
+    let trusted_path = zeta_file_access::Dir::open_local(&trusted_dir).unwrap().canonical_path().to_path_buf();
     let trusted = crate::document_migration::legacy_id_for_path(&trusted_path);
     let mismatched_dir = database_path.with_extension("mismatched-dir");
     std::fs::create_dir(&mismatched_dir).unwrap();
-    let mismatched_path = std::fs::canonicalize(&mismatched_dir).unwrap();
+    let mismatched_path = zeta_file_access::Dir::open_local(&mismatched_dir).unwrap().canonical_path().to_path_buf();
     let mismatched = format!("sha256:{}", "56".repeat(32));
     let restricted = format!("sha256:{}", "34".repeat(32));
     std::fs::write(
@@ -207,12 +246,12 @@ type = "disabled"
 "{restricted}" = "restricted"
 
 [workspaceTrust.rootPaths]
-"{trusted}" = "{}"
-"{mismatched}" = "{}"
+"{trusted}" = {}
+"{mismatched}" = {}
 "{restricted}" = "/tmp/restricted"
 "#,
-            trusted_path.display(),
-            mismatched_path.display()
+            toml::Value::String(trusted_path.to_string_lossy().into_owned()),
+            toml::Value::String(mismatched_path.to_string_lossy().into_owned())
         ),
     )
     .unwrap();
@@ -1105,6 +1144,7 @@ fn provider_entries_validate_their_key_and_static_settings() {
             command: UserConfigCommand::ConfigureProvider {
                 provider: provider_id("openai"),
                 config: ModelProviderConfig {
+                    custom: None,
                     provider: provider_id("anthropic"),
                     base_url: Some("file:///tmp/provider".into()),
                     max_output_tokens: Some(0),

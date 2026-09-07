@@ -1362,6 +1362,42 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
 
 struct OllamaCatalogClient;
 
+#[test]
+fn custom_provider_catalog_fetch_is_explicit_and_feeds_model_selection() {
+    struct Client { calls: std::sync::atomic::AtomicUsize }
+    impl OperationClient for Client {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            assert_eq!(request.url(), "https://example.test/v1/models");
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(ClientResponse::new(200, vec![], br#"{"data":[{"id":"custom-model"}]}"#.to_vec()))
+        }
+    }
+    let path = config_path("custom-model-catalog");
+    let config = Arc::new(ConfigStore::open(&path).unwrap());
+    let provider = ProviderId::new("custom-example").unwrap();
+    let mut connection = ModelProviderConfig::new(provider.clone());
+    connection.base_url = Some("https://example.test/v1".into());
+    connection.custom = Some(zeta_model_provider_config::CustomProviderConfig { name: "Example".into(), protocol: zeta_model_provider_config::CustomProviderProtocol::Responses });
+    config.apply(ConfigCommandRequest { command_id: CommandId::new("create-custom").unwrap(), expected_revision: ConfigRevision::INITIAL, command: UserConfigCommand::ConfigureProvider { provider: provider.clone(), config: connection } }).unwrap();
+    let client = Arc::new(Client { calls: std::sync::atomic::AtomicUsize::new(0) });
+    let provider_configs = ProviderConfigRegistry::builtin();
+    let catalog_provider = Arc::new(ModelProviderRuntime::with_client(provider_configs.clone(), client.clone()));
+    let model = ConfigBackedModelService {
+        config, dir_config: None, provider_configs, models_manager: catalog_provider.models_manager(), catalog_provider,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(RecordingSnapshotResolver { gate: Arc::new(ResponseGate::default()) }),
+    };
+    assert!(!model.list().unwrap().iter().any(|entry| entry.model.provider == provider));
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let fetched = model.refresh(&provider).unwrap();
+    assert_eq!(fetched.len(), 1);
+    assert_eq!(fetched[0].model.model.as_str(), "custom-model");
+    assert!(model.list().unwrap().iter().any(|entry| entry.model.provider == provider && entry.model.model.as_str() == "custom-model"));
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    drop(model);
+    remove_config_files(&path);
+}
+
 impl OperationClient for OllamaCatalogClient {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
         let body = match request.url() {

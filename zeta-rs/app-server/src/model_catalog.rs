@@ -9,6 +9,12 @@ use zeta_protocol::ModelRef;
 /// Runtime configuration, authentication, entitlement, rate limits, and transport are checked by the
 /// selected Turn backend and become errors on that Turn.
 pub(crate) trait ModelCatalog: Send + Sync {
+    fn refresh(
+        &self,
+        _provider: &zeta_protocol::ProviderId,
+    ) -> Result<Vec<ModelCatalogEntry>, CoreError> {
+        Err(CoreError::Model("Model discovery is unavailable".into()))
+    }
     fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError>;
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError>;
 }

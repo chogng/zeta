@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 1 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 28 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 3 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:0be008d6b8f6ffce4ff7b1e665f1e8be8991ef70dbe95781a3371734f9656b7d" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:013946c0cab6cd0678dcb6e2898df998ae535456a18f6d1a9b65a9ec671232ca" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -21,7 +21,7 @@ export type AccountLoginCompletionStatusDto = { "type": "succeeded" } | { "type"
 export type AccountLoginFailureDto = { code: string, message: string, };
 export type AccountLoginMethodDto = { "type": "openAiChatGptBrowser" } | { "type": "openAiChatGptDeviceCode" } | { "type": "kimiDeviceCode" };
 export type AccountLoginStartParams = { method: AccountLoginMethodDto, };
-export type AccountLoginStartResult = { "type": "browser", loginId: string, authorizationUrl: string, } | { "type": "deviceCode", loginId: string, verificationUrl: string, userCode: string, };
+export type AccountLoginStartResult = { "type": "connected", loginId: string, } | { "type": "browser", loginId: string, authorizationUrl: string, } | { "type": "deviceCode", loginId: string, verificationUrl: string, userCode: string, };
 export type AccountLogoutResult = { status: AccountLogoutStatusDto, };
 export type AccountLogoutParams = { provider: string, };
 export type AccountLogoutStatusDto = "loggedOut" | "alreadyLoggedOut";
@@ -195,7 +195,9 @@ export type CodebaseConfigDto = { models?: CodebaseModelsDto | null, automaticCo
 export type ApprovalReviewModelSelection = { "type": "automatic" } | { "type": "explicit", model: ModelRef, };
 export type AgentGrepBackendDto = "ripgrep" | "fastRegex";
 export type ModelContextConfigDto = { contextWindow: number, autoCompactTokenLimit?: number | null, };
-export type ProviderConfigDto = { provider: string, baseUrl?: string | null, maxOutputTokens?: number | null, modelContext?: { [key in string]: ModelContextConfigDto }, };
+export type CustomProviderConfigDto = { name: string, protocol: CustomProviderProtocolDto, };
+export type CustomProviderProtocolDto = "responses" | "chatCompletions";
+export type ProviderConfigDto = { provider: string, custom?: CustomProviderConfigDto | null, baseUrl?: string | null, maxOutputTokens?: number | null, modelContext?: { [key in string]: ModelContextConfigDto }, };
 export type McpCredentialBindingDto = { "type": "unauthenticated" } | { "type": "reference", credentialRef: string, };
 export type McpServerEnablementDto = "disabled" | "enabled";
 export type McpTransportDto = { "type": "stdio", command: string, args: Array<string>, } | { "type": "streamableHttp", url: string, };
@@ -435,6 +437,7 @@ export type ProviderApiKeyDto = string;
 export type ProviderApiKeyPolicyDto = "unsupported" | "optional" | "required";
 export type ProviderApiKeySetParams = { provider: string, apiKey: ProviderApiKeyDto, };
 export type ProviderApiKeySetResult = { provider: string, apiKeyConfigured: boolean, };
+export type ProviderModelsListParams = { provider: string, };
 export type ProviderCatalogEntryDto = { provider: string, displayName: string, apiKeyPolicy: ProviderApiKeyPolicyDto, apiKeyConfigured: boolean, };
 export type ProviderListResult = { providers: Array<ProviderCatalogEntryDto>, };
 export type StableTurnErrorCode = "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "worktreeCaptureFailed";
@@ -1159,6 +1162,7 @@ export interface AppServerRequestMap {
   "plugin/uninstall": { params: PluginPackageCommandParams; response: PluginCommandResultDto };
   "model/list": { params: Record<string, never>; response: ModelListResult };
   "provider/list": { params: Record<string, never>; response: ProviderListResult };
+  "provider/models/list": { params: ProviderModelsListParams; response: ModelListResult };
   "provider/apiKey/set": { params: ProviderApiKeySetParams; response: ProviderApiKeySetResult };
   "account/read": { params: Record<string, never>; response: AccountReadResult };
   "account/login/start": { params: AccountLoginStartParams; response: AccountLoginStartResult };
@@ -1417,6 +1421,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "plugin/uninstall": { method: "plugin/uninstall" },
   "model/list": { method: "model/list" },
   "provider/list": { method: "provider/list" },
+  "provider/models/list": { method: "provider/models/list" },
   "provider/apiKey/set": { method: "provider/apiKey/set" },
   "account/read": { method: "account/read" },
   "account/login/start": { method: "account/login/start" },

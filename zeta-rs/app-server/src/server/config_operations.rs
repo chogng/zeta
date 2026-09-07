@@ -984,6 +984,13 @@ fn approval_review_model_update_from_dto(
 fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
     ProviderConfigDto {
         provider: config.provider.to_string(),
+        custom: config.custom.map(|custom| zeta_app_server_protocol::protocol::config::CustomProviderConfigDto {
+            name: custom.name,
+            protocol: match custom.protocol {
+                zeta_model_provider_config::CustomProviderProtocol::Responses => zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
+                zeta_model_provider_config::CustomProviderProtocol::ChatCompletions => zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::ChatCompletions,
+            },
+        }),
         base_url: config.base_url,
         max_output_tokens: config.max_output_tokens,
         model_context: config
@@ -1018,6 +1025,13 @@ fn provider_config_from_dto(config: ProviderConfigDto) -> Result<ModelProviderCo
         })
         .collect::<Result<_, RpcError>>()?;
     Ok(ModelProviderConfig {
+        custom: config.custom.map(|custom| zeta_model_provider_config::CustomProviderConfig {
+            name: custom.name,
+            protocol: match custom.protocol {
+                zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses => zeta_model_provider_config::CustomProviderProtocol::Responses,
+                zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::ChatCompletions => zeta_model_provider_config::CustomProviderProtocol::ChatCompletions,
+            },
+        }),
         provider: ProviderId::new(config.provider)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
         base_url: config.base_url,

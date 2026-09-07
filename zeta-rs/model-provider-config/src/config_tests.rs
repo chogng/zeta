@@ -7,6 +7,53 @@ fn provider_id(value: &str) -> ProviderId {
     ProviderId::new(value).unwrap()
 }
 
+#[test]
+fn custom_connections_validate_and_restore_protocol_without_shadowing_builtins() {
+    let mut first = ModelProviderConfig::new(provider_id("custom-one"));
+    first.custom = Some(CustomProviderConfig {
+        name: "One".into(),
+        protocol: CustomProviderProtocol::Responses,
+    });
+    first.base_url = Some("https://one.test/v1".into());
+    let encoded = serde_json::to_string(&first).unwrap();
+    let restored: ModelProviderConfig = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(restored, first);
+    let registry = ProviderConfigRegistry::builtin()
+        .with_configs([&restored])
+        .unwrap();
+    assert_eq!(
+        registry.normalize(&restored).unwrap().api_profile,
+        ApiProfile::OpenAiResponses
+    );
+    assert_eq!(
+        registry.get(&restored.provider).unwrap().api_key_policy,
+        ApiKeyPolicy::Optional
+    );
+    let mut second = first.clone();
+    second.provider = provider_id("custom-two");
+    assert!(
+        ProviderConfigRegistry::builtin()
+            .with_configs([&first, &second])
+            .is_err()
+    );
+    second.custom.as_mut().unwrap().name = "Two".into();
+    assert!(
+        ProviderConfigRegistry::builtin()
+            .with_configs([&first, &second])
+            .is_ok()
+    );
+    for url in [
+        "invalid",
+        "https://user:password@example.test/v1",
+        "https://example.test/v1?key=secret",
+    ] {
+        second.base_url = Some(url.into());
+        assert!(second.validate_static().is_err());
+    }
+    first.provider = provider_id("openai");
+    assert!(first.validate_static().is_err());
+}
+
 fn definition(id: &str, endpoint: EndpointPolicy) -> ProviderDefinition {
     ProviderDefinition::new(
         provider_id(id),
@@ -28,6 +75,7 @@ fn model_ref(provider: &str, model: &str) -> zeta_protocol::ModelRef {
 #[test]
 fn model_provider_config_is_serializable_and_has_a_schema() {
     let config = ModelProviderConfig {
+        custom: None,
         provider: provider_id("openai"),
         base_url: Some("https://example.test/v1".into()),
         max_output_tokens: Some(2048),
@@ -174,6 +222,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
     let registry = ProviderConfigRegistry::builtin();
     let openai = registry
         .normalize(&ModelProviderConfig {
+            custom: None,
             provider: provider_id("openai"),
             base_url: Some("https://proxy.test/v1".into()),
             max_output_tokens: None,
@@ -185,6 +234,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
         .unwrap();
     let google_override = registry
         .normalize(&ModelProviderConfig {
+            custom: None,
             provider: provider_id("google"),
             base_url: Some("https://proxy.test/v1/openai".into()),
             max_output_tokens: None,
@@ -333,6 +383,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 
     let normalized = registry
         .normalize(&ModelProviderConfig {
+            custom: None,
             provider: provider_id("custom"),
             base_url: Some(" https://runtime.test/v1/ ".into()),
             max_output_tokens: Some(512),
@@ -345,6 +396,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 #[test]
 fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     let invalid_url = ModelProviderConfig {
+        custom: None,
         provider: provider_id("custom"),
         base_url: Some("file:///tmp/provider".into()),
         max_output_tokens: None,
@@ -356,6 +408,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     ));
 
     let invalid_tokens = ModelProviderConfig {
+        custom: None,
         provider: provider_id("custom"),
         base_url: None,
         max_output_tokens: Some(0),
@@ -371,6 +424,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
 fn static_validation_rejects_zero_model_context_limits() {
     let model = ModelId::new("model").unwrap();
     let config = ModelProviderConfig {
+        custom: None,
         provider: provider_id("custom"),
         base_url: None,
         max_output_tokens: None,

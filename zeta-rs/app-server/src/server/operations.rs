@@ -282,6 +282,13 @@ impl AppServer {
         })
     }
 
+    pub(super) fn provider_models_list(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: zeta_app_server_protocol::protocol::provider::ProviderModelsListParams = decode(params)?;
+        let provider = zeta_protocol::ProviderId::new(params.provider)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        result(&ModelListResult { models: self.model_catalog.refresh(&provider).map_err(core_error)? })
+    }
+
     /// Routes one canonical mutation through the owning Session aggregate.
     pub(super) fn session_request(
         &self,

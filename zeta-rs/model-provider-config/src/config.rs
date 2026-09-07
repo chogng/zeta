@@ -25,6 +25,8 @@ pub struct ModelContextConfig {
 pub struct ModelProviderConfig {
     pub provider: ProviderId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom: Option<CustomProviderConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
@@ -36,6 +38,7 @@ impl ModelProviderConfig {
     pub fn new(provider: ProviderId) -> Self {
         Self {
             provider,
+            custom: None,
             base_url: None,
             max_output_tokens: None,
             model_context: BTreeMap::new(),
@@ -43,6 +46,9 @@ impl ModelProviderConfig {
     }
 
     pub fn validate_static(&self) -> Result<(), ProviderConfigError> {
+        if let Some(custom) = &self.custom {
+            custom.definition(self)?.validate()?;
+        }
         if self.max_output_tokens == Some(0) {
             return Err(ProviderConfigError::InvalidMaxOutputTokens(
                 self.provider.clone(),
@@ -66,6 +72,79 @@ impl ModelProviderConfig {
             }
         }
         Ok(())
+    }
+}
+
+/// User-defined OpenAI-compatible connection, independent of built-in provider identities.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CustomProviderConfig {
+    pub name: String,
+    pub protocol: CustomProviderProtocol,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CustomProviderProtocol {
+    Responses,
+    ChatCompletions,
+}
+
+impl CustomProviderConfig {
+    pub(crate) fn definition(
+        &self,
+        config: &ModelProviderConfig,
+    ) -> Result<crate::ProviderDefinition, ProviderConfigError> {
+        if !config.provider.as_str().starts_with("custom-")
+            && config.provider.as_str() != "openai-compatible"
+        {
+            return Err(ProviderConfigError::UnknownProvider(
+                config.provider.clone(),
+            ));
+        }
+        let base_url = config
+            .base_url
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| ProviderConfigError::MissingBaseUrl(config.provider.clone()))?;
+        let valid_url = url::Url::parse(base_url.trim()).is_ok_and(|url| {
+            matches!(url.scheme(), "http" | "https")
+                && url.host_str().is_some()
+                && url.username().is_empty()
+                && url.password().is_none()
+                && url.query().is_none()
+                && url.fragment().is_none()
+        });
+        if !valid_url {
+            return Err(ProviderConfigError::InvalidBaseUrl {
+                provider: config.provider.clone(),
+                base_url: base_url.into(),
+            });
+        }
+        if self.name.trim().is_empty()
+            || self.name.chars().count() > 80
+            || self.name.chars().any(char::is_control)
+        {
+            return Err(ProviderConfigError::InvalidProvider {
+                provider: config.provider.clone(),
+                message: "name must contain 1 to 80 characters without control characters".into(),
+            });
+        }
+        Ok(crate::ProviderDefinition::new(
+            config.provider.clone(),
+            self.name.trim(),
+            crate::ProviderAdapter::OpenAiCompatible,
+            match self.protocol {
+                CustomProviderProtocol::Responses => ApiProfile::OpenAiResponses,
+                CustomProviderProtocol::ChatCompletions => ApiProfile::OpenAiChatCompletions,
+            },
+            crate::EndpointPolicy::ProviderDefault {
+                base_url: base_url.into(),
+            },
+            crate::ModelCatalogPolicy::AllowUnlisted,
+        )
+        .with_api_key_policy(crate::ApiKeyPolicy::Optional)
+        .with_native_streaming())
     }
 }
 

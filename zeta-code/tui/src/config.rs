@@ -1,5 +1,5 @@
 mod editor;
-mod openai;
+pub(crate) mod openai;
 mod request;
 mod settings;
 mod subscription;
@@ -30,11 +30,11 @@ pub(crate) struct ConfigEditResult {
 
 /// A completed configuration operation delivered to the TUI state owner.
 pub(crate) enum Event {
+    Connection(openai::Reply),
     Subscription(SubscriptionEvent),
     SettingsReceived(TerminalSettings),
     Updated(ConfigEditResult),
     EditorOpened(ConfigChoices),
-    ProviderConfigured(ConfigChoices),
     ApiKeySaved {
         provider: String,
         choices: ConfigChoices,
@@ -43,10 +43,10 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    Connection(openai::Request),
     Subscription(SubscriptionCommand),
     OpenEditor,
     Edit(ConfigEdit),
     SetLanguageServerMode(LanguageServerEdit),
     SetProviderApiKey(ProviderApiKeyEdit),
-    ConfigureProvider(zeta_app_server_protocol::protocol::config::ProviderConfigureParams),
 }

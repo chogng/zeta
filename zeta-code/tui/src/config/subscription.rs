@@ -228,12 +228,6 @@ impl Subscription {
                     SubscriptionCommand::SignOut,
                 );
             }
-            add_action(
-                &mut items,
-                &mut actions,
-                "Refresh account",
-                SubscriptionCommand::Read,
-            );
         }
         ConfigChoices {
             model: ListSelectionModel::new(

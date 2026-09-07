@@ -26,12 +26,12 @@ pub(crate) struct ProviderApiKeyUpdate {
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
+            Self::Connection(_) => "zeta-tui-provider-connection",
             Self::Subscription(_) => "zeta-tui-chatgpt-account",
             Self::OpenEditor => "zeta-tui-read-config",
             Self::Edit(_) => "zeta-tui-set-config",
             Self::SetLanguageServerMode(_) => "zeta-tui-set-language-server-mode",
             Self::SetProviderApiKey(_) => "zeta-tui-set-provider-api-key",
-            Self::ConfigureProvider(_) => "zeta-tui-configure-provider",
         }
     }
 }
@@ -41,13 +41,10 @@ where
     T: JsonRpcTransport,
 {
     match command {
-        Command::ConfigureProvider(mut params) => {
-            params.command_id = new_command_id("provider");
-            client
-                .configure_provider(params)
-                .map_err(ConfigCommandError::from)
-                .and_then(|_| read_config_choices(client))
-                .map(Event::ProviderConfigured)
+        Command::Connection(request) => {
+            let id = request.id.clone();
+            let result = execute_connection(client, request);
+            return Ok(Event::Connection(super::openai::Reply { id, result }));
         }
         Command::Subscription(command) => Ok(Event::Subscription(super::subscription::execute(
             client, command,
@@ -65,6 +62,52 @@ where
         }
     }
     .map_err(|error| error.to_string())
+}
+
+fn execute_connection<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    request: super::openai::Request,
+) -> Result<(ConfigChoices, Option<Result<Vec<String>, String>>), String> {
+    let provider = request.config.provider.clone();
+    let current = client.read_config().map_err(|error| error.to_string())?;
+    if current.providers.get(&provider) != Some(&request.config) {
+        client
+            .configure_provider(
+                zeta_app_server_protocol::protocol::config::ProviderConfigureParams {
+                    command_id: request.id,
+                    expected_revision: request.revision,
+                    config: request.config,
+                },
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(key) = request.key {
+        let (provider, key) = key.into_parts();
+        client
+            .set_provider_api_key(ProviderApiKeySetRequest::new(provider, key))
+            .map_err(|error| format!("Provider settings saved; API key was not saved: {error}"))?;
+    }
+    let models = if request.operation == super::openai::Operation::FetchModels {
+        Some(
+            client
+                .list_provider_models(provider)
+                .map(|result| {
+                    result
+                        .models
+                        .into_iter()
+                        .map(|entry| entry.model.model.to_string())
+                        .collect()
+                })
+                .map_err(|error| error.to_string()),
+        )
+    } else {
+        None
+    };
+    Ok((
+        read_config_choices(client)
+            .map_err(|error| format!("Saved; could not refresh provider settings: {error}"))?,
+        models,
+    ))
 }
 
 pub(crate) fn read_config_choices<T>(

@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 schemars = { workspace = true }
 serde = { workspace = true }
+url = { workspace = true }
 zeta-protocol = { workspace = true }
 
 [dev-dependencies]

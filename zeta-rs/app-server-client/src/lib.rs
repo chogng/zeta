@@ -913,6 +913,16 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::ModelList, EmptyParams {})
     }
 
+    pub fn list_provider_models(
+        &mut self,
+        provider: String,
+    ) -> Result<ModelListResult, ClientError> {
+        self.call(
+            ClientMethod::ProviderModelsList,
+            zeta_app_server_protocol::protocol::provider::ProviderModelsListParams { provider },
+        )
+    }
+
     pub fn list_providers(&mut self) -> Result<ProviderListResult, ClientError> {
         self.call(ClientMethod::ProviderList, EmptyParams {})
     }

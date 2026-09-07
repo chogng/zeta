@@ -1,36 +1,4 @@
-use crate::protocol::memory::MemorySessionParams;
-use zeta_memory_diagnostics::MemoryProduct;
-use zeta_memory_diagnostics::MemoryStart;
-use zeta_memory_diagnostics::MemoryRole;
-use zeta_memory_diagnostics::MemoryOrigin;
-use zeta_memory_diagnostics::MemoryPhase;
-use zeta_memory_diagnostics::MemoryMetricKind;
-use zeta_memory_diagnostics::MemoryUnavailable;
-use zeta_memory_diagnostics::MemoryMetric;
-use zeta_memory_diagnostics::MemoryObservation;
-use zeta_memory_diagnostics::MemoryEvidence;
-use zeta_memory_diagnostics::MemoryStatus;
-use zeta_memory_diagnostics::MemoryFinding;
-use zeta_memory_diagnostics::MemorySample;
-use zeta_memory_diagnostics::MemoryTrend;
-use zeta_memory_diagnostics::MemoryTargetReport;
-use zeta_memory_diagnostics::MemoryReport;
 use crate::protocol::account::AccountDto;
-use crate::protocol::automation::AutomationListResult;
-use crate::protocol::automation::AutomationWriteParams;
-use crate::protocol::automation::AutomationDeleteParams;
-use crate::protocol::automation::AutomationRunParams;
-use crate::protocol::automation::AutomationRunsParams;
-use crate::protocol::automation::AutomationRunsResult;
-use crate::protocol::automation::AutomationStopParams;
-use zeta_protocol::Automation;
-use zeta_protocol::AutomationDefinition;
-use zeta_protocol::AutomationSchedule;
-use zeta_protocol::AutomationSession;
-use zeta_protocol::AutomationStatus;
-use zeta_protocol::AutomationRun;
-use zeta_protocol::AutomationRunStatus;
-use zeta_protocol::UnixMillis;
 use crate::protocol::account::AccountLoginCancelParams;
 use crate::protocol::account::AccountLoginCancelResult;
 use crate::protocol::account::AccountLoginCancelStatusDto;
@@ -54,6 +22,13 @@ use crate::protocol::attachments::AttachmentUploadStartParams;
 use crate::protocol::attachments::AttachmentUploadStartResult;
 use crate::protocol::attachments::AttachmentUploadWriteParams;
 use crate::protocol::attachments::AttachmentUploadWriteResult;
+use crate::protocol::automation::AutomationDeleteParams;
+use crate::protocol::automation::AutomationListResult;
+use crate::protocol::automation::AutomationRunParams;
+use crate::protocol::automation::AutomationRunsParams;
+use crate::protocol::automation::AutomationRunsResult;
+use crate::protocol::automation::AutomationStopParams;
+use crate::protocol::automation::AutomationWriteParams;
 use crate::protocol::browser::BrowserBinaryPayload;
 use crate::protocol::browser::BrowserCloseParams;
 use crate::protocol::browser::BrowserCreateParams;
@@ -174,6 +149,8 @@ use crate::protocol::config::PluginRequestEnablementDto;
 use crate::protocol::config::PluginRequestRemoveParams;
 use crate::protocol::config::PluginRequestSetEnablementParams;
 use crate::protocol::config::PluginRequestUpsertParams;
+use crate::protocol::config::CustomProviderConfigDto;
+use crate::protocol::config::CustomProviderProtocolDto;
 use crate::protocol::config::ProviderConfigDto;
 use crate::protocol::config::ProviderConfigureParams;
 use crate::protocol::config::ProviderRemoveParams;
@@ -506,6 +483,7 @@ use crate::protocol::mcp::McpServerRuntimeIntentResult;
 use crate::protocol::mcp::McpServerRuntimeStateDto;
 use crate::protocol::mcp::McpServerStatusDto;
 use crate::protocol::mcp::McpServerStatusResult;
+use crate::protocol::memory::MemorySessionParams;
 use crate::protocol::model::ModelCatalogEntry;
 use crate::protocol::model::ModelListResult;
 use crate::protocol::notification::ThreadTranscriptUpdateEnvelope;
@@ -541,6 +519,7 @@ use crate::protocol::provider::ProviderApiKeySetParams;
 use crate::protocol::provider::ProviderApiKeySetResult;
 use crate::protocol::provider::ProviderCatalogEntryDto;
 use crate::protocol::provider::ProviderListResult;
+use crate::protocol::provider::ProviderModelsListParams;
 use crate::protocol::resources::ResourceMetadataParams;
 use crate::protocol::resources::ResourceMetadataResult;
 use crate::protocol::resources::ResourceReadParams;
@@ -738,6 +717,22 @@ use ts_rs::Config;
 use ts_rs::TS;
 use zeta_environment::EnvId;
 use zeta_file_access::DirId;
+use zeta_memory_diagnostics::MemoryEvidence;
+use zeta_memory_diagnostics::MemoryFinding;
+use zeta_memory_diagnostics::MemoryMetric;
+use zeta_memory_diagnostics::MemoryMetricKind;
+use zeta_memory_diagnostics::MemoryObservation;
+use zeta_memory_diagnostics::MemoryOrigin;
+use zeta_memory_diagnostics::MemoryPhase;
+use zeta_memory_diagnostics::MemoryProduct;
+use zeta_memory_diagnostics::MemoryReport;
+use zeta_memory_diagnostics::MemoryRole;
+use zeta_memory_diagnostics::MemorySample;
+use zeta_memory_diagnostics::MemoryStart;
+use zeta_memory_diagnostics::MemoryStatus;
+use zeta_memory_diagnostics::MemoryTargetReport;
+use zeta_memory_diagnostics::MemoryTrend;
+use zeta_memory_diagnostics::MemoryUnavailable;
 use zeta_protocol::ActionApprovalCapability;
 use zeta_protocol::ActionApprovalCapabilityKind;
 use zeta_protocol::ActionApprovalDecision;
@@ -767,6 +762,13 @@ use zeta_protocol::AgentTreeNodeProjection;
 use zeta_protocol::AgentTreeProjection;
 use zeta_protocol::AgentTreeWaitingReason;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::Automation;
+use zeta_protocol::AutomationDefinition;
+use zeta_protocol::AutomationRun;
+use zeta_protocol::AutomationRunStatus;
+use zeta_protocol::AutomationSchedule;
+use zeta_protocol::AutomationSession;
+use zeta_protocol::AutomationStatus;
 use zeta_protocol::CapabilitySupport;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ContentPart;
@@ -870,6 +872,7 @@ use zeta_protocol::TurnInstructions;
 use zeta_protocol::TurnInteraction;
 use zeta_protocol::TurnKind;
 use zeta_protocol::TurnStatus;
+use zeta_protocol::UnixMillis;
 use zeta_protocol::UserInputAnswer;
 use zeta_protocol::UserInputOption;
 use zeta_protocol::UserInputQuestion;
@@ -1259,7 +1262,7 @@ client_methods! {
     },
     SessionDirAdd => "session/dirs/add" {
         params: SessionDirAddParams,
-        response: SessionDirMutationResult,
+        response: SessionDirAddResult,
         serialization: SessionExclusive,
     },
     SessionDirRemove => "session/dirs/remove" {
@@ -1730,6 +1733,11 @@ client_methods! {
     ProviderList => "provider/list" {
         params: EmptyParams,
         response: ProviderListResult,
+        serialization: GlobalSharedRead,
+    },
+    ProviderModelsList => "provider/models/list" {
+        params: ProviderModelsListParams,
+        response: ModelListResult,
         serialization: GlobalSharedRead,
     },
     ProviderApiKeySet => "provider/apiKey/set" {
@@ -2888,6 +2896,8 @@ typescript_bindings! {
     ApprovalReviewModelSelectionDto,
     AgentGrepBackendDto,
     ModelContextConfigDto,
+    CustomProviderConfigDto,
+    CustomProviderProtocolDto,
     ProviderConfigDto,
     McpCredentialBindingDto,
     McpServerEnablementDto,
@@ -3108,6 +3118,7 @@ typescript_bindings! {
     ProviderApiKeyPolicyDto,
     ProviderApiKeySetParams,
     ProviderApiKeySetResult,
+    ProviderModelsListParams,
     ProviderCatalogEntryDto,
     ProviderListResult,
     StableTurnErrorCode,

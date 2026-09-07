@@ -1703,14 +1703,13 @@ fn openai_panel_renders_connection_choices_and_masked_key_in_terminal_output() {
     }
     for width in [60, 100] {
         let output = render(&app, width, 30);
-        for label in ["OpenAI API key", "Custom base URL", "Custom API key", "ChatGPT subscription"] {
+        for label in ["Official API key", "Base URL (read-only)", "API key", "ChatGPT subscription", "New custom provider"] {
             assert!(output.contains(label), "missing {label} at width {width}: {output}");
         }
     }
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_paste("never-display-this-key".into());
     let output = render(&app, 100, 30);
-    assert!(output.contains("OpenAI API key"));
+    assert!(output.contains("Official API key"));
     assert!(!output.contains("never-display-this-key"));
 }
 

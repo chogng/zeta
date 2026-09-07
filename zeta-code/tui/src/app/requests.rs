@@ -135,7 +135,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | ConfigCommand::Subscription(_)
             | ConfigCommand::Edit(_)
             | ConfigCommand::SetLanguageServerMode(_)
-            | ConfigCommand::ConfigureProvider(_)
+            | ConfigCommand::Connection(_)
             | ConfigCommand::SetProviderApiKey(_),
         )
         | AppCommand::Theme(

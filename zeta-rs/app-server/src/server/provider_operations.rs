@@ -14,11 +14,26 @@ use zeta_model_provider_config::ApiKeyPolicy;
 use zeta_model_provider_config::ProviderId;
 
 impl AppServer {
-    pub(super) fn provider_list(&self) -> Result<Value, RpcError> {
-        let providers = self
+    fn configured_credentials(
+        &self,
+    ) -> Result<zeta_model_provider::ProviderCredentialService, RpcError> {
+        let credentials = self
             .provider_credentials
             .as_ref()
-            .ok_or_else(provider_credentials_unavailable)?
+            .ok_or_else(provider_credentials_unavailable)?;
+        let Some(store) = &self.config else {
+            return Ok(credentials.as_ref().clone());
+        };
+        let config = store
+            .read_snapshot()
+            .map_err(|_| provider_credentials_unavailable())?;
+        credentials
+            .with_configs(config.values.providers.values())
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
+    }
+    pub(super) fn provider_list(&self) -> Result<Value, RpcError> {
+        let providers = self
+            .configured_credentials()?
             .catalog()
             .map_err(provider_credential_error)?;
         let providers = providers
@@ -37,9 +52,7 @@ impl AppServer {
         let params: ProviderApiKeySetParams = decode(&params)?;
         let provider = ProviderId::new(params.provider)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-        self.provider_credentials
-            .as_ref()
-            .ok_or_else(provider_credentials_unavailable)?
+        self.configured_credentials()?
             .set_api_key(&provider, params.api_key.into_bytes())
             .map_err(provider_credential_error)?;
         result(&ProviderApiKeySetResult {

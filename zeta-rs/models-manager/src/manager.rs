@@ -58,12 +58,23 @@ pub struct ModelsManager {
 
 struct ModelsManagerInner {
     providers: ProviderConfigRegistry,
-    scopes: RwLock<BTreeMap<CatalogScopeKey, Arc<ManagedScope>>>,
+    scopes: Arc<RwLock<BTreeMap<CatalogScopeKey, Arc<ManagedScope>>>>,
     freshness: CatalogFreshnessPolicy,
     clock: Arc<dyn Clock>,
 }
 
 impl ModelsManager {
+    /// Uses a new definition snapshot while retaining endpoint-scoped discovery results.
+    pub fn with_registry(&self, providers: ProviderConfigRegistry) -> Self {
+        Self {
+            inner: Arc::new(ModelsManagerInner {
+                providers,
+                scopes: Arc::clone(&self.inner.scopes),
+                freshness: self.inner.freshness.clone(),
+                clock: Arc::clone(&self.inner.clock),
+            }),
+        }
+    }
     pub fn new(providers: ProviderConfigRegistry) -> Self {
         Self::with_policy_and_clock(
             providers,
@@ -270,7 +281,7 @@ impl ModelsManager {
         Self {
             inner: Arc::new(ModelsManagerInner {
                 providers,
-                scopes: RwLock::new(BTreeMap::new()),
+                scopes: Arc::new(RwLock::new(BTreeMap::new())),
                 freshness,
                 clock,
             }),
@@ -290,15 +301,15 @@ impl ModelsManager {
         &self,
         scope: &CatalogScopeKey,
     ) -> Result<Arc<ManagedScope>, ModelsManagerError> {
-        if let Some(managed) = read_lock(&self.inner.scopes).get(scope) {
-            return Ok(managed.clone());
-        }
         let definition = self
             .inner
             .providers
             .get(scope.provider())
             .cloned()
             .ok_or_else(|| ModelsManagerError::UnknownProvider(scope.provider().clone()))?;
+        if let Some(managed) = read_lock(&self.inner.scopes).get(scope) {
+            return Ok(managed.clone());
+        }
         let managed = Arc::new(ManagedScope::new(definition, scope));
         let mut scopes = write_lock(&self.inner.scopes);
         Ok(scopes

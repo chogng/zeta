@@ -158,6 +158,9 @@ pub struct UserConfigDocument {
 
 impl UserConfigDocument {
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
+        ProviderConfigRegistry::new()
+            .with_configs(self.providers.values())
+            .map_err(provider_config_error)?;
         for (provider_id, provider) in &self.providers {
             if provider.provider != *provider_id {
                 return Err(ConfigError(format!(
@@ -291,6 +294,9 @@ impl ResolvedConfig {
         &self,
         registry: &ProviderConfigRegistry,
     ) -> Result<ModelRef, ConfigError> {
+        let registry = registry
+            .with_configs(self.providers.values())
+            .map_err(provider_config_error)?;
         let model = match &self.approval_review_model {
             ApprovalReviewModelSelection::Automatic => {
                 let active_model = self.preferred_model.as_ref().ok_or_else(|| {

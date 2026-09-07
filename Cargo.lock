@@ -11953,6 +11953,7 @@ name = "zeta-model-provider"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
@@ -11980,6 +11981,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "url",
  "zeta-protocol",
 ]
 
@@ -12505,6 +12507,7 @@ dependencies = [
  "syntect",
  "tempfile",
  "unicode-width 0.2.0",
+ "url",
  "windows-sys 0.59.0",
  "zeroize",
  "zeta-ansi-escape",

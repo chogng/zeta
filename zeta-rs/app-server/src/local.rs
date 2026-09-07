@@ -1833,12 +1833,59 @@ impl ModelService for ConfigBackedModelService {
 }
 
 impl ModelCatalog for ConfigBackedModelService {
+    fn refresh(
+        &self,
+        provider: &zeta_protocol::ProviderId,
+    ) -> Result<Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
+        let config = self.resolved_config()?;
+        let connection = config.providers.get(provider).cloned().unwrap_or_else(|| {
+            zeta_model_provider_config::ModelProviderConfig::new(provider.clone())
+        });
+        let registry = self
+            .provider_configs
+            .with_configs(config.providers.values())
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        let manager = self.models_manager.with_registry(registry.clone());
+        let binding = self
+            .catalog_provider
+            .catalog_binding(&connection)
+            .map_err(|error| CoreError::Model(error.to_string()))?
+            .ok_or_else(|| {
+                CoreError::Model("This provider does not support model discovery".into())
+            })?;
+        self.catalog_runtime
+            .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        let definition = registry
+            .get(provider)
+            .ok_or_else(|| CoreError::Model("Unknown provider".into()))?;
+        manager
+            .list(&[binding.scope().clone()], &CatalogQuery::all())
+            .map_err(|error| CoreError::Model(error.to_string()))?
+            .into_iter()
+            .filter(|entry| entry.availability() == zeta_protocol::ModelAvailability::Available)
+            .map(|entry| {
+                runtime_catalog_entry(
+                    zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                        entry.model().clone(),
+                        entry.info(),
+                        definition.output_transport,
+                    ),
+                    &config,
+                )
+            })
+            .collect()
+    }
     fn list(
         &self,
     ) -> Result<Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         let config = self.resolved_config()?;
-        let mut scopes = self
+        let registry = self
             .provider_configs
+            .with_configs(config.providers.values())
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        let manager = self.models_manager.with_registry(registry.clone());
+        let mut scopes = registry
             .providers()
             .map(|provider| CatalogScopeKey::provider_seed(provider.id.clone()))
             .collect::<Vec<_>>();
@@ -1855,9 +1902,13 @@ impl ModelCatalog for ConfigBackedModelService {
                 }
             };
             let scope = binding.scope().clone();
-            if let Err(error) = self.catalog_runtime.block_on(self.models_manager.read(
+            if let Err(error) = self.catalog_runtime.block_on(manager.read(
                 scope.clone(),
-                zeta_models_manager::CatalogReadPolicy::CachePreferred,
+                if provider.provider.as_str() == "ollama" {
+                    zeta_models_manager::CatalogReadPolicy::CachePreferred
+                } else {
+                    zeta_models_manager::CatalogReadPolicy::CacheOnly
+                },
                 zeta_models_manager::CatalogReadSource::dynamic(binding.source()),
             )) {
                 log::warn!(
@@ -1870,10 +1921,11 @@ impl ModelCatalog for ConfigBackedModelService {
                 .find(|candidate| candidate.provider() == &provider.provider)
             {
                 *seed = scope;
+            } else {
+                scopes.push(scope);
             }
         }
-        let mut models = self
-            .models_manager
+        let mut models = manager
             .list(&scopes, &CatalogQuery::all())
             .map_err(|error| CoreError::Model(error.to_string()))?
             .into_iter()
@@ -1882,7 +1934,7 @@ impl ModelCatalog for ConfigBackedModelService {
                     zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                         entry.model().clone(),
                         entry.info(),
-                        self.provider_configs
+                        registry
                             .get(&entry.model().provider)
                             .expect("listed model provider came from the same registry")
                             .output_transport,
@@ -1894,13 +1946,11 @@ impl ModelCatalog for ConfigBackedModelService {
         if let Some(preferred) = config.preferred_model.clone()
             && !models.iter().any(|entry| entry.model == preferred)
         {
-            let output_transport = self
-                .provider_configs
+            let output_transport = registry
                 .get(&preferred.provider)
                 .expect("preferred model provider was validated against the same registry")
                 .output_transport;
-            let resolved = self
-                .models_manager
+            let resolved = manager
                 .resolve_static(&preferred, &ModelRequirements::agent())
                 .map_err(|error| CoreError::Model(error.to_string()))?;
             models.push(runtime_catalog_entry(
@@ -1977,7 +2027,9 @@ fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, C
     let Some(provider_config) = config.providers.get(&model_ref.provider) else {
         return Ok(ContextBudget::provider_managed());
     };
-    let registry = ProviderConfigRegistry::builtin();
+    let registry = ProviderConfigRegistry::builtin()
+        .with_configs(config.providers.values())
+        .map_err(|error| CoreError::Model(error.to_string()))?;
     let Some(definition) = registry.get(&model_ref.provider) else {
         return Ok(ContextBudget::provider_managed());
     };

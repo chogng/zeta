@@ -75,6 +75,29 @@ impl ProviderConfigRegistry {
         self.providers.get(provider)
     }
 
+    /// Resolves user-defined connections into one immutable registry snapshot.
+    pub fn with_configs<'a>(
+        &self,
+        configs: impl IntoIterator<Item = &'a ModelProviderConfig>,
+    ) -> Result<Self, ProviderConfigError> {
+        let mut registry = self.clone();
+        let mut names = std::collections::BTreeSet::new();
+        for config in configs {
+            if let Some(custom) = &config.custom {
+                config.validate_static()?;
+                if !names.insert(custom.name.trim().to_lowercase()) {
+                    return Err(ProviderConfigError::DuplicateProvider(
+                        config.provider.clone(),
+                    ));
+                }
+                registry
+                    .providers
+                    .insert(config.provider.clone(), custom.definition(config)?);
+            }
+        }
+        Ok(registry)
+    }
+
     pub fn providers(&self) -> impl Iterator<Item = &ProviderDefinition> {
         self.providers.values()
     }

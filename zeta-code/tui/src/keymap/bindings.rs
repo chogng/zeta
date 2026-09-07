@@ -561,6 +561,16 @@ pub(crate) const LAST: Keybinding =
 
 // Each list panel declares its activation here, so changing one panel is local.
 pub(crate) const CONFIG_CHANGE: Keybinding = Keybinding::new(ENTER_SPACE, "change");
+pub(crate) const PROVIDER_CONFIRM: Keybinding = Keybinding::new(ENTER, "confirm & next");
+pub(crate) const PROVIDER_EDIT: Keybinding = Keybinding::new(ENTER, "edit");
+pub(crate) const PROVIDER_CREATE: Keybinding = Keybinding::new(ENTER, "create provider");
+pub(crate) const PROVIDER_FETCH_MODELS: Keybinding = Keybinding::new(ENTER, "fetch models");
+pub(crate) const PROVIDER_NEXT_FIELD: Keybinding = Keybinding::new(&[(NONE, KeyCode::Tab)], "next field");
+pub(crate) const PROVIDER_SWITCH_TABS: Keybinding = Keybinding::new(&[(KeyModifiers::ALT, KeyCode::Left), (KeyModifiers::ALT, KeyCode::Right)], "switch tabs");
+pub(crate) const PROVIDER_TAB_ARROWS: Keybinding = Keybinding::new(&[(NONE, KeyCode::Left), (NONE, KeyCode::Right)], "switch tabs");
+pub(crate) const PROVIDER_ENTER_TAB: Keybinding = Keybinding::new(ENTER, "enter tab");
+pub(crate) const PROVIDER_RETURN_TABS: Keybinding = Keybinding::new(ESC, "return to tabs");
+pub(crate) const PROVIDER_RETURN: Keybinding = Keybinding::new(ESC, "return to Providers");
 pub(crate) const DIR_ADD: Keybinding = Keybinding::new(ENTER, "add");
 pub(crate) const DIR_INPUT: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Char('/'))], "add directory");

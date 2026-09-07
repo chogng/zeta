@@ -28,6 +28,12 @@ pub struct ProviderListResult {
     pub providers: Vec<ProviderCatalogEntryDto>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelsListParams {
+    pub provider: String,
+}
+
 /// Inbound-only provider API key that redacts diagnostics and clears its allocation on drop.
 #[derive(Deserialize, Eq, JsonSchema, PartialEq, TS)]
 #[serde(transparent)]

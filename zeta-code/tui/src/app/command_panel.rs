@@ -66,6 +66,7 @@ pub(crate) enum CommandPanelPointerTarget {
 enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
     Prompt(&'a TextPrompt),
+    OpenAi(&'a crate::config::openai::Panel),
     KeyCapture(&'a KeyCapture),
     Status(&'a StatusPanel),
 }
@@ -324,6 +325,7 @@ impl CommandPanel {
             Self::Config(editor) => match editor.page() {
                 ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
                 ConfigEditorPage::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
+                ConfigEditorPage::OpenAi(panel) => CommandPanelBody::OpenAi(panel),
             },
             Self::Connectors(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Keymap(editor) => match editor.page() {
@@ -588,6 +590,7 @@ impl<'a> CommandPanelBody<'a> {
         match self {
             Self::Selection(selection) => selection.title(),
             Self::Prompt(prompt) => prompt.title(),
+            Self::OpenAi(_) => "OpenAI",
             Self::KeyCapture(capture) => capture.title(),
             Self::Status(panel) => panel.title(),
         }
@@ -597,6 +600,7 @@ impl<'a> CommandPanelBody<'a> {
         match self {
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
+            Self::OpenAi(panel) => panel.tab_rows(width),
             Self::Prompt(_) | Self::KeyCapture(_) => 0,
         }
     }
@@ -607,13 +611,14 @@ impl<'a> CommandPanelBody<'a> {
             Self::Prompt(prompt) => prompt.desired_height(),
             Self::KeyCapture(capture) => capture.desired_height(),
             Self::Status(panel) => panel.body_rows(width),
+            Self::OpenAi(panel) => panel.body_rows(),
         }
     }
 
     fn presentation_focus(self) -> Option<ratatui::style::Color> {
         match self {
             Self::Selection(selection) => selection.presentation_focus(),
-            Self::Prompt(_) | Self::KeyCapture(_) | Self::Status(_) => None,
+            Self::Prompt(_) | Self::KeyCapture(_) | Self::Status(_) | Self::OpenAi(_) => None,
         }
     }
 
@@ -630,6 +635,7 @@ impl<'a> CommandPanelBody<'a> {
                 list_selection::draw_tabs(frame, area, selection, hovered_tab, pressed_tab, context)
             }
             Self::Status(panel) => panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context),
+            Self::OpenAi(panel) => panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context),
             Self::Prompt(_) | Self::KeyCapture(_) => {}
         }
     }
@@ -656,6 +662,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
             Self::Status(panel) => panel.draw_body(frame, area, context),
+            Self::OpenAi(panel) => panel.draw_body(frame, area, context),
         }
     }
 
@@ -676,6 +683,14 @@ impl<'a> CommandPanelBody<'a> {
                 })
                 .or_else(|| {
                     selection
+                        .item_index_in(layout.body, column, row)
+                        .map(CommandPanelPointerTarget::Item)
+                }),
+            Self::OpenAi(panel) => panel
+                .tab_index_in(layout.tabs, column, row)
+                .map(CommandPanelPointerTarget::Tab)
+                .or_else(|| {
+                    panel
                         .item_index_in(layout.body, column, row)
                         .map(CommandPanelPointerTarget::Item)
                 }),

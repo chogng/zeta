@@ -257,6 +257,7 @@ fn provider_config_with_endpoint(
     base_url: impl Into<String>,
 ) -> ModelProviderConfig {
     ModelProviderConfig {
+        custom: None,
         provider: provider_id(provider),
         base_url: Some(base_url.into()),
         max_output_tokens: None,
@@ -284,6 +285,61 @@ fn responses_response(text: &str) -> Value {
             "content": [{"type": "output_text", "text": text}]
         }]
     })
+}
+
+#[test]
+fn custom_provider_uses_selected_protocol_and_isolated_credentials() {
+    use zeta_model_provider_config::CustomProviderConfig;
+    use zeta_model_provider_config::CustomProviderProtocol;
+    for (protocol, path, response) in [
+        (
+            CustomProviderProtocol::Responses,
+            "responses",
+            responses_response("responses result"),
+        ),
+        (
+            CustomProviderProtocol::ChatCompletions,
+            "chat/completions",
+            completion_response("chat result"),
+        ),
+    ] {
+        let mut config = ModelProviderConfig::new(provider_id("custom-test"));
+        config.custom = Some(CustomProviderConfig {
+            name: "My service".into(),
+            protocol,
+        });
+        config.base_url = Some("https://custom.test/v1".into());
+        let secrets = Arc::new(MemorySecretStore::default());
+        let credentials = crate::ProviderCredentialService::new(
+            ProviderConfigRegistry::builtin()
+                .with_configs([&config])
+                .unwrap(),
+            secrets.clone(),
+        );
+        credentials
+            .set_api_key(&config.provider, b"custom-key".to_vec())
+            .unwrap();
+        credentials
+            .set_api_key(&provider_id("openai"), b"official-key".to_vec())
+            .unwrap();
+        let client = Arc::new(CapturingTransport::new(response));
+        let runtime = ModelProviderRuntime::with_client_and_secrets(
+            ProviderConfigRegistry::builtin(),
+            client.clone(),
+            secrets,
+        );
+        let model = runtime
+            .build_model(&config, &model_ref("custom-test", "test-model"))
+            .unwrap();
+        assert!(!invoke_text(model.as_ref(), "hello").is_empty());
+        let request = client.request.lock().unwrap();
+        let (url, headers, _) = request.as_ref().unwrap();
+        assert_eq!(url, &format!("https://custom.test/v1/{path}"));
+        assert_eq!(
+            headers,
+            &vec![HttpHeader::new("Authorization", "Bearer custom-key")]
+        );
+    }
 }
 
 fn invoke_text(model: &dyn ModelInvoker, prompt: &str) -> String {
@@ -1100,7 +1156,12 @@ fn runtime_accepts_structured_tool_requests() {
     request.tools.push(ToolDefinition {
         name: ToolName::new("weather").expect("test tool name is valid"),
         description: "Get weather".into(),
-        parameters: json!({"type": "object"}),
+        parameters: json!({
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+            "additionalProperties": false
+        }),
         strict: true,
     });
     let response = runtime

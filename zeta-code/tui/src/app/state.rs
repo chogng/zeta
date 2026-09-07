@@ -673,11 +673,11 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(
+                request,
+            )) => Some(ConfigCommand::Connection(request).into()),
             crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::ConfigureProvider(params),
-            ) => Some(ConfigCommand::ConfigureProvider(params).into()),
-            crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::OpenOpenAi(_) | ConfigSelectionAction::OpenEndpoint(_),
+                ConfigSelectionAction::OpenOpenAi(_),
             ) => None,
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription) => {
                 self.chat_panel
@@ -1282,7 +1282,9 @@ impl App {
         &self.welcome
     }
 
-    pub(crate) fn memory_object_count(&self) -> usize { self.thread.cells().len() }
+    pub(crate) fn memory_object_count(&self) -> usize {
+        self.thread.cells().len()
+    }
 
     #[cfg(test)]
     pub(crate) fn status(&self) -> &Status {
@@ -1845,6 +1847,13 @@ impl App {
 
     fn apply_config_event(&mut self, event: ConfigEvent) {
         match event {
+            ConfigEvent::Connection(reply) => {
+                if let Err(error) = &reply.result {
+                    self.thread.update(ThreadPresentationEvent::NoticeReceived(format!("Provider update failed: {error}")));
+                }
+                self.chat_panel.complete_connection(reply);
+                self.status = Status::Ready;
+            }
             ConfigEvent::Subscription(event) => {
                 self.subscription.update(event);
                 self.chat_panel
@@ -1873,10 +1882,6 @@ impl App {
             }
             ConfigEvent::EditorOpened(view) => {
                 self.open_command_panel(CommandPanel::config(view));
-            }
-            ConfigEvent::ProviderConfigured(choices) => {
-                self.chat_panel.finish_config_prompt(choices);
-                self.status = Status::Ready;
             }
             ConfigEvent::ApiKeySaved { provider, choices } => {
                 self.chat_panel.finish_config_prompt(choices);
@@ -2470,7 +2475,10 @@ impl App {
         }
         if matches!(self.status, Status::Working)
             && invocation.origin == SlashCommandOrigin::Local
-            && !matches!(local, Some(TuiSlashCommandAction::Export | TuiSlashCommandAction::Memory))
+            && !matches!(
+                local,
+                Some(TuiSlashCommandAction::Export | TuiSlashCommandAction::Memory)
+            )
         {
             self.thread.update(ThreadPresentationEvent::CommandFailed {
                 command: invocation.display_text(),

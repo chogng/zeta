@@ -27,6 +27,7 @@ strum_macros = { workspace = true }
 syntect = { workspace = true }
 zeta-memory-diagnostics = { workspace = true }
 unicode-width = { workspace = true }
+url = { workspace = true }
 zeroize = { workspace = true }
 zeta-ansi-escape = { workspace = true }
 zeta-app-server-client = { workspace = true }

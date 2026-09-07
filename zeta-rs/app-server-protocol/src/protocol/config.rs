@@ -116,12 +116,29 @@ pub struct ProviderConfigDto {
     pub provider: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    pub custom: Option<CustomProviderConfigDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub base_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub max_output_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_context: BTreeMap<String, ModelContextConfigDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CustomProviderConfigDto {
+    pub name: String,
+    pub protocol: CustomProviderProtocolDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum CustomProviderProtocolDto {
+    Responses,
+    ChatCompletions,
 }
 
 /// Model-specific context limits used by Core's deterministic budget planner.

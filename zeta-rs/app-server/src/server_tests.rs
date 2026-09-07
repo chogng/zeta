@@ -275,6 +275,35 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
     );
 }
 
+#[test]
+fn custom_provider_rpc_round_trips_protocol_and_stores_a_separate_key() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Arc::new(ConfigStore::open(directory.path().join("config.sqlite3")).unwrap());
+    let server = server().with_config_store(store).with_provider_credentials(Arc::new(
+        zeta_model_provider::ProviderCredentialService::new(zeta_model_provider_config::ProviderConfigRegistry::builtin(), Arc::new(MemorySecretStore::default())),
+    ));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let configured = call(&server, &mut connection, serde_json::json!({
+        "jsonrpc":"2.0","id":2,"method":"provider/configure","params":{
+            "commandId":"create-custom","expectedRevision":0,"config":{
+                "provider":"custom-example","custom":{"name":"Example","protocol":"responses"},"baseUrl":"https://example.test/v1","modelContext":{}
+            }
+        }
+    }));
+    assert!(configured.get("error").is_none(), "{configured}");
+    let saved = call(&server, &mut connection, serde_json::json!({"jsonrpc":"2.0","id":3,"method":"provider/apiKey/set","params":{"provider":"custom-example","apiKey":"test-key"}}));
+    assert_eq!(saved["result"]["apiKeyConfigured"], true);
+    let catalog = call(&server, &mut connection, serde_json::json!({"jsonrpc":"2.0","id":4,"method":"provider/list","params":{}}));
+    let providers = catalog["result"]["providers"].as_array().unwrap();
+    assert!(providers.iter().any(|provider| provider["provider"] == "custom-example" && provider["displayName"] == "Example" && provider["apiKeyConfigured"] == true));
+    assert!(providers.iter().any(|provider| provider["provider"] == "openai" && provider["apiKeyConfigured"] == false));
+    assert!(!catalog.to_string().contains("test-key"));
+    let config = call(&server, &mut connection, serde_json::json!({"jsonrpc":"2.0","id":5,"method":"config/read","params":{}}));
+    assert_eq!(config["result"]["providers"]["custom-example"]["custom"]["protocol"], "responses");
+    assert!(!config.to_string().contains("test-key"));
+}
+
 fn call(
     server: &AppServer,
     connection: &mut ConnectionState,

@@ -1,0 +1,241 @@
+use super::*;
+use crate::config::TerminalSettings;
+use crate::status::StatusLineSettings;
+
+fn panel() -> Panel {
+    Panel::new(Settings::new(
+        &crate::test_support::empty_config_snapshot(),
+        &ProviderListResult {
+            providers: Vec::new(),
+        },
+    ))
+}
+fn key(panel: &mut Panel, code: KeyCode) -> ConfigEditorOutcome {
+    panel.handle_key(KeyEvent::new(code, KeyModifiers::NONE))
+}
+fn request(outcome: ConfigEditorOutcome) -> Request {
+    let ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) = outcome else {
+        panic!("expected connection request")
+    };
+    request
+}
+fn success(panel: &mut Panel, request: &Request) {
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.revision = request.revision + 1;
+    config.providers = panel.settings.configs.clone();
+    config
+        .providers
+        .insert(request.config.provider.clone(), request.config.clone());
+    let choices = super::super::config_choices(
+        &config,
+        &ProviderListResult {
+            providers: Vec::new(),
+        },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    );
+    panel.complete(Reply {
+        id: request.id.clone(),
+        result: Ok((choices, None)),
+    });
+}
+fn draft(panel: &mut Panel) {
+    panel.select_tab(panel.tabs.tabs().len() - 1);
+    panel.handle_paste("My service".into());
+    assert!(matches!(
+        key(panel, KeyCode::Enter),
+        ConfigEditorOutcome::Consumed
+    ));
+    panel.handle_paste("https://example.test/v1".into());
+    key(panel, KeyCode::Enter);
+    panel.handle_paste("test-key".into());
+    key(panel, KeyCode::Enter);
+}
+
+#[test]
+fn enter_confirms_each_draft_field_and_creation_preserves_new_tab() {
+    let mut panel = panel();
+    draft(&mut panel);
+    assert_eq!(panel.form().unwrap().focus, 3);
+    assert!(panel.form().unwrap().editing);
+    assert!(panel.pending.is_none());
+    assert_eq!(
+        panel.form().unwrap().protocol,
+        CustomProviderProtocolDto::Responses
+    );
+    key(&mut panel, KeyCode::Right);
+    key(&mut panel, KeyCode::Enter);
+    assert_eq!(panel.form().unwrap().focus, 4);
+    assert!(!panel.form().unwrap().editing);
+    let request = request(key(&mut panel, KeyCode::Enter));
+    assert_eq!(
+        request.config.custom.as_ref().unwrap().protocol,
+        CustomProviderProtocolDto::ChatCompletions
+    );
+    assert_eq!(
+        request.key.clone().unwrap().into_parts(),
+        (request.config.provider.clone(), "test-key".into())
+    );
+    success(&mut panel, &request);
+    assert_eq!(
+        panel
+            .tabs
+            .tabs()
+            .iter()
+            .map(|tab| tab.label.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "Official API key",
+            "ChatGPT subscription",
+            "My service",
+            "New custom provider"
+        ]
+    );
+    assert_eq!(panel.tabs.active_tab().id, request.config.provider);
+    assert!(!panel.form().unwrap().draft);
+    assert!(panel.form().unwrap().key.query().is_empty());
+    panel.select_tab(3);
+    assert!(panel.form().unwrap().name.query().is_empty());
+}
+
+#[test]
+fn saved_field_advances_only_after_success_and_failure_keeps_input() {
+    let mut panel = panel();
+    panel.handle_paste("test-key".into());
+    let first = request(key(&mut panel, KeyCode::Enter));
+    assert_eq!(panel.form().unwrap().focus, 2);
+    panel.complete(Reply {
+        id: first.id,
+        result: Err("Secret store unavailable".into()),
+    });
+    assert!(panel.form().unwrap().editing);
+    assert_eq!(panel.form().unwrap().key.query(), "test-key");
+    let retry = request(key(&mut panel, KeyCode::Enter));
+    success(&mut panel, &retry);
+    assert_eq!(panel.form().unwrap().focus, 4);
+    assert!(!panel.form().unwrap().editing);
+    assert!(panel.pending.is_none());
+}
+
+#[test]
+fn focus_changes_do_not_save_and_drafts_survive_tab_switches() {
+    let mut panel = panel();
+    panel.handle_paste("unconfirmed-key".into());
+    assert!(matches!(
+        key(&mut panel, KeyCode::Tab),
+        ConfigEditorOutcome::Consumed
+    ));
+    assert!(panel.pending.is_none());
+    draft(&mut panel);
+    let id = panel.tabs.active_tab().id.clone();
+    panel.select_tab(0);
+    panel.select_tab(2);
+    assert_eq!(panel.tabs.active_tab().id, id);
+    assert_eq!(panel.form().unwrap().name.query(), "My service");
+    assert_eq!(panel.form().unwrap().key.query(), "test-key");
+    assert!(panel.pending.is_none());
+}
+
+#[test]
+fn invalid_url_stays_in_field_and_escape_restores_confirmed_value() {
+    let mut panel = panel();
+    panel.select_tab(2);
+    panel.handle_paste("Example".into());
+    key(&mut panel, KeyCode::Enter);
+    panel.handle_paste("not-a-url".into());
+    key(&mut panel, KeyCode::Enter);
+    assert_eq!(panel.form().unwrap().focus, 1);
+    assert!(panel.form().unwrap().editing);
+    assert!(panel.pending.is_none());
+    key(&mut panel, KeyCode::Esc);
+    assert!(panel.form().unwrap().url.query().is_empty());
+    assert!(!panel.form().unwrap().editing);
+}
+
+#[test]
+fn late_creation_reply_does_not_switch_back_to_its_tab() {
+    let mut panel = panel();
+    draft(&mut panel);
+    key(&mut panel, KeyCode::Enter);
+    let request = request(key(&mut panel, KeyCode::Enter));
+    panel.select_tab(0);
+    success(&mut panel, &request);
+    assert_eq!(panel.tabs.active_index(), 0);
+    assert_eq!(panel.tabs.tabs().len(), 4);
+}
+
+#[test]
+fn unchanged_existing_field_advances_without_request() {
+    let mut panel = panel();
+    // Existing empty API key means leave the saved secret unchanged.
+    assert!(matches!(
+        key(&mut panel, KeyCode::Enter),
+        ConfigEditorOutcome::Consumed
+    ));
+    assert_eq!(panel.form().unwrap().focus, 4);
+}
+
+#[test]
+fn existing_name_confirmation_saves_then_immediately_edits_the_next_field() {
+    let mut panel = panel();
+    draft(&mut panel);
+    key(&mut panel, KeyCode::Enter);
+    let created = request(key(&mut panel, KeyCode::Enter));
+    success(&mut panel, &created);
+    panel.activate(0);
+    panel.handle_paste(" renamed".into());
+    let renamed = request(key(&mut panel, KeyCode::Enter));
+    assert_eq!(panel.form().unwrap().focus, 0);
+    success(&mut panel, &renamed);
+    assert_eq!(panel.form().unwrap().focus, 1);
+    assert!(panel.form().unwrap().editing);
+    panel.handle_paste("/gateway".into());
+    assert!(panel.form().unwrap().url.query().ends_with("/gateway"));
+    assert_eq!(
+        panel.form().unwrap().saved.provider,
+        created.config.provider
+    );
+}
+
+#[test]
+fn openai_form_character_output_masks_key_and_keeps_focused_field_visible() {
+    let mut panel = panel();
+    draft(&mut panel);
+    for (width, height) in [(80, 24), (36, 14)] {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
+        let app = crate::app::App::new();
+        terminal
+            .draw(|frame| {
+                let tabs = panel.tab_rows(width);
+                panel.draw_tabs(
+                    frame,
+                    Rect::new(0, 0, width, tabs),
+                    None,
+                    None,
+                    app.render_context(),
+                );
+                panel.draw_body(
+                    frame,
+                    Rect::new(0, tabs, width, height - tabs),
+                    app.render_context(),
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let output = (0..height)
+            .map(|y| {
+                (0..width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(output.contains("API protocol"));
+        assert!(!output.contains("test-key"));
+        assert!(output.contains("Responses"));
+        insta::assert_snapshot!(format!("openai_form_{width}x{height}"), output);
+    }
+}

@@ -38,6 +38,17 @@ pub struct ProviderCredentialService {
 }
 
 impl ProviderCredentialService {
+    /// Resolves credentials against the persisted connection definitions.
+    pub fn with_configs<'a>(
+        &self,
+        configs: impl IntoIterator<Item = &'a zeta_model_provider_config::ModelProviderConfig>,
+    ) -> Result<Self, zeta_model_provider_config::ProviderConfigError> {
+        Ok(self.with_registry(self.providers.with_configs(configs)?))
+    }
+    /// Uses a validated connection snapshot while preserving the same secret authority.
+    pub fn with_registry(&self, providers: ProviderConfigRegistry) -> Self {
+        Self::new(providers, Arc::clone(&self.secrets))
+    }
     pub fn new(providers: ProviderConfigRegistry, secrets: Arc<dyn SecretStore>) -> Self {
         Self { providers, secrets }
     }

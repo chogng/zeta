@@ -287,6 +287,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
             command_id: CommandId::new("configure-test-provider").unwrap(),
             expected_revision: revision,
             config: ProviderConfigDto {
+                custom: None,
                 provider: "test".into(),
                 base_url: None,
                 max_output_tokens: None,
