@@ -62,12 +62,13 @@ OpenAI 官方文档明确区分“Sign in with ChatGPT”订阅访问与 API key
 
 2026-09-07 已用本机 Codex 的有效登录态完成从 Codex credential 到 Zeta App Server 的真实验收。验证使用隔离的临时 Zeta profile，不修改本机 Codex 原始凭据。
 
+- 本地 Codex 订阅的真实验收固定使用 `gpt-5.6-luna`；不得为了验收选择其他模型，以免产生不必要的订阅消耗；
 - `account/read` 返回 `openai-chatgpt`、`pro`、`ready`；
-- 配置 `gpt-5.6-sol` 后，普通 Responses 回合完成并返回预期文本；
+- 配置 `gpt-5.6-luna` 后，普通 Responses 回合完成并返回预期文本；
 - 带工具的回合成功调用 `get_goal`，收到工具结果后继续生成预期文本；
 - 两次回合都记录了模型调用次数、输入 token 和输出 token。
 
-这证明了“Codex 登录态 → Zeta App Server → ChatGPT subscription Responses → Zeta Agent Loop”的执行链路已经通过验收。该记录不替代交互式 device OAuth、refresh rotation、401/429、取消和断线恢复的完整故障矩阵；这些项目仍按下表的完成门继续验证。
+这证明了“Codex 登录态 → Zeta App Server → ChatGPT subscription Responses → Zeta Agent Loop”的执行链路已经通过验收。Luna 约束只适用于真实订阅调用；离线协议测试和产品模型目录仍可覆盖其他模型标识。该记录不替代交互式 device OAuth、refresh rotation、401/429、取消和断线恢复的完整故障矩阵；这些项目仍按下表的完成门继续验证。
 
 ## 当前状态与待完成项
 
