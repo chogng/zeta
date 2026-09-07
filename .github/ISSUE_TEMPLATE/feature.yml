@@ -1,0 +1,88 @@
+name: 功能需求
+description: 描述一个需要新增或改变的用户行为
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先描述用户目标和必要行为，不必提前指定文件、接口或实现方案。实现方案会在调查仓库后确定。
+
+  - type: textarea
+    id: intent
+    attributes:
+      label: 用户目标
+      description: 谁需要什么能力，解决什么问题，完成后用户能做什么？
+      placeholder: 例如：作为……，我希望……，这样就能……
+    validations:
+      required: true
+
+  - type: input
+    id: area
+    attributes:
+      label: 目标产品或模块
+      description: 填写已知的产品、crate、页面、命令或能力名称。
+      placeholder: 例如：Workbench Sessions / zeta-code / marketplace
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 期望行为
+      description: 描述入口、前提、操作、结果，以及失败、取消、切换或恢复时的行为。
+      placeholder: |
+        - 入口：……
+        - 前提：……
+        - 操作：……
+        - 结果：……
+        - 失败或取消：……
+    validations:
+      required: true
+
+  - type: dropdown
+    id: change_class
+    attributes:
+      label: 变化类型
+      description: 用于决定记录和审查范围；不确定时选择“待判断”。
+      options:
+        - 待判断
+        - A 类：小修复或局部行为调整
+        - B 类：新功能或用户契约变化
+        - C 类：架构、兼容性、状态或持久化契约变化
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 用可观察的结果写出完成条件，一行一个 AC；不要只写“实现某个类”或“修改某个文件”。
+      placeholder: |
+        - AC-1：在……前提下执行……，结果是……
+        - AC-2：当……失败或取消时，……
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: 约束与非目标
+      description: 写出必须保留的兼容性、性能、平台、权限或交互约束，以及明确不在本次范围内的内容。
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: 验证场景
+      description: 说明希望通过什么测试、命令或真实操作确认结果；不知道时可以留给实现者补充。
+      placeholder: |
+        - 正常流程：……
+        - 失败或取消：……
+        - 切换或恢复：……
+
+  - type: input
+    id: references
+    attributes:
+      label: 相关链接
+      description: 可填写现有文档、Issue、设计稿或讨论链接。
