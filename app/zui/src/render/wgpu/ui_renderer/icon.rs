@@ -103,6 +103,10 @@ pub(crate) struct IconRenderer {
 }
 
 impl IconRenderer {
+    pub(super) fn cache_entries(&self) -> usize {
+        self.regions.len()
+    }
+
     pub(crate) fn new(
         device: &wgpu::Device,
         surface_format: wgpu::TextureFormat,

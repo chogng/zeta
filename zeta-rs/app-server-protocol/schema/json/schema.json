@@ -1364,6 +1364,12 @@
         "MethodNotFound",
         "InvalidParams",
         "InternalError",
+        "MemoryUnavailable",
+        "MemoryNotFound",
+        "MemoryConflict",
+        "MemoryCapacity",
+        "MemoryStopped",
+        "MemoryStale",
         "AutomationUnavailable",
         "AutomationNotFound",
         "AutomationConflict",
@@ -2559,6 +2565,86 @@
     },
     "ClientRequestSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "memory/start",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryStart"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemorySessionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/stop",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemorySessionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/submit",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryEvidence"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/export",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MemorySessionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -6419,6 +6505,86 @@
     },
     "ClientResultSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "memory/start",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryReport"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryReport"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/stop",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MemoryReport"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/submit",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "memory/export",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ResourceMetadataResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -21510,6 +21676,387 @@
           "type": "object"
         }
       ]
+    },
+    "MemoryEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "observations": {
+          "items": {
+            "$ref": "#/$defs/MemoryObservation"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "sequence",
+        "observations"
+      ],
+      "type": "object"
+    },
+    "MemoryFinding": {
+      "enum": [
+        "insufficientEvidence",
+        "noSustainedGrowthObserved",
+        "sustainedGrowth",
+        "idleBaselineGrowth"
+      ],
+      "type": "string"
+    },
+    "MemoryMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/MemoryMetricKind"
+        },
+        "unavailable": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MemoryUnavailable"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "MemoryMetricKind": {
+      "enum": [
+        "residentBytes",
+        "javaScriptHeapBytes",
+        "domNodes",
+        "eventListeners",
+        "uiObjects",
+        "windows",
+        "cacheBytes",
+        "gpuEstimatedBytes",
+        "gpuResources",
+        "renderCacheEntries",
+        "tasks"
+      ],
+      "type": "string"
+    },
+    "MemoryObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/MemoryMetric"
+          },
+          "maxItems": 11,
+          "minItems": 1,
+          "type": "array"
+        },
+        "phase": {
+          "$ref": "#/$defs/MemoryPhase"
+        },
+        "processId": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "role": {
+          "$ref": "#/$defs/MemoryRole"
+        }
+      },
+      "required": [
+        "instanceId",
+        "role",
+        "phase",
+        "metrics"
+      ],
+      "type": "object"
+    },
+    "MemoryOrigin": {
+      "enum": [
+        "backendHost",
+        "clientHost"
+      ],
+      "type": "string"
+    },
+    "MemoryPhase": {
+      "enum": [
+        "busy",
+        "idle",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "MemoryProduct": {
+      "enum": [
+        "tui",
+        "rustGui",
+        "electron",
+        "browser"
+      ],
+      "type": "string"
+    },
+    "MemoryReport": {
+      "properties": {
+        "elapsedMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidenceGaps": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "product": {
+          "$ref": "#/$defs/MemoryProduct"
+        },
+        "sampleIntervalMs": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "startedAtMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/MemoryStatus"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/MemoryTargetReport"
+          },
+          "type": "array"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "sessionId",
+        "product",
+        "status",
+        "startedAtMs",
+        "elapsedMs",
+        "sampleIntervalMs",
+        "targets",
+        "evidenceGaps"
+      ],
+      "type": "object"
+    },
+    "MemoryRole": {
+      "enum": [
+        "backend",
+        "tool",
+        "tui",
+        "rustGui",
+        "electronMain",
+        "renderer",
+        "gpu",
+        "utility",
+        "extension"
+      ],
+      "type": "string"
+    },
+    "MemorySample": {
+      "properties": {
+        "elapsedMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/MemoryMetric"
+          },
+          "type": "array"
+        },
+        "phase": {
+          "$ref": "#/$defs/MemoryPhase"
+        }
+      },
+      "required": [
+        "elapsedMs",
+        "phase",
+        "metrics"
+      ],
+      "type": "object"
+    },
+    "MemorySessionParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "MemoryStart": {
+      "additionalProperties": false,
+      "properties": {
+        "durationSecs": {
+          "format": "uint32",
+          "maximum": 1800,
+          "minimum": 10,
+          "type": "integer"
+        },
+        "product": {
+          "$ref": "#/$defs/MemoryProduct"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "requestId",
+        "product",
+        "durationSecs"
+      ],
+      "type": "object"
+    },
+    "MemoryStatus": {
+      "enum": [
+        "recording",
+        "stopped",
+        "budgetExpired",
+        "targetsExited"
+      ],
+      "type": "string"
+    },
+    "MemoryTargetReport": {
+      "properties": {
+        "discardedSamples": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instanceId": {
+          "type": "string"
+        },
+        "latest": {
+          "$ref": "#/$defs/MemorySample"
+        },
+        "origin": {
+          "$ref": "#/$defs/MemoryOrigin"
+        },
+        "processId": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "role": {
+          "$ref": "#/$defs/MemoryRole"
+        },
+        "samples": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "trends": {
+          "items": {
+            "$ref": "#/$defs/MemoryTrend"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "origin",
+        "instanceId",
+        "role",
+        "samples",
+        "discardedSamples",
+        "latest",
+        "trends"
+      ],
+      "type": "object"
+    },
+    "MemoryTrend": {
+      "properties": {
+        "finding": {
+          "$ref": "#/$defs/MemoryFinding"
+        },
+        "growthPerSecond": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/MemoryMetricKind"
+        },
+        "samples": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spanSecs": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "finding",
+        "samples",
+        "spanSecs"
+      ],
+      "type": "object"
+    },
+    "MemoryUnavailable": {
+      "enum": [
+        "unsupported",
+        "permissionDenied",
+        "readFailed",
+        "exited"
+      ],
+      "type": "string"
     },
     "ModelAccess": {
       "description": "How a user gains access to a model.\n\n[`ModelRef::provider`] identifies the model vendor. Product composition may use this access\nmode to choose an execution backend, but it is not proof of authentication, entitlement, or\nremote availability.",

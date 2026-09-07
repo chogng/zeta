@@ -15,7 +15,7 @@
 | [正文与执行结果](design/tui.md#正文与终端历史) | 回复逐步显示，相关执行结果合并展示；可展开和滚动，预览及详情受保留容量限制 | [模型](../tui/src/thread/transcript/model.rs)、[执行](../tui/src/thread/transcript/exec_cell.rs)、[测试](../tui/src/thread/transcript/view/render_tests.rs) |
 | [终端历史](spec/interaction.md#鼠标规则) | 已定稿内容写入终端历史，仍在生成的内容继续刷新。不同终端及复用器组合尚未全面验证 | [终端会话](../tui/src/terminal/session.rs)、[协议测试](../tui/src/terminal/history_protocol_tests.rs) |
 | [断线恢复](../tui/README.md#产品支持边界) | TUI 返回持久化身份，由 CLI 重建连接。不恢复旧连接中的待执行请求 | [断线处理](../tui/src/app/recovery.rs)、[恢复测试](../tui/src/sessions/active_tests.rs)、[PTY 场景](../cli/tests/tui_real_scenarios.rs) |
-| [状态与资源](design/process-resources.md) | `/status` 提供 Thread / Processes 两页，状态行按需采样。不统计远程资源或自动诊断泄漏 | [状态页](../tui/src/status/panel.rs)、[采样](../tui/src/host/process_resources.rs)、[测试](../tui/src/host/process_resources_tests.rs) |
+| [状态与资源](design/process-resources.md) | `/status` 提供 Thread / Processes 两页，状态行按需采样；`/memory` 提供后端持续诊断与导出，不自动确认泄漏 | [状态页](../tui/src/status/panel.rs)、[采样](../../zeta-rs/memory-diagnostics/src/process_resources.rs)、[测试](../../zeta-rs/memory-diagnostics/src/process_resources_tests.rs) |
 | [设置与快捷键](spec/interaction.md#快捷键声明与保存) | 支持保存 TUI 设置、主题和应用快捷键；面板基础键仍固定，凭据使用专用接口 | [配置](../tui/src/config/request.rs)、[快捷键](../tui/src/keymap/settings.rs)、[主题测试](../tui/src/theme/resource_tests.rs)、[快捷键测试](../tui/src/keymap/settings_tests.rs) |
 | [增强鼠标](spec/interaction.md#鼠标规则) | 打开的面板内支持交互和可见字符选择；其他区域由终端管理鼠标 | [鼠标](../tui/src/terminal/mouse.rs)、[选择测试](../tui/src/terminal/screen_selection_tests.rs) |
 | [Welcome 宠物](spec/welcome-pet.md) | 部分实现：静止绘制、动作资源和独立预览可用，Welcome 点击播放尚未接入 | [绘制](../tui/src/app/welcome/pet.rs)、[资源测试](../tui/src/app/welcome_view_tests.rs) |

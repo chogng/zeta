@@ -2,6 +2,8 @@ use super::*;
 
 #[path = "automation_tests.rs"]
 mod automation_tests;
+#[path = "memory_tests.rs"]
+mod memory_tests;
 use base64::Engine;
 use std::io::Cursor;
 use std::io::Write;

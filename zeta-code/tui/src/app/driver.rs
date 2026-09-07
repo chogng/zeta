@@ -76,6 +76,8 @@ pub(super) struct AppDriver {
     theme_resource: ThemeResource,
     server_slash_commands: Vec<SlashCommandDefinition>,
     plugins_enabled: bool,
+    memory: Option<Box<zeta_app_server_client::MemoryRecording>>,
+    memory_objects: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
 pub(super) struct AppDriverResources {
@@ -110,6 +112,8 @@ impl AppDriver {
             theme_resource: resources.theme_resource,
             server_slash_commands: resources.server_slash_commands,
             plugins_enabled: resources.plugins_enabled,
+            memory: None,
+            memory_objects: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         }
     }
 
@@ -140,6 +144,7 @@ impl AppDriver {
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
+        self.memory_objects.store(self.app.memory_object_count(), std::sync::atomic::Ordering::Relaxed);
         let completions = self.requests.poll();
         let changed = !completions.is_empty();
         for completion in completions {
@@ -149,6 +154,7 @@ impl AppDriver {
                     &mut self.conversation,
                     &mut self.thread_subscription,
                     &mut self.app,
+                    &mut self.memory,
                 ),
                 Err(error) => self
                     .app

@@ -10,7 +10,7 @@
 | `/status` 的 Processes 页可见 | 每秒采样完整进程信息 | 已实现 |
 | `/status` 的 Thread 页可见 | Thread 页本身不提出资源观测需求 | 已实现 |
 | 两处都没有显示资源信息 | 停止读取进程数据，采样线程进入休眠 | 已实现 |
-| 用户排查疑似内存泄漏 | 尚无专用诊断能力；现有读数只能提供线索 | 未实现 |
+| 用户排查疑似内存泄漏 | `/memory` 明确开始/停止后端诊断，读取或导出增长证据 | 已接入，完整验收见独立记录 |
 
 后续章节依次说明[用户可见语义](#1-用户可见语义)、[按需采样](#3-已实现需求与生命周期)、[内存诊断边界](#5-内存诊断不属于当前观测)和[当前实现证据](#7-当前实现与证据)。
 
@@ -76,14 +76,14 @@
 | `StatusPanel` | 暴露当前页签是否为 Processes | 读取操作系统进程数据 |
 | 应用排版与事件循环 | 合并所有可见条件，产生唯一观测需求；把当前请求安装到显示模型 | 执行阻塞式系统调用 |
 | 事件泵 | 为需求分配版本，把请求传给 Host，并把最新读数送回单写者循环 | 解释峰值、趋势或泄漏 |
-| `host/process_resources.rs` | 按需求刷新 TUI，以及明确 App Server PID 为根的进程树，并在停止时休眠 | 根据命令参数猜测子进程角色或修改 UI 状态 |
+| `zeta-rs/memory-diagnostics/src/process_resources.rs` | 按需求刷新 TUI，以及明确 App Server PID 为根的进程树，并在停止时休眠 | 根据命令参数猜测子进程角色或修改 UI 状态 |
 | `status/resources.rs` | 聚合读数，维护有界历史，生成显示快照 | 决定采样时机 |
 
 资源观测属于附加信息。线程创建失败、系统接口不可用或单次读取失败都会使指标进入不可用状态，不会阻止 TUI 启动、输入、对话或退出。某个应计入合计的本地进程不可读时，本机合计也显示不可用，不把不完整数值伪装成完整合计。
 
 ## 5. 内存诊断不属于当前观测
 
-当前只提供资源读数、观察峰值和趋势，不自动诊断泄漏。诊断核心由 `zeta-rs` 统一负责，三端的职责与证据规则见[三端内存诊断设计](../../../zeta-rs/docs/memory-diagnostics.md)，TUI 接入要求见[内存诊断规格草案](../spec/memory-diagnostics.md)。这些要求尚未实施，不能作为已支持能力。接入共享核心时，通用进程采样退出 TUI，界面仍负责提交可见性需求与展示读数。
+当前只提供资源读数、观察峰值和趋势，不自动诊断泄漏。诊断核心由 `zeta-rs` 统一负责，三端的职责与证据规则见[三端内存诊断设计](../../../zeta-rs/docs/memory-diagnostics.md)，TUI 接入要求见[TUI 内存诊断](../spec/memory-diagnostics.md)。共享采样已迁入 zeta-rs，TUI 保留可见性需求与读数展示；`/memory` 已接入独立持续诊断，完整验收范围见[记录](../../../zeta-rs/docs/changes/memory-diagnostics/verification.md)。
 
 ## 6. 验证要求
 
@@ -105,7 +105,7 @@
 
 | 状态 | 内容 | 证据 |
 | --- | --- | --- |
-| 已实现 | 无可见需求时休眠；状态行每 2 秒、Processes 页每秒按需读取 TUI 与本地 App Server 进程树 | [`ProcessResourcesSource`](../../tui/src/host/process_resources.rs) |
+| 已实现 | 无可见需求时休眠；状态行每 2 秒、Processes 页每秒按需读取 TUI 与本地 App Server 进程树 | [`ProcessResourcesSource`](../../../zeta-rs/memory-diagnostics/src/process_resources.rs) |
 | 已实现 | 可见需求计算、版本隔离、最新事件合并和按需重绘 | [`frame`](../../tui/src/app/frame.rs)、[`EventPump`](../../tui/src/app/event_pump.rs)、[`App`](../../tui/src/app/state.rs) |
 | 已实现 | 本机聚合、观察峰值和有界趋势历史 | [`ProcessResourcesModel`](../../tui/src/status/resources.rs) |
 | 已实现 | 状态行内存与 CPU 项、Status 面板 Processes 页 | [`StatusLineModel`](../../tui/src/status/model.rs)、[`StatusPanel`](../../tui/src/status/panel.rs) |

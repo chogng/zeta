@@ -8,7 +8,7 @@ use super::event_pump::EventPump;
 use crate::AppServerProcess;
 use crate::TuiError;
 use crate::TuiOptions;
-use crate::host::process_resources::ProcessResourceTargets;
+use zeta_memory_diagnostics::ProcessResourceTargets;
 use crate::sessions;
 use crate::sessions::Event as SessionEvent;
 use crate::skills::Event as SkillEvent;
@@ -161,8 +161,8 @@ pub(super) fn start(
 
 const fn process_resource_targets(process: AppServerProcess) -> ProcessResourceTargets {
     match process {
-        AppServerProcess::Local(process_id) => ProcessResourceTargets::TuiAndAppServer(process_id),
-        AppServerProcess::IncludedInTui | AppServerProcess::Remote => ProcessResourceTargets::Tui,
+        AppServerProcess::Local(process_id) => ProcessResourceTargets::CurrentAndTree(process_id),
+        AppServerProcess::IncludedInTui | AppServerProcess::Remote => ProcessResourceTargets::Current,
     }
 }
 

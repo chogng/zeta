@@ -1,6 +1,7 @@
 //! Backend-neutral rendering boundary between UI scenes and graphics implementations.
 
 use std::error::Error;
+use std::sync::Arc;
 
 use crate::ui::presentation::UiScene;
 use thiserror::Error;
@@ -65,12 +66,38 @@ impl RendererError {
     }
 }
 
+/// Counts retained rendering handles and image/icon/text-buffer cache entries, not driver bytes.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct RendererMemory {
+    pub gpu_resources: usize,
+    pub cache_entries: usize,
+}
+
+/// A thread-safe diagnostic reader owned by one renderer's window registration.
+#[derive(Clone)]
+pub struct RendererMemoryReader(Arc<dyn Fn() -> RendererMemory + Send + Sync>);
+
+impl RendererMemoryReader {
+    pub fn new(read: impl Fn() -> RendererMemory + Send + Sync + 'static) -> Self {
+        Self(Arc::new(read))
+    }
+
+    pub fn read(&self) -> RendererMemory {
+        self.0()
+    }
+}
+
 /// Executes backend-neutral [`UiScene`] frames on one presentation target.
 ///
 /// Implementations own graphics resources and surface lifecycle. Product components only emit
 /// scene primitives; they must never receive a concrete graphics device, queue, encoder, or render
 /// pass. Hosts may replace an implementation without changing component or scene construction.
 pub trait Renderer {
+    /// Returns an explicit diagnostic capability when this renderer exposes resource counts.
+    fn memory_reader(&self) -> Option<RendererMemoryReader> {
+        None
+    }
+
     /// Reconfigures the physical presentation target.
     fn resize(&mut self, size: RenderTargetSize);
 

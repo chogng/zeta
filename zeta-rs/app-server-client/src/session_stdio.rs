@@ -187,6 +187,7 @@ pub(super) fn start(
     };
 
     let mut client = super::AppServerClient::new(SessionTransport {
+        in_process: false,
         commands: commands.clone(),
     });
     let initialized = client.initialize(InitializeParams {

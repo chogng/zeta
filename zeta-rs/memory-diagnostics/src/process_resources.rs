@@ -16,47 +16,47 @@ use sysinfo::ProcessesToUpdate;
 use sysinfo::System;
 use sysinfo::get_current_pid;
 
-const STATUS_LINE_SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
-const PROCESSES_SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
+const SUMMARY_SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
+const DETAIL_SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy)]
 struct ProcessResourceSampleIntervals {
-    status_line: Duration,
-    processes: Duration,
+    summary: Duration,
+    detail: Duration,
 }
 
 impl Default for ProcessResourceSampleIntervals {
     fn default() -> Self {
         Self {
-            status_line: STATUS_LINE_SAMPLE_INTERVAL,
-            processes: PROCESSES_SAMPLE_INTERVAL,
+            summary: SUMMARY_SAMPLE_INTERVAL,
+            detail: DETAIL_SAMPLE_INTERVAL,
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ProcessResourceTargets {
-    Tui,
-    TuiAndAppServer(u32),
+pub enum ProcessResourceTargets {
+    Current,
+    CurrentAndTree(u32),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ProcessResourceMetrics {
+pub enum ProcessResourceMetrics {
     Memory,
     Cpu,
     MemoryAndCpu,
 }
 
 impl ProcessResourceMetrics {
-    pub(crate) const fn includes_memory(self) -> bool {
+    pub const fn includes_memory(self) -> bool {
         matches!(self, Self::Memory | Self::MemoryAndCpu)
     }
 
-    pub(crate) const fn includes_cpu(self) -> bool {
+    pub const fn includes_cpu(self) -> bool {
         matches!(self, Self::Cpu | Self::MemoryAndCpu)
     }
 
-    pub(crate) const fn union(self, other: Self) -> Self {
+    pub const fn union(self, other: Self) -> Self {
         match (self, other) {
             (Self::Memory, Self::Memory) => Self::Memory,
             (Self::Cpu, Self::Cpu) => Self::Cpu,
@@ -66,67 +66,67 @@ impl ProcessResourceMetrics {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum ProcessResourceDemand {
+pub enum ProcessResourceDemand {
     #[default]
     Disabled,
-    StatusLine(ProcessResourceMetrics),
-    Processes,
+    Summary(ProcessResourceMetrics),
+    Detailed,
 }
 
 impl ProcessResourceDemand {
-    pub(crate) const fn metrics(self) -> Option<ProcessResourceMetrics> {
+    pub const fn metrics(self) -> Option<ProcessResourceMetrics> {
         match self {
             Self::Disabled => None,
-            Self::StatusLine(metrics) => Some(metrics),
-            Self::Processes => Some(ProcessResourceMetrics::MemoryAndCpu),
+            Self::Summary(metrics) => Some(metrics),
+            Self::Detailed => Some(ProcessResourceMetrics::MemoryAndCpu),
         }
     }
 
     const fn sample_interval(self, intervals: ProcessResourceSampleIntervals) -> Option<Duration> {
         match self {
             Self::Disabled => None,
-            Self::StatusLine(_) => Some(intervals.status_line),
-            Self::Processes => Some(intervals.processes),
+            Self::Summary(_) => Some(intervals.summary),
+            Self::Detailed => Some(intervals.detail),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ProcessResourceRequest {
-    pub(crate) revision: u64,
-    pub(crate) cpu_cycle: u64,
-    pub(crate) demand: ProcessResourceDemand,
+pub struct ProcessResourceRequest {
+    pub revision: u64,
+    pub cpu_cycle: u64,
+    pub demand: ProcessResourceDemand,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ProcessResourceUsage {
-    pub(crate) resident_bytes: Option<u64>,
-    pub(crate) cpu_tenths_percent: Option<u16>,
+pub struct ProcessResourceUsage {
+    pub resident_bytes: Option<u64>,
+    pub cpu_tenths_percent: Option<u16>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ObservedProcess {
-    pub(crate) process_id: u32,
-    pub(crate) depth: usize,
-    pub(crate) name: String,
-    pub(crate) usage: Result<ProcessResourceUsage, String>,
+pub struct ObservedProcess {
+    pub process_id: u32,
+    pub depth: usize,
+    pub name: String,
+    pub usage: Result<ProcessResourceUsage, String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ProcessTreeResourceUsage {
-    pub(crate) root: ProcessResourceUsage,
-    pub(crate) descendants: Vec<ObservedProcess>,
+pub struct ProcessTreeResourceUsage {
+    pub root: ProcessResourceUsage,
+    pub descendants: Vec<ObservedProcess>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ProcessResourcesReading {
-    pub(crate) request: ProcessResourceRequest,
-    pub(crate) tui: Result<ProcessResourceUsage, String>,
-    pub(crate) app_server: Option<Result<ProcessTreeResourceUsage, String>>,
-    pub(crate) sampled_at: Instant,
+pub struct ProcessResourcesReading {
+    pub request: ProcessResourceRequest,
+    pub current: Result<ProcessResourceUsage, String>,
+    pub tree: Option<Result<ProcessTreeResourceUsage, String>>,
+    pub sampled_at: Instant,
 }
 
-pub(crate) struct ProcessResourcesSource {
+pub struct ProcessResourcesSource {
     stop: Arc<AtomicBool>,
     control: Arc<ProcessResourcesControl>,
     task: Option<JoinHandle<()>>,
@@ -139,7 +139,7 @@ struct ProcessResourcesControl {
 }
 
 impl ProcessResourcesSource {
-    pub(crate) fn start(
+    pub fn start(
         stop: Arc<AtomicBool>,
         targets: ProcessResourceTargets,
         emit: impl FnMut(ProcessResourcesReading) -> bool + Send + 'static,
@@ -162,7 +162,7 @@ impl ProcessResourcesSource {
         let control = Arc::new(ProcessResourcesControl::default());
         let task_control = Arc::clone(&control);
         let task = thread::Builder::new()
-            .name("zeta-tui-process-resources".into())
+            .name("zeta-process-resources".into())
             .spawn(move || {
                 let mut sampler = None;
                 loop {
@@ -211,7 +211,7 @@ impl ProcessResourcesSource {
         })
     }
 
-    pub(crate) fn set_request(&self, request: ProcessResourceRequest) {
+    pub fn set_request(&self, request: ProcessResourceRequest) {
         let mut current = self.control.request.lock().unwrap();
         if *current == request {
             return;
@@ -220,7 +220,7 @@ impl ProcessResourcesSource {
         self.control.changed.notify_one();
     }
 
-    pub(crate) fn join(&mut self) -> Result<(), io::Error> {
+    pub fn join(&mut self) -> Result<(), io::Error> {
         self.stop.store(true, Ordering::Release);
         let Some(task) = self.task.take() else {
             return Ok(());
@@ -238,7 +238,7 @@ impl Drop for ProcessResourcesSource {
     }
 }
 
-struct ProcessResourcesSampler {
+pub struct ProcessResourcesSampler {
     state: Result<SamplerState, String>,
     targets: ProcessResourceTargets,
     metrics: ProcessResourceMetrics,
@@ -247,26 +247,26 @@ struct ProcessResourcesSampler {
 
 struct SamplerState {
     system: System,
-    tui_pid: Pid,
-    app_server_pid: Option<Pid>,
+    current_pid: Pid,
+    tree_pid: Option<Pid>,
     logical_processors: usize,
     cpu_ready: bool,
 }
 
 impl ProcessResourcesSampler {
-    fn new(
+    pub fn new(
         targets: ProcessResourceTargets,
         metrics: ProcessResourceMetrics,
         cpu_cycle: u64,
     ) -> Self {
         let state = if sysinfo::IS_SUPPORTED_SYSTEM {
             get_current_pid()
-                .map(|tui_pid| SamplerState {
+                .map(|current_pid| SamplerState {
                     system: System::new(),
-                    tui_pid,
-                    app_server_pid: match targets {
-                        ProcessResourceTargets::Tui => None,
-                        ProcessResourceTargets::TuiAndAppServer(process_id) => {
+                    current_pid,
+                    tree_pid: match targets {
+                        ProcessResourceTargets::Current => None,
+                        ProcessResourceTargets::CurrentAndTree(process_id) => {
                             Some(Pid::from_u32(process_id))
                         }
                     },
@@ -275,7 +275,7 @@ impl ProcessResourcesSampler {
                         .unwrap_or(1),
                     cpu_ready: false,
                 })
-                .map_err(|error| format!("could not identify the TUI process: {error}"))
+                .map_err(|error| format!("could not identify the Current process process: {error}"))
         } else {
             Err("process resources are unavailable on this operating system".into())
         };
@@ -285,6 +285,72 @@ impl ProcessResourcesSampler {
             metrics,
             cpu_cycle,
         }
+    }
+
+    /// Reads memory evidence for the current process and its owned descendants.
+    /// Process start time separates reused operating-system process identifiers.
+    pub fn memory_observations(
+        &mut self,
+        role: crate::MemoryRole,
+    ) -> Vec<crate::MemoryObservation> {
+        let request = ProcessResourceRequest {
+            revision: 0,
+            cpu_cycle: 0,
+            demand: ProcessResourceDemand::Detailed,
+        };
+        let _ = self.sample(request, Instant::now());
+        let Ok(state) = &self.state else {
+            return vec![crate::MemoryObservation {
+                instance_id: format!("{}:unavailable", std::process::id()),
+                process_id: Some(std::process::id()),
+                role,
+                phase: crate::MemoryPhase::Unknown,
+                metrics: vec![crate::MemoryMetric {
+                    kind: crate::MemoryMetricKind::ResidentBytes,
+                    value: None,
+                    unavailable: Some(if sysinfo::IS_SUPPORTED_SYSTEM {
+                        crate::MemoryUnavailable::ReadFailed
+                    } else {
+                        crate::MemoryUnavailable::Unsupported
+                    }),
+                }],
+            }];
+        };
+        let root = state.current_pid;
+        let mut pids = vec![root];
+        if let Some(tree) = state.tree_pid {
+            if tree != root {
+                pids.push(tree);
+            }
+            pids.extend(
+                descendant_processes(&state.system, tree)
+                    .into_iter()
+                    .map(|(pid, _)| pid),
+            );
+        }
+        pids.sort();
+        pids.dedup();
+        pids.into_iter()
+            .take(33)
+            .filter_map(|pid| {
+                let process = state.system.process(pid)?;
+                Some(crate::MemoryObservation {
+                    instance_id: format!("{}:{}", pid.as_u32(), process.start_time()),
+                    process_id: Some(pid.as_u32()),
+                    role: if pid == root {
+                        role
+                    } else {
+                        crate::MemoryRole::Tool
+                    },
+                    phase: crate::MemoryPhase::Unknown,
+                    metrics: vec![crate::MemoryMetric {
+                        kind: crate::MemoryMetricKind::ResidentBytes,
+                        value: Some(process.memory()),
+                        unavailable: None,
+                    }],
+                })
+            })
+            .collect()
     }
 
     fn set_request(&mut self, request: ProcessResourceRequest) {
@@ -304,7 +370,7 @@ impl ProcessResourcesSampler {
         self.cpu_cycle = request.cpu_cycle;
     }
 
-    fn sample(
+    pub fn sample(
         &mut self,
         request: ProcessResourceRequest,
         sampled_at: Instant,
@@ -314,8 +380,8 @@ impl ProcessResourcesSampler {
             Err(error) => {
                 return ProcessResourcesReading {
                     request,
-                    tui: Err(error.clone()),
-                    app_server: matches!(self.targets, ProcessResourceTargets::TuiAndAppServer(_))
+                    current: Err(error.clone()),
+                    tree: matches!(self.targets, ProcessResourceTargets::CurrentAndTree(_))
                         .then(|| Err(error.clone())),
                     sampled_at,
                 };
@@ -328,7 +394,7 @@ impl ProcessResourcesSampler {
         if self.metrics.includes_cpu() {
             refresh = refresh.with_cpu();
         }
-        match state.app_server_pid {
+        match state.tree_pid {
             Some(_) => {
                 state
                     .system
@@ -336,25 +402,25 @@ impl ProcessResourcesSampler {
             }
             None => {
                 state.system.refresh_processes_specifics(
-                    ProcessesToUpdate::Some(&[state.tui_pid]),
+                    ProcessesToUpdate::Some(&[state.current_pid]),
                     true,
                     refresh,
                 );
             }
         }
-        let tui = process_usage(
+        let current = process_usage(
             &state.system,
-            state.tui_pid,
-            "TUI",
+            state.current_pid,
+            "Current process",
             self.metrics,
             state.cpu_ready,
             state.logical_processors,
         );
-        let app_server = state.app_server_pid.map(|pid| {
+        let tree = state.tree_pid.map(|pid| {
             let root = process_usage(
                 &state.system,
                 pid,
-                "App Server",
+                "Process tree",
                 self.metrics,
                 state.cpu_ready,
                 state.logical_processors,
@@ -383,8 +449,8 @@ impl ProcessResourcesSampler {
         state.cpu_ready = self.metrics.includes_cpu();
         ProcessResourcesReading {
             request,
-            tui,
-            app_server,
+            current,
+            tree,
             sampled_at,
         }
     }

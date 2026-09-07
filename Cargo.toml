@@ -24,6 +24,7 @@ members = [
     "zeta-rs/async-utils",
     "zeta-rs/auto-review",
     "zeta-rs/automation",
+    "zeta-rs/memory-diagnostics",
     "zeta-rs/bwrap",
     "zeta-code/ansi-escape",
     "zeta-code/cli",
@@ -161,6 +162,7 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+zeta-memory-diagnostics = { path = "zeta-rs/memory-diagnostics" }
 accesskit = "0.24.0"
 accesskit-platform = { package = "accesskit_winit", version = "0.32.2" }
 anyhow = "1"

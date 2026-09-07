@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::app::welcome;
-use crate::host::process_resources::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceDemand;
 use crate::keymap::bindings;
 use crate::render::Renderable;
 use crate::sessions;
@@ -545,7 +545,7 @@ pub(crate) fn process_resource_demand(app: &App, terminal_area: Rect) -> Process
         .command_panel()
         .is_some_and(|panel| panel.process_resources_visible(areas.session.composer))
     {
-        return ProcessResourceDemand::Processes;
+        return ProcessResourceDemand::Detailed;
     }
     if !matches!(bottom_content(app), BottomContent::StatusLine) {
         return ProcessResourceDemand::Disabled;
@@ -564,7 +564,7 @@ pub(crate) fn process_resource_demand(app: &App, terminal_area: Rect) -> Process
         .visible_process_resources(usize::from(area.width), app.status_line_runtime())
         .map_or(
             ProcessResourceDemand::Disabled,
-            ProcessResourceDemand::StatusLine,
+            ProcessResourceDemand::Summary,
         )
 }
 

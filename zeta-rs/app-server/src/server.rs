@@ -113,6 +113,7 @@ mod multi_agent_evaluation;
 mod multi_agent_evaluation_loop;
 pub(crate) mod multi_agent_tools;
 pub(crate) mod notification_queue;
+mod memory_operations;
 mod operations;
 mod plugin_extension_sources;
 mod plugin_operations;
@@ -222,6 +223,7 @@ pub struct AppServer {
     request_scheduler: RequestScheduler,
     request_cancellations: RequestCancellationRegistry,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
+    memory: zeta_memory_diagnostics::MemoryDiagnostics,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
@@ -538,6 +540,7 @@ impl AppServer {
             request_scheduler: RequestScheduler::default(),
             request_cancellations: RequestCancellationRegistry::default(),
             resources,
+            memory: zeta_memory_diagnostics::MemoryDiagnostics::default(),
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
@@ -812,6 +815,7 @@ impl AppServer {
         if !connection.mark_closed() {
             return;
         }
+        self.memory.close_owner(connection.connection_id);
         self.request_scheduler
             .cancel_connection(connection.connection_id);
         self.request_cancellations
@@ -1919,6 +1923,11 @@ impl AppServer {
                 self.work_run_integration_request(connection, &request.params)
             }
             Some(ClientMethod::ProjectList) => self.project_list(connection, &request.params),
+            Some(ClientMethod::MemoryStart) => self.memory_start(connection, &request.params),
+            Some(ClientMethod::MemoryRead) => self.memory_read(connection, &request.params),
+            Some(ClientMethod::MemoryStop) => self.memory_stop(connection, &request.params),
+            Some(ClientMethod::MemorySubmit) => self.memory_submit(connection, &request.params),
+            Some(ClientMethod::MemoryExport) => self.memory_export(connection, &request.params),
             Some(ClientMethod::AutomationList) => self.automation_list(),
             Some(ClientMethod::AutomationWrite) => self.automation_write(&request.params),
             Some(ClientMethod::AutomationDelete) => self.automation_delete(&request.params),

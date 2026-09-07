@@ -1,11 +1,11 @@
 use crate::client::ClientEvent;
 use crate::client::ClientEventSource;
 use crate::host::TerminationSource;
-use crate::host::process_resources::ProcessResourceDemand;
-use crate::host::process_resources::ProcessResourceRequest;
-use crate::host::process_resources::ProcessResourceTargets;
-use crate::host::process_resources::ProcessResourcesReading;
-use crate::host::process_resources::ProcessResourcesSource;
+use zeta_memory_diagnostics::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceRequest;
+use zeta_memory_diagnostics::ProcessResourceTargets;
+use zeta_memory_diagnostics::ProcessResourcesReading;
+use zeta_memory_diagnostics::ProcessResourcesSource;
 use crate::terminal::TerminalEvent;
 use crate::terminal::TerminalEventSource;
 use crossterm::event::Event;
@@ -127,8 +127,8 @@ impl EventPump {
             {
                 let reading = ProcessResourcesReading {
                     request,
-                    tui: Err(error.clone()),
-                    app_server: matches!(targets, ProcessResourceTargets::TuiAndAppServer(_))
+                    current: Err(error.clone()),
+                    tree: matches!(targets, ProcessResourceTargets::CurrentAndTree(_))
                         .then(|| Err(error.clone())),
                     sampled_at: std::time::Instant::now(),
                 };

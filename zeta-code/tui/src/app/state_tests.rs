@@ -88,6 +88,10 @@ use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
 use zeta_app_server_protocol::protocol::skills::{SkillDiagnosticCodeDto, SkillDiagnosticDto};
+use zeta_memory_diagnostics::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceRequest;
+use zeta_memory_diagnostics::ProcessResourceUsage;
+use zeta_memory_diagnostics::ProcessResourcesReading;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
@@ -2096,4 +2100,19 @@ fn panel_search_owns_letters_and_paste_then_returns_to_the_list_and_original_dra
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert_eq!(app.input(), "original draft");
+}
+
+#[test]
+fn memory_diagnostics_remain_available_during_a_running_turn() {
+    let mut app = App::new();
+    app.insert_text("first");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.insert_text("/memory start");
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(action, Some(AppCommand::Thread(ThreadCommand::ExecuteProductCommand(invocation))) if invocation.command.name == "memory"));
+    assert_eq!(app.status(), &Status::Working);
+    app.update(crate::host::Event::OperationCompleted(Ok("Memory recording started".into())));
+    assert_eq!(app.status(), &Status::Working);
+    app.update(crate::host::Event::OperationCompleted(Err("Memory collection failed".into())));
+    assert_eq!(app.status(), &Status::Working);
 }

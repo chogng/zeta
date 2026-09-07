@@ -13,8 +13,8 @@ use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
 use crate::host::clipboard::ClipboardImageFingerprint;
-use crate::host::process_resources::ProcessResourceDemand;
-use crate::host::process_resources::ProcessResourceMetrics;
+use zeta_memory_diagnostics::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceMetrics;
 use crate::models::Event as ModelEvent;
 use crate::models::ModelSummary;
 use crate::render::test_context;
@@ -327,7 +327,7 @@ fn process_resource_demand_follows_the_content_that_is_actually_visible() {
     app.update(StatusEvent::LineSettingsReceived(settings));
     assert_eq!(
         process_resource_demand(&app, area),
-        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Memory)
+        ProcessResourceDemand::Summary(ProcessResourceMetrics::Memory)
     );
     assert_eq!(
         process_resource_demand(&app, Rect::new(0, 0, 1, 20)),
@@ -354,7 +354,7 @@ fn process_resource_demand_follows_the_content_that_is_actually_visible() {
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(
         process_resource_demand(&app, area),
-        ProcessResourceDemand::Processes
+        ProcessResourceDemand::Detailed
     );
     assert_eq!(
         process_resource_demand(&app, Rect::new(0, 0, 80, 1)),
@@ -381,14 +381,14 @@ fn status_line_items_control_process_resource_metrics_independently() {
     app.update(StatusEvent::LineSettingsReceived(settings.clone()));
     assert_eq!(
         process_resource_demand(&app, area),
-        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::MemoryAndCpu)
+        ProcessResourceDemand::Summary(ProcessResourceMetrics::MemoryAndCpu)
     );
 
     settings.set(StatusLineItem::Memory, false);
     app.update(StatusEvent::LineSettingsReceived(settings.clone()));
     assert_eq!(
         process_resource_demand(&app, area),
-        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Cpu)
+        ProcessResourceDemand::Summary(ProcessResourceMetrics::Cpu)
     );
 
     settings.set(StatusLineItem::Memory, true);
@@ -396,7 +396,7 @@ fn status_line_items_control_process_resource_metrics_independently() {
     app.update(StatusEvent::LineSettingsReceived(settings.clone()));
     assert_eq!(
         process_resource_demand(&app, area),
-        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Memory)
+        ProcessResourceDemand::Summary(ProcessResourceMetrics::Memory)
     );
 
     settings.set(StatusLineItem::Memory, false);

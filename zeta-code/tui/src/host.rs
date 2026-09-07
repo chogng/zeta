@@ -1,6 +1,5 @@
 pub(crate) mod browser;
 pub(crate) mod clipboard;
-pub(crate) mod process_resources;
 mod termination;
 pub(crate) mod transcript_export;
 
@@ -9,7 +8,7 @@ pub(crate) enum Event {
     ClipboardImageRead(Result<clipboard::ClipboardImage, String>),
     ClipboardImageAvailabilityChanged(clipboard::ClipboardImageAvailability),
     OperationCompleted(Result<String, String>),
-    ProcessResourcesSampled(process_resources::ProcessResourcesReading),
+    ProcessResourcesSampled(zeta_memory_diagnostics::ProcessResourcesReading),
     TopTipNoticeShown(String),
 }
 

@@ -2,10 +2,10 @@ use super::RuntimeEvent;
 use super::RuntimeQueue;
 use super::next_process_resource_request;
 use crate::client::ClientEvent;
-use crate::host::process_resources::ProcessResourceDemand;
-use crate::host::process_resources::ProcessResourceRequest;
-use crate::host::process_resources::ProcessResourceUsage;
-use crate::host::process_resources::ProcessResourcesReading;
+use zeta_memory_diagnostics::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceRequest;
+use zeta_memory_diagnostics::ProcessResourceUsage;
+use zeta_memory_diagnostics::ProcessResourcesReading;
 use crate::terminal::TerminalEvent;
 use crossterm::event::Event;
 use crossterm::event::KeyModifiers;
@@ -98,7 +98,7 @@ fn process_resource_readings_coalesce_and_remain_behind_user_input() {
     let Some(RuntimeEvent::ProcessResources(reading)) = queue.recv(None).unwrap() else {
         panic!("expected a process resource reading");
     };
-    assert_eq!(reading.tui.unwrap().resident_bytes, Some(20));
+    assert_eq!(reading.current.unwrap().resident_bytes, Some(20));
     assert!(
         queue
             .recv(Some(Duration::from_millis(1)))
@@ -118,16 +118,16 @@ fn stale_process_resource_reading_cannot_replace_a_newer_request() {
         panic!("expected a process resource reading");
     };
     assert_eq!(reading.request.revision, 2);
-    assert_eq!(reading.tui.unwrap().resident_bytes, Some(20));
+    assert_eq!(reading.current.unwrap().resident_bytes, Some(20));
 }
 
 #[test]
 fn cpu_observation_cycle_restarts_only_after_cpu_was_not_requested() {
-    let cpu = ProcessResourceDemand::StatusLine(
-        crate::host::process_resources::ProcessResourceMetrics::Cpu,
+    let cpu = ProcessResourceDemand::Summary(
+        zeta_memory_diagnostics::ProcessResourceMetrics::Cpu,
     );
     let first = next_process_resource_request(ProcessResourceRequest::default(), cpu);
-    let detailed = next_process_resource_request(first, ProcessResourceDemand::Processes);
+    let detailed = next_process_resource_request(first, ProcessResourceDemand::Detailed);
     let disabled = next_process_resource_request(detailed, ProcessResourceDemand::Disabled);
     let restarted = next_process_resource_request(disabled, cpu);
 
@@ -247,13 +247,13 @@ fn resource_reading(revision: u64, resident_bytes: u64) -> ProcessResourcesReadi
         request: ProcessResourceRequest {
             revision,
             cpu_cycle: 1,
-            demand: ProcessResourceDemand::Processes,
+            demand: ProcessResourceDemand::Detailed,
         },
-        tui: Ok(ProcessResourceUsage {
+        current: Ok(ProcessResourceUsage {
             resident_bytes: Some(resident_bytes),
             cpu_tenths_percent: Some(10),
         }),
-        app_server: None,
+        tree: None,
         sampled_at: Instant::now(),
     }
 }

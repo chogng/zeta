@@ -9,6 +9,7 @@ mod host;
 mod keymap;
 mod mcp;
 mod models;
+mod memory;
 mod render;
 mod sessions;
 mod skills;

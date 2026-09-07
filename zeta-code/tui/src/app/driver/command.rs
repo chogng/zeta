@@ -242,11 +242,121 @@ impl AppDriver {
         }
     }
 
+    fn execute_memory(&mut self, key: Option<RequestKey>, arguments: &str) {
+        let mut parts = arguments.trim().splitn(2, char::is_whitespace);
+        let action = parts.next().unwrap_or("read");
+        let path = parts
+            .next()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        match action {
+            "start" if path.is_none() => {
+                if self.memory.as_ref().is_some_and(|recording| {
+                    recording.report().is_ok_and(|report| {
+                        report.status == zeta_memory_diagnostics::MemoryStatus::Recording
+                    })
+                }) {
+                    self.app.update(crate::host::Event::OperationCompleted(Ok("Memory diagnostics are already recording. Use /memory read or /memory stop.".into())));
+                    return;
+                }
+                let client = self.client.clone();
+                let id = crate::client::new_command_id("memory").to_string();
+                let objects = std::sync::Arc::clone(&self.memory_objects);
+                self.requests.spawn(
+                    key,
+                    "zeta-memory-start",
+                    move || {
+                        Completion::Memory(
+                            zeta_app_server_client::MemoryRecording::start(
+                                client,
+                                zeta_memory_diagnostics::MemoryProduct::Tui,
+                                id,
+                                move || {
+                                    vec![zeta_memory_diagnostics::MemoryMetric {
+                                        kind: zeta_memory_diagnostics::MemoryMetricKind::UiObjects,
+                                        value: Some(
+                                            objects.load(std::sync::atomic::Ordering::Relaxed)
+                                                as u64,
+                                        ),
+                                        unavailable: None,
+                                    }]
+                                },
+                            )
+                            .map(Box::new),
+                        )
+                    },
+                    &mut self.app,
+                );
+            }
+            "stop" if path.is_none() => {
+                let Some(mut recording) = self.memory.take() else {
+                    self.app.update(crate::host::Event::OperationCompleted(Ok(
+                        "No memory diagnostic has been started.".into(),
+                    )));
+                    return;
+                };
+                self.requests.spawn(
+                    key,
+                    "zeta-memory-stop",
+                    move || Completion::Memory(recording.stop().map(|_| recording)),
+                    &mut self.app,
+                );
+            }
+            "read" | "" if path.is_none() => {
+                let result = self
+                    .memory
+                    .as_ref()
+                    .ok_or_else(|| "Use /memory start to begin a diagnostic.".to_owned())
+                    .and_then(|recording| recording.report())
+                    .map(|report| crate::memory::describe(&report));
+                self.app
+                    .update(crate::host::Event::OperationCompleted(result));
+            }
+            "export" if path.is_some() => {
+                let Some(recording) = &self.memory else {
+                    self.app.update(crate::host::Event::OperationCompleted(Err(
+                        "No memory diagnostic has been started.".into(),
+                    )));
+                    return;
+                };
+                let id = recording.session_id().to_owned();
+                let path = self.host_dir_root.join(path.unwrap());
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    key,
+                    "zeta-memory-export",
+                    move || {
+                        let result = (|| {
+                            use std::io::Write;
+                            let bytes = client.export_memory_bytes(id)?;
+                            let mut file = std::fs::OpenOptions::new()
+                                .write(true)
+                                .create_new(true)
+                                .open(&path)
+                                .map_err(|error| error.to_string())?;
+                            file.write_all(&bytes).map_err(|error| error.to_string())?;
+                            Ok(format!("Memory report exported to {}", path.display()))
+                        })();
+                        Ok(crate::host::Event::OperationCompleted(result))
+                    },
+                    &mut self.app,
+                );
+            }
+            _ => self.app.update(crate::host::Event::OperationCompleted(Err(
+                "Usage: /memory start | read | stop | export <new-file.json>".into(),
+            ))),
+        }
+    }
+
     fn execute_product_command(
         &mut self,
         request_key: Option<RequestKey>,
         invocation: crate::thread::composer::SlashCommandInvocation,
     ) {
+        if invocation.command.name == "memory" {
+            self.execute_memory(request_key, &invocation.display_arguments);
+            return;
+        }
         let mut client = self.client.clone();
         let conversation = self.conversation.clone();
         let subscription = self.thread_subscription.clone();

@@ -1,9 +1,9 @@
 use crate::AppServerProcess;
-use crate::host::process_resources::ProcessResourceMetrics;
-use crate::host::process_resources::ProcessResourceRequest;
-use crate::host::process_resources::ProcessResourceUsage;
-use crate::host::process_resources::ProcessResourcesReading;
-use crate::host::process_resources::ProcessTreeResourceUsage;
+use zeta_memory_diagnostics::ProcessResourceMetrics;
+use zeta_memory_diagnostics::ProcessResourceRequest;
+use zeta_memory_diagnostics::ProcessResourceUsage;
+use zeta_memory_diagnostics::ProcessResourcesReading;
+use zeta_memory_diagnostics::ProcessTreeResourceUsage;
 use std::collections::VecDeque;
 use std::time::Duration;
 use std::time::Instant;
@@ -137,9 +137,9 @@ impl ProcessResourcesModel {
         let Some(metrics) = self.request.demand.metrics() else {
             return;
         };
-        apply_usage(&mut self.tui, reading.tui, metrics);
+        apply_usage(&mut self.tui, reading.current, metrics);
         if matches!(self.app_server_process, AppServerProcess::Local(_)) {
-            match reading.app_server {
+            match reading.tree {
                 Some(Ok(usage)) => apply_app_server_usage(&mut self.app_server, usage, metrics),
                 Some(Err(_)) | None => {
                     mark_usage_unavailable(&mut self.app_server.process, metrics);

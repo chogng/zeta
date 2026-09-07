@@ -227,6 +227,7 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
                 self.handle_remote_tunnel_event(event);
                 return;
             }
+            WorkbenchEvent::Memory(completion) => { self.memory.finish(completion); self.rebuild_presentation_on_next_redraw(); return; }
             WorkbenchEvent::ScmOperationFinished(result) => {
                 if let Err(error) = result {
                     eprintln!("SCM operation failed: {error}");

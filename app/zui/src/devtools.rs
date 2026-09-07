@@ -115,6 +115,7 @@ pub struct WindowDiagnostics {
     pub metrics: WindowMetrics,
     pub presented_frames: u64,
     pub last_scene: Option<SceneDiagnostics>,
+    pub renderer_memory: Option<crate::render::RendererMemory>,
 }
 
 /// Immutable snapshot consumed by diagnostics UI, tests, or support tooling.
@@ -153,6 +154,7 @@ impl DiagnosticsHandle {
                 next_sequence: 1,
                 events: VecDeque::with_capacity(capacity),
                 windows: HashMap::new(),
+                memory_readers: HashMap::new(),
                 active_tasks: 0,
                 active_timers: 0,
                 sink,
@@ -163,15 +165,20 @@ impl DiagnosticsHandle {
     /// Captures current runtime state and a stable copy of the bounded trace.
     pub fn snapshot(&self) -> DiagnosticsSnapshot {
         let state = self.state.lock().expect("diagnostics lock");
-        let mut windows = state.windows.values().cloned().collect::<Vec<_>>();
-        windows.sort_by_key(|window| window.id.into_raw());
-        DiagnosticsSnapshot {
+        let mut snapshot = DiagnosticsSnapshot {
             uptime: state.started.elapsed(),
-            windows,
+            windows: state.windows.values().cloned().collect(),
             active_tasks: state.active_tasks,
             active_timers: state.active_timers,
             events: state.events.iter().cloned().collect(),
+        };
+        let readers = state.memory_readers.clone();
+        drop(state);
+        snapshot.windows.sort_by_key(|window| window.id.into_raw());
+        for window in &mut snapshot.windows {
+            window.renderer_memory = readers.get(&window.id).map(|reader| reader.read());
         }
+        snapshot
     }
 
     /// Removes trace history without changing live runtime state.
@@ -217,6 +224,7 @@ impl DiagnosticsHandle {
                 metrics,
                 presented_frames: 0,
                 last_scene: None,
+                renderer_memory: None,
             },
         );
         self.record(DiagnosticEventKind::WindowOpened(id));
@@ -258,12 +266,30 @@ impl DiagnosticsHandle {
         });
     }
 
+    pub(crate) fn set_memory_reader(
+        &self,
+        id: WindowId,
+        reader: Option<crate::render::RendererMemoryReader>,
+    ) {
+        let mut state = self.state.lock().expect("diagnostics lock");
+        if state.windows.contains_key(&id) {
+            match reader {
+                Some(reader) => {
+                    state.memory_readers.insert(id, reader);
+                }
+                None => {
+                    state.memory_readers.remove(&id);
+                }
+            }
+        }
+    }
+
     pub(crate) fn close_window(&self, id: WindowId) {
-        self.state
-            .lock()
-            .expect("diagnostics lock")
-            .windows
-            .remove(&id);
+        {
+            let mut state = self.state.lock().expect("diagnostics lock");
+            state.windows.remove(&id);
+            state.memory_readers.remove(&id);
+        }
         self.record(DiagnosticEventKind::WindowClosed(id));
     }
 
@@ -280,6 +306,7 @@ struct DiagnosticsState {
     next_sequence: u64,
     events: VecDeque<DiagnosticEvent>,
     windows: HashMap<WindowId, WindowDiagnostics>,
+    memory_readers: HashMap<WindowId, crate::render::RendererMemoryReader>,
     active_tasks: usize,
     active_timers: usize,
     sink: Option<Arc<dyn DiagnosticsSink>>,

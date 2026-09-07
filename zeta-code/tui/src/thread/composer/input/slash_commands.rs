@@ -17,6 +17,7 @@ use zeta_slash_commands::SlashCommandCatalog;
 #[strum(serialize_all = "kebab-case")]
 pub(crate) enum TuiSlashCommandAction {
     Status,
+    Memory,
     #[strum(serialize = "statusline")]
     StatusLine,
     Skills,
@@ -62,6 +63,7 @@ impl TuiSlashCommandAction {
 
     pub(crate) fn description(self) -> &'static str {
         match self {
+            Self::Memory => "memory diagnostics: start, read, stop, export <path>",
             Self::Status => "show the active session, thread, and model",
             Self::StatusLine => "choose the items shown in the status line",
             Self::Sessions | Self::Agents => "open the Session Manager",
@@ -88,7 +90,8 @@ impl TuiSlashCommandAction {
 
     pub(crate) fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
-            Self::Resume
+            Self::Memory
+            | Self::Resume
             | Self::Rewind
             | Self::AddDir
             | Self::Fork

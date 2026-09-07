@@ -8,6 +8,7 @@ use zeta_editor_host::FileEditorLanguageEvent;
 use zeta_terminal_runtime::TerminalRuntimeEvent;
 
 pub(crate) enum WorkbenchEvent {
+    Memory(crate::memory::MemoryCompletion),
     Session(SessionRuntimeEvent),
     Terminal(TerminalSessionEventEnvelope),
     TerminalReady(TerminalSessionReady),

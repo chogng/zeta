@@ -16,7 +16,7 @@ use std::time::Instant;
 use sysinfo::Pid;
 
 #[test]
-fn demand_uses_no_timer_when_disabled_and_slower_status_line_sampling() {
+fn demand_uses_no_timer_when_disabled_and_slower_summary_sampling() {
     let intervals = ProcessResourceSampleIntervals::default();
 
     assert_eq!(
@@ -24,35 +24,34 @@ fn demand_uses_no_timer_when_disabled_and_slower_status_line_sampling() {
         None
     );
     assert_eq!(
-        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Memory)
-            .sample_interval(intervals),
+        ProcessResourceDemand::Summary(ProcessResourceMetrics::Memory).sample_interval(intervals),
         Some(Duration::from_secs(2))
     );
     assert_eq!(
-        ProcessResourceDemand::Processes.sample_interval(intervals),
+        ProcessResourceDemand::Detailed.sample_interval(intervals),
         Some(Duration::from_secs(1))
     );
 }
 
 #[test]
-fn sampler_reads_tui_memory_and_collects_cpu_after_the_first_interval() {
+fn sampler_reads_current_memory_and_collects_cpu_after_the_first_interval() {
     let request = ProcessResourceRequest {
         revision: 1,
         cpu_cycle: 1,
-        demand: ProcessResourceDemand::Processes,
+        demand: ProcessResourceDemand::Detailed,
     };
     let mut sampler = ProcessResourcesSampler::new(
-        ProcessResourceTargets::Tui,
+        ProcessResourceTargets::Current,
         ProcessResourceMetrics::MemoryAndCpu,
         request.cpu_cycle,
     );
     let first = sampler.sample(request, Instant::now());
-    let first = first.tui.unwrap();
+    let first = first.current.unwrap();
     assert!(first.resident_bytes.unwrap() > 0);
     assert_eq!(first.cpu_tenths_percent, None);
 
     std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
-    let second = sampler.sample(request, Instant::now()).tui.unwrap();
+    let second = sampler.sample(request, Instant::now()).current.unwrap();
     assert!(second.cpu_tenths_percent.is_some());
     assert!(second.cpu_tenths_percent.unwrap() <= 1_000);
 }
@@ -83,10 +82,10 @@ fn source_waits_for_demand_samples_only_requested_metrics_and_joins_promptly() {
     let emitted = Arc::clone(&readings);
     let mut source = ProcessResourcesSource::start_with_intervals(
         Arc::clone(&stop),
-        ProcessResourceTargets::Tui,
+        ProcessResourceTargets::Current,
         ProcessResourceSampleIntervals {
-            status_line: Duration::from_millis(10),
-            processes: Duration::from_millis(10),
+            summary: Duration::from_millis(10),
+            detail: Duration::from_millis(10),
         },
         move |reading| {
             emitted.lock().unwrap().push(reading);
@@ -100,7 +99,7 @@ fn source_waits_for_demand_samples_only_requested_metrics_and_joins_promptly() {
     let memory_request = ProcessResourceRequest {
         revision: 1,
         cpu_cycle: 0,
-        demand: ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Memory),
+        demand: ProcessResourceDemand::Summary(ProcessResourceMetrics::Memory),
     };
     source.set_request(memory_request);
     let deadline = Instant::now() + Duration::from_secs(2);
@@ -109,12 +108,12 @@ fn source_waits_for_demand_samples_only_requested_metrics_and_joins_promptly() {
     }
     let first = readings.lock().unwrap()[0].clone();
     assert_eq!(first.request, memory_request);
-    assert!(first.tui.unwrap().resident_bytes.is_some());
+    assert!(first.current.unwrap().resident_bytes.is_some());
 
     let cpu_request = ProcessResourceRequest {
         revision: 2,
         cpu_cycle: 1,
-        demand: ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Cpu),
+        demand: ProcessResourceDemand::Summary(ProcessResourceMetrics::Cpu),
     };
     source.set_request(cpu_request);
     let deadline = Instant::now() + Duration::from_secs(2);
@@ -132,7 +131,7 @@ fn source_waits_for_demand_samples_only_requested_metrics_and_joins_promptly() {
         .iter()
         .find(|reading| reading.request == cpu_request)
         .unwrap()
-        .tui
+        .current
         .as_ref()
         .unwrap();
     assert_eq!(cpu.resident_bytes, None);
@@ -151,7 +150,7 @@ fn source_waits_for_demand_samples_only_requested_metrics_and_joins_promptly() {
     let restarted_cpu_request = ProcessResourceRequest {
         revision: 4,
         cpu_cycle: 2,
-        demand: ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Cpu),
+        demand: ProcessResourceDemand::Summary(ProcessResourceMetrics::Cpu),
     };
     source.set_request(restarted_cpu_request);
     let deadline = Instant::now() + Duration::from_secs(2);
@@ -170,7 +169,7 @@ fn source_waits_for_demand_samples_only_requested_metrics_and_joins_promptly() {
         .iter()
         .find(|reading| reading.request == restarted_cpu_request)
         .unwrap()
-        .tui
+        .current
         .as_ref()
         .unwrap()
         .cpu_tenths_percent;

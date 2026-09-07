@@ -10974,6 +10974,7 @@ dependencies = [
  "zeta-marketplace-manager",
  "zeta-mcp",
  "zeta-mcp-extension",
+ "zeta-memory-diagnostics",
  "zeta-model-provider",
  "zeta-model-provider-config",
  "zeta-models-manager",
@@ -11021,6 +11022,7 @@ dependencies = [
  "zeta-core",
  "zeta-file-access",
  "zeta-install-context",
+ "zeta-memory-diagnostics",
  "zeta-protocol",
 ]
 
@@ -11062,6 +11064,7 @@ dependencies = [
  "zeta-collaboration",
  "zeta-environment",
  "zeta-file-access",
+ "zeta-memory-diagnostics",
  "zeta-protocol",
  "zeta-thread-transcript",
 ]
@@ -11915,6 +11918,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-memory-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "thiserror 2.0.19",
+ "ts-rs",
+]
+
+[[package]]
 name = "zeta-model-accounting"
 version = "0.1.0"
 dependencies = [
@@ -12490,6 +12505,7 @@ dependencies = [
  "zeta-diff",
  "zeta-file-search",
  "zeta-keybinding",
+ "zeta-memory-diagnostics",
  "zeta-protocol",
  "zeta-slash-commands",
  "zeta-sprite",
@@ -12760,6 +12776,7 @@ dependencies = [
  "zeta-keybinding",
  "zeta-keybindings-host",
  "zeta-lsp-manager",
+ "zeta-memory-diagnostics",
  "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",

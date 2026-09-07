@@ -25,7 +25,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 syntect = { workspace = true }
-sysinfo = { workspace = true }
+zeta-memory-diagnostics = { workspace = true }
 unicode-width = { workspace = true }
 zeroize = { workspace = true }
 zeta-ansi-escape = { workspace = true }

@@ -635,3 +635,42 @@ fn actual_tui_process_renders_an_http_failure_and_remains_usable() {
     process.assert_snapshot("real/07-lifecycle/04-error-recovered");
     process.quit();
 }
+
+#[test]
+fn actual_tui_records_reads_stops_and_exports_memory_diagnostics() {
+    let fixture = Fixture::new("memory-diagnostics");
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/memory start");
+    process.wait_for_output("Recording");
+    process.submit("/memory start");
+    process.wait_for_output("already");
+    process.submit("/memory read");
+    process.submit("/memory stop");
+    process.wait_for_output("Stopped");
+    process.submit("/memory export memory-report.json");
+    let path = fixture.workspace().join("memory-report.json");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let report: serde_json::Value = loop {
+        if let Ok(bytes) = fs::read(&path) {
+            if let Ok(report) = serde_json::from_slice(&bytes) {
+                break report;
+            }
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the diagnostic export did not complete"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert_eq!(report["report"]["version"], 1);
+    assert_eq!(report["report"]["status"], "stopped");
+    assert!(report["report"]["targets"].as_array().is_some());
+    process.quit();
+    assert!(
+        server.request_bodies().is_empty(),
+        "diagnostics must not invoke a model"
+    );
+}

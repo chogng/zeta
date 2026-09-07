@@ -214,7 +214,11 @@ fn default_keybinding(command: AppCommandId) -> Option<&'static KeySequence> {
                     .expect("builtin key"),
             )
         })),
-        AppCommandId::ManageRemoteTunnels
+        AppCommandId::StartMemoryDiagnostics
+        | AppCommandId::ReadMemoryDiagnostics
+        | AppCommandId::StopMemoryDiagnostics
+        | AppCommandId::ExportMemoryDiagnostics
+        | AppCommandId::ManageRemoteTunnels
         | AppCommandId::ToggleTabContainer
         | AppCommandId::ToggleFilesPane
         | AppCommandId::AddSession

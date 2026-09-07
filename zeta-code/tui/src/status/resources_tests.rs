@@ -8,13 +8,13 @@ use super::format_compact_process_cpu;
 use super::format_compact_process_memory;
 use super::format_memory_change;
 use crate::AppServerProcess;
-use crate::host::process_resources::ObservedProcess;
-use crate::host::process_resources::ProcessResourceDemand;
-use crate::host::process_resources::ProcessResourceMetrics;
-use crate::host::process_resources::ProcessResourceRequest;
-use crate::host::process_resources::ProcessResourceUsage;
-use crate::host::process_resources::ProcessResourcesReading;
-use crate::host::process_resources::ProcessTreeResourceUsage;
+use zeta_memory_diagnostics::ObservedProcess;
+use zeta_memory_diagnostics::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceMetrics;
+use zeta_memory_diagnostics::ProcessResourceRequest;
+use zeta_memory_diagnostics::ProcessResourceUsage;
+use zeta_memory_diagnostics::ProcessResourcesReading;
+use zeta_memory_diagnostics::ProcessTreeResourceUsage;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -72,8 +72,8 @@ fn unavailable_local_process_marks_the_total_unavailable_without_discarding_hist
     model.apply(reading(100 * MIB, Some(20 * MIB), Some(10), started));
     model.apply(ProcessResourcesReading {
         request: detailed_request(),
-        tui: Ok(usage(110 * MIB, Some(10))),
-        app_server: Some(Err("not readable".into())),
+        current: Ok(usage(110 * MIB, Some(10))),
+        tree: Some(Err("not readable".into())),
         sampled_at: started + Duration::from_secs(1),
     });
 
@@ -90,8 +90,8 @@ fn model_includes_app_server_descendants_in_app_server_and_local_totals() {
     model.apply_request(detailed_request());
     model.apply(ProcessResourcesReading {
         request: detailed_request(),
-        tui: Ok(usage(100 * MIB, Some(20))),
-        app_server: Some(Ok(ProcessTreeResourceUsage {
+        current: Ok(usage(100 * MIB, Some(20))),
+        tree: Some(Ok(ProcessTreeResourceUsage {
             root: usage(40 * MIB, Some(10)),
             descendants: vec![
                 ObservedProcess {
@@ -139,8 +139,8 @@ fn remote_app_server_is_explicit_and_excluded_from_local_totals() {
     model.apply_request(detailed_request());
     model.apply(ProcessResourcesReading {
         request: detailed_request(),
-        tui: Ok(usage(80 * MIB, Some(35))),
-        app_server: None,
+        current: Ok(usage(80 * MIB, Some(35))),
+        tree: None,
         sampled_at: Instant::now(),
     });
 
@@ -180,16 +180,16 @@ fn demand_changes_clear_ended_history_reset_restarted_metrics_and_reject_stale_r
     let memory = ProcessResourceRequest {
         revision: 3,
         cpu_cycle: 1,
-        demand: ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Memory),
+        demand: ProcessResourceDemand::Summary(ProcessResourceMetrics::Memory),
     };
     model.apply_request(memory);
     model.apply(ProcessResourcesReading {
         request: memory,
-        tui: Ok(ProcessResourceUsage {
+        current: Ok(ProcessResourceUsage {
             resident_bytes: Some(80 * MIB),
             cpu_tenths_percent: None,
         }),
-        app_server: None,
+        tree: None,
         sampled_at: started + Duration::from_secs(2),
     });
     assert_eq!(
@@ -202,7 +202,7 @@ fn demand_changes_clear_ended_history_reset_restarted_metrics_and_reject_stale_r
     model.apply_request(ProcessResourceRequest {
         revision: 4,
         cpu_cycle: 2,
-        demand: ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Cpu),
+        demand: ProcessResourceDemand::Summary(ProcessResourceMetrics::Cpu),
     });
     assert_eq!(model.view().local.cpu, ProcessCpuCurrent::Collecting);
     assert_eq!(model.view().observed_peak_bytes, None);
@@ -232,8 +232,8 @@ fn reading(
 ) -> ProcessResourcesReading {
     ProcessResourcesReading {
         request: detailed_request(),
-        tui: Ok(usage(tui_memory, cpu)),
-        app_server: app_server_memory.map(|memory| {
+        current: Ok(usage(tui_memory, cpu)),
+        tree: app_server_memory.map(|memory| {
             Ok(ProcessTreeResourceUsage {
                 root: usage(memory, cpu),
                 descendants: Vec::new(),
@@ -254,6 +254,6 @@ fn detailed_request() -> ProcessResourceRequest {
     ProcessResourceRequest {
         revision: 1,
         cpu_cycle: 1,
-        demand: ProcessResourceDemand::Processes,
+        demand: ProcessResourceDemand::Detailed,
     }
 }

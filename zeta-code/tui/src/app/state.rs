@@ -28,7 +28,6 @@ use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
-use crate::host::process_resources::ProcessResourceRequest;
 use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
@@ -122,6 +121,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadResult;
+use zeta_memory_diagnostics::ProcessResourceRequest;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
@@ -1300,6 +1300,8 @@ impl App {
     pub(crate) fn welcome(&self) -> &WelcomeModel {
         &self.welcome
     }
+
+    pub(crate) fn memory_object_count(&self) -> usize { self.thread.cells().len() }
 
     #[cfg(test)]
     pub(crate) fn status(&self) -> &Status {
@@ -2490,7 +2492,7 @@ impl App {
         }
         if matches!(self.status, Status::Working)
             && invocation.origin == SlashCommandOrigin::Local
-            && !matches!(local, Some(TuiSlashCommandAction::Export))
+            && !matches!(local, Some(TuiSlashCommandAction::Export | TuiSlashCommandAction::Memory))
         {
             self.thread.update(ThreadPresentationEvent::CommandFailed {
                 command: invocation.display_text(),

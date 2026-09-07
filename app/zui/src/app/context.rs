@@ -139,8 +139,11 @@ impl<'a, T: 'static> AppContext<'a, T> {
                 ApplicationError::host("native application menu attachment", source)
             })?;
         runtime.finish_open(parent);
+        let memory_reader = runtime.memory_reader();
         self.windows.insert(opened.id(), runtime);
         self.diagnostics.open_window(opened.id(), opened.metrics());
+        self.diagnostics
+            .set_memory_reader(opened.id(), memory_reader);
         self.lifecycle.record_window_opened(opened.id());
         Ok(opened)
     }

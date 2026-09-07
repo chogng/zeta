@@ -1,3 +1,4 @@
+import './contrib/memory/browser/memory.contribution.js';
 /**
  * Shared Workbench registrations loaded by every renderer host.
  *

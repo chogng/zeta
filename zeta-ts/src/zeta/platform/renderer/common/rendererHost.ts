@@ -1,3 +1,4 @@
+import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
 import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../app-server/common/appServerApi.js";
 import type { IExtensionApi } from "../../extensions/common/extensionApi.js";
 import type { IFileApi } from "../../files/common/fileApi.js";
@@ -48,6 +49,7 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
 	readonly automation?: IAutomationService;
+	readonly memoryDiagnostics?: IMemoryDiagnosticsService;
 	readonly appServer: IAppServerApi;
 	readonly accounts: IAccountApi;
 	readonly remote?: IRemoteAgentApi;

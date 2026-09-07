@@ -1,5 +1,8 @@
 //! Reusable typed app-server client boundary and contract-test entry point.
 
+mod memory;
+pub use memory::MemoryRecording;
+
 mod in_process;
 mod notification;
 mod product_services;
@@ -985,6 +988,82 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: TypstCompileParams,
     ) -> Result<TypstCompileResult, ClientError> {
         self.call(ClientMethod::TypstCompile, params)
+    }
+
+    pub fn start_memory(
+        &mut self,
+        params: zeta_memory_diagnostics::MemoryStart,
+    ) -> Result<zeta_memory_diagnostics::MemoryReport, ClientError> {
+        self.call(ClientMethod::MemoryStart, params)
+    }
+
+    pub fn read_memory(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::memory::MemorySessionParams,
+    ) -> Result<zeta_memory_diagnostics::MemoryReport, ClientError> {
+        self.call(ClientMethod::MemoryRead, params)
+    }
+
+    pub fn stop_memory(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::memory::MemorySessionParams,
+    ) -> Result<zeta_memory_diagnostics::MemoryReport, ClientError> {
+        self.call(ClientMethod::MemoryStop, params)
+    }
+
+    pub fn submit_memory(
+        &mut self,
+        params: zeta_memory_diagnostics::MemoryEvidence,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::MemorySubmit, params)
+    }
+
+    pub fn export_memory(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::memory::MemorySessionParams,
+    ) -> Result<ResourceMetadataResult, ClientError> {
+        self.call(ClientMethod::MemoryExport, params)
+    }
+
+    pub fn export_memory_bytes(&mut self, session_id: String) -> Result<Vec<u8>, String> {
+        use base64::Engine;
+        let metadata = self
+            .export_memory(
+                zeta_app_server_protocol::protocol::memory::MemorySessionParams { session_id },
+            )
+            .map_err(|error| error.to_string())?;
+        let result = (|| {
+            let mut bytes = Vec::new();
+            while bytes.len() < metadata.size {
+                let chunk = self
+                    .read_resource(ResourceReadParams {
+                        resource_id: metadata.resource_id.clone(),
+                        offset: bytes.len(),
+                        max_bytes: 262144,
+                    })
+                    .map_err(|error| error.to_string())?;
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(chunk.data_base64)
+                    .map_err(|error| error.to_string())?;
+                if decoded.is_empty()
+                    || decoded.len() != chunk.decoded_length
+                    || bytes.len() + decoded.len() > metadata.size
+                {
+                    return Err("invalid diagnostic report chunk".into());
+                }
+                bytes.extend(decoded);
+            }
+            Ok(bytes)
+        })();
+        let released = self
+            .release_resource(ResourceReleaseParams {
+                resource_id: metadata.resource_id,
+            })
+            .map_err(|error| error.to_string());
+        match (result, released) {
+            (Ok(bytes), Ok(())) => Ok(bytes),
+            (Err(error), _) | (_, Err(error)) => Err(error),
+        }
     }
 
     pub fn resource_metadata(

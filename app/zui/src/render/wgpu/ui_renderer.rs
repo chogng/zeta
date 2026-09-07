@@ -67,6 +67,7 @@ impl TextLayer {
 
 /// Owns the font shaping, glyph cache, atlas, and GPU pipeline for a native UI surface.
 pub struct UiRenderer {
+    cache_entries: Arc<std::sync::atomic::AtomicUsize>,
     clip_renderer: ClipRenderer,
     rect_renderer: RectRenderer,
     icon_renderer: IconRenderer,
@@ -94,6 +95,7 @@ impl UiRenderer {
         let mut atlas = TextAtlas::new(device, queue, &cache, surface_format);
         let text_batches = vec![TextLayer::new(&mut atlas, device)];
         Self {
+            cache_entries: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             clip_renderer: ClipRenderer::new(device, surface_format),
             rect_renderer: RectRenderer::new(device, surface_format, content_depth_stencil()),
             icon_renderer: IconRenderer::new(device, surface_format, content_depth_stencil()),
@@ -109,6 +111,10 @@ impl UiRenderer {
             prepared_text_blocks: Vec::new(),
             prepared_target: None,
         }
+    }
+
+    pub(super) fn cache_entries(&self) -> Arc<std::sync::atomic::AtomicUsize> {
+        Arc::clone(&self.cache_entries)
     }
 
     pub fn prepare(
@@ -240,6 +246,12 @@ impl UiRenderer {
         self.prepared_scene_batches = scene_batches;
         self.prepared_text_blocks = scene.text_blocks().to_vec();
         self.prepared_target = Some(target);
+        self.cache_entries.store(
+            self.image_renderer.cache_entries()
+                + self.icon_renderer.cache_entries()
+                + self.text_buffer_cache.len(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         Ok(())
     }
 

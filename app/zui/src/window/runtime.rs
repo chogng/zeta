@@ -272,6 +272,10 @@ impl WindowRuntime {
             .update(nodes, self.metrics.scale_factor());
     }
 
+    pub(crate) fn memory_reader(&self) -> Option<crate::render::RendererMemoryReader> {
+        self.renderer.memory_reader()
+    }
+
     pub(crate) fn render_scene(&mut self, scene: &UiScene) -> Result<RenderOutcome, RendererError> {
         let outcome = self.renderer.render_scene(scene)?;
         if outcome == RenderOutcome::Retry {

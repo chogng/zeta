@@ -211,3 +211,76 @@ impl ModelService for TestModel {
         })
     }
 }
+
+#[test]
+fn memory_recording_collects_product_counters_exports_and_stops_for_rust_products() {
+    use crate::MemoryRecording;
+    use zeta_memory_diagnostics::MemoryMetric;
+    use zeta_memory_diagnostics::MemoryMetricKind;
+    use zeta_memory_diagnostics::MemoryOrigin;
+    use zeta_memory_diagnostics::MemoryProduct;
+    use zeta_memory_diagnostics::MemoryStatus;
+    for product in [MemoryProduct::Tui, MemoryProduct::RustGui] {
+        let session = AppServerSession::from_embedded_host(Arc::new(app_server()), ClientInfo { name: "memory-test".into(), version: "1".into() }, ClientCapabilities::default()).unwrap();
+        let mut client = session.client();
+        let mut recording = MemoryRecording::start(client.clone(), product, "memory-test".into(), || vec![MemoryMetric { kind: MemoryMetricKind::UiObjects, value: Some(7), unavailable: None }]).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            let report = recording.report().unwrap();
+            if let Some(target) = report.targets.iter().find(|target| target.origin == MemoryOrigin::ClientHost) {
+                assert!(target.latest.metrics.iter().any(|metric| metric.kind == MemoryMetricKind::UiObjects && metric.value == Some(7)));
+                assert!(!target.latest.metrics.iter().any(|metric| metric.kind == MemoryMetricKind::ResidentBytes), "the embedded backend already reports this process's resident memory");
+                break;
+            }
+            assert!(Instant::now() < deadline, "client evidence did not arrive");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let report = recording.stop().unwrap();
+        assert_eq!(report.status, MemoryStatus::Stopped);
+        assert_eq!(report, recording.stop().unwrap());
+        let export = client.export_memory_bytes(recording.session_id().to_owned()).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&export).unwrap();
+        assert_eq!(value["report"]["status"], "stopped");
+        drop(recording);
+        session.shutdown().unwrap();
+    }
+}
+
+#[test]
+fn dropping_memory_recording_stops_backend_without_closing_its_connection() {
+    use crate::MemoryRecording;
+    use zeta_memory_diagnostics::MemoryMetric;
+    use zeta_memory_diagnostics::MemoryMetricKind;
+    use zeta_memory_diagnostics::MemoryProduct;
+    use zeta_memory_diagnostics::MemoryStatus;
+    use zeta_app_server_protocol::protocol::memory::MemorySessionParams;
+    let session = AppServerSession::from_embedded_host(Arc::new(app_server()), ClientInfo { name: "memory-drop-test".into(), version: "1".into() }, ClientCapabilities::default()).unwrap();
+    let mut client = session.client();
+    let recording = MemoryRecording::start(client.clone(), MemoryProduct::Tui, "drop-test".into(), || vec![MemoryMetric { kind: MemoryMetricKind::UiObjects, value: Some(1), unavailable: None }]).unwrap();
+    let session_id = recording.session_id().to_owned();
+    drop(recording);
+    assert_eq!(client.read_memory(MemorySessionParams { session_id }).unwrap().status, MemoryStatus::Stopped);
+    session.shutdown().unwrap();
+}
+
+#[test]
+fn failed_memory_evidence_remains_visible_after_backend_cleanup() {
+    use crate::MemoryRecording;
+    use zeta_memory_diagnostics::MemoryMetric;
+    use zeta_memory_diagnostics::MemoryMetricKind;
+    use zeta_memory_diagnostics::MemoryProduct;
+    use zeta_memory_diagnostics::MemoryStatus;
+    use zeta_app_server_protocol::protocol::memory::MemorySessionParams;
+    let session = AppServerSession::from_embedded_host(Arc::new(app_server()), ClientInfo { name: "memory-failure-test".into(), version: "1".into() }, ClientCapabilities::default()).unwrap();
+    let mut client = session.client();
+    let recording = MemoryRecording::start(client.clone(), MemoryProduct::Tui, "failure-test".into(), || vec![MemoryMetric { kind: MemoryMetricKind::UiObjects, value: Some(1), unavailable: None }; 2]).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let report = client.read_memory(MemorySessionParams { session_id: recording.session_id().into() }).unwrap();
+        if recording.report().is_err() && report.status == MemoryStatus::Stopped { break; }
+        assert!(Instant::now() < deadline, "failed collector did not stop its recording");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    drop(recording);
+    session.shutdown().unwrap();
+}

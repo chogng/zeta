@@ -34,11 +34,15 @@ pub enum AppCommandId {
     FocusNextPane,
     FocusPreviousPane,
     ClosePane,
+    StartMemoryDiagnostics,
+    ReadMemoryDiagnostics,
+    StopMemoryDiagnostics,
+    ExportMemoryDiagnostics,
 }
 
 impl AppCommandId {
     /// Commands that can currently be assigned a user keybinding.
-    pub const BINDABLE: [Self; 18] = [
+    pub const BINDABLE: [Self; 22] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
@@ -57,10 +61,14 @@ impl AppCommandId {
         Self::FocusNextPane,
         Self::FocusPreviousPane,
         Self::ClosePane,
+        Self::StartMemoryDiagnostics,
+        Self::ReadMemoryDiagnostics,
+        Self::StopMemoryDiagnostics,
+        Self::ExportMemoryDiagnostics,
     ];
 
     /// Every command known to the app command catalog.
-    pub const ALL: [Self; 27] = [
+    pub const ALL: [Self; 31] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
@@ -88,11 +96,19 @@ impl AppCommandId {
         Self::FocusNextPane,
         Self::FocusPreviousPane,
         Self::ClosePane,
+        Self::StartMemoryDiagnostics,
+        Self::ReadMemoryDiagnostics,
+        Self::StopMemoryDiagnostics,
+        Self::ExportMemoryDiagnostics,
     ];
 
     /// Returns the stable configuration and command-palette identifier.
     pub const fn id(self) -> &'static str {
         match self {
+            Self::StartMemoryDiagnostics => "zeta.memory.start",
+            Self::ReadMemoryDiagnostics => "zeta.memory.read",
+            Self::StopMemoryDiagnostics => "zeta.memory.stop",
+            Self::ExportMemoryDiagnostics => "zeta.memory.export",
             Self::Copy => "editor.action.clipboardCopyAction",
             Self::Paste => "editor.action.clipboardPasteAction",
             Self::Save => "workbench.action.files.save",
@@ -126,6 +142,10 @@ impl AppCommandId {
     /// Returns the user-facing label used by keyboard shortcut presentation.
     pub const fn label(self) -> &'static str {
         match self {
+            Self::StartMemoryDiagnostics => "Start memory diagnostics",
+            Self::ReadMemoryDiagnostics => "Show memory diagnostics",
+            Self::StopMemoryDiagnostics => "Stop memory diagnostics",
+            Self::ExportMemoryDiagnostics => "Export memory diagnostic report",
             Self::Copy => "Copy",
             Self::Paste => "Paste",
             Self::Save => "Save",

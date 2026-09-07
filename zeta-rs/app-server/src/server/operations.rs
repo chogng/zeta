@@ -257,6 +257,7 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
+        capabilities.contracts.insert("memoryDiagnostics".into(), zeta_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 });
         if self.automation.is_some() {
             capabilities.contracts.insert(
                 "automation".into(),

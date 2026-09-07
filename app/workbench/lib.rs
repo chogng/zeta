@@ -11,6 +11,7 @@ mod host;
 mod keybinding_hint;
 mod layout;
 mod model;
+mod memory;
 mod pane_binding;
 mod panepart;
 mod presentation;

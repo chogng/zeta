@@ -48,6 +48,10 @@ pub struct WgpuRenderer {
 }
 
 impl Renderer for WgpuRenderer {
+    fn memory_reader(&self) -> Option<crate::render::RendererMemoryReader> {
+        memory_reader(self.instance.clone(), self.ui_renderer.cache_entries())
+    }
+
     fn resize(&mut self, size: RenderTargetSize) {
         self.resize(PhysicalExtent::new(size.width(), size.height()));
     }
@@ -63,6 +67,47 @@ impl Renderer for WgpuRenderer {
     fn render_scene(&mut self, scene: &UiScene) -> Result<RenderOutcome, RendererError> {
         self.render_scene(scene).map_err(RendererError::backend)
     }
+}
+
+fn memory_reader(
+    instance: wgpu::Instance,
+    cache_entries: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+) -> Option<crate::render::RendererMemoryReader> {
+    instance.generate_report()?;
+    Some(crate::render::RendererMemoryReader::new(move || {
+        let hub = instance
+            .generate_report()
+            .expect("the wgpu instance backend does not change")
+            .hub;
+        let gpu_resources = [
+            hub.buffers,
+            hub.textures,
+            hub.texture_views,
+            hub.external_textures,
+            hub.samplers,
+            hub.bind_groups,
+            hub.bind_group_layouts,
+            hub.pipeline_layouts,
+            hub.shader_modules,
+            hub.render_pipelines,
+            hub.compute_pipelines,
+            hub.pipeline_caches,
+            hub.command_encoders,
+            hub.command_buffers,
+            hub.render_bundles,
+            hub.query_sets,
+            hub.render_passes,
+            hub.compute_passes,
+            hub.render_bundle_encoders,
+        ]
+        .iter()
+        .map(|registry| registry.num_kept_from_user)
+        .sum();
+        crate::render::RendererMemory {
+            gpu_resources,
+            cache_entries: cache_entries.load(std::sync::atomic::Ordering::Relaxed),
+        }
+    }))
 }
 
 impl WgpuRenderer {

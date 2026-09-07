@@ -1,3 +1,20 @@
+use crate::protocol::memory::MemorySessionParams;
+use zeta_memory_diagnostics::MemoryProduct;
+use zeta_memory_diagnostics::MemoryStart;
+use zeta_memory_diagnostics::MemoryRole;
+use zeta_memory_diagnostics::MemoryOrigin;
+use zeta_memory_diagnostics::MemoryPhase;
+use zeta_memory_diagnostics::MemoryMetricKind;
+use zeta_memory_diagnostics::MemoryUnavailable;
+use zeta_memory_diagnostics::MemoryMetric;
+use zeta_memory_diagnostics::MemoryObservation;
+use zeta_memory_diagnostics::MemoryEvidence;
+use zeta_memory_diagnostics::MemoryStatus;
+use zeta_memory_diagnostics::MemoryFinding;
+use zeta_memory_diagnostics::MemorySample;
+use zeta_memory_diagnostics::MemoryTrend;
+use zeta_memory_diagnostics::MemoryTargetReport;
+use zeta_memory_diagnostics::MemoryReport;
 use crate::protocol::account::AccountDto;
 use crate::protocol::automation::AutomationListResult;
 use crate::protocol::automation::AutomationWriteParams;
@@ -1185,6 +1202,22 @@ macro_rules! cancellation_definition {
 }
 
 client_methods! {
+    MemoryStart => "memory/start" {
+        params: MemoryStart, response: MemoryReport, serialization: ConnectionExclusive("memory"),
+    },
+    MemoryRead => "memory/read" {
+        params: MemorySessionParams, response: MemoryReport, serialization: ConnectionExclusive("memory"),
+    },
+    MemoryStop => "memory/stop" {
+        params: MemorySessionParams, response: MemoryReport, serialization: ConnectionExclusive("memory"),
+    },
+    MemorySubmit => "memory/submit" {
+        params: MemoryEvidence, response: (), serialization: ConnectionExclusive("memory"),
+    },
+    MemoryExport => "memory/export" {
+        params: MemorySessionParams, response: ResourceMetadataResult, serialization: ConnectionExclusive("memory"),
+    },
+
     AutomationList => "automation/list" {
         params: EmptyParams, response: AutomationListResult, serialization: None,
     },
@@ -3272,6 +3305,23 @@ typescript_bindings! {
     AutomationStatus,
     AutomationRun,
     AutomationRunStatus,
+    MemorySessionParams,
+    MemoryProduct,
+    MemoryStart,
+    MemoryRole,
+    MemoryOrigin,
+    MemoryPhase,
+    MemoryMetricKind,
+    MemoryUnavailable,
+    MemoryMetric,
+    MemoryObservation,
+    MemoryEvidence,
+    MemoryStatus,
+    MemoryFinding,
+    MemorySample,
+    MemoryTrend,
+    MemoryTargetReport,
+    MemoryReport,
     AutomationListResult,
     AutomationWriteParams,
     AutomationDeleteParams,

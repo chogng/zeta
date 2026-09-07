@@ -3,6 +3,7 @@ use super::*;
 
 impl WorkbenchApplication {
     pub(super) fn rebuild_presentation(&mut self) {
+        self.memory.update_counters(self.retained_runtime.fragment_registry().len());
         let viewport = self.logical_viewport();
         let active_screen = self.active_screen();
         let tab_container = self.workbench.tab_container_state();

@@ -31,6 +31,7 @@ const EVENT_SEND_RETRY: Duration = Duration::from_millis(1);
 /// A cloneable request transport backed by an owned App Server session driver.
 #[derive(Clone)]
 pub struct SessionTransport {
+    pub(super) in_process: bool,
     commands: SyncSender<DriverCommand>,
 }
 
@@ -188,6 +189,7 @@ impl AppServerSession {
         };
 
         let mut client = AppServerClient::new(SessionTransport {
+            in_process: true,
             commands: commands.clone(),
         });
         let initialized = client.initialize(InitializeParams {
