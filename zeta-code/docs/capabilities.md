@@ -17,7 +17,8 @@
 | [断线恢复](../tui/README.md#产品支持边界) | TUI 返回持久化身份，由 CLI 重建连接。不恢复旧连接中的待执行请求 | [断线处理](../tui/src/app/recovery.rs)、[恢复测试](../tui/src/sessions/active_tests.rs)、[PTY 场景](../cli/tests/tui_real_scenarios.rs) |
 | [状态与资源](design/process-resources.md) | `/status` 提供 Thread / Processes 两页，状态行按需采样；`/memory` 提供后端持续诊断与导出，不自动确认泄漏 | [状态页](../tui/src/status/panel.rs)、[采样](../../zeta-rs/memory-diagnostics/src/process_resources.rs)、[测试](../../zeta-rs/memory-diagnostics/src/process_resources_tests.rs) |
 | [设置与快捷键](spec/interaction.md#快捷键声明与保存) | 支持保存 TUI 设置、主题和应用快捷键；面板基础键仍固定，凭据使用专用接口 | [配置](../tui/src/config/request.rs)、[快捷键](../tui/src/keymap/settings.rs)、[主题测试](../tui/src/theme/resource_tests.rs)、[快捷键测试](../tui/src/keymap/settings_tests.rs) |
-| [ChatGPT 订阅](changes/chatgpt-provider/spec.md) | Providers 可查看账户、设备码登录、取消和退出；有 Codex 时只读复用，无 Codex 时维护登录和续期，缺失时创建兼容文件 | [账户页面与请求](../tui/src/config/subscription.rs)、[验收](changes/chatgpt-provider/verification.md) |
+| [OpenAI 配置](changes/openai-panel/spec.md) | 供应商子页可保存 API Key、自定义兼容地址与独立 Key，并进入 ChatGPT 登录；没有远程模型发现与任意多个命名连接 | [面板](../tui/src/config/openai.rs)、[验收](changes/openai-panel/verification.md) |
+| [ChatGPT 订阅](changes/chatgpt-provider/spec.md) | Providers → OpenAI 可查看账户、设备码登录、取消和退出；有 Codex 时只读复用，无 Codex 时维护登录和续期，缺失时创建兼容文件 | [账户页面与请求](../tui/src/config/subscription.rs)、[验收](changes/chatgpt-provider/verification.md) |
 | [增强鼠标](spec/interaction.md#鼠标规则) | 仅可见的详情、补全覆盖浮层支持交互和字符选择；占布局高度的区域由终端管理鼠标 | [鼠标](../tui/src/terminal/mouse.rs)、[选择测试](../tui/src/terminal/screen_selection_tests.rs) |
 | [Welcome 宠物](spec/welcome-pet.md) | 部分实现：静止绘制、动作资源和独立预览可用，Welcome 点击播放尚未接入 | [绘制](../tui/src/app/welcome/pet.rs)、[资源测试](../tui/src/app/welcome_view_tests.rs) |
 

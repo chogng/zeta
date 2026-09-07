@@ -938,6 +938,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
     );
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -958,7 +959,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         ),
     });
 
-    assert_eq!(app.list_selection().unwrap().title(), "Config");
+    assert_eq!(app.list_selection().unwrap().title(), "OpenAI");
 }
 
 #[test]
@@ -986,6 +987,7 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
 
@@ -993,7 +995,7 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
         None
     );
-    assert_eq!(app.list_selection().unwrap().title(), "Config");
+    assert_eq!(app.list_selection().unwrap().title(), "OpenAI");
 }
 
 #[test]
@@ -1018,6 +1020,10 @@ fn chatgpt_subscription_keeps_pending_login_across_back_navigation_and_cancels_b
         KeyCode::Down,
     ] {
         app.handle_key(KeyEvent::new(key, KeyModifiers::NONE));
+    }
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    for _ in 0..3 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     assert_eq!(
         app.list_selection()
@@ -1055,10 +1061,10 @@ fn chatgpt_subscription_keeps_pending_login_across_back_navigation_and_cancels_b
             user_code: "ABCD-1234".into(),
         },
     )));
-    assert_eq!(app.list_selection().unwrap().title(), "Config");
+    assert_eq!(app.list_selection().unwrap().title(), "OpenAI");
     assert_eq!(
         app.list_selection().unwrap().active_tab().label(),
-        "Providers"
+        "Connections"
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),

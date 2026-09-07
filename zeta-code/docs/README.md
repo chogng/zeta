@@ -13,6 +13,8 @@
 
 当前已登记 27 条要求；产品实测尚未执行。Markdown、终端组合、未发送内容恢复和宠物点击播放的完成边界仍待确定。
 
+OpenAI 配置面板：[目标](changes/openai-panel/intent.md) · [行为](changes/openai-panel/spec.md) · [计划](changes/openai-panel/plan.md) · [验收](changes/openai-panel/verification.md)。
+
 ## 详细参考
 
 | 内容 | 文档 |

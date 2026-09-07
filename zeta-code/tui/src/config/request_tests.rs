@@ -115,3 +115,91 @@ fn response(id: u64, result: serde_json::Value) -> String {
     })
     .to_string()
 }
+
+#[test]
+fn custom_provider_saves_non_secret_settings_with_revision_and_refreshes() {
+    use zeta_app_server_protocol::protocol::config::ProviderConfigDto;
+    use zeta_app_server_protocol::protocol::config::ProviderConfigureParams;
+    let config = ProviderConfigDto {
+        provider: "openai-compatible".into(),
+        base_url: Some("https://gateway.example/v1".into()),
+        max_output_tokens: Some(2048),
+        model_context: Default::default(),
+    };
+    let mut refreshed = empty_config_snapshot();
+    refreshed.revision = 8;
+    refreshed
+        .providers
+        .insert(config.provider.clone(), config.clone());
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        responses: VecDeque::from([
+            response(
+                1,
+                serde_json::to_value(ConfigCommandResult {
+                    revision: 8,
+                    generation: 2,
+                    disposition: ConfigCommandDispositionDto::Updated,
+                })
+                .unwrap(),
+            ),
+            response(2, serde_json::to_value(refreshed).unwrap()),
+            response(
+                3,
+                serde_json::to_value(ProviderListResult {
+                    providers: Vec::new(),
+                })
+                .unwrap(),
+            ),
+        ]),
+        requests: Arc::clone(&requests),
+    });
+    let event = super::execute(
+        &mut client,
+        super::Command::ConfigureProvider(ProviderConfigureParams {
+            command_id: crate::client::new_command_id("test"),
+            expected_revision: 7,
+            config: config.clone(),
+        }),
+    )
+    .unwrap();
+    assert!(matches!(event, super::Event::ProviderConfigured(_)));
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    assert_eq!(requests[0]["method"], "provider/configure");
+    assert_eq!(requests[0]["params"]["expectedRevision"], 7);
+    assert_eq!(
+        requests[0]["params"]["config"],
+        serde_json::to_value(config).unwrap()
+    );
+    assert_eq!(requests[1]["method"], "config/read");
+    assert_eq!(requests[2]["method"], "provider/list");
+}
+
+#[test]
+fn rejected_custom_provider_update_does_not_report_saved_or_send_a_key() {
+    use zeta_app_server_protocol::protocol::config::ProviderConfigDto;
+    use zeta_app_server_protocol::protocol::config::ProviderConfigureParams;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        responses: VecDeque::from([serde_json::json!({"jsonrpc":"2.0", "id":1, "error":{"code":-32602,"message":"InvalidParams"}}).to_string()]),
+        requests: Arc::clone(&requests),
+    });
+    assert!(
+        super::execute(
+            &mut client,
+            super::Command::ConfigureProvider(ProviderConfigureParams {
+                command_id: crate::client::new_command_id("test"),
+                expected_revision: 7,
+                config: ProviderConfigDto {
+                    provider: "openai-compatible".into(),
+                    base_url: Some("invalid".into()),
+                    max_output_tokens: None,
+                    model_context: Default::default()
+                },
+            })
+        )
+        .is_err()
+    );
+    assert_eq!(requests.lock().unwrap().len(), 1);
+}

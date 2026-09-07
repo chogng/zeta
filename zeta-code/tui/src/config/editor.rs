@@ -35,6 +35,9 @@ pub(crate) struct ConfigEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
+    OpenOpenAi(super::openai::Settings),
+    OpenEndpoint(zeta_app_server_protocol::protocol::config::ProviderConfigureParams),
+    ConfigureProvider(zeta_app_server_protocol::protocol::config::ProviderConfigureParams),
     OpenSubscription,
     Subscription(super::SubscriptionCommand),
     SetTerminalSettings(ConfigEdit),
@@ -95,6 +98,7 @@ pub(crate) struct ProviderApiKeyPrompt {
 #[derive(Debug)]
 pub(crate) struct ConfigEditor {
     selection: ListSelection<ConfigSelectionAction>,
+    openai: Option<ListSelection<ConfigSelectionAction>>,
     subscription: Option<ListSelection<ConfigSelectionAction>>,
     prompt: Option<ProviderApiKeyPromptState>,
 }
@@ -102,6 +106,7 @@ pub(crate) struct ConfigEditor {
 #[derive(Debug)]
 struct ProviderApiKeyPromptState {
     provider: String,
+    endpoint: Option<zeta_app_server_protocol::protocol::config::ProviderConfigureParams>,
     prompt: TextPrompt,
     key_hints: crate::widgets::key_hint::KeyHints,
 }
@@ -124,12 +129,23 @@ impl ConfigEditor {
     pub(crate) fn new(spec: ConfigChoices) -> Self {
         Self {
             selection: ListSelection::new(spec.model, spec.actions),
+            openai: None,
             subscription: None,
             prompt: None,
         }
     }
 
     pub(crate) fn replace(&mut self, spec: ConfigChoices) {
+        if let Some(openai) = &mut self.openai {
+            if let Some(ConfigSelectionAction::OpenOpenAi(settings)) = spec
+                .actions
+                .values()
+                .find(|action| matches!(action, ConfigSelectionAction::OpenOpenAi(_)))
+            {
+                let choices = super::openai::choices(settings);
+                openai.replace(choices.model, choices.actions);
+            }
+        }
         self.selection.replace(spec.model, spec.actions);
     }
 
@@ -150,12 +166,59 @@ impl ConfigEditor {
                     self.prompt = None;
                     ConfigEditorOutcome::Consumed
                 }
-                TextPromptOutcome::Submit(value) => ConfigEditorOutcome::SaveApiKey(
-                    ProviderApiKeyEdit::new(prompt.provider.clone(), value),
-                ),
+                TextPromptOutcome::Submit(value) => {
+                    if let Some(mut params) = prompt.endpoint.clone() {
+                        params.config.base_url = Some(value);
+                        ConfigEditorOutcome::Action(ConfigSelectionAction::ConfigureProvider(
+                            params,
+                        ))
+                    } else {
+                        ConfigEditorOutcome::SaveApiKey(ProviderApiKeyEdit::new(
+                            prompt.provider.clone(),
+                            value,
+                        ))
+                    }
+                }
             };
         }
-        match self.selection.handle_key(key) {
+        let outcome = if let Some(openai) = &mut self.openai {
+            openai.handle_key(key)
+        } else {
+            self.selection.handle_key(key)
+        };
+        self.handle_selection_outcome(outcome)
+    }
+
+    fn handle_selection_outcome(
+        &mut self,
+        outcome: ListSelectionOutcome<ConfigSelectionAction>,
+    ) -> ConfigEditorOutcome {
+        match outcome {
+            ListSelectionOutcome::Activate(ConfigSelectionAction::OpenOpenAi(settings)) => {
+                let spec = super::openai::choices(&settings);
+                self.openai = Some(ListSelection::new(spec.model, spec.actions));
+                ConfigEditorOutcome::Consumed
+            }
+            ListSelectionOutcome::Activate(ConfigSelectionAction::OpenEndpoint(params)) => {
+                let mut prompt = TextPrompt::new(TextPromptSpec {
+                    title: "Custom base URL".into(),
+                    explanation: "OpenAI-compatible Chat Completions endpoint. Address and API key are saved separately.".into(),
+                    placeholder: "https://your-service.example/v1".into(),
+                    masked: false,
+                });
+                if let Some(url) = &params.config.base_url {
+                    prompt.handle_paste(url.clone());
+                }
+                self.prompt = Some(ProviderApiKeyPromptState {
+                    provider: params.config.provider.clone(),
+                    endpoint: Some(params),
+                    prompt,
+                    key_hints: crate::widgets::key_hint::KeyHints::new()
+                        .with_binding(bindings::SAVE)
+                        .with_binding(bindings::CANCEL),
+                });
+                ConfigEditorOutcome::Consumed
+            }
             ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProviderApiKey {
                 provider,
                 display_name,
@@ -166,12 +229,21 @@ impl ConfigEditor {
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Adjust(action, _) => match action {
                 ConfigSelectionAction::OpenProviderApiKey { .. }
+                | ConfigSelectionAction::OpenOpenAi(_)
+                | ConfigSelectionAction::OpenEndpoint(_)
+                | ConfigSelectionAction::ConfigureProvider(_)
                 | ConfigSelectionAction::OpenSubscription
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
                 action => ConfigEditorOutcome::Action(action),
             },
             ListSelectionOutcome::Consumed => ConfigEditorOutcome::Consumed,
-            ListSelectionOutcome::Dismiss => ConfigEditorOutcome::Dismiss,
+            ListSelectionOutcome::Dismiss => {
+                if self.openai.take().is_some() {
+                    ConfigEditorOutcome::Consumed
+                } else {
+                    ConfigEditorOutcome::Dismiss
+                }
+            }
         }
     }
 
@@ -180,6 +252,8 @@ impl ConfigEditor {
             subscription.handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
             prompt.prompt.handle_paste(pasted);
+        } else if let Some(openai) = self.openai.as_mut() {
+            openai.handle_paste(pasted);
         } else {
             self.selection.handle_paste(pasted);
         }
@@ -191,7 +265,9 @@ impl ConfigEditor {
         }
         match &self.prompt {
             Some(prompt) => ConfigEditorPage::Prompt(&prompt.prompt),
-            None => ConfigEditorPage::Selection(self.selection.state()),
+            None => {
+                ConfigEditorPage::Selection(self.openai.as_ref().unwrap_or(&self.selection).state())
+            }
         }
     }
 
@@ -202,35 +278,32 @@ impl ConfigEditor {
         self.prompt
             .as_ref()
             .map(|prompt| prompt.key_hints.text())
-            .unwrap_or_else(|| self.selection.key_hints())
+            .unwrap_or_else(|| self.openai.as_ref().unwrap_or(&self.selection).key_hints())
     }
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
         if let Some(subscription) = &self.subscription {
             return Some(subscription.state());
         }
-        self.prompt.is_none().then(|| self.selection.state())
+        self.prompt
+            .is_none()
+            .then(|| self.openai.as_ref().unwrap_or(&self.selection).state())
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ConfigEditorOutcome> {
+        if self.prompt.is_some() {
+            return None;
+        }
         if let Some(subscription) = self.subscription.as_mut() {
             let outcome = subscription.activate_visible_item(index)?;
             return Some(self.handle_subscription_outcome(outcome));
         }
-        let outcome = self.selection.activate_visible_item(index)?;
-        Some(match outcome {
-            ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProviderApiKey {
-                provider,
-                display_name,
-            }) => {
-                self.open_provider_prompt(provider, display_name);
-                ConfigEditorOutcome::Consumed
-            }
-            ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
-            ListSelectionOutcome::Adjust(_, _) => ConfigEditorOutcome::Consumed,
-            ListSelectionOutcome::Consumed => ConfigEditorOutcome::Consumed,
-            ListSelectionOutcome::Dismiss => ConfigEditorOutcome::Dismiss,
-        })
+        let outcome = self
+            .openai
+            .as_mut()
+            .unwrap_or(&mut self.selection)
+            .activate_visible_item(index)?;
+        Some(self.handle_selection_outcome(outcome))
     }
 
     pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
@@ -261,6 +334,7 @@ impl ConfigEditor {
         let prompt = provider_api_key_prompt(provider, display_name);
         self.prompt = Some(ProviderApiKeyPromptState {
             provider: prompt.provider,
+            endpoint: None,
             prompt: TextPrompt::new(prompt.spec),
             key_hints: crate::widgets::key_hint::KeyHints::new()
                 .with_binding(bindings::SAVE)
@@ -343,7 +417,7 @@ pub(crate) fn config_choices(
             ),
     ];
     config_items.extend(overview(config));
-    let provider_items = provider_items(providers, &mut actions);
+    let provider_items = provider_items(config, providers, &mut actions);
     let language_server_items = language_servers(config, &mut actions);
     ConfigChoices {
         model: ListSelectionModel::new(
@@ -395,17 +469,22 @@ fn overview(config: &ConfigReadResult) -> Vec<ListSelectionItem> {
 }
 
 fn provider_items(
+    config: &ConfigReadResult,
     catalog: &ProviderListResult,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> Vec<ListSelectionItem> {
     let mut items: Vec<_> = catalog
         .providers
         .iter()
+        .filter(|provider| !matches!(provider.provider.as_str(), "openai" | "openai-chatgpt"))
         .map(|provider| provider_item(provider, actions))
         .collect();
-    let id = ListSelectionItemId::new("chatgpt-subscription");
-    actions.insert(id.clone(), ConfigSelectionAction::OpenSubscription);
-    items.push(ListSelectionItem::new("ChatGPT subscription").with_id(id));
+    let id = ListSelectionItemId::new("openai");
+    actions.insert(
+        id.clone(),
+        ConfigSelectionAction::OpenOpenAi(super::openai::Settings::new(config, catalog)),
+    );
+    items.insert(0, ListSelectionItem::new("OpenAI").with_id(id));
     items
 }
 

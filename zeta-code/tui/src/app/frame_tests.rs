@@ -1690,6 +1690,30 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .join("\n")
 }
 
+#[test]
+fn openai_panel_renders_connection_choices_and_masked_key_in_terminal_output() {
+    let mut app = App::new();
+    app.update(crate::config::Event::EditorOpened(crate::config::config_choices(
+        &crate::test_support::empty_config_snapshot(),
+        &zeta_app_server_protocol::protocol::provider::ProviderListResult { providers: Vec::new() },
+        crate::config::TerminalSettings::default(), StatusLineSettings::default(),
+    )));
+    for key in [KeyCode::Up, KeyCode::Up, KeyCode::Tab, KeyCode::Down, KeyCode::Down, KeyCode::Enter] {
+        app.handle_key(KeyEvent::new(key, KeyModifiers::NONE));
+    }
+    for width in [60, 100] {
+        let output = render(&app, width, 30);
+        for label in ["OpenAI API key", "Custom base URL", "Custom API key", "ChatGPT subscription"] {
+            assert!(output.contains(label), "missing {label} at width {width}: {output}");
+        }
+    }
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_paste("never-display-this-key".into());
+    let output = render(&app, 100, 30);
+    assert!(output.contains("OpenAI API key"));
+    assert!(!output.contains("never-display-this-key"));
+}
+
 fn help_view() -> ListSelectionModel {
     ListSelectionModel::new(
         "Help",

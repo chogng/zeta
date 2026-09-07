@@ -670,6 +670,12 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::ConfigureProvider(params),
+            ) => Some(ConfigCommand::ConfigureProvider(params).into()),
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::OpenOpenAi(_) | ConfigSelectionAction::OpenEndpoint(_),
+            ) => None,
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription) => {
                 self.chat_panel
                     .open_subscription(self.subscription.choices());
@@ -1861,6 +1867,10 @@ impl App {
             }
             ConfigEvent::EditorOpened(view) => {
                 self.open_command_panel(CommandPanel::config(view));
+            }
+            ConfigEvent::ProviderConfigured(choices) => {
+                self.chat_panel.finish_config_prompt(choices);
+                self.status = Status::Ready;
             }
             ConfigEvent::ApiKeySaved { provider, choices } => {
                 self.chat_panel.finish_config_prompt(choices);

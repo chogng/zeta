@@ -1,4 +1,5 @@
 mod editor;
+mod openai;
 mod request;
 mod settings;
 mod subscription;
@@ -33,6 +34,7 @@ pub(crate) enum Event {
     SettingsReceived(TerminalSettings),
     Updated(ConfigEditResult),
     EditorOpened(ConfigChoices),
+    ProviderConfigured(ConfigChoices),
     ApiKeySaved {
         provider: String,
         choices: ConfigChoices,
@@ -46,4 +48,5 @@ pub(crate) enum Command {
     Edit(ConfigEdit),
     SetLanguageServerMode(LanguageServerEdit),
     SetProviderApiKey(ProviderApiKeyEdit),
+    ConfigureProvider(zeta_app_server_protocol::protocol::config::ProviderConfigureParams),
 }

@@ -16,7 +16,7 @@ use tui_process::SMALL_SIZE;
 use tui_process::TuiProcess;
 
 #[test]
-fn actual_tui_opens_chatgpt_subscription_and_returns_to_providers() {
+fn actual_tui_opens_chatgpt_subscription_and_returns_to_openai() {
     let fixture = Fixture::new("chatgpt-provider");
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
@@ -28,8 +28,12 @@ fn actual_tui_opens_chatgpt_subscription_and_returns_to_providers() {
     process.up();
     process.tab();
     process.down();
-    process.type_text("ChatGPT subscription");
+    process.type_text("OpenAI");
+    process.down();
+    process.enter();
     process.wait_for_screen("ChatGPT subscription");
+    process.down();
+    process.down();
     process.down();
     process.enter();
     process.wait_for_screen("Not signed in");
@@ -37,7 +41,7 @@ fn actual_tui_opens_chatgpt_subscription_and_returns_to_providers() {
     process.resize(SMALL_SIZE);
     process.wait_for_screen("Sign in with ChatGPT");
     process.escape();
-    process.wait_for_screen("Providers");
+    process.wait_for_screen("Custom base URL");
     process.enter();
     process.wait_for_screen("Not signed in");
     process.escape();
@@ -77,7 +81,12 @@ fn actual_tui_reuses_chatgpt_subscription_without_changing_codex_auth() {
     process.up();
     process.tab();
     process.down();
-    process.type_text("ChatGPT subscription");
+    process.type_text("OpenAI");
+    process.down();
+    process.enter();
+    process.wait_for_screen("ChatGPT subscription");
+    process.down();
+    process.down();
     process.down();
     process.enter();
     process.wait_for_screen("account@example.invalid");

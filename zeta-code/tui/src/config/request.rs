@@ -31,6 +31,7 @@ impl Command {
             Self::Edit(_) => "zeta-tui-set-config",
             Self::SetLanguageServerMode(_) => "zeta-tui-set-language-server-mode",
             Self::SetProviderApiKey(_) => "zeta-tui-set-provider-api-key",
+            Self::ConfigureProvider(_) => "zeta-tui-configure-provider",
         }
     }
 }
@@ -40,6 +41,14 @@ where
     T: JsonRpcTransport,
 {
     match command {
+        Command::ConfigureProvider(mut params) => {
+            params.command_id = new_command_id("provider");
+            client
+                .configure_provider(params)
+                .map_err(ConfigCommandError::from)
+                .and_then(|_| read_config_choices(client))
+                .map(Event::ProviderConfigured)
+        }
         Command::Subscription(command) => Ok(Event::Subscription(super::subscription::execute(
             client, command,
         ))),
