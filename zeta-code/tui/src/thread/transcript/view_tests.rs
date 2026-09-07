@@ -407,7 +407,7 @@ fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
         .draw(|frame| view.render(frame, area, test_context()))
         .unwrap();
 
-    let label = "Jump to bottom (click) ↓";
+    let label = "Ctrl+End to jump to bottom ↓";
     let start = (area.width - u16::try_from(label.chars().count()).unwrap()) / 2;
     let buffer = terminal.backend().buffer();
     let row = (0..area.width)

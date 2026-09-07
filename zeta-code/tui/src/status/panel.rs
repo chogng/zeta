@@ -7,6 +7,7 @@ use super::format_process_cpu;
 use super::format_process_memory;
 use super::model::format_cache_hit_rate;
 use super::model::format_reference_cost;
+use crate::keymap::bindings;
 use crate::render::RenderContext;
 use crate::widgets::detail_list;
 use crate::widgets::detail_list::DetailList;
@@ -16,7 +17,6 @@ use crate::widgets::tab_list;
 use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
@@ -27,7 +27,7 @@ use zeta_protocol::ModelUsageTotal;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum StatusSection {
-    Session,
+    Thread,
     Processes,
 }
 
@@ -52,7 +52,6 @@ pub(crate) struct StatusViewData<'a> {
     pub(crate) reference_cost: &'a ModelReferenceCostSummary,
     pub(crate) session_id: &'a str,
     pub(crate) thread_id: &'a str,
-    pub(crate) thread_sequence: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -104,20 +103,26 @@ impl StatusPanel {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, body: Rect) -> StatusPanelOutcome {
-        if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc && key.modifiers.is_empty() {
+        if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
             return StatusPanelOutcome::Dismiss;
         }
         if let Some(navigation) = Navigation::from_key(key) {
-            let content_rows = self.active_detail().content_height(body.width);
-            let last = content_rows.saturating_sub(usize::from(body.height));
-            let scroll = &mut self.scroll[self.tabs.active_index()];
-            *scroll = navigation
-                .offset(usize::from(*scroll), last, usize::from(body.height))
-                .min(usize::from(u16::MAX)) as u16;
+            self.scroll(navigation, body);
         } else {
             self.tabs.handle_key(key);
         }
         StatusPanelOutcome::Consumed
+    }
+
+    pub(crate) fn scroll(&mut self, navigation: Navigation, body: Rect) {
+        let last = self
+            .active_detail()
+            .content_height(body.width)
+            .saturating_sub(usize::from(body.height));
+        let scroll = &mut self.scroll[self.tabs.active_index()];
+        *scroll = navigation
+            .offset(usize::from(*scroll), last, usize::from(body.height))
+            .min(usize::from(u16::MAX)) as u16;
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
@@ -162,8 +167,8 @@ impl StatusPanel {
         );
     }
 
-    pub(crate) const fn key_hints(&self) -> &'static str {
-        "↑↓/jk to scroll · Tab to switch · Esc to close"
+    pub(crate) fn key_hints(&self) -> &'static str {
+        bindings::STATUS_HINTS.as_str()
     }
 
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
@@ -175,7 +180,7 @@ impl StatusPanel {
 
     fn active_detail(&self) -> &DetailList {
         match self.tabs.active_tab().section {
-            StatusSection::Session => &self.session,
+            StatusSection::Thread => &self.session,
             StatusSection::Processes => &self.processes,
         }
     }
@@ -223,13 +228,17 @@ pub(crate) fn status_panel(data: StatusViewData<'_>) -> StatusPanel {
             format_reference_cost(data.usage.model_invocations, data.reference_cost)
                 .unwrap_or_else(|| "unknown".into()),
         ),
-        detail("Session ID", data.session_id),
+        detail(
+            "Session ID",
+            data.session_id
+                .strip_prefix("thread:")
+                .unwrap_or(data.session_id),
+        ),
         detail("Thread ID", data.thread_id),
-        detail("Thread version", data.thread_sequence.to_string()),
     ];
     StatusPanel {
         tabs: TabListState::new(status_tabs()),
-        session: DetailList::new("Session", base_rows),
+        session: DetailList::new("Thread", base_rows),
         processes: DetailList::new("Processes", process_rows(ProcessResourcesView::default())),
         scroll: [0, 0],
     }
@@ -238,8 +247,8 @@ pub(crate) fn status_panel(data: StatusViewData<'_>) -> StatusPanel {
 fn status_tabs() -> Vec<StatusTab> {
     vec![
         StatusTab {
-            section: StatusSection::Session,
-            label: "Session",
+            section: StatusSection::Thread,
+            label: "Thread",
         },
         StatusTab {
             section: StatusSection::Processes,

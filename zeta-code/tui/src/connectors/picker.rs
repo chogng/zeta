@@ -1,3 +1,4 @@
+use crate::keymap::bindings;
 use std::collections::BTreeMap;
 
 use zeta_app_server_protocol::protocol::connectors::ConnectorAvailableActionDto;
@@ -5,7 +6,6 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorConnectionStateDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
 
-use crate::widgets::list_selection::ListSelectionActivationMode;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -68,8 +68,7 @@ pub(crate) fn connector_choices(catalog: &ConnectorListResult) -> ConnectorChoic
                 ),
             ],
         )
-        .with_activation_mode(ListSelectionActivationMode::Enter)
-        .with_activation_action("connect/disconnect")
+        .with_activation(bindings::CONNECTOR_TOGGLE)
         .with_search(SearchBoxModel::new("Search connectors"))
         .with_empty_message("No matching Connectors"),
         actions,

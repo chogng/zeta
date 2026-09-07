@@ -1,4 +1,3 @@
-use super::ListSelectionActivationMode;
 use super::ListSelectionAdjustment;
 use super::ListSelectionGroup;
 use super::ListSelectionInputOutcome;
@@ -6,6 +5,7 @@ use super::ListSelectionItem;
 use super::ListSelectionItemId;
 use super::ListSelectionModel;
 use super::ListSelectionState;
+use crate::keymap::bindings;
 use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -112,6 +112,8 @@ fn search_hit_testing_and_explicit_focus_share_the_search_geometry() {
 #[test]
 fn tab_keys_switch_tabs_and_wrap() {
     let mut state = state();
+    state.handle_key(key(KeyCode::Up));
+    state.handle_key(key(KeyCode::Up));
 
     state.handle_key(key(KeyCode::Tab));
     assert_eq!(active_tab_label(&state), "Keys");
@@ -154,7 +156,12 @@ fn tab_switching_preserves_the_search_query() {
         state.handle_key(key(KeyCode::Char(character)));
     }
     state.handle_key(key(KeyCode::Tab));
-
+    assert!(state.search_focused());
+    assert_eq!(active_tab_label(&state), "Commands");
+    state.handle_key(key(KeyCode::BackTab));
+    assert!(state.search_focused());
+    state.handle_key(key(KeyCode::Up));
+    state.handle_key(key(KeyCode::Tab));
     assert_eq!(state.query(), "esc");
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "Esc");
@@ -262,7 +269,7 @@ fn enter_and_space_activate_actionable_items() {
                 vec![ListSelectionItem::new("review").with_id(item_id.clone())],
             )],
         )
-        .with_activation_mode(ListSelectionActivationMode::EnterOrSpace),
+        .with_activation(bindings::CONFIG_CHANGE),
     );
 
     assert_eq!(
@@ -276,16 +283,86 @@ fn enter_and_space_activate_actionable_items() {
 }
 
 #[test]
-fn search_and_tabs_have_explicit_focus_entry_and_return_to_items() {
+fn arrows_follow_items_search_and_tabs_in_visual_order() {
     let mut view = state();
+    view.handle_key(key(KeyCode::Down));
     view.handle_key(key(KeyCode::Up));
     assert!(view.items_focused());
-    view.handle_key(key(KeyCode::Char('/')));
+    view.handle_key(key(KeyCode::Up));
     assert!(view.search_focused());
-    view.handle_key(key(KeyCode::Char(' ')));
-    assert_eq!(view.query(), " ");
+    assert!(view.search().unwrap().input_active());
+    view.handle_key(key(KeyCode::Char('m')));
+    assert_eq!(view.query(), "m");
     view.handle_key(key(KeyCode::Up));
     assert!(view.tabs_focused());
+    assert!(!view.search().unwrap().input_active());
+    view.handle_key(key(KeyCode::Right));
+    assert_eq!(active_tab_label(&view), "Keys");
+    view.handle_key(key(KeyCode::Left));
+    assert_eq!(active_tab_label(&view), "Commands");
+    view.handle_key(key(KeyCode::Down));
+    assert!(view.search_focused());
+    view.handle_key(key(KeyCode::Down));
+    assert!(view.items_focused());
+}
+
+#[test]
+fn empty_results_still_allow_returning_to_search() {
+    let mut view = state();
+    view.handle_key(key(KeyCode::Up));
+    view.handle_paste("no matching entry".into());
+    view.handle_key(key(KeyCode::Down));
+    assert_eq!(view.selected_visible_index(), None);
+    view.handle_key(key(KeyCode::Up));
+    assert!(view.search_focused());
+}
+
+#[test]
+fn repeated_arrows_do_not_cross_focus_regions() {
+    let mut view = state();
+    let repeat = |code| {
+        KeyEvent::new_with_kind(
+            code,
+            KeyModifiers::NONE,
+            crossterm::event::KeyEventKind::Repeat,
+        )
+    };
+    view.handle_key(repeat(KeyCode::Up));
+    assert!(view.items_focused());
+    view.handle_key(key(KeyCode::Up));
+    view.handle_key(repeat(KeyCode::Up));
+    view.handle_key(repeat(KeyCode::Down));
+    assert!(view.search_focused());
+}
+
+#[test]
+fn vertical_focus_skips_missing_regions() {
+    let mut view = ListSelectionState::new(ListSelectionModel::new(
+        "Items",
+        vec![ListSelectionGroup::new(
+            "All",
+            vec![ListSelectionItem::new("One")],
+        )],
+    ));
+    view.handle_key(key(KeyCode::Up));
+    assert!(view.tabs_focused());
+    view.handle_key(key(KeyCode::Down));
+    assert!(view.items_focused());
+
+    let mut view = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Items",
+            vec![ListSelectionGroup::new(
+                "All",
+                vec![ListSelectionItem::new("One")],
+            )],
+        )
+        .without_tab_bar()
+        .with_search(SearchBoxModel::new("Search")),
+    );
+    view.handle_key(key(KeyCode::Up));
+    view.handle_key(key(KeyCode::Up));
+    assert!(view.search_focused());
     view.handle_key(key(KeyCode::Down));
     assert!(view.items_focused());
 }

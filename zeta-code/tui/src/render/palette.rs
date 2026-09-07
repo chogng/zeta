@@ -225,6 +225,7 @@ const fn hex_digit(value: u8) -> u8 {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RenderTheme {
+    cursor_color: Option<[u8; 3]>,
     accent: Color,
     accent_surface_background: Color,
     accent_surface_foreground: Color,
@@ -265,6 +266,8 @@ impl RenderTheme {
     pub(crate) fn from_palette(palette: ThemePalette, capability: ColorLevel) -> Self {
         let projected = |color| terminal_color(color, capability);
         Self {
+            cursor_color: (capability != ColorLevel::Monochrome)
+                .then(|| palette.focus.components()),
             accent: projected(palette.accent),
             accent_surface_background: projected(palette.accent_surface_background),
             accent_surface_foreground: projected(palette.accent_surface_foreground),
@@ -310,6 +313,7 @@ impl RenderTheme {
 
     pub(crate) const fn fallback() -> Self {
         Self {
+            cursor_color: Some(ThemePalette::dark().focus.components()),
             accent: hex("#69aaff"),
             accent_surface_background: hex("#6658c7"),
             accent_surface_foreground: hex("#ffffff"),
@@ -458,6 +462,9 @@ pub(crate) struct RenderContext<'a> {
 }
 
 impl<'a> RenderContext<'a> {
+    pub(crate) const fn cursor_color(self) -> Option<[u8; 3]> {
+        self.theme.cursor_color
+    }
     pub(crate) const fn new(theme: &'a RenderTheme, theme_revision: u64) -> Self {
         Self {
             theme,

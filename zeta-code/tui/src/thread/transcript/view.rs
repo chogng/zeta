@@ -26,7 +26,22 @@ use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
 use zeta_ansi_escape::ansi_text;
 
-const JUMP_TO_BOTTOM_LABEL: &str = "Jump to bottom (click) ↓";
+const JUMP_TO_BOTTOM_LABEL: &str = "Ctrl+End to jump to bottom ↓";
+
+pub(crate) fn prepare_history(
+    message: &Message,
+    width: u16,
+    context: RenderContext<'_>,
+) -> (super::cache::PreparedCell, usize) {
+    let cache = ChatHistoryRenderCache::default();
+    let height = cache.measure(message, width, context, || {
+        cell_lines_with_code(message, context, None, true).0
+    });
+    let cell = cache.prepare(message, width, context, || {
+        cell_lines_with_code(message, context, None, true)
+    });
+    (cell, height)
+}
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) header: Option<&'a Buffer>,

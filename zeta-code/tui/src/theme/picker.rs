@@ -1,3 +1,4 @@
+use crate::keymap::bindings;
 use std::collections::BTreeMap;
 
 use crate::render::SyntaxPalette;
@@ -7,7 +8,6 @@ use crate::theme::ThemePickerChoice;
 use crate::theme::ThemePickerTarget;
 use crate::theme::ThemePreviewPalette;
 use crate::widgets::list_selection::ListSelection;
-use crate::widgets::list_selection::ListSelectionActivationMode;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -72,6 +72,15 @@ impl ThemePicker {
             .last()
             .expect("a theme picker always has a selection page")
             .state()
+    }
+
+    pub(crate) fn selection_mut(
+        &mut self,
+    ) -> &mut crate::widgets::list_selection::ListSelectionState {
+        self.pages
+            .last_mut()
+            .expect("a theme picker always has a selection page")
+            .state_mut()
     }
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ThemePickerOutcome {
@@ -168,11 +177,10 @@ fn list_selection(
     };
     ThemeChoices {
         model: ListSelectionModel::new(title, vec![ListSelectionGroup::new("Themes", items)])
-            .with_activation_mode(ListSelectionActivationMode::Enter)
-            .with_activation_action("apply")
-            .with_dismiss_action(match level {
-                ThemePickerLevel::Main => "close",
-                ThemePickerLevel::Custom => "return",
+            .with_activation(bindings::THEME_APPLY)
+            .with_dismiss(match level {
+                ThemePickerLevel::Main => bindings::DISMISS_LIST,
+                ThemePickerLevel::Custom => bindings::RETURN_LIST,
             })
             .without_tab_bar()
             .with_initial_selected(selected)

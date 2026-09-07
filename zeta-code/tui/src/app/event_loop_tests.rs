@@ -32,6 +32,91 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
+fn enhanced_panel_wheel_scrolls_only_content_and_preserves_search_focus() {
+    let mut app = App::new();
+    app.update(AppEvent::HelpOpened(
+        ListSelectionModel::new(
+            "Items",
+            vec![ListSelectionGroup::new(
+                "All",
+                (0..40)
+                    .map(|index| ListSelectionItem::new(format!("Item {index}")))
+                    .collect(),
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search")),
+    ));
+    let area = Rect::new(0, 0, 80, 20);
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    let body_row = (0..area.height)
+        .find(|row| {
+            matches!(
+                frame::input_pointer_target_at(&app, area, 2, *row),
+                Some(InputPointerTarget::CommandPanel(
+                    CommandPanelPointerTarget::Item(0)
+                ))
+            )
+        })
+        .unwrap();
+    assert!(!frame::panel_mouse_contains(
+        &app,
+        area,
+        ratatui::layout::Position::new(2, 19)
+    ));
+    scroll_pointer_item(&mut app, area, 2, body_row, TranscriptScrollDirection::Down);
+    let selection = app.list_selection().unwrap();
+    assert!(selection.search().unwrap().input_active());
+    assert_eq!(selection.selected_visible_index(), Some(0));
+    assert_eq!(
+        frame::input_pointer_target_at(&app, area, 2, body_row),
+        None
+    );
+    assert_eq!(
+        frame::input_pointer_target_at(&app, area, 2, body_row + 1),
+        Some(InputPointerTarget::CommandPanel(
+            CommandPanelPointerTarget::Item(1)
+        ))
+    );
+    // The search field and hint bar do not scroll the list.
+    for row in [body_row - 1, 19] {
+        scroll_pointer_item(&mut app, area, 2, row, TranscriptScrollDirection::Down);
+    }
+    assert_eq!(
+        frame::input_pointer_target_at(&app, area, 2, body_row + 1),
+        Some(InputPointerTarget::CommandPanel(
+            CommandPanelPointerTarget::Item(1)
+        ))
+    );
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_mouse_interactions(false);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    scroll_pointer_item(
+        &mut app,
+        area,
+        2,
+        body_row + 1,
+        TranscriptScrollDirection::Down,
+    );
+    assert_eq!(
+        frame::input_pointer_target_at(&app, area, 2, body_row + 1),
+        Some(InputPointerTarget::CommandPanel(
+            CommandPanelPointerTarget::Item(1)
+        ))
+    );
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        frame::input_pointer_target_at(&app, area, 2, body_row),
+        Some(InputPointerTarget::CommandPanel(
+            CommandPanelPointerTarget::Item(0)
+        ))
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+}
+
+#[test]
 fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
     let mut app = App::new();
     app.insert_text("/");
@@ -232,7 +317,7 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
 }
 
 #[test]
-fn transcript_mouse_wheel_reveals_jump_control_and_click_returns_to_latest() {
+fn terminal_owned_mouse_wheel_does_not_scroll_the_tui_transcript() {
     let mut app = App::new();
     for index in 0..12 {
         app.update(ThreadEvent::FailureReported(format!("failure {index}")));
@@ -250,43 +335,20 @@ fn transcript_mouse_wheel_reveals_jump_control_and_click_returns_to_latest() {
         ),
         None
     );
+    assert!(app.transcript_scroll().anchor().is_none());
+    app.navigate_transcript(TranscriptScrollDirection::Up, area);
     assert!(app.transcript_scroll().anchor().is_some());
-    let jump = (transcript.x..transcript.right())
-        .find(|column| {
-            frame::input_pointer_target_at(
-                &app,
-                area,
-                *column,
-                transcript.bottom().saturating_sub(1),
-            ) == Some(InputPointerTarget::TranscriptJumpToBottom)
-        })
-        .expect("the transcript jump control should be clickable");
-
-    assert_eq!(
-        activate_pointer_item(&mut app, area, jump, transcript.bottom().saturating_sub(1),),
-        None
-    );
-    assert!((transcript.x..transcript.right()).all(|column| {
-        frame::input_pointer_target_at(&app, area, column, transcript.bottom().saturating_sub(1))
-            != Some(InputPointerTarget::TranscriptJumpToBottom)
-    }));
+    app.handle_key_in_area(KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL), area);
+    assert!(app.transcript_scroll().anchor().is_none());
 }
-
 #[test]
-fn transcript_mouse_wheel_at_loaded_start_requests_older_history() {
+fn transcript_keyboard_navigation_still_requests_older_history() {
     let mut app = App::new();
     app.update(ThreadEvent::FailureReported("only loaded message".into()));
     let area = Rect::new(0, 0, 50, 16);
-    let transcript = frame::layout(&app, area).session.transcript;
 
     assert_eq!(
-        scroll_pointer_item(
-            &mut app,
-            area,
-            transcript.x,
-            transcript.y,
-            TranscriptScrollDirection::Up,
-        ),
+        app.navigate_transcript(TranscriptScrollDirection::Up, area),
         Some(AppCommand::Thread(ThreadCommand::LoadOlderHistory))
     );
     assert!(app.transcript_scroll().anchor().is_some());

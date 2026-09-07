@@ -1,4 +1,4 @@
-use crate::widgets::list_selection::ListSelectionActivationMode;
+use crate::keymap::bindings;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -149,7 +149,7 @@ where
 
 pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> DirChoices {
     let mut actions = BTreeMap::new();
-    let groups = result
+    let mut groups = result
         .dirs
         .into_iter()
         .enumerate()
@@ -193,14 +193,21 @@ pub(crate) fn choices(session_id: &SessionId, result: SessionDirListResult) -> D
             }
             ListSelectionGroup::new(dir.path.display().to_string(), items)
         })
-        .collect();
+        .collect::<Vec<_>>();
+    if groups.is_empty() {
+        groups.push(ListSelectionGroup::new("Directories", Vec::new()));
+    }
+    let show_tabs = groups.len() > 1;
+    let model = ListSelectionModel::new("Directories", groups)
+        .with_activation(bindings::DIR_CHANGE)
+        .with_search(SearchBoxModel::new("Search directories"))
+        .with_empty_message("No directories");
     DirChoices {
-        model: ListSelectionModel::new("Directories", groups)
-            .with_activation_mode(ListSelectionActivationMode::Enter)
-            .with_activation_action("change")
-            .without_tab_bar()
-            .with_search(SearchBoxModel::new("Search directories"))
-            .with_empty_message("No directories"),
+        model: if show_tabs {
+            model
+        } else {
+            model.without_tab_bar()
+        },
         actions,
     }
 }

@@ -1,5 +1,5 @@
 use crate::keymap::KeymapActionSnapshot;
-use crate::keymap::fixed_shortcuts;
+use crate::keymap::fixed_bindings;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
@@ -55,7 +55,7 @@ fn shortcut_items(actions: Vec<KeymapActionSnapshot>) -> Vec<ListSelectionItem> 
         }
     }
     items.extend(
-        fixed_shortcuts()
+        fixed_bindings()
             .map(|(key, description)| ListSelectionItem::new(key).with_description(description)),
     );
     items

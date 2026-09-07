@@ -8,7 +8,6 @@ pub(crate) use action::ListSelection;
 pub(crate) use action::ListSelectionOutcome;
 pub(crate) use action::ListSelectionSpec;
 pub(crate) use preview::ListSelectionPreview;
-pub(crate) use state::ListSelectionActivationMode;
 pub(crate) use state::ListSelectionAdjustment;
 pub(crate) use state::ListSelectionGroup;
 pub(crate) use state::ListSelectionInputOutcome;

@@ -1,6 +1,6 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
-assertion_line: 1040
+assertion_line: 1034
 expression: "render(&app, 80, 20)"
 ---
                                                                                 
@@ -22,4 +22,4 @@ expression: "render(&app, 80, 20)"
   Profile  ·  default                                                           
   Connection  ·  Local App Server                                               
                                                                                 
-  ↑↓/jk to choose  ·  Esc to close
+  Esc to close

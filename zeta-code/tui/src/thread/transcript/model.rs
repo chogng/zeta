@@ -72,6 +72,24 @@ pub(crate) struct TranscriptCell {
 }
 
 impl TranscriptCell {
+    pub(crate) fn render_revision(&self) -> u64 {
+        self.render_revision
+    }
+
+    pub(crate) fn history_view(&self) -> Message {
+        let mut message = self.view(false, false);
+        match &self.body {
+            TranscriptCellBody::Reasoning(text) | TranscriptCellBody::Error(text) => {
+                message.text = text.clone();
+            }
+            TranscriptCellBody::Exec(exec) => message.detail = Some(exec.full_details()),
+            _ => {}
+        }
+        message.can_expand = false;
+        message.has_details = false;
+        message
+    }
+
     pub(crate) fn cell_id(&self) -> &TranscriptCellId {
         &self.cell_id
     }

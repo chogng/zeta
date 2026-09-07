@@ -96,6 +96,8 @@ fn language_server_switch_uses_the_backend_config_authority_and_refreshes_the_ta
     drop(requests);
 
     let mut state = ListSelectionState::new(result.choices.model);
+    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(state.visible_items().len(), 1);

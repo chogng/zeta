@@ -15,7 +15,7 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
-fn resume_picker_marks_the_current_session_and_maps_enter_to_its_id() {
+fn resume_picker_selects_the_current_session_and_maps_enter_to_its_id() {
     let sessions = vec![Session {
         session_id: SessionId::new("session-1").unwrap(),
         title: "Current work".into(),
@@ -29,7 +29,7 @@ fn resume_picker_marks_the_current_session_and_maps_enter_to_its_id() {
 
     assert_eq!(state.title(), "Resume session");
     assert!(!state.show_tabs());
-    assert_eq!(state.visible_items()[0].label(), "Current work ✓");
+    assert_eq!(state.visible_items()[0].label(), "Current work");
     assert_eq!(
         view.actions.values().next(),
         Some(&SessionSelectionAction::Resume {
@@ -93,7 +93,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
     assert!(!state.show_tabs());
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(view.actions.len(), 2);
-    assert_eq!(state.selected_item().unwrap().label(), "Active work ✓");
+    assert_eq!(state.selected_item().unwrap().label(), "Active work");
     let ListSelectionInputOutcome::Activate(item_id) =
         state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
@@ -138,7 +138,7 @@ fn resume_items_show_time_and_tokens_without_branches_or_ids() {
 
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("1m  ·  1.5K tokens")
+        Some("1m ago  ·  1.5K tokens")
     );
     assert!(state.search().is_some());
 }
@@ -230,19 +230,19 @@ fn resume_time_floors_elapsed_time_and_omits_zero_trailing_units() {
     session.manager.status_changed_at_unix_ms = changed_at;
 
     for (elapsed_ms, expected) in [
-        (0, "<1m"),
-        (59_999, "<1m"),
-        (60_000, "1m"),
-        (119_999, "1m"),
-        (3_599_999, "59m"),
-        (3_600_000, "1h"),
-        (3_659_999, "1h"),
-        (3_660_000, "1h 01m"),
-        (86_399_999, "23h 59m"),
-        (86_400_000, "1d"),
-        (89_999_999, "1d"),
-        (90_000_000, "1d 1h"),
-        (604_799_999, "6d 23h"),
+        (0, "just now"),
+        (59_999, "just now"),
+        (60_000, "1m ago"),
+        (119_999, "1m ago"),
+        (3_599_999, "59m ago"),
+        (3_600_000, "1h ago"),
+        (3_659_999, "1h ago"),
+        (3_660_000, "1h 01m ago"),
+        (86_399_999, "23h 59m ago"),
+        (86_400_000, "1d ago"),
+        (89_999_999, "1d ago"),
+        (90_000_000, "1d 1h ago"),
+        (604_799_999, "6d 23h ago"),
     ] {
         assert_eq!(
             super::session_time(&session, changed_at + elapsed_ms),
@@ -250,7 +250,7 @@ fn resume_time_floors_elapsed_time_and_omits_zero_trailing_units() {
             "elapsed milliseconds: {elapsed_ms}"
         );
     }
-    assert_eq!(super::session_time(&session, changed_at - 1), "<1m");
+    assert_eq!(super::session_time(&session, changed_at - 1), "just now");
     session.manager.status_changed_at_unix_ms = 0;
     assert_eq!(super::session_time(&session, changed_at), "time unknown");
 }

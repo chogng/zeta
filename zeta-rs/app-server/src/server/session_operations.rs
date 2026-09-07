@@ -42,16 +42,12 @@ impl AppServer {
             .map_err(core_error)?;
         self.updates
             .subscribe_session(connection.connection_id, created.session_id.clone());
-        result(&SessionResult {
-            session: self.session_view(&created.session_id)?,
-        })
+        result(&self.session_result(&created.session_id)?)
     }
 
     pub(super) fn session_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionReadParams = decode(params)?;
-        result(&SessionResult {
-            session: self.session_view(&params.session_id)?,
-        })
+        result(&self.session_result(&params.session_id)?)
     }
 
     pub(super) fn session_list(&self) -> Result<Value, RpcError> {
@@ -139,9 +135,7 @@ impl AppServer {
             .map_err(core_error)?;
         self.notify_thread_updates(&restored.thread_id, restored.sequence.saturating_sub(1))?;
         self.updates.publish_session_changed(&mutation.session_id);
-        Ok(SessionResult {
-            session: self.session_view(&mutation.session_id)?,
-        })
+        self.session_result(&mutation.session_id)
     }
 
     pub(super) fn stop_session_request(
@@ -173,9 +167,7 @@ impl AppServer {
         }
         self.updates.publish_session_changed(&mutation.session_id);
         self.enforce_turn_changes_cleanup();
-        Ok(SessionResult {
-            session: self.session_view(&mutation.session_id)?,
-        })
+        self.session_result(&mutation.session_id)
     }
 
     pub(super) fn delete_session_request(
@@ -222,9 +214,7 @@ impl AppServer {
             .map_err(core_error)?;
         self.updates.publish_session_changed(&mutation.session_id);
         self.enforce_turn_changes_cleanup();
-        Ok(SessionResult {
-            session: self.session_view(&mutation.session_id)?,
-        })
+        self.session_result(&mutation.session_id)
     }
 
     fn enforce_turn_changes_cleanup(&self) {

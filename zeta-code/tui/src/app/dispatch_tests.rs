@@ -232,6 +232,8 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
             .contains("enabled  ·  built-in  ·  builtin:skill-source:zeta-release")
     );
 
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let enabled = app.list_selection().unwrap();
     assert_eq!(enabled.active_tab().label(), "Enabled (1)");
@@ -239,6 +241,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let action = app
@@ -262,6 +265,9 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     )
     .unwrap();
     app.update(SkillEvent::SettingsUpdated(view));
+    app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
     let disabled = app.list_selection().unwrap();
     assert_eq!(disabled.active_tab().label(), "Disabled (1)");
@@ -518,6 +524,14 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     let mut conversation = ActiveConversation::start(&mut client, "add dir".into()).unwrap();
     let mut app = App::new();
 
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::AddDir, ""),
+        &mut app,
+    );
+    assert!(app.list_selection().unwrap().visible_items().is_empty());
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
     let output = super::execute_product_command(
         conversation,
         &mut client,
@@ -557,6 +571,24 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     assert_eq!(
         path.canonicalize().unwrap(),
         additional.canonicalize().unwrap()
+    );
+
+    let event = crate::dirs::execute(
+        &mut client,
+        conversation.session_id(),
+        DirCommand::Remove { path },
+    )
+    .unwrap();
+    app.update(AppEvent::Dirs(event));
+    assert!(app.list_selection().unwrap().visible_items().is_empty());
+    assert!(
+        client
+            .list_session_dirs(SessionDirListParams {
+                session_id: conversation.session_id().clone(),
+            })
+            .unwrap()
+            .dirs
+            .is_empty()
     );
 
     drop(client);

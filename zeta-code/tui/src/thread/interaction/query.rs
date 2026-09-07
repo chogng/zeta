@@ -1,3 +1,4 @@
+use crate::keymap::bindings;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -165,14 +166,14 @@ impl Query {
                     custom_answer.pop();
                     QueryOutcome::Consumed
                 }
-                KeyCode::Enter if key.modifiers.is_empty() && !custom_answer.trim().is_empty() => {
+                _ if bindings::ANSWER.matches(key) && !custom_answer.trim().is_empty() => {
                     let value = self
                         .custom_answer
                         .take()
                         .expect("the custom answer editor is active");
                     self.advance(value)
                 }
-                KeyCode::Esc if key.modifiers.is_empty() => {
+                _ if bindings::CANCEL_ANSWER.matches(key) => {
                     self.custom_answer = None;
                     QueryOutcome::Consumed
                 }
@@ -180,7 +181,7 @@ impl Query {
             };
         }
         match key.code {
-            KeyCode::Enter if key.modifiers.is_empty() => self.activate_selected(),
+            _ if bindings::ANSWER.matches(key) => self.activate_selected(),
             KeyCode::Esc => QueryOutcome::Consumed,
             _ => QueryOutcome::Unhandled,
         }

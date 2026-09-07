@@ -249,6 +249,24 @@ impl AppDriver {
                 self.refresh.skills = false;
             }
         }
+        if self.requests.is_idle(Some(RequestKey::SessionDetails)) {
+            if let Some((generation, session_id)) = self.app.take_session_details_request() {
+                let mut client = self.client.clone();
+                self.requests.spawn(
+                    Some(RequestKey::SessionDetails),
+                    "zeta-tui-session-details",
+                    move || {
+                        Completion::Presentation(Ok(sessions::load_details(
+                            &mut client,
+                            generation,
+                            session_id,
+                        )
+                        .into()))
+                    },
+                    &mut self.app,
+                );
+            }
+        }
         if self.requests.is_idle(Some(RequestKey::Sessions)) && self.refresh.sessions {
             let mut client = self.client.clone();
             self.requests.spawn(

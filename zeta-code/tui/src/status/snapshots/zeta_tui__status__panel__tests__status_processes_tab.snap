@@ -1,8 +1,9 @@
 ---
 source: zeta-code/tui/src/status/panel_tests.rs
+assertion_line: 223
 expression: terminal.backend().to_string()
 ---
-"   Session    Processes                                                         "
+"   Thread    Processes                                                          "
 "  Local total resident memory:  240.0 MiB                                       "
 "  Local observed peak:          260.0 MiB                                       "
 "  Local total CPU:              12.4%                                           "

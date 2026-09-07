@@ -19,7 +19,7 @@ fn detail_scroll_is_bounded_and_supports_first_and_last_shortcuts() {
         vec![DetailListRow::new("stdout", "one\ntwo\nthree")],
     );
     let mut overlay = DetailOverlay::new(detail);
-    let available = ratatui::layout::Rect::new(0, 0, 20, 4);
+    let available = ratatui::layout::Rect::new(0, 0, 20, 3);
 
     overlay.handle_key(
         KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL),
@@ -63,6 +63,10 @@ fn wrapped_content_uses_the_same_width_for_height_and_scroll() {
 fn overlay_fills_each_wide_row_and_aligns_content_with_the_page() {
     let detail = DetailList::new("Output", vec![DetailListRow::new("stdout", "done")]);
     let overlay = DetailOverlay::new(detail);
+    assert_eq!(
+        overlay.surface(ratatui::layout::Rect::new(0, 0, 120, 8)),
+        ratatui::layout::Rect::new(0, 6, 120, 2)
+    );
     let mut terminal = Terminal::new(TestBackend::new(120, 8)).unwrap();
 
     terminal
@@ -72,17 +76,17 @@ fn overlay_fills_each_wide_row_and_aligns_content_with_the_page() {
         })
         .unwrap();
 
-    assert_eq!(terminal.backend().buffer()[(0, 2)].symbol(), " ");
-    assert_eq!(terminal.backend().buffer()[(119, 2)].symbol(), " ");
+    assert_eq!(terminal.backend().buffer()[(0, 6)].symbol(), " ");
+    assert_eq!(terminal.backend().buffer()[(119, 6)].symbol(), " ");
     assert_eq!(
-        terminal.backend().buffer()[(0, 2)].bg,
+        terminal.backend().buffer()[(0, 6)].bg,
         Color::Rgb(37, 37, 38)
     );
     assert_eq!(
-        terminal.backend().buffer()[(119, 2)].bg,
+        terminal.backend().buffer()[(119, 6)].bg,
         Color::Rgb(37, 37, 38)
     );
-    assert_eq!(terminal.backend().buffer()[(2, 2)].symbol(), "O");
+    assert_eq!(terminal.backend().buffer()[(2, 6)].symbol(), "O");
     assert_snapshot!("wide_detail_overlay_uses_full_rows", terminal.backend());
 }
 
@@ -109,7 +113,7 @@ fn detail_navigation_uses_reading_aliases_and_does_not_repeat_close() {
     );
     assert_eq!(overlay.scroll, 1);
     overlay.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE), area);
-    assert_eq!(overlay.scroll, 9);
+    assert_eq!(overlay.scroll, 10);
     overlay.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE), area);
     assert_eq!(overlay.scroll, 0);
     assert_eq!(

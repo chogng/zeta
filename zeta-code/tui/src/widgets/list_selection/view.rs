@@ -73,8 +73,7 @@ pub(crate) fn draw_body_with_pointer(
     }
 
     let visible_items = view.visible_items();
-    let rendered_rows = usize::from(areas[1].height).min(visible_items.len());
-    let first_row = view.first_rendered_row(rendered_rows);
+    let viewport = view.viewport(areas[1]);
     if visible_items.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
@@ -89,13 +88,13 @@ pub(crate) fn draw_body_with_pointer(
         for (row, (index, item)) in visible_items
             .iter()
             .enumerate()
-            .skip(first_row)
-            .take(rendered_rows)
+            .skip(viewport.start)
+            .take(viewport.end - viewport.start)
             .enumerate()
         {
             let row_area = Rect::new(
                 list_area.x,
-                areas[1].y.saturating_add(row as u16),
+                viewport.items.y.saturating_add(row as u16),
                 list_area.width,
                 1,
             );
@@ -109,6 +108,18 @@ pub(crate) fn draw_body_with_pointer(
                 column_layout,
                 context,
             );
+        }
+        for (area, count, position) in [
+            (viewport.above, viewport.start, "above"),
+            (viewport.below, visible_items.len() - viewport.end, "below"),
+        ] {
+            if !area.is_empty() {
+                frame.render_widget(
+                    Paragraph::new(format!("{count} more {position}"))
+                        .style(Style::default().fg(context.muted())),
+                    area,
+                );
+            }
         }
     }
     if let Some(item) = view.selected_item()
@@ -164,6 +175,35 @@ pub(crate) fn draw_body_with_pointer(
 }
 
 impl ListSelectionState {
+    fn viewport(&self, area: Rect) -> ListViewport {
+        match self.scroll_start {
+            Some(start) => ListViewport::at_start(area, self.visible_items().len(), start),
+            None => ListViewport::new(
+                area,
+                self.visible_items().len(),
+                self.selected_visible_index(),
+            ),
+        }
+    }
+
+    pub(crate) fn scroll(
+        &mut self,
+        body: Rect,
+        navigation: crate::widgets::navigation::Navigation,
+        position: ratatui::layout::Position,
+    ) {
+        let area = body_areas(body, self)[1];
+        if !area.contains(position) || area.is_empty() {
+            return;
+        }
+        let viewport = self.viewport(area);
+        let count = self.visible_items().len();
+        if count <= usize::from(area.height) {
+            return;
+        }
+        let last = count.saturating_sub(usize::from(area.height.saturating_sub(1).max(1)));
+        self.scroll_start = Some(navigation.offset(viewport.start, last, 3));
+    }
     pub(crate) fn tab_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
         if !self.show_tabs() {
             return None;
@@ -176,19 +216,19 @@ impl ListSelectionState {
             return None;
         }
         let areas = body_areas(area, self);
-        let list_area = with_state_column(areas[1]);
-        let visible_items = self.visible_items();
-        let rendered_rows = usize::from(areas[1].height).min(visible_items.len());
-        let first_row = self.first_rendered_row(rendered_rows);
+        let viewport = self.viewport(areas[1]);
+        let list_area = with_state_column(viewport.items);
         if column < list_area.x
             || column >= list_area.right()
-            || row < areas[1].y
-            || row >= areas[1].y.saturating_add(rendered_rows as u16)
+            || row < list_area.y
+            || row >= list_area.bottom()
         {
             return None;
         }
-        let index = first_row.saturating_add(usize::from(row - areas[1].y));
-        (index < visible_items.len()).then_some(index)
+        let index = viewport
+            .start
+            .saturating_add(usize::from(row - list_area.y));
+        (index < viewport.end).then_some(index)
     }
 
     pub(crate) fn search_contains_in(&self, area: Rect, column: u16, row: u16) -> bool {
@@ -199,6 +239,71 @@ impl ListSelectionState {
             return false;
         }
         body_areas(area, self)[0].contains(ratatui::layout::Position::new(column, row))
+    }
+}
+
+struct ListViewport {
+    start: usize,
+    end: usize,
+    items: Rect,
+    above: Rect,
+    below: Rect,
+}
+
+impl ListViewport {
+    fn at_start(area: Rect, count: usize, start: usize) -> Self {
+        if count <= usize::from(area.height) {
+            return Self::new(area, count, None);
+        }
+        let last = count.saturating_sub(usize::from(area.height.saturating_sub(1).max(1)));
+        let start = start.min(last);
+        let above_rows = u16::from(start > 0 && area.height > 1);
+        let available = area.height.saturating_sub(above_rows);
+        let below_rows = u16::from(count - start > usize::from(available) && available > 1);
+        let item_rows = usize::from(available.saturating_sub(below_rows)).min(count - start) as u16;
+        Self {
+            start,
+            end: start + usize::from(item_rows),
+            items: Rect::new(area.x, area.y + above_rows, area.width, item_rows),
+            above: Rect::new(area.x, area.y, area.width, above_rows),
+            below: Rect::new(
+                area.x,
+                area.y + above_rows + item_rows,
+                area.width,
+                below_rows,
+            ),
+        }
+    }
+    fn new(area: Rect, count: usize, selected: Option<usize>) -> Self {
+        let height = usize::from(area.height);
+        let selected = selected.unwrap_or(0).min(count.saturating_sub(1));
+        let (start, end) = if count <= height {
+            (0, count)
+        } else if height <= 1 {
+            (selected, (selected + height).min(count))
+        } else if selected < height - 1 {
+            (0, height - 1)
+        } else if selected >= count - (height - 1) {
+            (count - (height - 1), count)
+        } else {
+            let capacity = height.saturating_sub(2).max(1);
+            (selected + 1 - capacity, selected + 1)
+        };
+        let above_rows = u16::from(start > 0 && height > 1);
+        let item_rows = (end - start) as u16;
+        let below_rows = u16::from(end < count && area.height > above_rows + item_rows);
+        Self {
+            start,
+            end,
+            items: Rect::new(area.x, area.y + above_rows, area.width, item_rows),
+            above: Rect::new(area.x, area.y, area.width, above_rows),
+            below: Rect::new(
+                area.x,
+                area.y + above_rows + item_rows,
+                area.width,
+                below_rows,
+            ),
+        }
     }
 }
 

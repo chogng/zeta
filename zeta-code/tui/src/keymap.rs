@@ -3,7 +3,7 @@
 //! This file is the module entry and runtime owner. Binding declarations,
 //! chord lifecycle, and terminal key conversion live in focused submodules.
 
-mod bindings;
+pub(crate) mod bindings;
 mod chords;
 mod editor;
 mod input;
@@ -42,6 +42,7 @@ pub(crate) use bindings::AppKeymapAction;
 pub(crate) use bindings::AppKeymapContext;
 pub(crate) use bindings::KeymapActionSnapshot;
 pub(crate) use bindings::compile_app_user_bindings;
+pub(crate) use bindings::fixed_bindings;
 pub(crate) use chords::AppChordMatch;
 #[cfg(test)]
 use chords::KEY_CHORD_TIMEOUT;
@@ -59,7 +60,6 @@ pub(crate) use settings::KeymapEditIntent;
 pub(crate) use settings::KeymapEditKind;
 pub(crate) use settings::KeymapEditorUpdate;
 pub(crate) use settings::KeymapSettings;
-pub(crate) use settings::fixed_shortcuts;
 pub(crate) use settings::read_keymap;
 pub(crate) use settings::set_keymap;
 pub(crate) use settings::settings_from_tui;

@@ -50,7 +50,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     );
     assert_eq!(
         view.model.key_hints().text(),
-        "Enter/Space to change  ·  ↑↓/jk to choose  ·  / to search  ·  Tab to switch  ·  Esc to close"
+        "Enter/Space to change  ·  / to search  ·  Esc to close"
     );
     let mut state = ListSelectionState::new(view.model);
 
@@ -77,10 +77,10 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .all(|item| item.label() != "Language servers")
     );
     let mouse = &state.visible_items()[0];
-    assert_eq!(mouse.label(), "Mouse interactions");
+    assert_eq!(mouse.label(), "Enhanced TUI");
     assert_eq!(
         mouse.description(),
-        Some("Select and auto-copy text, click, and hover [ ✔ ]")
+        Some("Click, scroll, hover, and auto-copy selected panel text [ ✔ ]")
     );
     assert!(matches!(
         view.actions.get(mouse.id().unwrap()).unwrap(),
@@ -111,6 +111,8 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             if edit.status_line.show_git_changes_as_diff()
     ));
 
+    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "OpenAI");
@@ -156,6 +158,8 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
     );
     let mut state = ListSelectionState::new(view.model);
 
+    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
@@ -205,12 +209,40 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
         terminal,
         StatusLineSettings::default(),
     );
-    let state = ListSelectionState::new(view.model);
+    let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("Select and auto-copy text, click, and hover [   ]")
+        Some("Click, scroll, hover, and auto-copy selected panel text [   ]")
     );
+    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert!(state.search().unwrap().input_active());
+    state.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE));
+    assert_eq!(state.query(), "v");
+    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(state.active_tab().label(), "Providers");
+}
+
+#[test]
+fn config_option_arrows_and_tabs_toggle_values_without_switching_pages() {
+    for key in [
+        KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT),
+    ] {
+        let mut editor = super::ConfigEditor::new(config_choices(
+            &empty_config_snapshot(),
+            &providers(),
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ));
+        assert!(matches!(editor.handle_key(key),
+            super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
+                if !edit.terminal.mouse_interactions()
+        ));
+    }
 }
 
 #[test]

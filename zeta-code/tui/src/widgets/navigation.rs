@@ -1,9 +1,8 @@
 //! Keys shared by focused lists and read-only surfaces, never by text editors.
 
-use crossterm::event::KeyCode;
+use crate::keymap::bindings;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Navigation {
@@ -20,15 +19,16 @@ impl Navigation {
         if key.kind == KeyEventKind::Release {
             return None;
         }
-        match (key.modifiers, key.code) {
-            (KeyModifiers::NONE, KeyCode::Up | KeyCode::Char('k')) => Some(Self::Previous),
-            (KeyModifiers::NONE, KeyCode::Down | KeyCode::Char('j')) => Some(Self::Next),
-            (KeyModifiers::NONE, KeyCode::PageUp) => Some(Self::PagePrevious),
-            (KeyModifiers::NONE, KeyCode::PageDown) => Some(Self::PageNext),
-            (KeyModifiers::NONE | KeyModifiers::CONTROL, KeyCode::Home) => Some(Self::First),
-            (KeyModifiers::NONE | KeyModifiers::CONTROL, KeyCode::End) => Some(Self::Last),
-            _ => None,
-        }
+        [
+            (bindings::PREVIOUS, Self::Previous),
+            (bindings::NEXT, Self::Next),
+            (bindings::PAGE_PREVIOUS, Self::PagePrevious),
+            (bindings::PAGE_NEXT, Self::PageNext),
+            (bindings::FIRST, Self::First),
+            (bindings::LAST, Self::Last),
+        ]
+        .into_iter()
+        .find_map(|(shortcut, action)| shortcut.matches(key).then_some(action))
     }
 
     pub(crate) fn offset(self, current: usize, last: usize, page_rows: usize) -> usize {

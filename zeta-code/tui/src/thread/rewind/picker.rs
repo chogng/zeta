@@ -1,4 +1,4 @@
-use crate::widgets::list_selection::ListSelectionActivationMode;
+use crate::keymap::bindings;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -58,8 +58,7 @@ pub(crate) fn rewind_choices(thread: &Thread) -> RewindChoices {
             "Rewind",
             vec![ListSelectionGroup::new("Checkpoints", items)],
         )
-        .with_activation_mode(ListSelectionActivationMode::Enter)
-        .with_activation_action("rewind")
+        .with_activation(bindings::REWIND)
         .without_tab_bar()
         .with_initial_selected(selected)
         .with_search(SearchBoxModel::new("Search message checkpoints"))

@@ -18,6 +18,8 @@ pub(crate) enum TerminalScreen {
 
 #[derive(Debug, Default)]
 pub(crate) struct SessionsState {
+    pub(crate) details: Option<super::details::SessionDetails>,
+    details_generation: u64,
     pub(crate) preview: Option<ConversationPreview>,
     preview_generation: u64,
     screen: Option<TerminalScreen>,
@@ -28,6 +30,35 @@ pub(crate) struct SessionsState {
 }
 
 impl SessionsState {
+    pub(crate) fn open_details(&mut self) {
+        let Some(session) = self.manager.selected_session().and_then(|id| {
+            self.catalog
+                .iter()
+                .find(|session| &session.session_id == id)
+        }) else {
+            return;
+        };
+        self.details_generation = self.details_generation.wrapping_add(1);
+        self.details = Some(super::details::SessionDetails::new(
+            session,
+            self.details_generation,
+        ));
+    }
+
+    pub(crate) fn finish_details(
+        &mut self,
+        generation: u64,
+        result: Result<zeta_app_server_protocol::protocol::session::SessionResult, String>,
+    ) {
+        if let Some(details) = self
+            .details
+            .as_mut()
+            .filter(|details| details.generation == generation)
+        {
+            details.install(result);
+        }
+    }
+
     pub(crate) fn open_preview(&mut self, session_id: &SessionId) -> Option<super::Command> {
         let session = self
             .catalog
@@ -94,6 +125,17 @@ impl SessionsState {
 
     pub(crate) fn refresh_catalog(&mut self, catalog: Vec<Session>) {
         self.catalog = catalog;
+        if let Some(details) = self.details.as_mut() {
+            if self
+                .catalog
+                .iter()
+                .any(|session| session.session_id == details.session_id)
+            {
+                details.invalidate();
+            } else {
+                self.details = None;
+            }
+        }
         if self.preview.as_ref().is_some_and(|preview| {
             !self
                 .catalog

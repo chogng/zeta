@@ -213,7 +213,6 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
         reference_cost: &reference_cost,
         session_id: "session-1",
         thread_id: "thread-1",
-        thread_sequence: 1,
     }));
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
 
@@ -231,16 +230,13 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
         buffer[(2, 0)].bg,
         test_context().accent_surface_background()
     );
-    assert_eq!(buffer[(3, 2)].symbol(), "S");
+    assert_eq!(buffer[(3, 2)].symbol(), "T");
     assert_eq!(
         buffer[(3, 2)].bg,
         test_context().accent_surface_background()
     );
     assert_eq!(buffer[(2, 3)].symbol(), "M");
-    assert_eq!(
-        panel.key_hints(),
-        "↑↓/jk to scroll · Tab to switch · Esc to close"
-    );
+    assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
 }
 
 #[test]
@@ -284,6 +280,38 @@ fn command_panel_layout_keeps_wrapped_tabs_between_title_and_body() {
 }
 
 #[test]
+fn long_command_lists_grow_past_twelve_rows_and_scroll_only_when_terminal_is_full() {
+    let mut app = App::new();
+    app.update(AppEvent::HelpOpened(
+        ListSelectionModel::new(
+            "Items",
+            vec![ListSelectionGroup::new(
+                "All",
+                (0..30)
+                    .map(|index| ListSelectionItem::new(format!("Item {index}")))
+                    .collect(),
+            )],
+        )
+        .without_tab_bar(),
+    ));
+    let large = layout(&app, Rect::new(0, 0, 80, 40));
+    assert_eq!(large.session.composer.height, 32);
+    let rendered = render(&app, 80, 40);
+    assert!(rendered.contains("Item 29"));
+    assert!(!rendered.contains("more below"));
+    let small = layout(&app, Rect::new(0, 0, 80, 20));
+    assert_eq!(small.session.composer.y, 0);
+    assert_eq!(small.session.composer.height, 18);
+    assert!(render(&app, 80, 20).contains("15 more below"));
+    app.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+    let rendered = render(&app, 80, 20);
+    assert!(rendered.contains("15 more above"));
+    assert!(rendered.contains("Item 29"));
+    assert!(!rendered.contains("more below"));
+    assert!(!render(&app, 80, 40).contains("more above"));
+}
+
+#[test]
 fn process_resource_demand_follows_the_content_that_is_actually_visible() {
     let mut app = App::new();
     let area = Rect::new(0, 0, 80, 20);
@@ -317,7 +345,6 @@ fn process_resource_demand_follows_the_content_that_is_actually_visible() {
         reference_cost: &reference_cost,
         session_id: "session-1",
         thread_id: "thread-1",
-        thread_sequence: 1,
     })));
     assert_eq!(
         process_resource_demand(&app, area),
@@ -362,7 +389,6 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
         reference_cost: &reference_cost,
         session_id: "session-1",
         thread_id: "thread-1",
-        thread_sequence: 4,
     })));
 
     assert_eq!(
@@ -370,9 +396,9 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
             .session
             .composer
             .height,
-        18
+        17
     );
-    assert_eq!(layout(&app, terminal_area).session.composer.height, 13);
+    assert_eq!(layout(&app, terminal_area).session.composer.height, 17);
     assert_eq!(layout(&app, terminal_area).session.bottom.height, 2);
     assert_ne!(layout(&app, terminal_area).session, before);
     assert!(app.command_panel().is_some());
@@ -382,14 +408,11 @@ fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_cha
     assert_eq!(app.input(), "/");
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
-    assert!(rows[5].starts_with("─ Status ─"));
-    assert!(rows[6].trim().is_empty());
-    assert!(rows[7].starts_with("   Session    Processes"));
+    assert!(rows[1].starts_with("─ Status ─"));
+    assert!(rows[2].trim().is_empty());
+    assert!(rows[3].starts_with("   Thread    Processes"));
     assert!(rows[18].trim().is_empty());
-    assert_eq!(
-        rows[19].trim_end(),
-        "  ↑↓/jk to scroll · Tab to switch · Esc to close"
-    );
+    assert_eq!(rows[19].trim_end(), "  Tab to switch · Esc to close");
     assert_snapshot!("status_panel_adaptive_height", rendered);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -1015,6 +1038,8 @@ fn command_panel_supports_keyboard_tab_switching_and_search() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(help_view()));
 
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
@@ -1632,4 +1657,46 @@ fn render_buffer(app: &App, width: u16, height: u16) -> Buffer {
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|frame| draw(frame, app)).unwrap();
     terminal.backend().buffer().clone()
+}
+
+#[test]
+fn detail_overlay_keeps_content_above_the_shared_hitbar_at_every_height() {
+    use crate::widgets::detail_list::{DetailList, DetailListRow};
+
+    for height in [2, 3, 4, 8, 24] {
+        let mut app = App::new();
+        app.show_overlay(DetailList::new(
+            "Output",
+            vec![DetailListRow::new(
+                "stdout",
+                (0..40)
+                    .map(|i| format!("line {i}"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )],
+        ));
+        let area = Rect::new(0, 0, 80, height);
+        let bottom = layout(&app, area).session.bottom;
+        assert!(
+            app.overlay()
+                .unwrap()
+                .surface(super::transient_area(&app, area))
+                .bottom()
+                <= bottom.y
+        );
+        app.handle_key_in_area(KeyEvent::new(KeyCode::End, KeyModifiers::NONE), area);
+        let rendered = render(&app, 80, height);
+        let rows = rendered.lines().collect::<Vec<_>>();
+        assert_eq!(
+            rows[usize::from(bottom.bottom() - 1)].trim(),
+            "Esc to close"
+        );
+        if bottom.height == 2 {
+            assert!(rows[usize::from(bottom.y)].trim().is_empty());
+        }
+        assert_eq!(rendered.matches("Esc to close").count(), 1);
+        if height >= 8 {
+            assert!(rendered.contains("line 39"));
+        }
+    }
 }

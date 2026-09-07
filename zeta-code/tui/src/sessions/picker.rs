@@ -1,5 +1,5 @@
+use crate::keymap::bindings;
 use crate::sessions::session_size_label;
-use crate::widgets::list_selection::ListSelectionActivationMode;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -40,7 +40,7 @@ fn session_choices_at(
             if session.session_id.as_str() == active_session_id {
                 selected = index;
             }
-            session_item(session, active_session_id, now_unix_ms, &mut actions)
+            session_item(session, now_unix_ms, &mut actions)
         })
         .collect::<Vec<_>>();
 
@@ -50,8 +50,7 @@ fn session_choices_at(
             vec![ListSelectionGroup::new("Sessions", items)],
         )
         .without_tab_bar()
-        .with_activation_mode(ListSelectionActivationMode::Enter)
-        .with_activation_action("resume")
+        .with_activation(bindings::SESSION_RESUME)
         .with_initial_selected(selected)
         .with_search(SearchBoxModel::new("Search saved sessions"))
         .with_empty_message("No matching sessions"),
@@ -61,7 +60,6 @@ fn session_choices_at(
 
 fn session_item(
     session: &Session,
-    active_session_id: &str,
     now_unix_ms: u64,
     actions: &mut BTreeMap<ListSelectionItemId, SessionSelectionAction>,
 ) -> ListSelectionItem {
@@ -72,21 +70,13 @@ fn session_item(
             session_id: session.session_id.to_string(),
         },
     );
-    ListSelectionItem::new(format!(
-        "{}{}",
-        session.title,
-        if session.session_id.as_str() == active_session_id {
-            " ✓"
-        } else {
-            ""
-        }
-    ))
-    .with_id(item_id)
-    .with_description(format!(
-        "{}  ·  {}",
-        session_time(session, now_unix_ms),
-        session_size_label(session),
-    ))
+    ListSelectionItem::new(session.title.clone())
+        .with_id(item_id)
+        .with_description(format!(
+            "{}  ·  {}",
+            session_time(session, now_unix_ms),
+            session_size_label(session),
+        ))
 }
 
 fn session_time(session: &Session, now_unix_ms: u64) -> String {
@@ -96,24 +86,24 @@ fn session_time(session: &Session, now_unix_ms: u64) -> String {
     }
     let minutes = now_unix_ms.saturating_sub(changed_at) / 60_000;
     match minutes {
-        0 => "<1m".into(),
-        1..60 => format!("{minutes}m"),
+        0 => "just now".into(),
+        1..60 => format!("{minutes}m ago"),
         60..1_440 => {
             let hours = minutes / 60;
             let minutes = minutes % 60;
             if minutes == 0 {
-                format!("{hours}h")
+                format!("{hours}h ago")
             } else {
-                format!("{hours}h {minutes:02}m")
+                format!("{hours}h {minutes:02}m ago")
             }
         }
         1_440..10_080 => {
             let days = minutes / 1_440;
             let hours = minutes / 60 % 24;
             if hours == 0 {
-                format!("{days}d")
+                format!("{days}d ago")
             } else {
-                format!("{days}d {hours}h")
+                format!("{days}d {hours}h ago")
             }
         }
         _ => {

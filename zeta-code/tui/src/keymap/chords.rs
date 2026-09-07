@@ -5,10 +5,8 @@ use super::bindings::AppKeymapAction;
 use super::bindings::AppKeymapContext;
 use super::bindings::condition_matches;
 use super::input::normalized_key;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use std::time::Duration;
 use std::time::Instant;
 use zeta_keybinding::Chord;
@@ -53,8 +51,7 @@ impl AppKeymap {
         if key.kind != KeyEventKind::Press {
             return AppChordMatch::PassThrough;
         }
-        if self.pending.is_some() && key.code == KeyCode::Esc && key.modifiers == KeyModifiers::NONE
-        {
+        if self.pending.is_some() && super::bindings::CLOSE.matches(*key) {
             self.cancel_chord();
             return AppChordMatch::Consumed;
         }

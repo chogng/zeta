@@ -72,3 +72,17 @@ fn escape_is_left_for_the_owning_view() {
     assert_eq!(search.query(), "s");
     assert!(search.input_active());
 }
+
+#[test]
+fn arrows_edit_unicode_text_and_paste_at_the_cursor() {
+    let mut search = search_box();
+    search.set_input_active(true);
+    search.handle_paste("界ab".into());
+    search.handle_key(key(KeyCode::Left));
+    search.handle_key(key(KeyCode::Left));
+    search.handle_key(key(KeyCode::Backspace));
+    search.handle_key(key(KeyCode::Char('中')));
+    search.handle_key(key(KeyCode::Right));
+    search.handle_paste("文".into());
+    assert_eq!(search.query(), "中a文b");
+}

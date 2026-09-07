@@ -28,6 +28,7 @@ pub(super) enum RequestKey {
     Directories,
     Sessions,
     Preview,
+    SessionDetails,
     Mcp,
     Skills,
     Clipboard,

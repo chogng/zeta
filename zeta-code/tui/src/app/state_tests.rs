@@ -735,10 +735,7 @@ fn startup_slash_command_opens_a_read_only_context_panel() {
         app.list_selection().map(|selection| selection.title()),
         Some("Startup")
     );
-    assert_eq!(
-        app.command_panel_key_hints(),
-        Some("↑↓/jk to choose  ·  Esc to close")
-    );
+    assert_eq!(app.command_panel_key_hints(), Some("Esc to close"));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
@@ -863,12 +860,15 @@ fn config_language_server_switch_emits_a_revision_bound_backend_edit() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(
         app.list_selection().unwrap().active_tab().label(),
         "Language servers"
     );
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
@@ -926,7 +926,10 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
@@ -975,7 +978,10 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1255,6 +1261,8 @@ fn help_uses_the_runtime_command_catalog_and_descriptions() {
         .expect("the active user shortcut is included in help");
     assert_eq!(custom.description(), Some("Copy last response · custom"));
 
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let selection = app.list_selection().unwrap();
     assert_eq!(selection.active_tab().label(), "Commands");
@@ -1370,15 +1378,15 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
-fn mouse_interactions_capture_pointer_input_on_every_screen() {
+fn enhanced_mouse_capture_is_limited_to_open_panels() {
     let mut app = App::new();
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
 
     app.insert_text("/");
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
 
     let dir = temporary_dir("mouse-interaction-mention");
     fs::write(dir.join("notes.md"), "notes").unwrap();
@@ -1510,7 +1518,6 @@ fn terminal_screen_change_closes_command_panels_including_status() {
         reference_cost: &reference_cost,
         session_id: "session-1",
         thread_id: "thread-1",
-        thread_sequence: 1,
     })));
     assert!(app.command_panel().is_some());
     app.update(ThreadEvent::ContextChanged {
@@ -2075,11 +2082,7 @@ fn panel_search_owns_letters_and_paste_then_returns_to_the_list_and_original_dra
             .unwrap()
             .input_active()
     );
-    assert!(
-        app.command_panel_key_hints()
-            .unwrap()
-            .contains("return to list")
-    );
+    assert_eq!(app.command_panel_key_hints(), Some("Enter/Esc to return"));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(
         !app.list_selection()

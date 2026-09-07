@@ -2869,6 +2869,73 @@ fn failed_backend_steer_is_not_replayed_across_rpc_retry() {
 }
 
 #[test]
+fn session_read_returns_the_same_agent_tree_as_subscription_without_subscribing() {
+    let server = server();
+    let mut writer = server.connection();
+    let mut reader = server.connection();
+    initialize(&server, &mut writer);
+    initialize(&server, &mut reader);
+    let created = create_session(&server, &mut writer, 2, "details-session");
+    let id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let read = call(
+        &server,
+        &mut reader,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":3, "method":"session/read", "params":{"sessionId":id}
+        }),
+    );
+    assert_eq!(read["result"]["agentTree"]["roots"][0]["threadId"], id);
+    assert_eq!(
+        read["result"]["agentTree"]["roots"][0]["executionStatus"],
+        "idle"
+    );
+    let subscribed = call(
+        &server,
+        &mut writer,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"session/subscribe", "params":{"sessionId":id}
+        }),
+    );
+    assert_eq!(
+        read["result"]["agentTree"],
+        subscribed["result"]["agentTree"]
+    );
+    let fork = call(
+        &server,
+        &mut writer,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":5, "method":"session/request", "params":{
+                "commandId":"details-fork", "sessionId":id,
+                "request":{"type":"forkThread", "parentThreadId":id, "title":"Alternative"}
+            }
+        }),
+    );
+    assert!(fork.get("error").is_none(), "{fork}");
+    assert!(server.drain_notifications(&mut reader).is_empty());
+    let read = call(
+        &server,
+        &mut reader,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":6, "method":"session/read", "params":{"sessionId":id}
+        }),
+    );
+    assert_eq!(
+        read["result"]["agentTree"]["roots"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(
+        read["result"]["agentTree"]["roots"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|node| node["forkedFromId"] == id)
+    );
+}
+
+#[test]
 fn updates_are_broadcast_to_other_subscribed_connections() {
     let server = server();
     let mut writer = server.connection();

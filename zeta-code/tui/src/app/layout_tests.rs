@@ -3,6 +3,22 @@ use super::session_areas;
 use ratatui::layout::Rect;
 
 #[test]
+fn command_panels_use_available_height_and_keep_hints_visible() {
+    for height in 0..40 {
+        let area = Rect::new(3, 5, 80, height);
+        let layout = super::command_panel_areas(area, 100, 2);
+        assert_eq!(layout.composer.height, height.saturating_sub(2));
+        assert_eq!(layout.transcript.height, 0);
+        assert_eq!(layout.bottom.bottom(), area.bottom());
+        assert_eq!(layout.composer.bottom(), layout.bottom.y);
+        assert_eq!(layout.top_tip.height, 0);
+    }
+    let layout = super::command_panel_areas(Rect::new(0, 0, 80, 40), 8, 2);
+    assert_eq!(layout.composer.height, 8);
+    assert_eq!(layout.transcript.height, 30);
+}
+
+#[test]
 fn session_layout_bounds_queue_and_preserves_transcript() {
     let areas = session_areas(Rect::new(0, 0, 80, 20), 1, 1, 12, 0, 3, 2, 4);
 

@@ -43,6 +43,7 @@ pub(crate) enum SearchBoxInputOutcome {
 pub(crate) struct SearchBoxState {
     model: SearchBoxModel,
     query: String,
+    cursor: usize,
     input_active: bool,
 }
 
@@ -52,6 +53,7 @@ impl SearchBoxState {
             input_active: model.initially_active,
             model,
             query: String::new(),
+            cursor: 0,
         }
     }
 
@@ -91,11 +93,29 @@ impl SearchBoxState {
 
         match key.code {
             KeyCode::Backspace => {
-                self.query.pop();
+                if let Some((previous, _)) = self.query[..self.cursor].char_indices().next_back() {
+                    self.query.drain(previous..self.cursor);
+                    self.cursor = previous;
+                }
                 SearchBoxInputOutcome::QueryChanged
             }
+            KeyCode::Left => {
+                self.cursor = self.query[..self.cursor]
+                    .char_indices()
+                    .next_back()
+                    .map(|(index, _)| index)
+                    .unwrap_or(0);
+                SearchBoxInputOutcome::Ignored
+            }
+            KeyCode::Right => {
+                if let Some(character) = self.query[self.cursor..].chars().next() {
+                    self.cursor += character.len_utf8();
+                }
+                SearchBoxInputOutcome::Ignored
+            }
             KeyCode::Char(character) if !character.is_ascii_control() => {
-                self.query.push(character);
+                self.query.insert(self.cursor, character);
+                self.cursor += character.len_utf8();
                 SearchBoxInputOutcome::QueryChanged
             }
             _ => SearchBoxInputOutcome::Ignored,
@@ -107,7 +127,8 @@ impl SearchBoxState {
             return SearchBoxInputOutcome::Ignored;
         }
         let normalized = pasted.split_whitespace().collect::<Vec<_>>().join(" ");
-        self.query.push_str(&normalized);
+        self.query.insert_str(self.cursor, &normalized);
+        self.cursor += normalized.len();
         SearchBoxInputOutcome::QueryChanged
     }
 }
@@ -170,6 +191,8 @@ pub(crate) fn draw(
     };
     let border_style = if pressed {
         Style::default().fg(context.pressed_foreground())
+    } else if search.input_active() {
+        Style::default().fg(context.focus())
     } else if hovered {
         Style::default().fg(context.foreground())
     } else {
@@ -185,16 +208,18 @@ pub(crate) fn draw(
         area,
     );
     if search.input_active() && area.width > 2 && area.height > 2 {
-        let cursor_width = rendered_query
-            .as_deref()
-            .unwrap_or(search.query())
-            .width()
-            .min(usize::from(
-                area.width
-                    .saturating_sub(2)
-                    .saturating_sub(SEARCH_BOX_LEFT_PADDING)
-                    .saturating_sub(1),
-            )) as u16;
+        let prefix = &search.query()[..search.cursor];
+        let cursor_width = if search.masked() {
+            prefix.chars().count()
+        } else {
+            prefix.width()
+        }
+        .min(usize::from(
+            area.width
+                .saturating_sub(2)
+                .saturating_sub(SEARCH_BOX_LEFT_PADDING)
+                .saturating_sub(1),
+        )) as u16;
         frame.set_cursor_position((
             area.x + 1 + SEARCH_BOX_LEFT_PADDING + cursor_width,
             area.y + 1,

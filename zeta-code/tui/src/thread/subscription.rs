@@ -81,7 +81,7 @@ impl ThreadSubscription {
         validate_transcript_scope(&result.transcript, session_id, thread_id)?;
         validate_update_scopes(&result.updates, session_id, thread_id)?;
 
-        let (snapshot, transcript, boundary) = if result
+        let (mut snapshot, mut transcript, boundary) = if result
             .updates
             .iter()
             .any(|update| update.durable_sequence > result.thread.sequence)
@@ -105,6 +105,34 @@ impl ThreadSubscription {
         let mut subscription =
             Self::from_snapshot_with_boundary(&snapshot, HISTORY_PAGE_TURNS, Some(boundary));
         subscription.confirmed_transcript_revision = transcript.revision;
+        let mut seen = std::collections::BTreeSet::new();
+        let mut pages = Vec::new();
+        while subscription.has_older_turns {
+            let before = subscription.oldest_turn_id.clone().ok_or_else(|| {
+                ClientError::Protocol("older history omitted its turn cursor".into())
+            })?;
+            if !seen.insert(before.clone()) {
+                return Err(ClientError::Protocol(
+                    "older history cursor did not advance".into(),
+                ));
+            }
+            let page =
+                super::request::read_older_thread_history(client, session_id, thread_id, before)?;
+            subscription.apply_history_page(&page.thread, page.boundary);
+            pages.push((page.thread.turns, page.transcript.entries));
+        }
+        // Pages arrive newest first. Install them oldest first without replacing
+        // the latest snapshot's sequence or transcript revision.
+        let mut turns = Vec::new();
+        let mut entries = Vec::new();
+        for (page_turns, page_entries) in pages.into_iter().rev() {
+            turns.extend(page_turns);
+            entries.extend(page_entries);
+        }
+        turns.append(&mut snapshot.turns);
+        entries.append(&mut transcript.entries);
+        snapshot.turns = turns;
+        transcript.entries = entries;
         Ok((subscription, snapshot, transcript))
     }
 

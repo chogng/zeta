@@ -239,7 +239,7 @@ enum AppCommand {
 `CommandPanel`、Approval、Query、输入目标、`TopTip` 和 `StatusLineModel`；固定与临时只表示
 这些内容的显示周期，不形成两套抽象。`CommandPanel` 只记录当前打开的命令面板，与普通输入框和
 审批面板互斥，但不解释具体面板的内部结果。产品文档统一使用“命令面板”，代码可以根据内部职责
-使用 `Picker`、`Editor` 或 `Panel` 等后缀；完整命名规则由[布局与部位名称](LAYOUT.md#输入位置里可能出现什么)定义。Status 面板按内容申请高度；布局在空间不足时压缩它并至少保留 4 行正文，面板在获得的视口内滚动。它属于普通布局而不是浮层。
+使用 `Picker`、`Editor` 或 `Panel` 等后缀；完整命名规则由[布局与部位名称](LAYOUT.md#输入位置里可能出现什么)定义。命令面板按全部内容申请高度，最多使用终端扣除底部操作提示后的全部空间，正文可以缩至 0。列表仅在实际高度不足时滚动并显示 more above / more below；Status 在获得的视口内滚动。它属于普通布局而不是浮层。
 
 每个具体界面自己处理按键、粘贴、期望高度、绘制和命中，并产生自己的类型化 outcome。
 `ChatPanel` 负责打开、替换、关闭和路由聊天区内容；`App` 只协调页面、Thread 与外部命令。
@@ -338,7 +338,7 @@ flowchart TD
 - 每个具体单元从宽度、主题、展开状态和交互状态产生同一份可缓存绘制结果；该结果同时提供行高、终端格内容和局部命中区域，测量、绘制和命中不能各自重新解释内容。
 - `Transcript` 只按顺序组合这些结果，负责总高度、滚动位置、可见裁剪、缓存上限和顶层命中路由；它不包含执行、Markdown 或本地命令的专属绘制分支。
 
-正文状态只保存一份：一个按正文顺序排列的 `TranscriptCell` 集合。实时内容和已完成内容不分集合；一个已完成的 `ExecCell` 仍然是原位置的同一个 `TranscriptCell`。不建立 `history_cells`、`active_cell` 或 `exec_cells` 这类并行存储，也不建立与 `ExecCell` 并列、专门表示“已完成内容”的 `HistoryCell`。Zeta 使用备用屏幕统一重绘正文，不使用 Codex 为终端回滚历史设计的“活跃单元加已提交历史”两套存储。
+正文状态只保存一份：一个按正文顺序排列的 `TranscriptCell` 集合。实时内容和已完成内容不分集合；一个已完成的 `ExecCell` 仍然是原位置的同一个 `TranscriptCell`。不建立 `history_cells`、`active_cell` 或 `exec_cells` 这类并行存储，也不建立与 `ExecCell` 并列、专门表示“已完成内容”的 `HistoryCell`。Zeta 使用终端主屏幕重绘当前视口，同时把定稿正文完整提交到终端回滚区。`TranscriptHistory` 只保存已成功写入的消息标识、绘制版本和内容校验值，不再保存一份正文；`terminal/session.rs` 分块写入完整内容并使其进入回滚区，块大小只限制单次缓冲分配，不裁剪输出。恢复旧会话时，`ThreadSubscription::start` 自动读完历史分页，按从旧到新的顺序安装正文。
 
 每种正文类型、执行阶段、合并方式、截断方式和完整详情的可见输出见 [界面词典的“正文单元会输出什么”](LAYOUT.md#正文单元会输出什么)。
 
@@ -361,6 +361,10 @@ flowchart TD
 
 Session 或 Thread 切换必须以一个完整结果安装新的 conversation identity、subscription 和 snapshot。
 旧 scope 的完成结果不得修改当前界面。
+
+Session 管理器的 `Session details` 复用 `DetailOverlay` 与 `DetailList`，由 `sessions/details.rs` 负责内容与读取周期。它通过 `session/read` 读取后端已有的 Agent 树，展示根 Thread、独立分支、Fork 来源、嵌套委派关系、执行状态、等待原因、归档状态和已交付结果。会话调用次数与 token 用量覆盖全部 Thread，上下文窗口仍属于单条 Thread，不做会话合计。
+
+详情打开时每秒读取一次，同一时间只允许一个详情请求；会话目录变化可以提前触发刷新；关闭后停止读取，晚到响应按打开代次丢弃。刷新复用同一个详情浮层并保留滚动位置，会话删除后关闭详情。`/status` 的 `Thread` 页只显示当前 Thread，`Processes` 页继续显示当前连接的进程资源；这次没有新增按 Agent 分摊 CPU 或内存的统计。
 
 ## 8. 独立产品能力
 
@@ -436,7 +440,7 @@ revision 和其他真实失效条件。
 
 ### `terminal/`
 
-负责 raw mode、alternate screen、bracketed paste、鼠标捕获、Crossterm 输入、Tick、背景色探针、
+负责 raw mode、主屏幕视口预留和退出、bracketed paste、鼠标捕获、Crossterm 输入、Tick、背景色探针、
 suspend/resume 和已完成 frame buffer 的字符选择读取。
 
 终端资源使用 RAII，部分获取失败必须逆序恢复，restore 必须幂等。平台相关 `unsafe` 只能存在于明确、

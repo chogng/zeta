@@ -207,11 +207,9 @@ fn pointer_activation_does_not_take_keyboard_focus_or_selection() {
         target,
         SessionManagerPointerTarget::Session(SessionId::new("idle").unwrap())
     );
-    let detail = state.details_selected(&sessions).unwrap();
 
     assert!(!state.focused());
     assert_eq!(state.selected_session().unwrap().as_str(), "idle");
-    assert_eq!(detail.title(), "Session details");
 }
 
 #[test]
@@ -224,59 +222,12 @@ fn group_headings_are_static_and_all_sessions_remain_visible() {
 
     assert_eq!(state.selected_archive_ids(&sessions).len(), 1);
     assert_eq!(
-        state.details_selected(&sessions).unwrap().title(),
-        "Session details"
-    );
-    assert_eq!(
         manager_rows(&sessions, &state.pinned, state.archived_expanded).len(),
         6
     );
     assert_eq!(
         state.selection_hint(),
         "Enter to open · Space to preview · Ctrl+X to archive · i to details"
-    );
-}
-
-#[test]
-fn session_preview_is_read_only_manager_detail() {
-    let mut session = session("idle", SessionManagerStatus::Idle, None);
-    session.threads.push(zeta_protocol::SessionThread {
-        thread_id: zeta_protocol::ThreadId::new("thread-idle").unwrap(),
-        title: "main".into(),
-        created_at_unix_ms: 0,
-        completed_turn_duration_ms: 0,
-        active_turn_started_at_unix_ms: None,
-        usage: Default::default(),
-        parent_thread_id: None,
-        forked_from_id: None,
-        status: zeta_protocol::ThreadStatus::Active,
-    });
-    session.threads[0].usage.input_tokens.reported = 1_200;
-    session.threads[0].usage.output_tokens.reported = 300;
-    let sessions = vec![session];
-    let mut state = SessionManagerState::default();
-    state.reconcile(&sessions);
-
-    let detail = state.details_selected(&sessions).unwrap();
-
-    assert_eq!(detail.title(), "Session details");
-    assert!(
-        detail
-            .rows()
-            .iter()
-            .any(|row| row.label() == "Branches" && row.value() == "1 branch")
-    );
-    assert!(
-        detail
-            .rows()
-            .iter()
-            .any(|row| row.label() == "Size" && row.value() == "1.5K tokens")
-    );
-    assert!(
-        detail
-            .rows()
-            .iter()
-            .any(|row| row.label() == "Root" && row.value() == "main · active")
     );
 }
 

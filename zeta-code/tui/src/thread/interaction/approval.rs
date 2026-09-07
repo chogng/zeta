@@ -1,3 +1,4 @@
+use crate::keymap::bindings;
 use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadRequestResponse;
 use crate::widgets::navigation::Navigation;
@@ -115,7 +116,7 @@ impl Approval {
             return ApprovalOutcome::Consumed;
         }
         match key.code {
-            KeyCode::Enter if key.modifiers.is_empty() => {
+            _ if bindings::APPROVE.matches(key) => {
                 self.submitting = true;
                 self.error = None;
                 ApprovalOutcome::Respond(self.selected)

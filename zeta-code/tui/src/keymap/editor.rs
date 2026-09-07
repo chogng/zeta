@@ -1,7 +1,6 @@
-use crossterm::event::KeyCode;
+use crate::keymap::bindings;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use std::collections::BTreeMap;
 
 use crate::keymap::KeymapActionSnapshot;
@@ -21,7 +20,7 @@ use super::KeymapCaptureMode;
 use super::KeymapEdit;
 use super::KeymapEditIntent;
 use super::KeymapEditKind;
-use super::fixed_shortcuts;
+use super::fixed_bindings;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum KeymapAction {
@@ -159,6 +158,15 @@ impl KeymapEditor {
                 .is_some_and(|page| page.select_tab(index))
     }
 
+    pub(crate) fn selection_mut(
+        &mut self,
+    ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        if self.capture.is_some() {
+            return None;
+        }
+        self.pages.last_mut().map(|page| page.state_mut())
+    }
+
     pub(crate) fn focus_search(&mut self) -> bool {
         self.capture.is_none()
             && self
@@ -247,7 +255,7 @@ pub(crate) fn keymap_choices(
             &mut item_actions,
         );
     }
-    all_items.extend(fixed_shortcut_items());
+    all_items.extend(fixed_binding_items());
     let user_items = non_empty(user_items, "No user shortcuts");
     let diagnostic_items = non_empty(
         diagnostics
@@ -265,7 +273,7 @@ pub(crate) fn keymap_choices(
                 ListSelectionGroup::new("Diagnostics", diagnostic_items),
             ],
         )
-        .with_activation_action("edit")
+        .with_activation(bindings::KEYMAP_EDIT)
         .with_search(SearchBoxModel::new("Search shortcuts"))
         .with_empty_message("No matching shortcuts"),
         actions: item_actions,
@@ -336,8 +344,8 @@ pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) ->
             action.label,
             vec![ListSelectionGroup::new("Actions", items)],
         )
-        .with_activation_action("choose")
-        .with_dismiss_action("return")
+        .with_activation(bindings::KEYMAP_CHOOSE)
+        .with_dismiss(bindings::RETURN_LIST)
         .with_key_hint_note(summary)
         .without_tab_bar(),
         actions,
@@ -438,7 +446,7 @@ impl KeymapCaptureState {
         (
             KeyCapture::new("Record shortcut", lines),
             crate::widgets::key_hint::KeyHints::new()
-                .with_action("Esc", "cancel")
+                .with_binding(bindings::CANCEL)
                 .with_note(format!(
                     "{}  ·  {}",
                     self.action.label,
@@ -560,16 +568,14 @@ fn non_empty(items: Vec<ListSelectionItem>, label: &str) -> Vec<ListSelectionIte
     }
 }
 
-fn fixed_shortcut_items() -> impl Iterator<Item = ListSelectionItem> {
-    fixed_shortcuts().map(|(key, description)| {
+fn fixed_binding_items() -> impl Iterator<Item = ListSelectionItem> {
+    fixed_bindings().map(|(key, description)| {
         ListSelectionItem::new(key).with_columns(key, description, "default")
     })
 }
 
 fn is_cancel(key: KeyEvent) -> bool {
-    (key.code == KeyCode::Esc && key.modifiers == KeyModifiers::NONE)
-        || (matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
-            && key.modifiers == KeyModifiers::CONTROL)
+    bindings::CANCEL.matches(key)
 }
 
 #[cfg(test)]

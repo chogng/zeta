@@ -1,5 +1,6 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
+assertion_line: 756
 expression: scrolled_to_start
 ---
                                                                                 
@@ -15,7 +16,7 @@ expression: scrolled_to_start
 ● Model invocation failed 1                                                     
                                                                                 
 ● Model invocation failed 2                                                     
-                            Jump to bottom (click) ↓                            
+                          Ctrl+End to jump to bottom ↓                          
                                                                                 
 ────────────────────────────────────────────────────────────────────────────────
 >                                                                               

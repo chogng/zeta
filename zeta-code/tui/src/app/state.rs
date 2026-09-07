@@ -37,6 +37,7 @@ use crate::keymap::Command as KeymapCommand;
 use crate::keymap::Event as KeymapEvent;
 use crate::keymap::KeymapChoices;
 use crate::keymap::KeymapEditorOutcome;
+use crate::keymap::bindings;
 use crate::mcp::Command as McpCommand;
 use crate::mcp::Event as McpEvent;
 use crate::mcp::McpChoices;
@@ -169,6 +170,7 @@ pub(crate) struct App {
     chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
     thread: ThreadState,
+    transcript_history: crate::thread::transcript::TranscriptHistory,
     thread_presentations: ThreadPresentationStore,
     sessions: SessionsState,
     agent_thread_switcher: AgentThreadSwitcher,
@@ -193,6 +195,7 @@ impl App {
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
+            transcript_history: Default::default(),
             thread_presentations: ThreadPresentationStore::new(
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
             ),
@@ -251,6 +254,7 @@ impl App {
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
+            transcript_history: Default::default(),
             thread_presentations: ThreadPresentationStore::with_input_catalog(
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
                 input_catalog,
@@ -304,17 +308,14 @@ impl App {
             self.pointer.clear();
         }
         let overlay_area = frame::transient_area(self, terminal_area);
-        if let Some(overlay) = self.overlay.as_mut() {
+        if let Some(overlay) = self.overlay_mut() {
             if overlay.handle_key(key, overlay_area) == OverlayInputOutcome::Dismiss {
                 self.close_overlay();
             }
             return None;
         }
         if self.sessions.preview.is_some() {
-            if key.kind == KeyEventKind::Press
-                && key.modifiers.is_empty()
-                && key.code == KeyCode::Esc
-            {
+            if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
                 self.sessions.preview = None;
                 self.pointer.clear();
                 return None;
@@ -769,7 +770,7 @@ impl App {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         self.pointer.clear();
-        if self.overlay.is_some() || self.sessions.preview.is_some() {
+        if self.overlay().is_some() || self.sessions.preview.is_some() {
             return;
         }
         if matches!(self.sessions.screen(), Some(TerminalScreen::Session(_)))
@@ -833,13 +834,36 @@ impl App {
         self.chat_panel.command()
     }
 
+    pub(super) fn take_session_details_request(
+        &mut self,
+    ) -> Option<(u64, zeta_protocol::SessionId)> {
+        self.sessions
+            .details
+            .as_mut()
+            .and_then(|details| details.take_request())
+    }
+
+    fn overlay_mut(&mut self) -> Option<&mut DetailOverlay> {
+        self.overlay.as_mut().or_else(|| {
+            self.sessions
+                .details
+                .as_mut()
+                .map(|details| &mut details.overlay)
+        })
+    }
+
     pub(crate) fn overlay(&self) -> Option<&DetailOverlay> {
-        self.overlay.as_ref()
+        self.overlay.as_ref().or_else(|| {
+            self.sessions
+                .details
+                .as_ref()
+                .map(|details| &details.overlay)
+        })
     }
 
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
         if self.chat_panel.command_active()
-            || self.overlay.is_some()
+            || self.overlay().is_some()
             || self.thread_presentations.active().queue.focused()
         {
             return None;
@@ -848,7 +872,7 @@ impl App {
     }
 
     pub(crate) fn chat_input_focused(&self) -> bool {
-        self.overlay.is_none()
+        self.overlay().is_none()
             && self.approval_view().is_none()
             && self.query_view().is_none()
             && !self.sessions.manager().focused()
@@ -864,7 +888,7 @@ impl App {
     }
 
     pub(crate) fn queue_key_hints(&self) -> &'static str {
-        "↑↓/jk to select · Enter to edit · Ctrl+Enter to send now · Ctrl+↑/↓ to move · Delete to remove · Esc to return to input"
+        bindings::QUEUE_HINTS.as_str()
     }
 
     pub(crate) fn activate_queue_pointer_target(&mut self, queue_id: QueueId) -> bool {
@@ -882,7 +906,13 @@ impl App {
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
-        if self.terminal_settings.mouse_interactions() {
+        if self.terminal_settings.mouse_interactions()
+            && (self.command_panel().is_some()
+                || self.overlay().is_some()
+                || self.approval_view().is_some()
+                || self.query_view().is_some()
+                || self.completion().is_some())
+        {
             MouseMode::TuiCapture
         } else {
             MouseMode::TerminalSelection
@@ -907,6 +937,30 @@ impl App {
 
     pub(crate) fn clear_pointer_interaction(&mut self) {
         self.pointer.clear();
+    }
+
+    pub(crate) fn clear_mouse_interaction(&mut self) {
+        self.pointer.clear();
+        self.screen_selection.clear();
+    }
+
+    pub(crate) fn scroll_panel(
+        &mut self,
+        terminal_area: Rect,
+        position: Position,
+        navigation: crate::widgets::navigation::Navigation,
+    ) {
+        if self.mouse_mode() != MouseMode::TuiCapture {
+            return;
+        }
+        self.clear_mouse_interaction();
+        let area = super::frame::layout(self, terminal_area).session.composer;
+        let transient = super::frame::transient_area(self, terminal_area);
+        if let Some(overlay) = self.overlay_mut() {
+            overlay.scroll(navigation, transient);
+        } else if let Some(panel) = self.chat_panel.command_mut() {
+            panel.scroll(area, position, navigation);
+        }
     }
 
     pub(crate) fn pressed_pointer_target(&self) -> Option<&InputPointerTarget> {
@@ -967,6 +1021,7 @@ impl App {
     fn open_command_panel(&mut self, panel: CommandPanel) {
         self.screen_escape_sequence.reset();
         self.overlay = None;
+        self.sessions.details = None;
         self.chat_panel.open_command(panel);
         self.pointer.clear();
     }
@@ -979,6 +1034,7 @@ impl App {
 
     pub(super) fn show_overlay(&mut self, detail: DetailList) {
         self.screen_escape_sequence.reset();
+        self.sessions.details = None;
         self.overlay = Some(DetailOverlay::new(detail));
         self.pointer.clear();
     }
@@ -986,6 +1042,7 @@ impl App {
     fn close_overlay(&mut self) {
         self.screen_escape_sequence.reset();
         self.overlay = None;
+        self.sessions.details = None;
         self.pointer.clear();
     }
 
@@ -993,6 +1050,7 @@ impl App {
         self.screen_escape_sequence.reset();
         self.chat_panel.close_command();
         self.overlay = None;
+        self.sessions.details = None;
         self.thread_presentations.active_mut().queue.blur();
         self.pointer.clear();
     }
@@ -1138,6 +1196,18 @@ impl App {
         self.thread.views(
             &self.thread_presentations.active().expanded_cells,
             self.thread_presentations.active().selected_cell.as_ref(),
+        )
+    }
+
+    pub(crate) fn write_transcript_history(
+        &mut self,
+        output: &mut impl FnMut(&Message, RenderContext<'_>) -> std::io::Result<()>,
+    ) -> std::io::Result<()> {
+        let context = RenderContext::new(&self.render_theme, self.render_theme_revision);
+        self.transcript_history.write(
+            self.thread_presentations.active_id().as_str(),
+            self.thread.cells(),
+            &mut |message| output(message, context),
         )
     }
 
@@ -1345,23 +1415,6 @@ impl App {
         });
         self.sessions.preview = Some(preview);
         command
-    }
-
-    pub(crate) fn scroll_session_manager(&mut self, up: bool) -> bool {
-        if self.sessions.preview.is_some()
-            || !matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
-        {
-            return false;
-        }
-        let catalog = self.sessions.catalog().to_vec();
-        let manager = self.sessions.manager_mut();
-        manager.focus();
-        if up {
-            manager.select_previous(&catalog);
-        } else {
-            manager.select_next(&catalog);
-        }
-        true
     }
 
     pub(crate) fn screen_navigation_tip(&self) -> Option<&'static str> {
@@ -1914,6 +1967,9 @@ impl App {
 
     fn apply_session_event(&mut self, event: SessionEvent) {
         match event {
+            SessionEvent::DetailsReceived { generation, result } => {
+                self.sessions.finish_details(generation, result)
+            }
             SessionEvent::PickerOpened(view) => self.show_session_picker(view),
             SessionEvent::CatalogReceived(catalog) => {
                 self.sessions.refresh_catalog(catalog);
@@ -1971,7 +2027,11 @@ impl App {
                 self.sessions.manager_mut().navigate(&catalog, navigation);
                 return Some(None);
             }
-            if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('x') {
+            if (self.sessions.manager().selected_is_archived()
+                && bindings::SESSION_DELETE.matches(key))
+                || (!self.sessions.manager().selected_is_archived()
+                    && bindings::SESSION_ARCHIVE.matches(key))
+            {
                 if self.sessions.manager().selected_is_archived() {
                     return Some(
                         self.sessions
@@ -1987,11 +2047,20 @@ impl App {
                         .then_some(SessionCommand::Archive { session_ids }.into()),
                 );
             }
-            if !key.modifiers.is_empty() {
-                return None;
-            }
             return match key.code {
-                KeyCode::Enter => {
+                _ if (self.sessions.manager().archived_selected()
+                    && if self.sessions.manager().archived_expanded() {
+                        bindings::ARCHIVED_COLLAPSE.matches(key)
+                    } else {
+                        bindings::ARCHIVED_EXPAND.matches(key)
+                    })
+                    || (!self.sessions.manager().archived_selected()
+                        && if self.sessions.manager().selected_is_archived() {
+                            bindings::SESSION_RESTORE.matches(key)
+                        } else {
+                            bindings::SESSION_OPEN.matches(key)
+                        }) =>
+                {
                     if self.sessions.manager().archived_selected() {
                         self.sessions.manager_mut().toggle_archived();
                         Some(None)
@@ -2020,7 +2089,7 @@ impl App {
                         )
                     }
                 }
-                KeyCode::Char(' ') => {
+                _ if bindings::SESSION_PREVIEW.matches(key) => {
                     if self.sessions.manager().archived_selected() {
                         self.sessions.manager_mut().toggle_archived();
                         Some(None)
@@ -2032,23 +2101,25 @@ impl App {
                         )
                     }
                 }
-                KeyCode::Char('i') => {
-                    if let Some(details) = self.sessions.manager().details_selected(&catalog) {
-                        self.show_overlay(details);
-                    }
+                _ if bindings::SESSION_DETAILS.matches(key) => {
+                    self.overlay = None;
+                    self.sessions.open_details();
+                    self.pointer.clear();
                     Some(None)
                 }
-                KeyCode::Left | KeyCode::Right if self.sessions.manager().archived_selected() => {
+                _ if (bindings::LEFT.matches(key) || bindings::RIGHT.matches(key))
+                    && self.sessions.manager().archived_selected() =>
+                {
                     self.sessions
                         .manager_mut()
-                        .set_archived_expanded(key.code == KeyCode::Right);
+                        .set_archived_expanded(bindings::RIGHT.matches(key));
                     Some(None)
                 }
-                KeyCode::Char('p') => {
+                _ if bindings::SESSION_PIN.matches(key) => {
                     self.sessions.manager_mut().toggle_selected_pin();
                     Some(None)
                 }
-                KeyCode::Esc => {
+                _ if bindings::RETURN_INPUT.matches(key) => {
                     self.sessions.manager_mut().blur();
                     Some(None)
                 }
@@ -2060,17 +2131,14 @@ impl App {
                 self.agent_thread_switcher.navigate(navigation);
                 return Some(None);
             }
-            if !key.modifiers.is_empty() {
-                return Some(None);
-            }
             return match key.code {
-                KeyCode::Enter => Some(
+                _ if bindings::THREAD_SWITCH.matches(key) => Some(
                     self.agent_thread_switcher
                         .selected()
                         .cloned()
                         .map(|thread_id| SessionCommand::SwitchThread { thread_id }.into()),
                 ),
-                KeyCode::Esc => {
+                _ if bindings::RETURN_INPUT.matches(key) => {
                     self.agent_thread_switcher.blur();
                     Some(None)
                 }
@@ -2269,7 +2337,7 @@ impl App {
                 .thread_presentations
                 .active_mut()
                 .select_next_cell(&cell_ids),
-            (KeyModifiers::NONE, KeyCode::Char(' ')) => {
+            _ if bindings::TRANSCRIPT_EXPAND.matches(key) => {
                 let Some(selected) = self.thread_presentations.active().selected_cell.clone()
                 else {
                     return false;
@@ -2286,7 +2354,7 @@ impl App {
                 }
                 true
             }
-            (KeyModifiers::NONE, KeyCode::Enter) => {
+            _ if bindings::TRANSCRIPT_DETAILS.matches(key) => {
                 let Some(selected) = self.thread_presentations.active().selected_cell.clone()
                 else {
                     return false;
@@ -2294,8 +2362,8 @@ impl App {
                 self.open_transcript_cell_details(selected.as_str());
                 true
             }
-            (KeyModifiers::NONE, KeyCode::Esc)
-                if self.thread_presentations.active().selected_cell.is_some() =>
+            _ if bindings::RETURN_INPUT.matches(key)
+                && self.thread_presentations.active().selected_cell.is_some() =>
             {
                 self.thread_presentations.active_mut().selected_cell = None;
                 true

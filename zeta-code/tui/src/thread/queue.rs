@@ -1,3 +1,4 @@
+use crate::keymap::bindings;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -7,10 +8,8 @@ use crate::thread::composer::ChatInput;
 use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::QueuedChatInput;
 use crate::widgets::navigation::Navigation;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -301,35 +300,35 @@ impl Queue {
         }
         let selected = self.selected;
         match (key.modifiers, key.code) {
-            (KeyModifiers::CONTROL, KeyCode::Up) => {
+            _ if bindings::QUEUE_UP.matches(key) => {
                 if let Some(id) = selected {
                     self.move_up(id);
                 }
                 QueueKeyOutcome::Consumed
             }
-            (KeyModifiers::CONTROL, KeyCode::Down) => {
+            _ if bindings::QUEUE_DOWN.matches(key) => {
                 if let Some(id) = selected {
                     self.move_down(id);
                 }
                 QueueKeyOutcome::Consumed
             }
-            (KeyModifiers::NONE, KeyCode::Enter) => selected
+            _ if bindings::QUEUE_EDIT.matches(key) => selected
                 .map(QueueKeyOutcome::Restore)
                 .unwrap_or(QueueKeyOutcome::Consumed),
-            (KeyModifiers::CONTROL, KeyCode::Enter) => selected
+            _ if bindings::QUEUE_SEND.matches(key) => selected
                 .map(QueueKeyOutcome::Send)
                 .unwrap_or(QueueKeyOutcome::Consumed),
-            (KeyModifiers::NONE, KeyCode::Delete) => {
+            _ if bindings::QUEUE_REMOVE.matches(key) => {
                 if let Some(id) = selected {
                     self.delete(id);
                 }
                 QueueKeyOutcome::Consumed
             }
-            (KeyModifiers::NONE, KeyCode::Esc) => {
+            _ if bindings::RETURN_INPUT.matches(key) => {
                 self.blur();
                 QueueKeyOutcome::Consumed
             }
-            (KeyModifiers::CONTROL, KeyCode::Char('c')) => QueueKeyOutcome::Unhandled,
+            _ if bindings::INTERRUPT.matches(key) => QueueKeyOutcome::Unhandled,
             _ => QueueKeyOutcome::Consumed,
         }
     }

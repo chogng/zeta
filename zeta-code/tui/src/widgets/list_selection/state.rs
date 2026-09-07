@@ -1,7 +1,8 @@
+use crate::keymap::bindings;
+use crate::keymap::bindings::Keybinding;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::style::Color;
 
 use super::ListSelectionPreview;
@@ -17,13 +18,7 @@ use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
 
-const MAX_VISIBLE_ROWS: usize = 12;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ListSelectionActivationMode {
-    Enter,
-    EnterOrSpace,
-}
+const PAGE_ROWS: usize = 12;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ListSelectionItem {
@@ -171,9 +166,9 @@ struct ListSelectionPresentation {
     title: String,
     search: Option<SearchBoxModel>,
     empty_message: String,
-    activation_mode: ListSelectionActivationMode,
-    activation_action: Option<String>,
-    dismiss_action: &'static str,
+    activation: Keybinding,
+    show_activation_hint: bool,
+    dismiss: Keybinding,
     key_hints: KeyHints,
     show_tabs: bool,
     initial_selected: usize,
@@ -191,9 +186,9 @@ impl ListSelectionModel {
                 title: title.into(),
                 search: None,
                 empty_message: "No matching items".into(),
-                activation_mode: ListSelectionActivationMode::Enter,
-                activation_action: None,
-                dismiss_action: "close",
+                activation: bindings::ACCEPT,
+                show_activation_hint: false,
+                dismiss: bindings::DISMISS_LIST,
                 key_hints: KeyHints::new(),
                 show_tabs: true,
                 initial_selected: 0,
@@ -201,18 +196,14 @@ impl ListSelectionModel {
         }
     }
 
-    pub(crate) fn with_activation_mode(mut self, mode: ListSelectionActivationMode) -> Self {
-        self.presentation.activation_mode = mode;
+    pub(crate) fn with_activation(mut self, shortcut: Keybinding) -> Self {
+        self.presentation.activation = shortcut;
+        self.presentation.show_activation_hint = true;
         self
     }
 
-    pub(crate) fn with_activation_action(mut self, action: impl Into<String>) -> Self {
-        self.presentation.activation_action = Some(action.into());
-        self
-    }
-
-    pub(crate) fn with_dismiss_action(mut self, action: &'static str) -> Self {
-        self.presentation.dismiss_action = action;
+    pub(crate) fn with_dismiss(mut self, shortcut: Keybinding) -> Self {
+        self.presentation.dismiss = shortcut;
         self
     }
 
@@ -244,22 +235,14 @@ impl ListSelectionModel {
     pub(crate) fn key_hints(&self) -> KeyHints {
         let presentation = &self.presentation;
         let mut hints = KeyHints::new();
-        if let Some(action) = &presentation.activation_action {
-            let keys = match presentation.activation_mode {
-                ListSelectionActivationMode::Enter => "Enter",
-                ListSelectionActivationMode::EnterOrSpace => "Enter/Space",
-            };
-            hints = hints.with_action(keys, action);
+        if presentation.show_activation_hint {
+            hints = hints.with_binding(presentation.activation);
         }
-        hints = hints.with_action("↑↓/jk", "choose");
         if presentation.search.is_some() {
-            hints = hints.with_action("/", "search");
-        }
-        if presentation.show_tabs && self.tabs.len() > 1 {
-            hints = hints.with_action("Tab", "switch");
+            hints = hints.with_binding(bindings::SEARCH);
         }
         hints
-            .with_action("Esc", presentation.dismiss_action)
+            .with_binding(presentation.dismiss)
             .extend(presentation.key_hints.clone())
     }
 
@@ -284,6 +267,7 @@ pub(crate) enum ListSelectionAdjustment {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ListSelectionState {
+    pub(super) scroll_start: Option<usize>,
     model: ListSelectionPresentation,
     tabs: TabListState<ListSelectionGroup>,
     selected_visible: Option<usize>,
@@ -303,6 +287,7 @@ impl ListSelectionState {
         let (model, tabs) = model.into_parts();
         let search = model.search.clone().map(SearchBoxState::new);
         let mut state = Self {
+            scroll_start: None,
             model,
             tabs: TabListState::new(tabs),
             selected_visible: None,
@@ -431,16 +416,6 @@ impl ListSelectionState {
         self.visible_items().get(index)?.id().cloned()
     }
 
-    pub(crate) fn first_rendered_row(&self, visible_rows: usize) -> usize {
-        let Some(selected) = self.selected_visible else {
-            return 0;
-        };
-        selected
-            .saturating_add(1)
-            .saturating_sub(visible_rows)
-            .min(self.visible_len().saturating_sub(visible_rows))
-    }
-
     pub(crate) fn tab_rows(&self, width: u16) -> u16 {
         if self.show_tabs() {
             tab_list::desired_height(self.tabs(), width)
@@ -451,7 +426,7 @@ impl ListSelectionState {
 
     pub(crate) fn body_rows(&self) -> u16 {
         let search_rows = self.search.as_ref().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
-        let list_rows = self.visible_len().clamp(1, MAX_VISIBLE_ROWS);
+        let list_rows = self.visible_len().max(1);
         let preview_rows = self
             .selected_item()
             .and_then(ListSelectionItem::preview)
@@ -466,9 +441,7 @@ impl ListSelectionState {
         if key.kind == KeyEventKind::Release {
             return ListSelectionInputOutcome::Consumed;
         }
-        if (key.code == KeyCode::Esc && key.modifiers.is_empty())
-            || (key.code == KeyCode::Char('c') && key.modifiers == KeyModifiers::CONTROL)
-        {
+        if self.model.dismiss.matches(key) {
             if key.kind != KeyEventKind::Press {
                 return ListSelectionInputOutcome::Consumed;
             }
@@ -479,10 +452,7 @@ impl ListSelectionState {
             return ListSelectionInputOutcome::Dismiss;
         }
         if self.search_focused() {
-            if key.kind == KeyEventKind::Press
-                && key.code == KeyCode::Enter
-                && key.modifiers.is_empty()
-            {
+            if key.kind == KeyEventKind::Press && bindings::SEARCH_RETURN.matches(key) {
                 self.set_focus(ListSelectionFocus::Items);
                 return ListSelectionInputOutcome::Consumed;
             }
@@ -493,77 +463,78 @@ impl ListSelectionState {
                 return ListSelectionInputOutcome::Consumed;
             }
             // Search keeps its characters; only explicit arrows leave the field.
-            if !matches!(
-                key.code,
-                KeyCode::Up | KeyCode::Down | KeyCode::Tab | KeyCode::BackTab
-            ) {
+            if !matches!(key.code, KeyCode::Up | KeyCode::Down) {
                 return ListSelectionInputOutcome::Consumed;
             }
         }
+        if self.focus == ListSelectionFocus::Items
+            && key.kind == KeyEventKind::Press
+            && self.model.activation.matches(key)
+        {
+            return self
+                .selected_item_id()
+                .map(ListSelectionInputOutcome::Activate)
+                .unwrap_or(ListSelectionInputOutcome::Consumed);
+        }
         if let Some(navigation) = Navigation::from_key(key) {
+            self.scroll_start = None;
             match navigation {
-                Navigation::Previous => self.move_focus_up(),
-                Navigation::Next => self.move_focus_down(),
+                Navigation::Previous => {
+                    if key.code == KeyCode::Up && key.kind == KeyEventKind::Press {
+                        self.move_focus_up();
+                    } else if self.focus == ListSelectionFocus::Items {
+                        self.move_selection(ListSelectionDirection::Previous);
+                    }
+                }
+                Navigation::Next => {
+                    if self.focus == ListSelectionFocus::Items {
+                        self.move_selection(ListSelectionDirection::Next);
+                    } else if key.kind == KeyEventKind::Press {
+                        self.move_focus_down();
+                    }
+                }
                 _ => {
                     self.set_focus(ListSelectionFocus::Items);
                     self.selected_visible = self.visible_len().checked_sub(1).map(|last| {
-                        navigation.offset(
-                            self.selected_visible.unwrap_or(0),
-                            last,
-                            MAX_VISIBLE_ROWS,
-                        )
+                        navigation.offset(self.selected_visible.unwrap_or(0), last, PAGE_ROWS)
                     });
                 }
             }
             return ListSelectionInputOutcome::Consumed;
         }
         // Adjusting values, opening an item and changing focus are one-shot actions.
-        if key.kind != KeyEventKind::Press
-            || key
-                .modifiers
-                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-        {
+        if key.kind != KeyEventKind::Press {
             return ListSelectionInputOutcome::Consumed;
         }
         match key.code {
-            KeyCode::Char('/') if key.modifiers.is_empty() => {
+            _ if bindings::SEARCH.matches(key) => {
                 self.focus_search();
             }
-            KeyCode::Tab | KeyCode::BackTab if self.show_tabs() => {
-                self.set_focus(ListSelectionFocus::Tabs);
-                self.switch_tab(key);
-            }
-            KeyCode::Enter if key.modifiers.is_empty() => {
-                if self.focus == ListSelectionFocus::Items
-                    && let Some(id) = self.selected_item_id()
-                {
-                    return ListSelectionInputOutcome::Activate(id);
-                }
+            _ if bindings::ENTER_LIST.matches(key) => {
                 if self.focus == ListSelectionFocus::Tabs {
                     self.set_focus(ListSelectionFocus::Items);
                 }
             }
-            KeyCode::Left | KeyCode::Right => match self.focus {
-                ListSelectionFocus::Tabs => self.switch_tab(key),
-                ListSelectionFocus::Items => {
-                    if let Some(id) = self.selected_item_id() {
-                        let adjustment = if key.code == KeyCode::Left {
-                            ListSelectionAdjustment::Previous
-                        } else {
-                            ListSelectionAdjustment::Next
-                        };
-                        return ListSelectionInputOutcome::Adjust(id, adjustment);
-                    }
-                }
-                ListSelectionFocus::Search => {}
-            },
-            KeyCode::Char(' ')
-                if self.focus == ListSelectionFocus::Items && key.modifiers.is_empty() =>
+            _ if bindings::LEFT.matches(key)
+                || bindings::RIGHT.matches(key)
+                || bindings::TAB_NEXT.matches(key)
+                || bindings::TAB_PREVIOUS.matches(key) =>
             {
-                if self.model.activation_mode == ListSelectionActivationMode::EnterOrSpace
-                    && let Some(id) = self.selected_item_id()
-                {
-                    return ListSelectionInputOutcome::Activate(id);
+                match self.focus {
+                    ListSelectionFocus::Tabs => self.switch_tab(key),
+                    ListSelectionFocus::Items => {
+                        if let Some(id) = self.selected_item_id() {
+                            let adjustment = if bindings::LEFT.matches(key)
+                                || bindings::TAB_PREVIOUS.matches(key)
+                            {
+                                ListSelectionAdjustment::Previous
+                            } else {
+                                ListSelectionAdjustment::Next
+                            };
+                            return ListSelectionInputOutcome::Adjust(id, adjustment);
+                        }
+                    }
+                    ListSelectionFocus::Search => {}
                 }
             }
             _ => {}
@@ -597,19 +568,36 @@ impl ListSelectionState {
                     self.set_focus(ListSelectionFocus::Tabs);
                 }
             }
-            ListSelectionFocus::Items => self.move_selection(ListSelectionDirection::Previous),
+            ListSelectionFocus::Items => {
+                if self.selected_visible.unwrap_or(0) > 0 {
+                    self.move_selection(ListSelectionDirection::Previous);
+                } else if self.search.is_some() {
+                    self.set_focus(ListSelectionFocus::Search);
+                } else if self.show_tabs() {
+                    self.set_focus(ListSelectionFocus::Tabs);
+                }
+            }
         }
     }
 
     fn move_focus_down(&mut self) {
         match self.focus {
-            ListSelectionFocus::Tabs => self.set_focus(ListSelectionFocus::Items),
+            ListSelectionFocus::Tabs => {
+                self.set_focus(if self.search.is_some() {
+                    ListSelectionFocus::Search
+                } else {
+                    ListSelectionFocus::Items
+                });
+            }
             ListSelectionFocus::Search => self.set_focus(ListSelectionFocus::Items),
             ListSelectionFocus::Items => self.move_selection(ListSelectionDirection::Next),
         }
     }
 
     fn set_focus(&mut self, focus: ListSelectionFocus) {
+        if focus == ListSelectionFocus::Items {
+            self.scroll_start = None;
+        }
         self.focus = focus;
         self.sync_search_focus();
     }
@@ -674,10 +662,12 @@ impl ListSelectionState {
     }
 
     fn select_first_visible(&mut self) {
+        self.scroll_start = None;
         self.selected_visible = (self.visible_len() > 0).then_some(0);
     }
 
     fn reconcile_selection(&mut self) {
+        self.scroll_start = None;
         let visible_len = self.visible_len();
         self.selected_visible = match (self.selected_visible, visible_len) {
             (_, 0) => None,

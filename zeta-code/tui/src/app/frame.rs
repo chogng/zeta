@@ -2,6 +2,7 @@ use crate::app::App;
 use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::app::welcome;
 use crate::host::process_resources::ProcessResourceDemand;
+use crate::keymap::bindings;
 use crate::render::Renderable;
 use crate::sessions;
 use crate::status as status_line;
@@ -81,11 +82,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
                 areas.session.top_tip,
             );
         }
-        frame.render_widget(
-            Paragraph::new("  ↑↓/jk to scroll · Home/End to jump · Esc to close")
-                .style(Style::default().fg(context.muted())),
-            areas.session.bottom,
-        );
+        draw_bottom(frame, areas.session.bottom, app, context);
         if let Some(overlay) = app.overlay() {
             crate::widgets::overlay::draw(
                 frame,
@@ -426,12 +423,30 @@ pub(crate) fn input_pointer_target_at(
     None
 }
 
-pub(crate) fn transcript_contains(app: &App, terminal_area: Rect, column: u16, row: u16) -> bool {
-    if app.overlay().is_some() || app.session_manager_view().is_some() {
+pub(crate) fn panel_mouse_contains(
+    app: &App,
+    terminal_area: Rect,
+    position: ratatui::layout::Position,
+) -> bool {
+    if app.mouse_mode() != crate::terminal::mouse::MouseMode::TuiCapture {
         return false;
     }
-    let area = layout(app, terminal_area).session.transcript;
-    column >= area.x && column < area.right() && row >= area.y && row < area.bottom()
+    let areas = layout(app, terminal_area);
+    if let Some(overlay) = app.overlay() {
+        return overlay
+            .surface(transient_area_from_layout(&areas))
+            .contains(position);
+    }
+    if app.command_panel().is_some() || app.approval_view().is_some() {
+        return areas.session.composer.contains(position);
+    }
+    if app.query_view().is_some() {
+        return areas.session.request.contains(position);
+    }
+    matches!(
+        input_pointer_target_at(app, terminal_area, position.x, position.y),
+        Some(InputPointerTarget::Composer(_))
+    )
 }
 
 pub(crate) struct FrameLayout {
@@ -447,16 +462,22 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
             session,
         };
     }
+    if let Some(panel) = app.command_panel() {
+        return FrameLayout {
+            session: super::layout::command_panel_areas(
+                terminal_area,
+                panel.desired_height(terminal_area.width),
+                BOTTOM_ROWS,
+            ),
+            input: Rect::default(),
+        };
+    }
     let input_view = app.chat_composer_view();
     let input_rows = ChatComposerSurface {
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
     }
     .desired_height(terminal_area.width, app.render_context());
-    let command_panel_rows = app
-        .command_panel()
-        .map(|panel| panel.desired_height(terminal_area.width))
-        .unwrap_or_default();
     let approval_rows = app
         .approval_view()
         .map(approval::desired_height)
@@ -467,8 +488,6 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         .unwrap_or_default();
     let composer_rows = if approval_rows > 0 {
         approval_rows
-    } else if command_panel_rows > 0 {
-        command_panel_rows
     } else {
         input_rows
     };
@@ -496,7 +515,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         BOTTOM_ROWS,
         app.agent_thread_switcher_rows(),
     );
-    let input = if approval_rows > 0 || command_panel_rows > 0 {
+    let input = if approval_rows > 0 {
         Rect {
             y: session.composer.bottom(),
             height: 0,
@@ -599,6 +618,12 @@ fn draw_bottom(
 }
 
 fn bottom_content(app: &App) -> BottomContent<'_> {
+    if app.overlay().is_some() || app.session_preview().is_some() {
+        return BottomContent::HitBar {
+            text: Cow::Borrowed(bindings::CLOSE_HINTS.as_str()),
+            style: HitBarStyle::Keys,
+        };
+    }
     if let Some(hints) = app.command_panel_key_hints() {
         return BottomContent::HitBar {
             text: Cow::Borrowed(hints),
@@ -613,16 +638,16 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     }
     if app.approval_view().is_some() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓/jk to choose · Enter to confirm"),
+            text: Cow::Borrowed(bindings::APPROVAL_HINTS.as_str()),
             style: HitBarStyle::Keys,
         };
     }
     if let Some(query) = app.query_view() {
         return BottomContent::HitBar {
             text: Cow::Borrowed(if query.custom_answer.is_some() {
-                "Enter to answer · Esc to cancel"
+                bindings::CUSTOM_ANSWER_HINTS.as_str()
             } else {
-                "↑↓/jk to choose · Enter to answer"
+                bindings::ANSWER_HINTS.as_str()
             }),
             style: HitBarStyle::Keys,
         };
@@ -635,21 +660,22 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     }
     if app.transcript_selection_active() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed(
-                "↑↓/jk to select · Space to expand · Enter to view details · Esc to return to input",
-            ),
+            text: Cow::Borrowed(bindings::TRANSCRIPT_HINTS.as_str()),
             style: HitBarStyle::Keys,
         };
     }
     if app.agent_thread_switcher_focused() {
         return BottomContent::HitBar {
-            text: Cow::Borrowed("↑↓/jk to select · Enter to switch · Esc to return to input"),
+            text: Cow::Borrowed(bindings::THREAD_HINTS.as_str()),
             style: HitBarStyle::Keys,
         };
     }
     if let Some(prefix) = app.pending_key_chord_label() {
         return BottomContent::HitBar {
-            text: Cow::Owned(format!("{prefix} … waiting for next key · Esc to cancel")),
+            text: Cow::Owned(format!(
+                "{prefix} … waiting for next key · {}",
+                bindings::CANCEL_HINTS.as_str()
+            )),
             style: HitBarStyle::Warning,
         };
     }

@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 1 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 27 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 3 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:2ffb97aa2b62e6d0e8eb145d795f2e52f38c04aa890224e471134cbfa9df2a38" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:591f7a95638af9be2619b3e79fd9fcb841d6fd91b653e6833b6254c55ec71c34" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -400,7 +400,7 @@ history?: ThreadHistoryBoundary, };
 export type SessionThreadSubscribeParams = { sessionId: SessionId, threadId: ThreadId, afterSequence: number, history?: ThreadSnapshotHistory, };
 export type SessionThreadSubscribeResult = { thread: Thread, transcript: ThreadTranscriptSnapshot, updates: Array<ThreadUpdateEnvelope>, history?: ThreadHistoryBoundary, };
 export type SessionThreadUnsubscribeParams = { sessionId: SessionId, threadId: ThreadId, };
-export type SessionResult = { session: Session, };
+export type SessionResult = { session: Session, agentTree: AgentTreeProjection, };
 export type SessionListResult = { sessions: Array<Session>, };
 export type SessionSubscribeResult = { session: Session, threadProjections: Array<SessionThreadProjection>, agentTree: AgentTreeProjection, };
 export type SessionThreadProjection = { thread: Thread, transcript: ThreadTranscriptSnapshot, updates: Array<ThreadUpdateEnvelope>, };

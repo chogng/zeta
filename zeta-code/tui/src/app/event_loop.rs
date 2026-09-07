@@ -50,7 +50,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut redraw = RedrawScheduler::default();
     let mut process_resource_demand = ProcessResourceDemand::Disabled;
     let mut pending_runtime_event = None;
-    if let Err(error) = draw_terminal(&mut terminal, driver.app()) {
+    if let Err(error) = draw_terminal(&mut terminal, driver.app_mut()) {
         let _ = pump.shutdown();
         return Err(error.into());
     }
@@ -70,7 +70,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         Some(event) => event,
                         None => {
                             if redraw.take_due(Instant::now()) {
-                                draw_terminal(&mut terminal, driver.app())?;
+                                draw_terminal(&mut terminal, driver.app_mut())?;
                             }
                             continue;
                         }
@@ -177,6 +177,16 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 driver.app_mut().handle_key_in_area(key, terminal.area()?)
                             }
                             Event::Mouse(mouse)
+                                if !frame::panel_mouse_contains(
+                                    driver.app(),
+                                    terminal.area()?,
+                                    ratatui::layout::Position::new(mouse.column, mouse.row),
+                                ) =>
+                            {
+                                driver.app_mut().clear_mouse_interaction();
+                                None
+                            }
+                            Event::Mouse(mouse)
                                 if mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
                             {
                                 let terminal_area = terminal.area()?;
@@ -276,10 +286,16 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 &mut process_resource_demand,
             );
             if redraw.take_due(Instant::now()) {
-                draw_terminal(&mut terminal, driver.app())?;
+                draw_terminal(&mut terminal, driver.app_mut())?;
             }
         }
     })();
+    // A quit can arrive before a batched redraw. Commit the latest finalized
+    // transcript before releasing the terminal, too.
+    let result = result.and_then(|exit| {
+        draw_terminal(&mut terminal, driver.app_mut())?;
+        Ok(exit)
+    });
     let pump_result = pump.shutdown();
     match (result, pump_result) {
         (Err(error), _) => Err(error),
@@ -361,13 +377,16 @@ fn scroll_pointer_item(
     row: u16,
     direction: TranscriptScrollDirection,
 ) -> Option<AppCommand> {
-    if app.scroll_session_manager(direction == TranscriptScrollDirection::Up) {
+    let position = ratatui::layout::Position::new(column, row);
+    if !frame::panel_mouse_contains(app, area, position) {
         return None;
     }
-    if !frame::transcript_contains(app, area, column, row) {
-        return None;
-    }
-    app.navigate_transcript(direction, area)
+    let navigation = match direction {
+        TranscriptScrollDirection::Up => crate::widgets::navigation::Navigation::Previous,
+        TranscriptScrollDirection::Down => crate::widgets::navigation::Navigation::Next,
+    };
+    app.scroll_panel(area, position, navigation);
+    None
 }
 
 fn finish_pointer_gesture(
@@ -436,9 +455,18 @@ fn update_pointer_hover(app: &mut App, area: ratatui::layout::Rect, column: u16,
 
 fn draw_terminal(
     terminal: &mut terminal::TerminalSession,
-    app: &App,
+    app: &mut App,
 ) -> Result<(), std::io::Error> {
+    if app.mouse_mode() == crate::terminal::mouse::MouseMode::TerminalSelection {
+        app.clear_mouse_interaction();
+    }
     terminal.set_mouse_mode(app.mouse_mode())?;
+    terminal.set_cursor_color(app.render_context().cursor_color())?;
+    let width = terminal.area()?.width;
+    app.write_transcript_history(&mut |message, context| {
+        let (cell, rows) = crate::thread::transcript::prepare_history(message, width, context);
+        terminal.append_history(rows, |buffer, offset| cell.render(buffer, buffer.area, offset))
+    })?;
     terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
 }
 

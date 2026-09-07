@@ -228,6 +228,7 @@ pub struct SessionThreadUnsubscribeParams {
 #[serde(rename_all = "camelCase")]
 pub struct SessionResult {
     pub session: Session,
+    pub agent_tree: AgentTreeProjection,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -32,7 +32,7 @@ pub(crate) fn manager_areas(area: Rect, welcome_desired_rows: u16) -> ManagerAre
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct SessionAreas {
     pub(crate) transcript: Rect,
     pub(crate) goal: Rect,
@@ -43,6 +43,26 @@ pub(crate) struct SessionAreas {
     pub(crate) composer: Rect,
     pub(crate) bottom: Rect,
     pub(crate) agent_thread_switcher: Rect,
+}
+
+pub(crate) fn command_panel_areas(area: Rect, desired_rows: u16, hint_rows: u16) -> SessionAreas {
+    let hint_rows = hint_rows.min(area.height);
+    let panel_rows = desired_rows.min(area.height.saturating_sub(hint_rows));
+    let panel_y = area
+        .bottom()
+        .saturating_sub(hint_rows)
+        .saturating_sub(panel_rows);
+    SessionAreas {
+        transcript: Rect::new(area.x, area.y, area.width, panel_y.saturating_sub(area.y)),
+        composer: Rect::new(area.x, panel_y, area.width, panel_rows),
+        bottom: Rect::new(
+            area.x,
+            area.bottom().saturating_sub(hint_rows),
+            area.width,
+            hint_rows,
+        ),
+        ..SessionAreas::default()
+    }
 }
 
 pub(crate) fn session_areas(

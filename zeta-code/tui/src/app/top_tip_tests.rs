@@ -1,5 +1,3 @@
-use super::CLIPBOARD_IMAGE_TIP;
-use super::POLICY_TIP;
 use super::TRANSIENT_TIP_DURATION;
 use super::TopTip;
 use crate::host::clipboard::ClipboardImageFingerprint;
@@ -23,7 +21,10 @@ fn policy_tip_replaces_navigation_then_disappears() {
 
     top_tip.show_policy_tip(started);
 
-    assert_eq!(top_tip.text(Some("← for agents")), Some(POLICY_TIP));
+    assert_eq!(
+        top_tip.text(Some("← for agents")),
+        Some("shift+tab to cycle policy")
+    );
     assert!(!top_tip.poll(started + TRANSIENT_TIP_DURATION - Duration::from_millis(1)));
     assert!(top_tip.poll(started + TRANSIENT_TIP_DURATION));
     assert_eq!(top_tip.text(Some("← for agents")), None);
@@ -39,7 +40,10 @@ fn showing_policy_tip_again_restarts_its_lifetime() {
     top_tip.show_policy_tip(shown_again);
 
     assert!(!top_tip.poll(started + TRANSIENT_TIP_DURATION));
-    assert_eq!(top_tip.text(Some("← for agents")), Some(POLICY_TIP));
+    assert_eq!(
+        top_tip.text(Some("← for agents")),
+        Some("shift+tab to cycle policy")
+    );
     assert!(top_tip.poll(shown_again + TRANSIENT_TIP_DURATION));
     assert_eq!(top_tip.text(Some("← for agents")), None);
 }
@@ -106,12 +110,12 @@ fn different_clipboard_image_restarts_its_lifetime() {
 
     assert_eq!(
         top_tip.text(Some("← for agents")),
-        Some(CLIPBOARD_IMAGE_TIP)
+        Some("image in clipboard · ctrl+v to paste")
     );
     assert!(!top_tip.poll(started + TRANSIENT_TIP_DURATION));
     assert_eq!(
         top_tip.text(Some("← for agents")),
-        Some(CLIPBOARD_IMAGE_TIP)
+        Some("image in clipboard · ctrl+v to paste")
     );
     assert!(top_tip.poll(shown_again + TRANSIENT_TIP_DURATION));
     assert_eq!(top_tip.text(Some("← for agents")), Some("← for agents"));
@@ -149,7 +153,10 @@ fn pasted_clipboard_image_stays_hidden_after_tip_reset() {
         ClipboardImageFingerprint(2),
         started + Duration::from_secs(2),
     );
-    assert_eq!(top_tip.text(None), Some(CLIPBOARD_IMAGE_TIP));
+    assert_eq!(
+        top_tip.text(None),
+        Some("image in clipboard · ctrl+v to paste")
+    );
 }
 
 #[test]
@@ -201,5 +208,8 @@ fn hiding_clipboard_image_restores_the_underlying_tip() {
     top_tip.show_policy_tip(started);
     top_tip.show_clipboard_image(ClipboardImageFingerprint(1), started);
     top_tip.hide_clipboard_image();
-    assert_eq!(top_tip.text(Some("← for agents")), Some(POLICY_TIP));
+    assert_eq!(
+        top_tip.text(Some("← for agents")),
+        Some("shift+tab to cycle policy")
+    );
 }

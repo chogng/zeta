@@ -278,6 +278,44 @@ impl CommandPanel {
         }
     }
 
+    pub(crate) fn scroll(
+        &mut self,
+        area: Rect,
+        position: ratatui::layout::Position,
+        navigation: crate::widgets::navigation::Navigation,
+    ) {
+        let body = self.body();
+        let layout = CommandPanelLayout::new(
+            area,
+            body.tab_rows(CommandPanelLayout::content_width(area.width)),
+        );
+        if !layout.body.contains(position) {
+            return;
+        }
+        let selection = match self {
+            Self::Help(content) => Some(content.state_mut()),
+            Self::Dirs(content) => Some(content.state_mut()),
+            Self::Config(content) => content.selection_mut(),
+            Self::Connectors(content) => Some(content.state_mut()),
+            Self::Keymap(content) => content.selection_mut(),
+            Self::Mcp(content) => Some(content.state_mut()),
+            Self::Model(content) => Some(content.state_mut()),
+            Self::Rewind(content) => Some(content.state_mut()),
+            Self::Sessions(content) => Some(content.state_mut()),
+            Self::Skills(content) => Some(content.state_mut()),
+            Self::Startup(content) => Some(content.state_mut()),
+            Self::Status(content) => {
+                content.scroll(navigation, layout.body);
+                None
+            }
+            Self::StatusLine(content) => Some(content.state_mut()),
+            Self::Theme(content) => Some(content.selection_mut()),
+        };
+        if let Some(selection) = selection {
+            selection.scroll(layout.body, navigation, position);
+        }
+    }
+
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
         match self {
             Self::Help(selection) => Some(selection.state()),

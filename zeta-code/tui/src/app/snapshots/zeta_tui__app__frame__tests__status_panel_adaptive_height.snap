@@ -1,16 +1,12 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
-assertion_line: 393
+assertion_line: 416
 expression: rendered
 ---
-                                                                                
   Zeta Code v0.1.0                                                              
-  Automatic model · Access unknown                                              
-  .                                                                             
-                                                                                
 ─ Status ───────────────────────────────────────────────────────────────────────
                                                                                 
-   Session    Processes                                                         
+   Thread    Processes                                                          
   Model:                    openai/gpt                                          
   Full context window:      100,000 tokens                                      
   Available context window: 90,000 tokens                                       
@@ -21,5 +17,9 @@ expression: rendered
   Cached input share:       unknown                                             
   Cache writes:             0 tokens                                            
   Output tokens:            0 tokens                                            
+  Reasoning output:         0 tokens                                            
+  Reference cost:           unknown                                             
+  Session ID:               session-1                                           
+  Thread ID:                thread-1                                            
                                                                                 
-  ↑↓/jk to scroll · Tab to switch · Esc to close
+  Tab to switch · Esc to close

@@ -1,13 +1,12 @@
 //! Read-only detail layer rendered without changing the current screen layout.
 
+use crate::keymap::bindings;
 use crate::render::RenderContext;
 use crate::render::bottom_anchored_area;
 use crate::render::horizontal_margin;
 use crate::widgets::detail_list;
 use crate::widgets::detail_list::DetailList;
-use crate::widgets::key_hint;
 use crate::widgets::navigation::Navigation;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
@@ -17,8 +16,6 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Clear;
 
 const TITLE_ROWS: u16 = 1;
-const BOTTOM_GAP_ROWS: u16 = 3;
-const KEY_HINT_ROWS: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum OverlayInputOutcome {
@@ -37,6 +34,10 @@ impl DetailOverlay {
         Self { detail, scroll: 0 }
     }
 
+    pub(crate) fn update(&mut self, detail: DetailList) {
+        self.detail = detail;
+    }
+
     #[cfg(test)]
     pub(crate) fn title(&self) -> &str {
         self.detail.title()
@@ -44,55 +45,45 @@ impl DetailOverlay {
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, available: Rect) -> OverlayInputOutcome {
         if let Some(navigation) = Navigation::from_key(key) {
-            let layout = overlay_layout(available, &self.detail);
-            self.scroll = navigation.offset(
-                usize::from(self.scroll),
-                usize::from(layout.max_scroll),
-                usize::from(layout.body.height.saturating_sub(TITLE_ROWS)),
-            ) as u16;
+            self.scroll(navigation, available);
         }
-        if key.kind == KeyEventKind::Press && key.modifiers.is_empty() && key.code == KeyCode::Esc {
+        if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
             OverlayInputOutcome::Dismiss
         } else {
             OverlayInputOutcome::Consumed
         }
+    }
+
+    pub(crate) fn surface(&self, available: Rect) -> Rect {
+        overlay_layout(available, &self.detail).surface
+    }
+
+    pub(crate) fn scroll(&mut self, navigation: Navigation, available: Rect) {
+        let layout = overlay_layout(available, &self.detail);
+        self.scroll = navigation.offset(
+            usize::from(self.scroll),
+            usize::from(layout.max_scroll),
+            usize::from(layout.surface.height.saturating_sub(TITLE_ROWS)),
+        ) as u16;
     }
 }
 
 #[derive(Clone, Copy)]
 struct DetailOverlayLayout {
     surface: Rect,
-    body: Rect,
-    hints: Rect,
     max_scroll: u16,
 }
 
 fn overlay_layout(available: Rect, detail: &DetailList) -> DetailOverlayLayout {
     let content_width = horizontal_margin(available, 2).width;
     let content_rows = u16::try_from(detail.content_height(content_width)).unwrap_or(u16::MAX);
-    let desired_body_rows = TITLE_ROWS
+    let surface_rows = TITLE_ROWS
         .saturating_add(content_rows)
-        .saturating_add(BOTTOM_GAP_ROWS);
-    let surface_rows = desired_body_rows
-        .saturating_add(KEY_HINT_ROWS)
         .min(available.height);
     let surface = bottom_anchored_area(available, surface_rows);
-    let hint_rows = KEY_HINT_ROWS.min(surface.height);
-    let body_rows = surface.height.saturating_sub(hint_rows);
-    let body = Rect {
-        height: body_rows,
-        ..surface
-    };
-    let hints = Rect {
-        y: surface.y.saturating_add(body_rows),
-        height: hint_rows,
-        ..surface
-    };
-    let visible_content_rows = body_rows.saturating_sub(TITLE_ROWS);
+    let visible_content_rows = surface.height.saturating_sub(TITLE_ROWS);
     DetailOverlayLayout {
         surface,
-        body,
-        hints,
         max_scroll: content_rows.saturating_sub(visible_content_rows),
     }
 }
@@ -111,15 +102,9 @@ pub(crate) fn draw(
     );
     detail_list::draw_scrolled(
         frame,
-        layout.body,
+        layout.surface,
         &state.detail,
         state.scroll.min(layout.max_scroll),
-        context,
-    );
-    key_hint::draw(
-        frame,
-        layout.hints,
-        "↑↓/jk to scroll · Home/End to jump · Esc to close",
         context,
     );
 }

@@ -1,4 +1,5 @@
 use crate::host::clipboard::ClipboardImageFingerprint;
+use crate::keymap::bindings;
 use crate::render::RenderContext;
 use crate::widgets::key_hint;
 use ratatui::Frame;
@@ -7,8 +8,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 const TRANSIENT_TIP_DURATION: Duration = Duration::from_secs(5);
-const POLICY_TIP: &str = "shift+tab to cycle policy";
-const CLIPBOARD_IMAGE_TIP: &str = "image in clipboard · ctrl+v to paste";
 
 #[derive(Debug)]
 pub(crate) struct TopTip {
@@ -126,11 +125,11 @@ impl TopTip {
             return Some(notice.text.as_str());
         }
         if self.clipboard_image_expires_at.is_some() {
-            return Some(CLIPBOARD_IMAGE_TIP);
+            return Some(bindings::CLIPBOARD_HINTS.as_str());
         }
         match self.phase {
             TopTipPhase::Navigation => tip,
-            TopTipPhase::Policy { .. } => Some(POLICY_TIP),
+            TopTipPhase::Policy { .. } => Some(bindings::POLICY_HINTS.as_str()),
             TopTipPhase::Hidden => None,
         }
     }

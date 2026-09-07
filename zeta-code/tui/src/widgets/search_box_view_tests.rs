@@ -42,6 +42,20 @@ fn active_search_places_the_terminal_cursor_after_the_query() {
 }
 
 #[test]
+fn left_arrow_moves_the_rendered_cursor_before_a_wide_character() {
+    let mut search = SearchBoxState::new(SearchBoxModel::new("Search").initially_active());
+    search.handle_paste("a界".into());
+    search.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
+    terminal
+        .draw(|frame| draw(frame, frame.area(), &search, false, false, test_context()))
+        .unwrap();
+    terminal
+        .backend_mut()
+        .assert_cursor_position(Position::new(3, 1));
+}
+
+#[test]
 fn masked_search_renders_bullets_without_exposing_the_query() {
     let mut search =
         SearchBoxState::new(SearchBoxModel::new("API key").initially_active().masked());
@@ -63,7 +77,7 @@ fn masked_search_renders_bullets_without_exposing_the_query() {
 }
 
 #[test]
-fn search_box_uses_muted_rest_and_foreground_hover_border_without_a_focus_layer() {
+fn search_box_distinguishes_focus_hover_and_pressed_borders() {
     let search = SearchBoxState::new(SearchBoxModel::new("Search"));
     let backend = TestBackend::new(20, 3);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -94,6 +108,6 @@ fn search_box_uses_muted_rest_and_foreground_hover_border_without_a_focus_layer(
         .unwrap();
     assert_eq!(
         terminal.backend().buffer()[(0, 0)].fg,
-        test_context().muted()
+        test_context().focus()
     );
 }

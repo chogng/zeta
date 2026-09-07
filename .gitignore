@@ -15,6 +15,7 @@ __pycache__/
 .playwright-*/
 .temp
 .tmp/
+.snow
 output/
 !zeta-ts/src/zeta/workbench/contrib/output/
 !zeta-ts/src/zeta/workbench/contrib/output/**

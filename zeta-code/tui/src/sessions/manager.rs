@@ -1,12 +1,9 @@
-use super::branch_count_label;
-use super::session_size_label;
+use crate::keymap::bindings;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::interaction_style;
 use crate::render::selection_marker;
-use crate::widgets::detail_list::DetailList;
-use crate::widgets::detail_list::DetailListRow;
 use ratatui::Frame;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
@@ -93,10 +90,7 @@ impl SessionManagerState {
         self.focused
     }
 
-    pub(crate) fn select_previous(&mut self, sessions: &[Session]) {
-        self.select_offset(sessions, -1);
-    }
-
+    #[cfg(test)]
     pub(crate) fn select_next(&mut self, sessions: &[Session]) -> bool {
         self.select_offset(sessions, 1)
     }
@@ -125,14 +119,6 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn details_selected(&self, sessions: &[Session]) -> Option<DetailList> {
-        let selected = self.selected_session()?;
-        sessions
-            .iter()
-            .find(|session| &session.session_id == selected)
-            .map(|session| session_details(session, self.now_unix_ms))
-    }
-
     pub(crate) fn toggle_archived(&mut self) {
         self.archived_expanded = !self.archived_expanded;
         self.selected = Some(SessionManagerPointerTarget::Archived);
@@ -141,6 +127,10 @@ impl SessionManagerState {
 
     pub(crate) fn set_archived_expanded(&mut self, expanded: bool) {
         self.archived_expanded = expanded;
+    }
+
+    pub(crate) fn archived_expanded(&self) -> bool {
+        self.archived_expanded
     }
 
     pub(crate) fn archived_selected(&self) -> bool {
@@ -175,16 +165,16 @@ impl SessionManagerState {
     pub(crate) fn selection_hint(&self) -> &'static str {
         if self.archived_selected() {
             if self.archived_expanded {
-                "Enter to collapse · Esc to return to input"
+                bindings::COLLAPSE_HINTS.as_str()
             } else {
-                "Enter to expand · Esc to return to input"
+                bindings::EXPAND_HINTS.as_str()
             }
         } else if self.selected_archived {
-            "Enter to restore · Space to preview · Ctrl+X to delete · i to details"
+            bindings::ARCHIVED_HINTS.as_str()
         } else if self.selected.is_some() {
-            "Enter to open · Space to preview · Ctrl+X to archive · i to details"
+            bindings::SESSION_HINTS.as_str()
         } else {
-            "Esc to return to input"
+            bindings::INPUT_HINTS.as_str()
         }
     }
 
@@ -192,7 +182,7 @@ impl SessionManagerState {
         if self.focused {
             self.selection_hint()
         } else {
-            "Enter to return"
+            bindings::RETURN_HINTS.as_str()
         }
     }
 
@@ -274,40 +264,7 @@ impl SessionManagerState {
     }
 }
 
-fn session_details(session: &Session, now_unix_ms: u64) -> DetailList {
-    let mut rows = vec![
-        DetailListRow::new("Session", session.title.clone()),
-        DetailListRow::new("ID", session.session_id.to_string()),
-        DetailListRow::new(
-            "Status",
-            if session.status == SessionStatus::Archived {
-                "archived"
-            } else {
-                manager_status_label(session.manager.status)
-            },
-        ),
-        DetailListRow::new("Time", elapsed_label(session, now_unix_ms)),
-        DetailListRow::new("Branches", branch_count_label(session)),
-        DetailListRow::new("Size", session_size_label(session)),
-    ];
-    let activity = activity_text(session);
-    if !activity.is_empty() {
-        rows.push(DetailListRow::new("Activity", activity));
-    }
-    for thread in &session.threads {
-        rows.push(DetailListRow::new(
-            if thread.parent_thread_id.is_some() {
-                "Branch"
-            } else {
-                "Root"
-            },
-            format!("{} · {}", thread.title, thread_status_label(thread.status)),
-        ));
-    }
-    DetailList::new("Session details", rows)
-}
-
-fn manager_status_label(status: SessionManagerStatus) -> &'static str {
+pub(super) fn manager_status_label(status: SessionManagerStatus) -> &'static str {
     match status {
         SessionManagerStatus::Idle => "idle",
         SessionManagerStatus::NeedsInput => "needs input",
@@ -316,13 +273,6 @@ fn manager_status_label(status: SessionManagerStatus) -> &'static str {
         SessionManagerStatus::Completed => "completed",
         SessionManagerStatus::Failed => "failed",
         SessionManagerStatus::Stopped => "stopped",
-    }
-}
-
-fn thread_status_label(status: zeta_protocol::ThreadStatus) -> &'static str {
-    match status {
-        zeta_protocol::ThreadStatus::Active => "active",
-        zeta_protocol::ThreadStatus::Archived => "archived",
     }
 }
 

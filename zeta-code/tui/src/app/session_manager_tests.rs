@@ -41,6 +41,25 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     assert_eq!(app.handle_key(key(KeyCode::Char('i'))), None);
     assert_eq!(app.overlay().unwrap().title(), "Session details");
     assert!(app.session_manager_view().is_some());
+    let loading = render(&app);
+    assert_eq!(loading.matches("Esc to close").count(), 1);
+    assert!(!loading.contains("Enter to open"));
+    assert_snapshot!("session_details_loading", loading);
+    let (generation, session_id) = app.take_session_details_request().unwrap();
+    assert_eq!(session_id, session().session_id);
+    let root = &session().threads[0];
+    let tree = serde_json::from_value(serde_json::json!({"roots":[{
+        "threadId":root.thread_id, "threadSequence":1, "title":root.title,
+        "executionStatus":"idle", "usage":zeta_protocol::ModelUsageSummary::default()
+    }]}))
+    .unwrap();
+    app.update(SessionEvent::DetailsReceived {
+        generation,
+        result: Ok(zeta_app_server_protocol::protocol::session::SessionResult {
+            session: session(),
+            agent_tree: tree,
+        }),
+    });
     assert_snapshot!("agents_manager_transient_session_details", render(&app));
 
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);

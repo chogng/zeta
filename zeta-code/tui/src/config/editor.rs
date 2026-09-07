@@ -1,9 +1,9 @@
 use crate::config::TerminalSettings;
+use crate::keymap::bindings;
 use crate::models::preferred_model_label;
 use crate::status::StatusLineSettings;
 use crate::thread::composer::ChatInputMode;
 use crate::widgets::list_selection::ListSelection;
-use crate::widgets::list_selection::ListSelectionActivationMode;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -156,7 +156,10 @@ impl ConfigEditor {
                 ConfigEditorOutcome::Consumed
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
-            ListSelectionOutcome::Adjust(_, _) => ConfigEditorOutcome::Consumed,
+            ListSelectionOutcome::Adjust(action, _) => match action {
+                ConfigSelectionAction::OpenProviderApiKey { .. } => ConfigEditorOutcome::Consumed,
+                action => ConfigEditorOutcome::Action(action),
+            },
             ListSelectionOutcome::Consumed => ConfigEditorOutcome::Consumed,
             ListSelectionOutcome::Dismiss => ConfigEditorOutcome::Dismiss,
         }
@@ -186,6 +189,12 @@ impl ConfigEditor {
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
         self.prompt.is_none().then(|| self.selection.state())
+    }
+
+    pub(crate) fn selection_mut(
+        &mut self,
+    ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        self.prompt.is_none().then(|| self.selection.state_mut())
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
@@ -219,8 +228,8 @@ impl ConfigEditor {
             provider: prompt.provider,
             prompt: TextPrompt::new(prompt.spec),
             key_hints: crate::widgets::key_hint::KeyHints::new()
-                .with_action("Enter", "save")
-                .with_action("Esc", "cancel"),
+                .with_binding(bindings::SAVE)
+                .with_binding(bindings::CANCEL),
         });
     }
 }
@@ -276,11 +285,11 @@ pub(crate) fn config_choices(
         }),
     );
     let mut config_items = vec![
-        ListSelectionItem::new("Mouse interactions")
+        ListSelectionItem::new("Enhanced TUI")
             .with_id(mouse_id)
             .with_columns(
-                "Mouse interactions",
-                "Select and auto-copy text, click, and hover",
+                "Enhanced TUI",
+                "Click, scroll, hover, and auto-copy selected panel text",
                 checkbox(mouse_enabled),
             ),
         ListSelectionItem::new("Vim mode")
@@ -310,8 +319,7 @@ pub(crate) fn config_choices(
                 ListSelectionGroup::new("Language servers", language_server_items),
             ],
         )
-        .with_activation_mode(ListSelectionActivationMode::EnterOrSpace)
-        .with_activation_action("change")
+        .with_activation(bindings::CONFIG_CHANGE)
         .with_search(SearchBoxModel::new("Search configuration"))
         .with_empty_message("No matching configuration"),
         actions,

@@ -1370,6 +1370,13 @@ impl AppServer {
         &self,
         session_id: &zeta_protocol::SessionId,
     ) -> Result<Session, RpcError> {
+        self.session_result(session_id).map(|result| result.session)
+    }
+
+    pub(super) fn session_result(
+        &self,
+        session_id: &zeta_protocol::SessionId,
+    ) -> Result<zeta_app_server_protocol::protocol::session::SessionResult, RpcError> {
         let mut snapshots = self
             .threads
             .list_session_threads(session_id)
@@ -1393,7 +1400,8 @@ impl AppServer {
             SessionStatus::Active
         };
         let manager = session_manager_info(&snapshots, root.created_at_unix_ms, status);
-        Ok(Session {
+        let agent_tree = zeta_core::project_agent_tree(&snapshots);
+        let session = Session {
             session_id: session_id.clone(),
             title: root.title.clone(),
             status,
@@ -1412,6 +1420,10 @@ impl AppServer {
                     status: thread.status,
                 })
                 .collect(),
+        };
+        Ok(zeta_app_server_protocol::protocol::session::SessionResult {
+            session,
+            agent_tree,
         })
     }
 

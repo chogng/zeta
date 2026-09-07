@@ -1,12 +1,11 @@
+use crate::keymap::bindings;
 use crate::render::RenderContext;
 use crate::widgets::search_box;
 use crate::widgets::search_box::SearchBoxInputOutcome;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -51,12 +50,10 @@ impl TextPrompt {
         if key.kind != KeyEventKind::Press {
             return TextPromptOutcome::Consumed;
         }
-        if key.code == KeyCode::Esc
-            || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c'))
-        {
+        if bindings::CANCEL.matches(key) {
             return TextPromptOutcome::Dismiss;
         }
-        if key.code == KeyCode::Enter && key.modifiers.is_empty() {
+        if bindings::SAVE.matches(key) {
             let value = self.input.query().trim();
             return if value.is_empty() {
                 TextPromptOutcome::Consumed

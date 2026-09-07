@@ -1,4 +1,4 @@
-use crate::widgets::list_selection::ListSelectionActivationMode;
+use crate::keymap::bindings;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -95,8 +95,7 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
                 ListSelectionGroup::new("Manage", manage),
             ],
         )
-        .with_activation_mode(ListSelectionActivationMode::EnterOrSpace)
-        .with_activation_action("toggle")
+        .with_activation(bindings::SKILL_TOGGLE)
         .with_search(SearchBoxModel::new("Search available skills"))
         .with_empty_message("No matching skills"),
         actions,

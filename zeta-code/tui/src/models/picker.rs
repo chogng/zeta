@@ -1,4 +1,4 @@
-use crate::widgets::list_selection::ListSelectionActivationMode;
+use crate::keymap::bindings;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -63,8 +63,7 @@ pub(crate) fn model_choices(
 
     ModelChoices {
         model: ListSelectionModel::new("Model", vec![ListSelectionGroup::new("Models", items)])
-            .with_activation_mode(ListSelectionActivationMode::Enter)
-            .with_activation_action("apply")
+            .with_activation(bindings::MODEL_APPLY)
             .without_tab_bar()
             .with_initial_selected(selected)
             .with_search(SearchBoxModel::new("Search models"))

@@ -3,6 +3,7 @@ use super::ListSelectionInputOutcome;
 use super::ListSelectionItemId;
 use super::ListSelectionModel;
 use super::ListSelectionState;
+use crate::keymap::bindings;
 use crate::widgets::key_hint::KeyHints;
 use crossterm::event::KeyEvent;
 use std::collections::BTreeMap;
@@ -55,9 +56,9 @@ impl<A> ListSelection<A> {
 
     pub(crate) fn key_hints(&self) -> &str {
         if self.state.search_focused() {
-            "Enter to return to list · Esc to return to list"
+            bindings::SEARCH_HINTS.as_str()
         } else if self.state.tabs_focused() {
-            "Tab/Shift+Tab to switch · Enter to return to list · Esc to close"
+            bindings::TAB_HINTS.as_str()
         } else {
             self.key_hints.text()
         }
@@ -65,6 +66,10 @@ impl<A> ListSelection<A> {
 
     pub(crate) fn state(&self) -> &ListSelectionState {
         &self.state
+    }
+
+    pub(crate) fn state_mut(&mut self) -> &mut ListSelectionState {
+        &mut self.state
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {

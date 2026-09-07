@@ -4,6 +4,7 @@ mod active;
 mod completion;
 #[cfg(test)]
 mod completion_tests;
+mod details;
 mod manager;
 mod picker;
 mod state;
@@ -18,6 +19,7 @@ pub(crate) use completion::ManagerSessionCompletion;
 pub(crate) use completion::SessionCompletion;
 pub(crate) use completion::finish_conversation_request;
 pub(crate) use completion::prepare_command;
+pub(crate) use details::load_details;
 pub(crate) use manager::SessionManagerPointerTarget;
 pub(crate) use manager::SessionManagerView;
 pub(crate) use manager::draw_manager;
@@ -38,6 +40,10 @@ use zeta_protocol::SessionId;
 
 /// A completed session operation delivered to the TUI state owner.
 pub(crate) enum Event {
+    DetailsReceived {
+        generation: u64,
+        result: Result<zeta_app_server_protocol::protocol::session::SessionResult, String>,
+    },
     PickerOpened(SessionChoices),
     CatalogReceived(Vec<Session>),
 }
@@ -138,11 +144,6 @@ pub(crate) fn delete<T: JsonRpcTransport>(
         ));
     }
     load_catalog(client)
-}
-
-pub(super) fn branch_count_label(session: &Session) -> String {
-    let count = session.threads.len();
-    format!("{count} {}", if count == 1 { "branch" } else { "branches" })
 }
 
 pub(super) fn session_size_label(session: &Session) -> String {

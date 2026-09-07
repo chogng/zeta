@@ -25102,12 +25102,16 @@
     },
     "SessionResult": {
       "properties": {
+        "agentTree": {
+          "$ref": "#/$defs/AgentTreeProjection"
+        },
         "session": {
           "$ref": "#/$defs/Session"
         }
       },
       "required": [
-        "session"
+        "session",
+        "agentTree"
       ],
       "type": "object"
     },

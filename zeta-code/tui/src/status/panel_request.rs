@@ -53,7 +53,6 @@ where
         reference_cost: &thread.reference_cost,
         session_id: scope.session_id.as_str(),
         thread_id: scope.thread_id.as_str(),
-        thread_sequence: thread.sequence,
     }))
 }
 

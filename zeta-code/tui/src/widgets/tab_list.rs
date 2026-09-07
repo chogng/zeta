@@ -1,11 +1,10 @@
+use crate::keymap::bindings;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::interaction_style;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -73,34 +72,19 @@ impl<T> TabListState<T> {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> TabListInputOutcome {
-        if key
-            .modifiers
-            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-        {
+        let previous_tab = bindings::TAB_PREVIOUS.matches(key) || bindings::LEFT.matches(key);
+        let next_tab = bindings::TAB_NEXT.matches(key) || bindings::RIGHT.matches(key);
+        if !previous_tab && !next_tab {
             return TabListInputOutcome::Unhandled;
         }
         if key.kind != KeyEventKind::Press {
-            return if matches!(
-                key.code,
-                KeyCode::Tab | KeyCode::BackTab | KeyCode::Left | KeyCode::Right
-            ) {
-                TabListInputOutcome::Consumed
-            } else {
-                TabListInputOutcome::Unhandled
-            };
+            return TabListInputOutcome::Consumed;
         }
         let previous = self.active;
-        match key.code {
-            KeyCode::BackTab | KeyCode::Left => {
-                self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1);
-            }
-            KeyCode::Tab if key.modifiers == KeyModifiers::SHIFT => {
-                self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1);
-            }
-            KeyCode::Tab | KeyCode::Right => {
-                self.active = (self.active + 1) % self.tabs.len();
-            }
-            _ => return TabListInputOutcome::Unhandled,
+        if previous_tab {
+            self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1);
+        } else {
+            self.active = (self.active + 1) % self.tabs.len();
         }
         if self.active == previous {
             TabListInputOutcome::Consumed

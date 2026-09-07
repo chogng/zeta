@@ -31,7 +31,7 @@ expression: render(&app)
 
 ● Conversation message 20: content stays readable in preview.
 
-                                      Jump to bottom (click) ↓
+                                    Ctrl+End to jump to bottom ↓
 
   Preview · Snapshot session · read only
-  ↑↓/jk to scroll · Home/End to jump · Esc to close
+  Esc to close

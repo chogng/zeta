@@ -1,6 +1,6 @@
+use crate::keymap::bindings;
 use std::collections::BTreeMap;
 
-use crate::widgets::list_selection::ListSelectionActivationMode;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -43,8 +43,7 @@ pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> St
         vec![ListSelectionGroup::new("Status line", items)],
     )
     .without_tab_bar()
-    .with_activation_mode(ListSelectionActivationMode::EnterOrSpace)
-    .with_activation_action("toggle");
+    .with_activation(bindings::STATUS_TOGGLE);
     StatusLineChoices { model, actions }
 }
 

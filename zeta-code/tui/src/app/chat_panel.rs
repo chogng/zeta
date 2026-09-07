@@ -152,6 +152,10 @@ impl ChatPanel {
         self.command.as_ref()
     }
 
+    pub(crate) fn command_mut(&mut self) -> Option<&mut CommandPanel> {
+        self.command.as_mut()
+    }
+
     pub(crate) fn command_key_hints(&self) -> Option<&str> {
         self.command.as_ref().map(CommandPanel::key_hints)
     }

@@ -56,6 +56,75 @@ fn newer_update_for_active_scope_requests_snapshot() {
 }
 
 #[test]
+fn subscribing_reads_every_history_page_before_installing_in_chronological_order() {
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut responses = VecDeque::new();
+    for (index, name) in ["turn-3", "turn-2", "turn-1"].into_iter().enumerate() {
+        let mut snapshot = thread("session-1", "thread-1", 7);
+        snapshot.turns = vec![turn(name)];
+        let turn_id = TurnId::new(name).unwrap();
+        let entry = zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry::Item {
+            entry_id: name.into(),
+            turn_id: turn_id.clone(),
+            item: zeta_protocol::ThreadItem::AgentMessage {
+                item_id: zeta_protocol::ItemId::new(name).unwrap(),
+                turn_id,
+                text: name.into(),
+            },
+            transient: false,
+        };
+        responses.push_back(
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": index + 1,
+                "result": {
+                    "thread": snapshot,
+                    "transcript": {
+                        "sessionId": "session-1", "threadId": "thread-1",
+                        "durableSequence": 7, "revision": 9,
+                        "entries": [entry]
+                    },
+                    "updates": [],
+                    "history": {"hasOlderTurns": index < 2, "oldestTurnId": name}
+                }
+            })
+            .to_string(),
+        );
+    }
+    let mut client = AppServerClient::new(RecordingTransport {
+        responses,
+        requests: requests.clone(),
+    });
+    let (subscription, snapshot, transcript) = ThreadSubscription::start(
+        &mut client,
+        &SessionId::new("session-1").unwrap(),
+        &ThreadId::new("thread-1").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        snapshot
+            .turns
+            .iter()
+            .map(|turn| turn.turn_id.as_str())
+            .collect::<Vec<_>>(),
+        ["turn-1", "turn-2", "turn-3"]
+    );
+    assert_eq!(
+        transcript
+            .entries
+            .iter()
+            .map(|entry| entry.entry_id())
+            .collect::<Vec<_>>(),
+        ["turn-1", "turn-2", "turn-3"]
+    );
+    assert!(subscription.older_history().is_none());
+    assert_eq!(transcript.revision, 9);
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    assert_eq!(requests[1]["params"]["history"]["turnId"], "turn-3");
+    assert_eq!(requests[2]["params"]["history"]["turnId"], "turn-2");
+}
+
+#[test]
 fn history_window_expands_one_page_at_a_time() {
     let snapshot = thread("session-1", "thread-1", 4);
     let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);

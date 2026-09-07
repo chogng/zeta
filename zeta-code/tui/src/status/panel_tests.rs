@@ -25,6 +25,27 @@ use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::ModelUsageTotal;
 
 #[test]
+fn mouse_scroll_keeps_the_status_tab_and_clamps_to_its_content() {
+    let usage = usage();
+    let cost = reference_cost();
+    let mut panel = panel(&usage, &cost);
+    let area = Rect::new(0, 0, 80, 4);
+    for _ in 0..100 {
+        panel.scroll(crate::widgets::navigation::Navigation::Next, area);
+    }
+    assert_eq!(panel.tabs.active_index(), 0);
+    assert_eq!(
+        usize::from(panel.scroll[0]),
+        panel.session.content_height(80) - 4
+    );
+    assert_eq!(panel.scroll[1], 0);
+    for _ in 0..100 {
+        panel.scroll(crate::widgets::navigation::Navigation::Previous, area);
+    }
+    assert_eq!(panel.scroll[0], 0);
+}
+
+#[test]
 fn status_panel_exposes_model_accounting_context_and_conversation_identity() {
     let usage = usage();
     let reference_cost = reference_cost();
@@ -53,7 +74,6 @@ fn status_panel_exposes_model_accounting_context_and_conversation_identity() {
             ("Reference cost", "$0.01008"),
             ("Session ID", "session-1"),
             ("Thread ID", "thread-2"),
-            ("Thread version", "3"),
         ]
     );
 }
@@ -63,7 +83,7 @@ fn status_panel_requests_full_content_height_and_renders_bold_labels() {
     let usage = usage();
     let reference_cost = reference_cost();
     let panel = panel(&usage, &reference_cost);
-    assert_eq!(desired_height(&panel, 100), 16);
+    assert_eq!(desired_height(&panel, 100), 15);
     assert!(desired_height(&panel, 24) > desired_height(&panel, 100));
     let backend = TestBackend::new(100, desired_height(&panel, 100));
     let mut terminal = Terminal::new(backend).unwrap();
@@ -71,7 +91,7 @@ fn status_panel_requests_full_content_height_and_renders_bold_labels() {
     terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
 
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(3, 0)].symbol(), "S");
+    assert_eq!(buffer[(3, 0)].symbol(), "T");
     assert_eq!(buffer[(2, 0)].symbol(), " ");
     assert_eq!(buffer[(10, 0)].symbol(), " ");
     assert_eq!(
@@ -221,7 +241,8 @@ fn status_panel_scrolls_when_allocated_height_is_shorter_than_content() {
     terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
 
     let rendered = terminal.backend().to_string();
-    assert!(rendered.contains("Thread version:"));
+    assert!(rendered.contains("Thread ID:"));
+    assert!(!rendered.contains("Thread version:"));
     assert!(!rendered.contains("Full context window"));
     assert_eq!(
         panel.handle_key(
@@ -284,10 +305,7 @@ fn status_panel_switches_tabs_with_keyboard_and_exposes_mouse_targets() {
     );
     assert_eq!(panel.tabs.active_index(), 0);
     assert_eq!(desired_height(&panel, 80), height_before);
-    assert_eq!(
-        panel.key_hints(),
-        "↑↓/jk to scroll · Tab to switch · Esc to close"
-    );
+    assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
 }
 
 #[test]
@@ -323,9 +341,8 @@ fn panel<'a>(
         },
         usage,
         reference_cost,
-        session_id: "session-1",
+        session_id: "thread:session-1",
         thread_id: "thread-2",
-        thread_sequence: 3,
     })
 }
 

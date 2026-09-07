@@ -1,6 +1,6 @@
 ---
 source: zeta-code/tui/src/app/session_manager_tests.rs
-assertion_line: 44
+assertion_line: 63
 expression: render(&app)
 ---
     ▄  ▄     Zeta Code v0.1.0
@@ -21,17 +21,17 @@ Archived (0)
 
 
 
+
   Session details─────────────────────────────────────────────────────────────────────────────────
-  Session:  Snapshot session
-  ID:       current
-  Status:   idle
-  Time:
-  Branches: 1 branch
-  Size:     0 tokens
-  Root:     main · active
+  Session:     Snapshot session
+  Session ID:  current
+  Lifecycle:   active
+  Status:      idle
+  Threads:     1
+  Total usage: 0 tokens
+  Model calls: 0
+  Thread:      Root · main · idle
+  ID:          current
+  Lifecycle:   active
 
-
-
-  ↑↓/jk to scroll · Home/End to jump · Esc to close
-
-  Enter to open · Space to preview · Ctrl+X to archive · i to details
+  Esc to close

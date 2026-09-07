@@ -24,15 +24,15 @@ enum KeyHint {
 }
 
 impl KeyHints {
+    pub(crate) fn with_binding(self, shortcut: crate::keymap::bindings::Keybinding) -> Self {
+        self.with_action(shortcut.keys(), shortcut.action())
+    }
+
     pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub(crate) fn with_action(
-        mut self,
-        keys: impl Into<String>,
-        action: impl Into<String>,
-    ) -> Self {
+    fn with_action(mut self, keys: impl Into<String>, action: impl Into<String>) -> Self {
         self.push(KeyHint::Action {
             keys: keys.into(),
             action: action.into(),
@@ -96,9 +96,9 @@ fn visible_hints(hints: &str, width: usize) -> std::borrow::Cow<'_, str> {
             .iter()
             .position(|entry| entry.starts_with("↑↓"))
             .or_else(|| {
-                entries
-                    .iter()
-                    .rposition(|entry| !entry.starts_with("Esc to "))
+                entries.iter().rposition(|entry| {
+                    !entry.starts_with(&format!("{} to ", crate::keymap::bindings::CLOSE.keys()))
+                })
             });
         let Some(index) = index else {
             break;
