@@ -236,4 +236,5 @@ pub(crate) mod google_count_tokens;
 pub(crate) mod kimi_estimate_tokens;
 pub(crate) mod openai_chat_completions;
 pub(crate) mod openai_responses;
+mod openai_tools;
 pub(crate) mod zai_tokenizer;

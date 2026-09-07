@@ -127,6 +127,7 @@ impl OpenAiChatCompletionsBodySink<'_> {
 }
 
 pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+    super::openai_tools::validate_tools(&request.tools)?;
     crate::requests::require_materialized_images(request)?;
     let mut messages = Vec::new();
     if let Some(instructions) = &request.instructions {

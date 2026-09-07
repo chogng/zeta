@@ -1,5 +1,6 @@
 use crate::ApiError;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use zeta_client::{SseEvent, SseFrame};
 use zeta_protocol::ModelStreamEvent;
 
@@ -11,6 +12,7 @@ use zeta_protocol::ModelStreamEvent;
 pub struct OpenAiResponsesSseDecoder {
     terminal: bool,
     response: Option<Value>,
+    output: BTreeMap<u64, Value>,
 }
 
 impl Default for OpenAiResponsesSseDecoder {
@@ -24,6 +26,7 @@ impl OpenAiResponsesSseDecoder {
         Self {
             terminal: false,
             response: None,
+            output: BTreeMap::new(),
         }
     }
 
@@ -50,18 +53,47 @@ impl OpenAiResponsesSseDecoder {
         }
     }
 
-    /// Returns the canonical terminal response carried by `response.completed`.
-    pub fn finish_response(self) -> Result<Value, ApiError> {
+    /// Combines completed output items with terminal response metadata.
+    pub fn finish_response(mut self) -> Result<Value, ApiError> {
         if !self.terminal {
             return Err(ApiError::InvalidResponse(
                 "OpenAI response stream ended before a terminal event".into(),
             ));
         }
-        self.response.ok_or_else(|| {
+        let mut response = self.response.ok_or_else(|| {
             ApiError::InvalidResponse(
                 "OpenAI response.completed event is missing its response".into(),
             )
-        })
+        })?;
+        let object = response.as_object_mut().ok_or_else(|| {
+            ApiError::InvalidResponse("OpenAI terminal response must be an object".into())
+        })?;
+        // Some Responses endpoints repeat the items in the terminal snapshot; others
+        // send only metadata there. Merge by output index without duplicating items.
+        if let Some(snapshot) = object.remove("output") {
+            let items = snapshot.as_array().ok_or_else(|| {
+                ApiError::InvalidResponse("OpenAI response output must be an array".into())
+            })?;
+            for (index, item) in items.iter().enumerate() {
+                if let Some(completed) = self.output.insert(index as u64, item.clone())
+                    && completed != *item
+                {
+                    return Err(ApiError::InvalidResponse(
+                        "OpenAI terminal output conflicts with its completed item".into(),
+                    ));
+                }
+            }
+        }
+        if self.output.keys().copied().ne(0..self.output.len() as u64) {
+            return Err(ApiError::InvalidResponse(
+                "OpenAI response output indices are not contiguous".into(),
+            ));
+        }
+        object.insert(
+            "output".into(),
+            Value::Array(self.output.into_values().collect()),
+        );
+        Ok(response)
     }
 
     fn decode_event(&mut self, event: &SseEvent) -> Result<Vec<ModelStreamEvent>, ApiError> {
@@ -77,6 +109,30 @@ impl OpenAiResponsesSseDecoder {
             })?;
 
         match event_type {
+            "response.output_item.done" => {
+                let index = payload
+                    .get("output_index")
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| {
+                        ApiError::InvalidResponse(
+                            "OpenAI completed output item is missing output_index".into(),
+                        )
+                    })?;
+                let item = payload
+                    .get("item")
+                    .filter(|item| item.is_object())
+                    .ok_or_else(|| {
+                        ApiError::InvalidResponse(
+                            "OpenAI completed output item is missing its item object".into(),
+                        )
+                    })?;
+                if self.output.insert(index, item.clone()).is_some() {
+                    return Err(ApiError::InvalidResponse(
+                        "OpenAI response repeated a completed output index".into(),
+                    ));
+                }
+                Ok(Vec::new())
+            }
             "response.output_text.delta" => Ok(vec![ModelStreamEvent::TextDelta(
                 required_delta(&payload, event_type)?.into(),
             )]),

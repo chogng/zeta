@@ -143,6 +143,122 @@ fn tool_request() -> ModelRequest {
     request
 }
 
+#[test]
+fn openai_strict_tools_reject_invalid_object_schemas_before_transport() {
+    let missing_budget = json!({
+        "type": "object",
+        "properties": {
+            "objective": {"type": "string"},
+            "token_budget": {"type": ["integer", "null"]}
+        },
+        "required": ["objective"],
+        "additionalProperties": false
+    });
+    let nested = json!({
+        "type": "object",
+        "properties": {"steps": {"type": "array", "items": {"anyOf": [missing_budget.clone(), {"type": "null"}]}}},
+        "required": ["steps"],
+        "additionalProperties": false
+    });
+    for (schema, detail) in [
+        (missing_budget, "required is missing 'token_budget'"),
+        (nested, "parameters.properties.steps.items.anyOf[0]"),
+        (
+            json!({"type": "object", "properties": {}, "required": []}),
+            "additionalProperties must be false",
+        ),
+        (
+            json!({"type": "object", "properties": {}, "additionalProperties": false}),
+            "required must list every property",
+        ),
+        (
+            json!({"type": "object", "properties": {"x": {}}, "required": ["x", "x"], "additionalProperties": false}),
+            "required must list each property exactly once",
+        ),
+        (
+            json!({"type": "object", "properties": {"target": {"oneOf": [{"type": "string"}, {"type": "null"}]}}, "required": ["target"], "additionalProperties": false}),
+            "oneOf is not supported",
+        ),
+    ] {
+        for endpoint in [
+            ApiEndpoint::OpenAiResponses,
+            ApiEndpoint::OpenAiChatCompletions,
+        ] {
+            let mut request = tool_request();
+            request.tools[0].name = ToolName::new("create_goal").unwrap();
+            request.tools[0].parameters = schema.clone();
+            let transport = CapturingTransport::new(json!({}));
+            let error = endpoint
+                .complete_with_client(&target(), "model-test", &request, &transport)
+                .unwrap_err();
+            assert!(
+                matches!(error, ApiError::InvalidRequest(ref message) if message.contains("create_goal") && message.contains(detail)),
+                "{error:?}"
+            );
+            let mut events = RecordedStreamEvents::default();
+            let stream_error = endpoint
+                .stream_with_client_and_cancellation(
+                    &target(),
+                    "model-test",
+                    &request,
+                    &transport,
+                    &CancellationSource::new().token(),
+                    &mut events,
+                )
+                .unwrap_err();
+            assert_eq!(stream_error, error);
+            assert!(events.events.is_empty());
+            assert!(transport.request.lock().unwrap().is_none());
+        }
+    }
+}
+
+#[test]
+fn openai_strict_tools_preserve_nullable_properties_and_schema_annotations() {
+    let schema = json!({
+        "type": "object",
+        "properties": {"token_budget": {
+            "type": ["integer", "null"],
+            "minimum": 1
+        }},
+        "required": ["token_budget"],
+        "additionalProperties": false,
+        "examples": [{"type": "object", "properties": "literal user data"}]
+    });
+    for strict in [true, false] {
+        let mut request = tool_request();
+        request.tools[0].parameters = schema.clone();
+        request.tools[0].strict = strict;
+        if !strict {
+            request.tools[0].parameters["required"] = json!([]);
+        }
+        for endpoint in [
+            ApiEndpoint::OpenAiResponses,
+            ApiEndpoint::OpenAiChatCompletions,
+        ] {
+            let transport = CapturingTransport::new(json!({
+                "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}],
+                "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]
+            }));
+            assert_eq!(
+                endpoint
+                    .complete_with_client(&target(), "model-test", &request, &transport)
+                    .unwrap()
+                    .text(),
+                "ok"
+            );
+            let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
+            let wire_tool = if endpoint == ApiEndpoint::OpenAiResponses {
+                &body["tools"][0]
+            } else {
+                &body["tools"][0]["function"]
+            };
+            assert_eq!(wire_tool["parameters"], request.tools[0].parameters);
+            assert_eq!(wire_tool["strict"], strict);
+        }
+    }
+}
+
 fn conformance_request() -> ModelRequest {
     let call_id = ToolCallId::new("call_1").unwrap();
     let tool_name = ToolName::new("weather").unwrap();
@@ -526,6 +642,55 @@ fn openai_responses_streams_wire_deltas_and_returns_the_terminal_response() {
     assert_eq!(
         transport.request.lock().unwrap().as_ref().unwrap()["stream"],
         true
+    );
+}
+
+#[test]
+fn openai_responses_collects_completed_items_with_terminal_usage() {
+    let transport = StreamingPayloadTransport::new(
+        concat!(
+            "data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"Checking\"}\n\n",
+            "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"summary\":[{\"text\":\"Checking\"}]}}\n\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello\"}\n\n",
+            "data: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\"}]}}\n\n",
+            "data: {\"type\":\"response.output_item.done\",\"output_index\":2,\"item\":{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}\n\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":20}}}\n\n",
+        ),
+        17,
+    );
+    let mut events = RecordedStreamEvents::default();
+    let response = ApiEndpoint::OpenAiResponses
+        .stream_with_client_and_cancellation(
+            &target(),
+            "model-test",
+            &tool_request(),
+            &transport,
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+    assert_eq!(
+        response.output,
+        vec![
+            OutputItem::Reasoning("Checking".into()),
+            OutputItem::Text("Hello".into()),
+            OutputItem::ToolCall(ToolCall {
+                id: ToolCallId::new("call_1").unwrap(),
+                name: ToolName::new("weather").unwrap(),
+                arguments: json!({"city": "Paris"}),
+            }),
+        ]
+    );
+    assert_eq!(response.stop_reason, StopReason::ToolUse);
+    let usage = response.usage.unwrap();
+    assert_eq!(usage.input_tokens, Some(10));
+    assert_eq!(usage.output_tokens, Some(20));
+    assert_eq!(
+        events.events,
+        vec![
+            ModelStreamEvent::ReasoningDelta("Checking".into()),
+            ModelStreamEvent::TextDelta("Hello".into()),
+        ]
     );
 }
 

@@ -239,7 +239,7 @@ fn create_definition() -> ToolDefinition {
                     "description": "Optional cumulative token budget for this Goal; null means unbounded."
                 }
             },
-            "required": ["objective"],
+            "required": ["objective", "token_budget"],
             "additionalProperties": false
         }),
     )
@@ -268,3 +268,7 @@ fn success(value: Value) -> Result<ToolExecutionOutput, CoreError> {
         .map(ToolExecutionOutput::Success)
         .map_err(|error| CoreError::Execution(error.to_string()))
 }
+
+#[cfg(test)]
+#[path = "goal_tool_tests.rs"]
+mod tests;

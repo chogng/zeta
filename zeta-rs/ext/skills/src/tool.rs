@@ -226,7 +226,7 @@ fn skill_read_definition() -> ToolDefinition {
                 },
                 "target": {
                     "description": "Read the Skill instructions or one package-relative resource.",
-                    "oneOf": [
+                    "anyOf": [
                         {
                             "type": "object",
                             "properties": {

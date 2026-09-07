@@ -266,6 +266,19 @@ fn skills_read_tool_loads_exact_enabled_skill_body_for_the_model() {
     let registry = builder.build();
     let executor = registry.contribute_read_only_tools().unwrap().remove(0);
     let definition = executor.definition();
+    let protocol = zeta_tools::to_protocol_tool_definition(&definition).unwrap();
+    let target = &protocol.parameters["properties"]["target"];
+    assert!(target.get("oneOf").is_none());
+    let variants = target["anyOf"].as_array().unwrap();
+    assert_eq!(variants.len(), 2);
+    assert_eq!(
+        variants[0]["properties"]["type"]["enum"],
+        serde_json::json!(["instructions"])
+    );
+    assert_eq!(
+        variants[1]["properties"]["type"]["enum"],
+        serde_json::json!(["resource"])
+    );
     let binding = ToolBinding::new(
         ToolRegistryGeneration::new(1),
         ToolBindingId::new("skills-read-binding").unwrap(),
