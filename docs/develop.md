@@ -1,5 +1,7 @@
 # Zeta 意图驱动的 Agent 开发系统
 
+> 日常仓库开发现在遵守[功能开发与验收流程](development-workflow.md)。本文只拥有计划中的 `/develop` 产品系统，不能因采用 `intent.md` 等记录就把本文状态改为已实现。
+
 > 状态：Proposed（2026-09-02）。本文是 `/develop` 流程、产物和状态机的唯一开发设计文档；内置角色定义由 `agents.md` 维护。
 > 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 的关系。内置阶段 Agent 与私有 Agent 的 ID、提示词、工具、能力和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 维护；Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，可靠多 Agent 开发见 [`multi-agent-development.md`](multi-agent-development.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
 

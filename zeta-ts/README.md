@@ -255,7 +255,7 @@ running 或交互等待期间输入工具栏同时显示 Send 与 Stop。Rendere
 当前链接只允许 HTTP、HTTPS 和页内 fragment，并交由宿主处理；图片只允许内嵌的 PNG、
 JPEG、GIF 与 WebP。语法高亮、Markdown 插件、Mermaid、KaTeX 和工作区相对资源映射尚未实现。
 详细边界见
-[`docs/zeta-desktop-architecture.md`](../docs/zeta-desktop-architecture.md#62-markdown)。
+[`docs/zeta-desktop-architecture.md`](../docs/zeta-desktop-architecture.md#63-markdown)。
 
 ## 安装失败时
 

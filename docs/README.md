@@ -1,75 +1,17 @@
-# Zeta 文档导航
+# 工程文档
 
-> 本文件是跨产品 `docs/` 的工程文档索引。新增跨产品工程文档必须同时加入本索引。
-> 面向使用者的文档和文档站由独立的 [`zeta-docs`](https://github.com/chogng/zeta-docs) 仓库维护。
-> `app` 专属系统文档由 [`app/docs/README.md`](../app/docs/README.md) 索引，避免产品宿主
-> 文档和共享系统文档混在同一目录。
-> `zeta code` 专属系统文档由 [`zeta-code/docs/README.md`](../zeta-code/docs/README.md) 索引。
-> 系统性的阅读方法（先系统后 crate、两层文档职责）见
-> [`documentation-guidelines.md`](documentation-guidelines.md)。
+[系统架构](architecture.md) · [Zeta Code](../zeta-code/docs/README.md) · [app](../app/docs/README.md) · [用户文档](https://github.com/chogng/zeta-docs)
 
-## 快速理解
+开发功能见[开发与验收流程](development-workflow.md)，编写文档见[写作规范](documentation-guidelines.md)。各模块的代码和测试入口在相邻 README。
 
-这份索引只负责跨产品、跨 crate 的系统文档；`app` 的产品宿主、渲染、终端和输入文档集中在
-[`app/docs/README.md`](../app/docs/README.md)。按下面的边界选择入口：
-
-| 目标 | 入口 |
-| --- | --- |
-| 理解共享 backend、协议、执行和存储 | 本目录对应的系统文档与 `zeta-rs/*/README.md` |
-| 理解 `app` 产品行为 | [`app/docs/README.md`](../app/docs/README.md) |
-| 理解 `zeta code` CLI/TUI | [`zeta-code/docs/README.md`](../zeta-code/docs/README.md) |
-| 理解某个 crate 的实现契约 | 对应 crate 的 `README.md` |
-| 学习如何使用 Zeta | [`zeta-docs`](https://github.com/chogng/zeta-docs) |
-
-## 1. 我该看哪份？
-
-按你要做的事查表，**按列出顺序读**：
-
-| 你要做什么 | 看这些（按序） |
-| --- | --- |
-| 设计意图驱动的 Agent 开发流程 | [`develop.md`](develop.md) → [`agents.md`](agents.md) → [`slash-commands.md`](slash-commands.md) → [`core-multi-agent.md`](core-multi-agent.md) → [`multi-agent-development.md`](multi-agent-development.md) |
-| 新人理解 Zeta 全貌 | [`architecture.md`](architecture.md) → 感兴趣系统的领域文档 |
-| 改 Project / Session / Thread / Workspace / Environment 命名或多根关系 | [`domain-model.md`](domain-model.md) → [`environment-access.md`](environment-access.md) → [`multi-agent-development.md`](multi-agent-development.md) |
-| **搭 / 改 agent harness**（提示词、工具、循环） | [`agent-harness-design.md`](agent-harness-design.md)（边界与状态）→ [`agent-tools-spec.md`](agent-tools-spec.md)（逐工具规格）→ [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)（执行边界） |
-| 改执行内核（Turn/Thread/恢复/取消） | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) → [`core.md`](core.md) |
-| 做上下文预算 / 压缩 | [`core-context.md`](core-context.md) + [`agent-harness-design.md`](agent-harness-design.md) §9–§11 |
-| 做同 Session Agent 委托与运行树 | [`core-multi-agent.md`](core-multi-agent.md)（gate 条件见其状态头） |
-| 做 Team、跨 Session Agent 或可靠多 Agent 代码开发 | [`multi-agent-development.md`](multi-agent-development.md) → [`domain-model.md`](domain-model.md) → [`core-multi-agent.md`](core-multi-agent.md) → [`chat-session-inspector.md`](chat-session-inspector.md) → [`permissions.md`](permissions.md) |
-| 开发代码知识、Workspace Symbol 或跨语言导航 | [`code-intelligence.md`](code-intelligence.md) → [`syntax-analysis.md`](syntax-analysis.md) → [`lsp.md`](lsp.md) → [`codebase.md`](codebase.md) |
-| 开发 Codebase / RAG | [`code-intelligence.md`](code-intelligence.md) → [`codebase.md`](codebase.md) → [`zeta-codebase` README](../zeta-rs/codebase/README.md) → [`zeta-cloud-codebase` README](../zeta-rs/cloud-codebase/README.md) |
-| 设计 Instructions / Skills / Agents、内置专化职责或外部导入 | [`agent-customizations.md`](agent-customizations.md) → [`agents.md`](agents.md) → 对应 authority 文档 |
-| 加 / 改一个工具 | [`agent-tools-spec.md`](agent-tools-spec.md) → [`tools.md`](tools.md)（契约层） |
-| 改协议 / 加 App Server 方法 | [`protocol.md`](protocol.md) → [`zeta-app-server-api.md`](zeta-app-server-api.md) → [`app-server-client.md`](app-server-client.md) |
-| 权限 / 审批 / 沙箱 | [`permissions.md`](permissions.md) → [`auto-review.md`](auto-review.md) → [`sandboxing.md`](sandboxing.md) |
-| 环境选择与目录访问 | [`domain-model.md`](domain-model.md) → [`environment-access.md`](environment-access.md) → [`permissions.md`](permissions.md) |
-| 接 / 改模型供应商 | [`model-provider.md`](model-provider.md) → [`model-provider-config.md`](model-provider-config.md) → [`models-manager.md`](models-manager.md) |
-| 接 / 改独立 Marketplace | [`marketplace-integration.md`](marketplace-integration.md) → [`localization.md`](localization.md) 或对应 [`plugins.md`](plugins.md)、[`lsp.md`](lsp.md)、[`skills.md`](skills.md) 或 [`mcp.md`](mcp.md) → 对应 crate README |
-| 改 Desktop UI | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`ui-styling-ownership.md`](ui-styling-ownership.md) |
-| 设计或修改三端快捷键 | [`keybindings.md`](keybindings.md) → 对应端的实现 README |
-| 开发 SSH Remote Workspace | [`remote-development.md`](remote-development.md) → [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`app-server-client.md`](app-server-client.md) |
-| 改 `app` 产品行为 | [`app/docs/README.md`](../app/docs/README.md) → 对应产品文档 → [`app/README.md`](../app/README.md) |
-| 写 / 改文档本身 | [`documentation-guidelines.md`](documentation-guidelines.md) |
-
-## 2. 文档类型
-
-每份文档属于四类之一，读法不同：
-
-| 类型 | 含义 | 过期方式 |
-| --- | --- | --- |
-| 设计 | 回答"为什么这样设计、边界在哪"；组件挂状态标记（已实现/部分/仅设计/推迟） | 长期维护，重审时修订 |
-| 规格 | 逐字照抄的实现规格（schema、文案、字段） | 随实现同步，改规格必须跑对应评测 |
-| 计划 | 阶段性工作计划 | **完成即过期**——做完后并入设计文档的状态标记，本体标记 Done 或删除 |
-| 参考 | 运行手册、模板、外部快照 | 按需更新 |
-
-## 3. 分类清单
-
-### 意图驱动的 Agent 开发流程
+## 意图驱动的 Agent 开发流程
 
 | 文档 | 类型 | 一句话 |
 | --- | --- | --- |
+| [`development-workflow.md`](development-workflow.md) | 规范 | 当前仓库使用的意图、规格、计划与验收方法，含四份记录模板；不依赖 `/develop` 产品实现 |
 | [`develop.md`](develop.md) | 设计 | 从自然对话到 Intent、Spec、Plan、实施、验收和收口的统一系统设计 |
 
-### Agent 与运行时（当前主战场）
+## Agent 与运行时
 
 | 文档 | 类型 | 一句话 |
 | --- | --- | --- |
@@ -91,7 +33,7 @@
 | [`mcp.md`](mcp.md) / [`mcp-server.md`](mcp-server.md) | 设计 | MCP 协议会话与能力调用、Connector ready binding，以及 Zeta 作为 MCP server |
 | [`slash-commands.md`](slash-commands.md) | 设计 | Slash Command 与统一斜杠启动面板边界 |
 
-### 协议与 API
+## 协议与 API
 
 [`domain-model.md`](domain-model.md)（领域身份与命名）、[`protocol.md`](protocol.md)（canonical 产品契约）、
 [`zeta-app-server-api.md`](zeta-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、
@@ -99,20 +41,20 @@
 [`zeta-api-interface-template.md`](zeta-api-interface-template.md)（模板）、
 [`zeta-client.md`](zeta-client.md)、[`chatgpt-subscription.md`](chatgpt-subscription.md)（参考）
 
-### 模型与配置
+## 模型与配置
 
 [`model-provider.md`](model-provider.md)、[`model-provider-config.md`](model-provider-config.md)、
 [`models-manager.md`](models-manager.md)、[`config.md`](config.md)、[`login.md`](login.md)、
 [`secrets.md`](secrets.md)
 
-### 安全与权限
+## 安全与权限
 
 [`permissions.md`](permissions.md)、[`auto-review.md`](auto-review.md)、
 [`sandboxing.md`](sandboxing.md)、[`environment-access.md`](environment-access.md)、
 [`workspace-security.md`](workspace-security.md)（当前实现）、
 [`windows-sandbox-acceptance-runbook.md`](windows-sandbox-acceptance-runbook.md)（参考/手册）
 
-### 界面与体验
+## 界面与体验
 
 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、
 [`ui-styling-ownership.md`](ui-styling-ownership.md)、
@@ -127,32 +69,21 @@
 [`editor-extensions.md`](editor-extensions.md)、
 [`chat-session-inspector.md`](chat-session-inspector.md)、[`pdf.md`](pdf.md)、[`typst.md`](typst.md)
 
-### app 产品
+## app 产品
 
-[`app/docs/README.md`](../app/docs/README.md) 是产品文档入口，包含 Agent Console、Terminal
-Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁移和发布图。
+[app 文档](../app/docs/README.md)：桌面交互、终端、输入与渲染。
 
-### 平台与产品
+## 平台与产品
 
 [`architecture.md`](architecture.md)（总入口）、[`zeta-rs-architecture.md`](zeta-rs-architecture.md)、
 [`zeta-code/docs/README.md`](../zeta-code/docs/README.md)、[`workbench-modes.md`](workbench-modes.md)、
 [`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)、
 [`documentation-guidelines.md`](documentation-guidelines.md)
 
-### 计划与迁移（会过期）
+## 计划与迁移
 
 | 文档 | 状态 |
 | --- | --- |
 | [`app/docs/native-deprecation-plan.md`](../app/docs/native-deprecation-plan.md) | Native 弃用迁移 |
 | [`app/docs/app-migration-plan.md`](../app/docs/app-migration-plan.md) | App 迁移 |
 | [`app/docs/app-release-graph.md`](../app/docs/app-release-graph.md) | App 发布依赖 |
-
-## 4. 维护规则
-
-1. 新跨产品工程文档加入本索引并声明类型（设计/规格/计划/参考）；产品专属文档加入对应产品的 `docs/README.md`；面向使用者的内容加入 `zeta-docs/docs/toc.json`；
-2. 计划类文档完成后：结论并入对应设计文档的状态标记，计划本体标 Done 或删除——
-   不允许长期留着已完成的计划冒充现状；
-3. 设计文档描述未实现组件必须挂状态标记（已实现/部分/仅设计/推迟），词表定义见
-   [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)；
-4. 同一主题冲突时的权威关系在两份文档开头互相声明（见
-   [`documentation-guidelines.md`](documentation-guidelines.md)）。

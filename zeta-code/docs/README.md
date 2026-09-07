@@ -1,19 +1,32 @@
 # Zeta Code 文档
 
-> 本目录只保存 `zeta code` 产品宿主和 TUI 专属的系统文档。共享协议、后端、权限、配置和产品线边界仍由仓库根 [`docs/`](../../docs/README.md) 拥有；crate 实现细节由相邻 `README.md` 拥有。
+## TUI 功能完整性梳理
 
-## 快速理解
+先读目标和功能要求；判断当前完成情况时看验收记录。下面四份是本次梳理的正文，不是模板。
 
-`zeta-code` 的文档按产品宿主、TUI 架构、界面部位、交互和视觉样式分开。已完成的迁移计划和历史讨论不保留为长期入口，其有效结论已经并入下面的当前文档。
-
-| 想了解或修改什么 | 先读 | 再读 |
+| 阅读顺序 | 文档 | 回答的问题 |
 | --- | --- | --- |
-| CLI 命令、输出、退出码和 App Server 接线 | [产品与 CLI 架构](architecture.md) | [`zeta-code` README](../README.md) |
-| TUI 状态、事件、布局、生命周期和功能边界 | [TUI 架构](tui.md) | [TUI crate README](../tui/README.md) |
-| 进程资源何时采样、统计含义和内存诊断边界 | [进程资源观测与内存诊断](process-resources.md) | [TUI 架构](tui.md) |
-| 界面区域叫什么、位于哪里 | [界面部位词典](LAYOUT.md) | [TUI 架构](tui.md) |
-| 键盘、鼠标、焦点和选择如何变化 | [TUI 交互契约](tui-interaction.md) | [TUI 样式](styles.md) |
-| 输入提示、状态字符、边线和颜色如何显示 | [TUI 样式](styles.md) | [TUI 主题实现](../tui/README.md) |
-| Welcome 终端 Logo 如何设计、生成和验收 | [终端 Logo 开发](logo.md) | [界面部位词典](LAYOUT.md) |
+| 1 | [intent.md · 目标](changes/tui-completeness/intent.md) | 用户最终应该能完成什么？ |
+| 2 | [spec.md · 功能要求](changes/tui-completeness/spec.md) | 每个流程应该怎样工作，失败和返回怎么办？ |
+| 3 | [plan.md · 检查与补齐计划](changes/tui-completeness/plan.md) | 先检查什么，缺口怎样补？ |
+| 4 | [verification.md · 验收记录](changes/tui-completeness/verification.md) | 实际确认了什么，还缺什么证据？ |
 
-共享系统只在根 `docs/` 维护。修改 App Server 契约时读 [App Server API](../../docs/zeta-app-server-api.md)，修改跨端快捷键时读 [三端快捷键系统](../../docs/keybindings.md)，判断产品归属时读 [产品线与宿主边界](../../docs/product-lines.md)。
+当前已登记 27 条要求；产品实测尚未执行。Markdown、终端组合、未发送内容恢复和宠物点击播放的完成边界仍待确定。
+
+## 详细参考
+
+| 内容 | 文档 |
+| --- | --- |
+| 当前能力与已知限制 | [功能现状](capabilities.md) |
+| 按键、返回与焦点 | [交互规格](spec/interaction.md) |
+| 页面位置与输出示例 | [布局规格](spec/layout.md) |
+| 字符、颜色与主题效果 | [样式规格](spec/styles.md) |
+| 资源格式与动作要求 | [Welcome 宠物规格](spec/welcome-pet.md) |
+| 状态、请求与模块分工 | [TUI 架构](design/tui.md) · [CLI 架构](design/cli.md) · [进程资源采样](design/process-resources.md) |
+| 代码入口、配置格式与测试 | [TUI 开发指南](../tui/README.md) |
+
+[正文绘制重构](spec/transcript-rendering.md)与[内存诊断](spec/memory-diagnostics.md)是尚未实现或排期的方案。其他规格中尚未接入的要求在对应段落标明。
+
+新功能沿用[开发流程与模板](../../docs/development-workflow.md)，在 `changes/<工作名>/` 保存自己的四份记录。本次梳理保留到范围和验收完成，不因正文已经写完而删除。
+
+共享协议与配置见[工程文档](../../docs/README.md)；跨端键位见[快捷键系统](../../docs/keybindings.md)。

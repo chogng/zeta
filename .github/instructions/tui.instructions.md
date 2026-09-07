@@ -5,7 +5,7 @@ applyTo: "zeta-code/**"
 
 # Zeta Code CLI/TUI Guidelines
 
-Follow [`zeta-code/docs/tui.md`](../../zeta-code/docs/tui.md) for the product architecture, state ownership, event flow, current implementation, and validation requirements.
+Start with [`zeta-code/docs/README.md`](../../zeta-code/docs/README.md) to select the document type: `capabilities.md` records current support and gaps, `design/` explains architecture, `spec/` defines behavior, and [`zeta-code/tui/README.md`](../../zeta-code/tui/README.md) provides implementation and test entry points. Keep unimplemented proposals explicitly separate from current architecture. Each new feature keeps `intent.md`, `spec.md`, `plan.md`, and `verification.md` together under `zeta-code/docs/changes/<work-name>/`, following the repository [development workflow](../../docs/development-workflow.md). A specification, checked plan, or existing test file is not evidence that a feature has passed acceptance.
 
 `zeta-code` owns `zeta-cli`, `zeta-tui`, raw-mode lifecycle, Ratatui interaction, and CLI product composition. Do not move this product presentation or lifecycle into `zeta-rs`; shared backend semantics must first form a backend-neutral contract with a real non-TUI consumer.
 
