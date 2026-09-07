@@ -2,7 +2,7 @@
 
 > 物理位置：`zeta-rs/login/`
 > Rust crate：`zeta_login`
-> 当前状态：多 Provider 控制面、App Server RPC、ChatGPT/Kimi native device OAuth 与 local model runtime 已实现
+> 当前状态：多 Provider 控制面、App Server RPC、ChatGPT/Kimi 订阅认证与本地模型执行 已实现
 > ChatGPT 订阅适配器：[`chatgpt-subscription.md`](chatgpt-subscription.md)
 > Kimi OAuth owner：`zeta-rs/kimi/`
 > Provider runtime：[`model-provider.md`](model-provider.md)
@@ -14,8 +14,8 @@
 
 | 用户动作或凭据类型 | 由谁处理 | Zeta 登录系统能看到什么 |
 | --- | --- | --- |
-| ChatGPT 设备码登录 | 本机 `zeta-chatgpt` | 授权地址、一次性用户码和脱敏账户状态；token 只进入本机 SecretStore |
-| Kimi 设备码登录 | 本机 `zeta-kimi` | 授权地址、一次性用户码和脱敏账户状态；token 只进入本机 SecretStore |
+| ChatGPT 设备码登录 | 本机 `zeta-chatgpt` | 授权地址、一次性用户码和脱敏账户状态；首次 token 保存为 Codex 兼容 auth.json；有 Codex 时只读复用，无 Codex 时由 Zeta 维护 |
+| Kimi 设备码登录 | 本机 `zeta-kimi` | 授权地址、一次性用户码和脱敏账户状态；首次 token 保存为 Codex 兼容 auth.json；有 Codex 时只读复用，无 Codex 时由 Zeta 维护 |
 | 登出、取消或切换账户 | 登录控制面协调，供应商适配器执行 | 稳定状态和脱敏结果 |
 | 没有受支持订阅 OAuth 的供应商 API key | 对应模型凭据领域 | 不属于交互式登录，也不是 OAuth 失败后的降级 |
 | AWS 凭据链、Google ADC、Azure 托管身份 | 对应供应商运行时 | 不包装成通用 OAuth |
@@ -27,7 +27,7 @@
 reauthentication-required 状态；它不把不同 Provider 的 credential 协议伪装成一套通用 OAuth
 实现。
 
-当前实现是 provider-neutral control plane：`InteractiveLoginDriver` 声明自己的 stable provider ID，接收 service-owned `LoginId`，只返回 browser/device-code UI instruction 和 redacted account snapshot。App Server 已暴露 `account/read`、`account/login/start`、`account/login/cancel`、带 provider 参数的 `account/logout`，并主动发布 `account/login/completed` 与 `account/updated`；`account/read` 返回 `accounts[]`，所以 ChatGPT 与 Kimi 可以同时登录。
+当前实现是 provider-neutral control plane：`InteractiveLoginDriver` 声明自己的 stable provider ID，接收 service-owned `LoginId`，返回 browser/device-code 挑战或立即连接成功，以及脱敏账户摘要。App Server 已暴露 `account/read`、`account/login/start`、`account/login/cancel`、带 provider 参数的 `account/logout`，并主动发布 `account/login/completed` 与 `account/updated`；`account/read` 返回 `accounts[]`，所以 ChatGPT 与 Kimi 可以同时登录。
 
 产品边界按认证能力划分：供应商提供并允许稳定的用户订阅 OAuth 时，通过 `zeta-login` 暴露交互式账户登录；没有该能力但提供开发者 API 的供应商，通过模型凭据领域接受 API key。登录方法中不存在 API key 分支，两条路径也不会自动 fallback。
 
@@ -71,7 +71,7 @@ zeta-login
              │ InteractiveLoginDriver
              ▼
 zeta-chatgpt
-             │ native device OAuth + SecretStore + refresh
+             │ Codex 兼容凭据 / 登录与按管理模式续期
              ▼
 ChatGPT subscription
 ```
@@ -117,12 +117,12 @@ zeta-login -/-> zeta-secrets
 zeta-login -/-> zeta-api / zeta-client / zeta-http-client
 ```
 
-`zeta-app-server` 是 composition root：它把 ChatGPT 与 Kimi 两个 adapter 注入同一个 login service，并让两个 OAuth authority 与 model-provider 共享同一 SecretStore owner。两个 adapter 都只提供 fresh authenticated target，由本地 model-provider/TurnExecutor 执行。用户点击登录不会隐式替换 Session 模型。
+`zeta-app-server` 是 composition root：它把 ChatGPT 与 Kimi 两个 adapter 注入同一个 login service，ChatGPT 的认证存储为 Codex 用户目录，profile SecretStore 只记录断开状态；Kimi 继续使用 profile SecretStore。两个 adapter 都只提供当前有效的认证目标，由本地 model-provider/TurnExecutor 执行。用户点击登录不会隐式替换 Session 模型。
 
 ## 6. 固定决策
 
 1. `zeta-login` 是登录控制面，不是 credential manager 或 OAuth protocol crate。
-2. ChatGPT 订阅使用本机 device OAuth、SecretStore 与固定 Responses target；`zeta-chatgpt` 是 token lifecycle 的唯一 owner。
+2. ChatGPT 订阅读取 Codex 凭据和固定 Responses 目标；缺失时设备码登录创建兼容文件；无 Codex 时 Zeta 负责续期和失效后的重新登录，有 Codex 时只读复用。
 3. Kimi 订阅使用本机 device OAuth、SecretStore 与 Kimi Coding API；`zeta-kimi` 是 token lifecycle 的唯一 owner。
 4. 仅在官方允许且有稳定技术接口时增加其他 interactive login adapter；没有受支持 OAuth 的订阅不能伪装成 API key 登录。
 5. Secret persistence 仍是各 credential owner 对 `zeta-secrets` 的直接依赖；login service 不读取

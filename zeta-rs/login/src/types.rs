@@ -91,6 +91,10 @@ pub struct BeginLoginRequest {
 /// Redacted UI instruction returned when a login starts.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BeginLogin {
+    Connected {
+        login_id: LoginId,
+        account: AccountSnapshot,
+    },
     Browser {
         login_id: LoginId,
         authorization_url: String,
@@ -105,7 +109,9 @@ pub enum BeginLogin {
 impl BeginLogin {
     pub fn login_id(&self) -> &LoginId {
         match self {
-            Self::Browser { login_id, .. } | Self::DeviceCode { login_id, .. } => login_id,
+            Self::Connected { login_id, .. }
+            | Self::Browser { login_id, .. }
+            | Self::DeviceCode { login_id, .. } => login_id,
         }
     }
 }

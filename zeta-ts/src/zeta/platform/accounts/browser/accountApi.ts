@@ -31,6 +31,9 @@ export function createAppServerAccountApi(connection: AppServerProtocolClient, h
 
 async function startLogin(connection: AppServerProtocolClient, params: Parameters<IAccountApi['startLogin']>[0], hostServices: BrowserAccountLoginHostServices): Promise<AccountLoginStartResult> {
 	const started = await appServerRequest(connection, 'account/login/start', params);
+	if (started.type === 'connected') {
+		return started;
+	}
 	try {
 		await hostServices.openerService.openExternal(started.type === 'browser' ? started.authorizationUrl : started.verificationUrl);
 		if (started.type === 'deviceCode') await hostServices.clipboardService.writeText(started.userCode);

@@ -12,6 +12,12 @@ path = "src/lib.rs"
 
 [dependencies]
 base64 = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+fs2 = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+toml = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 urlencoding = { workspace = true }
@@ -20,6 +26,7 @@ zeta-async-utils = { workspace = true }
 zeta-client = { workspace = true }
 zeta-http-client = { workspace = true }
 zeta-login = { workspace = true }
+zeta-keyring-store = { workspace = true }
 zeta-secrets = { workspace = true }
 
 [lints]

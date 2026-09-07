@@ -38,7 +38,7 @@ struct UserCodeResponse {
     device_auth_id: String,
     #[serde(alias = "usercode")]
     user_code: String,
-    #[serde(deserialize_with = "deserialize_interval")]
+    #[serde(default, deserialize_with = "deserialize_interval")]
     interval: u64,
 }
 
@@ -125,7 +125,12 @@ pub(crate) fn complete_device_login(
         if Instant::now() >= deadline {
             return Err(ChatGptError::new("ChatGPT device authorization expired"));
         }
-        wait_with_cancellation(device.interval, cancellation)?;
+        wait_with_cancellation(
+            device
+                .interval
+                .min(deadline.saturating_duration_since(Instant::now())),
+            cancellation,
+        )?;
     }
 }
 

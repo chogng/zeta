@@ -1,7 +1,7 @@
 //! OS keyring adapter for Zeta's provider-neutral secret persistence contract.
 //!
-//! This crate owns only platform keyring entry materialization, profile namespace isolation, and
-//! sanitized backend error mapping. Credential meaning, authentication, refresh, and revocation
+//! This crate owns platform keyring access, profile namespace isolation, explicitly named
+//! credential entry operations, and sanitized backend errors. Authentication and revocation
 //! remain with the domain runtime that supplies [`SecretKey`].
 
 use std::fmt::Write as _;
@@ -22,6 +22,47 @@ const KEYRING_SERVICE: &str = "com.zeta.secret-store.v1";
 const PROFILE_NAMESPACE_DOMAIN: &[u8] = b"zeta-keyring-profile-namespace-v1\0";
 const ACCOUNT_DOMAIN: &[u8] = b"zeta-keyring-account-v1\0";
 const MAX_SECRET_BYTES: usize = 1024 * 1024;
+
+/// Reads an existing product-owned keyring entry without creating, updating, or deleting it.
+pub fn read_credential(
+    service: &str,
+    account: &str,
+) -> Result<Option<SecretValue>, SecretStoreError> {
+    ensure_supported_platform()?;
+    SystemKeyringBackend
+        .load(service, account)
+        .map(|value| value.map(SecretValue::new))
+        .map_err(backend_error)
+}
+
+/// Writes one explicitly selected credential entry after its owning domain authorizes the update.
+pub fn write_credential(
+    service: &str,
+    account: &str,
+    value: &SecretValue,
+) -> Result<(), SecretStoreError> {
+    ensure_supported_platform()?;
+    if value.expose().len() > MAX_SECRET_BYTES {
+        return Err(sanitized_error(
+            SecretStoreErrorKind::BackendFailure,
+            "credential exceeds keyring size limit",
+        ));
+    }
+    SystemKeyringBackend
+        .store(service, account, value.expose())
+        .map_err(backend_error)
+}
+
+/// Deletes one explicitly selected entry after its owning domain authorizes logout.
+pub fn delete_credential(
+    service: &str,
+    account: &str,
+) -> Result<DeleteSecretOutcome, SecretStoreError> {
+    ensure_supported_platform()?;
+    SystemKeyringBackend
+        .delete(service, account)
+        .map_err(backend_error)
+}
 
 /// A `SecretStore` backed by the current platform's native credential facility.
 ///

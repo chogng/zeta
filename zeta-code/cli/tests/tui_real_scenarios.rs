@@ -16,6 +16,92 @@ use tui_process::SMALL_SIZE;
 use tui_process::TuiProcess;
 
 #[test]
+fn actual_tui_opens_chatgpt_subscription_and_returns_to_providers() {
+    let fixture = Fixture::new("chatgpt-provider");
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Enhanced TUI");
+    process.up();
+    process.up();
+    process.tab();
+    process.down();
+    process.type_text("ChatGPT subscription");
+    process.wait_for_screen("ChatGPT subscription");
+    process.down();
+    process.enter();
+    process.wait_for_screen("Not signed in");
+    process.wait_for_screen("Sign in with ChatGPT");
+    process.resize(SMALL_SIZE);
+    process.wait_for_screen("Sign in with ChatGPT");
+    process.escape();
+    process.wait_for_screen("Providers");
+    process.enter();
+    process.wait_for_screen("Not signed in");
+    process.escape();
+    process.escape();
+    process.escape();
+    process.quit();
+    assert!(
+        server.request_bodies().is_empty(),
+        "opening an account must not invoke a model"
+    );
+}
+
+#[test]
+fn actual_tui_reuses_chatgpt_subscription_without_changing_codex_auth() {
+    let fixture = Fixture::new("chatgpt-reuse");
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    fs::create_dir_all(fixture.codex_home()).unwrap();
+    // Synthetic JWTs identify account@example.invalid / pro and expire in 2096.
+    // This test only reads accounts and reconnects; it never invokes a model.
+    let original = serde_json::to_vec(&serde_json::json!({
+        "auth_mode": "chatgpt", "OPENAI_API_KEY": null,
+        "tokens": {
+            "id_token": "e30.eyJlbWFpbCI6ImFjY291bnRAZXhhbXBsZS5pbnZhbGlkIiwiaHR0cHM6Ly9hcGkub3BlbmFpLmNvbS9hdXRoIjp7ImNoYXRncHRfYWNjb3VudF9pZCI6ImFjY291bnQtMSIsImNoYXRncHRfcGxhbl90eXBlIjoicHJvIn19.signature",
+            "access_token": "e30.eyJleHAiOjQwMDAwMDAwMDB9.signature",
+            "refresh_token": "test-refresh-never-used", "account_id": "account-1"
+        },
+        "last_refresh": "2026-09-07T00:00:00Z"
+    })).unwrap();
+    let auth = fixture.codex_home().join("auth.json");
+    fs::write(&auth, &original).unwrap();
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Enhanced TUI");
+    process.up();
+    process.up();
+    process.tab();
+    process.down();
+    process.type_text("ChatGPT subscription");
+    process.down();
+    process.enter();
+    process.wait_for_screen("account@example.invalid");
+    process.wait_for_screen("Disconnect from Zeta");
+    process.down();
+    process.down();
+    process.down();
+    process.enter();
+    process.wait_for_screen("Disconnected from ChatGPT in Zeta");
+    assert!(fs::read(&auth).unwrap() == original);
+    process.send(b"\x1b[H");
+    process.down();
+    process.down();
+    process.enter();
+    process.wait_for_screen("account@example.invalid");
+    process.escape();
+    process.escape();
+    process.escape();
+    process.quit();
+    assert!(fs::read(auth).unwrap() == original);
+    assert!(server.request_bodies().is_empty());
+}
+
+#[test]
 fn actual_tui_runs_three_complete_conversation_turns() {
     let fixture = Fixture::new("multi-turn-trajectory");
     let first = Gate::new();

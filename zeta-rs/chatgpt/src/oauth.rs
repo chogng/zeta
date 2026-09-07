@@ -1,19 +1,21 @@
-use crate::credential::RefreshRequest;
-use crate::credential::RefreshResponse;
+use crate::ChatGptAuthManagement;
 use crate::credential::TokenCredential;
+use crate::credential::TokenResponse;
 use crate::device_flow;
-use serde_json::to_vec;
+use crate::maintenance::AuthMaintenance;
+use crate::maintenance::RefreshReason;
+use crate::storage::CodexAuthStore;
+use crate::storage::LoginWrite;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Weak;
 use std::thread;
 use zeta_async_utils::CancellationSource;
-use zeta_client::ClientRequest;
 use zeta_client::OperationClient;
 use zeta_client::ResolvedApiTarget;
-use zeta_client::RetryPolicy;
 use zeta_client::ZetaClient;
 use zeta_http_client::HttpHeader;
 use zeta_http_client::UreqHttpClient;
@@ -41,7 +43,7 @@ pub const CHATGPT_RESPONSES_BASE_URL: &str = "https://chatgpt.com/backend-api/co
 
 pub(crate) const AUTH_BASE_URL: &str = "https://auth.openai.com";
 pub(crate) const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
-const CREDENTIAL_KEY: &str = "provider/openai-chatgpt/current/oauth";
+const DISCONNECTED_KEY: &str = "provider/openai-chatgpt/disconnected";
 
 /// Sanitized ChatGPT OAuth or credential failure.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -65,29 +67,37 @@ impl fmt::Display for ChatGptError {
 
 impl std::error::Error for ChatGptError {}
 
-/// Owns native ChatGPT device OAuth, local token lifecycle, and request-time auth headers.
+/// Maintains ChatGPT authentication when Codex is absent and otherwise reuses its credentials.
 pub struct ChatGptOAuth {
     client: Arc<dyn OperationClient>,
     secrets: Arc<dyn SecretStore>,
     self_weak: Weak<Self>,
     login_service: Mutex<Weak<LoginService>>,
     active: Mutex<BTreeMap<LoginId, CancellationSource>>,
-    refresh: Mutex<()>,
+    auth: CodexAuthStore,
+    maintenance: AuthMaintenance,
 }
 
 impl ChatGptOAuth {
-    pub fn production(secrets: Arc<dyn SecretStore>) -> Result<Arc<Self>, ChatGptError> {
+    pub fn production(
+        codex_home: PathBuf,
+        secrets: Arc<dyn SecretStore>,
+    ) -> Result<Arc<Self>, ChatGptError> {
         let transport = UreqHttpClient::new()
             .map_err(|_| ChatGptError::new("ChatGPT HTTPS transport is unavailable"))?;
         Ok(Self::with_client(
+            codex_home,
             secrets,
             Arc::new(ZetaClient::new(Arc::new(transport))),
+            ChatGptAuthManagement::Automatic,
         ))
     }
 
     pub fn with_client(
+        codex_home: PathBuf,
         secrets: Arc<dyn SecretStore>,
         client: Arc<dyn OperationClient>,
+        management: ChatGptAuthManagement,
     ) -> Arc<Self> {
         Arc::new_cyclic(|self_weak| Self {
             client,
@@ -95,7 +105,8 @@ impl ChatGptOAuth {
             self_weak: self_weak.clone(),
             login_service: Mutex::new(Weak::new()),
             active: Mutex::new(BTreeMap::new()),
-            refresh: Mutex::new(()),
+            auth: CodexAuthStore::new(codex_home),
+            maintenance: AuthMaintenance::new(management),
         })
     }
 
@@ -105,19 +116,19 @@ impl ChatGptOAuth {
         Ok(())
     }
 
-    /// Resolves fresh ChatGPT subscription credentials for one Responses invocation.
+    /// Resolves current credentials, refreshing only when Zeta is the credential manager.
     pub fn api_target(&self) -> Result<ResolvedApiTarget, ChatGptError> {
-        let _refresh = self
-            .refresh
-            .lock()
-            .map_err(|_| ChatGptError::new("ChatGPT credential refresh state is unavailable"))?;
-        let mut credential = self
-            .load_credential()?
-            .ok_or_else(|| ChatGptError::new("ChatGPT is not signed in"))?;
-        if credential.needs_refresh() {
-            self.refresh_token(&mut credential)?;
-            self.store_credential(&credential)?;
-            self.publish_account_update(&credential);
+        if self.disconnected()? {
+            return Err(ChatGptError::new("ChatGPT is disconnected in Zeta"));
+        }
+        let credential = self
+            .maintenance
+            .resolve(&self.auth, self.client.as_ref(), RefreshReason::Proactive)?
+            .ok_or_else(|| ChatGptError::new("ChatGPT is not connected in Zeta"))?;
+        if !credential.is_usable() {
+            return Err(ChatGptError::new(
+                "Codex sign-in has expired; update the login in Codex, then reconnect",
+            ));
         }
         Ok(ResolvedApiTarget::new(
             CHATGPT_RESPONSES_BASE_URL,
@@ -125,67 +136,98 @@ impl ChatGptOAuth {
         ))
     }
 
-    fn refresh_token(&self, credential: &mut TokenCredential) -> Result<(), ChatGptError> {
-        if credential.refresh_token.trim().is_empty() {
-            return Err(ChatGptError::new("ChatGPT sign-in has expired"));
-        }
-        let body = to_vec(&RefreshRequest {
-            client_id: CLIENT_ID,
-            grant_type: "refresh_token",
-            refresh_token: &credential.refresh_token,
-        })
-        .map_err(|_| ChatGptError::new("ChatGPT token refresh could not be encoded"))?;
-        let request = ClientRequest::post(
-            format!("{AUTH_BASE_URL}/oauth/token"),
-            vec![
-                HttpHeader::new("Content-Type", "application/json"),
-                HttpHeader::new("Accept", "application/json"),
-                HttpHeader::new("User-Agent", user_agent()),
-            ],
-            body,
-            RetryPolicy::never(),
-        )
-        .map_err(|_| ChatGptError::new("ChatGPT token refresh could not be constructed"))?;
-        let cancellation = CancellationSource::new();
-        let response = self
-            .client
-            .execute_with_cancellation(&request, &cancellation.token())
-            .map_err(|_| ChatGptError::new("ChatGPT OAuth service is unavailable"))?;
-        if !response.is_success() {
-            return Err(ChatGptError::new(format!(
-                "ChatGPT token refresh failed with HTTP {}",
-                response.status()
-            )));
-        }
-        let response: RefreshResponse = serde_json::from_slice(response.body())
-            .map_err(|_| ChatGptError::new("OpenAI returned an invalid token refresh response"))?;
-        credential.apply_refresh(response)
+    fn disconnected_key() -> SecretKey {
+        SecretKey::new(DISCONNECTED_KEY).expect("static connection key is valid")
     }
 
-    pub(crate) fn credential_key() -> SecretKey {
-        SecretKey::new(CREDENTIAL_KEY).expect("static ChatGPT credential key is valid")
-    }
-
-    pub(crate) fn load_credential(&self) -> Result<Option<TokenCredential>, ChatGptError> {
+    fn disconnected(&self) -> Result<bool, ChatGptError> {
         self.secrets
-            .load(&Self::credential_key())
-            .map_err(|_| ChatGptError::new("ChatGPT credential store is unavailable"))?
-            .map(|value| {
-                serde_json::from_slice(value.expose())
-                    .map_err(|_| ChatGptError::new("stored ChatGPT credential is invalid"))
-            })
-            .transpose()
+            .load(&Self::disconnected_key())
+            .map(|value| value.is_some())
+            .map_err(|_| ChatGptError::new("Zeta connection state could not be read"))
     }
 
-    pub(crate) fn store_credential(
+    fn load_credential(&self) -> Result<Option<TokenCredential>, ChatGptError> {
+        if self.disconnected()? {
+            return Ok(None);
+        }
+        self.auth.load()
+    }
+
+    /// Handles a definite authentication rejection without reusing another account.
+    /// The model layer may retry once only when no streamed output was delivered.
+    pub fn recover_unauthorized(
         &self,
-        credential: &TokenCredential,
-    ) -> Result<(), ChatGptError> {
-        let encoded = serde_json::to_vec(credential)
-            .map_err(|_| ChatGptError::new("ChatGPT credential could not be encoded"))?;
+        rejected: &ResolvedApiTarget,
+    ) -> Result<Option<ResolvedApiTarget>, ChatGptError> {
+        let Some(current) = self.load_credential()? else {
+            return Ok(None);
+        };
+        let account = rejected
+            .headers
+            .iter()
+            .find(|header| header.name().eq_ignore_ascii_case("ChatGPT-Account-ID"))
+            .map(|header| header.value());
+        if current.account_id.as_deref() != account {
+            return Err(ChatGptError::new(
+                "ChatGPT account changed; the request was not retried",
+            ));
+        }
+        let bearer = rejected
+            .headers
+            .iter()
+            .find(|header| header.name().eq_ignore_ascii_case("Authorization"))
+            .map(|header| header.value());
+        let credential = if bearer != Some(format!("Bearer {}", current.access_token).as_str()) {
+            current
+        } else {
+            if !self.maintenance.management.is_zeta() {
+                return Ok(None);
+            }
+            self.maintenance
+                .resolve(
+                    &self.auth,
+                    self.client.as_ref(),
+                    RefreshReason::Unauthorized {
+                        account_id: current.account_id.clone(),
+                        revision: current.storage_revision,
+                    },
+                )?
+                .ok_or_else(|| {
+                    ChatGptError::new("ChatGPT credentials disappeared during recovery")
+                })?
+        };
+        if credential.account_id.as_deref() != account || !credential.is_usable() {
+            return Err(ChatGptError::new(
+                "ChatGPT recovery did not produce valid credentials for the same account",
+            ));
+        }
+        if self.disconnected()? {
+            return Ok(None);
+        }
+        Ok(Some(ResolvedApiTarget::new(
+            CHATGPT_RESPONSES_BASE_URL,
+            api_headers(&credential),
+        )))
+    }
+
+    /// Remembers a rejected credential version without deleting shared authentication.
+    pub fn note_rejected(&self, rejected: &ResolvedApiTarget) {
+        if let Ok(Some(current)) = self.load_credential() {
+            if rejected.headers.iter().any(|header| {
+                header.name().eq_ignore_ascii_case("Authorization")
+                    && header.value() == format!("Bearer {}", current.access_token)
+            }) {
+                self.maintenance.reject(&current);
+            }
+        }
+    }
+
+    fn connect(&self) -> Result<(), ChatGptError> {
         self.secrets
-            .store(&Self::credential_key(), &SecretValue::new(encoded))
-            .map_err(|_| ChatGptError::new("ChatGPT credential store is unavailable"))
+            .delete(&Self::disconnected_key())
+            .map(|_| ())
+            .map_err(|_| ChatGptError::new("Zeta connection state could not be saved"))
     }
 
     fn account_snapshot(&self, credential: &TokenCredential) -> AccountSnapshot {
@@ -201,7 +243,10 @@ impl ChatGptOAuth {
             display_name: Some("ChatGPT".into()),
             organization: credential.account_id.clone(),
             plan: credential.plan.clone(),
-            status: if credential.is_usable() {
+            status: if !self.maintenance.requires_login(credential)
+                && (credential.is_usable()
+                    || self.maintenance.management.is_zeta() && credential.refresh_available)
+            {
                 AccountStatus::Ready
             } else {
                 AccountStatus::ReauthenticationRequired
@@ -210,15 +255,40 @@ impl ChatGptOAuth {
         }
     }
 
-    fn finish_login(&self, login_id: LoginId, outcome: LoginCompletionOutcome) {
-        let active = self
-            .active
-            .lock()
-            .map(|mut active| active.remove(&login_id).is_some())
-            .unwrap_or(false);
-        if !active {
+    fn finish_login(
+        &self,
+        login_id: LoginId,
+        tokens: Result<TokenResponse, ChatGptError>,
+        write: LoginWrite,
+    ) {
+        // Serialize cancellation with the file commit and completion notification.
+        // A cancelled flow must never create auth.json after its UI has reported cancellation.
+        let Ok(mut active) = self.active.lock() else {
+            return;
+        };
+        let Some(source) = active.remove(&login_id) else {
+            return;
+        };
+        if source.token().is_cancelled() {
             return;
         }
+        let outcome = match tokens.and_then(|tokens| {
+            if matches!(write, LoginWrite::Replace { .. }) && !self.maintenance.management.is_zeta()
+            {
+                return Err(ChatGptError::new(
+                    "Codex now manages authentication; complete sign-in there",
+                ));
+            }
+            self.auth.write_login(&tokens, write)
+        }) {
+            Ok(credential) => match self.connect() {
+                Ok(()) => LoginCompletionOutcome::Succeeded {
+                    account: self.account_snapshot(&credential),
+                },
+                Err(error) => login_failure(error),
+            },
+            Err(error) => login_failure(error),
+        };
         let service = self
             .login_service
             .lock()
@@ -226,17 +296,6 @@ impl ChatGptOAuth {
             .and_then(|service| service.upgrade());
         if let Some(service) = service {
             let _ = service.complete(CompleteLogin { login_id, outcome });
-        }
-    }
-
-    fn publish_account_update(&self, credential: &TokenCredential) {
-        let service = self
-            .login_service
-            .lock()
-            .ok()
-            .and_then(|service| service.upgrade());
-        if let Some(service) = service {
-            let _ = service.update_account(self.account_snapshot(credential));
         }
     }
 }
@@ -262,59 +321,76 @@ impl InteractiveLoginDriver for ChatGptOAuth {
                 "login method is not owned by ChatGPT",
             ));
         }
-        if !self.active.lock().map_err(login_lock_error)?.is_empty() {
+        let mut active = self.active.lock().map_err(login_lock_error)?;
+        if !active.is_empty() {
             return Err(LoginError::new(
                 LoginErrorKind::Conflict,
                 "a ChatGPT login is already active",
             ));
         }
+        let write = if let Some(mut credential) = self.auth.load().map_err(login_driver_error)? {
+            let managed = self.maintenance.management.is_zeta();
+            if managed
+                && !self.maintenance.requires_login(&credential)
+                && credential.needs_refresh()
+            {
+                match self.maintenance.resolve(
+                    &self.auth,
+                    self.client.as_ref(),
+                    RefreshReason::Proactive,
+                ) {
+                    Ok(Some(current)) => credential = current,
+                    Ok(None) => {
+                        return Err(login_driver_error(ChatGptError::new(
+                            "ChatGPT credentials disappeared; retry sign-in",
+                        )));
+                    }
+                    Err(error) if !self.maintenance.requires_login(&credential) => {
+                        return Err(login_driver_error(error));
+                    }
+                    Err(_) => {}
+                }
+            }
+            if credential.is_usable() && !self.maintenance.requires_login(&credential) {
+                self.connect().map_err(login_driver_error)?;
+                return Ok(BeginLogin::Connected {
+                    login_id: request.login_id,
+                    account: self.account_snapshot(&credential),
+                });
+            }
+            if !managed {
+                return Err(login_driver_error(ChatGptError::new(
+                    "Codex sign-in has expired; update it in Codex before reconnecting",
+                )));
+            }
+            LoginWrite::Replace {
+                revision: credential.storage_revision,
+            }
+        } else {
+            self.auth.ensure_creatable().map_err(login_driver_error)?;
+            LoginWrite::Create
+        };
+        if matches!(write, LoginWrite::Replace { .. }) && !self.maintenance.management.is_zeta() {
+            return Err(login_driver_error(ChatGptError::new(
+                "Codex now manages authentication; complete sign-in there",
+            )));
+        }
         let device =
             device_flow::request_device_code(self.client.as_ref()).map_err(login_driver_error)?;
         let cancellation = CancellationSource::new();
-        self.active
-            .lock()
-            .map_err(login_lock_error)?
-            .insert(request.login_id.clone(), cancellation.clone());
+        active.insert(request.login_id.clone(), cancellation.clone());
         let weak = self.self_weak.clone();
+        let client = Arc::clone(&self.client);
         let login_id = request.login_id.clone();
         let worker_device = device.clone();
         thread::spawn(move || {
-            let Some(runtime) = weak.upgrade() else {
-                return;
-            };
             let result = device_flow::complete_device_login(
-                runtime.client.as_ref(),
+                client.as_ref(),
                 &worker_device,
                 &cancellation.token(),
-            )
-            .and_then(|tokens| TokenCredential::from_tokens(tokens, 1));
-            if cancellation.token().is_cancelled() {
-                return;
-            }
-            match result {
-                Ok(credential) => {
-                    let completion = match runtime.store_credential(&credential) {
-                        Ok(()) => LoginCompletionOutcome::Succeeded {
-                            account: runtime.account_snapshot(&credential),
-                        },
-                        Err(error) => LoginCompletionOutcome::Failed {
-                            failure: LoginFailure {
-                                code: "credential_store_failed".into(),
-                                message: error.to_string(),
-                            },
-                        },
-                    };
-                    runtime.finish_login(login_id, completion);
-                }
-                Err(error) => runtime.finish_login(
-                    login_id,
-                    LoginCompletionOutcome::Failed {
-                        failure: LoginFailure {
-                            code: "oauth_failed".into(),
-                            message: error.to_string(),
-                        },
-                    },
-                ),
+            );
+            if let Some(runtime) = weak.upgrade() {
+                runtime.finish_login(login_id, result, write);
             }
         });
         Ok(BeginLogin::DeviceCode {
@@ -344,13 +420,22 @@ impl InteractiveLoginDriver for ChatGptOAuth {
                 "account is not owned by the ChatGPT login driver",
             ));
         }
+        if self.maintenance.management.is_zeta()
+            && self.auth.load().map_err(login_driver_error)?.is_some()
+        {
+            let guard = self.auth.lock_updates().map_err(login_driver_error)?;
+            if self.maintenance.management.is_zeta() {
+                self.auth
+                    .logout(&guard, &account.account_id)
+                    .map_err(login_driver_error)?;
+            }
+        }
         self.secrets
-            .delete(&Self::credential_key())
-            .map(|_| ())
+            .store(&Self::disconnected_key(), &SecretValue::new(b"1".to_vec()))
             .map_err(|_| {
                 LoginError::new(
                     LoginErrorKind::Unavailable,
-                    "ChatGPT credential store is unavailable",
+                    "Zeta connection state is unavailable",
                 )
             })
     }
@@ -387,4 +472,23 @@ fn login_lock_error<T>(_: std::sync::PoisonError<T>) -> LoginError {
         LoginErrorKind::Unavailable,
         "ChatGPT login state is unavailable",
     )
+}
+
+impl Drop for ChatGptOAuth {
+    fn drop(&mut self) {
+        if let Ok(active) = self.active.get_mut() {
+            for source in active.values() {
+                source.cancel();
+            }
+        }
+    }
+}
+
+fn login_failure(error: ChatGptError) -> LoginCompletionOutcome {
+    LoginCompletionOutcome::Failed {
+        failure: LoginFailure {
+            code: "chatgpt_login_failed".into(),
+            message: error.to_string(),
+        },
+    }
 }

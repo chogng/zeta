@@ -11010,6 +11010,7 @@ dependencies = [
 name = "zeta-app-server-client"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "tempfile",
@@ -11154,13 +11155,20 @@ name = "zeta-chatgpt"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
+ "dirs",
+ "fs2",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "toml 0.9.12+spec-1.1.0",
  "urlencoding",
  "zeroize",
  "zeta-async-utils",
  "zeta-client",
  "zeta-http-client",
+ "zeta-keyring-store",
  "zeta-login",
  "zeta-secrets",
 ]
@@ -11944,8 +11952,10 @@ dependencies = [
 name = "zeta-model-provider"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "serde_json",
  "sha2 0.10.9",
+ "tempfile",
  "tokio",
  "url",
  "zeta-api",
@@ -12493,7 +12503,6 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "syntect",
- "sysinfo",
  "tempfile",
  "unicode-width 0.2.0",
  "windows-sys 0.59.0",

@@ -1,10 +1,10 @@
 use super::activate_pointer_item;
+use super::handle_mouse;
 use super::scroll_pointer_item;
 use super::update_pointer_hover;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
-use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::app::frame;
 use crate::app::frame::InputPointerTarget;
 use crate::sessions::Event as SessionEvent;
@@ -16,12 +16,14 @@ use crate::thread::composer::CompletionView;
 use crate::thread::transcript::TranscriptScrollDirection;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
-use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use ratatui::layout::Rect;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
@@ -32,88 +34,139 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
-fn enhanced_panel_wheel_scrolls_only_content_and_preserves_search_focus() {
+fn fixed_command_panels_ignore_mouse_and_keep_keyboard_navigation() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(
         ListSelectionModel::new(
             "Items",
-            vec![ListSelectionGroup::new(
-                "All",
-                (0..40)
-                    .map(|index| ListSelectionItem::new(format!("Item {index}")))
-                    .collect(),
-            )],
+            vec![
+                ListSelectionGroup::new(
+                    "First",
+                    (0..40)
+                        .map(|index| ListSelectionItem::new(format!("Item {index}")))
+                        .collect(),
+                ),
+                ListSelectionGroup::new("Second", vec![ListSelectionItem::new("Other")]),
+            ],
         )
         .with_search(SearchBoxModel::new("Search")),
     ));
-    let area = Rect::new(0, 0, 80, 20);
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    let body_row = (0..area.height)
-        .find(|row| {
-            matches!(
-                frame::input_pointer_target_at(&app, area, 2, *row),
-                Some(InputPointerTarget::CommandPanel(
-                    CommandPanelPointerTarget::Item(0)
-                ))
-            )
-        })
-        .unwrap();
-    assert!(!frame::panel_mouse_contains(
-        &app,
-        area,
-        ratatui::layout::Position::new(2, 19)
-    ));
-    scroll_pointer_item(&mut app, area, 2, body_row, TranscriptScrollDirection::Down);
-    let selection = app.list_selection().unwrap();
-    assert!(selection.search().unwrap().input_active());
-    assert_eq!(selection.selected_visible_index(), Some(0));
-    assert_eq!(
-        frame::input_pointer_target_at(&app, area, 2, body_row),
-        None
-    );
-    assert_eq!(
-        frame::input_pointer_target_at(&app, area, 2, body_row + 1),
-        Some(InputPointerTarget::CommandPanel(
-            CommandPanelPointerTarget::Item(1)
-        ))
-    );
-    // The search field and hint bar do not scroll the list.
-    for row in [body_row - 1, 19] {
-        scroll_pointer_item(&mut app, area, 2, row, TranscriptScrollDirection::Down);
+    for area in [Rect::new(0, 0, 80, 24), Rect::new(0, 0, 12, 3)] {
+        assert_terminal_mouse(&mut app, area);
+        let selection = app.list_selection().unwrap();
+        assert_eq!(selection.active_tab().label(), "First");
+        assert_eq!(selection.selected_visible_index(), Some(0));
+        assert_eq!(selection.query(), "");
     }
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
-        frame::input_pointer_target_at(&app, area, 2, body_row + 1),
-        Some(InputPointerTarget::CommandPanel(
-            CommandPanelPointerTarget::Item(1)
-        ))
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(1)
     );
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().query(), "2");
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+}
+
+fn assert_terminal_mouse(app: &mut App, area: Rect) {
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    for row in area.y..area.bottom() {
+        for column in area.x..area.right() {
+            assert!(!frame::overlay_mouse_contains(
+                app,
+                area,
+                ratatui::layout::Position::new(column, row)
+            ));
+            assert_eq!(frame::input_pointer_target_at(app, area, column, row), None);
+            for kind in [
+                MouseEventKind::Moved,
+                MouseEventKind::Down(MouseButton::Left),
+                MouseEventKind::Drag(MouseButton::Left),
+                MouseEventKind::Up(MouseButton::Left),
+                MouseEventKind::ScrollUp,
+                MouseEventKind::ScrollDown,
+            ] {
+                assert_eq!(
+                    handle_mouse(
+                        app,
+                        area,
+                        MouseEvent {
+                            kind,
+                            column,
+                            row,
+                            modifiers: KeyModifiers::NONE,
+                        }
+                    ),
+                    None
+                );
+            }
+            assert_eq!(activate_pointer_item(app, area, column, row), None);
+        }
+    }
+    assert!(app.hovered_pointer_target().is_none());
+    assert!(app.pressed_pointer_target().is_none());
+    assert!(app.screen_selection().range().is_none());
+}
+
+#[test]
+fn completion_click_is_disabled_with_enhancement_and_keyboard_still_works() {
+    let mut app = App::new();
+    app.insert_text("/q");
+    let area = Rect::new(0, 0, 80, 24);
+    let target = (0..area.height)
+        .flat_map(|row| (0..area.width).map(move |column| (column, row)))
+        .find(|(column, row)| frame::input_pointer_target_at(&app, area, *column, *row).is_some())
+        .expect("completion is clickable");
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_mouse_interactions(false);
     app.update(crate::config::Event::SettingsReceived(settings));
-    scroll_pointer_item(
-        &mut app,
-        area,
-        2,
-        body_row + 1,
-        TranscriptScrollDirection::Down,
-    );
+    assert_terminal_mouse(&mut app, area);
+    assert_eq!(app.input(), "/q");
     assert_eq!(
-        frame::input_pointer_target_at(&app, area, 2, body_row + 1),
-        Some(InputPointerTarget::CommandPanel(
-            CommandPanelPointerTarget::Item(1)
-        ))
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Quit)
     );
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+    let mut app = App::new();
+    app.insert_text("/q");
     assert_eq!(
-        frame::input_pointer_target_at(&app, area, 2, body_row),
-        Some(InputPointerTarget::CommandPanel(
-            CommandPanelPointerTarget::Item(0)
-        ))
+        activate_pointer_item(&mut app, area, target.0, target.1),
+        Some(AppCommand::Quit)
     );
+}
+
+#[test]
+fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
+    let mut app = App::new();
+    let area = Rect::new(0, 0, 80, 24);
+    let before = frame::layout(&app, area).session.composer;
+    app.show_overlay(crate::widgets::detail_list::DetailList::new(
+        "Output",
+        vec![crate::widgets::detail_list::DetailListRow::new(
+            "stdout", "details",
+        )],
+    ));
+    assert_eq!(frame::layout(&app, area).session.composer, before);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    let surface = app
+        .overlay()
+        .unwrap()
+        .surface(frame::transient_area(&app, area));
+    for row in 0..area.height {
+        for column in 0..area.width {
+            let position = ratatui::layout::Position::new(column, row);
+            assert_eq!(
+                frame::overlay_mouse_contains(&app, area, position),
+                surface.contains(position)
+            );
+            assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
+        }
+    }
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.command_panel().is_none());
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_terminal_mouse(&mut app, area);
 }
 
 #[test]
@@ -138,122 +191,7 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
 }
 
 #[test]
-fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
-    let mut app = App::new();
-    app.update(AppEvent::HelpOpened(
-        ListSelectionModel::new(
-            "Feature",
-            vec![ListSelectionGroup::new(
-                "Items",
-                vec![
-                    ListSelectionItem::new("First").with_id(ListSelectionItemId::new("first")),
-                    ListSelectionItem::new("Second").with_id(ListSelectionItemId::new("second")),
-                ],
-            )],
-        )
-        .without_tab_bar(),
-    ));
-    let area = Rect::new(0, 0, 80, 24);
-    let mut target = None;
-    'rows: for row in area.y..area.bottom() {
-        for column in area.x..area.right() {
-            if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::CommandPanel(
-                    CommandPanelPointerTarget::Item(1),
-                ))
-            {
-                target = Some((column, row));
-                break 'rows;
-            }
-        }
-    }
-    let (column, row) = target.expect("second feature row should be clickable");
-
-    update_pointer_hover(&mut app, area, column, row);
-
-    assert_eq!(
-        app.list_selection().unwrap().selected_visible_index(),
-        Some(0)
-    );
-    assert_eq!(
-        app.hovered_pointer_target(),
-        Some(&InputPointerTarget::CommandPanel(
-            CommandPanelPointerTarget::Item(1)
-        ))
-    );
-}
-
-#[test]
-fn pointer_click_switches_a_selection_tab() {
-    let mut app = App::new();
-    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
-        "Feature",
-        vec![
-            ListSelectionGroup::new("First", vec![ListSelectionItem::new("Read only")]),
-            ListSelectionGroup::new("Second", vec![ListSelectionItem::new("Another item")]),
-        ],
-    )));
-    let area = Rect::new(0, 0, 80, 24);
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
-
-    let mut target = None;
-    'cells: for row in area.y..area.bottom() {
-        for column in area.x..area.right() {
-            if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::CommandPanel(
-                    CommandPanelPointerTarget::Tab(1),
-                ))
-            {
-                target = Some((column, row));
-                break 'cells;
-            }
-        }
-    }
-    let (column, row) = target.expect("second selection tab should be clickable");
-
-    assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "Second");
-}
-
-#[test]
-fn pointer_click_explicitly_focuses_the_command_panel_search_box() {
-    let mut app = App::new();
-    app.update(AppEvent::HelpOpened(
-        ListSelectionModel::new(
-            "Feature",
-            vec![ListSelectionGroup::new(
-                "Items",
-                vec![ListSelectionItem::new("Searchable")],
-            )],
-        )
-        .with_search(SearchBoxModel::new("Search features")),
-    ));
-    let area = Rect::new(0, 0, 80, 24);
-    let mut target = None;
-    'cells: for row in area.y..area.bottom() {
-        for column in area.x..area.right() {
-            if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(InputPointerTarget::CommandPanel(
-                    CommandPanelPointerTarget::Search,
-                ))
-            {
-                target = Some((column, row));
-                break 'cells;
-            }
-        }
-    }
-    let (column, row) = target.expect("command panel search box should be clickable");
-
-    update_pointer_hover(&mut app, area, column, row);
-    assert_eq!(app.list_selection().unwrap().query(), "");
-    assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
-    app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
-
-    assert_eq!(app.list_selection().unwrap().query(), "s");
-}
-
-#[test]
-fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
+fn fixed_session_manager_ignores_mouse_without_changing_focus_or_opening_preview() {
     let mut app = App::new();
     let session_id = SessionId::new("pointer-session").unwrap();
     let thread_id = ThreadId::new("pointer-thread").unwrap();
@@ -281,66 +219,12 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
     app.insert_text("/sessions");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let area = Rect::new(0, 0, 80, 24);
-    let mut session_cell = None;
-    'cells: for row in area.y..area.bottom() {
-        for column in area.x..area.right() {
-            if matches!(
-                frame::input_pointer_target_at(&app, area, column, row),
-                Some(InputPointerTarget::SessionManager(
-                    crate::sessions::SessionManagerPointerTarget::Session(_)
-                ))
-            ) {
-                update_pointer_hover(&mut app, area, column, row);
-                session_cell = Some((column, row));
-                break 'cells;
-            }
-        }
-    }
-    let (column, row) = session_cell.expect("the Session row should be interactive");
-
+    app.insert_text("keep this draft");
+    assert_terminal_mouse(&mut app, area);
     assert!(!app.session_manager_focused());
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-        None
-    );
-    assert!(app.session_manager_view().is_none());
-
-    app.insert_text("/sessions");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let heading_row = row - 1;
-    assert!(matches!(
-        frame::input_pointer_target_at(&app, area, column, heading_row),
-        Some(InputPointerTarget::SessionManager(
-            crate::sessions::SessionManagerPointerTarget::Group(_)
-        ))
-    ));
-    update_pointer_hover(&mut app, area, column, heading_row);
-    assert!(!app.session_manager_focused());
-    assert_eq!(
-        activate_pointer_item(&mut app, area, column, heading_row),
-        None
-    );
     assert!(app.session_preview().is_none());
-    assert!(!app.session_manager_focused());
-    assert!(matches!(
-        frame::input_pointer_target_at(&app, area, column, row),
-        Some(InputPointerTarget::SessionManager(
-            crate::sessions::SessionManagerPointerTarget::Group(_)
-        ))
-    ));
-    assert_eq!(
-        activate_pointer_item(&mut app, area, column, heading_row),
-        None
-    );
-    assert!(matches!(
-        activate_pointer_item(&mut app, area, column, row),
-        Some(AppCommand::Sessions(
-            crate::sessions::Command::Preview { .. }
-        ))
-    ));
-    assert!(app.overlay().is_none());
-    assert!(app.session_preview().is_some());
-    assert!(app.session_manager_view().is_none());
+    assert!(app.session_manager_view().is_some());
+    assert_eq!(app.input(), "keep this draft");
 }
 
 #[test]
@@ -379,4 +263,96 @@ fn transcript_keyboard_navigation_still_requests_older_history() {
         Some(AppCommand::Thread(ThreadCommand::LoadOlderHistory))
     );
     assert!(app.transcript_scroll().anchor().is_some());
+}
+
+#[test]
+fn disabling_enhancement_during_a_drag_ignores_queued_mouse_events() {
+    let mut app = App::new();
+    app.insert_text("/");
+    let area = Rect::new(0, 0, 80, 24);
+    let row = frame::layout(&app, area).input.y - 1;
+    let event = |kind, column| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(&mut app, area, event(MouseEventKind::Moved, 2));
+    handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Down(MouseButton::Left), 2),
+    );
+    assert!(app.hovered_pointer_target().is_some());
+    assert!(app.pressed_pointer_target().is_some());
+    handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Drag(MouseButton::Left), 8),
+    );
+    assert!(app.screen_selection().range().is_some());
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_mouse_interactions(false);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    assert_eq!(
+        handle_mouse(
+            &mut app,
+            area,
+            event(MouseEventKind::Up(MouseButton::Left), 8)
+        ),
+        None
+    );
+    assert_terminal_mouse(&mut app, area);
+    assert_eq!(app.input(), "/");
+}
+
+// Run under a PTY so TerminalSession emits the actual mouse-mode protocol.
+#[test]
+#[ignore = "requires a PTY with a nonzero window size"]
+fn real_terminal_mouse_handoff() {
+    let mut terminal = crate::terminal::TerminalSession::open().unwrap();
+    let area = terminal.area().unwrap();
+    assert!(area.width >= 40 && area.height >= 12);
+    let mut app = App::new();
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Help",
+        vec![ListSelectionGroup::new(
+            "Commands",
+            vec![ListSelectionItem::new("Help")],
+        )],
+    )));
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    assert_terminal_mouse(&mut app, area);
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.insert_text("/q");
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    let (column, row) = (0..area.height)
+        .flat_map(|row| (0..area.width).map(move |column| (column, row)))
+        .find(|(column, row)| frame::input_pointer_target_at(&app, area, *column, *row).is_some())
+        .unwrap();
+    let event = |kind| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Down(MouseButton::Left)),
+    );
+    let outcome = handle_mouse(&mut app, area, event(MouseEventKind::Up(MouseButton::Left)));
+    assert_eq!(
+        super::finish_pointer_gesture(&mut app, &terminal, outcome).unwrap(),
+        Some(AppCommand::Quit)
+    );
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    app.insert_text("/q");
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_mouse_interactions(false);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    assert_terminal_mouse(&mut app, area);
+    assert_eq!(app.input(), "/q");
 }

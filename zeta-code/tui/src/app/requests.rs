@@ -132,6 +132,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(
             ConfigCommand::OpenEditor
+            | ConfigCommand::Subscription(_)
             | ConfigCommand::Edit(_)
             | ConfigCommand::SetLanguageServerMode(_)
             | ConfigCommand::SetProviderApiKey(_),

@@ -709,18 +709,17 @@ fn queued_message_is_visible_only_in_the_queue_region() {
 }
 
 #[test]
-fn queue_focus_is_visible_and_queue_rows_are_clickable() {
+fn queue_focus_is_visible_and_queue_rows_leave_mouse_to_the_terminal() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("edit this later");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let terminal_area = Rect::new(0, 0, 120, 20);
     let queue_area = layout(&app, terminal_area).session.queue;
-    let queue_id = app.queue_view().items[0].id;
 
     assert_eq!(
         input_pointer_target_at(&app, terminal_area, queue_area.x + 2, queue_area.y),
-        Some(InputPointerTarget::Queue(queue_id))
+        None
     );
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
     let rendered = render(&app, 120, 20);

@@ -273,24 +273,6 @@ pub(crate) fn draw(
     );
 }
 
-pub(crate) fn choice_index_at(
-    area: Rect,
-    view: ApprovalView<'_>,
-    column: u16,
-    row: u16,
-) -> Option<usize> {
-    if column <= area.x || column >= area.right().saturating_sub(1) {
-        return None;
-    }
-    let first_choice_row = area
-        .y
-        .saturating_add(1)
-        .saturating_add(1)
-        .saturating_add(view.details.len().min(MAX_DETAIL_ROWS) as u16);
-    let index = usize::from(row.saturating_sub(first_choice_row));
-    (row >= first_choice_row && index < 2).then_some(index)
-}
-
 fn choice_line<'a>(
     label: &'a str,
     state: InteractionState,

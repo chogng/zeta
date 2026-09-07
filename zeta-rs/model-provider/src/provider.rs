@@ -4,7 +4,10 @@ use crate::ProviderCredentialService;
 use crate::lazy_client::LazyOperationClient;
 use crate::providers;
 use crate::providers::ProviderAdapter;
+use std::borrow::Cow;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use zeta_api::ApiProtocol;
 use zeta_api::ContentPart;
 use zeta_api::InputItem;
@@ -17,7 +20,10 @@ use zeta_async_utils::CancellationSource;
 use zeta_async_utils::CancellationToken;
 use zeta_chatgpt::ChatGptOAuth;
 use zeta_client::ClientError;
+use zeta_client::ClientRequest;
+use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
+use zeta_client::OperationStreamSink;
 use zeta_client::ResolvedApiTarget;
 use zeta_client::ZetaClient;
 use zeta_context_engine::ContextTokenMeasurementCapability;
@@ -45,12 +51,127 @@ use zeta_protocol::ModelRef;
 use zeta_secrets::SecretStore;
 
 enum ProviderConnection {
+    ChatGpt {
+        auth: Arc<ChatGptOAuth>,
+    },
     Direct {
         credential_headers: Vec<zeta_http_client::HttpHeader>,
     },
     Subscription {
         target: ResolvedApiTarget,
     },
+}
+
+#[derive(Clone)]
+enum ProviderTarget {
+    Fixed(ResolvedApiTarget),
+    ChatGpt(Arc<ChatGptOAuth>),
+}
+
+impl ProviderTarget {
+    fn resolve(&self) -> Result<Cow<'_, ResolvedApiTarget>, ModelProviderError> {
+        match self {
+            Self::Fixed(target) => Ok(Cow::Borrowed(target)),
+            Self::ChatGpt(auth) => auth
+                .api_target()
+                .map(Cow::Owned)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+        }
+    }
+
+    fn recover_unauthorized(
+        &self,
+        rejected: &ResolvedApiTarget,
+    ) -> Result<Option<ResolvedApiTarget>, ModelProviderError> {
+        match self {
+            Self::Fixed(_) => Ok(None),
+            Self::ChatGpt(auth) => auth
+                .recover_unauthorized(rejected)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+        }
+    }
+
+    fn note_rejected(&self, target: &ResolvedApiTarget) {
+        if let Self::ChatGpt(auth) = self {
+            auth.note_rejected(target);
+        }
+    }
+}
+
+struct AttemptEvents<'a> {
+    sink: &'a mut dyn ModelEventSink,
+    emitted: bool,
+}
+
+// Only an HTTP 401 proves rejection before model execution. A similarly named
+// error inside an accepted response stream must not cause the request to replay.
+struct AttemptClient<'a> {
+    client: &'a dyn OperationClient,
+    unauthorized: AtomicBool,
+}
+
+impl<'a> AttemptClient<'a> {
+    fn new(client: &'a dyn OperationClient) -> Self {
+        Self {
+            client,
+            unauthorized: AtomicBool::new(false),
+        }
+    }
+
+    fn observe(
+        &self,
+        result: Result<ClientResponse, ClientError>,
+    ) -> Result<ClientResponse, ClientError> {
+        if result
+            .as_ref()
+            .is_ok_and(|response| response.status() == 401)
+        {
+            self.unauthorized.store(true, Ordering::Relaxed);
+        }
+        result
+    }
+
+    fn was_unauthorized(&self) -> bool {
+        self.unauthorized.load(Ordering::Relaxed)
+    }
+}
+
+impl OperationClient for AttemptClient<'_> {
+    fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        self.observe(self.client.execute(request))
+    }
+    fn execute_with_cancellation(
+        &self,
+        request: &ClientRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ClientResponse, ClientError> {
+        self.observe(self.client.execute_with_cancellation(request, cancellation))
+    }
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.observe(self.client.execute_streaming(request, sink))
+    }
+    fn execute_streaming_with_cancellation(
+        &self,
+        request: &ClientRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.observe(
+            self.client
+                .execute_streaming_with_cancellation(request, cancellation, sink),
+        )
+    }
+}
+
+impl ModelEventSink for AttemptEvents<'_> {
+    fn emit(&mut self, event: ModelStreamEvent) -> Result<(), ModelProviderError> {
+        self.emitted = true;
+        self.sink.emit(event)
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -65,7 +186,7 @@ pub struct Provider {
     config: NormalizedModelProviderConfig,
     models: ModelsManager,
     adapter: Arc<dyn ProviderAdapter>,
-    target: ResolvedApiTarget,
+    target: ProviderTarget,
     remote_measurement: RemoteMeasurement,
     client: Arc<dyn OperationClient>,
     local_counter: providers::measurement::LocalInputTokenCounter,
@@ -95,11 +216,16 @@ impl Provider {
                 let mut headers = adapter.fixed_headers();
                 headers.append(&mut credential_headers);
                 (
-                    ResolvedApiTarget::new(config.base_url.clone(), headers),
+                    ProviderTarget::Fixed(ResolvedApiTarget::new(config.base_url.clone(), headers)),
                     RemoteMeasurement::Enabled,
                 )
             }
-            ProviderConnection::Subscription { target } => (target, RemoteMeasurement::Disabled),
+            ProviderConnection::Subscription { target } => {
+                (ProviderTarget::Fixed(target), RemoteMeasurement::Disabled)
+            }
+            ProviderConnection::ChatGpt { auth } => {
+                (ProviderTarget::ChatGpt(auth), RemoteMeasurement::Disabled)
+            }
         };
         let local_counter = providers::measurement::LocalInputTokenCounter::new(
             config.provider.clone(),
@@ -163,13 +289,39 @@ impl Provider {
         let supports_original =
             model.capabilities.image_detail_original == CapabilitySupport::Supported;
         let _image_detail_decisions = request.sanitize_image_details(supports_original);
-        self.adapter.complete(
-            &self.target,
+        check_cancellation(cancellation)?;
+        let target = self.target.resolve()?;
+        let attempt_client = AttemptClient::new(self.client.as_ref());
+        let response = self.adapter.complete(
+            &target,
             model.id.as_str(),
             &request,
-            self.client.as_ref(),
+            &attempt_client,
             cancellation,
-        )
+        );
+        if matches!(response, Err(ModelProviderError::AuthFailed(_)))
+            && attempt_client.was_unauthorized()
+        {
+            check_cancellation(cancellation)?;
+            if let Some(renewed) = self.target.recover_unauthorized(&target)? {
+                let retry_client = AttemptClient::new(self.client.as_ref());
+                let response = self.adapter.complete(
+                    &renewed,
+                    model.id.as_str(),
+                    &request,
+                    &retry_client,
+                    cancellation,
+                );
+                if matches!(response, Err(ModelProviderError::AuthFailed(_)))
+                    && retry_client.was_unauthorized()
+                {
+                    self.target.note_rejected(&renewed);
+                }
+                return response;
+            }
+            self.target.note_rejected(&target);
+        }
+        response
     }
 
     pub fn stream_with_cancellation(
@@ -184,14 +336,46 @@ impl Provider {
         let supports_original =
             model.capabilities.image_detail_original == CapabilitySupport::Supported;
         let _image_detail_decisions = request.sanitize_image_details(supports_original);
-        self.adapter.stream(
-            &self.target,
+        check_cancellation(cancellation)?;
+        let target = self.target.resolve()?;
+        let attempt_client = AttemptClient::new(self.client.as_ref());
+        let mut attempt = AttemptEvents {
+            sink,
+            emitted: false,
+        };
+        let response = self.adapter.stream(
+            &target,
             model.id.as_str(),
             &request,
-            self.client.as_ref(),
+            &attempt_client,
             cancellation,
-            sink,
-        )
+            &mut attempt,
+        );
+        if matches!(response, Err(ModelProviderError::AuthFailed(_)))
+            && !attempt.emitted
+            && attempt_client.was_unauthorized()
+        {
+            check_cancellation(cancellation)?;
+            if let Some(renewed) = self.target.recover_unauthorized(&target)? {
+                let retry_client = AttemptClient::new(self.client.as_ref());
+                let response = self.adapter.stream(
+                    &renewed,
+                    model.id.as_str(),
+                    &request,
+                    &retry_client,
+                    cancellation,
+                    &mut attempt,
+                );
+                if matches!(response, Err(ModelProviderError::AuthFailed(_)))
+                    && retry_client.was_unauthorized()
+                {
+                    self.target.note_rejected(&renewed);
+                }
+                return response;
+            }
+            self.target.note_rejected(&target);
+        }
+        response
     }
 
     pub fn input_token_measurement_capability(
@@ -222,8 +406,9 @@ impl Provider {
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
         let provider = if self.remote_measurement == RemoteMeasurement::Enabled {
+            let target = self.target.resolve()?;
             self.adapter.measure_input(
-                &self.target,
+                &target,
                 model.id.as_str(),
                 request,
                 self.client.as_ref(),
@@ -453,15 +638,18 @@ impl ModelProviderRuntime {
                 .api_target()
                 .map(|target| ProviderConnection::Subscription { target })
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
-            Some(StaticModelRuntime::ChatGptSubscription) => self
-                .chatgpt_oauth
-                .as_ref()
-                .ok_or_else(|| {
+            Some(StaticModelRuntime::ChatGptSubscription) => {
+                let auth = self.chatgpt_oauth.as_ref().ok_or_else(|| {
                     ModelProviderError::Credential("ChatGPT OAuth is unavailable".into())
-                })?
-                .api_target()
-                .map(|target| ProviderConnection::Subscription { target })
-                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+                })?;
+                auth.api_target()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+                // Keep the authority, not a token snapshot: a reused model must observe
+                // Codex rotation, logout and Zeta disconnection before every invocation.
+                Ok(ProviderConnection::ChatGpt {
+                    auth: Arc::clone(auth),
+                })
+            }
             Some(StaticModelRuntime::ProviderApi) | None => self.direct_connection(&model.provider),
         }
     }

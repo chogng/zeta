@@ -108,6 +108,10 @@ baseUrl = "{base_url}"
         &self.workspace
     }
 
+    pub fn codex_home(&self) -> PathBuf {
+        self.profile.join("codex")
+    }
+
     pub fn find_file(&self, name: &str) -> Option<PathBuf> {
         find_named(self._root.path(), name)
     }
@@ -196,6 +200,9 @@ impl TuiProcess {
         command.cwd(&fixture.workspace);
         command.env("TERM", "xterm-256color");
         command.env("ZETA_PROFILE_ROOT", &fixture.profile);
+        // Never let an offline PTY scenario reuse the developer's actual Codex subscription.
+        fs::create_dir_all(fixture.codex_home()).unwrap();
+        command.env("CODEX_HOME", fixture.codex_home());
         command.env("ZETA_WORKSPACE_ROOT", &fixture.workspace);
         command.env("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "1000");
         let child = ChildGuard::new(pair.slave.spawn_command(command).unwrap());

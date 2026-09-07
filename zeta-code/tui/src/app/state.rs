@@ -50,7 +50,6 @@ use crate::render::RenderTheme;
 use crate::sessions::Command as SessionCommand;
 use crate::sessions::Event as SessionEvent;
 use crate::sessions::SessionChoices;
-use crate::sessions::SessionManagerPointerTarget;
 use crate::sessions::SessionManagerView;
 use crate::sessions::SessionSelectionAction;
 use crate::sessions::SessionsState;
@@ -179,6 +178,7 @@ pub(crate) struct App {
     screen_escape_sequence: ScreenEscapeSequence,
     status: Status,
     terminal_settings: TerminalSettings,
+    subscription: crate::config::Subscription,
     pointer: PointerInteraction<InputPointerTarget>,
     screen_selection: ScreenSelection,
     render_theme: RenderTheme,
@@ -206,6 +206,7 @@ impl App {
             screen_escape_sequence: ScreenEscapeSequence::default(),
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
+            subscription: crate::config::Subscription::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
             render_theme: RenderTheme::fallback(),
@@ -266,6 +267,7 @@ impl App {
             screen_escape_sequence: ScreenEscapeSequence::default(),
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
+            subscription: crate::config::Subscription::default(),
             pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
             render_theme: RenderTheme::fallback(),
@@ -668,6 +670,14 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription) => {
+                self.chat_panel
+                    .open_subscription(self.subscription.choices());
+                self.begin_subscription_command(crate::config::SubscriptionCommand::Read)
+            }
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Subscription(
+                command,
+            )) => self.begin_subscription_command(command),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetTerminalSettings(edit),
             ) => Some(ConfigCommand::Edit(edit).into()),
@@ -692,6 +702,18 @@ impl App {
                 None
             }
         }
+    }
+
+    fn begin_subscription_command(
+        &mut self,
+        command: crate::config::SubscriptionCommand,
+    ) -> Option<AppCommand> {
+        if !self.subscription.begin(&command) {
+            return None;
+        }
+        self.chat_panel
+            .update_subscription(self.subscription.choices());
+        Some(ConfigCommand::Subscription(command).into())
     }
 
     fn handle_theme_picker_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
@@ -721,26 +743,6 @@ impl App {
             .chat_panel
             .activate_completion(&mut self.thread_presentations.active_mut().input, index)?;
         self.handle_chat_composer_outcome(outcome, Instant::now())
-    }
-
-    pub(crate) fn activate_thread_request_choice(&mut self, index: usize) -> Option<AppCommand> {
-        self.chat_panel
-            .activate_request_choice(index)
-            .map(|response| ThreadCommand::ResolveRequest(response).into())
-    }
-
-    pub(crate) fn toggle_transcript_cell(&mut self, render_key: &str) -> bool {
-        let cell_id = crate::thread::TranscriptCellId::from_render_key(render_key);
-        if !self
-            .thread
-            .cells()
-            .iter()
-            .any(|cell| cell.cell_id() == &cell_id && cell.can_expand())
-        {
-            return false;
-        }
-        self.thread_presentations.active_mut().toggle_cell(&cell_id);
-        true
     }
 
     pub(crate) fn open_transcript_cell_details(&mut self, render_key: &str) -> bool {
@@ -891,27 +893,9 @@ impl App {
         bindings::QUEUE_HINTS.as_str()
     }
 
-    pub(crate) fn activate_queue_pointer_target(&mut self, queue_id: QueueId) -> bool {
-        if !self
-            .thread_presentations
-            .active_mut()
-            .queue
-            .select(queue_id)
-        {
-            return false;
-        }
-        self.thread_presentations.active_mut().selected_cell = None;
-        self.agent_thread_switcher.blur();
-        true
-    }
-
     pub(crate) fn mouse_mode(&self) -> MouseMode {
         if self.terminal_settings.mouse_interactions()
-            && (self.command_panel().is_some()
-                || self.overlay().is_some()
-                || self.approval_view().is_some()
-                || self.query_view().is_some()
-                || self.completion().is_some())
+            && (self.overlay().is_some() || frame::completion_visible(self))
         {
             MouseMode::TuiCapture
         } else {
@@ -944,22 +928,18 @@ impl App {
         self.screen_selection.clear();
     }
 
-    pub(crate) fn scroll_panel(
+    pub(crate) fn scroll_overlay(
         &mut self,
         terminal_area: Rect,
-        position: Position,
         navigation: crate::widgets::navigation::Navigation,
     ) {
         if self.mouse_mode() != MouseMode::TuiCapture {
             return;
         }
         self.clear_mouse_interaction();
-        let area = super::frame::layout(self, terminal_area).session.composer;
         let transient = super::frame::transient_area(self, terminal_area);
         if let Some(overlay) = self.overlay_mut() {
             overlay.scroll(navigation, transient);
-        } else if let Some(panel) = self.chat_panel.command_mut() {
-            panel.scroll(area, position, navigation);
         }
     }
 
@@ -1165,14 +1145,6 @@ impl App {
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
         self.chat_panel.command_list_selection()
-    }
-
-    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.chat_panel.select_command_tab(index)
-    }
-
-    pub(crate) fn focus_composer_search(&mut self) -> bool {
-        self.chat_panel.focus_command_search()
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<AppCommand> {
@@ -1383,21 +1355,6 @@ impl App {
 
     pub(crate) fn session_manager_hint(&self) -> &'static str {
         self.sessions.manager().status_hint()
-    }
-
-    pub(crate) fn activate_session_manager_pointer_target(
-        &mut self,
-        target: SessionManagerPointerTarget,
-    ) -> Option<AppCommand> {
-        match target {
-            SessionManagerPointerTarget::Group(group) => {
-                self.sessions.manager_mut().toggle_group(group);
-                None
-            }
-            SessionManagerPointerTarget::Session(id) => {
-                self.sessions.open_preview(&id).map(Into::into)
-            }
-        }
     }
 
     pub(crate) fn session_preview(&self) -> Option<&ConversationPreview> {
@@ -1876,6 +1833,11 @@ impl App {
 
     fn apply_config_event(&mut self, event: ConfigEvent) {
         match event {
+            ConfigEvent::Subscription(event) => {
+                self.subscription.update(event);
+                self.chat_panel
+                    .update_subscription(self.subscription.choices());
+            }
             ConfigEvent::SettingsReceived(settings) => {
                 self.terminal_settings = settings;
                 if !settings.mouse_interactions() {
@@ -1891,7 +1853,7 @@ impl App {
                     .status_line_mut()
                     .apply_settings(result.status_line);
                 if !result.terminal.mouse_interactions() {
-                    self.screen_selection.clear();
+                    self.clear_mouse_interaction();
                 }
                 self.thread_presentations
                     .set_input_mode(result.terminal.input_mode());

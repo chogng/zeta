@@ -98,6 +98,7 @@ const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
 #[derive(Clone)]
 pub struct LocalAppServerOptions {
     pub profile_root: PathBuf,
+    codex_home: Option<PathBuf>,
     pub dir_config: Option<LocalDirConfigOptions>,
     pub slash_commands: SlashCommandCatalog,
     pub dir_root: Option<PathBuf>,
@@ -128,6 +129,7 @@ impl LocalAppServerOptions {
     pub fn new(profile_root: impl Into<PathBuf>) -> Self {
         Self {
             profile_root: profile_root.into(),
+            codex_home: None,
             dir_config: None,
             slash_commands: SlashCommandCatalog::default(),
             dir_root: None,
@@ -150,6 +152,12 @@ impl LocalAppServerOptions {
 
     pub fn with_dir_config(mut self, dir_config: LocalDirConfigOptions) -> Self {
         self.dir_config = Some(dir_config);
+        self
+    }
+
+    /// Selects the Codex credential home for an isolated host or test environment.
+    pub fn with_codex_home(mut self, home: impl Into<PathBuf>) -> Self {
+        self.codex_home = Some(home.into());
         self
     }
 
@@ -324,6 +332,7 @@ impl fmt::Debug for LocalAppServerOptions {
         formatter
             .debug_struct("LocalAppServerOptions")
             .field("profile_root", &self.profile_root)
+            .field("codex_home", &self.codex_home)
             .field("dir_config", &self.dir_config)
             .field("slash_commands", &self.slash_commands)
             .field("dir_root", &self.dir_root)
@@ -374,6 +383,7 @@ impl fmt::Debug for LocalAppServerOptions {
 impl PartialEq for LocalAppServerOptions {
     fn eq(&self, other: &Self) -> bool {
         self.profile_root == other.profile_root
+            && self.codex_home == other.codex_home
             && self.dir_config == other.dir_config
             && self.slash_commands == other.slash_commands
             && self.dir_root == other.dir_root
@@ -757,7 +767,9 @@ impl LocalProfileRuntime {
         );
         Ok(Self {
             profile_root,
-            automation: Arc::new(zeta_automation::AutomationStore::open(&database_path).map_err(open_error)?),
+            automation: Arc::new(
+                zeta_automation::AutomationStore::open(&database_path).map_err(open_error)?,
+            ),
             state,
             threads,
             config,
@@ -1079,9 +1091,20 @@ pub fn open_local_app_server_with_codebase_providers(
     );
     let provider_configs = ProviderConfigRegistry::builtin();
     let model_operation_client = options.model_operation_client.take();
+    let codex_home = match options.codex_home.take() {
+        Some(home) => home,
+        None => {
+            zeta_chatgpt::codex_home().map_err(|error| OpenAppServerError(error.to_string()))?
+        }
+    };
     let chatgpt_oauth = match &model_operation_client {
-        Some(client) => ChatGptOAuth::with_client(Arc::clone(&profile_secrets), Arc::clone(client)),
-        None => ChatGptOAuth::production(Arc::clone(&profile_secrets))
+        Some(client) => ChatGptOAuth::with_client(
+            codex_home,
+            Arc::clone(&profile_secrets),
+            Arc::clone(client),
+            zeta_chatgpt::ChatGptAuthManagement::Automatic,
+        ),
+        None => ChatGptOAuth::production(codex_home, Arc::clone(&profile_secrets))
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     };
     let kimi_oauth = match &model_operation_client {

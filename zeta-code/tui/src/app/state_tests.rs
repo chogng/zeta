@@ -11,10 +11,6 @@ use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageFingerprint;
-use crate::host::process_resources::ProcessResourceDemand;
-use crate::host::process_resources::ProcessResourceRequest;
-use crate::host::process_resources::ProcessResourceUsage;
-use crate::host::process_resources::ProcessResourcesReading;
 use crate::keymap::Command as KeymapCommand;
 use crate::keymap::Event as KeymapEvent;
 use crate::keymap::KeymapEditIntent;
@@ -272,11 +268,11 @@ fn selected_render_theme_is_read_through_the_frame_context() {
 }
 
 #[test]
-fn pointer_activation_uses_the_feature_action_mapping() {
+fn feature_activation_uses_the_feature_action_mapping() {
     let mut app = App::new();
     app.update(ThemeEvent::PickerOpened(theme_choices(&theme_catalog())));
 
-    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     assert_eq!(
         app.activate_visible_item(1),
         Some(AppCommand::Theme(ThemeCommand::OpenCustomPicker))
@@ -774,7 +770,7 @@ fn inline_theme_selection_requests_a_tui_config_edit() {
 }
 
 #[test]
-fn config_mouse_selection_emits_a_revision_bound_edit() {
+fn enhanced_tui_keyboard_toggle_emits_a_revision_bound_edit() {
     let mut config = empty_config_snapshot();
     config.revision = 7;
     let mut app = App::new();
@@ -1001,6 +997,112 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
 }
 
 #[test]
+fn chatgpt_subscription_keeps_pending_login_across_back_navigation_and_cancels_by_id() {
+    use crate::config::SubscriptionCommand;
+    use crate::config::SubscriptionEvent;
+    use zeta_app_server_protocol::protocol::account::AccountLoginStartResult;
+    use zeta_app_server_protocol::protocol::account::AccountReadResult;
+
+    let mut app = App::new();
+    app.update(ConfigEvent::EditorOpened(config_choices(
+        &empty_config_snapshot(),
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    for key in [
+        KeyCode::Up,
+        KeyCode::Up,
+        KeyCode::Tab,
+        KeyCode::Down,
+        KeyCode::Down,
+    ] {
+        app.handle_key(KeyEvent::new(key, KeyModifiers::NONE));
+    }
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "ChatGPT subscription"
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionCommand::Read
+        )))
+    );
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read(
+        AccountReadResult {
+            revision: 1,
+            accounts: vec![],
+        },
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionCommand::SignIn
+        )))
+    );
+    // Returning while the start request is in flight must not reopen the page.
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Started(
+        AccountLoginStartResult::DeviceCode {
+            login_id: "login-1".into(),
+            verification_url: "https://auth.openai.com/codex/device".into(),
+            user_code: "ABCD-1234".into(),
+        },
+    )));
+    assert_eq!(app.list_selection().unwrap().title(), "Config");
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "Providers"
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionCommand::Read
+        )))
+    );
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read(
+        AccountReadResult {
+            revision: 1,
+            accounts: vec![],
+        },
+    )));
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|item| item.description() == Some("ABCD-1234"))
+    );
+    for _ in 0..3 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionCommand::Cancel {
+                login_id: "login-1".into()
+            }
+        )))
+    );
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::Cancelled {
+        login_id: "login-1".into(),
+    }));
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "Sign-in cancelled")
+    );
+}
+
+#[test]
 fn statusline_slash_command_is_owned_by_the_local_host() {
     let mut app = App::new();
     app.insert_text("/statusline");
@@ -1085,18 +1187,18 @@ fn process_resource_sample_updates_the_optional_statusline_items() {
     let request = ProcessResourceRequest {
         revision: 1,
         cpu_cycle: 1,
-        demand: ProcessResourceDemand::Processes,
+        demand: ProcessResourceDemand::Detailed,
     };
     app.apply_process_resource_request(request);
 
     app.update(HostEvent::ProcessResourcesSampled(
         ProcessResourcesReading {
             request,
-            tui: Ok(ProcessResourceUsage {
+            current: Ok(ProcessResourceUsage {
                 resident_bytes: Some(128 * 1024 * 1024),
                 cpu_tenths_percent: Some(124),
             }),
-            app_server: None,
+            tree: None,
             sampled_at: Instant::now(),
         },
     ));
@@ -1383,7 +1485,7 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
-fn enhanced_mouse_capture_is_limited_to_open_panels() {
+fn enhanced_mouse_capture_is_limited_to_visible_overlays() {
     let mut app = App::new();
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
 
@@ -1404,6 +1506,60 @@ fn enhanced_mouse_capture_is_limited_to_open_panels() {
 }
 
 #[test]
+fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
+    for approval in [true, false] {
+        let mut app = App::new();
+        enter_test_session(&mut app);
+        app.insert_text("/");
+        assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+        if approval {
+            app.update(ThreadEvent::ApprovalRequested(Approval::new(
+                ApprovalSpec {
+                    title: "Approval required".into(),
+                    reason: "Run tests".into(),
+                    details: Vec::new(),
+                },
+            )));
+            assert!(app.approval_view().is_some());
+        } else {
+            app.update(ThreadEvent::QueryRequested(
+                Query::new(vec![QueryQuestion {
+                    id: "answer".into(),
+                    header: "Answer".into(),
+                    prompt: "What next?".into(),
+                    choices: vec![QueryChoice {
+                        label: "Default".into(),
+                        description: "Use the default".into(),
+                    }],
+                    custom_answer: QueryCustomAnswer::Allowed,
+                }])
+                .unwrap(),
+            ));
+            assert!(app.query_view().is_some());
+        }
+        assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+        let area = Rect::new(0, 0, 80, 24);
+        for row in 0..area.height {
+            for column in 0..area.width {
+                assert_eq!(
+                    crate::app::frame::input_pointer_target_at(&app, area, column, row),
+                    None
+                );
+                assert!(!crate::app::frame::overlay_mouse_contains(
+                    &app,
+                    area,
+                    ratatui::layout::Position::new(column, row)
+                ));
+            }
+        }
+        assert!(matches!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Thread(ThreadCommand::ResolveRequest(_)))
+        ));
+    }
+}
+
+#[test]
 fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
     let mut app = App::new();
     app.insert_text("/");
@@ -1417,6 +1573,35 @@ fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
     app.update(ConfigEvent::SettingsReceived(settings));
 
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert!(app.screen_selection().range().is_none());
+}
+
+#[test]
+fn saved_enhancement_disable_clears_hover_press_and_drag_together() {
+    let mut app = App::new();
+    app.insert_text("/");
+    let target = crate::app::frame::InputPointerTarget::Composer(
+        crate::thread::composer::ChatComposerPointerTarget::CompletionItem(0),
+    );
+    app.update_pointer_hover(Some(target.clone()));
+    app.update_pointer_pressed(Some(target));
+    app.begin_screen_selection(ratatui::layout::Position::new(2, 1));
+    app.drag_screen_selection(ratatui::layout::Position::new(4, 1));
+    let mut settings = TerminalSettings::default();
+    settings.set_mouse_interactions(false);
+    app.update(ConfigEvent::Updated(crate::config::ConfigEditResult {
+        terminal: settings,
+        status_line: StatusLineSettings::default(),
+        choices: config_choices(
+            &empty_config_snapshot(),
+            &ProviderListResult { providers: vec![] },
+            settings,
+            StatusLineSettings::default(),
+        ),
+    }));
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert!(app.hovered_pointer_target().is_none());
+    assert!(app.pressed_pointer_target().is_none());
     assert!(app.screen_selection().range().is_none());
 }
 

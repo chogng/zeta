@@ -39,9 +39,7 @@ use zeta_login::LogoutOutcome;
 impl AppServer {
     pub(super) fn account_read(&self) -> Result<Value, RpcError> {
         result(&account_state_dto(
-            self.login_service()?
-                .read_or_refresh()
-                .map_err(login_error)?,
+            self.login_service()?.refresh().map_err(login_error)?,
         ))
     }
 
@@ -54,6 +52,9 @@ impl AppServer {
         };
         let started = self.login_service()?.begin(method).map_err(login_error)?;
         result(&match started {
+            BeginLogin::Connected { login_id, .. } => AccountLoginStartResult::Connected {
+                login_id: login_id.to_string(),
+            },
             BeginLogin::Browser {
                 login_id,
                 authorization_url,

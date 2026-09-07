@@ -1,78 +1,89 @@
 # ChatGPT 订阅接入
 
-> 状态：部分具备。登录、刷新、脱敏账户摘要、固定 Responses 目标与本地 Agent Loop 已接通；兼容探测、丰富响应项、额度/限流状态和完整故障矩阵仍待收口。
-> 认证实现：`zeta-rs/chatgpt/`
-> 模型执行：`zeta-rs/model-provider/`
-> 登录控制面：[`login.md`](login.md)
-> SecretStore：[`secrets.md`](secrets.md)
-> 官方依据：[ChatGPT 登录](https://learn.chatgpt.com/docs/auth)
+Zeta 与 Codex 使用兼容的 ChatGPT 认证存储。检测到 Codex 时只读复用；本机没有可发现的 Codex 安装时，由 Zeta 维护登录。模型请求、Thread、Turn、工具和 Agent Loop 仍由 Zeta 持有，不启动 Codex Agent 进程。
 
-## 快速理解
+## 职责
 
-Zeta 直接接入用户的 ChatGPT 订阅，不启动外部 Agent runtime，也不把 Thread、Turn、工具、批准或恢复委托给另一个进程。
+| 所有者 | 职责 |
+| --- | --- |
+| `zeta-chatgpt` | 选择凭据管理者；只读复用，或在无 Codex 时登录、刷新并维护兼容文件 |
+| `zeta-login` | 登录、立即连接成功、取消、账户状态和通知 |
+| `zeta-model-provider` | 使用当前 access token 调用固定的 ChatGPT 订阅 Responses 服务 |
+| Zeta profile SecretStore | 只保存是否断开此连接；不保存 ChatGPT token 副本 |
 
-`zeta-chatgpt` 只负责本机 OAuth、token refresh、SecretStore envelope 和请求级认证 header；`zeta-model-provider` 使用该 authority 调用 ChatGPT subscription Responses target；完整 Agent Loop 继续由 Zeta Core 与 App Server 持有。
+订阅和 OpenAI Platform API key 使用独立的凭据与计费路径，不能互相转换或在失败后切换。
 
-ChatGPT 订阅与 OpenAI Platform API key 是两套不同的 credential 和计费边界，不能互相回退、转换或复用。
+## 存储与首次登录
 
-| 场景 | 所有者 | 行为 |
-| --- | --- | --- |
-| 登录与 refresh | `zeta-chatgpt` | 本机 OAuth 与 SecretStore envelope |
-| 单次模型请求 | `zeta-model-provider` | 使用 fresh subscription target 调用 Responses |
-| Agent Loop | Zeta Core 与 App Server | 持有 Thread、Turn、工具、批准、恢复与 steering |
-| Platform API key | direct-provider credential layer | 独立计费和 target，不与订阅互换 |
+路径以运行 Zeta 后端的主机为准。优先使用 `CODEX_HOME`，与 Codex 一样要求显式指定的目录已存在，并解析其规范路径；未设置时使用用户主目录的 `~/.codex`，允许它在首次登录前不存在。不会自动查找仓库中的 `.codex`。不修改现有 `config.toml`。只读模式保持认证文件原样；Zeta 管理模式会受校验地更新认证记录。
 
-## 数据流
+按照 Codex 的 `cli_auth_credentials_store` 选择读取位置：默认 `file` 读取 `auth.json`；`keyring` 读取既有的 `Codex Auth` 条目；`auto` 在钥匙串没有条目时读取文件。钥匙串访问失败必须报告错误，不转向另一个可能过期或属于其他账户的存储。
 
-```text
-Settings / account RPC
-        │
-        ▼
-zeta-login ──▶ zeta-chatgpt ──▶ OpenAI OAuth
-                    │
-                    └──▶ profile SecretStore
+只读加载只保留 access token、身份与有效期，不反序列化 refresh token。认证模式遵循 Codex 的显式 `auth_mode` 及旧文件模式判定；已有 API key 等其他认证模式不会被当成 ChatGPT 订阅。用户配置的登录方式和 workspace 限制仍须匹配。
 
-Zeta TurnExecutor
-        │
-        ▼
-zeta-model-provider ──▶ zeta-chatgpt fresh target
-        │
-        └──▶ ChatGPT subscription Responses service
+凭据完全缺失时，用户可从 `/config → Providers → ChatGPT subscription` 发起设备码登录。成功后创建以下 Codex 结构：
+
+```json
+{
+  "auth_mode": "chatgpt",
+  "OPENAI_API_KEY": null,
+  "tokens": {
+    "id_token": "<ID token>",
+    "access_token": "<access token>",
+    "refresh_token": "<refresh token>",
+    "account_id": "<account ID>"
+  },
+  "last_refresh": "<RFC 3339 UTC timestamp>"
+}
 ```
 
-静态模型目录使用 `access = subscription` 表达用户接入方式，并使用 `runtime = chatgpt_subscription` 选择认证 target。模型身份仍是 `openai/<model>`；登录账户 identity 是 `openai-chatgpt`，不会进入 `ModelRef`。
+首次授权得到的 refresh token 按 Codex 格式保存。只读复用时不使用它；Zeta 管理时用它续期，并保存服务端返回的新值。文件以 0600 权限创建，通过原子、不覆盖的提交方式发布；登录期间若 Codex 已创建文件，则停止写入。取消和后端退出阻止迟到的授权结果写文件。
 
-## 本机 OAuth
+当前支持普通文件与直接钥匙串读取。Codex 的加密 secrets 后端和仅进程内认证明确报告不支持，不生成替代文件。配置要求仅使用钥匙串且其中没有凭据时，首次登录需由 Codex 完成。
 
-当前产品使用 OpenAI device authorization：Zeta 请求一次性 code，Desktop 打开验证页并复制 code，本机 worker 在可取消的 15 分钟窗口内轮询并交换 token。成功后，access token、refresh token、ID token、expiry、脱敏账户 metadata 和 credential revision 作为一个 opaque envelope 保存到 `provider/openai-chatgpt/current/oauth`。
+## 使用、断开与重新连接
 
-OAuth access token 接近过期时，`zeta-chatgpt` 在单一 refresh 临界区内刷新并原子替换 envelope。模型请求只获得一次调用所需的 `ResolvedApiTarget`；token 不进入配置、RPC、日志或前端状态。
+每次模型请求重新读取当前凭据；`account/read` 重新观察账户存储。只读模式不刷新；Zeta 管理模式在需要时刷新。损坏记录不当成缺失，不改用 API key。
 
-## Agent Loop 所有权
+复用模式断开只保存 Zeta profile 的停用标志，Codex 仍可正常使用原账户。自管模式登出会清除所维护的当前账户认证，下一次可在 Zeta 重新登录。重新连接已有有效凭据返回 `connected`，发布账户完成通知，不打开浏览器；缺失或 Zeta 管理的凭据永久失效、用户再次登录时，返回设备码挑战。重新登录完成前保留旧记录，完成时校验它未被其他写入替换。
 
-ChatGPT subscription model 与 API-key model、Kimi subscription model 一样进入本地 `TurnExecutor`。Core 继续拥有 durable history、上下文压缩、工具循环、批准、steering、恢复、预算和多 Agent 协调。
+不改变 Codex 的文件并不等于模型调用没有副作用：请求仍消耗同一账户的订阅额度。
 
-这条边界是架构约束：认证 adapter 不能创建远端 Thread/Turn，也不能实现 Core `TurnExecutionBackend`。
+## 无 Codex 时的维护
 
-## 兼容性边界
+生产模式从 PATH、常见 macOS 应用位置及 VS Code OpenAI 扩展查找 Codex 可执行文件，只检查文件，不启动 Codex。后续检测到安装后，不再启动新的刷新。测试通过显式管理模式隔离安装状态。
 
-OpenAI 官方文档明确区分“Sign in with ChatGPT”订阅访问与 API key 的 usage-based 访问。当前 direct Responses target、OAuth client/endpoint 和 header contract 依据 OpenAI 开源实现保持兼容；它们不是一份独立发布的通用公共 API 合约，因此升级时必须用登录、refresh、streaming response 和错误分类测试验证，不能静默改写为 Platform API key。
+维护规则对齐 Codex AuthManager：
 
-## 已通过的真实验收
+- access token 到期前约 5 分钟刷新；不能取得到期时间（包括不透明 access token）时，按 `last_refresh` 超过 8 天判断。
+- 使用相同 OAuth token endpoint、client ID 和 refresh_token grant；刷新响应未返回的 ID/access/refresh token 保留原值，成功后更新 `last_refresh`。
+- 暂时失败不丢弃仍有效的 access token；永久失效绑定当前记录缓存，停止反复刷新，账户显示需要重新登录。用户可直接在 Zeta 完成重新登录。
 
-2026-09-07 已用本机 Codex 的有效登录态完成从 Codex credential 到 Zeta App Server 的真实验收。验证使用隔离的临时 Zeta profile，不修改本机 Codex 原始凭据。
+同一 Codex home 的多个 Zeta 实例通过 `zeta-auth.lock` 串行更新。锁后重新读取；发布前再次校验记录和存储位置；文件通过临时文件原子替换，直接钥匙串也校验当前记录再写入。刷新保留未知字段，不把 Zeta 管理字段写进 auth.json。
 
-- 本地 Codex 订阅的真实验收固定使用 `gpt-5.6-luna`；不得为了验收选择其他模型，以免产生不必要的订阅消耗；
-- `account/read` 返回 `openai-chatgpt`、`pro`、`ready`；
-- 配置 `gpt-5.6-luna` 后，普通 Responses 回合完成并返回预期文本；
-- 带工具的回合成功调用 `get_goal`，收到工具结果后继续生成预期文本；
-- 两次回合都记录了模型调用次数、输入 token 和输出 token。
+只有明确的 HTTP 401，且没有交付任何模型事件时，才进行一次重读/刷新与模型重试；已接受流中的错误不触发重放。恢复前后必须是同一账户，第二次拒绝后停止自动恢复。
 
-这证明了“Codex 登录态 → Zeta App Server → ChatGPT subscription Responses → Zeta Agent Loop”的执行链路已经通过验收。Luna 约束只适用于真实订阅调用；离线协议测试和产品模型目录仍可覆盖其他模型标识。该记录不替代交互式 device OAuth、refresh rotation、401/429、取消和断线恢复的完整故障矩阵；这些项目仍按下表的完成门继续验证。
+Codex 不使用 Zeta 的锁，因此不能把安装探测与写入前校验描述为跨产品原子互斥。刷新已开始时会完成受校验的持久化；已观察到外部修改则停止覆盖，后续采用新记录。
+
+## 对齐与验证
+
+兼容参照为 `../codex` 提交 `d3ee328ee6af47ba540a489bb590cb96acbdd8ba`：
+
+- `codex-rs/login/src/auth/storage.rs`、`auth/manager.rs`：存储路径、模式和结构；
+- `codex-rs/login/src/token_data.rs`：token 字段与身份信息；
+- `codex-rs/login/src/device_code_auth.rs`、`server.rs`：设备授权、交换与首次存储。
+
+模型请求保留 Zeta 的来源标识。开源实现兼容性不代表接口具有独立的稳定性承诺；升级需验证存储、登录、取消、错误分类和流式响应。
+
+**本功能所有真实模型测试固定使用 `gpt-5.6-luna`、`reasoning.effort=low`，禁止改用其他模型、默认思考强度或刷新真实凭据。** 首次创建和故障测试使用隔离目录与合成 token；用官方 Codex CLI 验证生成文件可读，不能用真实登录覆盖用户账户。
+
+本次实现、命令和结果见[认证兼容验收](../zeta-rs/docs/changes/chatgpt-auth/verification.md)。丰富响应项、额度展示、完整流式断线恢复仍属于后续能力，不包含在本次认证改动中。
+
+参考：[官方认证文档](https://developers.openai.com/codex/auth)、[OpenAI 工程师对第三方客户端的说明](https://github.com/openai/codex/discussions/8338)。
 
 ## 当前状态与待完成项
 
-阶段性的 Agent Loop 总计划已经退场，ChatGPT 订阅路径的状态与完成门由本文长期维护。
+以下保留订阅服务其余能力的现状；认证维护的本次验收见上文链接。
 
 | 能力 | 状态 | 完成门 |
 | --- | --- | --- |
@@ -80,7 +91,7 @@ OpenAI 官方文档明确区分“Sign in with ChatGPT”订阅访问与 API key
 | 丰富响应项 | 尚未完成 | 把订阅 Responses 支持的响应项映射为统一的持久化 Item 与通知；重连后只从统一状态重建，Desktop 不依赖供应商 DTO。 |
 | 图片输入 | 已实现 | 继续通过工作区附件授权、MIME、字节与像素边界进入受控的模型输入。 |
 | 敏感交互输入 | 进行中 | 按 [`secrets.md`](secrets.md#8-交互式敏感输入) 的一次性交付边界响应 `isSecret` 请求，不进入普通 transcript、Thread Item、错误、Debug 或观测数据。 |
-| 账户摘要与限流状态 | 部分具备 | 本机 OAuth 已把脱敏的账户、组织、方案、状态和凭据版本投影到独立账户状态；仍需增加额度与限流观察。过期观察必须变为未知，不能门禁静态模型目录，真实失败仍归属准确 Turn。 |
-| 登录与流式故障矩阵 | 尚未完成 | 覆盖 device poll、refresh rotation、401、429、流截断、取消和恢复；token 不泄露，不确定的模型调用结果不重放，所有等待都有终态。 |
+| 账户摘要与限流状态 | 部分具备 | Codex 凭据读取和首次 OAuth 已提供账户、组织、方案、状态和凭据版本摘要；仍需增加额度与限流观察。过期观察必须变为未知，不能门禁静态模型目录，真实失败仍归属准确 Turn。 |
+| 登录与流式故障矩阵 | 尚未完成 | 覆盖 device poll、外部凭据轮换、401、429、流截断、取消和恢复；token 不泄露，不确定的模型调用结果不重放，所有等待都有终态。 |
 
-升级或发布这条路径前，至少运行登录、刷新、流式、重连、错误分类和脱敏测试。任何线上字段无法映射为统一 Item 时必须明确失败或标记未支持，不能静默丢弃。
+升级或发布这条路径前，至少运行登录、只读凭据更新、流式、重连、错误分类和脱敏测试。任何线上字段无法映射为统一 Item 时必须明确失败或标记未支持，不能静默丢弃。

@@ -171,6 +171,14 @@ impl LoginService {
                 "interactive login driver changed the assigned login ID",
             ));
         }
+        if let BeginLogin::Connected { login_id, account } = &started {
+            self.complete(CompleteLogin {
+                login_id: login_id.clone(),
+                outcome: LoginCompletionOutcome::Succeeded {
+                    account: account.clone(),
+                },
+            })?;
+        }
         Ok(started)
     }
 

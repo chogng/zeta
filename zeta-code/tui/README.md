@@ -118,6 +118,8 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 配置保存替换完整 `[tui]` 表，因此必须保留其他 TUI 设置。API key 只通过专用凭据接口保存，不进入普通配置或展示状态。快捷键候选先完成全量校验，保存失败时保留上一份有效规则；面板基础键与用户可重绑的应用动作范围见[快捷键规格](../docs/spec/interaction.md#快捷键声明与保存)。
 
+`/config` 的 Providers 页提供独立的 `ChatGPT subscription` 入口，可查看 Zeta 账户和方案、启动设备码登录、取消登录或退出。验证地址与一次性代码显示在账户页；Esc 返回 Providers，待完成登录仍可重新进入查看和取消。TUI 使用共享账户接口，后端有 Codex 时只读复用，无 Codex 时负责续期和重新登录；缺失时生成兼容的 auth.json。复用模式断开不会退出 Codex；自管模式登出清除认证。重新连接仍有效的已有凭据无需浏览器。[认证存储与验收](../../zeta-rs/docs/changes/chatgpt-auth/verification.md)。
+
 资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。统计定义见[进程资源设计](../docs/design/process-resources.md)。
 
 ## 正文更新与容量
@@ -140,7 +142,7 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 ## 产品支持边界
 
-正文支持普通折行和 fenced code block 高亮，尚未实现完整 Markdown、可点击 Markdown 链接或任意 HTML 展示。增强鼠标只处理打开的交互面板和补全；面板外的终端历史、选择和复制由终端处理。Vim 只改变输入框编辑。
+正文支持普通折行和 fenced code block 高亮，尚未实现完整 Markdown、可点击 Markdown 链接或任意 HTML 展示。增强鼠标只处理可见的详情与补全覆盖浮层；占据布局高度的区域不接收 TUI 鼠标操作，终端自身的历史、文字选择和复制仍由终端处理。Vim 只改变输入框编辑。
 
 `/export [relative-path]` 导出当前已加载正文，路径限制在本机工作目录内，不能覆盖已有文件。Ctrl+O 复制最后一条 Agent 回复。
 
@@ -187,9 +189,11 @@ showGitChangesAsDiff = false
 
 当前使用终端主屏幕。`TerminalSession::open` 先检测终端，获取模式、查询背景色，再创建 Ratatui 终端并清理当前绘制区域。
 
-模式按以下顺序获取：原始输入模式 → 主屏幕准备 → 粘贴事件 → 焦点上报。只有增强鼠标开启且存在交互面板时才启用鼠标捕获；事件循环还会检查鼠标是否落在该面板内。
+模式按以下顺序获取：原始输入模式 → 主屏幕准备 → 粘贴事件 → 焦点上报。只有增强鼠标开启且存在可见覆盖浮层时才启用鼠标捕获；事件循环还会检查鼠标是否落在浮层内，关闭开关后的残留鼠标事件也会被忽略。
 
 `TerminalModeGuard` 记录每一步是否成功。任一步失败或退出时，逆序关闭鼠标、焦点上报、粘贴事件，结束当前屏幕并关闭原始输入模式。显式恢复可重复调用，Drop 再次清理不会重复操作；退出或挂起时还要重置光标颜色并显示光标。
+
+鼠标边界回归见 [event_loop_tests.rs](src/app/event_loop_tests.rs)。在窗口至少 40×12 的真实 PTY 中运行 `just test zeta-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，可验证固定面板不捕获、补全开启捕获、关闭浮层或增强开关后释放捕获。该场景不替代各终端自身的选文与复制兼容性验证。
 
 Ctrl+Z 在 Unix 上先恢复终端，再发送 SIGTSTP；`fg` 后重新获取模式并重绘。SIGINT/SIGTERM 进入正常事件循环退出路径。新增模式时同时修改获取标记、逆序清理和 [session_tests.rs](src/terminal/session_tests.rs) 中的部分失败测试。
 

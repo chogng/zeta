@@ -31,6 +31,9 @@ export class AppServerAccountService extends Disposable implements IAccountServi
 
 	async startLogin(method: AccountLoginMethod): Promise<AccountLoginChallenge> {
 		const started = await this.api.startLogin({ method });
+		if (started.type === 'connected') {
+			return { type: 'connected', loginId: started.loginId };
+		}
 		return started.type === 'browser'
 			? { type: 'browser', loginId: started.loginId, authorizationUrl: started.authorizationUrl }
 			: { type: 'deviceCode', loginId: started.loginId, verificationUrl: started.verificationUrl, userCode: started.userCode };

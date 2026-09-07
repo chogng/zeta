@@ -1,4 +1,4 @@
-use crate::host::process_resources::ProcessResourceMetrics;
+use zeta_memory_diagnostics::ProcessResourceMetrics;
 use crate::thread::TurnApprovalModes;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;

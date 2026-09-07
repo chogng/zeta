@@ -80,7 +80,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(mouse.label(), "Enhanced TUI");
     assert_eq!(
         mouse.description(),
-        Some("Click, scroll, hover, and auto-copy selected panel text [ ✔ ]")
+        Some("Click, scroll, hover, and auto-copy text in overlays only [ ✔ ]")
     );
     assert!(matches!(
         view.actions.get(mouse.id().unwrap()).unwrap(),
@@ -114,9 +114,14 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(state.visible_items().len(), 2);
+    assert_eq!(state.visible_items().len(), 3);
     assert_eq!(state.visible_items()[0].label(), "OpenAI");
     assert_eq!(state.visible_items()[1].label(), "Ollama");
+    assert_eq!(state.visible_items()[2].label(), "ChatGPT subscription");
+    assert!(matches!(
+        view.actions.get(state.visible_items()[2].id().unwrap()),
+        Some(ConfigSelectionAction::OpenSubscription)
+    ));
     assert!(
         state
             .visible_items()
@@ -213,7 +218,7 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
 
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("Click, scroll, hover, and auto-copy selected panel text [   ]")
+        Some("Click, scroll, hover, and auto-copy text in overlays only [   ]")
     );
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(state.search().unwrap().input_active());

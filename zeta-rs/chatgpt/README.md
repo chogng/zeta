@@ -1,11 +1,7 @@
 # `zeta-chatgpt`
 
-`zeta-chatgpt` 负责原生 ChatGPT 订阅 OAuth、profile SecretStore 持久化、refresh token 轮换和请求时 authenticated target 投影。
+- 检测 Codex 安装：存在时只读复用凭据，不存在时由 Zeta 维护 ChatGPT 登录。
+- 按 Codex 格式创建、刷新及重新登录；串行更新并校验现有记录，保留省略的 token 字段与其他元数据。
+- 向模型请求和登录控制面提供当前认证状态；断开仅影响 Zeta，真实模型测试固定 Luna / low。
 
-它为 `openai-chatgpt` 实现 `zeta-login::InteractiveLoginDriver`，并向 `zeta-model-provider` 提供 `ChatGptOAuth::api_target()`。它不拥有 Session、Thread、Turn、工具、批准或 Agent Loop；这些仍属于 Zeta Core 和 App Server。
-
-credential envelope 保存于 `provider/openai-chatgpt/current/oauth`。原始 token 不进入 login snapshot、App Server RPC、Desktop IPC 或 config。
-
-ChatGPT subscription credential 与 OpenAI Platform API key 是独立的凭据和计费路径，两者不会互相降级。
-
-完整架构与兼容性边界见 [`docs/chatgpt-subscription.md`](../../docs/chatgpt-subscription.md)。
+[存储约定与验证](../../docs/chatgpt-subscription.md)。

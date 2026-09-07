@@ -61,6 +61,9 @@ pub struct AccountLoginStartParams {
 )]
 #[ts(tag = "type", rename_all = "camelCase")]
 pub enum AccountLoginStartResult {
+    Connected {
+        login_id: String,
+    },
     Browser {
         login_id: String,
         authorization_url: String,

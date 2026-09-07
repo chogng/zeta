@@ -257,19 +257,6 @@ impl Queue {
         true
     }
 
-    pub(crate) fn select(&mut self, id: QueueId) -> bool {
-        if !self
-            .entries
-            .iter()
-            .any(|entry| entry.id == id && !entry.sending && entry.input.is_some())
-        {
-            return false;
-        }
-        self.focused = true;
-        self.selected = Some(id);
-        true
-    }
-
     pub(crate) fn blur(&mut self) {
         self.focused = false;
         self.selected = None;
@@ -430,24 +417,6 @@ pub(crate) fn draw(
         })
         .collect::<Vec<_>>();
     frame.render_widget(Paragraph::new(lines), area);
-}
-
-pub(crate) fn pointer_target_at(
-    area: Rect,
-    view: &QueueView<'_>,
-    max_visible_items: usize,
-    column: u16,
-    row: u16,
-) -> Option<QueueId> {
-    if column < area.x || column >= area.right() || row < area.y || row >= area.bottom() {
-        return None;
-    }
-    let range = visible_range(view, max_visible_items);
-    let index = range.start.saturating_add(usize::from(row - area.y));
-    view.items
-        .get(index)
-        .filter(|item| !item.sending && !item.editing)
-        .map(|item| item.id)
 }
 
 fn visible_range(view: &QueueView<'_>, max_visible_items: usize) -> Range<usize> {

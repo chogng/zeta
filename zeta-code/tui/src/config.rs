@@ -1,6 +1,11 @@
 mod editor;
 mod request;
 mod settings;
+mod subscription;
+
+pub(crate) use subscription::Subscription;
+pub(crate) use subscription::SubscriptionCommand;
+pub(crate) use subscription::SubscriptionEvent;
 
 pub(crate) use editor::ConfigChoices;
 pub(crate) use editor::ConfigEdit;
@@ -24,6 +29,7 @@ pub(crate) struct ConfigEditResult {
 
 /// A completed configuration operation delivered to the TUI state owner.
 pub(crate) enum Event {
+    Subscription(SubscriptionEvent),
     SettingsReceived(TerminalSettings),
     Updated(ConfigEditResult),
     EditorOpened(ConfigChoices),
@@ -35,6 +41,7 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    Subscription(SubscriptionCommand),
     OpenEditor,
     Edit(ConfigEdit),
     SetLanguageServerMode(LanguageServerEdit),

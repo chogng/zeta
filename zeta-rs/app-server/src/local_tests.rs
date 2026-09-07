@@ -201,6 +201,7 @@ fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     let profile = tempfile::tempdir().unwrap();
     let server = open_local_app_server(
         LocalAppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
     )
@@ -218,6 +219,83 @@ fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     );
     let account: serde_json::Value = serde_json::from_str(&account).unwrap();
     assert_eq!(account["result"]["accounts"], serde_json::json!([]));
+}
+
+#[test]
+fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
+    use base64::Engine;
+    let profile = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let jwt = |value: serde_json::Value| {
+        format!(
+            "e30.{}.signature",
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(serde_json::to_vec(&value).unwrap())
+        )
+    };
+    let auth = serde_json::to_vec(&serde_json::json!({
+        "auth_mode":"chatgpt", "OPENAI_API_KEY":null,
+        "tokens": {"id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{"chatgpt_account_id":"account-1","chatgpt_plan_type":"pro"}})),"access_token":jwt(serde_json::json!({"exp":4_000_000_000_u64})),"refresh_token":"never-used","account_id":"account-1"},
+        "last_refresh":"2026-09-07T00:00:00Z"
+    })).unwrap();
+    std::fs::write(home.path().join("auth.json"), &auth).unwrap();
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .with_codex_home(home.path())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let mut call = |id: u64, method: &str, params: serde_json::Value| -> serde_json::Value {
+        serde_json::from_str(
+            &server.handle_json(
+                &mut connection,
+                &serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params})
+                    .to_string(),
+            ),
+        )
+        .unwrap()
+    };
+    call(
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"auth-test","version":"1"},"capabilities":{}}),
+    );
+    assert_eq!(
+        call(2, "account/read", serde_json::json!({}))["result"]["accounts"][0]["plan"],
+        "pro"
+    );
+    assert_eq!(
+        call(
+            3,
+            "account/logout",
+            serde_json::json!({"provider":"openai-chatgpt"})
+        )["result"]["status"],
+        "loggedOut"
+    );
+    assert_eq!(
+        call(4, "account/read", serde_json::json!({}))["result"]["accounts"],
+        serde_json::json!([])
+    );
+    assert_eq!(
+        call(
+            5,
+            "account/login/start",
+            serde_json::json!({"method":{"type":"openAiChatGptDeviceCode"}})
+        )["result"]["type"],
+        "connected"
+    );
+    assert_eq!(
+        call(6, "account/read", serde_json::json!({}))["result"]["accounts"][0]["status"],
+        "ready"
+    );
+    assert!(auth == std::fs::read(home.path().join("auth.json")).unwrap());
+    std::fs::remove_file(home.path().join("auth.json")).unwrap();
+    assert_eq!(
+        call(7, "account/read", serde_json::json!({}))["result"]["accounts"],
+        serde_json::json!([])
+    );
 }
 
 #[test]

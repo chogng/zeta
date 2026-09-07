@@ -121,7 +121,9 @@ struct BlockingWriter {
 }
 
 #[derive(Default)]
-struct TestLoginDriver;
+struct TestLoginDriver {
+    account: Mutex<Option<AccountSnapshot>>,
+}
 
 impl InteractiveLoginDriver for TestLoginDriver {
     fn provider_id(&self) -> &'static str {
@@ -129,7 +131,7 @@ impl InteractiveLoginDriver for TestLoginDriver {
     }
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
-        Ok(None)
+        Ok(self.account.lock().unwrap().clone())
     }
 
     fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
@@ -1503,16 +1505,36 @@ fn session_restore_reopens_archived_conversation_and_updates_catalog() {
     initialize(&server, &mut connection);
     let session = create_session(&server, &mut connection, 2, "restore-session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
-    for (id, operation, expected) in [(3, "archive", "archived"), (4, "restore", "active"), (5, "restore", "active")] {
-        let response = call(&server, &mut connection, serde_json::json!({
-            "jsonrpc":"2.0", "id":id, "method":"session/request",
-            "params":{"commandId":format!("restore-test-{id}"), "sessionId":session_id, "request":{"type":operation}}
-        }));
-        assert_eq!(response["result"]["value"]["session"]["status"], expected, "{response}");
+    for (id, operation, expected) in [
+        (3, "archive", "archived"),
+        (4, "restore", "active"),
+        (5, "restore", "active"),
+    ] {
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":id, "method":"session/request",
+                "params":{"commandId":format!("restore-test-{id}"), "sessionId":session_id, "request":{"type":operation}}
+            }),
+        );
+        assert_eq!(
+            response["result"]["value"]["session"]["status"], expected,
+            "{response}"
+        );
     }
-    let listed = call(&server, &mut connection, serde_json::json!({"jsonrpc":"2.0","id":6,"method":"session/list","params":{}}));
+    let listed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"session/list","params":{}}),
+    );
     assert_eq!(listed["result"]["sessions"][0]["status"], "active");
-    assert!(server.drain_notifications(&mut connection).iter().any(|notification| notification.contains("session/changed")));
+    assert!(
+        server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notification| notification.contains("session/changed"))
+    );
 }
 
 #[test]
@@ -4525,7 +4547,8 @@ fn slow_connection_writer_does_not_block_another_connection() {
 
 #[test]
 fn account_rpc_projects_login_completion_without_credentials() {
-    let login = Arc::new(LoginService::new(Arc::new(TestLoginDriver)).unwrap());
+    let driver = Arc::new(TestLoginDriver::default());
+    let login = Arc::new(LoginService::new(driver.clone()).unwrap());
     let server = server().with_login_service(Arc::clone(&login));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -4581,6 +4604,7 @@ fn account_rpc_projects_login_completion_without_credentials() {
             && !value.contains("apiKey")
     }));
 
+    *driver.account.lock().unwrap() = login.read().unwrap().accounts.first().cloned();
     let read = call(
         &server,
         &mut connection,
@@ -4588,6 +4612,13 @@ fn account_rpc_projects_login_completion_without_credentials() {
     );
     assert_eq!(read["result"]["accounts"][0]["plan"], "plus");
     assert_eq!(read["result"]["accounts"][0]["credentialRevision"], 7);
+    *driver.account.lock().unwrap() = None;
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"account/read","params":{}}),
+    );
+    assert_eq!(read["result"]["accounts"], serde_json::json!([]));
 }
 
 #[test]

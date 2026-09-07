@@ -10,6 +10,7 @@ use zeta_protocol::ThreadUpdateEnvelope;
 /// A connection-layer fact understood by the TUI event loop.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ClientEvent {
+    Account(crate::config::SubscriptionEvent),
     AgentRequest(Box<AgentRequestEnvelope>),
     ConfigChanged,
     ConnectionClosed(ConnectionCloseReason),
@@ -31,6 +32,12 @@ pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
 
 fn project_notification(notification: ServerNotification) -> Option<ClientEvent> {
     match notification {
+        ServerNotification::AccountUpdated(updated) => Some(ClientEvent::Account(
+            crate::config::SubscriptionEvent::Updated(updated.account),
+        )),
+        ServerNotification::AccountLoginCompleted(completed) => Some(ClientEvent::Account(
+            crate::config::SubscriptionEvent::Completed(completed),
+        )),
         ServerNotification::AgentRequest(request) => {
             Some(ClientEvent::AgentRequest(Box::new(request)))
         }

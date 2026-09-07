@@ -376,25 +376,6 @@ pub(crate) fn draw(
     );
 }
 
-pub(crate) fn choice_index_at(
-    area: Rect,
-    view: QueryView<'_>,
-    column: u16,
-    row: u16,
-) -> Option<usize> {
-    if column <= area.x || column >= area.right().saturating_sub(1) {
-        return None;
-    }
-    let first_choice_row = area.y.saturating_add(2);
-    let visible_choices = view.question.choices.len().min(MAX_CHOICE_ROWS)
-        + usize::from(
-            view.question.custom_answer == QueryCustomAnswer::Allowed
-                && view.question.choices.len() < MAX_CHOICE_ROWS,
-        );
-    let index = usize::from(row.saturating_sub(first_choice_row));
-    (row >= first_choice_row && index < visible_choices).then_some(index)
-}
-
 fn choice_line<'a>(
     label: &'a str,
     description: &'a str,

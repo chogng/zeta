@@ -142,6 +142,25 @@ fn unowned_notifications_do_not_enter_tui_state() {
 }
 
 #[test]
+fn account_notifications_reach_the_subscription_owner() {
+    use crate::config::SubscriptionEvent;
+    use zeta_app_server_protocol::protocol::account::AccountReadResult;
+    use zeta_app_server_protocol::protocol::account::AccountUpdated;
+    let account = AccountReadResult {
+        revision: 3,
+        accounts: vec![],
+    };
+    assert_eq!(
+        map_event(AppServerEvent::Notification(
+            ServerNotification::AccountUpdated(AccountUpdated {
+                account: account.clone()
+            })
+        )),
+        Some(ClientEvent::Account(SubscriptionEvent::Updated(account)))
+    );
+}
+
+#[test]
 fn notification_failure_becomes_a_client_event() {
     assert_eq!(
         map_event(AppServerEvent::ConnectionClosed(

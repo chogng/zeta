@@ -178,28 +178,6 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
 }
 
 #[test]
-fn session_manager_pointer_preview_preserves_a_nonempty_draft_and_input_focus() {
-    let mut app = active_session_app();
-    app.handle_key(key(KeyCode::Left));
-    app.insert_text("keep this draft");
-    assert!(matches!(
-        app.activate_session_manager_pointer_target(
-            crate::sessions::SessionManagerPointerTarget::Session(
-                SessionId::new("current").unwrap()
-            )
-        ),
-        Some(AppCommand::Sessions(SessionCommand::Preview { .. }))
-    ));
-    app.handle_key(key(KeyCode::Char('x')));
-    app.handle_key(key(KeyCode::Enter));
-    app.handle_paste("ignored paste".into());
-    app.handle_key(key(KeyCode::Esc));
-    assert_eq!(app.input(), "keep this draft");
-    assert!(!app.session_manager_focused());
-    assert!(app.session_manager_view().is_some());
-}
-
-#[test]
 fn session_manager_preview_loads_older_history_without_switching_the_active_thread() {
     let mut app = active_session_app();
     app.handle_key(key(KeyCode::Left));
@@ -312,28 +290,6 @@ fn session_manager_group_keys_collapse_expand_and_skip_hidden_sessions() {
         Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. })) if session_id == "current"));
 }
 
-#[test]
-fn session_manager_heading_click_toggles_without_editing_the_draft_or_opening_a_session() {
-    let mut app = active_session_app();
-    app.handle_key(key(KeyCode::Left));
-    app.insert_text("keep this draft");
-    let area = ratatui::layout::Rect::new(0, 0, WIDTH, HEIGHT);
-    let heading =
-        crate::sessions::pointer_target_at(area, app.session_manager_view().unwrap(), 6, 0)
-            .expect("Idle heading must accept clicks");
-    assert_eq!(
-        app.activate_session_manager_pointer_target(heading.clone()),
-        None
-    );
-    assert!(!app.session_manager_focused());
-    assert!(app.session_preview().is_none());
-    assert!(!render(&app).contains("Snapshot session"));
-    assert_eq!(app.input(), "keep this draft");
-    assert_eq!(app.activate_session_manager_pointer_target(heading), None);
-    assert!(render(&app).contains("Snapshot session"));
-    assert_eq!(app.input(), "keep this draft");
-    assert!(!app.session_manager_focused());
-}
 
 fn preview_result(
     range: std::ops::Range<usize>,

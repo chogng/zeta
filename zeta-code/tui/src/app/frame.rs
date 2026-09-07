@@ -1,5 +1,4 @@
 use crate::app::App;
-use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::app::welcome;
 use zeta_memory_diagnostics::ProcessResourceDemand;
 use crate::keymap::bindings;
@@ -15,9 +14,6 @@ use crate::thread::interaction::approval;
 use crate::thread::interaction::query;
 use crate::thread::plan;
 use crate::thread::queue;
-use crate::thread::queue::QueueId;
-use crate::thread::transcript as chat_history;
-use crate::thread::transcript::ChatHistoryPointerState;
 use crate::thread::transcript::ChatHistoryView;
 use crate::widgets::key_hint;
 use ratatui::Frame;
@@ -102,22 +98,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             welcome::desired_height(areas.session.transcript.width),
         );
         welcome::draw(frame, manager_areas.welcome, app.welcome(), context);
-        let hovered_manager = match hovered {
-            Some(InputPointerTarget::SessionManager(target)) => Some(target),
-            _ => None,
-        };
-        let pressed_manager = match pressed {
-            Some(InputPointerTarget::SessionManager(target)) => Some(target),
-            _ => None,
-        };
-        sessions::draw_manager(
-            frame,
-            manager_areas.sessions,
-            manager,
-            hovered_manager,
-            pressed_manager,
-            context,
-        );
+        sessions::draw_manager(frame, manager_areas.sessions, manager, None, None, context);
     } else {
         let messages = app.visible_transcript_views();
         let header = app.transcript_header_visible().then(|| {
@@ -133,7 +114,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             messages: &messages,
             scroll: app.transcript_scroll(),
             render_cache: app.transcript_render_cache(),
-            pointer: transcript_pointer_state(hovered, pressed),
+            pointer: Default::default(),
         }
         .render(frame, areas.session.transcript, context);
     }
@@ -144,38 +125,9 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     };
     let input_view = app.chat_composer_view();
     if let Some(approval) = app.approval_view() {
-        let hovered_choice = match hovered {
-            Some(InputPointerTarget::Approval(index)) => Some(*index),
-            _ => None,
-        };
-        let pressed_choice = match pressed {
-            Some(InputPointerTarget::Approval(index)) => Some(*index),
-            _ => None,
-        };
-        approval::draw(
-            frame,
-            areas.session.composer,
-            approval,
-            hovered_choice,
-            pressed_choice,
-            context,
-        );
+        approval::draw(frame, areas.session.composer, approval, None, None, context);
     } else if let Some(panel) = app.command_panel() {
-        let hovered_panel = match hovered {
-            Some(InputPointerTarget::CommandPanel(target)) => Some(*target),
-            _ => None,
-        };
-        let pressed_panel = match pressed {
-            Some(InputPointerTarget::CommandPanel(target)) => Some(*target),
-            _ => None,
-        };
-        panel.draw(
-            frame,
-            areas.session.composer,
-            hovered_panel,
-            pressed_panel,
-            context,
-        );
+        panel.draw(frame, areas.session.composer, None, None, context);
     } else {
         ChatComposerSurface {
             view: &input_view,
@@ -184,42 +136,19 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         .render(frame, areas.input, context);
     }
     if let Some(query) = app.query_view() {
-        let hovered_choice = match hovered {
-            Some(InputPointerTarget::Query(index)) => Some(*index),
-            _ => None,
-        };
-        let pressed_choice = match pressed {
-            Some(InputPointerTarget::Query(index)) => Some(*index),
-            _ => None,
-        };
-        query::draw(
-            frame,
-            areas.session.request,
-            query,
-            hovered_choice,
-            pressed_choice,
-            context,
-        );
+        query::draw(frame, areas.session.request, query, None, None, context);
     }
     if app.session_manager_view().is_none() {
         goal::draw(frame, areas.session.goal, app.goal_view(), context);
         plan::draw(frame, areas.session.plan, app.plan_view(), context);
         let queue_view = app.queue_view();
-        let hovered_queue = match hovered {
-            Some(InputPointerTarget::Queue(queue_id)) => Some(*queue_id),
-            _ => None,
-        };
-        let pressed_queue = match pressed {
-            Some(InputPointerTarget::Queue(queue_id)) => Some(*queue_id),
-            _ => None,
-        };
         queue::draw(
             frame,
             areas.session.queue,
             &queue_view,
             queue::DEFAULT_MAX_VISIBLE_ITEMS,
-            hovered_queue,
-            pressed_queue,
+            None,
+            None,
             context,
         );
     }
@@ -277,7 +206,6 @@ pub(crate) fn input_overlay_index_at(
     row: u16,
 ) -> Option<usize> {
     match input_pointer_target_at(app, terminal_area, column, row) {
-        Some(InputPointerTarget::Approval(index) | InputPointerTarget::Query(index)) => Some(index),
         Some(InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index))) => {
             Some(index)
         }
@@ -288,40 +216,6 @@ pub(crate) fn input_overlay_index_at(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InputPointerTarget {
     Composer(ChatComposerPointerTarget),
-    CommandPanel(CommandPanelPointerTarget),
-    Approval(usize),
-    Query(usize),
-    SessionManager(crate::sessions::SessionManagerPointerTarget),
-    Queue(QueueId),
-    TranscriptJumpToBottom,
-    TranscriptToggle(String),
-    TranscriptDetails(String),
-}
-
-fn transcript_pointer_state<'a>(
-    hovered: Option<&'a InputPointerTarget>,
-    pressed: Option<&'a InputPointerTarget>,
-) -> ChatHistoryPointerState<'a> {
-    ChatHistoryPointerState {
-        hovered_jump_to_bottom: matches!(hovered, Some(InputPointerTarget::TranscriptJumpToBottom)),
-        hovered_toggle: match hovered {
-            Some(InputPointerTarget::TranscriptToggle(cell_id)) => Some(cell_id.as_str()),
-            _ => None,
-        },
-        hovered_details: match hovered {
-            Some(InputPointerTarget::TranscriptDetails(cell_id)) => Some(cell_id.as_str()),
-            _ => None,
-        },
-        pressed_jump_to_bottom: matches!(pressed, Some(InputPointerTarget::TranscriptJumpToBottom)),
-        pressed_toggle: match pressed {
-            Some(InputPointerTarget::TranscriptToggle(cell_id)) => Some(cell_id.as_str()),
-            _ => None,
-        },
-        pressed_details: match pressed {
-            Some(InputPointerTarget::TranscriptDetails(cell_id)) => Some(cell_id.as_str()),
-            _ => None,
-        },
-    }
 }
 
 pub(crate) fn input_pointer_target_at(
@@ -330,107 +224,22 @@ pub(crate) fn input_pointer_target_at(
     column: u16,
     row: u16,
 ) -> Option<InputPointerTarget> {
-    let areas = layout(app, terminal_area);
-    if app.overlay().is_some() {
+    if app.mouse_mode() != crate::terminal::mouse::MouseMode::TuiCapture || !completion_visible(app)
+    {
         return None;
     }
-    if let Some(preview) = app.session_preview() {
-        return match chat_history::pointer_target_at(
-            areas.session.transcript,
-            usize::from(welcome::history_height(areas.session.transcript.height)),
-            &preview.messages(),
-            &preview.scroll,
-            &preview.cache,
-            app.render_context(),
-            column,
-            row,
-        ) {
-            Some(chat_history::ChatHistoryPointerTarget::JumpToBottom) => {
-                Some(InputPointerTarget::TranscriptJumpToBottom)
-            }
-            _ => None,
-        };
-    }
-    let input_view = app.chat_composer_view();
-    if completion_visible(app)
-        && let Some(target) = chat_composer::pointer_target_at(
-            completion_area(&areas),
-            &input_view,
-            true,
-            column,
-            row,
-        )
-    {
-        return Some(InputPointerTarget::Composer(target));
-    }
-    if let Some(view) = app.approval_view() {
-        return approval::choice_index_at(areas.session.composer, view, column, row)
-            .map(InputPointerTarget::Approval);
-    }
-    if let Some(view) = app.query_view()
-        && let Some(index) = query::choice_index_at(areas.session.request, view, column, row)
-    {
-        return Some(InputPointerTarget::Query(index));
-    }
-    if let Some(panel) = app.command_panel()
-        && let Some(target) = panel.pointer_target_at(areas.session.composer, column, row)
-    {
-        return Some(InputPointerTarget::CommandPanel(target));
-    }
-    if let Some(manager) = app.session_manager_view() {
-        let manager_areas = super::layout::manager_areas(
-            areas.session.transcript,
-            welcome::desired_height(areas.session.transcript.width),
-        );
-        if let Some(target) =
-            sessions::pointer_target_at(manager_areas.sessions, manager, column, row)
-        {
-            return Some(InputPointerTarget::SessionManager(target));
-        }
-    } else {
-        let queue_view = app.queue_view();
-        if let Some(queue_id) = queue::pointer_target_at(
-            areas.session.queue,
-            &queue_view,
-            queue::DEFAULT_MAX_VISIBLE_ITEMS,
-            column,
-            row,
-        ) {
-            return Some(InputPointerTarget::Queue(queue_id));
-        }
-        let messages = app.visible_transcript_views();
-        let header_rows = if app.transcript_header_visible() {
-            usize::from(welcome::history_height(areas.session.transcript.height))
-        } else {
-            0
-        };
-        if let Some(target) = chat_history::pointer_target_at(
-            areas.session.transcript,
-            header_rows,
-            &messages,
-            app.transcript_scroll(),
-            app.transcript_render_cache(),
-            app.render_context(),
-            column,
-            row,
-        ) {
-            return Some(match target {
-                chat_history::ChatHistoryPointerTarget::JumpToBottom => {
-                    InputPointerTarget::TranscriptJumpToBottom
-                }
-                chat_history::ChatHistoryPointerTarget::Toggle(entry_id) => {
-                    InputPointerTarget::TranscriptToggle(entry_id)
-                }
-                chat_history::ChatHistoryPointerTarget::Details(entry_id) => {
-                    InputPointerTarget::TranscriptDetails(entry_id)
-                }
-            });
-        }
-    }
-    None
+    let areas = layout(app, terminal_area);
+    chat_composer::pointer_target_at(
+        completion_area(&areas),
+        &app.chat_composer_view(),
+        true,
+        column,
+        row,
+    )
+    .map(InputPointerTarget::Composer)
 }
 
-pub(crate) fn panel_mouse_contains(
+pub(crate) fn overlay_mouse_contains(
     app: &App,
     terminal_area: Rect,
     position: ratatui::layout::Position,
@@ -443,12 +252,6 @@ pub(crate) fn panel_mouse_contains(
         return overlay
             .surface(transient_area_from_layout(&areas))
             .contains(position);
-    }
-    if app.command_panel().is_some() || app.approval_view().is_some() {
-        return areas.session.composer.contains(position);
-    }
-    if app.query_view().is_some() {
-        return areas.session.request.contains(position);
     }
     matches!(
         input_pointer_target_at(app, terminal_area, position.x, position.y),
@@ -594,8 +397,9 @@ pub(crate) fn transient_area(app: &App, terminal_area: Rect) -> Rect {
     transient_area_from_layout(&layout(app, terminal_area))
 }
 
-fn completion_visible(app: &App) -> bool {
-    app.overlay().is_none()
+pub(super) fn completion_visible(app: &App) -> bool {
+    app.session_preview().is_none()
+        && app.overlay().is_none()
         && app.command_panel().is_none()
         && app.approval_view().is_none()
         && app.query_view().is_none()

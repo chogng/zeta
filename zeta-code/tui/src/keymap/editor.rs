@@ -150,31 +150,6 @@ impl KeymapEditor {
         })
     }
 
-    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.capture.is_none()
-            && self
-                .pages
-                .last_mut()
-                .is_some_and(|page| page.select_tab(index))
-    }
-
-    pub(crate) fn selection_mut(
-        &mut self,
-    ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
-        if self.capture.is_some() {
-            return None;
-        }
-        self.pages.last_mut().map(|page| page.state_mut())
-    }
-
-    pub(crate) fn focus_search(&mut self) -> bool {
-        self.capture.is_none()
-            && self
-                .pages
-                .last_mut()
-                .is_some_and(ListSelection::focus_search)
-    }
-
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<KeymapEditorOutcome> {
         if self.capture.is_some() {
             return None;

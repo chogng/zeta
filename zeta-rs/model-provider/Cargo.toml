@@ -29,6 +29,8 @@ zeta-ollama = { workspace = true }
 zeta-secrets = { workspace = true }
 
 [dev-dependencies]
+base64 = { workspace = true }
+tempfile = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]

@@ -382,6 +382,10 @@ fn refresh_server_event(
     app: &mut App,
 ) -> ServerRefresh {
     match event {
+        client::ClientEvent::Account(event) => {
+            app.update(crate::config::Event::Subscription(event));
+            ServerRefresh::default()
+        }
         client::ClientEvent::ConfigChanged => ServerRefresh {
             config: true,
             ..ServerRefresh::default()

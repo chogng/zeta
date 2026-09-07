@@ -35,6 +35,8 @@ pub(crate) struct ConfigEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
+    OpenSubscription,
+    Subscription(super::SubscriptionCommand),
     SetTerminalSettings(ConfigEdit),
     SetVimMode(ConfigEdit),
     SetShowGitChangesAsDiff(ConfigEdit),
@@ -93,6 +95,7 @@ pub(crate) struct ProviderApiKeyPrompt {
 #[derive(Debug)]
 pub(crate) struct ConfigEditor {
     selection: ListSelection<ConfigSelectionAction>,
+    subscription: Option<ListSelection<ConfigSelectionAction>>,
     prompt: Option<ProviderApiKeyPromptState>,
 }
 
@@ -121,6 +124,7 @@ impl ConfigEditor {
     pub(crate) fn new(spec: ConfigChoices) -> Self {
         Self {
             selection: ListSelection::new(spec.model, spec.actions),
+            subscription: None,
             prompt: None,
         }
     }
@@ -135,6 +139,10 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
+        if let Some(subscription) = self.subscription.as_mut() {
+            let outcome = subscription.handle_key(key);
+            return self.handle_subscription_outcome(outcome);
+        }
         if let Some(prompt) = self.prompt.as_mut() {
             return match prompt.prompt.handle_key(key) {
                 TextPromptOutcome::Consumed => ConfigEditorOutcome::Consumed,
@@ -157,7 +165,9 @@ impl ConfigEditor {
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
             ListSelectionOutcome::Adjust(action, _) => match action {
-                ConfigSelectionAction::OpenProviderApiKey { .. } => ConfigEditorOutcome::Consumed,
+                ConfigSelectionAction::OpenProviderApiKey { .. }
+                | ConfigSelectionAction::OpenSubscription
+                | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
                 action => ConfigEditorOutcome::Action(action),
             },
             ListSelectionOutcome::Consumed => ConfigEditorOutcome::Consumed,
@@ -166,7 +176,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        if let Some(prompt) = self.prompt.as_mut() {
+        if let Some(subscription) = self.subscription.as_mut() {
+            subscription.handle_paste(pasted);
+        } else if let Some(prompt) = self.prompt.as_mut() {
             prompt.prompt.handle_paste(pasted);
         } else {
             self.selection.handle_paste(pasted);
@@ -174,6 +186,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn page(&self) -> ConfigEditorPage<'_> {
+        if let Some(subscription) = &self.subscription {
+            return ConfigEditorPage::Selection(subscription.state());
+        }
         match &self.prompt {
             Some(prompt) => ConfigEditorPage::Prompt(&prompt.prompt),
             None => ConfigEditorPage::Selection(self.selection.state()),
@@ -181,6 +196,9 @@ impl ConfigEditor {
     }
 
     pub(crate) fn key_hints(&self) -> &str {
+        if let Some(subscription) = &self.subscription {
+            return subscription.key_hints();
+        }
         self.prompt
             .as_ref()
             .map(|prompt| prompt.key_hints.text())
@@ -188,24 +206,17 @@ impl ConfigEditor {
     }
 
     pub(crate) fn selection(&self) -> Option<&crate::widgets::list_selection::ListSelectionState> {
+        if let Some(subscription) = &self.subscription {
+            return Some(subscription.state());
+        }
         self.prompt.is_none().then(|| self.selection.state())
     }
 
-    pub(crate) fn selection_mut(
-        &mut self,
-    ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
-        self.prompt.is_none().then(|| self.selection.state_mut())
-    }
-
-    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.prompt.is_none() && self.selection.select_tab(index)
-    }
-
-    pub(crate) fn focus_search(&mut self) -> bool {
-        self.prompt.is_none() && self.selection.focus_search()
-    }
-
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ConfigEditorOutcome> {
+        if let Some(subscription) = self.subscription.as_mut() {
+            let outcome = subscription.activate_visible_item(index)?;
+            return Some(self.handle_subscription_outcome(outcome));
+        }
         let outcome = self.selection.activate_visible_item(index)?;
         Some(match outcome {
             ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProviderApiKey {
@@ -220,6 +231,30 @@ impl ConfigEditor {
             ListSelectionOutcome::Consumed => ConfigEditorOutcome::Consumed,
             ListSelectionOutcome::Dismiss => ConfigEditorOutcome::Dismiss,
         })
+    }
+
+    pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
+        self.subscription = Some(ListSelection::new(spec.model, spec.actions));
+    }
+
+    pub(crate) fn update_subscription(&mut self, spec: ConfigChoices) {
+        if let Some(subscription) = self.subscription.as_mut() {
+            subscription.replace(spec.model, spec.actions);
+        }
+    }
+
+    fn handle_subscription_outcome(
+        &mut self,
+        outcome: ListSelectionOutcome<ConfigSelectionAction>,
+    ) -> ConfigEditorOutcome {
+        match outcome {
+            ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
+            ListSelectionOutcome::Dismiss => {
+                self.subscription = None;
+                ConfigEditorOutcome::Consumed
+            }
+            _ => ConfigEditorOutcome::Consumed,
+        }
     }
 
     fn open_provider_prompt(&mut self, provider: String, display_name: String) {
@@ -289,7 +324,7 @@ pub(crate) fn config_choices(
             .with_id(mouse_id)
             .with_columns(
                 "Enhanced TUI",
-                "Click, scroll, hover, and auto-copy selected panel text",
+                "Click, scroll, hover, and auto-copy text in overlays only",
                 checkbox(mouse_enabled),
             ),
         ListSelectionItem::new("Vim mode")
@@ -363,11 +398,15 @@ fn provider_items(
     catalog: &ProviderListResult,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> Vec<ListSelectionItem> {
-    catalog
+    let mut items: Vec<_> = catalog
         .providers
         .iter()
         .map(|provider| provider_item(provider, actions))
-        .collect()
+        .collect();
+    let id = ListSelectionItemId::new("chatgpt-subscription");
+    actions.insert(id.clone(), ConfigSelectionAction::OpenSubscription);
+    items.push(ListSelectionItem::new("ChatGPT subscription").with_id(id));
+    items
 }
 
 fn provider_item(

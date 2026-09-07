@@ -15,7 +15,7 @@ use crate::client;
 use crate::host;
 use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
-use crate::host::process_resources::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceDemand;
 use crate::terminal;
 use crate::terminal::screen_selection::ClickCount;
 use crate::terminal::screen_selection::ScreenSelectionOutcome;
@@ -26,6 +26,7 @@ use crate::thread::transcript::batch::TranscriptBatch;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
 use std::time::Instant;
 use zeta_app_server_client::AppServerSession;
@@ -132,136 +133,63 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 }
                 event => event,
             };
-            let action =
-                match runtime_event {
-                    RuntimeEvent::Client(event) => {
-                        let event = match super::recovery::continue_or_exit(
-                            event,
-                            driver.session_id(),
-                            driver.thread_id(),
-                        ) {
-                            Ok(event) => event,
-                            Err(exit) => return Ok(exit),
-                        };
-                        driver.handle_client_event(event);
+            let action = match runtime_event {
+                RuntimeEvent::Client(event) => {
+                    let event = match super::recovery::continue_or_exit(
+                        event,
+                        driver.session_id(),
+                        driver.thread_id(),
+                    ) {
+                        Ok(event) => event,
+                        Err(exit) => return Ok(exit),
+                    };
+                    driver.handle_client_event(event);
+                    None
+                }
+                RuntimeEvent::TerminationRequested => {
+                    return Ok(TuiExit::TerminationRequested);
+                }
+                RuntimeEvent::ProcessResources(reading) => {
+                    driver
+                        .app_mut()
+                        .update(HostEvent::ProcessResourcesSampled(reading));
+                    if !matches!(process_resource_demand, ProcessResourceDemand::Disabled) {
+                        redraw.request(Instant::now(), RedrawPriority::Batched);
+                    }
+                    None
+                }
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(error)) => {
+                    return Err(error.into());
+                }
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Tick) => {
+                    let now = Instant::now();
+                    if driver.app_mut().handle_tick(now) {
+                        redraw.request(now, RedrawPriority::Batched);
+                    }
+                    None
+                }
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
+                    Event::FocusGained => {
+                        Some(HostCommand::RefreshClipboardImageAvailability.into())
+                    }
+                    Event::Key(key) if key.kind != KeyEventKind::Release => {
+                        driver.app_mut().handle_key_in_area(key, terminal.area()?)
+                    }
+                    Event::Mouse(mouse) => {
+                        let outcome = handle_mouse(driver.app_mut(), terminal.area()?, mouse);
+                        finish_pointer_gesture(driver.app_mut(), &terminal, outcome)?
+                    }
+                    Event::Paste(text) => {
+                        driver.app_mut().handle_paste(text);
                         None
                     }
-                    RuntimeEvent::TerminationRequested => {
-                        return Ok(TuiExit::TerminationRequested);
-                    }
-                    RuntimeEvent::ProcessResources(reading) => {
-                        driver
-                            .app_mut()
-                            .update(HostEvent::ProcessResourcesSampled(reading));
-                        if !matches!(process_resource_demand, ProcessResourceDemand::Disabled) {
-                            redraw.request(Instant::now(), RedrawPriority::Batched);
-                        }
+                    Event::Resize(_, _) => {
+                        driver.app_mut().clear_pointer_interaction();
                         None
                     }
-                    RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(error)) => {
-                        return Err(error.into());
-                    }
-                    RuntimeEvent::Terminal(terminal::TerminalEvent::Tick) => {
-                        let now = Instant::now();
-                        if driver.app_mut().handle_tick(now) {
-                            redraw.request(now, RedrawPriority::Batched);
-                        }
-                        None
-                    }
-                    RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => {
-                        match event {
-                            Event::FocusGained => {
-                                Some(HostCommand::RefreshClipboardImageAvailability.into())
-                            }
-                            Event::Key(key) if key.kind != KeyEventKind::Release => {
-                                driver.app_mut().handle_key_in_area(key, terminal.area()?)
-                            }
-                            Event::Mouse(mouse)
-                                if !frame::panel_mouse_contains(
-                                    driver.app(),
-                                    terminal.area()?,
-                                    ratatui::layout::Position::new(mouse.column, mouse.row),
-                                ) =>
-                            {
-                                driver.app_mut().clear_mouse_interaction();
-                                None
-                            }
-                            Event::Mouse(mouse)
-                                if mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
-                            {
-                                let terminal_area = terminal.area()?;
-                                let target = frame::input_pointer_target_at(
-                                    driver.app(),
-                                    terminal_area,
-                                    mouse.column,
-                                    mouse.row,
-                                );
-                                driver.app_mut().update_pointer_pressed(target);
-                                driver.app_mut().begin_screen_selection(
-                                    ratatui::layout::Position::new(mouse.column, mouse.row),
-                                );
-                                None
-                            }
-                            Event::Mouse(mouse)
-                                if mouse.kind == MouseEventKind::Drag(MouseButton::Left) =>
-                            {
-                                driver.app_mut().clear_pointer_pressed();
-                                driver.app_mut().drag_screen_selection(
-                                    ratatui::layout::Position::new(mouse.column, mouse.row),
-                                );
-                                None
-                            }
-                            Event::Mouse(mouse)
-                                if mouse.kind == MouseEventKind::Up(MouseButton::Left) =>
-                            {
-                                finish_pointer_gesture(
-                                    driver.app_mut(),
-                                    &terminal,
-                                    ratatui::layout::Position::new(mouse.column, mouse.row),
-                                )?
-                            }
-                            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved => {
-                                let terminal_area = terminal.area()?;
-                                update_pointer_hover(
-                                    driver.app_mut(),
-                                    terminal_area,
-                                    mouse.column,
-                                    mouse.row,
-                                );
-                                None
-                            }
-                            Event::Mouse(mouse)
-                                if matches!(
-                                    mouse.kind,
-                                    MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
-                                ) =>
-                            {
-                                let terminal_area = terminal.area()?;
-                                let direction = if mouse.kind == MouseEventKind::ScrollUp {
-                                    TranscriptScrollDirection::Up
-                                } else {
-                                    TranscriptScrollDirection::Down
-                                };
-                                scroll_pointer_item(
-                                    driver.app_mut(),
-                                    terminal_area,
-                                    mouse.column,
-                                    mouse.row,
-                                    direction,
-                                )
-                            }
-                            Event::Paste(text) => {
-                                driver.app_mut().handle_paste(text);
-                                None
-                            }
-                            Event::Resize(_, _) => {
-                                driver.app_mut().clear_pointer_interaction();
-                                None
-                            }
-                            _ => None,
-                        }
-                    }
-                };
+                    _ => None,
+                },
+            };
 
             if driver.poll_request_completions() {
                 redraw.request(Instant::now(), RedrawPriority::Batched);
@@ -319,6 +247,49 @@ fn sync_process_resource_demand(
     *current = next;
 }
 
+fn handle_mouse(
+    app: &mut App,
+    area: ratatui::layout::Rect,
+    mouse: MouseEvent,
+) -> Option<ScreenSelectionOutcome> {
+    let position = ratatui::layout::Position::new(mouse.column, mouse.row);
+    if !frame::overlay_mouse_contains(app, area, position) {
+        app.clear_mouse_interaction();
+        return None;
+    }
+    match mouse.kind {
+        MouseEventKind::Down(MouseButton::Left) => {
+            app.update_pointer_pressed(frame::input_pointer_target_at(
+                app,
+                area,
+                mouse.column,
+                mouse.row,
+            ));
+            app.begin_screen_selection(position);
+        }
+        MouseEventKind::Drag(MouseButton::Left) => {
+            app.clear_pointer_pressed();
+            app.drag_screen_selection(position);
+        }
+        MouseEventKind::Up(MouseButton::Left) => {
+            let outcome = app.finish_screen_selection(position, Instant::now());
+            app.clear_pointer_pressed();
+            return outcome;
+        }
+        MouseEventKind::Moved => update_pointer_hover(app, area, mouse.column, mouse.row),
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            let direction = if mouse.kind == MouseEventKind::ScrollUp {
+                TranscriptScrollDirection::Up
+            } else {
+                TranscriptScrollDirection::Down
+            };
+            scroll_pointer_item(app, area, mouse.column, mouse.row, direction);
+        }
+        _ => {}
+    }
+    None
+}
+
 fn activate_pointer_item(
     app: &mut App,
     area: ratatui::layout::Rect,
@@ -327,45 +298,8 @@ fn activate_pointer_item(
 ) -> Option<AppCommand> {
     let target = frame::input_pointer_target_at(app, area, column, row)?;
     match target {
-        InputPointerTarget::CommandPanel(
-            crate::app::command_panel::CommandPanelPointerTarget::Tab(index),
-        ) => {
-            app.select_tab(index);
-            None
-        }
-        InputPointerTarget::CommandPanel(
-            crate::app::command_panel::CommandPanelPointerTarget::Search,
-        ) => {
-            app.focus_composer_search();
-            None
-        }
-        InputPointerTarget::CommandPanel(
-            crate::app::command_panel::CommandPanelPointerTarget::Item(index),
-        ) => app.activate_visible_item(index),
         InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
             app.activate_input_completion(index)
-        }
-        InputPointerTarget::Approval(index) | InputPointerTarget::Query(index) => {
-            app.activate_thread_request_choice(index)
-        }
-        InputPointerTarget::SessionManager(target) => {
-            app.activate_session_manager_pointer_target(target)
-        }
-        InputPointerTarget::Queue(queue_id) => {
-            app.activate_queue_pointer_target(queue_id);
-            None
-        }
-        InputPointerTarget::TranscriptJumpToBottom => {
-            app.follow_latest_transcript();
-            None
-        }
-        InputPointerTarget::TranscriptToggle(entry_id) => {
-            app.toggle_transcript_cell(&entry_id);
-            None
-        }
-        InputPointerTarget::TranscriptDetails(entry_id) => {
-            app.open_transcript_cell_details(&entry_id);
-            None
         }
     }
 }
@@ -378,24 +312,22 @@ fn scroll_pointer_item(
     direction: TranscriptScrollDirection,
 ) -> Option<AppCommand> {
     let position = ratatui::layout::Position::new(column, row);
-    if !frame::panel_mouse_contains(app, area, position) {
+    if !frame::overlay_mouse_contains(app, area, position) {
         return None;
     }
     let navigation = match direction {
         TranscriptScrollDirection::Up => crate::widgets::navigation::Navigation::Previous,
         TranscriptScrollDirection::Down => crate::widgets::navigation::Navigation::Next,
     };
-    app.scroll_panel(area, position, navigation);
+    app.scroll_overlay(area, navigation);
     None
 }
 
 fn finish_pointer_gesture(
     app: &mut App,
     terminal: &terminal::TerminalSession,
-    position: ratatui::layout::Position,
+    outcome: Option<ScreenSelectionOutcome>,
 ) -> Result<Option<AppCommand>, std::io::Error> {
-    let outcome = app.finish_screen_selection(position, Instant::now());
-    app.clear_pointer_pressed();
     match outcome {
         Some(ScreenSelectionOutcome::Click {
             position,

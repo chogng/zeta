@@ -152,10 +152,6 @@ impl ChatPanel {
         self.command.as_ref()
     }
 
-    pub(crate) fn command_mut(&mut self) -> Option<&mut CommandPanel> {
-        self.command.as_mut()
-    }
-
     pub(crate) fn command_key_hints(&self) -> Option<&str> {
         self.command.as_ref().map(CommandPanel::key_hints)
     }
@@ -194,18 +190,6 @@ impl ChatPanel {
         self.command.as_ref().and_then(CommandPanel::list_selection)
     }
 
-    pub(crate) fn select_command_tab(&mut self, index: usize) -> bool {
-        self.command
-            .as_mut()
-            .is_some_and(|command| command.select_tab(index))
-    }
-
-    pub(crate) fn focus_command_search(&mut self) -> bool {
-        self.command
-            .as_mut()
-            .is_some_and(CommandPanel::focus_search)
-    }
-
     pub(crate) fn activate_command_item(&mut self, index: usize) -> Option<CommandPanelOutcome> {
         self.command.as_mut()?.activate_visible_item(index)
     }
@@ -219,6 +203,18 @@ impl ChatPanel {
     pub(crate) fn replace_config(&mut self, choices: ConfigChoices) {
         if let Some(command) = self.command.as_mut() {
             command.replace_config(choices);
+        }
+    }
+
+    pub(crate) fn open_subscription(&mut self, choices: ConfigChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.open_subscription(choices);
+        }
+    }
+
+    pub(crate) fn update_subscription(&mut self, choices: ConfigChoices) {
+        if let Some(command) = self.command.as_mut() {
+            command.update_subscription(choices);
         }
     }
 
@@ -329,23 +325,6 @@ impl ChatPanel {
             });
         }
         None
-    }
-
-    pub(crate) fn activate_request_choice(
-        &mut self,
-        index: usize,
-    ) -> Option<ThreadRequestResponse> {
-        if let Some(approval) = self.approval.as_mut() {
-            let ApprovalOutcome::Respond(decision) = approval.activate(index)? else {
-                return None;
-            };
-            return Some(approval.response(decision));
-        }
-        let query = self.query.as_mut()?;
-        let QueryOutcome::Completed(answers) = query.activate(index)? else {
-            return None;
-        };
-        Some(query.response(answers))
     }
 
     pub(crate) fn handle_request_paste(&mut self, pasted: String) -> bool {

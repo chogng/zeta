@@ -74,15 +74,6 @@ impl ThemePicker {
             .state()
     }
 
-    pub(crate) fn selection_mut(
-        &mut self,
-    ) -> &mut crate::widgets::list_selection::ListSelectionState {
-        self.pages
-            .last_mut()
-            .expect("a theme picker always has a selection page")
-            .state_mut()
-    }
-
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ThemePickerOutcome {
         let outcome = self
             .pages
@@ -97,18 +88,6 @@ impl ThemePicker {
             .last_mut()
             .expect("a theme picker always has a selection page")
             .handle_paste(pasted);
-    }
-
-    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.pages
-            .last_mut()
-            .is_some_and(|page| page.select_tab(index))
-    }
-
-    pub(crate) fn focus_search(&mut self) -> bool {
-        self.pages
-            .last_mut()
-            .is_some_and(ListSelection::focus_search)
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ThemePickerOutcome> {

@@ -25,6 +25,7 @@ export type AccountLoginMethod =
 	| { readonly type: 'kimiDeviceCode' };
 
 export type AccountLoginChallenge =
+	| { readonly type: 'connected'; readonly loginId: string }
 	| { readonly type: 'browser'; readonly loginId: string; readonly authorizationUrl: string }
 	| { readonly type: 'deviceCode'; readonly loginId: string; readonly verificationUrl: string; readonly userCode: string };
 

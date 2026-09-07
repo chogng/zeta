@@ -29,6 +29,9 @@ use zeta_secrets::SecretKey;
 use zeta_secrets::SecretStore;
 use zeta_secrets::SecretValue;
 
+#[path = "chatgpt_recovery_tests.rs"]
+mod chatgpt_recovery;
+
 #[test]
 fn api_failure_categories_are_preserved_by_the_provider_boundary() {
     assert_eq!(
@@ -617,37 +620,55 @@ fn direct_provider_runtime_rejects_a_missing_required_api_key() {
 
 #[test]
 fn chatgpt_subscription_runtime_uses_local_oauth_and_zeta_agent_loop() {
-    let transport = Arc::new(CapturingTransport::new(responses_response(
-        "Hello from ChatGPT",
+    let transport = Arc::new(CapturingSubscriptionTransport(CapturingTransport::new(
+        responses_response("Hello from ChatGPT"),
     )));
     let secrets = Arc::new(MemorySecretStore::default());
-    secrets
-        .store(
-            &SecretKey::new("provider/openai-chatgpt/current/oauth").unwrap(),
-            &SecretValue::new(
-                br#"{"id_token":"header.payload.signature","access_token":"chatgpt-access","refresh_token":"chatgpt-refresh","expires_at":4102444800,"email":"person@example.com","plan":"plus","user_id":"user-1","account_id":"account-1","is_fedramp":false,"credential_revision":3}"#.to_vec(),
-            ),
+    let home = tempfile::tempdir().unwrap();
+    use base64::Engine;
+    let jwt = |value: Value| {
+        format!(
+            "e30.{}.signature",
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(serde_json::to_vec(&value).unwrap())
         )
-        .unwrap();
-    let chatgpt_oauth = ChatGptOAuth::with_client(secrets.clone(), transport.clone());
+    };
+    let access = jwt(json!({"exp":4_000_000_000_u64}));
+    std::fs::write(home.path().join("auth.json"), serde_json::to_vec(&json!({
+        "auth_mode":"chatgpt", "OPENAI_API_KEY":null,
+        "tokens": {"id_token":jwt(json!({"https://api.openai.com/auth":{"chatgpt_account_id":"account-1"}})), "access_token":access,"refresh_token":"never-used","account_id":"account-1"},
+        "last_refresh":"2026-09-07T00:00:00Z"
+    })).unwrap()).unwrap();
+    let chatgpt_oauth = ChatGptOAuth::with_client(
+        home.path().into(),
+        secrets.clone(),
+        transport.clone(),
+        zeta_chatgpt::ChatGptAuthManagement::Codex,
+    );
     let runtime = ModelProviderRuntime::with_client_and_secrets(
         ProviderConfigRegistry::builtin(),
         transport.clone(),
-        secrets,
+        secrets.clone(),
     )
     .with_chatgpt_oauth(chatgpt_oauth);
     let model = runtime
         .build_model(
             &provider_config("openai"),
-            &model_ref("openai", "gpt-5.6-sol"),
+            &model_ref("openai", "gpt-5.6-luna"),
         )
         .unwrap();
 
-    assert_eq!(invoke_text(model.as_ref(), "hello"), "Hello from ChatGPT");
-    let (endpoint, headers, request) = transport.request.lock().unwrap().clone().unwrap();
+    // All ChatGPT model validation is restricted to Luna / low, including this wire fixture.
+    let mut input = ModelRequest::text("hello");
+    input.reasoning = Some(zeta_protocol::ReasoningConfig {
+        effort: zeta_protocol::ReasoningEffort::Low,
+        summary: false,
+    });
+    assert_eq!(model.invoke(&input).unwrap().text(), "Hello from ChatGPT");
+    let (endpoint, headers, request) = transport.0.request.lock().unwrap().clone().unwrap();
     assert_eq!(endpoint, "https://chatgpt.com/backend-api/codex/responses");
     assert!(headers.iter().any(|header| {
-        header.name() == "Authorization" && header.value() == "Bearer chatgpt-access"
+        header.name() == "Authorization" && header.value() == format!("Bearer {access}")
     }));
     assert!(
         headers.iter().any(|header| {
@@ -659,7 +680,142 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_zeta_agent_loop() {
             .iter()
             .any(|header| header.name() == "Originator" && header.value() == "zeta")
     );
-    assert_eq!(request["model"], "gpt-5.6-sol");
+    assert_eq!(request["model"], "gpt-5.6-luna");
+    assert_eq!(request["reasoning"]["effort"], "low");
+
+    // Reuse this exact model instance after Codex changes the access token.
+    let auth_path = home.path().join("auth.json");
+    let rotated = jwt(json!({"exp":4_000_000_000_u64,"jti":"rotated"}));
+    let mut auth: Value = serde_json::from_slice(&std::fs::read(&auth_path).unwrap()).unwrap();
+    auth["tokens"]["access_token"] = rotated.clone().into();
+    std::fs::write(&auth_path, serde_json::to_vec(&auth).unwrap()).unwrap();
+    let mut events = RecordedModelEvents::default();
+    assert_eq!(
+        model
+            .stream_with_cancellation(&input, &CancellationSource::new().token(), &mut events)
+            .unwrap()
+            .text(),
+        "live"
+    );
+    let (_, headers, request) = transport.0.request.lock().unwrap().clone().unwrap();
+    assert!(
+        headers.iter().any(|header| header.name() == "Authorization"
+            && header.value() == format!("Bearer {rotated}"))
+    );
+    assert_eq!(request["model"], "gpt-5.6-luna");
+    assert_eq!(request["reasoning"]["effort"], "low");
+
+    *transport.0.request.lock().unwrap() = None;
+    let disconnected = SecretKey::new("provider/openai-chatgpt/disconnected").unwrap();
+    secrets
+        .store(&disconnected, &SecretValue::new(b"1".to_vec()))
+        .unwrap();
+    assert!(matches!(
+        model.invoke(&input),
+        Err(ModelProviderError::Credential(_))
+    ));
+    assert!(transport.0.request.lock().unwrap().is_none());
+    secrets.delete(&disconnected).unwrap();
+    std::fs::remove_file(auth_path).unwrap();
+    assert!(matches!(
+        model.stream_with_cancellation(&input, &CancellationSource::new().token(), &mut events),
+        Err(ModelProviderError::Credential(_))
+    ));
+    assert!(transport.0.request.lock().unwrap().is_none());
+}
+
+struct CapturingSubscriptionTransport(CapturingTransport);
+
+#[test]
+#[ignore = "Real Codex subscription request: Luna / low only, read-only credentials"]
+fn live_chatgpt_luna_low_uses_the_zeta_model_pipeline() {
+    use sha2::Digest;
+    let home = zeta_chatgpt::codex_home().unwrap();
+    let fingerprint = || match std::fs::read(home.join("auth.json")) {
+        Ok(bytes) => Some(sha2::Sha256::digest(SecretValue::new(bytes).expose())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => panic!("Codex auth.json could not be fingerprinted"),
+    };
+    let before = fingerprint();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let auth = ChatGptOAuth::with_client(
+        home.clone(),
+        secrets.clone(),
+        Arc::new(FailingTransport),
+        zeta_chatgpt::ChatGptAuthManagement::Codex,
+    );
+    let runtime = ModelProviderRuntime::with_secrets(ProviderConfigRegistry::builtin(), secrets)
+        .with_chatgpt_oauth(auth);
+    // User constraint: never change this smoke test to another model or effort,
+    // and never refresh or rewrite the user's Codex authentication to make it pass.
+    let model = runtime
+        .build_model(
+            &provider_config("openai"),
+            &model_ref("openai", "gpt-5.6-luna"),
+        )
+        .unwrap();
+    let mut request = ModelRequest::text(
+        "Return this exact string without punctuation or extra text: ZETA_AUTH_OK",
+    );
+    request.instructions = Some("Reply briefly. Do not use tools.".into());
+    request.reasoning = Some(zeta_protocol::ReasoningConfig {
+        effort: zeta_protocol::ReasoningEffort::Low,
+        summary: false,
+    });
+    let mut events = RecordedModelEvents::default();
+    let response =
+        model.stream_with_cancellation(&request, &CancellationSource::new().token(), &mut events);
+    assert!(
+        before == fingerprint(),
+        "Codex auth.json must remain unchanged"
+    );
+    if let Err(error) = &response {
+        // Report only a category and event count, never provider bodies or headers.
+        let category = match error {
+            ModelProviderError::Api(zeta_api::ApiError::Transport(message)) => {
+                if message.to_ascii_lowercase().contains("timed out")
+                    || message.to_ascii_lowercase().contains("timeout")
+                {
+                    "transport timeout"
+                } else {
+                    "transport"
+                }
+            }
+            ModelProviderError::Api(
+                zeta_api::ApiError::UsageLimited | zeta_api::ApiError::RateLimited { .. },
+            ) => "usage limit",
+            ModelProviderError::Api(zeta_api::ApiError::Overloaded) => "service overloaded",
+            ModelProviderError::AuthFailed(_) => "authentication rejected",
+            ModelProviderError::Credential(_) => "credential unavailable",
+            ModelProviderError::InvalidResponse(_) => "invalid response",
+            ModelProviderError::InvalidRequest(_) => "invalid request",
+            ModelProviderError::Cancelled(_) => "cancelled",
+            _ => "other model error",
+        };
+        panic!(
+            "Luna / low failed: {category}; delivered events: {}",
+            events.0.len()
+        );
+    }
+    assert!(
+        response.unwrap().text().trim() == "ZETA_AUTH_OK",
+        "Luna must return the exact test marker"
+    );
+}
+
+impl OperationClient for CapturingSubscriptionTransport {
+    fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        self.0.execute(request)
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.0.execute(request)?;
+        StreamingTransport.execute_streaming(request, sink)
+    }
 }
 
 #[test]

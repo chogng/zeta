@@ -26,6 +26,7 @@ pub(crate) struct ProviderApiKeyUpdate {
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
+            Self::Subscription(_) => "zeta-tui-chatgpt-account",
             Self::OpenEditor => "zeta-tui-read-config",
             Self::Edit(_) => "zeta-tui-set-config",
             Self::SetLanguageServerMode(_) => "zeta-tui-set-language-server-mode",
@@ -39,6 +40,9 @@ where
     T: JsonRpcTransport,
 {
     match command {
+        Command::Subscription(command) => Ok(Event::Subscription(super::subscription::execute(
+            client, command,
+        ))),
         Command::OpenEditor => read_config_choices(client).map(Event::EditorOpened),
         Command::Edit(edit) => set_settings(client, edit).map(Event::Updated),
         Command::SetLanguageServerMode(edit) => {

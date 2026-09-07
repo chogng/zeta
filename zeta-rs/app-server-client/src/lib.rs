@@ -18,6 +18,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use zeroize::Zeroize;
 use zeroize::Zeroizing;
+use zeta_app_server_protocol::protocol::account::AccountLoginCancelParams;
+use zeta_app_server_protocol::protocol::account::AccountLoginCancelResult;
+use zeta_app_server_protocol::protocol::account::AccountLoginStartParams;
+use zeta_app_server_protocol::protocol::account::AccountLoginStartResult;
+use zeta_app_server_protocol::protocol::account::AccountLogoutParams;
+use zeta_app_server_protocol::protocol::account::AccountLogoutResult;
+use zeta_app_server_protocol::protocol::account::AccountReadResult;
 use zeta_app_server_protocol::protocol::attachments::AttachmentImportRemoteParams;
 use zeta_app_server_protocol::protocol::attachments::AttachmentMaterializeResult;
 use zeta_app_server_protocol::protocol::attachments::AttachmentUploadCancelParams;
@@ -678,6 +685,35 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SessionThreadUnsubscribeParams,
     ) -> Result<(), ClientError> {
         self.call(ClientMethod::SessionThreadUnsubscribe, params)
+    }
+
+    /// Reads redacted provider accounts without exposing credentials to the client.
+    pub fn read_accounts(&mut self) -> Result<AccountReadResult, ClientError> {
+        self.call(ClientMethod::AccountRead, EmptyParams {})
+    }
+
+    /// Starts the provider-owned interactive sign-in flow.
+    pub fn start_account_login(
+        &mut self,
+        params: AccountLoginStartParams,
+    ) -> Result<AccountLoginStartResult, ClientError> {
+        self.call(ClientMethod::AccountLoginStart, params)
+    }
+
+    /// Cancels a pending sign-in by its backend-issued identity.
+    pub fn cancel_account_login(
+        &mut self,
+        params: AccountLoginCancelParams,
+    ) -> Result<AccountLoginCancelResult, ClientError> {
+        self.call(ClientMethod::AccountLoginCancel, params)
+    }
+
+    /// Removes only the selected provider's credentials from the Zeta profile.
+    pub fn logout_account(
+        &mut self,
+        params: AccountLogoutParams,
+    ) -> Result<AccountLogoutResult, ClientError> {
+        self.call(ClientMethod::AccountLogout, params)
     }
 
     pub fn read_config(&mut self) -> Result<ConfigReadResult, ClientError> {

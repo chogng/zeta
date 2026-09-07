@@ -278,44 +278,6 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn scroll(
-        &mut self,
-        area: Rect,
-        position: ratatui::layout::Position,
-        navigation: crate::widgets::navigation::Navigation,
-    ) {
-        let body = self.body();
-        let layout = CommandPanelLayout::new(
-            area,
-            body.tab_rows(CommandPanelLayout::content_width(area.width)),
-        );
-        if !layout.body.contains(position) {
-            return;
-        }
-        let selection = match self {
-            Self::Help(content) => Some(content.state_mut()),
-            Self::Dirs(content) => Some(content.state_mut()),
-            Self::Config(content) => content.selection_mut(),
-            Self::Connectors(content) => Some(content.state_mut()),
-            Self::Keymap(content) => content.selection_mut(),
-            Self::Mcp(content) => Some(content.state_mut()),
-            Self::Model(content) => Some(content.state_mut()),
-            Self::Rewind(content) => Some(content.state_mut()),
-            Self::Sessions(content) => Some(content.state_mut()),
-            Self::Skills(content) => Some(content.state_mut()),
-            Self::Startup(content) => Some(content.state_mut()),
-            Self::Status(content) => {
-                content.scroll(navigation, layout.body);
-                None
-            }
-            Self::StatusLine(content) => Some(content.state_mut()),
-            Self::Theme(content) => Some(content.selection_mut()),
-        };
-        if let Some(selection) = selection {
-            selection.scroll(layout.body, navigation, position);
-        }
-    }
-
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
         match self {
             Self::Help(selection) => Some(selection.state()),
@@ -453,44 +415,6 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        match self {
-            Self::Help(content) => content.select_tab(index),
-            Self::Dirs(content) => content.select_tab(index),
-            Self::Config(content) => content.select_tab(index),
-            Self::Connectors(content) => content.select_tab(index),
-            Self::Keymap(content) => content.select_tab(index),
-            Self::Mcp(content) => content.select_tab(index),
-            Self::Model(content) => content.select_tab(index),
-            Self::Rewind(content) => content.select_tab(index),
-            Self::Sessions(content) => content.select_tab(index),
-            Self::Skills(content) => content.select_tab(index),
-            Self::Startup(content) => content.select_tab(index),
-            Self::Status(content) => content.select_tab(index),
-            Self::StatusLine(content) => content.select_tab(index),
-            Self::Theme(content) => content.select_tab(index),
-        }
-    }
-
-    pub(crate) fn focus_search(&mut self) -> bool {
-        match self {
-            Self::Help(content) => content.focus_search(),
-            Self::Dirs(content) => content.focus_search(),
-            Self::Config(content) => content.focus_search(),
-            Self::Connectors(content) => content.focus_search(),
-            Self::Keymap(content) => content.focus_search(),
-            Self::Mcp(content) => content.focus_search(),
-            Self::Model(content) => content.focus_search(),
-            Self::Rewind(content) => content.focus_search(),
-            Self::Sessions(content) => content.focus_search(),
-            Self::Skills(content) => content.focus_search(),
-            Self::Startup(content) => content.focus_search(),
-            Self::Status(_) => false,
-            Self::StatusLine(content) => content.focus_search(),
-            Self::Theme(content) => content.focus_search(),
-        }
-    }
-
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<CommandPanelOutcome> {
         match self {
             Self::Help(content) => content.activate_visible_item(index).map(map_read_only),
@@ -546,6 +470,18 @@ impl CommandPanel {
         };
         content.replace(spec);
         true
+    }
+
+    pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
+        if let Self::Config(content) = self {
+            content.open_subscription(spec);
+        }
+    }
+
+    pub(crate) fn update_subscription(&mut self, spec: ConfigChoices) {
+        if let Self::Config(content) = self {
+            content.update_subscription(spec);
+        }
     }
 
     pub(crate) fn finish_config_prompt(&mut self, spec: ConfigChoices) -> bool {

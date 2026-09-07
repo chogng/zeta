@@ -1,0 +1,93 @@
+use super::ChatGptOAuth;
+use sha2::Digest;
+use std::sync::Arc;
+use zeroize::Zeroizing;
+use zeta_client::ClientRequest;
+use zeta_client::OperationClient;
+use zeta_client::RetryPolicy;
+use zeta_client::ZetaClient;
+use zeta_http_client::HttpHeader;
+use zeta_http_client::UreqHttpClient;
+use zeta_secrets::MemorySecretStore;
+
+// User-mandated subscription test budget: ONLY gpt-5.6-luna and low reasoning.
+// Do not add model/effort overrides, refresh tokens, or retry with another model.
+const TEST_MODEL: &str = "gpt-5.6-luna";
+const TEST_EFFORT: &str = "low";
+
+#[test]
+#[ignore = "Uses the user's existing Codex subscription: Luna / low only, no refresh or writes"]
+fn live_codex_auth_is_read_only_and_luna_low_completes() {
+    let home = super::codex_home().expect("Codex home must resolve");
+    let before = auth_digest(&home);
+    let client = Arc::new(ZetaClient::new(Arc::new(UreqHttpClient::new().unwrap())));
+    let runtime = ChatGptOAuth::with_client(
+        home.clone(),
+        Arc::new(MemorySecretStore::default()),
+        client.clone(),
+        super::ChatGptAuthManagement::Codex,
+    );
+    let target = runtime
+        .api_target()
+        .expect("an unexpired Codex ChatGPT login is required; update it in Codex if expired");
+    let mut headers = target.headers;
+    headers.push(HttpHeader::new("Content-Type", "application/json"));
+    headers.push(HttpHeader::new("Accept", "text/event-stream"));
+    let body = serde_json::to_vec(&serde_json::json!({
+        "model": TEST_MODEL,
+        "reasoning": { "effort": TEST_EFFORT },
+        "instructions": "Reply briefly. Do not use tools.",
+        "input": [{"role":"user","content":[{"type":"input_text","text":"Return this exact string without punctuation or extra text: ZETA_AUTH_OK"}]}],
+        "store": false,
+        "stream": true
+    })).unwrap();
+    let request = ClientRequest::post(
+        format!("{}/responses", target.base_url),
+        headers,
+        body,
+        RetryPolicy::never(),
+    )
+    .unwrap();
+    let response = client
+        .execute(&request)
+        .expect("Luna / low request must complete without an automatic retry");
+    // Never include response bodies, raw credentials, or authorization headers in failures.
+    assert!(
+        before == auth_digest(&home),
+        "the source auth.json changed during read-only use"
+    );
+    assert!(
+        response.is_success(),
+        "Luna / low request returned HTTP {}",
+        response.status()
+    );
+    let mut text = String::new();
+    let mut completed = false;
+    for line in response.body().split(|byte| *byte == b'\n') {
+        let Some(data) = line.strip_prefix(b"data: ") else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_slice::<serde_json::Value>(data) else {
+            continue;
+        };
+        match value["type"].as_str() {
+            Some("response.output_text.delta") => {
+                text.push_str(value["delta"].as_str().unwrap_or_default())
+            }
+            Some("response.completed") => completed = true,
+            _ => {}
+        }
+    }
+    assert!(
+        completed && text.trim() == "ZETA_AUTH_OK",
+        "Luna / low must return the exact test marker and a completed event"
+    );
+}
+
+fn auth_digest(home: &std::path::Path) -> Option<[u8; 32]> {
+    match std::fs::read(home.join("auth.json")) {
+        Ok(bytes) => Some(sha2::Sha256::digest(&*Zeroizing::new(bytes)).into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => panic!("auth.json could not be fingerprinted"),
+    }
+}

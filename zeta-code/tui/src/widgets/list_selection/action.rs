@@ -68,18 +68,6 @@ impl<A> ListSelection<A> {
         &self.state
     }
 
-    pub(crate) fn state_mut(&mut self) -> &mut ListSelectionState {
-        &mut self.state
-    }
-
-    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.state.select_tab(index)
-    }
-
-    pub(crate) fn focus_search(&mut self) -> bool {
-        self.state.focus_search()
-    }
-
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         self.state.handle_paste(pasted);
     }

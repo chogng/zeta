@@ -1,20 +1,15 @@
 use crate::oauth::ChatGptError;
 use base64::Engine;
 use serde::Deserialize;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
-use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
-pub(crate) const REFRESH_MARGIN: Duration = Duration::from_secs(5 * 60);
-
-#[derive(Deserialize, Serialize)]
+#[derive(Clone)]
 pub(crate) struct TokenCredential {
-    pub(crate) id_token: String,
     pub(crate) access_token: String,
-    pub(crate) refresh_token: String,
     pub(crate) expires_at: Option<u64>,
     pub(crate) email: Option<String>,
     pub(crate) plan: Option<String>,
@@ -22,84 +17,75 @@ pub(crate) struct TokenCredential {
     pub(crate) account_id: Option<String>,
     pub(crate) is_fedramp: bool,
     pub(crate) credential_revision: u64,
+    pub(crate) storage_revision: [u8; 32],
+    pub(crate) last_refresh: Option<i64>,
+    pub(crate) refresh_available: bool,
 }
 
 impl TokenCredential {
-    pub(crate) fn from_tokens(
-        mut tokens: TokenResponse,
-        credential_revision: u64,
+    pub(crate) fn from_parts(
+        id_token: &str,
+        access_token: String,
+        account_id: Option<String>,
     ) -> Result<Self, ChatGptError> {
-        if tokens.id_token.trim().is_empty() || tokens.access_token.trim().is_empty() {
+        let mut access_token = Zeroizing::new(access_token);
+        if id_token.trim().is_empty() || access_token.trim().is_empty() {
             return Err(ChatGptError::new(
-                "OpenAI returned an incomplete token response",
+                "Codex returned incomplete ChatGPT credentials",
             ));
         }
-        let claims: IdentityClaims = decode_jwt_payload(&tokens.id_token)?;
-        let access_claims: ExpirationClaims = decode_jwt_payload(&tokens.access_token)?;
+        let claims: IdentityClaims = decode_jwt_payload(id_token)?;
+        // Codex treats an opaque access token as having unknown expiry; the
+        // provider still validates it, and last_refresh drives proactive renewal.
+        let expires_at = decode_jwt_payload::<ExpirationClaims>(&access_token)
+            .ok()
+            .and_then(|claims| claims.exp)
+            .and_then(|value| u64::try_from(value).ok());
         let auth = claims.auth.unwrap_or_default();
+        use sha2::Digest;
+        let digest = sha2::Sha256::digest(access_token.as_bytes());
+        let credential_revision = u64::from_be_bytes(
+            digest[..8]
+                .try_into()
+                .expect("SHA-256 prefix has eight bytes"),
+        ) >> 16;
         Ok(Self {
-            id_token: std::mem::take(&mut tokens.id_token),
-            access_token: std::mem::take(&mut tokens.access_token),
-            refresh_token: std::mem::take(&mut tokens.refresh_token),
-            expires_at: access_claims
-                .exp
-                .and_then(|value| u64::try_from(value).ok()),
+            access_token: std::mem::take(&mut *access_token),
+            expires_at,
             email: claims
                 .email
                 .or_else(|| claims.profile.and_then(|value| value.email)),
             plan: auth.chatgpt_plan_type,
             user_id: auth.chatgpt_user_id.or(auth.user_id),
-            account_id: auth.chatgpt_account_id,
+            account_id: account_id.or(auth.chatgpt_account_id),
             is_fedramp: auth.chatgpt_account_is_fedramp,
             credential_revision,
-        })
-    }
-
-    pub(crate) fn apply_refresh(
-        &mut self,
-        mut response: RefreshResponse,
-    ) -> Result<(), ChatGptError> {
-        let id_token = response
-            .id_token
-            .take()
-            .unwrap_or_else(|| self.id_token.clone());
-        let access_token = response
-            .access_token
-            .take()
-            .unwrap_or_else(|| self.access_token.clone());
-        let refresh_token = response
-            .refresh_token
-            .take()
-            .unwrap_or_else(|| self.refresh_token.clone());
-        let refreshed = Self::from_tokens(
-            TokenResponse {
-                id_token,
-                access_token,
-                refresh_token,
-            },
-            self.credential_revision.saturating_add(1),
-        )?;
-        *self = refreshed;
-        Ok(())
-    }
-
-    pub(crate) fn needs_refresh(&self) -> bool {
-        self.expires_at.is_some_and(|expires_at| {
-            expires_at <= now_epoch_seconds().saturating_add(REFRESH_MARGIN.as_secs())
+            storage_revision: [0; 32],
+            last_refresh: None,
+            refresh_available: false,
         })
     }
 
     pub(crate) fn is_usable(&self) -> bool {
-        !self.access_token.trim().is_empty()
-            && (!self.needs_refresh() || !self.refresh_token.trim().is_empty())
+        self.expires_at
+            .is_none_or(|expires_at| expires_at > now_epoch_seconds())
+    }
+
+    pub(crate) fn needs_refresh(&self) -> bool {
+        // Same proactive rules as Codex AuthManager: five minutes before expiry;
+        // only when expiry is unknown, use the eight-day last_refresh interval.
+        match self.expires_at {
+            Some(expiry) => expiry <= now_epoch_seconds().saturating_add(300),
+            None => self
+                .last_refresh
+                .is_some_and(|last| last < now_epoch_seconds() as i64 - 8 * 24 * 60 * 60),
+        }
     }
 }
 
 impl Drop for TokenCredential {
     fn drop(&mut self) {
-        self.id_token.zeroize();
         self.access_token.zeroize();
-        self.refresh_token.zeroize();
         self.email.zeroize();
         self.user_id.zeroize();
         self.account_id.zeroize();
@@ -114,31 +100,6 @@ pub(crate) struct TokenResponse {
 }
 
 impl Drop for TokenResponse {
-    fn drop(&mut self) {
-        self.id_token.zeroize();
-        self.access_token.zeroize();
-        self.refresh_token.zeroize();
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-pub(crate) struct RefreshRequest<'a> {
-    pub(crate) client_id: &'a str,
-    pub(crate) grant_type: &'static str,
-    pub(crate) refresh_token: &'a str,
-}
-
-#[derive(Deserialize)]
-pub(crate) struct RefreshResponse {
-    #[serde(default)]
-    pub(crate) id_token: Option<String>,
-    #[serde(default)]
-    pub(crate) access_token: Option<String>,
-    #[serde(default)]
-    pub(crate) refresh_token: Option<String>,
-}
-
-impl Drop for RefreshResponse {
     fn drop(&mut self) {
         self.id_token.zeroize();
         self.access_token.zeroize();

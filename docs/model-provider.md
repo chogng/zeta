@@ -528,7 +528,7 @@ projection 由 [`zeta-login`](login.md) 提供；App Server 只读取该 redacte
 2. Runtime 选择 API endpoint，但不实现 wire codec。
 3. Runtime 选择 retry policy，但 retry attempt loop 属于 `zeta-client`。
 4. Direct-provider runtime 解析自己的 credential；secret 不进入 config、普通 inference DTO 或
-   telemetry。ChatGPT 订阅凭据始终留在 `zeta-chatgpt` 的 SecretStore envelope。
+   telemetry。ChatGPT 订阅凭据由 `zeta-chatgpt` 从 Codex 用户存储加载，并按管理模式续期，不复制到 Zeta SecretStore。
 5. Runtime 不解析 SSE/NDJSON framing。
 6. 动态 catalog cache 属于 models manager。
 7. `zeta-api` 和 `zeta-client` 不反向依赖 runtime。
