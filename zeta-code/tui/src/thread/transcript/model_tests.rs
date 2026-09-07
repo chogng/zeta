@@ -139,6 +139,59 @@ fn reinstalling_a_cell_advances_its_render_revision() {
     assert!(second > first);
 }
 
+#[test]
+fn first_live_cell_splits_committed_history_from_the_rendered_tail() {
+    let turn_id = turn_id("turn");
+    let call_id = call_id("call");
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![
+        ThreadTranscriptEntry::Item {
+            entry_id: "user-entry".into(),
+            turn_id: turn_id.clone(),
+            item: ThreadItem::UserMessage {
+                item_id: item_id("user-item"),
+                turn_id: turn_id.clone(),
+                text: "committed prompt".into(),
+            },
+            transient: false,
+        },
+        ThreadTranscriptEntry::Item {
+            entry_id: "call-entry".into(),
+            turn_id: turn_id.clone(),
+            item: ThreadItem::ToolCall {
+                item_id: item_id("call-item"),
+                turn_id: turn_id.clone(),
+                tool_call_id: call_id,
+                name: zeta_protocol::ToolName::new("exec").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+            transient: true,
+        },
+        ThreadTranscriptEntry::Item {
+            entry_id: "agent-entry".into(),
+            turn_id: turn_id.clone(),
+            item: ThreadItem::AgentMessage {
+                item_id: item_id("agent-item"),
+                turn_id,
+                text: "ordered behind live work".into(),
+            },
+            transient: false,
+        },
+    ]));
+
+    assert_eq!(model.committed_cells().len(), 1);
+    assert_eq!(model.active_cells().len(), 2);
+    assert_eq!(
+        model
+            .active_views(&BTreeSet::new(), None)
+            .last()
+            .unwrap()
+            .text,
+        "ordered behind live work"
+    );
+}
+
 fn snapshot(entries: Vec<ThreadTranscriptEntry>) -> ThreadTranscriptSnapshot {
     ThreadTranscriptSnapshot {
         session_id: session_id("session"),

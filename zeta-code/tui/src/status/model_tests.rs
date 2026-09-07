@@ -99,7 +99,7 @@ fn git_changes_can_show_added_and_deleted_lines() {
     status_line.apply_settings(settings);
     status_line.apply_git_status(&git_status(2));
 
-    assert!(status_line.request_git_text_diff());
+    assert!(status_line.request_status_line_git_text_diff());
     assert_eq!(
         status_line.top_text_for_width(80, StatusLineRuntime::default()),
         "main"
@@ -132,7 +132,7 @@ fn git_changes_can_show_added_and_deleted_lines() {
             ("-3", StatusLineSegmentKind::Removed),
         ]
     );
-    assert!(!status_line.request_git_text_diff());
+    assert!(!status_line.request_status_line_git_text_diff());
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn stale_git_line_statistics_do_not_replace_a_newer_status() {
     let mut stale = git_status(1);
     stale.revision = 3;
     status_line.apply_git_status(&stale);
-    assert!(status_line.request_git_text_diff());
+    assert!(status_line.request_status_line_git_text_diff());
     let mut current = git_status(2);
     current.revision = 4;
     status_line.apply_git_status(&current);
@@ -162,7 +162,7 @@ fn stale_git_line_statistics_do_not_replace_a_newer_status() {
         status_line.top_text_for_width(80, StatusLineRuntime::default()),
         "main"
     );
-    assert!(status_line.request_git_text_diff());
+    assert!(status_line.request_status_line_git_text_diff());
 }
 
 #[test]
@@ -278,6 +278,35 @@ fn configured_items_can_be_hidden_independently() {
         status_line.policy_text_for_width(80, ApprovalMode::AutoReview),
         ""
     );
+}
+
+#[test]
+fn base_git_updates_remain_independent_of_status_line_items() {
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, false);
+    }
+    settings.set_show_git_changes_as_diff(true);
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_settings(settings.clone());
+
+    status_line.apply_git_status(&git_status(2));
+
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        ""
+    );
+    assert!(!status_line.request_status_line_git_text_diff());
+
+    settings.set(StatusLineItem::GitBranch, true);
+    settings.set(StatusLineItem::GitChanges, true);
+    status_line.apply_settings(settings);
+
+    assert_eq!(
+        status_line.top_text_for_width(80, StatusLineRuntime::default()),
+        "main"
+    );
+    assert!(status_line.request_status_line_git_text_diff());
 }
 
 #[test]

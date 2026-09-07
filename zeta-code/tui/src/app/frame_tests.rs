@@ -368,6 +368,46 @@ fn process_resource_demand_follows_the_content_that_is_actually_visible() {
 }
 
 #[test]
+fn status_line_items_control_process_resource_metrics_independently() {
+    let mut app = App::new();
+    let area = Rect::new(0, 0, 80, 20);
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(
+            item,
+            matches!(item, StatusLineItem::Memory | StatusLineItem::Cpu),
+        );
+    }
+    app.update(StatusEvent::LineSettingsReceived(settings.clone()));
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::MemoryAndCpu)
+    );
+
+    settings.set(StatusLineItem::Memory, false);
+    app.update(StatusEvent::LineSettingsReceived(settings.clone()));
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Cpu)
+    );
+
+    settings.set(StatusLineItem::Memory, true);
+    settings.set(StatusLineItem::Cpu, false);
+    app.update(StatusEvent::LineSettingsReceived(settings.clone()));
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::StatusLine(ProcessResourceMetrics::Memory)
+    );
+
+    settings.set(StatusLineItem::Memory, false);
+    app.update(StatusEvent::LineSettingsReceived(settings));
+    assert_eq!(
+        process_resource_demand(&app, area),
+        ProcessResourceDemand::Disabled
+    );
+}
+
+#[test]
 fn status_panel_expands_or_scrolls_with_available_height_and_escape_restores_chat_input() {
     let mut app = App::new();
     let terminal_area = Rect::new(0, 0, 80, 20);
@@ -596,6 +636,10 @@ fn pending_steer_is_shown_once_in_chat_history() {
     app.insert_text("check the tests first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
 
+    app.handle_key_in_area(
+        KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL),
+        Rect::new(0, 0, 80, 20),
+    );
     let rendered = render(&app, 80, 20);
 
     assert!(!rendered.contains("Steer  1 sending"));
@@ -733,7 +777,7 @@ fn welcome_header_remains_at_the_start_of_scrollable_history() {
     assert!(!empty.lines().last().unwrap().contains("/work/zeta"));
 
     app.update(ThreadEvent::ProductNotice("Conversation started.".into()));
-    assert!(render(&app, 80, 20).contains("/work/zeta"));
+    assert!(!render(&app, 80, 20).contains("/work/zeta"));
 
     for index in 0..12 {
         app.update(ThreadEvent::FailureReported(format!(
@@ -1006,7 +1050,7 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn read_only_command_panel_shows_navigation_and_close_hints() {
+fn read_only_command_panel_does_not_repaint_committed_history() {
     let mut app = App::new();
     app.update(ThreadEvent::ProductNotice(
         "Conversation remains visible.".into(),
@@ -1015,7 +1059,7 @@ fn read_only_command_panel_shows_navigation_and_close_hints() {
 
     let rendered = render(&app, 80, 24);
 
-    assert!(rendered.contains("Conversation remains visible."));
+    assert!(!rendered.contains("Conversation remains visible."));
     assert!(rendered.contains("Help"));
     assert!(rendered.contains("Commands"));
     assert!(rendered.contains("Keys"));
@@ -1118,7 +1162,7 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
 }
 
 #[test]
-fn error_detail_is_rendered_once_and_status_line_only_offers_recovery() {
+fn committed_error_leaves_the_current_frame_and_status_line_only_offers_recovery() {
     let mut app = App::new();
     app.update(ThreadEvent::FailureReported(
         "The configured model is unavailable.".into(),
@@ -1127,12 +1171,7 @@ fn error_detail_is_rendered_once_and_status_line_only_offers_recovery() {
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert_eq!(
-        rendered
-            .matches("The configured model is unavailable.")
-            .count(),
-        1
-    );
+    assert!(!rendered.contains("The configured model is unavailable."));
     assert!(rendered.contains("ask permissions on"));
     assert!(!rows.iter().any(|line| line.trim() == "error"));
     assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
@@ -1142,14 +1181,21 @@ fn error_detail_is_rendered_once_and_status_line_only_offers_recovery() {
 }
 
 #[test]
-fn submitted_slash_command_is_immediately_visible_in_the_transcript() {
+fn submitted_slash_command_moves_out_of_the_current_frame() {
     let mut app = App::new();
     app.insert_text("/status");
 
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let rendered = render(&app, 80, 20);
-    assert!(rendered.lines().any(|line| line.contains("> /status")));
+    assert!(!rendered.lines().any(|line| line.contains("> /status")));
+    let mut history = Vec::new();
+    app.write_transcript_history(&mut |message, _| {
+        history.push(message.text.clone());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(history, ["/status"]);
 }
 
 #[test]
@@ -1176,6 +1222,10 @@ fn command_completion_renders_an_adjacent_result_line() {
         result: "Theme set to Zeta Code Light".into(),
     });
 
+    app.handle_key_in_area(
+        KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL),
+        Rect::new(0, 0, 80, 20),
+    );
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
     let command_row = rows
@@ -1197,6 +1247,10 @@ fn transcript_and_chat_input_content_start_in_the_same_column() {
     app.insert_text("draft");
 
     let terminal_area = Rect::new(0, 0, 80, 20);
+    app.handle_key_in_area(
+        KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL),
+        terminal_area,
+    );
     let input = layout(&app, terminal_area).input;
     let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
     let transcript_row = (0..input.y)

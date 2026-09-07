@@ -22,10 +22,14 @@ async page => {
       const text = Array.from({ length: buffer.length }, (_, i) => buffer.getLine(i).translateToString(true)).join('').replace(/\s/g, '');
       let previous = -1;
       for (const marker of ['PREEXISTING-SHELL', 'ZETA-SHELL-SENTINEL', ...fixture.markers]) {
-        if (text.split(marker).length !== 2) throw Error(`${fixture.file}: ${marker} missing or duplicated`);
+        const count = text.split(marker).length - 1;
+        if (count !== 1) throw Error(`${fixture.file}: ${marker} expected once, got ${count}`);
         const position = text.indexOf(marker);
         if (position <= previous) throw Error(`${marker} out of order`);
         previous = position;
+      }
+      for (const marker of ['ZETA-TRANSIENT-WELCOME', 'ZETA-TRANSIENT-COMPLETION', 'ZETA-TRANSIENT-INPUT']) {
+        if (text.includes(marker)) throw Error(`${fixture.file}: transient frame leaked into scrollback: ${marker}`);
       }
       return { historyRows: buffer.baseY };
     }, fixture);

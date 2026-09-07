@@ -123,8 +123,24 @@ impl ThreadState {
         self.transcript.views(expanded, selected)
     }
 
+    pub(crate) fn active_views(
+        &self,
+        expanded: &BTreeSet<TranscriptCellId>,
+        selected: Option<&TranscriptCellId>,
+    ) -> Vec<Message> {
+        self.transcript.active_views(expanded, selected)
+    }
+
     pub(crate) fn cells(&self) -> &[TranscriptCell] {
         self.transcript.cells()
+    }
+
+    pub(crate) fn committed_cells(&self) -> &[TranscriptCell] {
+        self.transcript.committed_cells()
+    }
+
+    pub(crate) fn has_committed_cells(&self) -> bool {
+        self.transcript.has_committed_cells()
     }
 
     pub(crate) fn details(&self, cell_id: &TranscriptCellId) -> Option<String> {

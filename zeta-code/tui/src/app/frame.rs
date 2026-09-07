@@ -119,15 +119,17 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             context,
         );
     } else {
-        let messages = app.transcript_views();
-        let header = welcome::history_buffer(
-            areas.session.transcript.width,
-            areas.session.transcript.height,
-            app.welcome(),
-            context,
-        );
+        let messages = app.visible_transcript_views();
+        let header = app.transcript_header_visible().then(|| {
+            welcome::history_buffer(
+                areas.session.transcript.width,
+                areas.session.transcript.height,
+                app.welcome(),
+                context,
+            )
+        });
         ChatHistoryView {
-            header: Some(&header),
+            header: header.as_ref(),
             messages: &messages,
             scroll: app.transcript_scroll(),
             render_cache: app.transcript_render_cache(),
@@ -396,10 +398,15 @@ pub(crate) fn input_pointer_target_at(
         ) {
             return Some(InputPointerTarget::Queue(queue_id));
         }
-        let messages = app.transcript_views();
+        let messages = app.visible_transcript_views();
+        let header_rows = if app.transcript_header_visible() {
+            usize::from(welcome::history_height(areas.session.transcript.height))
+        } else {
+            0
+        };
         if let Some(target) = chat_history::pointer_target_at(
             areas.session.transcript,
-            usize::from(welcome::history_height(areas.session.transcript.height)),
+            header_rows,
             &messages,
             app.transcript_scroll(),
             app.transcript_render_cache(),

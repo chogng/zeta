@@ -247,6 +247,22 @@ impl TranscriptModel {
             .collect()
     }
 
+    pub(in crate::thread) fn active_views(
+        &self,
+        expanded: &BTreeSet<TranscriptCellId>,
+        selected: Option<&TranscriptCellId>,
+    ) -> Vec<Message> {
+        self.active_cells()
+            .iter()
+            .map(|cell| {
+                cell.view(
+                    expanded.contains(cell.cell_id()),
+                    selected == Some(cell.cell_id()),
+                )
+            })
+            .collect()
+    }
+
     pub(in crate::thread) fn has_user_message(&self) -> bool {
         self.cells.iter().any(|cell| {
             matches!(
@@ -271,6 +287,18 @@ impl TranscriptModel {
 
     pub(in crate::thread) fn cells(&self) -> &[TranscriptCell] {
         &self.cells
+    }
+
+    pub(in crate::thread) fn committed_cells(&self) -> &[TranscriptCell] {
+        &self.cells[..self.active_start()]
+    }
+
+    pub(in crate::thread) fn active_cells(&self) -> &[TranscriptCell] {
+        &self.cells[self.active_start()..]
+    }
+
+    pub(in crate::thread) fn has_committed_cells(&self) -> bool {
+        self.active_start() > 0
     }
 
     pub(in crate::thread) fn details(&self, cell_id: &TranscriptCellId) -> Option<String> {
@@ -611,6 +639,13 @@ impl TranscriptModel {
     fn render_revision(&mut self) -> u64 {
         self.next_render_revision = self.next_render_revision.wrapping_add(1).max(1);
         self.next_render_revision
+    }
+
+    fn active_start(&self) -> usize {
+        self.cells
+            .iter()
+            .position(|cell| cell.lifecycle() == CellLifecycle::Live)
+            .unwrap_or(self.cells.len())
     }
 }
 

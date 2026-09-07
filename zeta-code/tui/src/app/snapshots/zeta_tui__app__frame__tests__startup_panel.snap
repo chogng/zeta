@@ -1,15 +1,15 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
-assertion_line: 1034
+assertion_line: 1065
 expression: "render(&app, 80, 20)"
 ---
                                                                                 
-    ▄  ▄     Zeta Code v0.1.0                                                   
-  ▗█▛██▜█▖   Automatic model · Access unknown                                   
-  ▝▜████▛▘   .                                                                  
-    ▝  ▘                                                                        
                                                                                 
-> /startup                                                                      
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
                                                                                 
                                                                                 
                                                                                 

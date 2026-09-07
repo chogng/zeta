@@ -8,7 +8,6 @@ use ratatui::backend::TestBackend;
 use ratatui::backend::WindowSize;
 use ratatui::buffer::Cell;
 use ratatui::layout::Position;
-use ratatui::layout::Rect;
 use ratatui::layout::Size;
 use std::io;
 use std::path::PathBuf;
@@ -60,10 +59,22 @@ impl Backend for RecordingBackend<'_> {
     fn flush(&mut self) -> io::Result<()> {
         Backend::flush(&mut self.output)
     }
+    fn scroll_region_up(&mut self, region: std::ops::Range<u16>, amount: u16) -> io::Result<()> {
+        self.output.scroll_region_up(region, amount)
+    }
+    fn scroll_region_down(&mut self, region: std::ops::Range<u16>, amount: u16) -> io::Result<()> {
+        self.output.scroll_region_down(region, amount)
+    }
+}
+
+impl super::HistoryBackend for RecordingBackend<'_> {
+    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()> {
+        super::HistoryBackend::commit_top_row(&mut self.output, borrowed_rows)
+    }
 }
 
 #[test]
-fn history_compatibility_corpus_uses_production_fullscreen_output() {
+fn history_compatibility_corpus_uses_production_cell_insertion_output() {
     let directory = std::env::var_os("ZETA_TUI_HISTORY_FIXTURES").map(PathBuf::from);
     if let Some(directory) = &directory {
         std::fs::create_dir_all(directory).unwrap();
@@ -87,11 +98,16 @@ fn history_compatibility_corpus_uses_production_fullscreen_output() {
             crate::render::test_context(),
         );
         let mut model = Terminal::new(TestBackend::new(width, height)).unwrap();
+        let rendered = model
+            .draw(|frame| draw_transient_frame(frame.buffer_mut()))
+            .unwrap()
+            .buffer
+            .clone();
         super::append_history(
             &mut model,
-            Rect::new(0, 0, width, height),
+            Some(&rendered),
             rows,
-            &mut |buffer, offset| cell.render(buffer, buffer.area, offset),
+            &mut |buffer, area, offset| cell.render(buffer, area, offset),
         )
         .unwrap();
         assert_eq!(
@@ -108,11 +124,16 @@ fn history_compatibility_corpus_uses_production_fullscreen_output() {
                 size: Size::new(width, height),
             };
             let mut terminal = Terminal::new(backend).unwrap();
+            let rendered = terminal
+                .draw(|frame| draw_transient_frame(frame.buffer_mut()))
+                .unwrap()
+                .buffer
+                .clone();
             super::append_history(
                 &mut terminal,
-                Rect::new(0, 0, width, height),
+                Some(&rendered),
                 rows,
-                &mut |buffer, offset| cell.render(buffer, buffer.area, offset),
+                &mut |buffer, area, offset| cell.render(buffer, area, offset),
             )
             .unwrap();
             terminal
@@ -124,10 +145,7 @@ fn history_compatibility_corpus_uses_production_fullscreen_output() {
                 .unwrap();
         }
         let protocol = String::from_utf8(output.clone()).unwrap();
-        assert!(
-            protocol.contains("\x1b[2J"),
-            "must exercise Fullscreen clear"
-        );
+        assert!(!protocol.contains("\x1b[2J"), "must not clear the screen");
         assert!(
             !protocol.contains("\x1b[3J"),
             "must preserve terminal history"
@@ -145,5 +163,16 @@ fn history_compatibility_corpus_uses_production_fullscreen_output() {
             serde_json::to_vec_pretty(&cases).unwrap(),
         )
         .unwrap();
+    }
+}
+
+fn draw_transient_frame(buffer: &mut ratatui::buffer::Buffer) {
+    let style = ratatui::style::Style::default();
+    buffer.set_string(0, 0, "ZETA-TRANSIENT-WELCOME", style);
+    if buffer.area.height > 1 {
+        buffer.set_string(0, 1, "ZETA-TRANSIENT-COMPLETION", style);
+    }
+    if buffer.area.height > 2 {
+        buffer.set_string(0, 2, "ZETA-TRANSIENT-INPUT", style);
     }
 }

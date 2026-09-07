@@ -47,6 +47,12 @@ def main():
         position = text.index(marker)
         assert position > previous, f"{marker!r}: wrong conversation order"
         previous = position
+    for marker in (
+        "ZETA-TRANSIENT-WELCOME",
+        "ZETA-TRANSIENT-COMPLETION",
+        "ZETA-TRANSIENT-INPUT",
+    ):
+        assert marker not in text, f"{marker!r}: transient frame leaked into scrollback"
     print(f"PASS {args.case}: shell history and all {len(case['markers'])} content markers retained in order")
 
 

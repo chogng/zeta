@@ -16,6 +16,7 @@ use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
+use ratatui::backend::ClearType;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
@@ -73,10 +74,14 @@ impl TerminalSession {
     pub(crate) fn append_history(
         &mut self,
         rows: usize,
-        mut render: impl FnMut(&mut Buffer, usize),
+        mut render: impl FnMut(&mut Buffer, Rect, usize),
     ) -> io::Result<()> {
-        let area = self.area()?;
-        append_history(&mut self.terminal, area, rows, &mut render)
+        append_history(
+            &mut self.terminal,
+            self.rendered_frame.as_ref(),
+            rows,
+            &mut render,
+        )
     }
 
     pub(crate) fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
@@ -307,46 +312,72 @@ impl TerminalModeOperations for CrosstermModeOperations {
     }
 }
 
-fn append_history<B: Backend>(
+fn append_history<B: HistoryBackend>(
     terminal: &mut Terminal<B>,
-    area: Rect,
+    rendered_frame: Option<&Buffer>,
     rows: usize,
-    render: &mut impl FnMut(&mut Buffer, usize),
+    render: &mut impl FnMut(&mut Buffer, Rect, usize),
 ) -> io::Result<()> {
-    if area.is_empty() {
+    let area = terminal.size()?;
+    if area.width == 0 || area.height == 0 {
         return Err(io::Error::other(
             "terminal has no space for transcript output",
         ));
     }
-    terminal.clear()?;
-    // Emit each rendered row with its own line feed. Painting an entire page
-    // and then scrolling it loses the last painted row through Windows ConPTY.
-    // Start at the top so short messages do not archive an empty screen first.
+    let row_area = Rect::new(0, 0, area.width, 1);
+    let empty = Buffer::empty(row_area);
+    let borrowed_rows = area.height.min(2);
     for offset in 0..rows {
-        let chunk = Rect::new(0, 0, area.width, 1);
-        let empty = Buffer::empty(chunk);
-        let mut buffer = empty.clone();
-        render(&mut buffer, offset);
-        let backend = terminal.backend_mut();
-        let y = offset.min(usize::from(area.height - 1)) as u16;
-        backend.draw(
-            empty
-                .diff(&buffer)
-                .into_iter()
-                .map(|(x, _, cell)| (x, y, cell)),
-        )?;
-        backend.set_cursor_position((0, y))?;
-        backend.append_lines(1)?;
-        backend.flush()?;
+        let mut row = empty.clone();
+        render(&mut row, row_area, offset);
+        terminal.backend_mut().set_cursor_position((0, 0))?;
+        terminal
+            .backend_mut()
+            .clear_region(ClearType::CurrentLine)?;
+        terminal.backend_mut().draw(empty.diff(&row).into_iter())?;
+        terminal.backend_mut().commit_top_row(borrowed_rows)?;
     }
-    // Commit the rows still on screen before clearing the interactive viewport.
-    terminal
-        .backend_mut()
-        .set_cursor_position((0, area.height - 1))?;
-    terminal
-        .backend_mut()
-        .append_lines(rows.min(usize::from(area.height - 1)) as u16)?;
-    terminal.clear()
+    if let Some(frame) = rendered_frame {
+        let restore_rows = borrowed_rows.min(frame.area.height);
+        let restore_right = frame.area.right().min(area.width);
+        terminal
+            .backend_mut()
+            .draw((frame.area.y..frame.area.y + restore_rows).flat_map(|y| {
+                (frame.area.x..restore_right).map(move |x| (x, y, &frame[(x, y)]))
+            }))?;
+    }
+    terminal.backend_mut().flush()
+}
+
+/// Moves the prepared top row into terminal history without scrolling the interactive frame.
+///
+/// Production uses a line feed at the bottom of a two-row region because xterm.js does not add
+/// `CSI S` partial-region scrolls to its scrollback. Test backends apply the equivalent semantic
+/// operation directly.
+trait HistoryBackend: Backend {
+    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()>;
+}
+
+impl<W: Write> HistoryBackend for CrosstermBackend<W> {
+    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()> {
+        if borrowed_rows == 1 {
+            return self.append_lines(1);
+        }
+        // A one-row DEC scrolling region is ignored by xterm.js. The history row occupies the
+        // first row; the second borrowed row gives the line feed a valid region to scroll.
+        write!(
+            self.writer_mut(),
+            "\x1b[1;{borrowed_rows}r\x1b[{borrowed_rows};1H\r\n\x1b[r"
+        )?;
+        self.writer_mut().flush()
+    }
+}
+
+#[cfg(test)]
+impl HistoryBackend for ratatui::backend::TestBackend {
+    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()> {
+        self.scroll_region_up(0..borrowed_rows, 1)
+    }
 }
 
 // Keep the main buffer: xterm.js translates wheel input into arrow keys in

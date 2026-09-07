@@ -191,6 +191,8 @@ impl StatusLineModel {
         self.reference_cost = None;
     }
 
+    /// Accepts every base Git status update independently of the configured StatusLine items.
+    /// The settings only gate rendering and the optional text-diff request below.
     pub(crate) fn apply_git_status(&mut self, status: &GitStatusResult) {
         let cursor = git_status_cursor(status);
         if self
@@ -241,7 +243,7 @@ impl StatusLineModel {
         }
     }
 
-    pub(crate) fn request_git_text_diff(&mut self) -> bool {
+    pub(crate) fn request_status_line_git_text_diff(&mut self) -> bool {
         if !self.settings.show_git_changes_as_diff()
             || !self.settings.enabled(StatusLineItem::GitChanges)
             || self.git_change_count == 0

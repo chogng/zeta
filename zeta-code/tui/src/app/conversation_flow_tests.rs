@@ -136,7 +136,14 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     ));
     apply_active_turn_snapshot(&mut app, &completed.thread.turns);
     let completed_frame = render(&app);
-    assert!(completed_frame.contains("fn main()"));
+    assert!(!completed_frame.contains("fn main()"));
+    let mut committed = Vec::new();
+    app.write_transcript_history(&mut |message, _| {
+        committed.push(message.text.clone());
+        Ok(())
+    })
+    .unwrap();
+    assert!(committed.iter().any(|text| text.contains("fn main()")));
     assert_eq!(app.latest_agent_response(), Some(FIRST_RESPONSE));
     assert_eq!(app.status(), &Status::Ready);
     assert_snapshot!("conversation_completed", render(&app));

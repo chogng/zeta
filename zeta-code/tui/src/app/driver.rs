@@ -305,7 +305,9 @@ impl AppDriver {
                 self.refresh.connectors = false;
             }
         }
-        if self.requests.is_idle(Some(RequestKey::Git)) && self.app.request_git_text_diff() {
+        if self.requests.is_idle(Some(RequestKey::Git))
+            && self.app.request_status_line_git_text_diff()
+        {
             let mut client = self.client.clone();
             self.requests.spawn(
                 Some(RequestKey::Git),

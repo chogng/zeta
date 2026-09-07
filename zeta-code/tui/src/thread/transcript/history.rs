@@ -1,6 +1,5 @@
 use super::Message;
 use super::TranscriptCell;
-use super::model::CellLifecycle;
 use std::collections::BTreeMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
@@ -26,10 +25,6 @@ impl TranscriptHistory {
             self.written.clear();
         }
         for cell in cells {
-            // A live cell may still change. Preserve ordering until it is final.
-            if cell.lifecycle() == CellLifecycle::Live {
-                break;
-            }
             let id = cell.cell_id().as_str();
             let revision = cell.render_revision();
             if self

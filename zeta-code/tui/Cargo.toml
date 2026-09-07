@@ -15,7 +15,11 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 crossterm = { workspace = true }
 dirs = { workspace = true }
-ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
+ratatui = { workspace = true, features = [
+    "scrolling-regions",
+    "unstable-backend-writer",
+    "unstable-rendered-line-info",
+] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }

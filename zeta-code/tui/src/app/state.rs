@@ -1199,6 +1199,20 @@ impl App {
         )
     }
 
+    pub(crate) fn visible_transcript_views(&self) -> Vec<Message> {
+        if self.transcript_history_browsing() {
+            return self.transcript_views();
+        }
+        self.thread.active_views(
+            &self.thread_presentations.active().expanded_cells,
+            self.thread_presentations.active().selected_cell.as_ref(),
+        )
+    }
+
+    pub(crate) fn transcript_header_visible(&self) -> bool {
+        self.transcript_history_browsing() || !self.thread.has_committed_cells()
+    }
+
     pub(crate) fn write_transcript_history(
         &mut self,
         output: &mut impl FnMut(&Message, RenderContext<'_>) -> std::io::Result<()>,
@@ -1206,9 +1220,14 @@ impl App {
         let context = RenderContext::new(&self.render_theme, self.render_theme_revision);
         self.transcript_history.write(
             self.thread_presentations.active_id().as_str(),
-            self.thread.cells(),
+            self.thread.committed_cells(),
             &mut |message| output(message, context),
         )
+    }
+
+    fn transcript_history_browsing(&self) -> bool {
+        self.transcript_scroll().anchor().is_some()
+            || self.thread_presentations.active().selected_cell.is_some()
     }
 
     pub(crate) fn latest_agent_response(&self) -> Option<&str> {
@@ -1492,8 +1511,10 @@ impl App {
         self.chat_panel.status_line()
     }
 
-    pub(crate) fn request_git_text_diff(&mut self) -> bool {
-        self.chat_panel.status_line_mut().request_git_text_diff()
+    pub(crate) fn request_status_line_git_text_diff(&mut self) -> bool {
+        self.chat_panel
+            .status_line_mut()
+            .request_status_line_git_text_diff()
     }
 
     pub(crate) fn top_tip(&self) -> &TopTip {

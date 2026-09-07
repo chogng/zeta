@@ -128,7 +128,7 @@ pub(super) fn start(
     if let Ok(status) = client.git_status() {
         app.update(StatusEvent::GitStatusReceived(status));
     }
-    if app.request_git_text_diff()
+    if app.request_status_line_git_text_diff()
         && let Ok(result) = client.git_text_diff()
     {
         app.update(StatusEvent::GitTextDiffReceived {

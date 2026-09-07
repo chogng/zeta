@@ -465,7 +465,9 @@ fn draw_terminal(
     let width = terminal.area()?.width;
     app.write_transcript_history(&mut |message, context| {
         let (cell, rows) = crate::thread::transcript::prepare_history(message, width, context);
-        terminal.append_history(rows, |buffer, offset| cell.render(buffer, buffer.area, offset))
+        terminal.append_history(rows, |buffer, area, offset| {
+            cell.render(buffer, area, offset)
+        })
     })?;
     terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
 }

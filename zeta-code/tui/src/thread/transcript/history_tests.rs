@@ -20,14 +20,14 @@ fn completed_messages_are_written_in_full_once_despite_redraw_and_snapshot_repla
     let mut history = TranscriptHistory::default();
     let mut output = Vec::new();
     history
-        .write("thread", model.cells(), &mut |message| {
+        .write("thread", model.committed_cells(), &mut |message| {
             output.push(message.text.clone());
             Ok(())
         })
         .unwrap();
     model.replace(snapshot(&text, false));
     history
-        .write("thread", model.cells(), &mut |message| {
+        .write("thread", model.committed_cells(), &mut |message| {
             output.push(message.text.clone());
             Ok(())
         })
@@ -42,7 +42,7 @@ fn streaming_blocks_later_cells_until_final_and_failed_writes_are_retried() {
     model.push_message(MessageRole::Notice, "later".into());
     let mut history = TranscriptHistory::default();
     history
-        .write("thread", model.cells(), &mut |_| {
+        .write("thread", model.committed_cells(), &mut |_| {
             panic!("live text is not committed")
         })
         .unwrap();
@@ -50,14 +50,14 @@ fn streaming_blocks_later_cells_until_final_and_failed_writes_are_retried() {
     model.push_message(MessageRole::Notice, "later".into());
     assert!(
         history
-            .write("thread", model.cells(), &mut |_| Err(io::Error::other(
-                "write failed"
-            )))
+            .write("thread", model.committed_cells(), &mut |_| {
+                Err(io::Error::other("write failed"))
+            })
             .is_err()
     );
     let mut output = Vec::new();
     history
-        .write("thread", model.cells(), &mut |message| {
+        .write("thread", model.committed_cells(), &mut |message| {
             output.push(message.text.clone());
             Ok(())
         })
@@ -73,7 +73,7 @@ fn changing_thread_starts_its_own_history_even_with_identical_local_ids() {
     let mut writes = 0;
     for scope in ["one", "two"] {
         history
-            .write(scope, model.cells(), &mut |_| {
+            .write(scope, model.committed_cells(), &mut |_| {
                 writes += 1;
                 Ok(())
             })
