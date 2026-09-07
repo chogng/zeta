@@ -58,6 +58,17 @@ ChatGPT subscription model 与 API-key model、Kimi subscription model 一样进
 
 OpenAI 官方文档明确区分“Sign in with ChatGPT”订阅访问与 API key 的 usage-based 访问。当前 direct Responses target、OAuth client/endpoint 和 header contract 依据 OpenAI 开源实现保持兼容；它们不是一份独立发布的通用公共 API 合约，因此升级时必须用登录、refresh、streaming response 和错误分类测试验证，不能静默改写为 Platform API key。
 
+## 已通过的真实验收
+
+2026-09-07 已用本机 Codex 的有效登录态完成从 Codex credential 到 Zeta App Server 的真实验收。验证使用隔离的临时 Zeta profile，不修改本机 Codex 原始凭据。
+
+- `account/read` 返回 `openai-chatgpt`、`pro`、`ready`；
+- 配置 `gpt-5.6-sol` 后，普通 Responses 回合完成并返回预期文本；
+- 带工具的回合成功调用 `get_goal`，收到工具结果后继续生成预期文本；
+- 两次回合都记录了模型调用次数、输入 token 和输出 token。
+
+这证明了“Codex 登录态 → Zeta App Server → ChatGPT subscription Responses → Zeta Agent Loop”的执行链路已经通过验收。该记录不替代交互式 device OAuth、refresh rotation、401/429、取消和断线恢复的完整故障矩阵；这些项目仍按下表的完成门继续验证。
+
 ## 当前状态与待完成项
 
 阶段性的 Agent Loop 总计划已经退场，ChatGPT 订阅路径的状态与完成门由本文长期维护。
