@@ -17,11 +17,15 @@ fn archived_is_a_peer_heading_and_owns_archived_sessions_even_when_pinned() {
     state.pinned.insert(SessionId::new("old").unwrap());
     state.reconcile(&sessions);
     state.select_next(&sessions);
-    assert!(state.archived_selected());
+    assert!(state.selected_group() == Some(SessionGroup::Archived));
     assert!(state.selected_archive_ids(&sessions).is_empty());
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     for expanded in [false, true] {
-        state.set_archived_expanded(expanded);
+        if expanded {
+            state.expand_selected_group();
+        } else {
+            state.collapse_selected_group();
+        }
         assert_eq!(
             state.selection_hint(),
             if expanded {
@@ -43,26 +47,26 @@ fn archived_is_a_peer_heading_and_owns_archived_sessions_even_when_pinned() {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        assert_eq!(buffer[(0, 0)].symbol(), "I");
-        assert_eq!(buffer[(0, 2)].symbol(), "A");
+        assert_eq!(buffer[(2, 0)].symbol(), "I");
+        assert_eq!(buffer[(2, 2)].symbol(), "A");
         let heading = (0..40)
             .map(|column| buffer[(column, 2)].symbol())
             .collect::<String>();
-        assert_eq!(heading.trim_end(), "Archived (1)");
+        assert_eq!(heading.trim_end(), "  Archived (1)");
         assert_eq!(buffer[(0, 0)].fg, buffer[(0, 2)].fg);
         assert_eq!(buffer[(0, 0)].modifier, buffer[(0, 2)].modifier);
         assert_eq!(
             pointer_target_at(Rect::new(0, 0, 40, 8), state.view(&sessions), 0, 2),
-            Some(SessionManagerPointerTarget::Archived)
+            Some(SessionManagerPointerTarget::Group(SessionGroup::Archived))
         );
-        let rows = manager_rows(&sessions, &state.pinned, expanded);
+        let rows = manager_rows(&sessions, &state.pinned, &state.collapsed);
         assert_eq!(rows.len(), if expanded { 4 } else { 3 });
     }
     state.select_next(&sessions);
     assert!(state.selected_is_archived());
     assert!(!state.toggle_selected_pin());
     state.reconcile(&sessions[..1]);
-    assert!(state.archived_selected());
+    assert!(state.selected_group() == Some(SessionGroup::Archived));
 }
 
 #[test]
@@ -91,7 +95,7 @@ fn groups_sessions_by_management_status_and_keeps_pinned_first() {
     ));
     assert!(state.toggle_selected_pin());
 
-    let labels = manager_rows(&sessions, &state.pinned, state.archived_expanded)
+    let labels = manager_rows(&sessions, &state.pinned, &state.collapsed)
         .into_iter()
         .map(|row| match row {
             ManagerRow::Heading { group, .. } => group.label().to_owned(),
@@ -124,10 +128,15 @@ fn navigation_follows_the_visible_group_order() {
     state.reconcile(&sessions);
 
     assert_eq!(state.selected_session().unwrap().as_str(), "question");
-    assert!(state.select_next(&sessions));
-    assert_eq!(state.selected_session().unwrap().as_str(), "working");
-    assert!(state.select_next(&sessions));
-    assert_eq!(state.selected_session().unwrap().as_str(), "completed");
+    for (group, id) in [
+        (SessionGroup::Working, "working"),
+        (SessionGroup::Completed, "completed"),
+    ] {
+        assert!(state.select_next(&sessions));
+        assert_eq!(state.selected_group(), Some(group));
+        assert!(state.select_next(&sessions));
+        assert_eq!(state.selected_session().unwrap().as_str(), id);
+    }
 }
 
 #[test]
@@ -199,7 +208,10 @@ fn pointer_activation_does_not_take_keyboard_focus_or_selection() {
     let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
-    assert!(pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 0).is_none());
+    assert_eq!(
+        pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 0),
+        Some(SessionManagerPointerTarget::Group(SessionGroup::Idle))
+    );
     let target = pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 1)
         .expect("the first session row is interactive");
 
@@ -213,22 +225,76 @@ fn pointer_activation_does_not_take_keyboard_focus_or_selection() {
 }
 
 #[test]
-fn group_headings_are_static_and_all_sessions_remain_visible() {
-    let sessions = (0..4)
-        .map(|index| session(&format!("idle-{index}"), SessionManagerStatus::Idle, None))
-        .collect::<Vec<_>>();
-    let mut state = SessionManagerState::default();
-    state.reconcile(&sessions);
-
-    assert_eq!(state.selected_archive_ids(&sessions).len(), 1);
-    assert_eq!(
-        manager_rows(&sessions, &state.pinned, state.archived_expanded).len(),
-        6
-    );
-    assert_eq!(
-        state.selection_hint(),
-        "Enter to open · Space to preview · Ctrl+X to archive · i to details"
-    );
+fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
+    let sessions = vec![
+        session("question", SessionManagerStatus::NeedsInput, None),
+        session("working", SessionManagerStatus::Working, None),
+        session("review", SessionManagerStatus::ReadyForReview, None),
+        session("failed", SessionManagerStatus::Failed, None),
+        session("stopped", SessionManagerStatus::Stopped, None),
+        session("completed", SessionManagerStatus::Completed, None),
+        session("idle", SessionManagerStatus::Idle, None),
+        session("pinned", SessionManagerStatus::Idle, None),
+        Session {
+            status: SessionStatus::Archived,
+            ..session("archived", SessionManagerStatus::Idle, None)
+        },
+    ];
+    for group in SessionGroup::ALL {
+        let mut state = SessionManagerState::default();
+        state.pinned.insert(SessionId::new("pinned").unwrap());
+        state.reconcile(&sessions);
+        state.navigate(&sessions, crate::widgets::navigation::Navigation::First);
+        while state.selected_group() != Some(group) {
+            assert!(
+                state.select_next(&sessions),
+                "heading must be reachable: {group:?}"
+            );
+        }
+        assert!(state.selected_session().is_none());
+        assert!(state.selected_archive_ids(&sessions).is_empty());
+        assert!(!state.toggle_selected_pin());
+        state.expand_selected_group();
+        let expanded = manager_rows(&sessions, &state.pinned, &state.collapsed)
+            .iter()
+            .map(ManagerRow::target)
+            .collect::<Vec<_>>();
+        state.toggle_selected_group();
+        state.reconcile(&sessions);
+        assert_eq!(state.selected_group(), Some(group));
+        assert_eq!(
+            state.selection_hint(),
+            "Enter to expand · Esc to return to input"
+        );
+        let collapsed = manager_rows(&sessions, &state.pinned, &state.collapsed)
+            .iter()
+            .map(ManagerRow::target)
+            .collect::<Vec<_>>();
+        let expected = expanded
+            .iter()
+            .filter(|target| match target {
+                SessionManagerPointerTarget::Session(id) => !sessions.iter().any(|session| {
+                    &session.session_id == id && group.includes(session, &state.pinned)
+                }),
+                _ => true,
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(collapsed, expected);
+        assert_eq!(expanded.len(), collapsed.len() + 1);
+        state.toggle_selected_group();
+        assert_eq!(
+            state.selection_hint(),
+            "Enter to collapse · Esc to return to input"
+        );
+        assert_eq!(
+            manager_rows(&sessions, &state.pinned, &state.collapsed)
+                .iter()
+                .map(ManagerRow::target)
+                .collect::<Vec<_>>(),
+            expanded
+        );
+    }
 }
 
 #[test]

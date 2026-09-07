@@ -274,6 +274,67 @@ fn session_manager_archived_group_restores_deletes_and_previews() {
     assert!(render(&app).contains("Archived (0)"));
 }
 
+#[test]
+fn session_manager_group_keys_collapse_expand_and_skip_hidden_sessions() {
+    let mut app = active_session_app();
+    app.handle_key(key(KeyCode::Left));
+    app.handle_key(key(KeyCode::Up));
+    app.handle_key(key(KeyCode::Up));
+    assert!(app.session_manager_hint().contains("Enter to collapse"));
+    assert!(render(&app).contains("> Idle (1)"));
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+    assert!(app.session_manager_hint().contains("Enter to expand"));
+    assert!(!render(&app).contains("Snapshot session"));
+    assert!(app.session_preview().is_none());
+    assert_snapshot!("session_manager_idle_collapsed", render(&app));
+
+    app.update(SessionEvent::CatalogReceived(vec![session()]));
+    assert!(app.session_manager_hint().contains("Enter to expand"));
+    app.handle_key(key(KeyCode::Down));
+    assert!(render(&app).contains("> Archived (0)"));
+    app.handle_key(key(KeyCode::Up));
+    assert_eq!(app.handle_key(key(KeyCode::Char(' '))), None);
+    assert!(app.session_preview().is_none());
+    assert!(render(&app).contains("Snapshot session"));
+    assert_snapshot!("session_manager_idle_expanded", render(&app));
+
+    for code in [KeyCode::Left, KeyCode::Left] {
+        assert_eq!(app.handle_key(key(code)), None);
+        assert!(!render(&app).contains("Snapshot session"));
+    }
+    for code in [KeyCode::Right, KeyCode::Right] {
+        assert_eq!(app.handle_key(key(code)), None);
+        assert!(render(&app).contains("Snapshot session"));
+    }
+    assert!(app.session_manager_focused());
+    app.handle_key(key(KeyCode::Down));
+    assert!(matches!(app.handle_key(key(KeyCode::Enter)),
+        Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. })) if session_id == "current"));
+}
+
+#[test]
+fn session_manager_heading_click_toggles_without_editing_the_draft_or_opening_a_session() {
+    let mut app = active_session_app();
+    app.handle_key(key(KeyCode::Left));
+    app.insert_text("keep this draft");
+    let area = ratatui::layout::Rect::new(0, 0, WIDTH, HEIGHT);
+    let heading =
+        crate::sessions::pointer_target_at(area, app.session_manager_view().unwrap(), 6, 0)
+            .expect("Idle heading must accept clicks");
+    assert_eq!(
+        app.activate_session_manager_pointer_target(heading.clone()),
+        None
+    );
+    assert!(!app.session_manager_focused());
+    assert!(app.session_preview().is_none());
+    assert!(!render(&app).contains("Snapshot session"));
+    assert_eq!(app.input(), "keep this draft");
+    assert_eq!(app.activate_session_manager_pointer_target(heading), None);
+    assert!(render(&app).contains("Snapshot session"));
+    assert_eq!(app.input(), "keep this draft");
+    assert!(!app.session_manager_focused());
+}
+
 fn preview_result(
     range: std::ops::Range<usize>,
     has_older_turns: bool,

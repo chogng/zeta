@@ -587,8 +587,8 @@ pub(crate) const SESSION_DELETE: Keybinding =
 pub(crate) const SESSION_DETAILS: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Char('i'))], "details");
 pub(crate) const SESSION_PIN: Keybinding = Keybinding::new(&[(NONE, KeyCode::Char('p'))], "pin");
-pub(crate) const ARCHIVED_EXPAND: Keybinding = Keybinding::new(ENTER, "expand");
-pub(crate) const ARCHIVED_COLLAPSE: Keybinding = Keybinding::new(ENTER, "collapse");
+pub(crate) const GROUP_EXPAND: Keybinding = Keybinding::new(ENTER, "expand");
+pub(crate) const GROUP_COLLAPSE: Keybinding = Keybinding::new(ENTER, "collapse");
 pub(crate) const THREAD_SWITCH: Keybinding = Keybinding::new(ENTER, "switch");
 pub(crate) const TRANSCRIPT_EXPAND: Keybinding = Keybinding::new(SPACE, "expand");
 pub(crate) const TRANSCRIPT_DETAILS: Keybinding = Keybinding::new(ENTER, "view details");
@@ -630,9 +630,9 @@ pub(crate) static CANCEL_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[CANC
 pub(crate) static RETURN_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[ENTER_LIST]));
 pub(crate) static INPUT_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[RETURN_INPUT]));
 pub(crate) static EXPAND_HINTS: LazyLock<String> =
-    LazyLock::new(|| hints(&[ARCHIVED_EXPAND, RETURN_INPUT]));
+    LazyLock::new(|| hints(&[GROUP_EXPAND, RETURN_INPUT]));
 pub(crate) static COLLAPSE_HINTS: LazyLock<String> =
-    LazyLock::new(|| hints(&[ARCHIVED_COLLAPSE, RETURN_INPUT]));
+    LazyLock::new(|| hints(&[GROUP_COLLAPSE, RETURN_INPUT]));
 pub(crate) static SESSION_HINTS: LazyLock<String> = LazyLock::new(|| {
     hints(&[
         SESSION_OPEN,

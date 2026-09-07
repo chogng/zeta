@@ -616,7 +616,7 @@ fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
     assert!(
         rendered
             .lines()
-            .any(|line| line.trim_end() == "Archived (1)")
+            .any(|line| line.trim_end() == "  Archived (1)")
     );
     assert!(needs_input.starts_with("  ? needs-input"));
     assert!(needs_input.contains("Which API should I use?"));

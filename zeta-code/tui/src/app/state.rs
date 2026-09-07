@@ -1388,8 +1388,8 @@ impl App {
         target: SessionManagerPointerTarget,
     ) -> Option<AppCommand> {
         match target {
-            SessionManagerPointerTarget::Archived => {
-                self.sessions.manager_mut().toggle_archived();
+            SessionManagerPointerTarget::Group(group) => {
+                self.sessions.manager_mut().toggle_group(group);
                 None
             }
             SessionManagerPointerTarget::Session(id) => {
@@ -2069,21 +2069,21 @@ impl App {
                 );
             }
             return match key.code {
-                _ if (self.sessions.manager().archived_selected()
-                    && if self.sessions.manager().archived_expanded() {
-                        bindings::ARCHIVED_COLLAPSE.matches(key)
+                _ if (self.sessions.manager().selected_group().is_some()
+                    && if self.sessions.manager().selected_group_expanded() {
+                        bindings::GROUP_COLLAPSE.matches(key)
                     } else {
-                        bindings::ARCHIVED_EXPAND.matches(key)
+                        bindings::GROUP_EXPAND.matches(key)
                     })
-                    || (!self.sessions.manager().archived_selected()
+                    || (self.sessions.manager().selected_group().is_none()
                         && if self.sessions.manager().selected_is_archived() {
                             bindings::SESSION_RESTORE.matches(key)
                         } else {
                             bindings::SESSION_OPEN.matches(key)
                         }) =>
                 {
-                    if self.sessions.manager().archived_selected() {
-                        self.sessions.manager_mut().toggle_archived();
+                    if self.sessions.manager().selected_group().is_some() {
+                        self.sessions.manager_mut().toggle_selected_group();
                         Some(None)
                     } else {
                         Some(
@@ -2111,8 +2111,8 @@ impl App {
                     }
                 }
                 _ if bindings::SESSION_PREVIEW.matches(key) => {
-                    if self.sessions.manager().archived_selected() {
-                        self.sessions.manager_mut().toggle_archived();
+                    if self.sessions.manager().selected_group().is_some() {
+                        self.sessions.manager_mut().toggle_selected_group();
                         Some(None)
                     } else {
                         let id = self.sessions.manager().selected_session().cloned();
@@ -2129,11 +2129,13 @@ impl App {
                     Some(None)
                 }
                 _ if (bindings::LEFT.matches(key) || bindings::RIGHT.matches(key))
-                    && self.sessions.manager().archived_selected() =>
+                    && self.sessions.manager().selected_group().is_some() =>
                 {
-                    self.sessions
-                        .manager_mut()
-                        .set_archived_expanded(bindings::RIGHT.matches(key));
+                    if bindings::RIGHT.matches(key) {
+                        self.sessions.manager_mut().expand_selected_group();
+                    } else {
+                        self.sessions.manager_mut().collapse_selected_group();
+                    }
                     Some(None)
                 }
                 _ if bindings::SESSION_PIN.matches(key) => {

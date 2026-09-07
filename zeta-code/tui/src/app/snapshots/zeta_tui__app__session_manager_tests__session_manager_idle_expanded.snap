@@ -8,10 +8,10 @@ expression: render(&app)
     ▝  ▘
 
 
-  Idle (1)
+> Idle (1)
   ○ Snapshot session
-  Archived (1)
-> ○ Archived chat
+  Archived (0)
+
 
 
 
@@ -33,4 +33,4 @@ expression: render(&app)
 >
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  Enter to restore · Space to preview · Ctrl+X to delete · i to details
+  Enter to collapse · Esc to return to input

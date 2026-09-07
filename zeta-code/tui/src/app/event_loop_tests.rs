@@ -286,7 +286,9 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
         for column in area.x..area.right() {
             if matches!(
                 frame::input_pointer_target_at(&app, area, column, row),
-                Some(InputPointerTarget::SessionManager(_))
+                Some(InputPointerTarget::SessionManager(
+                    crate::sessions::SessionManagerPointerTarget::Session(_)
+                ))
             ) {
                 update_pointer_hover(&mut app, area, column, row);
                 session_cell = Some((column, row));
@@ -305,6 +307,31 @@ fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
 
     app.insert_text("/sessions");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let heading_row = row - 1;
+    assert!(matches!(
+        frame::input_pointer_target_at(&app, area, column, heading_row),
+        Some(InputPointerTarget::SessionManager(
+            crate::sessions::SessionManagerPointerTarget::Group(_)
+        ))
+    ));
+    update_pointer_hover(&mut app, area, column, heading_row);
+    assert!(!app.session_manager_focused());
+    assert_eq!(
+        activate_pointer_item(&mut app, area, column, heading_row),
+        None
+    );
+    assert!(app.session_preview().is_none());
+    assert!(!app.session_manager_focused());
+    assert!(matches!(
+        frame::input_pointer_target_at(&app, area, column, row),
+        Some(InputPointerTarget::SessionManager(
+            crate::sessions::SessionManagerPointerTarget::Group(_)
+        ))
+    ));
+    assert_eq!(
+        activate_pointer_item(&mut app, area, column, heading_row),
+        None
+    );
     assert!(matches!(
         activate_pointer_item(&mut app, area, column, row),
         Some(AppCommand::Sessions(

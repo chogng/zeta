@@ -1793,7 +1793,7 @@ fn sessions_and_agents_commands_open_the_manager_screen() {
 }
 
 #[test]
-fn manager_keys_operate_on_sessions_while_group_headings_remain_static() {
+fn manager_session_keys_archive_show_details_and_open_the_selected_session() {
     let mut app = App::new();
     app.update(SessionEvent::CatalogReceived(vec![
         manager_state_session("one"),

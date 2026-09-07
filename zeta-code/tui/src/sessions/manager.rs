@@ -31,7 +31,7 @@ const WORKING_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '�
 #[derive(Debug)]
 pub(crate) struct SessionManagerState {
     selected: Option<SessionManagerPointerTarget>,
-    archived_expanded: bool,
+    collapsed: BTreeSet<SessionGroup>,
     selected_archived: bool,
     focused: bool,
     pinned: BTreeSet<SessionId>,
@@ -44,7 +44,7 @@ impl Default for SessionManagerState {
     fn default() -> Self {
         Self {
             selected: None,
-            archived_expanded: false,
+            collapsed: BTreeSet::from([SessionGroup::Archived]),
             selected_archived: false,
             focused: false,
             pinned: BTreeSet::new(),
@@ -62,18 +62,22 @@ impl SessionManagerState {
                 .iter()
                 .any(|session| &session.session_id == session_id)
         });
-        let rows = manager_rows(sessions, &self.pinned, self.archived_expanded);
-        if self.selected.as_ref().is_some_and(|selected| {
-            rows.iter()
-                .any(|row| row.target().as_ref() == Some(selected))
-        }) {
+        let rows = manager_rows(sessions, &self.pinned, &self.collapsed);
+        if self
+            .selected
+            .as_ref()
+            .is_some_and(|selected| rows.iter().any(|row| &row.target() == selected))
+        {
             self.update_selected_status(sessions);
             return;
         }
         self.selected = if self.selected_archived {
-            Some(SessionManagerPointerTarget::Archived)
+            Some(SessionManagerPointerTarget::Group(SessionGroup::Archived))
         } else {
-            rows.into_iter().find_map(|row| row.target())
+            rows.iter()
+                .find(|row| matches!(row, ManagerRow::Session(_)))
+                .or_else(|| rows.first())
+                .map(ManagerRow::target)
         };
         self.update_selected_status(sessions);
     }
@@ -119,22 +123,42 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn toggle_archived(&mut self) {
-        self.archived_expanded = !self.archived_expanded;
-        self.selected = Some(SessionManagerPointerTarget::Archived);
+    pub(crate) fn selected_group(&self) -> Option<SessionGroup> {
+        match self.selected {
+            Some(SessionManagerPointerTarget::Group(group)) => Some(group),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn toggle_group(&mut self, group: SessionGroup) {
+        if !self.collapsed.remove(&group) {
+            self.collapsed.insert(group);
+        }
+        self.selected = Some(SessionManagerPointerTarget::Group(group));
         self.selected_archived = false;
     }
 
-    pub(crate) fn set_archived_expanded(&mut self, expanded: bool) {
-        self.archived_expanded = expanded;
+    pub(crate) fn toggle_selected_group(&mut self) {
+        if let Some(group) = self.selected_group() {
+            self.toggle_group(group);
+        }
     }
 
-    pub(crate) fn archived_expanded(&self) -> bool {
-        self.archived_expanded
+    pub(crate) fn expand_selected_group(&mut self) {
+        if let Some(group) = self.selected_group() {
+            self.collapsed.remove(&group);
+        }
     }
 
-    pub(crate) fn archived_selected(&self) -> bool {
-        self.selected == Some(SessionManagerPointerTarget::Archived)
+    pub(crate) fn collapse_selected_group(&mut self) {
+        if let Some(group) = self.selected_group() {
+            self.collapsed.insert(group);
+        }
+    }
+
+    pub(crate) fn selected_group_expanded(&self) -> bool {
+        self.selected_group()
+            .is_some_and(|group| !self.collapsed.contains(&group))
     }
 
     pub(crate) fn selected_is_archived(&self) -> bool {
@@ -163,8 +187,8 @@ impl SessionManagerState {
     }
 
     pub(crate) fn selection_hint(&self) -> &'static str {
-        if self.archived_selected() {
-            if self.archived_expanded {
+        if self.selected_group().is_some() {
+            if self.selected_group_expanded() {
                 bindings::COLLAPSE_HINTS.as_str()
             } else {
                 bindings::EXPAND_HINTS.as_str()
@@ -233,7 +257,7 @@ impl SessionManagerState {
         SessionManagerView {
             sessions,
             selected: self.selected.as_ref(),
-            archived_expanded: self.archived_expanded,
+            collapsed: &self.collapsed,
             focused: self.focused,
             pinned: &self.pinned,
             animation_frame: self.animation_frame,
@@ -242,9 +266,9 @@ impl SessionManagerState {
     }
 
     fn select_offset(&mut self, sessions: &[Session], delta: isize) -> bool {
-        let selectable = manager_rows(sessions, &self.pinned, self.archived_expanded)
+        let selectable = manager_rows(sessions, &self.pinned, &self.collapsed)
             .into_iter()
-            .filter_map(|row| row.target())
+            .map(|row| row.target())
             .collect::<Vec<_>>();
         let index = self
             .selected
@@ -279,7 +303,7 @@ pub(super) fn manager_status_label(status: SessionManagerStatus) -> &'static str
 pub(crate) struct SessionManagerView<'a> {
     sessions: &'a [Session],
     selected: Option<&'a SessionManagerPointerTarget>,
-    archived_expanded: bool,
+    collapsed: &'a BTreeSet<SessionGroup>,
     focused: bool,
     pinned: &'a BTreeSet<SessionId>,
     animation_frame: usize,
@@ -289,7 +313,7 @@ pub(crate) struct SessionManagerView<'a> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SessionManagerPointerTarget {
     Session(SessionId),
-    Archived,
+    Group(SessionGroup),
 }
 
 pub(crate) fn pointer_target_at(
@@ -301,19 +325,15 @@ pub(crate) fn pointer_target_at(
     if !area.contains(Position::new(column, row)) {
         return None;
     }
-    let rows = manager_rows(view.sessions, view.pinned, view.archived_expanded);
-    let selected_row = rows.iter().position(|row| {
-        row.target()
-            .as_ref()
-            .is_some_and(|target| Some(target) == view.selected)
-    });
+    let rows = manager_rows(view.sessions, view.pinned, view.collapsed);
+    let selected_row = rows
+        .iter()
+        .position(|row| Some(&row.target()) == view.selected);
     let viewport = manager_viewport(rows.len(), selected_row, usize::from(area.height));
     let line = usize::from(row.saturating_sub(area.y));
     let top_notice = usize::from(viewport.start > 0);
     let index = viewport.start.saturating_add(line.checked_sub(top_notice)?);
-    (index < viewport.end)
-        .then(|| rows[index].target())
-        .flatten()
+    (index < viewport.end).then(|| rows[index].target())
 }
 
 pub(crate) fn draw_manager(
@@ -327,7 +347,7 @@ pub(crate) fn draw_manager(
     if area.is_empty() {
         return;
     }
-    let rows = manager_rows(view.sessions, view.pinned, view.archived_expanded);
+    let rows = manager_rows(view.sessions, view.pinned, view.collapsed);
     if rows.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::styled(
@@ -339,11 +359,9 @@ pub(crate) fn draw_manager(
         return;
     }
     let visible_rows = usize::from(area.height);
-    let selected_row = rows.iter().position(|row| {
-        row.target()
-            .as_ref()
-            .is_some_and(|target| Some(target) == view.selected)
-    });
+    let selected_row = rows
+        .iter()
+        .position(|row| Some(&row.target()) == view.selected);
     let viewport = manager_viewport(rows.len(), selected_row, visible_rows);
     let mut lines = Vec::with_capacity(visible_rows);
     if viewport.start > 0 {
@@ -359,25 +377,19 @@ pub(crate) fn draw_manager(
             .iter()
             .copied()
             .map(|row| match row {
-                ManagerRow::Heading { group, count } => {
-                    let mut line = group_line(group, count, usize::from(area.width), context);
-                    if group == SessionGroup::Archived {
-                        let state = manager_state(
-                            &SessionManagerPointerTarget::Archived,
-                            view.selected,
-                            view.focused,
-                            hovered,
-                            pressed,
-                        );
-                        line = line.style(
-                            Style::default()
-                                .fg(context.muted())
-                                .add_modifier(Modifier::BOLD)
-                                .patch(interaction_style(context, state)),
-                        );
-                    }
-                    line
-                }
+                ManagerRow::Heading { group, count } => group_line(
+                    group,
+                    count,
+                    manager_state(
+                        &SessionManagerPointerTarget::Group(group),
+                        view.selected,
+                        view.focused,
+                        hovered,
+                        pressed,
+                    ),
+                    usize::from(area.width),
+                    context,
+                ),
                 ManagerRow::Session(session) => session_line(
                     session,
                     manager_state(
@@ -458,22 +470,18 @@ enum ManagerRow<'a> {
 }
 
 impl ManagerRow<'_> {
-    fn target(&self) -> Option<SessionManagerPointerTarget> {
+    fn target(&self) -> SessionManagerPointerTarget {
         match self {
-            Self::Heading {
-                group: SessionGroup::Archived,
-                ..
-            } => Some(SessionManagerPointerTarget::Archived),
-            Self::Heading { .. } => None,
-            Self::Session(session) => Some(SessionManagerPointerTarget::Session(
-                session.session_id.clone(),
-            )),
+            Self::Heading { group, .. } => SessionManagerPointerTarget::Group(*group),
+            Self::Session(session) => {
+                SessionManagerPointerTarget::Session(session.session_id.clone())
+            }
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-enum SessionGroup {
+pub(crate) enum SessionGroup {
     Archived,
     Pinned,
     NeedsInput,
@@ -540,7 +548,7 @@ impl SessionGroup {
 fn manager_rows<'a>(
     sessions: &'a [Session],
     pinned: &BTreeSet<SessionId>,
-    archived_expanded: bool,
+    collapsed: &BTreeSet<SessionGroup>,
 ) -> Vec<ManagerRow<'a>> {
     let mut rows = Vec::new();
     for group in SessionGroup::ALL {
@@ -555,7 +563,7 @@ fn manager_rows<'a>(
             group,
             count: group_sessions.len(),
         });
-        if group != SessionGroup::Archived || archived_expanded {
+        if !collapsed.contains(&group) {
             rows.extend(group_sessions.into_iter().map(ManagerRow::Session));
         }
     }
@@ -604,13 +612,19 @@ fn session_line<'a>(
 fn group_line(
     group: SessionGroup,
     count: usize,
+    state: InteractionState,
     width: usize,
     context: RenderContext<'_>,
 ) -> Line<'static> {
-    let text = format!("{} ({count})", group.label());
+    let text = format!(
+        "{}{} ({count})",
+        selection_marker(state.selected),
+        group.label()
+    );
     let style = Style::default()
         .fg(context.muted())
-        .add_modifier(Modifier::BOLD);
+        .add_modifier(Modifier::BOLD)
+        .patch(interaction_style(context, state));
     Line::styled(pad_to_width(&truncate_to_width(&text, width), width), style)
 }
 
