@@ -25,7 +25,7 @@
 | 状态、请求与模块分工 | [TUI 架构](design/tui.md) · [CLI 架构](design/cli.md) · [进程资源采样](design/process-resources.md) |
 | 代码入口、配置格式与测试 | [TUI 开发指南](../tui/README.md) |
 
-[正文绘制重构](spec/transcript-rendering.md)与[内存诊断](spec/memory-diagnostics.md)是尚未实现或排期的方案。其他规格中尚未接入的要求在对应段落标明。
+[正文绘制重构](spec/transcript-rendering.md)已有新的实现，尚待逐项验收；[内存诊断](spec/memory-diagnostics.md)仍为未排期草案。其他规格中尚未接入的要求在对应段落标明。
 
 新功能沿用[开发流程与模板](../../docs/development-workflow.md)，在 `changes/<工作名>/` 保存自己的四份记录。本次梳理保留到范围和验收完成，不因正文已经写完而删除。
 
