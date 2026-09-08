@@ -28,6 +28,49 @@ fn open_provider(process: &mut TuiProcess) {
 }
 
 #[test]
+fn actual_tui_tab_switches_from_content_search_and_unsaved_field() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Enhanced TUI");
+    let original_config = fixture.config_source();
+    process.tab();
+    process.wait_for_screen("> OpenAI");
+    process.type_text("/OpenAI");
+    process.tab();
+    process.wait_for_screen("No matching configuration");
+    assert!(process.screen().contains("OpenAI"));
+    process.back_tab();
+    process.enter();
+    process.wait_for_screen("> OpenAI");
+    process.enter();
+    process.wait_for_screen("> API key");
+    process.back_tab();
+    process.wait_for_screen("> Provider name");
+    process.enter();
+    process.type_text("Unsubmitted service");
+    process.tab();
+    process.wait_for_screen("> API key");
+    process.back_tab();
+    process.wait_for_screen("Unsubmitted service");
+    process.type_text(" continued");
+    process.wait_for_screen("Unsubmitted service continued");
+    process.resize(SMALL_SIZE);
+    process.wait_for_screen("Unsubmitted service continued");
+    process.escape();
+    assert!(!process.screen().contains("Unsubmitted service"));
+    assert_eq!(fixture.config_source(), original_config);
+    process.escape();
+    process.escape();
+    process.escape();
+    process.quit();
+    assert!(server.request_bodies().is_empty());
+}
+
+#[test]
 fn actual_tui_issue_config_switch_gates_its_tab() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
@@ -1025,17 +1068,15 @@ fn actual_tui_issue_selection_creates_one_draft_without_touching_source_changes(
     process.wait_for_screen("Repair first issue");
     process.wait_for_screen("Closed");
     assert!(process.screen().contains("─ Issues"));
-    process.back_tab();
-    process.right();
+    process.tab();
     process.wait_for_screen("Previously resolved issue");
     assert!(!process.screen().contains("Repair first issue"));
     process.resize(SMALL_SIZE);
     process.wait_for_screen("Previously resolved issue");
     process.resize(LARGE_SIZE);
-    process.left();
+    process.back_tab();
     process.wait_for_screen("Repair first issue");
     assert!(!process.screen().contains("Previously resolved issue"));
-    process.down();
     process.space();
     process.down();
     process.space();
@@ -1043,7 +1084,7 @@ fn actual_tui_issue_selection_creates_one_draft_without_touching_source_changes(
     process.resize(SMALL_SIZE);
     process.wait_for_screen("2 selected");
     process.resize(LARGE_SIZE);
-    process.tab();
+    process.down();
     process.enter();
     process.wait_for_screen("[issue #3] [issue #5]");
     process.type_text("implement together");
@@ -1136,8 +1177,8 @@ fn issue_pr_flow(choice: IssuePrChoice) {
     process.space();
     process.down();
     process.space();
-    process.tab();
-    process.tab();
+    process.down();
+    process.down();
     process.enter();
     process.wait_for_screen("[issue #3] [issue #5]");
     process.type_text("implement together");

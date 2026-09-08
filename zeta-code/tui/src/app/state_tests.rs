@@ -1277,41 +1277,53 @@ fn process_resource_sample_updates_the_optional_statusline_items() {
 
 #[test]
 fn shortcut_capture_emits_a_revision_bound_edit() {
-    let mut app = App::new();
-    let settings = keymap_settings_from_tui(&Default::default()).unwrap();
-    let choices = keymap_choices(settings.keymap.setup_actions(), &[], 7);
-    app.update(KeymapEvent::EditorOpened(KeymapEditorUpdate {
-        settings,
-        choices,
-        notice: None,
-    }));
+    for (input, expected) in [
+        (
+            KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL),
+            "ctrl+y",
+        ),
+        (KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), "tab"),
+        (
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+            "shift+tab",
+        ),
+    ] {
+        let mut app = App::new();
+        let settings = keymap_settings_from_tui(&Default::default()).unwrap();
+        let choices = keymap_choices(settings.keymap.setup_actions(), &[], 7);
+        app.update(KeymapEvent::EditorOpened(KeymapEditorUpdate {
+            settings,
+            choices,
+            notice: None,
+        }));
 
-    assert_eq!(app.list_selection().unwrap().title(), "Keymap");
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        None
-    );
-    assert_eq!(app.list_selection().unwrap().title(), "Cycle approval mode");
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        None
-    );
-    assert!(app.list_selection().is_none());
+        assert_eq!(app.list_selection().unwrap().title(), "Keymap");
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            None
+        );
+        assert_eq!(app.list_selection().unwrap().title(), "Cycle approval mode");
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            None
+        );
+        assert!(app.list_selection().is_none());
 
-    let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
-    assert_eq!(
-        edit,
-        Some(AppCommand::Keymap(KeymapCommand::Edit(
-            crate::keymap::KeymapEdit {
-                expected_revision: 7,
-                command_id: "zetaCode.action.cycleApprovalMode".into(),
-                kind: KeymapEditKind::Set {
-                    key: "ctrl+y".into(),
-                    intent: KeymapEditIntent::ReplaceUser,
-                },
-            }
-        )))
-    );
+        let edit = app.handle_key(input);
+        assert_eq!(
+            edit,
+            Some(AppCommand::Keymap(KeymapCommand::Edit(
+                crate::keymap::KeymapEdit {
+                    expected_revision: 7,
+                    command_id: "zetaCode.action.cycleApprovalMode".into(),
+                    kind: KeymapEditKind::Set {
+                        key: expected.into(),
+                        intent: KeymapEditIntent::ReplaceUser,
+                    },
+                }
+            )))
+        );
+    }
 }
 
 #[test]
@@ -2341,7 +2353,10 @@ fn panel_search_owns_letters_and_paste_then_returns_to_the_list_and_original_dra
             .unwrap()
             .input_active()
     );
-    assert_eq!(app.command_panel_key_hints(), Some("Enter/Esc to return"));
+    assert_eq!(
+        app.command_panel_key_hints(),
+        Some("Enter/Esc/Ctrl+C to return  ·  Tab/Shift+Tab to switch")
+    );
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(
         !app.list_selection()

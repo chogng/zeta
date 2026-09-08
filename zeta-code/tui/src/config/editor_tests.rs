@@ -51,7 +51,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     );
     assert_eq!(
         view.model.key_hints().text(),
-        "Enter/Space to change  ·  / to search  ·  Esc to close"
+        "Enter/Space to change  ·  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close"
     );
     let mut state = ListSelectionState::new(view.model);
 
@@ -383,12 +383,10 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
 }
 
 #[test]
-fn config_option_arrows_and_tabs_toggle_values_without_switching_pages() {
+fn config_option_arrows_toggle_values_without_switching_pages() {
     for key in [
         KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
         KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
-        KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
-        KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT),
     ] {
         let mut editor = super::ConfigEditor::new(config_choices(
             &empty_config_snapshot(),
@@ -527,4 +525,21 @@ fn created_provider_remains_available_after_closing_and_reopening_openai() {
     };
     assert_eq!(renamed.config.provider, request.config.provider);
     assert_eq!(renamed.revision, 1);
+}
+
+#[test]
+fn tab_from_config_option_switches_page_without_changing_setting() {
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    for (code, expected) in [(KeyCode::Tab, "Providers"), (KeyCode::BackTab, "Config")] {
+        assert!(matches!(
+            editor.handle_key(KeyEvent::new(code, KeyModifiers::NONE)),
+            super::ConfigEditorOutcome::Consumed
+        ));
+        assert_eq!(editor.selection.state().active_tab().label(), expected);
+    }
 }

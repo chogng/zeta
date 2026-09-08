@@ -13,6 +13,7 @@ use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
 use crate::widgets::tab_list;
 use crate::widgets::tab_list::FocusedTabListInputOutcome;
+use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
 use crossterm::event::KeyCode;
@@ -282,13 +283,12 @@ impl Manager {
         self.attempt = None;
         self.next = None;
         self.cursor = 0;
-        self.search.set_query(String::new());
         self.load(1)
     }
 
     pub(crate) fn key_hints(&self) -> &str {
         if self.search.input_active() {
-            "Type to filter · Enter done · Esc back"
+            "Type to filter · Tab/Shift+Tab to switch · Enter done · Esc back"
         } else if self.detail.is_some() {
             "↑↓ scroll · Esc back"
         } else if self.pr_session.is_some() {
@@ -296,7 +296,7 @@ impl Manager {
         } else if self.tabs.focused {
             "←→/Tab switch · ↓/Enter list · Esc close"
         } else {
-            "Space select · Enter open/start · Tab focus · / search · n more · r refresh · Esc close"
+            "Space select · Enter open/start · Tab/Shift+Tab to switch · / search · n more · r refresh · Esc close"
         }
     }
 
@@ -315,6 +315,16 @@ impl Manager {
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<Command> {
         if key.kind == KeyEventKind::Release {
             return None;
+        }
+        if self.pr_session.is_none()
+            && self.detail.is_none()
+            && !self.pending_creation
+            && crate::keymap::bindings::TABS.matches(key)
+        {
+            return match self.tabs.state.handle_key(key) {
+                TabListInputOutcome::ActiveChanged => Some(self.switch_tab()),
+                _ => None,
+            };
         }
         if self.search.input_active() {
             match key.code {
@@ -348,10 +358,7 @@ impl Manager {
                 }
                 return None;
             }
-            if key.code == KeyCode::BackTab
-                && (self.cursor == 0 || self.cursor < self.filtered().len())
-                || key.code == KeyCode::Up && self.cursor == 0
-            {
+            if key.code == KeyCode::Up && self.cursor == 0 {
                 self.tabs.focused = true;
                 return None;
             }
@@ -401,25 +408,6 @@ impl Manager {
         }
         let number = rows.get(self.cursor).map(|issue| issue.number);
         match key.code {
-            KeyCode::BackTab => {
-                self.cursor = if self.cursor > count {
-                    count
-                } else if self.cursor == count {
-                    0
-                } else {
-                    count + 1
-                };
-            }
-            KeyCode::Tab => {
-                self.cursor = if self.cursor < count {
-                    count
-                } else if self.cursor == count {
-                    count + 1
-                } else {
-                    self.tabs.focused = true;
-                    0
-                }
-            }
             KeyCode::Char('/') => self.search.set_input_active(true),
             KeyCode::Char('i') if !self.status.is_empty() => {
                 self.detail = Some(self.status.clone())

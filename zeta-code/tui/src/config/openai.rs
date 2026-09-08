@@ -41,8 +41,7 @@ const FIELD_ROWS: u16 = 4;
 fn form_hints(action: Keybinding, dismiss: Keybinding) -> KeyHints {
     KeyHints::new()
         .with_binding(action)
-        .with_binding(bindings::PROVIDER_NEXT_FIELD)
-        .with_binding(bindings::PROVIDER_SWITCH_TABS)
+        .with_binding(bindings::TABS)
         .with_binding(dismiss)
 }
 static EDIT_HINTS: LazyLock<KeyHints> =
@@ -167,6 +166,7 @@ fn input(value: &str, placeholder: &str, visibility: InputVisibility) -> TextFie
             InputVisibility::Visible => model,
         },
     )
+    .with_key_hint(bindings::TABS)
 }
 
 fn empty_config(id: String) -> ProviderConfigDto {
@@ -415,7 +415,13 @@ impl Panel {
             forms: BTreeMap::new(),
             draft_id,
             focus: PanelFocus::Content,
-            subscription: ListSelection::new(choices.model.without_tab_bar(), choices.actions),
+            subscription: ListSelection::new(
+                choices
+                    .model
+                    .without_tab_bar()
+                    .with_key_hint(bindings::TABS),
+                choices.actions,
+            ),
             pending: None,
         };
         panel.replace(settings);
@@ -496,8 +502,13 @@ impl Panel {
         }
     }
     pub(crate) fn update_subscription(&mut self, choices: ConfigChoices) {
-        self.subscription
-            .replace(choices.model.without_tab_bar(), choices.actions);
+        self.subscription.replace(
+            choices
+                .model
+                .without_tab_bar()
+                .with_key_hint(bindings::TABS),
+            choices.actions,
+        );
     }
     fn form(&self) -> Option<&Form> {
         self.forms.get(
@@ -521,9 +532,6 @@ impl Panel {
         if self.tabs.select(index) == TabListInputOutcome::Unhandled {
             return ConfigEditorOutcome::Consumed;
         }
-        if let Some(form) = self.form_mut() {
-            form.focus(form.focus);
-        }
         if self.tabs.active_index() == Some(1) {
             ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription)
         } else {
@@ -534,9 +542,13 @@ impl Panel {
         if key.kind != KeyEventKind::Press {
             return ConfigEditorOutcome::Consumed;
         }
-        let mut key = key;
-        if key.code == KeyCode::Tab && key.modifiers.contains(KeyModifiers::SHIFT) {
-            key.code = KeyCode::BackTab;
+        if bindings::TABS.matches(key) {
+            return match self.tabs.handle_key(key) {
+                TabListInputOutcome::ActiveChanged => {
+                    self.select_tab(self.tabs.active_index().expect("provider tabs are enabled"))
+                }
+                _ => ConfigEditorOutcome::Consumed,
+            };
         }
         if key.modifiers.contains(KeyModifiers::ALT)
             && matches!(key.code, KeyCode::Left | KeyCode::Right)
@@ -562,7 +574,7 @@ impl Panel {
             return ConfigEditorOutcome::Consumed;
         }
         if self.tabs.active_index() == Some(1) {
-            if key.code == KeyCode::Esc || key.code == KeyCode::BackTab {
+            if key.code == KeyCode::Esc {
                 self.focus = PanelFocus::Tabs;
                 return ConfigEditorOutcome::Consumed;
             }
@@ -601,16 +613,6 @@ impl Panel {
                 form.protocol_editing = false;
             }
             KeyCode::Esc => self.focus = PanelFocus::Tabs,
-            KeyCode::BackTab => {
-                if form.move_focus(Direction::Previous) == FieldFocusOutcome::BeforeFirst {
-                    self.focus = PanelFocus::Tabs;
-                }
-            }
-            KeyCode::Tab => {
-                if form.move_focus(Direction::Next) == FieldFocusOutcome::AfterLast {
-                    self.focus = PanelFocus::Tabs;
-                }
-            }
             KeyCode::Up if !form.editing() => {
                 if form.move_focus(Direction::Previous) == FieldFocusOutcome::BeforeFirst {
                     self.focus = PanelFocus::Tabs;

@@ -164,10 +164,10 @@ fn tab_switching_preserves_the_search_query() {
     }
     state.handle_key(key(KeyCode::Tab));
     assert!(state.search_focused());
-    assert_eq!(active_tab_label(&state), "Commands");
+    assert_eq!(active_tab_label(&state), "Keys");
     state.handle_key(key(KeyCode::BackTab));
     assert!(state.search_focused());
-    state.handle_key(key(KeyCode::Up));
+    assert_eq!(active_tab_label(&state), "Commands");
     state.handle_key(key(KeyCode::Tab));
     assert_eq!(state.query(), "esc");
     assert_eq!(state.visible_items().len(), 2);
@@ -512,4 +512,60 @@ fn navigation_clamps_at_list_boundaries_and_only_press_activates() {
         state.handle_key(key(KeyCode::Enter)),
         ListSelectionInputOutcome::Activate(_)
     ));
+}
+
+#[test]
+fn tab_from_items_skips_disabled_pages_and_repeat_does_not_switch() {
+    use crossterm::event::KeyEventKind;
+    let mut state = ListSelectionState::new(ListSelectionModel::new(
+        "Config",
+        vec![
+            ListSelectionGroup::new(
+                "First",
+                vec![ListSelectionItem::new("Toggle").with_id(ListSelectionItemId::new("toggle"))],
+            ),
+            ListSelectionGroup::new("Disabled", vec![]).disabled(),
+            ListSelectionGroup::new("Empty", vec![]),
+        ],
+    ));
+    assert_eq!(
+        state.handle_key(key(KeyCode::Tab)),
+        ListSelectionInputOutcome::Consumed
+    );
+    assert_eq!(active_tab_label(&state), "Empty");
+    assert!(state.items_focused());
+    assert_eq!(state.selected_visible_index(), None);
+    for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
+        state.handle_key(KeyEvent::new_with_kind(
+            KeyCode::Tab,
+            KeyModifiers::NONE,
+            kind,
+        ));
+        assert_eq!(active_tab_label(&state), "Empty");
+    }
+    state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT));
+    assert_eq!(active_tab_label(&state), "First");
+    assert_eq!(state.selected_visible_index(), Some(0));
+}
+
+#[test]
+fn hidden_tab_list_neither_switches_nor_adjusts_values_on_tab() {
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Nested",
+            vec![ListSelectionGroup::new(
+                "Items",
+                vec![ListSelectionItem::new("Toggle").with_id(ListSelectionItemId::new("toggle"))],
+            )],
+        )
+        .without_tab_bar(),
+    );
+    for code in [KeyCode::Tab, KeyCode::BackTab] {
+        assert_eq!(
+            state.handle_key(key(code)),
+            ListSelectionInputOutcome::Consumed
+        );
+        assert!(state.items_focused());
+        assert_eq!(active_tab_label(&state), "Items");
+    }
 }

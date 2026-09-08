@@ -14,17 +14,17 @@ Config 总页的“推荐合并处理”默认勾选；取消后禁用同一面�
 
 | 界面 / 入口 | 导航与搜索 | 页签 / 左右键 | Enter | Space | Esc |
 | --- | --- | --- | --- | --- | --- |
-| Issues `/issue` | 列表导航；`/` 过滤已加载 issue，`n` 下一页，`r` 刷新 | Tab/Shift+Tab 到底部起点动作 | 阅读详情或创建一个合并处理的会话 | 多选 | 返回 |
+| Issues `/issue` | 列表导航；`/` 过滤已加载 issue，`n` 下一页，`r` 刷新 | Tab/Shift+Tab 切 Open / Closed；上下键到达底部起点动作 | 阅读详情或创建一个合并处理的会话 | 多选 | 返回 |
 | Issue PR `/pr` | 选择创建方式；`i` 查看发布范围，`r` 刷新 | 单页 | 提交任务变更、推送并创建所选 PR | 无 | 返回 |
-| Help `/help` | 列表导航；`/` 搜索帮助 | 页签获焦后 Tab/Shift+Tab 切 Shortcuts、Commands、Custom commands | 无业务动作 | 无 | 关闭 |
+| Help `/help` | 列表导航；`/` 搜索帮助 | Tab/Shift+Tab 切 Shortcuts、Commands、Custom commands | 无业务动作 | 无 | 关闭 |
 | Directories `/add-dir` | 列表导航；`/` 输入目录路径 | 单页 | 输入框中添加目录；列表中移除目录或更改权限 | 无 | 输入框中返回列表；等待添加时关闭面板；列表中关闭 |
 | Model `/model` | 列表导航；`/` 搜索模型 | 单页 | 应用模型 | 无 | 关闭 |
 | Theme `/theme` | 列表导航；无搜索；编号只是标签 | 单页 | 应用主题，或进入 Custom color theme | 无 | 主列表关闭；自定义主题列表返回主列表 |
-| Config `/config` | 列表导航；`/` 搜索设置 | 页签获焦后 Tab/Shift+Tab 切分类；条目左右调整值 | 更改值或进入字段编辑 | 与 Enter 相同 | 关闭；字段编辑内取消并返回设置列表 |
-| Keymap `/shortcuts` | 列表导航；`/` 搜索快捷键 | 页签获焦后 Tab/Shift+Tab 切分类 | 主列表打开动作菜单；菜单执行绑定编辑或开始录制 | 无 | 菜单返回主列表；录制取消后回菜单；主列表关闭 |
-| Connectors `/connectors` | 列表导航；`/` 搜索连接器 | 页签获焦后 Tab/Shift+Tab 切分类 | 连接或断开当前项 | 无 | 关闭 |
-| MCP `/mcp` | 列表导航；`/` 搜索服务器 | 页签获焦后 Tab/Shift+Tab 切分类 | 切换启用状态 | 与 Enter 相同 | 关闭 |
-| Skills `/skills` | 列表导航；`/` 搜索技能 | 页签获焦后 Tab/Shift+Tab 切分类 | 切换当前技能或执行 Manage 条目 | 与 Enter 相同 | 关闭 |
+| Config `/config` | 列表导航；`/` 搜索设置 | Tab/Shift+Tab 切分类；条目左右调整值 | 更改值或进入字段编辑 | 与 Enter 相同 | 关闭；字段编辑内取消并返回设置列表 |
+| Keymap `/shortcuts` | 列表导航；`/` 搜索快捷键 | Tab/Shift+Tab 切分类 | 主列表打开动作菜单；菜单执行绑定编辑或开始录制 | 无 | 菜单返回主列表；录制取消后回菜单；主列表关闭 |
+| Connectors `/connectors` | 列表导航；`/` 搜索连接器 | Tab/Shift+Tab 切分类 | 连接或断开当前项 | 无 | 关闭 |
+| MCP `/mcp` | 列表导航；`/` 搜索服务器 | Tab/Shift+Tab 切分类 | 切换启用状态 | 与 Enter 相同 | 关闭 |
+| Skills `/skills` | 列表导航；`/` 搜索技能 | Tab/Shift+Tab 切分类 | 切换当前技能或执行 Manage 条目 | 与 Enter 相同 | 关闭 |
 | Sessions `/resume` | 列表导航；`/` 搜索保存的会话 | 单页 | 恢复并进入所选会话 | 无 | 关闭 |
 | Rewind `/rewind` | 列表导航；`/` 搜索检查点 | 单页 | 回退到所选检查点 | 无 | 关闭 |
 | Status line `/statusline` | 列表导航；无搜索 | 单页 | 切换状态行条目 | 与 Enter 相同 | 关闭 |

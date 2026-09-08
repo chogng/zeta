@@ -41,7 +41,7 @@ fn multiple_issues_produce_one_creation_command_and_retry_identity() {
     key(&mut manager, KeyCode::Char(' '));
     key(&mut manager, KeyCode::Down);
     key(&mut manager, KeyCode::Char(' '));
-    key(&mut manager, KeyCode::Tab);
+    key(&mut manager, KeyCode::Down);
     let command = key(&mut manager, KeyCode::Enter).unwrap();
     let Command::Start {
         generation,
@@ -85,7 +85,7 @@ fn closed_manager_does_not_reopen_when_loading_finishes() {
 #[test]
 fn empty_selection_does_not_create_a_task() {
     let mut manager = loaded();
-    key(&mut manager, KeyCode::Tab);
+    key(&mut manager, KeyCode::End);
     assert!(key(&mut manager, KeyCode::Enter).is_none());
     assert!(!manager.busy);
 }
@@ -120,12 +120,11 @@ fn issue_tabs_query_the_selected_state_and_reject_old_results() {
     let mut manager = loaded();
     key(&mut manager, KeyCode::Char(' '));
     manager.next = Some(2);
-    key(&mut manager, KeyCode::BackTab);
     let Command::List {
         generation: closed,
         state,
         page,
-    } = key(&mut manager, KeyCode::Right).unwrap()
+    } = key(&mut manager, KeyCode::Tab).unwrap()
     else {
         panic!();
     };
@@ -137,7 +136,7 @@ fn issue_tabs_query_the_selected_state_and_reject_old_results() {
         generation: open,
         state,
         page,
-    } = key(&mut manager, KeyCode::Left).unwrap()
+    } = key(&mut manager, KeyCode::BackTab).unwrap()
     else {
         panic!();
     };
@@ -157,8 +156,7 @@ fn issue_tabs_query_the_selected_state_and_reject_old_results() {
 #[test]
 fn closed_issue_empty_results_retry_and_pagination_keep_the_state() {
     let mut manager = loaded();
-    key(&mut manager, KeyCode::BackTab);
-    let Command::List { generation, .. } = key(&mut manager, KeyCode::Right).unwrap() else {
+    let Command::List { generation, .. } = key(&mut manager, KeyCode::Tab).unwrap() else {
         panic!();
     };
     manager.update(Event::Listed {
@@ -197,17 +195,14 @@ fn closed_issue_empty_results_retry_and_pagination_keep_the_state() {
 }
 
 #[test]
-fn issue_focus_cycles_between_list_actions_and_tabs() {
+fn issue_arrows_reach_list_actions_and_tabs() {
     let mut manager = loaded();
-    key(&mut manager, KeyCode::Tab);
+    key(&mut manager, KeyCode::Down);
+    key(&mut manager, KeyCode::Down);
     assert_eq!(manager.cursor, 2);
-    key(&mut manager, KeyCode::Tab);
+    key(&mut manager, KeyCode::Down);
     assert_eq!(manager.cursor, 3);
-    key(&mut manager, KeyCode::Tab);
-    assert!(manager.tabs.focused);
-    key(&mut manager, KeyCode::Enter);
-    assert!(!manager.tabs.focused);
-    assert_eq!(manager.cursor, 0);
+    key(&mut manager, KeyCode::Home);
     key(&mut manager, KeyCode::Up);
     assert!(manager.tabs.focused);
     key(&mut manager, KeyCode::Down);
@@ -265,11 +260,54 @@ fn issue_search_keeps_text_editing_separate_from_tab_navigation() {
     );
     key(&mut manager, KeyCode::Left);
     assert_eq!(manager.state(), IssueState::Open);
-    key(&mut manager, KeyCode::Esc);
-    assert!(!manager.search.input_active());
+    assert!(matches!(
+        key(&mut manager, KeyCode::Tab),
+        Some(Command::List {
+            state: IssueState::Closed,
+            ..
+        })
+    ));
+    assert!(manager.search.input_active());
     assert!(manager.is_open());
-    key(&mut manager, KeyCode::BackTab);
-    key(&mut manager, KeyCode::Right);
-    assert!(manager.search.query().is_empty());
+    assert_eq!(manager.search.query(), "first");
     assert_eq!(manager.state(), IssueState::Closed);
+}
+
+#[test]
+fn tab_does_not_repeat_or_leave_issue_detail_and_pending_creation() {
+    use crossterm::event::KeyEventKind;
+    let mut manager = loaded();
+    for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
+        assert!(
+            manager
+                .handle_key(KeyEvent::new_with_kind(
+                    KeyCode::Tab,
+                    KeyModifiers::NONE,
+                    kind
+                ))
+                .is_none()
+        );
+        assert_eq!(manager.state(), IssueState::Open);
+    }
+    manager.detail = Some("Issue details".into());
+    assert!(key(&mut manager, KeyCode::Tab).is_none());
+    assert_eq!(manager.state(), IssueState::Open);
+    assert_eq!(manager.detail.as_deref(), Some("Issue details"));
+    key(&mut manager, KeyCode::Esc);
+    key(&mut manager, KeyCode::Char(' '));
+    key(&mut manager, KeyCode::End);
+    let Command::Start { generation, .. } = key(&mut manager, KeyCode::Enter).unwrap() else {
+        panic!()
+    };
+    assert!(key(&mut manager, KeyCode::Tab).is_none());
+    assert_eq!(manager.generation, generation);
+    assert_eq!(manager.state(), IssueState::Open);
+    manager.finish_start(generation, Some("retry".into()));
+    assert!(matches!(
+        key(&mut manager, KeyCode::Tab),
+        Some(Command::List {
+            state: IssueState::Closed,
+            ..
+        })
+    ));
 }
