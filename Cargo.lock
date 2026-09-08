@@ -12520,6 +12520,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "syntect",
  "tempfile",
+ "unicode-segmentation",
  "unicode-width 0.2.0",
  "url",
  "windows-sys 0.59.0",

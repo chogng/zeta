@@ -28,6 +28,7 @@ pub(crate) use request::set_preferred_model;
 pub(crate) struct ModelSummary {
     preferred_model: Option<ModelRefDto>,
     access: ModelAccess,
+    context_capacity: Option<u64>,
 }
 
 impl ModelSummary {
@@ -35,26 +36,31 @@ impl ModelSummary {
         preferred_model: Option<ModelRefDto>,
         catalog: Option<&ModelListResult>,
     ) -> Self {
-        let access = preferred_model
-            .as_ref()
-            .and_then(|preferred| {
-                catalog.and_then(|catalog| {
-                    catalog.models.iter().find(|entry| {
-                        entry.model.provider.as_str() == preferred.provider
-                            && entry.model.model.as_str() == preferred.model
-                    })
+        let entry = preferred_model.as_ref().and_then(|preferred| {
+            catalog.and_then(|catalog| {
+                catalog.models.iter().find(|entry| {
+                    entry.model.provider.as_str() == preferred.provider
+                        && entry.model.model.as_str() == preferred.model
                 })
             })
-            .map(|entry| entry.access)
-            .unwrap_or(ModelAccess::Unknown);
+        });
         Self {
             preferred_model,
-            access,
+            access: entry
+                .map(|entry| entry.access)
+                .unwrap_or(ModelAccess::Unknown),
+            context_capacity: entry
+                .and_then(|entry| entry.available_context_window)
+                .map(u64::from),
         }
     }
 
     pub(crate) fn preferred_model(&self) -> Option<&ModelRefDto> {
         self.preferred_model.as_ref()
+    }
+
+    pub(crate) const fn context_capacity(&self) -> Option<u64> {
+        self.context_capacity
     }
 
     pub(crate) fn model_label(&self) -> String {

@@ -707,7 +707,8 @@ impl App {
                 Some(ConfigCommand::Edit(edit).into())
             }
             crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::SetShowGitChangesAsDiff(edit),
+                ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
+                | ConfigSelectionAction::SetStatusLineStyle(edit),
             ) => Some(ConfigCommand::Edit(edit).into()),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(
                 edit,
@@ -1747,6 +1748,9 @@ impl App {
                 .chat_panel
                 .status_line_mut()
                 .apply_thread_accounting(&usage, &reference_cost),
+            ThreadEvent::ContextUsageChanged(usage) => {
+                self.chat_panel.status_line_mut().apply_context_usage(usage)
+            }
             ThreadEvent::GoalChanged(goal) => {
                 self.thread_presentations.active_mut().goal = goal;
             }
@@ -1978,6 +1982,9 @@ impl App {
                 self.chat_panel
                     .status_line_mut()
                     .apply_preferred_model(summary.preferred_model());
+                self.chat_panel
+                    .status_line_mut()
+                    .apply_context_capacity(summary.preferred_model(), summary.context_capacity());
                 self.welcome.apply_model_summary(&summary);
             }
             ModelEvent::PickerOpened(view) => self.show_model_picker(view),

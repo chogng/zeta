@@ -54,6 +54,7 @@ fn top_line(segments: Vec<StatusLineSegment>, context: RenderContext<'_>) -> Lin
                     StatusLineSegmentKind::Chrome => context.chat_input_chrome(),
                     StatusLineSegmentKind::Inserted => context.inserted_marker(),
                     StatusLineSegmentKind::Removed => context.removed_marker(),
+                    StatusLineSegmentKind::Progress => context.accent(),
                 };
                 Span::styled(text, Style::default().fg(color))
             })

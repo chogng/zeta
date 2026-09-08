@@ -83,6 +83,11 @@ pub(crate) enum Message {
     ConfigMemoryDiagnosticsDescription,
     ConfigGitChangesAsDiff,
     ConfigGitChangesAsDiffDescription,
+    ConfigStatusLineStyle,
+    ConfigStatusLineSimple,
+    ConfigStatusLineExpressive,
+    ConfigStatusLineSimpleDescription,
+    ConfigStatusLineExpressiveDescription,
     ConfigLanguage,
     ConfigLanguageDescription,
     ConfigSearch,
@@ -120,6 +125,11 @@ const fn english(message: Message) -> &'static str {
         Message::ConfigGitChangesAsDiffDescription => {
             "Show added and deleted lines instead of changed files"
         }
+        Message::ConfigStatusLineStyle => "Status bar style",
+        Message::ConfigStatusLineSimple => "Simple",
+        Message::ConfigStatusLineExpressive => "Expressive",
+        Message::ConfigStatusLineSimpleDescription => "Text and numbers, clean and easy to read",
+        Message::ConfigStatusLineExpressiveDescription => "Emoji and progress bars at a glance",
         Message::ConfigLanguage => "Language",
         Message::ConfigLanguageDescription => "Change the interface language",
         Message::ConfigSearch => "Search configuration",
@@ -158,6 +168,11 @@ const fn japanese(message: Message) -> &'static str {
         Message::ConfigGitChangesAsDiffDescription => {
             "変更されたファイルではなく、追加・削除された行を表示する"
         }
+        Message::ConfigStatusLineStyle => "ステータスバーの表示",
+        Message::ConfigStatusLineSimple => "シンプル",
+        Message::ConfigStatusLineExpressive => "華やか",
+        Message::ConfigStatusLineSimpleDescription => "文字と数値ですっきり表示",
+        Message::ConfigStatusLineExpressiveDescription => "絵文字と進捗バーでひと目で確認",
         Message::ConfigLanguage => "言語",
         Message::ConfigLanguageDescription => "インターフェースの言語を変更する",
         Message::ConfigSearch => "設定を検索",
@@ -190,6 +205,11 @@ const fn chinese(message: Message) -> &'static str {
         Message::ConfigMemoryDiagnosticsDescription => "持续收集有界的内存诊断数据",
         Message::ConfigGitChangesAsDiff => "以差异显示 Git 更改",
         Message::ConfigGitChangesAsDiffDescription => "显示新增和删除的行，而不是已更改的文件",
+        Message::ConfigStatusLineStyle => "状态栏风格",
+        Message::ConfigStatusLineSimple => "简洁",
+        Message::ConfigStatusLineExpressive => "生动",
+        Message::ConfigStatusLineSimpleDescription => "文字与数值，清爽易读",
+        Message::ConfigStatusLineExpressiveDescription => "加入表情与进度条，一眼看清状态",
         Message::ConfigLanguage => "语言",
         Message::ConfigLanguageDescription => "切换界面语言",
         Message::ConfigSearch => "搜索配置",
@@ -228,6 +248,11 @@ const fn french(message: Message) -> &'static str {
         Message::ConfigGitChangesAsDiffDescription => {
             "Afficher les lignes ajoutées et supprimées au lieu des fichiers modifiés"
         }
+        Message::ConfigStatusLineStyle => "Style de la barre d’état",
+        Message::ConfigStatusLineSimple => "Simple",
+        Message::ConfigStatusLineExpressive => "Expressif",
+        Message::ConfigStatusLineSimpleDescription => "Du texte et des chiffres, faciles à lire",
+        Message::ConfigStatusLineExpressiveDescription => "Des emoji et des barres de progression",
         Message::ConfigLanguage => "Langue",
         Message::ConfigLanguageDescription => "Changer la langue de l’interface",
         Message::ConfigSearch => "Rechercher dans la configuration",

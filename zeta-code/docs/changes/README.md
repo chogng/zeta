@@ -8,6 +8,7 @@
 
 | 记录日期 | 工作 | 状态与证据边界 | 对应现行规格 | 对应设计 |
 | --- | --- | --- | --- | --- |
+| 2026-09-08 | [状态栏风格](2026-09-08-status-line-style/verification.md) | 已完成；包检查、相关回归与 macOS PTY 重启场景通过 | [状态](../spec/status.md) | [TUI](../design/tui.md) |
 | 2026-09-08 | [终端内容顺序追加](2026-09-08-terminal-append.md) | 已完成；Windows PTY、字符输出与构建通过 | [终端](../spec/terminal.md)、[布局](../spec/layout.md) | [TUI](../design/tui.md) |
 | 2026-09-08 | [Windows PTY 实测](2026-09-08-pty-windows/verification.md) | Windows 4 项真实场景通过；Unix 未在本机重跑 | [终端](../spec/terminal.md) | [TUI](../design/tui.md) |
 | 2026-09-08 | [Provider 输入与禁用页签](2026-09-08-provider-input-tabs/verification.md) | 实现及自动化验收完成；Windows PTY 见后续记录，真实账号未测 | [供应商](../spec/providers.md)、[交互](../spec/interaction.md) | [TUI](../design/tui.md) |
