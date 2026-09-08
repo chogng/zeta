@@ -25,6 +25,7 @@ just zeta
 | 会话列表、预览、切换和详情 | [sessions](src/sessions) |
 | 设置、主题、快捷键 | [config](src/config)、[theme](src/theme)、[keymap](src/keymap) |
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
+| 界面语言与类型化文案 | [nls.rs](src/nls.rs)；持久化由 [config/settings.rs](src/config/settings.rs) 负责 |
 | 状态信息和本机资源 | [status](src/status)、[process_resources.rs](../../zeta-rs/memory-diagnostics/src/process_resources.rs) |
 | 终端恢复、鼠标和历史输出 | [session.rs](src/terminal/session.rs)、[mouse.rs](src/terminal/mouse.rs) |
 | 命令面板共用控件和文字绘制 | [widgets](src/widgets)、[render](src/render) |
@@ -162,7 +163,10 @@ mouseInteractions = true
 inputMode = "standard"
 memoryDiagnostics = false
 showGitChangesAsDiff = false
+language = "en"
 ```
+
+`language` 只接受 `en`、`ja`、`zh-CN`、`fr`，缺省为 `en`。当前实现会立即切换 Config 根页面；供应商名、语言服务器标识、模型回复、代码和用户内容保持原文。编辑任一设置时都会保留未知的 `[tui]` 同级字段，无效语言值会报告配置错误。
 
 目录权限不属于 TUI profile 设置，只保存在对应 Session。用户主题内容保存为 `<profile>/zeta-code/themes/*.json`。每个文件最多 1 MiB；目录最多读取 128 个常规 JSON 文件；`id` 必须是小写 kebab-case，`label` 为 1–80 个已去除首尾空格的字符，`appearance` 只能是 `dark` 或 `light`，`colors` 最多覆盖 64 项且颜色必须是 `#RRGGBB`。未知字段、未知颜色名、重复/保留 ID 和不支持的版本都会使该主题文件单独失效。
 

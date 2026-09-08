@@ -10,6 +10,7 @@ mod keymap;
 mod mcp;
 mod memory;
 mod models;
+mod nls;
 mod render;
 mod sessions;
 mod skills;

@@ -2,6 +2,7 @@ use super::config_choices;
 use super::provider_api_key_prompt;
 use crate::config::ConfigSelectionAction;
 use crate::config::TerminalSettings;
+use crate::nls::Language;
 use crate::status::StatusLineSettings;
 use crate::test_support::empty_config_snapshot;
 use crate::thread::composer::ChatInputMode;
@@ -68,7 +69,14 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         state
             .visible_items()
             .iter()
-            .all(|item| !matches!(item.label(), "Revision" | "Generation"))
+            .all(|item| !matches!(
+                item.label(),
+                "Revision"
+                    | "Generation"
+                    | "Preferred model"
+                    | "Approval review model"
+                    | "Providers"
+            ))
     );
     assert!(
         state
@@ -123,6 +131,17 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
             if edit.status_line.show_git_changes_as_diff()
     ));
+    let language = &state.visible_items()[4];
+    assert_eq!(language.label(), "Language");
+    assert_eq!(
+        language.description(),
+        Some("Change the interface language English")
+    );
+    assert!(matches!(
+        view.actions.get(language.id().unwrap()).unwrap(),
+        ConfigSelectionAction::SetLanguage(edit)
+            if edit.terminal.language() == Language::English
+    ));
 
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
@@ -143,6 +162,78 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::OpenOpenAi(_)
     ));
     assert!(state.visible_items()[1].id().is_none());
+}
+
+#[test]
+fn language_setting_cycles_with_activation_and_directional_keys() {
+    let choices = || {
+        config_choices(
+            &empty_config_snapshot(),
+            &providers(),
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        )
+    };
+    let mut editor = super::ConfigEditor::new(choices());
+    for _ in 0..4 {
+        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(edit))
+            if edit.terminal.language() == Language::Japanese
+    ));
+
+    let mut editor = super::ConfigEditor::new(choices());
+    for _ in 0..4 {
+        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(edit))
+            if edit.terminal.language() == Language::Japanese
+    ));
+
+    let mut editor = super::ConfigEditor::new(choices());
+    for _ in 0..4 {
+        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(edit))
+            if edit.terminal.language() == Language::French
+    ));
+}
+
+#[test]
+fn config_root_uses_the_selected_language_through_nls() {
+    let mut terminal = TerminalSettings::default();
+    terminal.set_language(Language::Chinese);
+    let view = config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        terminal,
+        StatusLineSettings::default(),
+    );
+    let state = ListSelectionState::new(view.model);
+
+    assert_eq!(state.title(), "配置");
+    assert_eq!(
+        state
+            .tabs()
+            .iter()
+            .map(|tab| tab.label())
+            .collect::<Vec<_>>(),
+        vec!["配置", "提供商", "语言服务器"]
+    );
+    assert_eq!(state.visible_items()[0].label(), "增强 TUI");
+    assert_eq!(state.visible_items()[2].label(), "内存诊断");
+    assert_eq!(state.visible_items()[4].label(), "语言");
+    assert_eq!(
+        state.visible_items()[4].description(),
+        Some("切换界面语言 中文")
+    );
 }
 
 #[test]

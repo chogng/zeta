@@ -1,3 +1,4 @@
+use crate::nls::Language;
 use crate::thread::composer::ChatInputMode;
 use serde::Deserialize;
 use serde::Serialize;
@@ -9,10 +10,16 @@ pub(crate) struct TerminalSettings {
     mouse_interactions: bool,
     input_mode: ChatInputMode,
     memory_diagnostics: bool,
+    language: Language,
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 3] = ["mouseInteractions", "inputMode", "memoryDiagnostics"];
+    const KEYS: [&'static str; 4] = [
+        "mouseInteractions",
+        "inputMode",
+        "memoryDiagnostics",
+        "language",
+    ];
 
     pub(crate) fn from_tui(section: &FrontendConfigDto) -> Result<Self, String> {
         let defaults = serde_json::to_value(Self::default())
@@ -74,6 +81,14 @@ impl TerminalSettings {
     pub(crate) fn set_memory_diagnostics(&mut self, enabled: bool) {
         self.memory_diagnostics = enabled;
     }
+
+    pub(crate) const fn language(self) -> Language {
+        self.language
+    }
+
+    pub(crate) fn set_language(&mut self, language: Language) {
+        self.language = language;
+    }
 }
 
 impl Default for TerminalSettings {
@@ -82,6 +97,7 @@ impl Default for TerminalSettings {
             mouse_interactions: true,
             input_mode: ChatInputMode::Standard,
             memory_diagnostics: false,
+            language: Language::English,
         }
     }
 }

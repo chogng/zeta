@@ -1,9 +1,12 @@
 use crate::config::TerminalSettings;
 use crate::keymap::bindings;
-use crate::models::preferred_model_label;
+use crate::nls;
+use crate::nls::Language;
+use crate::nls::Message;
 use crate::status::StatusLineSettings;
 use crate::thread::composer::ChatInputMode;
 use crate::widgets::list_selection::ListSelection;
+use crate::widgets::list_selection::ListSelectionAdjustment;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -17,7 +20,6 @@ use crate::widgets::text_prompt::TextPromptSpec;
 use std::collections::BTreeMap;
 use std::fmt;
 use zeroize::Zeroizing;
-use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
@@ -42,6 +44,7 @@ pub(crate) enum ConfigSelectionAction {
     SetTerminalSettings(ConfigEdit),
     SetVimMode(ConfigEdit),
     SetShowGitChangesAsDiff(ConfigEdit),
+    SetLanguage(ConfigEdit),
     SetLanguageServerMode(LanguageServerEdit),
     OpenProviderApiKey {
         provider: String,
@@ -193,6 +196,9 @@ impl ConfigEditor {
         outcome: ListSelectionOutcome<ConfigSelectionAction>,
     ) -> ConfigEditorOutcome {
         match outcome {
+            ListSelectionOutcome::Activate(ConfigSelectionAction::SetLanguage(edit)) => {
+                language_outcome(edit, ListSelectionAdjustment::Next)
+            }
             ListSelectionOutcome::Activate(ConfigSelectionAction::OpenOpenAi(settings)) => {
                 self.openai = Some(super::openai::Panel::new(settings));
                 ConfigEditorOutcome::Consumed
@@ -205,12 +211,13 @@ impl ConfigEditor {
                 ConfigEditorOutcome::Consumed
             }
             ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
-            ListSelectionOutcome::Adjust(action, _) => match action {
+            ListSelectionOutcome::Adjust(action, adjustment) => match action {
                 ConfigSelectionAction::OpenProviderApiKey { .. }
                 | ConfigSelectionAction::OpenOpenAi(_)
                 | ConfigSelectionAction::Connection(_)
                 | ConfigSelectionAction::OpenSubscription
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
+                ConfigSelectionAction::SetLanguage(edit) => language_outcome(edit, adjustment),
                 action => ConfigEditorOutcome::Action(action),
             },
             ListSelectionOutcome::Consumed | ListSelectionOutcome::FocusPrevious => {
@@ -365,6 +372,7 @@ pub(crate) fn config_choices(
     status_line: StatusLineSettings,
 ) -> ConfigChoices {
     let mut actions = BTreeMap::new();
+    let language = terminal.language();
     let mouse_id = ListSelectionItemId::new("terminal-mouse-interactions");
     let mouse_enabled = terminal.mouse_interactions();
     let mut toggled_terminal = terminal;
@@ -373,6 +381,16 @@ pub(crate) fn config_choices(
         mouse_id.clone(),
         ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
             terminal: toggled_terminal,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
+    let language_id = ListSelectionItemId::new("language");
+    actions.insert(
+        language_id.clone(),
+        ConfigSelectionAction::SetLanguage(ConfigEdit {
+            terminal,
             status_line: status_line.clone(),
             server_config: config.clone(),
             providers: providers.clone(),
@@ -421,53 +439,77 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
-    let mut config_items = vec![
-        ListSelectionItem::new("Enhanced TUI")
+    let config_items = vec![
+        ListSelectionItem::new(nls::text(language, Message::ConfigEnhancedTui))
             .with_id(mouse_id)
             .with_columns(
-                "Enhanced TUI",
-                "Click, scroll, hover, and auto-copy text in overlays only",
+                nls::text(language, Message::ConfigEnhancedTui),
+                nls::text(language, Message::ConfigEnhancedTuiDescription),
                 checkbox(mouse_enabled),
             ),
-        ListSelectionItem::new("Vim mode")
+        ListSelectionItem::new(nls::text(language, Message::ConfigVimMode))
             .with_id(vim_mode_id)
             .with_columns(
-                "Vim mode",
-                "Use Vim editing in ChatInput",
+                nls::text(language, Message::ConfigVimMode),
+                nls::text(language, Message::ConfigVimModeDescription),
                 checkbox(vim_mode),
             ),
-        ListSelectionItem::new("Memory diagnostics")
+        ListSelectionItem::new(nls::text(language, Message::ConfigMemoryDiagnostics))
             .with_id(memory_diagnostics_id)
             .with_columns(
-                "Memory diagnostics",
-                "Continuously collect bounded memory evidence",
+                nls::text(language, Message::ConfigMemoryDiagnostics),
+                nls::text(language, Message::ConfigMemoryDiagnosticsDescription),
                 checkbox(memory_diagnostics),
             ),
-        ListSelectionItem::new("Show Git changes as diff")
+        ListSelectionItem::new(nls::text(language, Message::ConfigGitChangesAsDiff))
             .with_id(git_changes_id)
             .with_columns(
-                "Show Git changes as diff",
-                "Show added and deleted lines instead of changed files",
+                nls::text(language, Message::ConfigGitChangesAsDiff),
+                nls::text(language, Message::ConfigGitChangesAsDiffDescription),
                 checkbox(show_git_changes_as_diff),
             ),
+        ListSelectionItem::new(nls::text(language, Message::ConfigLanguage))
+            .with_id(language_id)
+            .with_columns(
+                nls::text(language, Message::ConfigLanguage),
+                nls::text(language, Message::ConfigLanguageDescription),
+                language.label(),
+            ),
     ];
-    config_items.extend(overview(config));
     let provider_items = provider_items(config, providers, &mut actions);
-    let language_server_items = language_servers(config, &mut actions);
+    let language_server_items = language_servers(config, language, &mut actions);
     ConfigChoices {
         model: ListSelectionModel::new(
-            "Config",
+            nls::text(language, Message::ConfigTitle),
             vec![
-                ListSelectionGroup::new("Config", config_items),
-                ListSelectionGroup::new("Providers", provider_items),
-                ListSelectionGroup::new("Language servers", language_server_items),
+                ListSelectionGroup::new(nls::text(language, Message::ConfigTitle), config_items),
+                ListSelectionGroup::new(
+                    nls::text(language, Message::ConfigProviders),
+                    provider_items,
+                ),
+                ListSelectionGroup::new(
+                    nls::text(language, Message::ConfigLanguageServers),
+                    language_server_items,
+                ),
             ],
         )
         .with_activation(bindings::CONFIG_CHANGE)
-        .with_search(SearchBoxModel::new("Search configuration"))
-        .with_empty_message("No matching configuration"),
+        .with_search(SearchBoxModel::new(nls::text(language, Message::ConfigSearch)))
+        .with_empty_message(nls::text(language, Message::ConfigNoMatches)),
         actions,
     }
+}
+
+fn language_outcome(
+    mut edit: ConfigEdit,
+    adjustment: ListSelectionAdjustment,
+) -> ConfigEditorOutcome {
+    let language = match adjustment {
+        ListSelectionAdjustment::Previous => edit.terminal.language().previous(),
+        ListSelectionAdjustment::Next => edit.terminal.language().next(),
+    };
+    edit.terminal.set_language(language);
+    ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(edit))
 }
 
 const fn checkbox(checked: bool) -> &'static str {
@@ -487,20 +529,6 @@ pub(crate) fn provider_api_key_prompt(
         },
         provider,
     }
-}
-
-fn overview(config: &ConfigReadResult) -> Vec<ListSelectionItem> {
-    vec![
-        detail(
-            "Preferred model",
-            preferred_model_label(config.preferred_model.as_ref()),
-        ),
-        detail(
-            "Approval review model",
-            approval_review_model(&config.approval_review_model),
-        ),
-        detail("Providers", config.providers.len().to_string()),
-    ]
 }
 
 fn provider_items(
@@ -549,6 +577,7 @@ fn provider_item(
 
 fn language_servers(
     config: &ConfigReadResult,
+    language: Language,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> Vec<ListSelectionItem> {
     or_empty(
@@ -580,21 +609,8 @@ fn language_servers(
                 )
             })
             .collect(),
-        "No language servers configured",
+        nls::text(language, Message::ConfigNoLanguageServers),
     )
-}
-
-fn approval_review_model(selection: &ApprovalReviewModelSelectionDto) -> String {
-    match selection {
-        ApprovalReviewModelSelectionDto::Automatic => "automatic".into(),
-        ApprovalReviewModelSelectionDto::Explicit { model } => {
-            format!("{}/{}", model.provider, model.model)
-        }
-    }
-}
-
-fn detail(label: &str, value: impl Into<String>) -> ListSelectionItem {
-    ListSelectionItem::new(label).with_description(value)
 }
 
 fn or_empty(items: Vec<ListSelectionItem>, message: &str) -> Vec<ListSelectionItem> {

@@ -116,7 +116,7 @@ where
     Ok(PreferredModelUpdate { summary, notice })
 }
 
-pub(crate) fn preferred_model_label(model: Option<&ModelRefDto>) -> String {
+fn preferred_model_label(model: Option<&ModelRefDto>) -> String {
     model
         .map(|model| format!("{}/{}", model.provider, model.model))
         .unwrap_or_else(|| "not configured".into())

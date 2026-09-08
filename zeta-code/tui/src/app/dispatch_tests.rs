@@ -434,6 +434,36 @@ fn show_git_changes_as_diff_is_persisted_in_the_tui_toml_section() {
 }
 
 #[test]
+fn language_is_persisted_in_the_tui_toml_section() {
+    let (mut client, state_root) = client();
+    let server_config = client.read_config().unwrap();
+    let mut terminal = crate::config::TerminalSettings::from_tui(&server_config.tui).unwrap();
+    terminal.set_language(crate::nls::Language::Chinese);
+    let status_line = crate::status::StatusLineSettings::from_tui(&server_config.tui).unwrap();
+
+    crate::config::set_settings(
+        &mut client,
+        crate::config::ConfigEdit {
+            terminal,
+            status_line,
+            server_config,
+            providers: zeta_app_server_protocol::protocol::provider::ProviderListResult {
+                providers: Vec::new(),
+            },
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        client.read_config().unwrap().tui.0.get("language"),
+        Some(&serde_json::json!("zh-CN"))
+    );
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
 fn resume_and_model_without_arguments_open_actionable_pickers() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();

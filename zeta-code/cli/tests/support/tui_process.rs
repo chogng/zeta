@@ -104,6 +104,10 @@ baseUrl = "{base_url}"
         config.write_all(fragment.as_bytes()).unwrap();
     }
 
+    pub fn config_source(&self) -> String {
+        fs::read_to_string(self.profile.join("config.toml")).unwrap()
+    }
+
     pub fn workspace(&self) -> &Path {
         &self.workspace
     }

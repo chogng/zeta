@@ -699,6 +699,9 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetShowGitChangesAsDiff(edit),
             ) => Some(ConfigCommand::Edit(edit).into()),
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(
+                edit,
+            )) => Some(ConfigCommand::Edit(edit).into()),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetLanguageServerMode(edit),
             ) => Some(ConfigCommand::SetLanguageServerMode(edit).into()),

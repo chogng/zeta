@@ -15,6 +15,7 @@ use crate::keymap::Command as KeymapCommand;
 use crate::keymap::Event as KeymapEvent;
 use crate::keymap::KeymapEditIntent;
 use crate::keymap::KeymapEditKind;
+use crate::nls::Language;
 use crate::keymap::KeymapEditorUpdate;
 use crate::keymap::keymap_choices;
 use crate::keymap::settings_from_tui as keymap_settings_from_tui;
@@ -857,6 +858,57 @@ fn config_show_git_changes_as_diff_toggles_on_enter() {
         Some(AppCommand::Config(ConfigCommand::Edit(edit)))
             if edit.status_line.show_git_changes_as_diff()
     ));
+}
+
+#[test]
+fn config_language_change_emits_a_profile_setting_edit() {
+    let mut config = empty_config_snapshot();
+    config.revision = 7;
+    let mut app = App::new();
+    app.update(ConfigEvent::EditorOpened(config_choices(
+        &config,
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    for _ in 0..4 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Edit(edit)))
+            if edit.server_config.revision == 7
+                && edit.terminal.language() == Language::Japanese
+    ));
+}
+
+#[test]
+fn saved_language_rebuilds_the_open_config_page() {
+    let config = empty_config_snapshot();
+    let providers = ProviderListResult { providers: vec![] };
+    let mut app = App::new();
+    app.update(ConfigEvent::EditorOpened(config_choices(
+        &config,
+        &providers,
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    let mut terminal = TerminalSettings::default();
+    terminal.set_language(Language::Chinese);
+
+    app.update(ConfigEvent::Updated(crate::config::ConfigEditResult {
+        terminal,
+        status_line: StatusLineSettings::default(),
+        choices: config_choices(&config, &providers, terminal, StatusLineSettings::default()),
+    }));
+
+    let selection = app.list_selection().unwrap();
+    assert_eq!(selection.title(), "配置");
+    assert_eq!(
+        selection.visible_items()[4].description(),
+        Some("切换界面语言 中文")
+    );
 }
 
 #[test]

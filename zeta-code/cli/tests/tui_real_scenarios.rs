@@ -105,6 +105,27 @@ fn actual_tui_reuses_chatgpt_subscription_without_changing_codex_auth() {
 }
 
 #[test]
+fn actual_tui_switches_language_and_persists_it() {
+    let fixture = Fixture::new("language");
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Enhanced TUI");
+    process.down();
+    process.down();
+    process.down();
+    process.down();
+    process.enter();
+    process.wait_for_screen("拡張 TUI");
+    process.escape();
+    process.quit();
+
+    assert!(fixture.config_source().contains("language = \"ja\""));
+}
+
+#[test]
 fn actual_tui_runs_three_complete_conversation_turns() {
     let fixture = Fixture::new("multi-turn-trajectory");
     let first = Gate::new();

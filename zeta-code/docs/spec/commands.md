@@ -37,6 +37,10 @@
 | 列表中的 Ctrl+C | 等价于 Esc 返回，不中断背景任务 |
 | 设置、模型、主题和快捷键保存 | 成功后界面与重新读取的值一致；无效输入、版本冲突或保存失败显示原因，不覆盖其他设置 |
 | Memory diagnostics | 仅在 Config 中启停并持久化；Status 只读显示诊断状态，不提供第二个开关 |
+| Config 根页面 | 显示 Enhanced TUI、Vim mode、Memory diagnostics、Git 差异展示和 Language 等可操作设置；模型、审批模型和供应商数量不在这里重复展示 |
+| Language | Enter、Space 或右方向选择下一种语言，左方向选择上一种；只支持 English、日本語、中文、Français，保存成功后立即刷新 Config 根页面 |
+
+界面语言保存在当前 profile 的 `[tui].language`。语言选择和 Config 根页面文字通过 TUI 的类型化文案接口解析；供应商名称、语言服务器标识、模型回复、代码和用户内容保持原文。无效语言值使本次 TUI 配置读取失败，不静默改用默认值。
 
 ### 快捷键声明与保存
 
