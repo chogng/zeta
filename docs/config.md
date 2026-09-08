@@ -77,6 +77,13 @@ inputMode = "standard"
 Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不校验字段含义。更新任一表时，
 前端必须先读取当前值、保留自己不认识的键，再携带 `expectedRevision` 替换完整表；两个表彼此独立。
 
+## 供应商默认模型
+
+保存供应商配置时，若 `agent.preferredModel` 尚未设置，Config 从内置模型目录中选取该供应商
+首个 `ProviderApi` 模型，并与供应商配置一起持久化。已有选择保持不变，包括新增其他供应商时。
+没有内置 API 模型的连接不生成模型 ID。保存过程不请求模型列表，也不验证远端调用权限。
+重新保存旧连接可以补齐缺失选择；目录顺序后续变化不会改写已经保存的模型。
+
 ## 目录配置
 
 `DirConfigStore` 严格读取一个目录中的 `.zeta/config.toml`。Host 在文档之外提供 `DirId` 与内容
