@@ -125,8 +125,18 @@ fn registry_method_and_notification_names_are_unique() {
 }
 
 #[test]
+fn issue_config_and_workflow_method_types_are_declared_in_typescript() {
+    let output = typescript();
+    for name in ["IssueConfigDto", "IssueConfigureParams", "IssueStartPoint", "IssueTaskCreateParams", "IssueTaskReadParams", "IssueTaskResult", "IssueTask", "IssueRepository", "IssueSummary", "IssueState", "IssueListParams", "IssueListResult", "IssueReadParams", "IssueReadResult", "IssueComment", "IssuePrMode", "IssuePrPreview", "IssuePrCreateParams", "IssuePrStatus"] {
+        assert!(output.contains(&format!("export type {name} =")), "missing {name}");
+    }
+    assert!(output.contains("\"issue/configure\": { params: IssueConfigureParams; response: ConfigCommandResult }"));
+}
+
+#[test]
 fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
     let input = vec![
+        InputItem::Issue { number: 3 },
         InputItem::Text {
             text: "describe".into(),
         },
@@ -151,6 +161,7 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
     assert_eq!(
         serde_json::to_value(input).unwrap(),
         serde_json::json!([
+            {"type": "issue", "number": 3},
             {"type": "text", "text": "describe"},
             {
                 "type": "context",
@@ -356,7 +367,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };"#
+        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };"#
     ));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));
@@ -733,5 +744,18 @@ fn schema_fixtures_match_the_generators() {
     for (file_name, expected) in typescript_files() {
         let actual = std::fs::read_to_string(fixture_directory.join(file_name)).unwrap();
         assert_eq!(actual.replace("\r\n", "\n"), expected, "{file_name}");
+    }
+}
+
+#[test]
+fn issue_list_requires_an_explicit_supported_state() {
+    use crate::protocol::issues::IssueListParams;
+    use crate::protocol::issues::IssueState;
+    for (name, state) in [("open", IssueState::Open), ("closed", IssueState::Closed)] {
+        let params: IssueListParams = serde_json::from_value(serde_json::json!({"page": 2, "state": name})).unwrap();
+        assert_eq!((params.state, params.page), (state, 2));
+    }
+    for value in [serde_json::json!({"page": 1}), serde_json::json!({"page": 1, "state": "all"})] {
+        assert!(serde_json::from_value::<IssueListParams>(value).is_err());
     }
 }

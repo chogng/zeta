@@ -360,6 +360,20 @@ impl ThreadWorktreeBinder for TurnChangesRuntime {
             return Ok(());
         }
         let (source, target) = self.source_for(&request.origin)?;
+        self.provision_source(request, source, target)
+    }
+}
+
+impl TurnChangesRuntime {
+    pub(super) fn provision_source(
+        &self,
+        request: &ThreadWorktreeBindingRequest,
+        source: ManagedDirSource,
+        target: ManagedDirTarget,
+    ) -> Result<(), CoreError> {
+        if let Some(binding) = self.binding(&request.thread_id) {
+            return self.bind_thread_services(&request.thread_id, &binding);
+        }
         let binding = self
             .worktree_runtime
             .block_on(self.worktrees.provision(&ManagedDirProvisionRequest {

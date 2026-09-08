@@ -101,6 +101,21 @@ use zeta_execpolicy::HostMatcher;
 use zeta_execpolicy::ScopeMatcher;
 
 impl AppServer {
+    pub(super) fn issue_configure(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: zeta_app_server_protocol::protocol::issues::IssueConfigureParams = decode(value)?;
+        let store = self.config.as_ref().ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let config = zeta_config::IssueConfig {
+            recommend_merge: params.config.recommend_merge,
+            analysis_model: params.config.analysis_model.map(model_ref_from_dto).transpose()?,
+        };
+        let outcome = store.apply(ConfigCommandRequest {
+            command_id: params.command_id,
+            expected_revision: ConfigRevision::new(params.expected_revision),
+            command: UserConfigCommand::ConfigureIssues { config },
+        }).map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
     pub(super) fn config_read(&self) -> Result<Value, RpcError> {
         let snapshot = self
             .config
@@ -568,6 +583,10 @@ fn config_read_result(
         embedding_status: tool_search_status_dto(tool_search_status),
     };
     ConfigReadResult {
+        issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
+            recommend_merge: snapshot.values.issues.recommend_merge,
+            analysis_model: snapshot.values.issues.analysis_model.map(model_ref_dto),
+        },
         revision: snapshot.revision.get(),
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),

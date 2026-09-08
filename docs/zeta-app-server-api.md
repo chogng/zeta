@@ -7,7 +7,7 @@ owner: zeta-rs
 consumers:
   - desktop
   - cli
-lastUpdated: 2026-08-30
+lastUpdated: 2026-09-08
 ```
 
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
@@ -1013,3 +1013,27 @@ corepack pnpm run generate:protocol
 当前编译器只暴露内存中的 `/main.typ`，不暴露宿主文件、网络访问、包下载、系统字体或当前
 日期。PDF 字节沿用 `resource/metadata`、`resource/read` 和 `resource/release` 生命周期。
 跨进程所有权和计划演进见 [`typst.md`](typst.md)。
+
+## Issue 任务与 PR
+
+CLI/TUI 的 Issue 功能使用以下类型化接口。业务数据与协议源见
+[`issues.rs`](../zeta-rs/app-server-protocol/src/protocol/issues.rs)，行为和验收见
+[Issue 规格](../zeta-code/docs/spec/issues.md)。本轮候选尚在验收。
+
+| 方法 | 契约 |
+| --- | --- |
+| `issue/list` | 从当前环境的 origin 按必填 `state: open | closed` 和 `page` 读取一页 issue，返回仓库身份、摘要和下一页；排除 PR |
+| `issue/configure` | 按 commandId 和 expectedRevision 保存合并推荐开关与独立分析模型；ConfigReadResult.issues 返回同一份后端配置 |
+| `issue/read` | 校验调用方仓库仍匹配环境，读取所选 issue 的正文与评论 |
+| `issue/task/create` | 以 commandId 去重，固定提交与材料快照，通过现有 ThreadWorktreeBinder 创建一个 Session |
+| `issue/task/read` | 按 Session 返回持久关联；pendingInput 表示根 Thread 尚未发送 Turn |
+| `issue/pr/preview` | 返回发布标题、正文、分支、提交身份、文件范围、预期文件树及允许的方式 |
+| `issue/pr/create` | 核对预期文件树，复用 ChangeSet 提交流程、推送并创建 PR，按用户选择请求自动合并 |
+
+`InputItem.type = issue` 携带编号；后端只从接收 Session 的已存关联中解析材料，转换为现有
+Context 输入。界面标签不是身份来源。Issue 查询不占用全局写锁，PR 操作按 Session 串行；
+任务创建沿用根 Thread 的全局创建顺序。
+
+`zeta-github` 隔离 GitHub CLI 的外部依赖；`zeta-state` 保存 issue_tasks 关联；Git/worktree
+继续拥有代码与工作目录，app-server 负责跨能力协调。创建 PR 与自动合并分别记录结果，
+自动合并失败仍返回已创建的 PR；状态刷新失败显式标注不可用。

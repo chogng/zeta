@@ -335,6 +335,17 @@ use crate::protocol::initialize::InitializeParams;
 use crate::protocol::initialize::InitializeResult;
 use crate::protocol::initialize::ProtocolVersion;
 use crate::protocol::initialize::ServerCapabilities;
+use crate::protocol::issues::IssueConfigureParams;
+use crate::protocol::issues::IssueListParams;
+use crate::protocol::issues::IssueListResult;
+use crate::protocol::issues::IssuePrCreateParams;
+use crate::protocol::issues::IssuePrPreview;
+use crate::protocol::issues::IssuePrStatus;
+use crate::protocol::issues::IssueReadParams;
+use crate::protocol::issues::IssueReadResult;
+use crate::protocol::issues::IssueTaskCreateParams;
+use crate::protocol::issues::IssueTaskReadParams;
+use crate::protocol::issues::IssueTaskResult;
 use crate::protocol::language::LanguageCancelParams;
 use crate::protocol::language::LanguageCancelResult;
 use crate::protocol::language::LanguageCancelStatusDto;
@@ -2209,6 +2220,41 @@ client_methods! {
         response: (),
         serialization: GlobalExclusive,
     },
+    IssuePrPreview => "issue/pr/preview" {
+        params: IssueTaskReadParams,
+        response: IssuePrPreview,
+        serialization: SessionSharedRead,
+    },
+    IssuePrCreate => "issue/pr/create" {
+        params: IssuePrCreateParams,
+        response: IssuePrStatus,
+        serialization: SessionExclusive,
+    },
+    IssueTaskCreate => "issue/task/create" {
+        params: IssueTaskCreateParams,
+        response: IssueTaskResult,
+        serialization: GlobalExclusive,
+    },
+    IssueTaskRead => "issue/task/read" {
+        params: IssueTaskReadParams,
+        response: IssueTaskResult,
+        serialization: SessionSharedRead,
+    },
+    IssueConfigure => "issue/configure" {
+        params: IssueConfigureParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    IssueList => "issue/list" {
+        params: IssueListParams,
+        response: IssueListResult,
+        serialization: None,
+    },
+    IssueRead => "issue/read" {
+        params: IssueReadParams,
+        response: IssueReadResult,
+        serialization: None,
+    },
     GitRepositories => "git/repositories" {
         params: EmptyParams,
         response: GitRepositoriesResult,
@@ -2743,6 +2789,25 @@ macro_rules! typescript_bindings {
 }
 
 typescript_bindings! {
+    crate::protocol::issues::IssueConfigDto,
+    crate::protocol::issues::IssueConfigureParams,
+    crate::protocol::issues::IssueStartPoint,
+    crate::protocol::issues::IssueTaskCreateParams,
+    crate::protocol::issues::IssueTaskReadParams,
+    crate::protocol::issues::IssueTaskResult,
+    crate::protocol::issues::IssueTask,
+    crate::protocol::issues::IssueRepository,
+    crate::protocol::issues::IssueSummary,
+    crate::protocol::issues::IssueState,
+    crate::protocol::issues::IssueListParams,
+    crate::protocol::issues::IssueListResult,
+    crate::protocol::issues::IssueReadParams,
+    crate::protocol::issues::IssueReadResult,
+    crate::protocol::issues::IssueComment,
+    crate::protocol::issues::IssuePrMode,
+    crate::protocol::issues::IssuePrPreview,
+    crate::protocol::issues::IssuePrCreateParams,
+    crate::protocol::issues::IssuePrStatus,
     AccountDto,
     AccountLoginCancelParams,
     AccountLoginCancelResult,

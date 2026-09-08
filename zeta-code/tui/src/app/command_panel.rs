@@ -1,3 +1,4 @@
+use crate::widgets::panel::PanelLayout;
 use crate::TuiStartupContext;
 use crate::config::ConfigChoices;
 use crate::config::ConfigEditor;
@@ -42,18 +43,7 @@ use crate::widgets::text_prompt::TextPrompt;
 use crossterm::event::KeyEvent;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Modifier;
-use ratatui::style::Style;
-use ratatui::text::Line;
-use ratatui::text::Span;
-use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use std::collections::BTreeMap;
-
-const TITLE_BAR_ROWS: u16 = 1;
-const TITLE_BODY_GAP_ROWS: u16 = 1;
-const HEADER_ROWS: u16 = TITLE_BAR_ROWS + TITLE_BODY_GAP_ROWS;
-const CONTENT_HORIZONTAL_MARGIN: u16 = 2;
 
 #[derive(Clone, Copy, Debug)]
 enum CommandPanelBody<'a> {
@@ -62,43 +52,6 @@ enum CommandPanelBody<'a> {
     OpenAi(&'a crate::config::openai::Panel),
     KeyCapture(&'a KeyCapture),
     Status(&'a StatusPanel),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CommandPanelLayout {
-    tabs: Rect,
-    body: Rect,
-}
-
-impl CommandPanelLayout {
-    fn new(area: Rect, tab_rows: u16) -> Self {
-        let header_rows = HEADER_ROWS.min(area.height);
-        let available_rows = area.height.saturating_sub(header_rows);
-        let tab_rows = tab_rows.min(available_rows);
-        let tabs = crate::render::horizontal_margin(
-            Rect::new(
-                area.x,
-                area.y.saturating_add(header_rows),
-                area.width,
-                tab_rows,
-            ),
-            CONTENT_HORIZONTAL_MARGIN,
-        );
-        let body = crate::render::horizontal_margin(
-            Rect::new(
-                area.x,
-                area.y.saturating_add(header_rows).saturating_add(tab_rows),
-                area.width,
-                available_rows.saturating_sub(tab_rows),
-            ),
-            CONTENT_HORIZONTAL_MARGIN,
-        );
-        Self { tabs, body }
-    }
-
-    fn content_width(width: u16) -> u16 {
-        width.saturating_sub(CONTENT_HORIZONTAL_MARGIN.saturating_mul(2))
-    }
 }
 
 #[derive(Debug)]
@@ -210,8 +163,8 @@ impl CommandPanel {
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
         match self {
             Self::Status(panel) => {
-                let content_width = CommandPanelLayout::content_width(area.width);
-                let layout = CommandPanelLayout::new(area, panel.tab_rows(content_width));
+                let content_width = PanelLayout::content_width(area.width);
+                let layout = PanelLayout::new(area, panel.tab_rows(content_width));
                 panel.process_resources_visible(layout.body)
             }
             _ => false,
@@ -224,9 +177,9 @@ impl CommandPanel {
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> CommandPanelOutcome {
         let body = self.body();
-        let layout = CommandPanelLayout::new(
+        let layout = PanelLayout::new(
             area,
-            body.tab_rows(CommandPanelLayout::content_width(area.width)),
+            body.tab_rows(PanelLayout::content_width(area.width)),
         );
         match self {
             Self::Help(content) => map_read_only(content.handle_key(key)),
@@ -329,8 +282,8 @@ impl CommandPanel {
 
     pub(crate) fn desired_height(&self, width: u16) -> u16 {
         let body = self.body();
-        let content_width = CommandPanelLayout::content_width(width);
-        HEADER_ROWS
+        let content_width = PanelLayout::content_width(width);
+        crate::widgets::panel::HEADER_ROWS
             .saturating_add(body.tab_rows(content_width))
             .saturating_add(body.body_rows(content_width))
     }
@@ -342,22 +295,10 @@ impl CommandPanel {
         context: crate::render::RenderContext<'_>,
     ) {
         let body = self.body();
-        let content_width = CommandPanelLayout::content_width(area.width);
-        let layout = CommandPanelLayout::new(area, body.tab_rows(content_width));
+        let content_width = PanelLayout::content_width(area.width);
+        let layout = PanelLayout::new(area, body.tab_rows(content_width));
         let presentation_focus = body.presentation_focus().unwrap_or_else(|| context.focus());
-        let title_style = Style::default()
-            .fg(presentation_focus)
-            .add_modifier(Modifier::BOLD);
-        frame.render_widget(
-            Block::default()
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(presentation_focus))
-                .title(Line::from(vec![
-                    Span::styled("─", Style::default().fg(presentation_focus)),
-                    Span::styled(format!(" {} ", body.title()), title_style),
-                ])),
-            area,
-        );
+        crate::widgets::panel::draw_header(frame, area, body.title(), presentation_focus);
         body.draw_tabs(frame, layout.tabs, None, None, context);
         body.draw_body(frame, layout.body, context);
     }
@@ -397,6 +338,10 @@ impl CommandPanel {
         if let Self::Dirs(content) = self {
             content.finish_add(request_id, result);
         }
+    }
+
+    pub(crate) fn finish_issue_models(&mut self, request_id: zeta_protocol::CommandId, result: Result<ConfigChoices, String>) {
+        if let Self::Config(content) = self { content.finish_issue_models(request_id, result); }
     }
 
     pub(crate) fn replace_config(&mut self, spec: ConfigChoices) -> bool {

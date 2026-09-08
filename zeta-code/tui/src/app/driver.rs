@@ -77,6 +77,7 @@ pub(super) struct AppDriver {
     server_slash_commands: Vec<SlashCommandDefinition>,
     plugins_enabled: bool,
     memory: crate::memory::Controller,
+    issue_context_thread: Option<zeta_protocol::ThreadId>,
 }
 
 pub(super) struct AppDriverResources {
@@ -112,6 +113,7 @@ impl AppDriver {
             server_slash_commands: resources.server_slash_commands,
             plugins_enabled: resources.plugins_enabled,
             memory: crate::memory::Controller::default(),
+            issue_context_thread: None,
         };
         driver.reconcile_memory_diagnostics();
         driver
@@ -144,6 +146,41 @@ impl AppDriver {
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
+        if self.issue_context_thread.as_ref() != Some(self.conversation.thread_id())
+            && self.requests.is_idle(Some(RequestKey::IssueContext))
+        {
+            let session_id = self.conversation.session_id().clone();
+            self.issue_context_thread = Some(self.conversation.thread_id().clone());
+            let mut client = self.client.clone();
+            self.requests.spawn_presentation(
+                Some(RequestKey::IssueContext),
+                "zeta-tui-issue-context",
+                move || {
+                    let result = client
+                        .read_issue_task(
+                            zeta_app_server_protocol::protocol::issues::IssueTaskReadParams {
+                                session_id: session_id.clone(),
+                            },
+                        )
+                        .map_err(|error| error.to_string())?;
+                    let numbers = result
+                        .task
+                        .filter(|task| task.pending_input)
+                        .map(|task| {
+                            task.issues
+                                .into_iter()
+                                .map(|issue| issue.issue.number)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    Ok(crate::issues::Event::ContextReceived {
+                        session_id,
+                        numbers,
+                    })
+                },
+                &mut self.app,
+            );
+        }
         self.memory.observe_objects(self.app.memory_object_count());
         let completions = self.requests.poll();
         let mut changed = !completions.is_empty();

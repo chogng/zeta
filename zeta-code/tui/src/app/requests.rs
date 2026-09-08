@@ -35,6 +35,8 @@ pub(super) enum RequestKey {
     FileExport,
     Git,
     Memory,
+    Issues,
+    IssueContext,
 }
 
 #[derive(Default)]
@@ -132,7 +134,9 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         | AppCommand::Suspend
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(
-            ConfigCommand::OpenEditor
+            ConfigCommand::SetIssues(_)
+            | ConfigCommand::LoadIssueModels { .. }
+            | ConfigCommand::OpenEditor
             | ConfigCommand::Subscription(_)
             | ConfigCommand::Edit(_)
             | ConfigCommand::SetLanguageServerMode(_)
@@ -176,6 +180,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | ThreadCommand::SubmitQueuedTurn { .. }
             | ThreadCommand::SteerTurn { .. },
         ) => Some(RequestKey::Thread),
+        AppCommand::Issues(_) => Some(RequestKey::Issues),
         AppCommand::Mcp(_) => Some(RequestKey::Mcp),
         AppCommand::Skills(_) => Some(RequestKey::Skills),
     }

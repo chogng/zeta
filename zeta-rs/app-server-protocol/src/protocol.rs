@@ -21,6 +21,7 @@ pub mod fs;
 pub mod git;
 pub mod goal;
 pub mod initialize;
+pub mod issues;
 pub mod language;
 pub mod marketplace;
 pub mod mcp;

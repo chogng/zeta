@@ -59,6 +59,17 @@ impl GitRemote {
     /// The identity intentionally excludes credentials and the original URL. Callers that need
     /// to display or associate a remote should use this projection rather than forwarding raw
     /// Git configuration values across a process boundary.
+    /// Whether every fetch and push URL identifies the same repository.
+    pub fn has_single_identity(&self) -> bool {
+        let Some(identity) = self.identity() else {
+            return false;
+        };
+        self.fetch_urls
+            .iter()
+            .chain(self.push_urls.iter())
+            .all(|url| parse_remote_identity(url).as_ref() == Some(&identity))
+    }
+
     pub fn identity(&self) -> Option<GitRemoteIdentity> {
         self.fetch_urls
             .iter()

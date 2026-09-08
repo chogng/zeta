@@ -571,7 +571,7 @@ impl AppServer {
         mutation: SessionMutation,
         rewrite: RewriteSessionMutation,
     ) -> Result<SessionRewriteResult, RpcError> {
-        let normalized_input = normalize_input(rewrite.input.clone());
+        let normalized_input = self.normalize_input(&mutation.session_id, rewrite.input.clone())?;
         let rewound = self
             .threads
             .rewind_thread(
@@ -832,12 +832,13 @@ impl AppServer {
             Some(tool_mode) => TurnToolModeSelection::Explicit(tool_mode),
             None => TurnToolModeSelection::ConfiguredDefault,
         };
+        let input = self.normalize_input(&mutation.session_id, input)?;
         self.start_agent_turn_request(
             mutation,
             thread_id,
             approval_mode,
             tool_mode,
-            normalize_input(input),
+            input,
             zeta_protocol::TurnKind::Coding,
             zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
         )
@@ -1152,27 +1153,19 @@ impl AppServer {
                 .is_some_and(|entry| entry.access == ModelAccess::Subscription)
         });
         if subscription
-            && input
-                .iter()
-                .any(|item| !matches!(item, InputItem::Text { .. } | InputItem::Context { .. }))
+            && input.iter().any(|item| {
+                !matches!(
+                    item,
+                    InputItem::Text { .. } | InputItem::Context { .. } | InputItem::Issue { .. }
+                )
+            })
         {
             return Err(RpcError::new(
                 -32010,
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let input = input
-            .into_iter()
-            .map(|item| match item {
-                InputItem::Text { text } => UserInput::Text { text },
-                InputItem::Context { name, content } => UserInput::Context { name, content },
-                InputItem::ImageAttachment { attachment } => {
-                    UserInput::ImageAttachment { attachment }
-                }
-                InputItem::Image { url } => UserInput::Image { url },
-                InputItem::Skill { skill } => UserInput::Skill { skill },
-            })
-            .collect::<Vec<_>>();
+        let input = self.normalize_input(&mutation.session_id, input)?;
         let command_id = mutation.command_id.clone();
         let steered = self
             .threads
@@ -1770,17 +1763,28 @@ fn thread_mutation(mutation: SessionMutation, expected_sequence: u64) -> ThreadM
     }
 }
 
-fn normalize_input(input: Vec<InputItem>) -> Vec<UserInput> {
-    input
-        .into_iter()
-        .map(|item| match item {
-            InputItem::Text { text } => UserInput::Text { text },
-            InputItem::Context { name, content } => UserInput::Context { name, content },
-            InputItem::ImageAttachment { attachment } => UserInput::ImageAttachment { attachment },
-            InputItem::Image { url } => UserInput::Image { url },
-            InputItem::Skill { skill } => UserInput::Skill { skill },
-        })
-        .collect()
+impl AppServer {
+    fn normalize_input(
+        &self,
+        session_id: &zeta_protocol::SessionId,
+        input: Vec<InputItem>,
+    ) -> Result<Vec<UserInput>, RpcError> {
+        input
+            .into_iter()
+            .map(|item| {
+                Ok(match item {
+                    InputItem::Issue { number } => self.issue_input(session_id, number)?,
+                    InputItem::Text { text } => UserInput::Text { text },
+                    InputItem::Context { name, content } => UserInput::Context { name, content },
+                    InputItem::ImageAttachment { attachment } => {
+                        UserInput::ImageAttachment { attachment }
+                    }
+                    InputItem::Image { url } => UserInput::Image { url },
+                    InputItem::Skill { skill } => UserInput::Skill { skill },
+                })
+            })
+            .collect()
+    }
 }
 
 fn rewrite_phase_command_id(

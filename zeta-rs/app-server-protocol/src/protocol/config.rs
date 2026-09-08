@@ -407,6 +407,7 @@ pub struct FrontendConfigDto(
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigReadResult {
+    pub issues: crate::protocol::issues::IssueConfigDto,
     #[ts(type = "number")]
     pub revision: u64,
     #[ts(type = "number")]

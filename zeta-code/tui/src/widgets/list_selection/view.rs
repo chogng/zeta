@@ -97,6 +97,7 @@ pub(crate) fn draw_body_with_pointer(
             .take(viewport.end - viewport.start)
             .enumerate()
         {
+            let selected = view.selected_visible_index() == Some(index);
             let row_area = Rect::new(
                 list_area.x,
                 viewport.items.y.saturating_add(row as u16),
@@ -107,7 +108,8 @@ pub(crate) fn draw_body_with_pointer(
                 frame,
                 row_area,
                 item,
-                view.selected_visible_index() == Some(index),
+                selected,
+                selected && view.items_focused(),
                 hovered_item == Some(index),
                 pressed_item == Some(index),
                 column_layout,
@@ -305,6 +307,7 @@ fn draw_item(
     area: Rect,
     item: &ListSelectionItem,
     selected: bool,
+    show_marker: bool,
     hovered: bool,
     pressed: bool,
     column_layout: ItemColumnLayout,
@@ -321,7 +324,7 @@ fn draw_item(
     } else {
         row_style
     };
-    let marker = selection_marker(selected);
+    let marker = selection_marker(show_marker);
     let marker_style = if selected {
         Style::default()
             .fg(context.foreground())
@@ -395,7 +398,7 @@ fn item_spans<'a>(
     ]
 }
 
-fn item_style(context: RenderContext<'_>, selected: bool, hovered: bool, pressed: bool) -> Style {
+pub(crate) fn item_style(context: RenderContext<'_>, selected: bool, hovered: bool, pressed: bool) -> Style {
     let mut style = Style::default().fg(if pressed {
         context.pressed_foreground()
     } else if selected || hovered {

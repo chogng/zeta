@@ -6,6 +6,7 @@ mod config;
 mod connectors;
 mod dirs;
 mod host;
+mod issues;
 mod keymap;
 mod mcp;
 mod memory;

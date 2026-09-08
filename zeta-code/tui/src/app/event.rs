@@ -7,6 +7,7 @@ pub(crate) enum AppEvent {
     Connectors(crate::connectors::Event),
     Dirs(crate::dirs::Event),
     Host(crate::host::Event),
+    Issues(crate::issues::Event),
     Keymap(crate::keymap::Event),
     Mcp(crate::mcp::Event),
     Models(crate::models::Event),
@@ -42,3 +43,5 @@ app_event_from!(crate::skills::Event, Skills);
 app_event_from!(crate::status::Event, Status);
 app_event_from!(crate::theme::Event, Theme);
 app_event_from!(crate::thread::Event, Thread);
+
+app_event_from!(crate::issues::Event, Issues);

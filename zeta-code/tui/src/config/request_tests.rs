@@ -36,6 +36,47 @@ impl JsonRpcTransport for RecordingTransport {
 }
 
 #[test]
+fn issue_config_write_uses_its_backend_contract_without_changing_tui_preferences() {
+    let mut current = empty_config_snapshot();
+    current.revision = 2;
+    current.issues.recommend_merge = false;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(1, serde_json::json!({"revision":2,"generation":2,"disposition":"updated"})),
+            response(2, serde_json::to_value(&current).unwrap()),
+            response(3, serde_json::json!({"providers":[]})),
+        ]),
+    });
+    super::set_issue_settings(&mut client, crate::config::IssueConfigEdit { expected_revision: 1, config: current.issues.clone() }).unwrap();
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.iter().map(|request| request["method"].as_str().unwrap()).collect::<Vec<_>>(), ["issue/configure", "config/read", "provider/list"]);
+    assert_eq!(requests[0]["params"]["expectedRevision"], 1);
+    assert_eq!(requests[0]["params"]["config"], serde_json::json!({"recommendMerge":false,"analysisModel":null}));
+    assert!(requests[0]["params"].get("tui").is_none());
+    assert!(requests[0]["params"].get("preferredModel").is_none());
+}
+
+#[test]
+fn issue_config_disabled_does_not_load_a_model_catalog() {
+    let mut config = empty_config_snapshot();
+    config.issues.recommend_merge = false;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([response(1, serde_json::to_value(&config).unwrap())]),
+    });
+    let result = super::execute(&mut client, crate::config::Command::LoadIssueModels {
+        request_id: crate::client::new_command_id("test-issue-models"), expected_revision: config.revision,
+    }).unwrap();
+    assert!(matches!(result, crate::config::Event::IssueModels { result: Err(_), .. }));
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0]["method"], "config/read");
+}
+
+#[test]
 fn fetching_models_is_read_only_and_decodes_empty_and_failed_results() {
     for (result, expected) in [
         (

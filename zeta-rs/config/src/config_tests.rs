@@ -155,6 +155,49 @@ fn configure_provider(store: &ConfigStore, revision: u64, provider: &str) -> Con
 }
 
 #[test]
+fn issue_config_defaults_on_and_preserves_its_model_across_disable_and_restart() {
+    let path = config_path("issues");
+    let store = ConfigStore::open(&path).unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.issues, IssueConfig { recommend_merge: true, analysis_model: None });
+    let invalid = store.apply(ConfigCommandRequest {
+        command_id: CommandId::new("unknown-issue-model").unwrap(), expected_revision: ConfigRevision::INITIAL,
+        command: UserConfigCommand::ConfigureIssues { config: IssueConfig { recommend_merge: true, analysis_model: Some(model_ref("missing", "small")) } },
+    });
+    assert!(matches!(invalid, Err(ConfigCommandError::Config(_))));
+    let configured = configure_provider(&store, 0, "ollama");
+    let chat = model_ref("ollama", "chat-model");
+    let preferred = store.apply(ConfigCommandRequest {
+        command_id: CommandId::new("chat-model").unwrap(), expected_revision: configured.revision,
+        command: UserConfigCommand::UpdatePreferences(PreferencesUpdate { preferred_model: Patch::Value(chat.clone()), ..Default::default() }),
+    }).unwrap();
+    let analysis = model_ref("ollama", "issue-model");
+    let disabled = IssueConfig { recommend_merge: false, analysis_model: Some(analysis.clone()) };
+    let outcome = store.apply(ConfigCommandRequest {
+        command_id: CommandId::new("disable-issue-recommendations").unwrap(), expected_revision: preferred.revision,
+        command: UserConfigCommand::ConfigureIssues { config: disabled.clone() },
+    }).unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.issues, disabled);
+    assert!(store.apply(ConfigCommandRequest {
+        command_id: CommandId::new("stale-issue-settings").unwrap(), expected_revision: preferred.revision,
+        command: UserConfigCommand::ConfigureIssues { config: IssueConfig::default() },
+    }).is_err());
+    let enabled = IssueConfig { recommend_merge: true, analysis_model: Some(analysis) };
+    store.apply(ConfigCommandRequest {
+        command_id: CommandId::new("enable-issue-recommendations").unwrap(), expected_revision: outcome.revision,
+        command: UserConfigCommand::ConfigureIssues { config: enabled.clone() },
+    }).unwrap();
+    drop(store);
+    let reopened = ConfigStore::open(&path).unwrap();
+    let snapshot = reopened.read_snapshot().unwrap();
+    assert_eq!(snapshot.values.issues, enabled);
+    assert_eq!(snapshot.values.preferred_model, Some(chat));
+    assert!(snapshot.values.tui.is_empty());
+    assert!(persisted_config_document(&path).contains("[issues]"));
+    drop(reopened);
+    remove_config_files(&path);
+}
+
+#[test]
 fn custom_provider_survives_restart_and_rejects_stale_update() {
     let path = config_path("custom-provider");
     let store = ConfigStore::open(&path).unwrap();

@@ -10961,6 +10961,7 @@ dependencies = [
  "zeta-file-system",
  "zeta-file-watcher",
  "zeta-git",
+ "zeta-github",
  "zeta-hooks",
  "zeta-http-client",
  "zeta-install-context",
@@ -11633,6 +11634,17 @@ dependencies = [
  "tempfile",
  "tokio",
  "zeta-diff",
+]
+
+[[package]]
+name = "zeta-github"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -12370,6 +12382,7 @@ dependencies = [
  "tempfile",
  "zeta-environment",
  "zeta-file-access",
+ "zeta-github",
  "zeta-history",
  "zeta-projects",
  "zeta-protocol",

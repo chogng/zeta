@@ -17,3 +17,4 @@ pub(crate) use state::ListSelectionModel;
 pub(crate) use state::ListSelectionState;
 pub(crate) use view::draw_body_with_pointer;
 pub(crate) use view::draw_tabs;
+pub(crate) use view::item_style;

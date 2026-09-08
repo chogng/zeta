@@ -30,6 +30,35 @@ impl AppDriver {
     pub(in crate::app) fn execute(&mut self, command: AppCommand) -> CommandEffect {
         let request_key = request_key(&command);
         match command {
+            AppCommand::Issues(command) => {
+                let mut client = self.client.clone();
+                if let crate::issues::Command::Start { generation, .. } = &command {
+                    let generation = *generation;
+                    let conversation = self.conversation.clone();
+                    let subscription = self.thread_subscription.clone();
+                    self.requests.spawn(
+                        request_key,
+                        "zeta-tui-issue-start",
+                        move || Completion::IssueCreated {
+                            generation,
+                            result: crate::issues::start(
+                                client,
+                                conversation,
+                                subscription,
+                                command,
+                            ),
+                        },
+                        &mut self.app,
+                    );
+                } else {
+                    self.requests.spawn_presentation(
+                        request_key,
+                        "zeta-tui-issues",
+                        move || crate::issues::execute(&mut client, command),
+                        &mut self.app,
+                    );
+                }
+            }
             AppCommand::Config(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();

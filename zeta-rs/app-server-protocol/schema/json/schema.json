@@ -1408,6 +1408,7 @@
         "FileSystemOperationFailed",
         "FileSystemNotFound",
         "FileSystemRevisionConflict",
+        "IssueOperationFailed",
         "GitUnavailable",
         "GitNotRepository",
         "GitOperationFailed",
@@ -5768,6 +5769,118 @@
         {
           "properties": {
             "method": {
+              "const": "issue/pr/preview",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueTaskReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/pr/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssuePrCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/task/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueTaskCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/task/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueTaskReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/configure",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueConfigureParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/repositories",
               "type": "string"
             },
@@ -9724,6 +9837,118 @@
         {
           "properties": {
             "method": {
+              "const": "issue/pr/preview",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssuePrPreview"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/pr/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssuePrStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/task/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueTaskResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/task/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueTaskResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/configure",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/repositories",
               "type": "string"
             },
@@ -11439,6 +11664,9 @@
           },
           "type": "object"
         },
+        "issues": {
+          "$ref": "#/$defs/IssueConfigDto"
+        },
         "languageServers": {
           "additionalProperties": {
             "$ref": "#/$defs/LanguageServerConfigDto"
@@ -11495,6 +11723,7 @@
         }
       },
       "required": [
+        "issues",
         "revision",
         "generation",
         "approvalReviewModel",
@@ -17227,6 +17456,25 @@
     "InputItem": {
       "oneOf": [
         {
+          "description": "Resolves an issue from the receiving Session's durable issue-task association.",
+          "properties": {
+            "number": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "issue",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "number"
+          ],
+          "type": "object"
+        },
+        {
           "properties": {
             "text": {
               "type": "string"
@@ -17470,6 +17718,452 @@
       "required": [
         "expiresAtUnixMs"
       ],
+      "type": "object"
+    },
+    "IssueComment": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "body",
+        "url",
+        "updatedAt"
+      ],
+      "type": "object"
+    },
+    "IssueConfigDto": {
+      "additionalProperties": false,
+      "properties": {
+        "analysisModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recommendMerge": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "recommendMerge"
+      ],
+      "type": "object"
+    },
+    "IssueConfigureParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "config": {
+          "$ref": "#/$defs/IssueConfigDto"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "config"
+      ],
+      "type": "object"
+    },
+    "IssueListParams": {
+      "properties": {
+        "page": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/IssueState"
+        }
+      },
+      "required": [
+        "state",
+        "page"
+      ],
+      "type": "object"
+    },
+    "IssueListResult": {
+      "properties": {
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueSummary"
+          },
+          "type": "array"
+        },
+        "nextPage": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "repository",
+        "issues"
+      ],
+      "type": "object"
+    },
+    "IssuePrCreateParams": {
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedTree": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/IssuePrMode"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "expectedTree",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "IssuePrMode": {
+      "enum": [
+        "ordinary",
+        "draft",
+        "merge",
+        "squash",
+        "rebase"
+      ],
+      "type": "string"
+    },
+    "IssuePrPreview": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "expectedTree": {
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "modes": {
+          "items": {
+            "$ref": "#/$defs/IssuePrMode"
+          },
+          "type": "array"
+        },
+        "pullRequest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IssuePrStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "startCommit": {
+          "type": "string"
+        },
+        "targetBranch": {
+          "type": "string"
+        },
+        "targetCommit": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "title",
+        "body",
+        "branch",
+        "targetBranch",
+        "startCommit",
+        "targetCommit",
+        "expectedTree",
+        "files",
+        "modes"
+      ],
+      "type": "object"
+    },
+    "IssuePrStatus": {
+      "properties": {
+        "automaticMerge": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "automaticMergeError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checks": {
+          "type": "string"
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "merged": {
+          "type": "boolean"
+        },
+        "refreshError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "state",
+        "draft",
+        "merged",
+        "checks"
+      ],
+      "type": "object"
+    },
+    "IssueReadParams": {
+      "properties": {
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "repository",
+        "number"
+      ],
+      "type": "object"
+    },
+    "IssueReadResult": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "comments": {
+          "items": {
+            "$ref": "#/$defs/IssueComment"
+          },
+          "type": "array"
+        },
+        "issue": {
+          "$ref": "#/$defs/IssueSummary"
+        }
+      },
+      "required": [
+        "issue",
+        "body",
+        "comments"
+      ],
+      "type": "object"
+    },
+    "IssueRepository": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "host",
+        "owner",
+        "name"
+      ],
+      "type": "object"
+    },
+    "IssueStartPoint": {
+      "enum": [
+        "currentBranch",
+        "main"
+      ],
+      "type": "string"
+    },
+    "IssueState": {
+      "enum": [
+        "open",
+        "closed"
+      ],
+      "type": "string"
+    },
+    "IssueSummary": {
+      "properties": {
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number",
+        "title",
+        "url",
+        "updatedAt",
+        "state"
+      ],
+      "type": "object"
+    },
+    "IssueTask": {
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueReadResult"
+          },
+          "type": "array"
+        },
+        "pendingInput": {
+          "type": "boolean"
+        },
+        "readAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "startCommit": {
+          "type": "string"
+        },
+        "targetBranch": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pendingInput",
+        "sessionId",
+        "repository",
+        "issues",
+        "startCommit",
+        "branch",
+        "targetBranch",
+        "readAt"
+      ],
+      "type": "object"
+    },
+    "IssueTaskCreateParams": {
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "numbers": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "start": {
+          "$ref": "#/$defs/IssueStartPoint"
+        }
+      },
+      "required": [
+        "commandId",
+        "repository",
+        "numbers",
+        "start"
+      ],
+      "type": "object"
+    },
+    "IssueTaskReadParams": {
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "IssueTaskResult": {
+      "properties": {
+        "task": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IssueTask"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
       "type": "object"
     },
     "ItemDelta": {
