@@ -406,3 +406,109 @@ fn model(provider: &str, model: &str) -> ModelRefDto {
         model: model.into(),
     }
 }
+
+#[test]
+fn expressive_status_line_shrinks_bars_before_removing_numbers() {
+    use super::super::StatusLineStyle;
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, false);
+    }
+    settings.set_style(StatusLineStyle::Rich);
+    let mut line = StatusLineModel::new();
+    line.apply_settings(settings);
+    let runtime = StatusLineRuntime {
+        plan: Some((1, 3)),
+        ..Default::default()
+    };
+    assert_eq!(
+        line.top_text_for_width(80, runtime),
+        "📋 plan ███░░░░░░░ 1/3"
+    );
+    assert_eq!(line.top_text_for_width(18, runtime), "📋 plan █░░░ 1/3");
+    assert_eq!(line.top_text_for_width(8, runtime), "plan 1/3");
+    assert_eq!(
+        line.top_text_for_width(
+            80,
+            StatusLineRuntime {
+                plan: Some((0, 0)),
+                ..Default::default()
+            }
+        ),
+        "📋 plan 0/0"
+    );
+}
+
+#[test]
+fn context_progress_requires_matching_model_and_clears_on_thread_switch() {
+    use super::super::StatusLineStyle;
+    use zeta_protocol::ModelContextUsage;
+    use zeta_protocol::ModelContextUsageSource;
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, item == StatusLineItem::Context);
+    }
+    settings.set_style(StatusLineStyle::Rich);
+    let mut line = StatusLineModel::new();
+    line.apply_settings(settings);
+    let selected = model("provider", "model");
+    line.apply_context_capacity(Some(&selected), Some(100));
+    assert_eq!(
+        line.top_text_for_width(80, Default::default()),
+        "🧠 context unknown"
+    );
+    line.apply_context_usage(Some((
+        zeta_protocol::ModelRef::new(
+            zeta_protocol::ProviderId::new("provider").unwrap(),
+            zeta_protocol::ModelId::new("model").unwrap(),
+        ),
+        ModelContextUsage {
+            used_tokens: 40,
+            source: ModelContextUsageSource::Estimated,
+        },
+    )));
+    assert_eq!(
+        line.top_text_for_width(80, Default::default()),
+        "🧠 context ████░░░░░░ ~40%"
+    );
+    line.apply_context_capacity(Some(&selected), Some(0));
+    assert_eq!(
+        line.top_text_for_width(80, Default::default()),
+        "🧠 context unknown"
+    );
+    line.apply_context_capacity(Some(&model("provider", "other")), Some(100));
+    assert_eq!(
+        line.top_text_for_width(80, Default::default()),
+        "🧠 context unknown"
+    );
+    line.apply_context_capacity(Some(&selected), Some(100));
+    line.clear_thread_accounting();
+    assert_eq!(
+        line.top_text_for_width(80, Default::default()),
+        "🧠 context unknown"
+    );
+}
+
+#[test]
+fn status_line_truncation_preserves_combined_emoji_and_accents() {
+    for text in ["👩‍💻 developer", "🖥️ cpu", "éclair"] {
+        for width in 0..20 {
+            let plain = super::truncate_with_ellipsis(text, width);
+            assert!(unicode_width::UnicodeWidthStr::width(plain.as_str()) <= width);
+            let segments = super::truncate_segments_with_ellipsis(
+                &[super::StatusLineSegment::chrome(text)],
+                width,
+            );
+            let joined: String = segments.iter().map(|segment| segment.text()).collect();
+            assert_eq!(joined, plain);
+            let prefix = plain.trim_end_matches('…');
+            assert!(text.starts_with(prefix));
+            assert!(
+                prefix.is_empty()
+                    || unicode_segmentation::UnicodeSegmentation::grapheme_indices(text, true)
+                        .any(|(index, _)| index == prefix.len())
+                    || prefix == text
+            );
+        }
+    }
+}

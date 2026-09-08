@@ -543,3 +543,52 @@ fn tab_from_config_option_switches_page_without_changing_setting() {
         assert_eq!(editor.selection.state().active_tab().label(), expected);
     }
 }
+
+#[test]
+fn status_line_style_changes_from_config_without_changing_items() {
+    use crate::status::StatusLineStyle;
+    use crate::widgets::list_selection::ListSelectionItemId;
+    for language in [
+        Language::English,
+        Language::Chinese,
+        Language::Japanese,
+        Language::French,
+    ] {
+        for style in [StatusLineStyle::Compact, StatusLineStyle::Rich] {
+            for key in [
+                KeyCode::Enter,
+                KeyCode::Char(' '),
+                KeyCode::Left,
+                KeyCode::Right,
+            ] {
+                let mut terminal = TerminalSettings::default();
+                terminal.set_language(language);
+                let mut settings = StatusLineSettings::default();
+                settings.set_style(style);
+                let mut editor = super::ConfigEditor::new(config_choices(
+                    &empty_config_snapshot(),
+                    &providers(),
+                    terminal,
+                    settings.clone(),
+                ));
+                assert!(
+                    editor
+                        .selection
+                        .state_mut()
+                        .focus_item(&ListSelectionItemId::new("status-line-style"))
+                );
+                let super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetStatusLineStyle(
+                    edit,
+                )) = editor.handle_key(KeyEvent::new(key, KeyModifiers::NONE))
+                else {
+                    panic!("expected style edit")
+                };
+                assert_eq!(edit.status_line.style(), style.next());
+                assert_eq!(
+                    edit.status_line.items().collect::<Vec<_>>(),
+                    settings.items().collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+}

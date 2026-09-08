@@ -48,6 +48,7 @@ fn setup_lists_each_item_with_a_description_checkbox_and_toggle_action() {
             ),
             ("Git branch", "Current Git branch [ ✔ ]"),
             ("Git changes", "Working tree changes [   ]"),
+            ("Context", "Current Thread context usage [   ]"),
         ]
     );
     assert!(matches!(

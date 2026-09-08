@@ -1,6 +1,6 @@
 use zeta_memory_diagnostics::ProcessResourceMetrics;
 use crate::thread::TurnApprovalModes;
-use unicode_width::UnicodeWidthChar;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitDiffStatisticsDto;
@@ -14,6 +14,7 @@ use zeta_protocol::StreamInstanceId;
 
 use super::StatusLineItem;
 use super::StatusLineSettings;
+use super::StatusLineStyle;
 use super::format_compact_process_cpu;
 use super::format_compact_process_memory;
 use super::format_process_cpu;
@@ -87,6 +88,7 @@ pub(super) enum StatusLineSegmentKind {
     Chrome,
     Inserted,
     Removed,
+    Progress,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -147,6 +149,9 @@ struct GitStatusCursor {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLineModel {
     settings: StatusLineSettings,
+    context_model: Option<ModelRefDto>,
+    context_capacity: Option<u64>,
+    context_usage: Option<(zeta_protocol::ModelRef, zeta_protocol::ModelContextUsage)>,
     preferred_model: Option<DisplayValue>,
     cache_hit_rate: Option<DisplayValue>,
     reference_cost: Option<DisplayValue>,
@@ -177,6 +182,22 @@ impl StatusLineModel {
             model.map(|model| DisplayValue::plain(model.model.clone(), model.model.clone()));
     }
 
+    pub(crate) fn apply_context_capacity(
+        &mut self,
+        model: Option<&ModelRefDto>,
+        capacity: Option<u64>,
+    ) {
+        self.context_model = model.cloned();
+        self.context_capacity = capacity.filter(|capacity| *capacity > 0);
+    }
+
+    pub(crate) fn apply_context_usage(
+        &mut self,
+        usage: Option<(zeta_protocol::ModelRef, zeta_protocol::ModelContextUsage)>,
+    ) {
+        self.context_usage = usage;
+    }
+
     pub(crate) fn apply_thread_accounting(
         &mut self,
         usage: &ModelUsageSummary,
@@ -187,6 +208,7 @@ impl StatusLineModel {
     }
 
     pub(crate) fn clear_thread_accounting(&mut self) {
+        self.context_usage = None;
         self.cache_hit_rate = None;
         self.reference_cost = None;
     }
@@ -282,10 +304,28 @@ impl StatusLineModel {
 
     fn top_layout_for_width(&self, width: usize, runtime: StatusLineRuntime) -> StatusLineLayout {
         let process_resources = runtime.process_resources;
-        let runtime = runtime.text();
         let mut values = Vec::new();
-        if !runtime.is_empty() {
-            values.push(DisplayValue::plain(runtime.clone(), runtime));
+        if self.settings.style() == StatusLineStyle::Rich {
+            if let Some((completed, total)) = runtime.plan {
+                values.push(progress_value(
+                    "📋",
+                    "plan",
+                    &format!("{completed}/{total}"),
+                    (total > 0)
+                        .then(|| (completed as u128 * 100 / total as u128).min(100) as usize),
+                ));
+            }
+            if runtime.subagents > 0 {
+                values.push(DisplayValue::plain(
+                    format!("👥 subagents {}", runtime.subagents),
+                    format!("subagents {}", runtime.subagents),
+                ));
+            }
+        } else {
+            let text = runtime.text();
+            if !text.is_empty() {
+                values.push(DisplayValue::plain(text.clone(), text));
+            }
         }
         values.extend(self.configured_values(process_resources));
         let fitted = fit_values(&values, width);
@@ -313,7 +353,9 @@ impl StatusLineModel {
     fn configured_values(&self, resources: ProcessUsageView) -> Vec<DisplayValue> {
         let mut values = Vec::new();
         for item in self.settings.items() {
+            let start = values.len();
             match item {
+                StatusLineItem::Context => values.push(self.context_display()),
                 StatusLineItem::Permissions => {}
                 StatusLineItem::Model => values.extend(self.preferred_model.iter().cloned()),
                 StatusLineItem::CacheHitRate => values.extend(self.cache_hit_rate.iter().cloned()),
@@ -331,8 +373,52 @@ impl StatusLineModel {
                 StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),
                 StatusLineItem::GitChanges => values.extend(self.git_changes_display().into_iter()),
             }
+            if self.settings.style() == StatusLineStyle::Rich && item != StatusLineItem::Context {
+                let icon = match item {
+                    StatusLineItem::Model => "🤖",
+                    StatusLineItem::CacheHitRate => "⚡",
+                    StatusLineItem::ReferenceCost => "💰",
+                    StatusLineItem::Memory => "💾",
+                    StatusLineItem::Cpu => "🖥️",
+                    StatusLineItem::GitBranch => "🌿",
+                    StatusLineItem::GitChanges => "📝",
+                    StatusLineItem::Permissions | StatusLineItem::Context => "",
+                };
+                for value in &mut values[start..] {
+                    value
+                        .full
+                        .insert(0, StatusLineSegment::chrome(format!("{icon} ")));
+                }
+            }
         }
         values
+    }
+
+    fn context_display(&self) -> DisplayValue {
+        let usage = self.context_usage.as_ref().filter(|(model, _)| {
+            self.context_model.as_ref().is_some_and(|selected| {
+                selected.provider == model.provider.as_str()
+                    && selected.model == model.model.as_str()
+            })
+        });
+        let (text, percentage) = match (usage, self.context_capacity) {
+            (Some((_, usage)), Some(capacity)) => {
+                let percentage =
+                    (u128::from(usage.used_tokens) * 100 / u128::from(capacity)).min(100) as usize;
+                let prefix = if usage.source == zeta_protocol::ModelContextUsageSource::Estimated {
+                    "~"
+                } else {
+                    ""
+                };
+                (format!("{prefix}{percentage}%"), Some(percentage))
+            }
+            _ => ("unknown".into(), None),
+        };
+        if self.settings.style() == StatusLineStyle::Rich {
+            progress_value("🧠", "context", &text, percentage)
+        } else {
+            DisplayValue::plain(format!("context {text}"), format!("context {text}"))
+        }
     }
 
     fn git_changes_display(&self) -> Option<DisplayValue> {
@@ -362,6 +448,28 @@ impl StatusLineModel {
                 "*",
             ))
         }
+    }
+}
+
+fn progress_value(icon: &str, label: &str, text: &str, percentage: Option<usize>) -> DisplayValue {
+    let compact = vec![StatusLineSegment::chrome(format!("{label} {text}"))];
+    let mut full = vec![StatusLineSegment::chrome(format!("{icon} {label} "))];
+    if let Some(percentage) = percentage {
+        let filled = percentage.min(100) / 10;
+        full.push(StatusLineSegment {
+            text: "█".repeat(filled),
+            kind: StatusLineSegmentKind::Progress,
+        });
+        full.push(StatusLineSegment::chrome(format!(
+            "{} ",
+            "░".repeat(10 - filled)
+        )));
+    }
+    full.push(StatusLineSegment::chrome(text));
+    DisplayValue {
+        full,
+        compact,
+        process_resources: None,
     }
 }
 
@@ -491,6 +599,21 @@ fn fit_values(values: &[DisplayValue], width: usize) -> FittedValues {
         };
     }
 
+    let mut shortened = full.clone();
+    for index in 0..shortened.len() {
+        if shortened[index].kind == StatusLineSegmentKind::Progress {
+            let filled = shortened[index].text.chars().count() * 4 / 10;
+            shortened[index].text = "█".repeat(filled);
+            shortened[index + 1].text = format!("{} ", "░".repeat(4 - filled));
+        }
+    }
+    if segments_width(&shortened) <= width {
+        return FittedValues {
+            segments: shortened,
+            visible_values: values.len(),
+        };
+    }
+
     let compact = join_values(values, true);
     if segments_width(&compact) <= width {
         return FittedValues {
@@ -554,13 +677,13 @@ fn truncate_segments_with_ellipsis(
     for segment in segments {
         let mut text = String::new();
         let mut truncated = false;
-        for character in segment.text.chars() {
-            let character_width = character.width().unwrap_or(0);
+        for character in segment.text.graphemes(true) {
+            let character_width = character.width();
             if rendered_width + character_width > content_width {
                 truncated = true;
                 break;
             }
-            text.push(character);
+            text.push_str(character);
             rendered_width += character_width;
         }
         if !text.is_empty() {
@@ -622,12 +745,12 @@ pub(super) fn truncate_with_ellipsis(text: &str, width: usize) -> String {
     let content_width = width - 1;
     let mut rendered = String::new();
     let mut rendered_width = 0;
-    for character in text.chars() {
-        let character_width = character.width().unwrap_or(0);
+    for character in text.graphemes(true) {
+        let character_width = character.width();
         if rendered_width + character_width > content_width {
             break;
         }
-        rendered.push(character);
+        rendered.push_str(character);
         rendered_width += character_width;
     }
     rendered.push('…');

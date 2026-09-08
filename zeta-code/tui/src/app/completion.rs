@@ -31,6 +31,7 @@ use std::time::Instant;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
+use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_protocol::Thread;
 #[cfg(test)]
@@ -47,7 +48,7 @@ pub(super) enum Completion {
         generation: u64,
         result: Result<(ConversationCompletion, Vec<u64>), String>,
     },
-    ConfigRefreshed(Result<ConfigReadResult, String>),
+    ConfigRefreshed(Result<(ConfigReadResult, ModelListResult), String>),
     Sessions(SessionCompletion),
     ProductCommand {
         command: String,
@@ -142,7 +143,9 @@ pub(super) fn apply_request_completion(
         Completion::IssueContext { .. } => {
             unreachable!("issue context completions are owned by AppDriver")
         }
-        Completion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, None, app),
+        Completion::ConfigRefreshed(Ok((config, models))) => {
+            apply_tui_config(config, Some(&models), app);
+        }
         Completion::ConfigRefreshed(Err(error)) => {
             app.update(ThreadEvent::FailureReported(error));
         }
@@ -588,6 +591,12 @@ fn apply_thread_snapshot_parts(
         usage: snapshot.usage.clone(),
         reference_cost: snapshot.reference_cost.clone(),
     });
+    app.update(ThreadEvent::ContextUsageChanged(
+        snapshot
+            .turns
+            .last()
+            .and_then(|turn| Some((turn.model.clone()?, turn.context_usage.clone()?))),
+    ));
     app.update(ThreadEvent::GoalChanged(snapshot.goal.clone()));
     let active_turn_updates = app.sync_active_turn(&snapshot.turns);
     let active_turn = app.active_turn().cloned();

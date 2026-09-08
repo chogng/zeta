@@ -400,6 +400,49 @@ fn actual_tui_tab_switches_from_content_search_and_unsaved_field() {
     process.escape();
     process.escape();
     process.quit();
+
+    assert!(server.request_bodies().is_empty());
+}
+
+#[test]
+fn actual_tui_status_line_style_persists_across_restart() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Enhanced TUI");
+    for _ in 0..6 {
+        process.down();
+    }
+    process.enter();
+    process.wait_for_screen("Emoji and progress bars at a glance");
+    process.escape();
+    process.wait_for_screen("🤖 zeta-real-scenario");
+    process.quit();
+    assert!(
+        fixture
+            .config_source()
+            .contains("statusLineStyle = \"rich\"")
+    );
+
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("🤖 zeta-real-scenario");
+    process.submit("/config");
+    process.wait_for_screen("Emoji and progress bars at a glance");
+    for _ in 0..6 {
+        process.down();
+    }
+    process.enter();
+    process.wait_for_screen("Text and numbers, clean and easy to read");
+    process.escape();
+    process.quit();
+    assert!(
+        fixture
+            .config_source()
+            .contains("statusLineStyle = \"compact\"")
+    );
     assert!(server.request_bodies().is_empty());
 }
 
