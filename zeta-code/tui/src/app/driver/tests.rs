@@ -1,4 +1,4 @@
-use super::complete_issue_context;
+use super::IssueContext;
 use super::schedule_command;
 use crate::app::App;
 use crate::app::AppCommand;
@@ -10,56 +10,156 @@ use crate::keymap::Command as KeymapCommand;
 use crate::theme::Command as ThemeCommand;
 use crate::thread::Command as ThreadCommand;
 use std::collections::VecDeque;
+use std::time::Duration;
+use std::time::Instant;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
 #[test]
-fn failed_issue_context_read_remains_eligible_for_retry() {
-    let current_thread = ThreadId::new("current").unwrap();
-    let mut loaded_thread = None;
+fn failed_issue_context_read_waits_before_retry_and_stops_after_success() {
+    let thread = ThreadId::new("current").unwrap();
+    let mut context = IssueContext::default();
+    let now = Instant::now();
+    assert!(context.should_load(&thread, now));
 
-    let failed = complete_issue_context(
-        &mut loaded_thread,
-        &current_thread,
-        current_thread.clone(),
+    // Even a slow RPC failure must wait a full second after completion.
+    let failed_at = now + Duration::from_secs(5);
+    let failed = context.complete(
+        &thread,
+        thread.clone(),
         Err("temporary disconnect".into()),
+        failed_at,
     );
     assert!(matches!(failed, Some(Err(error)) if error == "temporary disconnect"));
-    assert_eq!(loaded_thread, None);
+    assert!(!context.should_load(&thread, failed_at + Duration::from_millis(999)));
+    let retry_at = failed_at + Duration::from_secs(1);
+    assert!(context.should_load(&thread, retry_at));
 
-    let succeeded = complete_issue_context(
-        &mut loaded_thread,
-        &current_thread,
-        current_thread.clone(),
+    let succeeded = context.complete(
+        &thread,
+        thread.clone(),
         Ok(crate::issues::Event::ContextReceived {
             session_id: SessionId::new("session").unwrap(),
             numbers: vec![3, 5],
         }),
+        retry_at,
     );
     assert!(matches!(
         succeeded,
-        Some(Ok(crate::issues::Event::ContextReceived { .. }))
+        Some(Ok(crate::issues::Event::ContextReceived { numbers, .. })) if numbers == vec![3, 5]
     ));
-    assert_eq!(loaded_thread, Some(current_thread));
+    assert!(!context.should_load(&thread, retry_at + Duration::from_secs(300)));
 }
 
 #[test]
-fn stale_issue_context_completion_does_not_mark_the_visible_thread_loaded() {
-    let current_thread = ThreadId::new("current").unwrap();
-    let mut loaded_thread = None;
+fn persistent_issue_context_failures_back_off_and_report_only_once() {
+    let thread = ThreadId::new("current").unwrap();
+    let mut context = IssueContext::default();
+    let started = Instant::now();
+    let mut requests = Vec::new();
+    let mut app = App::new();
 
-    let completion = complete_issue_context(
-        &mut loaded_thread,
-        &current_thread,
-        ThreadId::new("previous").unwrap(),
+    // Exercise two minutes of terminal ticks with immediately failing RPCs.
+    for millis in (0..=120_000).step_by(25) {
+        let now = started + Duration::from_millis(millis);
+        if context.should_load(&thread, now) {
+            requests.push(millis);
+            if let Some(Err(error)) = context.complete(
+                &thread,
+                thread.clone(),
+                Err(format!("failure at {millis}")),
+                now,
+            ) {
+                app.update(crate::thread::Event::FailureReported(error));
+            }
+        }
+    }
+
+    assert_eq!(
+        requests,
+        vec![0, 1_000, 3_000, 7_000, 15_000, 31_000, 61_000, 91_000]
+    );
+    assert_eq!(app.messages().len(), 1);
+    assert_eq!(app.messages()[0].text(), "failure at 0");
+
+    let recovered_at = started + Duration::from_secs(121);
+    assert!(context.should_load(&thread, recovered_at));
+    assert!(matches!(
+        context.complete(
+            &thread,
+            thread.clone(),
+            Ok(crate::issues::Event::ContextReceived {
+                session_id: SessionId::new("session").unwrap(),
+                numbers: vec![3],
+            }),
+            recovered_at,
+        ),
+        Some(Ok(_))
+    ));
+    assert!(!context.should_load(&thread, recovered_at + Duration::from_secs(300)));
+}
+
+#[test]
+fn switching_issue_context_resets_backoff_and_ignores_stale_completions() {
+    let previous = ThreadId::new("previous").unwrap();
+    let current = ThreadId::new("current").unwrap();
+    let mut context = IssueContext::default();
+    let now = Instant::now();
+    assert!(context.should_load(&previous, now));
+    assert!(
+        context
+            .complete(&previous, previous.clone(), Err("failed".into()), now)
+            .is_some()
+    );
+    assert!(!context.should_load(&previous, now));
+    assert!(context.should_load(&current, now));
+
+    for result in [
         Ok(crate::issues::Event::ContextReceived {
             session_id: SessionId::new("previous").unwrap(),
             numbers: vec![3],
         }),
+        Err("late failure".into()),
+    ] {
+        assert!(
+            context
+                .complete(&current, previous.clone(), result, now)
+                .is_none()
+        );
+        assert!(context.should_load(&current, now));
+    }
+    // The new thread gets its own first failure and initial retry delay.
+    assert!(
+        context
+            .complete(&current, current.clone(), Err("current failed".into()), now)
+            .is_some()
     );
+    assert!(!context.should_load(&current, now + Duration::from_millis(999)));
+    assert!(context.should_load(&current, now + Duration::from_secs(1)));
+}
 
-    assert!(completion.is_none());
-    assert_eq!(loaded_thread, None);
+#[test]
+fn empty_issue_context_is_loaded_until_the_thread_changes() {
+    let first = ThreadId::new("first").unwrap();
+    let second = ThreadId::new("second").unwrap();
+    let mut context = IssueContext::default();
+    let now = Instant::now();
+    for thread in [&first, &second, &first] {
+        assert!(context.should_load(thread, now));
+        assert!(matches!(
+            context.complete(
+                thread,
+                thread.clone(),
+                Ok(crate::issues::Event::ContextReceived {
+                    session_id: SessionId::new("session").unwrap(),
+                    numbers: Vec::new(),
+                }),
+                now,
+            ),
+            Some(Ok(_))
+        ));
+        assert!(!context.should_load(thread, now + Duration::from_secs(300)));
+    }
 }
 
 #[test]

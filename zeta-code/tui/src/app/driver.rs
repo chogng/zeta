@@ -33,6 +33,8 @@ use crate::thread::interaction::query::Query;
 use crate::thread::read_thread_history;
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::time::Duration;
+use std::time::Instant;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 
@@ -77,7 +79,7 @@ pub(super) struct AppDriver {
     server_slash_commands: Vec<SlashCommandDefinition>,
     plugins_enabled: bool,
     memory: crate::memory::Controller,
-    issue_context_thread: Option<zeta_protocol::ThreadId>,
+    issue_context: IssueContext,
 }
 
 pub(super) struct AppDriverResources {
@@ -113,7 +115,7 @@ impl AppDriver {
             server_slash_commands: resources.server_slash_commands,
             plugins_enabled: resources.plugins_enabled,
             memory: crate::memory::Controller::default(),
-            issue_context_thread: None,
+            issue_context: IssueContext::default(),
         };
         driver.reconcile_memory_diagnostics();
         driver
@@ -146,7 +148,9 @@ impl AppDriver {
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
-        if self.issue_context_thread.as_ref() != Some(self.conversation.thread_id())
+        if self
+            .issue_context
+            .should_load(self.conversation.thread_id(), Instant::now())
             && self.requests.is_idle(Some(RequestKey::IssueContext))
         {
             let session_id = self.conversation.session_id().clone();
@@ -197,11 +201,11 @@ impl AppDriver {
                     self.publish_memory_status(previous);
                 }
                 Ok(Completion::IssueContext { thread_id, result }) => {
-                    if let Some(result) = complete_issue_context(
-                        &mut self.issue_context_thread,
+                    if let Some(result) = self.issue_context.complete(
                         self.conversation.thread_id(),
                         thread_id,
                         result,
+                        Instant::now(),
                     ) {
                         match result {
                             Ok(event) => self.app.update(event),
@@ -444,19 +448,63 @@ impl AppDriver {
     }
 }
 
-fn complete_issue_context(
-    loaded_thread: &mut Option<zeta_protocol::ThreadId>,
-    current_thread: &zeta_protocol::ThreadId,
-    requested_thread: zeta_protocol::ThreadId,
-    result: Result<crate::issues::Event, String>,
-) -> Option<Result<crate::issues::Event, String>> {
-    if requested_thread != *current_thread {
-        return None;
+/// Tracks issue context loading and one failure episode for the visible thread.
+struct IssueContext {
+    thread: Option<zeta_protocol::ThreadId>,
+    loaded: bool,
+    retry_at: Option<Instant>,
+    retry_delay: Duration,
+}
+
+impl Default for IssueContext {
+    fn default() -> Self {
+        Self {
+            thread: None,
+            loaded: false,
+            retry_at: None,
+            retry_delay: Duration::from_secs(1),
+        }
     }
-    if result.is_ok() {
-        *loaded_thread = Some(requested_thread);
+}
+
+impl IssueContext {
+    fn should_load(&mut self, thread: &zeta_protocol::ThreadId, now: Instant) -> bool {
+        if self.thread.as_ref() != Some(thread) {
+            *self = Self {
+                thread: Some(thread.clone()),
+                ..Self::default()
+            };
+        }
+        !self.loaded && self.retry_at.is_none_or(|deadline| now >= deadline)
     }
-    Some(result)
+
+    fn complete(
+        &mut self,
+        current_thread: &zeta_protocol::ThreadId,
+        requested_thread: zeta_protocol::ThreadId,
+        result: Result<crate::issues::Event, String>,
+        now: Instant,
+    ) -> Option<Result<crate::issues::Event, String>> {
+        if requested_thread != *current_thread || self.thread.as_ref() != Some(current_thread) {
+            return None;
+        }
+        match result {
+            Ok(event) => {
+                self.loaded = true;
+                self.retry_at = None;
+                self.retry_delay = Duration::from_secs(1);
+                Some(Ok(event))
+            }
+            Err(error) => {
+                let report = self.retry_at.is_none();
+                // Measure from completion so a slow failure still gets a full delay.
+                self.retry_at = Some(now + self.retry_delay);
+                self.retry_delay = (self.retry_delay * 2).min(Duration::from_secs(30));
+                // A continuing outage must not keep growing the transcript.
+                report.then_some(Err(error))
+            }
+        }
+    }
 }
 
 pub(super) fn schedule_command(

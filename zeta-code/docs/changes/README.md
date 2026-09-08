@@ -11,7 +11,7 @@
 | 2026-09-08 | [终端内容顺序追加](2026-09-08-terminal-append.md) | 已完成；Windows PTY、字符输出与构建通过 | [终端](../spec/terminal.md)、[布局](../spec/layout.md) | [TUI](../design/tui.md) |
 | 2026-09-08 | [Windows PTY 实测](2026-09-08-pty-windows/verification.md) | Windows 4 项真实场景通过；Unix 未在本机重跑 | [终端](../spec/terminal.md) | [TUI](../design/tui.md) |
 | 2026-09-08 | [Provider 输入与禁用页签](2026-09-08-provider-input-tabs/verification.md) | 实现及自动化验收完成；Windows PTY 见后续记录，真实账号未测 | [供应商](../spec/providers.md)、[交互](../spec/interaction.md) | [TUI](../design/tui.md) |
-| 2026-09-07 | [Issue 管理器与 PR](2026-09-07-issue-manager/verification.md) | 面板与 Open / Closed 页签已验收；其余范围见记录 | [Issue 开发](../spec/issues.md) | [本次职责与计划](2026-09-07-issue-manager/plan.md) |
+| 2026-09-07 | [Issue 管理器与 PR](2026-09-07-issue-manager/verification.md) | 面板与 Open / Closed 页签已验收；PR #16 重试修复的状态、时序与构建检查通过；其余范围见记录 | [Issue 开发](../spec/issues.md) | [本次职责与计划](2026-09-07-issue-manager/plan.md) |
 | 2026-09-07 | [清理无入口的鼠标接口](2026-09-07-unused-pointer-apis/verification.md) | 已完成；普通构建无警告，701 项测试通过、1 项忽略 | [终端鼠标规则](../spec/terminal.md#鼠标规则) | [TUI](../design/tui.md) |
 | 2026-09-08 | [内存诊断配置开关](2026-09-08-memory-diagnostics-config/README.md) | Config 独占启停、Status 只读的自动化通过；Unix PTY 待实测 | [内存诊断](../spec/memory-diagnostics.md) | [采样职责](../design/process-resources.md) |
 | 2026-09-07 | [界面语言设置](2026-09-07-interface-language/verification.md) | 已完成本次范围；配置、持久化、生产检查和真实 PTY 场景通过 | [命令面板与设置](../spec/commands.md#设置与快捷键) | [TUI](../design/tui.md) |
