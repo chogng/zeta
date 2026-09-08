@@ -68,12 +68,6 @@ impl Backend for RecordingBackend<'_> {
     }
 }
 
-impl super::HistoryBackend for RecordingBackend<'_> {
-    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()> {
-        super::HistoryBackend::commit_top_row(&mut self.output, borrowed_rows)
-    }
-}
-
 #[test]
 fn history_compatibility_corpus_uses_production_cell_insertion_output() {
     let directory = std::env::var_os("ZETA_TUI_HISTORY_FIXTURES").map(PathBuf::from);
@@ -99,17 +93,12 @@ fn history_compatibility_corpus_uses_production_cell_insertion_output() {
             crate::render::test_context(),
         );
         let mut model = Terminal::new(TestBackend::new(width, height)).unwrap();
-        let rendered = model
+        model
             .draw(|frame| draw_transient_frame(frame.buffer_mut()))
-            .unwrap()
-            .buffer
-            .clone();
-        super::append_history(
-            &mut model,
-            Some(&rendered),
-            rows,
-            &mut |buffer, area, offset| cell.render(buffer, area, offset),
-        )
+            .unwrap();
+        super::append_history(&mut model, rows, &mut |buffer, area, offset| {
+            cell.render(buffer, area, offset)
+        })
         .unwrap();
         assert_eq!(
             usize::from(model.backend().scrollback().area.height),
@@ -125,17 +114,12 @@ fn history_compatibility_corpus_uses_production_cell_insertion_output() {
                 size: Size::new(width, height),
             };
             let mut terminal = Terminal::new(MainScreenBackend { inner: backend }).unwrap();
-            let rendered = terminal
+            terminal
                 .draw(|frame| draw_transient_frame(frame.buffer_mut()))
-                .unwrap()
-                .buffer
-                .clone();
-            super::append_history(
-                &mut terminal,
-                Some(&rendered),
-                rows,
-                &mut |buffer, area, offset| cell.render(buffer, area, offset),
-            )
+                .unwrap();
+            super::append_history(&mut terminal, rows, &mut |buffer, area, offset| {
+                cell.render(buffer, area, offset)
+            })
             .unwrap();
             terminal
                 .draw(|frame| {

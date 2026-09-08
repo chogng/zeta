@@ -24,6 +24,51 @@ const FINISH_SCREEN: &str = "finish screen";
 const DISABLE_RAW_MODE: &str = "disable raw mode";
 
 #[test]
+fn inline_output_keeps_welcome_and_short_commands_on_screen_without_blank_history() {
+    use ratatui::Terminal;
+    use ratatui::TerminalOptions;
+    use ratatui::Viewport;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::style::Style;
+    let mut terminal = Terminal::with_options(
+        TestBackend::new(80, 24),
+        TerminalOptions {
+            viewport: Viewport::Fixed(Rect::new(0, 0, 80, 6)),
+        },
+    )
+    .unwrap();
+    for text in ["WELCOME", "> /status", "status result", "> hello"] {
+        super::append_history(&mut terminal, 1, &mut |buffer, area, _| {
+            buffer.set_string(area.x, area.y, text, Style::default());
+        })
+        .unwrap();
+        terminal
+            .draw(|frame| {
+                let area = frame.area();
+                frame
+                    .buffer_mut()
+                    .set_string(area.x, area.y, "INPUT", Style::default());
+            })
+            .unwrap();
+    }
+    assert_eq!(terminal.backend().scrollback().area.height, 0);
+    for (y, expected) in ["WELCOME", "> /status", "status result", "> hello", "INPUT"]
+        .into_iter()
+        .enumerate()
+    {
+        let text = (0..80)
+            .map(|x| terminal.backend().buffer()[(x, y as u16)].symbol())
+            .collect::<String>();
+        assert_eq!(text.trim_end(), expected);
+    }
+    super::resize_viewport(&mut terminal, 12).unwrap();
+    super::resize_viewport(&mut terminal, 6).unwrap();
+    assert_eq!(terminal.backend().scrollback().area.height, 0);
+    assert_eq!(terminal.get_frame().area().y, 4);
+}
+
+#[test]
 fn transcript_output_protocol_keeps_the_main_buffer_and_existing_history() {
     use crate::thread::transcript::CellView;
     use crate::thread::transcript::MessageRole;
@@ -47,7 +92,7 @@ fn transcript_output_protocol_keeps_the_main_buffer_and_existing_history() {
             },
         )
         .unwrap();
-        super::append_history(&mut terminal, None, rows, &mut |buffer, area, offset| {
+        super::append_history(&mut terminal, rows, &mut |buffer, area, offset| {
             cell.render(buffer, area, offset)
         })
         .unwrap();
@@ -64,7 +109,7 @@ fn transcript_output_protocol_keeps_the_main_buffer_and_existing_history() {
 fn history_longer_than_the_screen_survives_repainting_and_resize() {
     use ratatui::style::Style;
     let mut terminal = fullscreen_terminal(40, 5);
-    super::append_history(&mut terminal, None, 101, &mut |buffer, area, offset| {
+    super::append_history(&mut terminal, 101, &mut |buffer, area, offset| {
         buffer.set_string(
             area.x,
             area.y,
@@ -115,8 +160,7 @@ fn inserting_history_never_commits_the_interactive_frame() {
         })
         .unwrap();
 
-    let rendered = terminal.backend().buffer().clone();
-    super::append_history(&mut terminal, Some(&rendered), 1, &mut |buffer, area, _| {
+    super::append_history(&mut terminal, 1, &mut |buffer, area, _| {
         buffer.set_string(area.x, area.y, "> /statusline", Style::default());
     })
     .unwrap();
@@ -150,7 +194,7 @@ fn complete_styled_answer_is_written_to_scrollback_in_small_chunks() {
     let (cell, rows) =
         crate::thread::transcript::prepare_history(&message, 40, crate::render::test_context());
     let mut terminal = fullscreen_terminal(40, 5);
-    super::append_history(&mut terminal, None, rows, &mut |buffer, area, offset| {
+    super::append_history(&mut terminal, rows, &mut |buffer, area, offset| {
         cell.render(buffer, area, offset);
     })
     .unwrap();

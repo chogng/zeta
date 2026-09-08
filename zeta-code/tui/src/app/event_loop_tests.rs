@@ -34,6 +34,60 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
+fn welcome_is_committed_once_and_retried_after_an_output_failure() {
+    let mut app = App::new();
+    assert!(
+        app.write_transcript_header(80, &mut |_| Err(std::io::Error::other("write failed")))
+            .is_err()
+    );
+    let mut entries = Vec::new();
+    app.write_transcript_header(80, &mut |header| {
+        let text = header
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(text.contains("Zeta Code"));
+        entries.push("welcome".to_owned());
+        Ok(())
+    })
+    .unwrap();
+    app.insert_text("/status");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    for width in [80, 40, 100] {
+        app.write_transcript_header(width, &mut |_| panic!("Welcome was already written"))
+            .unwrap();
+        app.write_transcript_history(&mut |cell, _| {
+            entries.push(cell.text().into_owned());
+            Ok(())
+        })
+        .unwrap();
+    }
+    assert_eq!(entries, ["welcome", "/status"]);
+}
+
+#[test]
+#[ignore = "requires a PTY; verify the emitted screen and scrollback with a terminal emulator"]
+fn real_terminal_history_append() {
+    let mut terminal = crate::terminal::TerminalSession::open().unwrap();
+    let mut app = App::new();
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    let initial = terminal.area().unwrap();
+    assert_eq!(initial.y, 6);
+    app.insert_text("/issue4-command");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
+    assert!(terminal.area().unwrap().y > initial.y);
+    for index in 0..40 {
+        app.update(ThreadEvent::ProductNotice(format!(
+            "ISSUE4-MESSAGE-{index:02}"
+        )));
+        super::draw_terminal(&mut terminal, &mut app).unwrap();
+        super::draw_terminal(&mut terminal, &mut app).unwrap();
+    }
+}
+
+#[test]
 fn fixed_command_panels_ignore_mouse_and_keep_keyboard_navigation() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(
@@ -326,7 +380,8 @@ fn real_terminal_mouse_handoff() {
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.insert_text("/q");
     super::draw_terminal(&mut terminal, &mut app).unwrap();
-    let (column, row) = (0..area.height)
+    let area = terminal.area().unwrap();
+    let (column, row) = (area.y..area.bottom())
         .flat_map(|row| (0..area.width).map(move |column| (column, row)))
         .find(|(column, row)| frame::input_pointer_target_at(&app, area, *column, *row).is_some())
         .unwrap();

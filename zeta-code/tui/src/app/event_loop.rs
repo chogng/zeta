@@ -394,7 +394,16 @@ fn draw_terminal(
     }
     terminal.set_mouse_mode(app.mouse_mode())?;
     terminal.set_cursor_color(app.render_context().cursor_color())?;
-    let width = terminal.area()?.width;
+    let screen = terminal.screen_area()?;
+    terminal.set_height(frame::desired_height(app, screen))?;
+    let width = screen.width;
+    app.write_transcript_header(width, &mut |header| {
+        terminal.append_history(usize::from(header.area.height), |buffer, area, offset| {
+            for x in 0..area.width.min(header.area.width) {
+                buffer[(area.x + x, area.y)] = header[(x, offset as u16)].clone();
+            }
+        })
+    })?;
     app.write_transcript_history(&mut |message, context| {
         let (cell, rows) = crate::thread::transcript::prepare_history(message, width, context);
         terminal.append_history(rows, |buffer, area, offset| {
