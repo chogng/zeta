@@ -12,7 +12,7 @@
 just zeta
 ```
 
-[功能现状](../docs/capabilities.md)说明目前能做什么；[交互规格](../docs/spec/interaction.md)说明怎么操作；[架构设计](../docs/design/tui.md)说明各模块为什么这样分工。下面用于定位实现和运行验证。
+Zeta Code 的跨客户端契约从 [API 入口](../docs/README.md)查找；下面用于定位实现和运行验证。
 
 ## 文件与职责
 
@@ -95,7 +95,7 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 
 命令补全只替换光标所在的首行命令名，保留参数、图片和粘贴绑定。例如 `/mod provider/model` 补全为 `/model provider/model`。移除命令后的空格后可以重新编辑名称。未知命令或不接受参数却带参数的命令按普通消息处理；已注册产品命令没有实现路径时不能冒充成功。
 
-`/resume`、`/rewind`、`/add-dir`、`/fork`、`/model`、`/theme` 和 `/new` 支持行内参数；产品命令拒绝图片参数。命令回显和结果始终更新同一正文单元，输出格式见[正文输出](../docs/spec/transcript.md)。
+`/resume`、`/rewind`、`/add-dir`、`/fork`、`/model`、`/theme` 和 `/new` 支持行内参数；产品命令拒绝图片参数。命令回显和结果始终更新同一正文单元。
 
 文件补全只识别空白分隔的 `@token`，不处理邮箱中的 `@`。扫描遵守 Git 忽略规则、不跟随符号链接，并跳过 `.git`、`.zeta`、`node_modules` 和 `target`；结果按匹配分数与路径稳定排序，最多 50 项。请求同时校验查询文本和版本，关闭补全后释放搜索句柄。
 
@@ -103,7 +103,7 @@ TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需
 
 ## 面板怎样接入后端
 
-通用导航、搜索和返回行为见[面板键表](../docs/spec/commands.md#每个命令面板)。下面只列会影响请求实现的区别。
+下面只列会影响请求实现的导航、搜索和返回差异。
 
 | 功能 | 接入要求 |
 | --- | --- |
@@ -118,11 +118,11 @@ TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需
 
 Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到剪贴板后打开验证网址，按服务端间隔轮询；失败时取消授权流程。目录版本和连接代次用于拒绝过期操作。
 
-配置保存替换完整 `[tui]` 表，因此必须保留其他 TUI 设置。API key 只通过专用凭据接口保存，不进入普通配置或展示状态。快捷键候选先完成全量校验，保存失败时保留上一份有效规则；面板基础键与用户可重绑的应用动作范围见[快捷键规格](../docs/spec/commands.md#快捷键声明与保存)。
+配置保存替换完整 `[tui]` 表，因此必须保留其他 TUI 设置。API key 只通过专用凭据接口保存，不进入普通配置或展示状态。快捷键候选先完成全量校验，保存失败时保留上一份有效规则。
 
 `/config` 的 Providers 页提供独立的 `ChatGPT subscription` 入口，可查看 Zeta 账户和方案、启动设备码登录、取消登录或退出。验证地址与一次性代码显示在账户页；Esc 返回 Providers，待完成登录仍可重新进入查看和取消。TUI 使用共享账户接口，后端有 Codex 时只读复用，无 Codex 时负责续期和重新登录；缺失时生成兼容的 auth.json。复用模式断开不会退出 Codex；自管模式登出清除认证。重新连接仍有效的已有凭据无需浏览器。[认证存储与验收](../../zeta-rs/docs/changes/chatgpt-auth/verification.md)。
 
-资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。统计定义见[进程资源设计](../docs/design/process-resources.md)。
+资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。
 
 ## 正文更新与容量
 
@@ -152,7 +152,7 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 ## TUI 主题文件
 
-交互事实由[交互契约](../docs/spec/interaction.md#交互状态)定义；内置颜色、字符与绘制优先级由[样式契约](../docs/spec/styles.md)定义。本节只拥有用户主题文件格式。
+本节只拥有用户主题文件格式。
 
 TUI 设置保存在 `<profile>/config.toml` 的根级 `[tui]` 表：
 
@@ -206,7 +206,7 @@ Ctrl+Z 在 Unix 上先恢复终端，再发送 SIGTSTP；`fg` 后重新获取模
 
 ## 修改 Welcome 宠物
 
-只编辑 [pet.sprite](assets/welcome/pet.sprite) 中的终端格、帧和动作；[build.rs](build.rs) 在构建时校验并嵌入数据。规格见[Welcome 宠物](../docs/spec/welcome-pet.md)。
+只编辑 [pet.sprite](assets/welcome/pet.sprite) 中的终端格、帧和动作；[build.rs](build.rs) 在构建时校验并嵌入数据。
 
 ```sh
 just pet
@@ -227,6 +227,16 @@ just test-tui
 ```
 
 功能模块的测试检查状态、请求和完成结果；App 测试检查跨功能路由、优先级和退出；真实 PTY 场景检查完整 CLI/TUI 操作。`just test-tui` 先构建配套 daemon，Windows 与 Unix 使用同一宿主；可追加场景过滤器。上述命令是执行入口，不是本次通过记录。
+
+真实场景入口为 `zeta-code/cli/tests/tui_real_scenarios.rs`，只加载共享支持代码和以下四个模块；仍只生成一个集成测试程序。原测试函数名过滤器继续可用，也可用 `just test-tui config::` 按组运行。
+
+| 模块 | 场景归属 |
+| --- | --- |
+| [terminal.rs](../cli/tests/tui/terminal.rs) | PTY、终端历史、滚动、尺寸、输入区域及进程退出恢复 |
+| [conversation.rs](../cli/tests/tui/conversation.rs) | 对话、队列、审批、会话及对话中的 Git 状态 |
+| [config.rs](../cli/tests/tui/config.rs) | 设置、供应商、账户、语言与配置面板导航 |
+| [issues.rs](../cli/tests/tui/issues.rs) | Issue 选择、会话创建与 PR；目前仅 Unix 场景 |
+
 
 渲染测试使用 Ratatui 字符缓冲区与 `insta`；状态、协议和副作用仍需独立断言。固定尺寸，规范化动态路径和身份，逐项审查 `.snap.new` 后再接受，具体操作见[字符快照测试](../../.agents/skills/zeta-code-snapshot-testing/SKILL.md)。
 
