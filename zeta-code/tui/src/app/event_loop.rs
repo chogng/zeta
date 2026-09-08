@@ -258,6 +258,10 @@ fn handle_mouse(app: &mut App, area: ratatui::layout::Rect, mouse: MouseEvent) -
     }
     let position = ratatui::layout::Position::new(mouse.column, mouse.row);
     let overlay_contains = frame::overlay_mouse_contains(app, area, position);
+    if (app.overlay().is_some() || frame::completion_visible(app)) && !overlay_contains {
+        app.clear_mouse_interaction();
+        return MouseAction::Selection(None);
+    }
     match mouse.kind {
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
             let direction = if mouse.kind == MouseEventKind::ScrollUp {

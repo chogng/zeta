@@ -8,6 +8,7 @@
 
 | 记录日期 | 工作 | 状态与证据边界 | 对应现行规格 | 对应设计 |
 | --- | --- | --- | --- | --- |
+| 2026-09-08 | [PR #20 评审修复](2026-09-08-pr20-review.md) | 已完成；浮层隔离、Thread 本地记录、分页、构建与 Windows PTY 通过 | [终端](../spec/terminal.md) | [TUI](../design/tui.md) |
 | 2026-09-08 | [恢复回到底部点击入口](2026-09-08-jump-to-bottom.md) | 已完成；点击、键盘、字符快照与 Windows PTY 通过 | [正文](../spec/transcript.md)、[样式](../spec/styles.md) | [TUI](../design/tui.md) |
 | 2026-09-08 | [全屏对话与固定输入区](2026-09-08-terminal-blank-lines.md) | 已完成；构建、700 项单测、Windows PTY、VS Code ConPTY 与多轮历史通过 | [终端](../spec/terminal.md)、[布局](../spec/layout.md) | [TUI](../design/tui.md#全屏内容区与固定交互区) |
 | 2026-09-08 | [终端内容顺序追加](2026-09-08-terminal-append.md) | 已完成；Windows PTY、字符输出与构建通过 | [终端](../spec/terminal.md)、[布局](../spec/layout.md) | [TUI](../design/tui.md) |

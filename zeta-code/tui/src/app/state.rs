@@ -1682,7 +1682,10 @@ impl App {
                     || self.sessions.remembered_thread(&session_id) != Some(&thread_id);
                 self.close_transient_surfaces();
                 if context_changed {
-                    self.thread.update(ThreadPresentationEvent::Cleared);
+                    self.thread.switch_transcript(
+                        self.thread_presentations.active_id(),
+                        &thread_id,
+                    );
                 }
                 self.thread_presentations.switch(thread_id.clone());
                 self.sessions.activate_context(session_id, thread_id);

@@ -246,6 +246,52 @@ fn tool_call(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
     }
 }
 
+#[test]
+fn local_commands_wait_for_their_history_page_without_being_lost_or_duplicated() {
+    let turn = turn_id("history");
+    let older = message("older", &turn, MessageRole::Agent, "older reply");
+    let newer = message("newer", &turn, MessageRole::Agent, "newer reply");
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![older.clone()]));
+    model.command_submitted("/status".into(), LocalCommandCompletion::Immediate);
+    model.command_submitted("/help".into(), LocalCommandCompletion::Immediate);
+    let ids = model
+        .cells()
+        .iter()
+        .skip(1)
+        .map(|cell| cell.cell_id().clone())
+        .collect::<Vec<_>>();
+    for _ in 0..2 {
+        model.replace(snapshot(vec![newer.clone()]));
+        assert_eq!(model.cells().len(), 1);
+    }
+    for _ in 0..2 {
+        model.prepend_history(snapshot(vec![older.clone()]));
+        assert_eq!(
+            model
+                .views(&BTreeSet::new(), None)
+                .iter()
+                .map(|cell| cell.text().into_owned())
+                .collect::<Vec<_>>(),
+            ["older reply", "/status", "/help", "newer reply"]
+        );
+        assert_eq!(
+            model
+                .cells()
+                .iter()
+                .skip(1)
+                .take(2)
+                .map(|cell| cell.cell_id().clone())
+                .collect::<Vec<_>>(),
+            ids
+        );
+    }
+    model.replace(snapshot(vec![newer]));
+    model.clear();
+    model.prepend_history(snapshot(vec![older]));
+    assert_eq!(model.cells().len(), 1);
+}
+
 fn tool_result(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
     ThreadTranscriptEntry::Item {
         entry_id: format!("result-{name}"),

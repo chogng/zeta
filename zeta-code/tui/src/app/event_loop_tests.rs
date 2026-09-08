@@ -289,6 +289,151 @@ fn scroll_only_mouse_mode_still_scrolls_the_transcript() {
 }
 
 #[test]
+fn overlays_block_background_wheel_and_selection_until_dismissed() {
+    for detail in [false, true] {
+        let mut app = App::new();
+        let area = Rect::new(0, 0, 80, 24);
+        for index in 0..30 {
+            app.update(ThreadEvent::FailureReported(format!("failure {index}")));
+        }
+        app.handle_key_in_area(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE), area);
+        let anchor = app.transcript_scroll().anchor().cloned();
+        if detail {
+            app.show_overlay(crate::widgets::detail_list::DetailList::new(
+                "Output",
+                vec![crate::widgets::detail_list::DetailListRow::new(
+                    "stdout", "details",
+                )],
+            ));
+        } else {
+            app.insert_text("/q");
+            assert!(frame::completion_visible(&app));
+        }
+        let transcript = frame::layout(&app, area).session.transcript;
+        let outside = (transcript.y..transcript.bottom())
+            .map(|row| ratatui::layout::Position::new(transcript.x, row))
+            .find(|position| !frame::overlay_mouse_contains(&app, area, *position))
+            .unwrap();
+        for kind in [
+            MouseEventKind::ScrollUp,
+            MouseEventKind::ScrollDown,
+            MouseEventKind::Down(MouseButton::Left),
+            MouseEventKind::Drag(MouseButton::Left),
+            MouseEventKind::Up(MouseButton::Left),
+        ] {
+            assert!(matches!(
+                handle_mouse(
+                    &mut app,
+                    area,
+                    MouseEvent {
+                        kind,
+                        column: outside.x,
+                        row: outside.y,
+                        modifiers: KeyModifiers::NONE,
+                    }
+                ),
+                super::MouseAction::Selection(None)
+            ));
+            assert!(app.screen_selection().range().is_none());
+            assert!(app.pressed_pointer_target().is_none());
+            assert_eq!(app.transcript_scroll().anchor(), anchor.as_ref());
+        }
+        let inside = (0..area.height)
+            .flat_map(|row| {
+                (0..area.width).map(move |column| ratatui::layout::Position::new(column, row))
+            })
+            .find(|position| frame::overlay_mouse_contains(&app, area, *position))
+            .unwrap();
+        handle_mouse(
+            &mut app,
+            area,
+            MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: inside.x,
+                row: inside.y,
+                modifiers: KeyModifiers::NONE,
+            },
+        );
+        handle_mouse(
+            &mut app,
+            area,
+            MouseEvent {
+                kind: MouseEventKind::Drag(MouseButton::Left),
+                column: outside.x,
+                row: outside.y,
+                modifiers: KeyModifiers::NONE,
+            },
+        );
+        assert!(app.screen_selection().range().is_none());
+        assert!(matches!(
+            handle_mouse(
+                &mut app,
+                area,
+                MouseEvent {
+                    kind: MouseEventKind::Up(MouseButton::Left),
+                    column: inside.x,
+                    row: inside.y,
+                    modifiers: KeyModifiers::NONE
+                }
+            ),
+            super::MouseAction::Selection(None)
+        ));
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        handle_mouse(
+            &mut app,
+            area,
+            MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                column: outside.x,
+                row: outside.y,
+                modifiers: KeyModifiers::NONE,
+            },
+        );
+        assert_ne!(app.transcript_scroll().anchor(), anchor.as_ref());
+    }
+}
+
+#[test]
+fn detail_overlay_still_scrolls_its_own_content_with_the_mouse() {
+    let mut app = App::new();
+    let area = Rect::new(0, 0, 80, 24);
+    app.show_overlay(crate::widgets::detail_list::DetailList::new(
+        "Output",
+        vec![crate::widgets::detail_list::DetailListRow::new(
+            "stdout",
+            (0..40)
+                .map(|index| format!("line {index:02}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )],
+    ));
+    let surface = app
+        .overlay()
+        .unwrap()
+        .surface(frame::transient_area(&app, area));
+    let render = |app: &App| {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
+                .unwrap();
+        terminal.draw(|frame| frame::draw(frame, app)).unwrap();
+        terminal.backend().to_string()
+    };
+    let before = render(&app);
+    handle_mouse(
+        &mut app,
+        area,
+        MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: surface.x,
+            row: surface.y + 1,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    assert_ne!(render(&app), before);
+    assert!(app.transcript_scroll().anchor().is_none());
+}
+
+#[test]
 fn issue_manager_blocks_background_transcript_scroll_and_clicks() {
     let mut app = App::new();
     let area = Rect::new(0, 0, 80, 24);

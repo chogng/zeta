@@ -7,8 +7,10 @@ use super::transcript::TranscriptCellId;
 use super::transcript::TranscriptModel;
 use crate::thread::transcript::CellView;
 use crate::thread::transcript::MessageRole;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::ThreadId;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 
@@ -36,15 +38,25 @@ impl From<ApprovalMode> for TurnApprovalModes {
     }
 }
 
-/// Owns current-Turn lifecycle inputs and ordered transcript state for the subscribed Thread.
+/// Owns current-Turn lifecycle inputs and retains ordered transcripts across Thread switches.
 #[derive(Debug, Default)]
 pub(crate) struct ThreadState {
     active_turn: Option<TurnId>,
     approval_modes: TurnApprovalModes,
     transcript: TranscriptModel,
+    inactive_transcripts: BTreeMap<ThreadId, TranscriptModel>,
 }
 
 impl ThreadState {
+    pub(crate) fn switch_transcript(&mut self, previous: &ThreadId, next: &ThreadId) {
+        if previous == next {
+            return;
+        }
+        let outgoing = std::mem::take(&mut self.transcript);
+        self.inactive_transcripts.insert(previous.clone(), outgoing);
+        self.transcript = self.inactive_transcripts.remove(next).unwrap_or_default();
+    }
+
     pub(crate) fn active_turn(&self) -> Option<&TurnId> {
         self.active_turn.as_ref()
     }

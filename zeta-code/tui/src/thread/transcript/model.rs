@@ -147,6 +147,7 @@ impl TranscriptCell {
 #[derive(Debug, Default)]
 pub(crate) struct TranscriptModel {
     cells: Vec<TranscriptCell>,
+    unloaded_local_cells: Vec<(Option<String>, TranscriptCell)>,
     next_local_id: u64,
     next_render_revision: u64,
 }
@@ -172,7 +173,7 @@ impl TranscriptModel {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let mut local_cells = Vec::new();
+        let mut local_cells = std::mem::take(&mut self.unloaded_local_cells);
         let mut preceding_source_id = None;
         for cell in std::mem::take(&mut self.cells) {
             let source_ids = cell.source_ids();
@@ -204,6 +205,8 @@ impl TranscriptModel {
                 .map(String::as_str)
                 .or(anchor.as_deref());
             let Some(mut insert_at) = self.local_insert_index(effective_anchor) else {
+                self.unloaded_local_cells
+                    .push((effective_anchor.map(str::to_owned), cell));
                 continue;
             };
             while self
@@ -231,6 +234,7 @@ impl TranscriptModel {
             }
         }
         self.cells.append(&mut current);
+        self.restore_local_cells();
     }
 
     pub(in crate::thread) fn apply(&mut self, update: ThreadTranscriptUpdateEnvelope) {
@@ -245,6 +249,7 @@ impl TranscriptModel {
 
     pub(in crate::thread) fn clear(&mut self) {
         self.cells.clear();
+        self.unloaded_local_cells.clear();
     }
 
     pub(in crate::thread) fn views(
@@ -685,6 +690,23 @@ impl TranscriptModel {
     fn render_revision(&mut self) -> u64 {
         self.next_render_revision = self.next_render_revision.wrapping_add(1).max(1);
         self.next_render_revision
+    }
+
+    fn restore_local_cells(&mut self) {
+        for (anchor, cell) in std::mem::take(&mut self.unloaded_local_cells) {
+            let Some(mut index) = self.local_insert_index(anchor.as_deref()) else {
+                self.unloaded_local_cells.push((anchor, cell));
+                continue;
+            };
+            while self
+                .cells
+                .get(index)
+                .is_some_and(|cell| cell.source_ids().is_empty())
+            {
+                index += 1;
+            }
+            self.cells.insert(index, cell);
+        }
     }
 
     fn local_insert_index(&self, preceding_source_id: Option<&str>) -> Option<usize> {

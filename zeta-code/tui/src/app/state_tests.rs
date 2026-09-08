@@ -1770,6 +1770,71 @@ fn terminal_screen_change_closes_command_panels_including_status() {
 }
 
 #[test]
+fn switching_threads_restores_local_commands_after_receiving_a_snapshot() {
+    let mut app = App::new();
+    let session_id = SessionId::new("local-history").unwrap();
+    let first = ThreadId::new("first").unwrap();
+    app.update(ThreadEvent::ContextChanged {
+        session_id: session_id.clone(),
+        thread_id: first.clone(),
+    });
+    app.insert_text("/status");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let before = app
+        .transcript_views()
+        .iter()
+        .map(|cell| (cell.cell_id.clone(), cell.text().into_owned()))
+        .collect::<Vec<_>>();
+    assert!(before.iter().any(|(_, text)| text.contains("/status")));
+    for index in 0..35 {
+        app.update(ThreadEvent::ContextChanged {
+            session_id: session_id.clone(),
+            thread_id: ThreadId::new(format!("other-{index}")).unwrap(),
+        });
+        assert!(app.transcript_views().is_empty());
+        app.update(ThreadEvent::FailureReported(format!(
+            "other thread {index}"
+        )));
+    }
+    app.update(ThreadEvent::ContextChanged {
+        session_id: session_id.clone(),
+        thread_id: first.clone(),
+    });
+    for _ in 0..2 {
+        app.update(ThreadEvent::TranscriptSnapshotReceived(
+            zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot {
+                session_id: session_id.clone(),
+                thread_id: first.clone(),
+                durable_sequence: 1,
+                revision: 1,
+                entries: vec![],
+            },
+        ));
+        let after = app
+            .transcript_views()
+            .iter()
+            .map(|cell| (cell.cell_id.clone(), cell.text().into_owned()))
+            .collect::<Vec<_>>();
+        assert_eq!(after, before);
+    }
+    app.update(ThreadEvent::TranscriptCleared);
+    app.update(ThreadEvent::ContextChanged {
+        session_id: session_id.clone(),
+        thread_id: ThreadId::new("other-0").unwrap(),
+    });
+    assert!(
+        app.transcript_views()
+            .iter()
+            .any(|cell| cell.text().contains("other thread 0"))
+    );
+    app.update(ThreadEvent::ContextChanged {
+        session_id,
+        thread_id: first,
+    });
+    assert!(app.transcript_views().is_empty());
+}
+
+#[test]
 fn two_screen_escape_presses_within_the_gesture_window_open_rewind() {
     let mut app = App::new();
     let started = Instant::now();
