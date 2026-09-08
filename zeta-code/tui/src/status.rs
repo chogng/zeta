@@ -56,6 +56,7 @@ pub(crate) use resources::format_process_cpu;
 pub(crate) use resources::format_process_memory;
 pub(crate) use settings::StatusLineItem;
 pub(crate) use settings::StatusLineSettings;
+pub(crate) use settings::StatusLineStyle;
 pub(crate) use settings_request::StatusLineEdit;
 pub(crate) use settings_request::StatusLineEditorUpdate;
 pub(crate) use settings_request::execute;

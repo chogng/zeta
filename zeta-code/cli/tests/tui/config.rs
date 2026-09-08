@@ -360,6 +360,48 @@ fn actual_tui_config_enables_and_disables_memory_diagnostics() {
     );
 }
 
+#[test]
+fn actual_tui_status_line_style_persists_across_restart() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Enhanced TUI");
+    for _ in 0..6 {
+        process.down();
+    }
+    process.enter();
+    process.wait_for_screen("Emoji and progress bars at a glance");
+    process.escape();
+    process.wait_for_screen("🤖 zeta-real-scenario");
+    process.quit();
+    assert!(
+        fixture
+            .config_source()
+            .contains("statusLineStyle = \"rich\"")
+    );
+
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("🤖 zeta-real-scenario");
+    process.submit("/config");
+    process.wait_for_screen("Emoji and progress bars at a glance");
+    for _ in 0..6 {
+        process.down();
+    }
+    process.enter();
+    process.wait_for_screen("Text and numbers, clean and easy to read");
+    process.escape();
+    process.quit();
+    assert!(
+        fixture
+            .config_source()
+            .contains("statusLineStyle = \"compact\"")
+    );
+    assert!(server.request_bodies().is_empty());
+}
+
 fn wait_for_config(fixture: &Fixture, expected: &str) {
     let path = fixture
         .find_file("config.toml")

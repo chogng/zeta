@@ -83,6 +83,7 @@ pub(crate) enum Event {
         usage: zeta_protocol::ModelUsageSummary,
         reference_cost: zeta_protocol::ModelReferenceCostSummary,
     },
+    ContextUsageChanged(Option<(zeta_protocol::ModelRef, zeta_protocol::ModelContextUsage)>),
     GoalChanged(Option<zeta_protocol::ThreadGoal>),
     SteerCompleted {
         source: composer::SteerSource,

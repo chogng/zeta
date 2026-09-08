@@ -35,3 +35,89 @@ fn initial_turn_failure_enters_error_state() {
 
     assert_eq!(app.status(), &Status::Error);
 }
+
+#[test]
+fn status_line_context_follows_thread_snapshots() {
+    use zeta_protocol::ModelContextUsage;
+    use zeta_protocol::ModelContextUsageSource;
+    use zeta_protocol::ModelRef;
+    use zeta_protocol::ModelId;
+    use zeta_protocol::ProviderId;
+    let model = ModelRef::new(
+        ProviderId::new("provider").unwrap(),
+        ModelId::new("model").unwrap(),
+    );
+    let mut snapshot = zeta_protocol::Thread {
+        session_id: zeta_protocol::SessionId::new("session").unwrap(),
+        thread_id: zeta_protocol::ThreadId::new("thread").unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
+        title: "thread".into(),
+        status: zeta_protocol::ThreadStatus::Active,
+        sequence: 1,
+        usage: Default::default(),
+        reference_cost: Default::default(),
+        goal: None,
+        turns: vec![zeta_protocol::Turn {
+            turn_id: TurnId::new("turn").unwrap(),
+            status: zeta_protocol::TurnStatus::Completed,
+            kind: Default::default(),
+            instructions: None,
+            model: Some(model),
+            tool_profile: None,
+            tool_mode: zeta_protocol::ToolMode::Direct,
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+            usage: Default::default(),
+            context_usage: Some(ModelContextUsage {
+                used_tokens: 40,
+                source: ModelContextUsageSource::ProviderReported,
+            }),
+            items: vec![],
+            plan: None,
+            pending_interaction: None,
+            error: None,
+        }],
+    };
+    let mut app = App::new();
+    let mut settings = crate::status::StatusLineSettings::default();
+    for item in crate::status::StatusLineItem::ALL {
+        settings.set(item, item == crate::status::StatusLineItem::Context);
+    }
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.tui = settings.write_to_tui(&config.tui);
+    config.preferred_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto { provider: "provider".into(), model: "model".into() });
+    let catalog = zeta_app_server_protocol::protocol::model::ModelListResult {
+        models: vec![
+            zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+                model: snapshot.turns[0].model.clone().unwrap(),
+                display_name: "model".into(),
+                access: zeta_protocol::ModelAccess::ApiKey,
+                output_transport: zeta_protocol::ModelOutputTransport::Unary,
+                context_window: Some(100),
+                auto_compact_token_limit: None,
+                available_context_window: Some(100),
+                capabilities: zeta_protocol::ModelCapabilities::UNKNOWN,
+                supported_reasoning_efforts: vec![],
+                default_reasoning_effort: None,
+                default_personality: None,
+            },
+        ],
+    };
+    super::apply_tui_config(config.clone(), Some(&catalog), &mut app);
+    super::apply_thread_snapshot_parts(&mut app, snapshot.clone(), None);
+    assert_eq!(
+        app.status_line()
+            .top_text_for_width(80, app.status_line_runtime()),
+        "context 40%"
+    );
+    super::apply_tui_config(config, Some(&catalog), &mut app);
+    assert_eq!(app.status_line().top_text_for_width(80, app.status_line_runtime()), "context 40%");
+    snapshot.thread_id = zeta_protocol::ThreadId::new("other").unwrap();
+    snapshot.turns.clear();
+    super::apply_thread_snapshot_parts(&mut app, snapshot, None);
+    assert_eq!(
+        app.status_line()
+            .top_text_for_width(80, app.status_line_runtime()),
+        "context unknown"
+    );
+}

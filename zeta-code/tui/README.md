@@ -163,6 +163,7 @@ mouseInteractions = true
 inputMode = "standard"
 memoryDiagnostics = false
 showGitChangesAsDiff = false
+statusLineStyle = "compact"
 language = "en"
 ```
 

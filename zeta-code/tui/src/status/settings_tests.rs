@@ -75,6 +75,7 @@ fn accounting_items_round_trip_when_enabled() {
             json!(["cache-hit-rate", "reference-cost"]),
         ),
         ("showGitChangesAsDiff".into(), json!(false)),
+        ("statusLineStyle".into(), json!("compact")),
     ]));
 
     let settings = StatusLineSettings::from_tui(&section).unwrap();
@@ -119,4 +120,30 @@ fn unknown_and_duplicate_items_are_rejected() {
         json!("yes"),
     )]));
     assert!(StatusLineSettings::from_tui(&section).is_err());
+}
+
+#[test]
+fn status_line_style_is_strict_and_preserves_composition() {
+    use super::super::StatusLineStyle;
+    let section = FrontendConfigDto(BTreeMap::from([
+        ("statusLine".into(), json!(["context", "model"])),
+        ("futureSetting".into(), json!(42)),
+    ]));
+    let mut settings = StatusLineSettings::from_tui(&section).unwrap();
+    assert_eq!(settings.style(), StatusLineStyle::Compact);
+    settings.set_style(StatusLineStyle::Rich);
+    let written = settings.write_to_tui(&section);
+    assert_eq!(written.0["statusLine"], section.0["statusLine"]);
+    assert_eq!(written.0["futureSetting"], json!(42));
+    assert_eq!(written.0["statusLineStyle"], json!("rich"));
+    assert_eq!(StatusLineSettings::from_tui(&written).unwrap(), settings);
+    for value in [json!(true), json!(null), json!("colorful"), json!(1)] {
+        let mut invalid = written.clone();
+        invalid.0.insert("statusLineStyle".into(), value);
+        assert!(
+            StatusLineSettings::from_tui(&invalid)
+                .unwrap_err()
+                .contains("statusLineStyle")
+        );
+    }
 }

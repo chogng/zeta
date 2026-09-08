@@ -9,4 +9,5 @@ expression: "rows.join(\"\\n\")"
   Memory            Local TUI, App Server, and child-process resident memory                 [   ]  
   CPU               Local TUI, App Server, and child-process CPU share                       [   ]  
   Git branch        Current Git branch                                                       [ ✔ ]  
-  Git changes       Working tree changes                                                     [   ]
+  Git changes       Working tree changes                                                     [   ]  
+  Context           Current Thread context usage                                             [   ]
