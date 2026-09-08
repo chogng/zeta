@@ -916,7 +916,8 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     pub fn list_provider_models(
         &mut self,
         provider: String,
-    ) -> Result<ModelListResult, ClientError> {
+    ) -> Result<zeta_app_server_protocol::protocol::provider::ProviderModelsListResult, ClientError>
+    {
         self.call(
             ClientMethod::ProviderModelsList,
             zeta_app_server_protocol::protocol::provider::ProviderModelsListParams { provider },

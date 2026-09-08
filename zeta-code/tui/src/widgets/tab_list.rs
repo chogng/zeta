@@ -19,6 +19,10 @@ const TAB_GAP: usize = 2;
 /// Supplies the label rendered by a tab list while the owning component keeps its payload.
 pub(crate) trait TabListItem {
     fn tab_label(&self) -> &str;
+
+    fn tab_enabled(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,39 +44,43 @@ pub(crate) enum FocusedTabListInputOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TabListState<T> {
     tabs: Vec<T>,
-    active: usize,
+    active: Option<usize>,
 }
 
-impl<T> TabListState<T> {
+impl<T: TabListItem> TabListState<T> {
     pub(crate) fn new(tabs: Vec<T>) -> Self {
         assert!(!tabs.is_empty(), "a tab list requires at least one tab");
-        Self { tabs, active: 0 }
+        let active = tabs.iter().position(TabListItem::tab_enabled);
+        Self { tabs, active }
     }
 
     pub(crate) fn replace_tabs(&mut self, tabs: Vec<T>) {
         assert!(!tabs.is_empty(), "a tab list requires at least one tab");
         self.tabs = tabs;
-        self.active = self.active.min(self.tabs.len() - 1);
+        let start = self.active.unwrap_or(0).min(self.tabs.len() - 1);
+        self.active = (0..self.tabs.len())
+            .map(|offset| (start + offset) % self.tabs.len())
+            .find(|index| self.tabs[*index].tab_enabled());
     }
 
     pub(crate) fn tabs(&self) -> &[T] {
         &self.tabs
     }
 
-    pub(crate) fn active_index(&self) -> usize {
+    pub(crate) fn active_index(&self) -> Option<usize> {
         self.active
     }
 
-    pub(crate) fn active_tab(&self) -> &T {
-        &self.tabs[self.active]
+    pub(crate) fn active_tab(&self) -> Option<&T> {
+        self.active.map(|index| &self.tabs[index])
     }
 
     pub(crate) fn select(&mut self, index: usize) -> TabListInputOutcome {
-        if index >= self.tabs.len() {
+        if index >= self.tabs.len() || !self.tabs[index].tab_enabled() {
             return TabListInputOutcome::Unhandled;
         }
         let previous = self.active;
-        self.active = index;
+        self.active = Some(index);
         if self.active == previous {
             TabListInputOutcome::Consumed
         } else {
@@ -90,11 +98,18 @@ impl<T> TabListState<T> {
             return TabListInputOutcome::Consumed;
         }
         let previous = self.active;
-        if previous_tab {
-            self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1);
-        } else {
-            self.active = (self.active + 1) % self.tabs.len();
-        }
+        let Some(active) = self.active else {
+            return TabListInputOutcome::Consumed;
+        };
+        self.active = (1..=self.tabs.len())
+            .map(|offset| {
+                if previous_tab {
+                    (active + self.tabs.len() - offset) % self.tabs.len()
+                } else {
+                    (active + offset) % self.tabs.len()
+                }
+            })
+            .find(|index| self.tabs[*index].tab_enabled());
         if self.active == previous {
             TabListInputOutcome::Consumed
         } else {
@@ -117,7 +132,7 @@ impl<T> TabListState<T> {
         } else {
             return FocusedTabListInputOutcome::Unhandled;
         };
-        if key.kind == KeyEventKind::Press {
+        if key.kind == KeyEventKind::Press && self.active.is_some() {
             outcome
         } else {
             FocusedTabListInputOutcome::Consumed
@@ -158,7 +173,7 @@ pub(crate) fn draw<T: TabListItem>(
 
 fn tab_lines<T: TabListItem>(
     tabs: &[T],
-    active: usize,
+    active: Option<usize>,
     width: u16,
     focused: bool,
     hovered: Option<usize>,
@@ -186,14 +201,16 @@ fn tab_lines<T: TabListItem>(
             spans.push(Span::raw(" ".repeat(position.start - *row_width)));
             *row_width = position.start;
         }
-        let target = if index == active {
+        let target = if !tab.tab_enabled() {
+            InteractionTarget::Disabled
+        } else if Some(index) == active {
             InteractionTarget::Active
         } else {
             InteractionTarget::Rest
         };
         let state = InteractionState {
             target,
-            selected: focused && index == active,
+            selected: focused && Some(index) == active,
             hovered: target == InteractionTarget::Rest && hovered == Some(index),
             pressed: pressed == Some(index),
         };

@@ -36,6 +36,102 @@ impl JsonRpcTransport for RecordingTransport {
 }
 
 #[test]
+fn fetching_models_is_read_only_and_decodes_empty_and_failed_results() {
+    for (result, expected) in [
+        (
+            serde_json::json!({"type":"empty"}),
+            "Provider returned no models",
+        ),
+        (
+            serde_json::json!({"type":"failed","failure":{"code":"authentication"}}),
+            "Check the API key",
+        ),
+        (
+            serde_json::json!({"type":"failed","failure":{"code":"invalidResponse"}}),
+            "invalid model list",
+        ),
+    ] {
+        let current = empty_config_snapshot();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let mut client = AppServerClient::new(RecordingTransport {
+            requests: requests.clone(),
+            responses: VecDeque::from([
+                response(1, serde_json::to_value(&current).unwrap()),
+                response(2, result),
+                response(3, serde_json::to_value(&current).unwrap()),
+                response(4, serde_json::json!({"providers":[]})),
+            ]),
+        });
+        let (_, models) = super::execute_connection(
+            &mut client,
+            crate::config::openai::Request {
+                id: crate::client::new_command_id("test"),
+                revision: current.revision,
+                config: zeta_app_server_protocol::protocol::config::ProviderConfigDto {
+                    provider: "openai".into(),
+                    custom: None,
+                    base_url: None,
+                    max_output_tokens: None,
+                    model_context: Default::default(),
+                },
+                key: None,
+                operation: crate::config::openai::Operation::FetchModels,
+            },
+        )
+        .unwrap();
+        assert!(models.unwrap().unwrap_err().contains(expected));
+        assert_eq!(
+            requests
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|r| r["method"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>(),
+            vec![
+                "config/read",
+                "provider/models/list",
+                "config/read",
+                "provider/list"
+            ]
+        );
+    }
+}
+
+#[test]
+fn fetching_with_a_stale_revision_does_not_rewrite_external_changes() {
+    let mut current = empty_config_snapshot();
+    current.revision = 9;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([response(1, serde_json::to_value(&current).unwrap())]),
+    });
+    let result = super::execute_connection(
+        &mut client,
+        crate::config::openai::Request {
+            id: crate::client::new_command_id("test"),
+            revision: 8,
+            config: zeta_app_server_protocol::protocol::config::ProviderConfigDto {
+                provider: "openai".into(),
+                custom: None,
+                base_url: None,
+                max_output_tokens: None,
+                model_context: Default::default(),
+            },
+            key: None,
+            operation: crate::config::openai::Operation::FetchModels,
+        },
+    );
+    assert!(
+        result
+            .err()
+            .unwrap()
+            .contains("Configuration changed elsewhere")
+    );
+    assert_eq!(requests.lock().unwrap().len(), 1);
+}
+
+#[test]
 fn language_server_switch_uses_the_backend_config_authority_and_refreshes_the_tab() {
     let executable = "C:\\tools\\rust-analyzer.exe";
     let mut refreshed = empty_config_snapshot();

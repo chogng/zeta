@@ -1,3 +1,4 @@
+use crate::protocol::model::ModelCatalogEntry;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -32,6 +33,40 @@ pub struct ProviderListResult {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderModelsListParams {
     pub provider: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ProviderModelsListFailureCodeDto {
+    Authentication,
+    Permission,
+    Unsupported,
+    RateLimited,
+    Unreachable,
+    ProviderUnavailable,
+    InvalidRequest,
+    InvalidResponse,
+    InvalidConfiguration,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelsListFailureDto {
+    pub code: ProviderModelsListFailureCodeDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ProviderModelsListResult {
+    Models {
+        models: Vec<ModelCatalogEntry>,
+    },
+    Empty,
+    Failed {
+        failure: ProviderModelsListFailureDto,
+    },
 }
 
 /// Inbound-only provider API key that redacts diagnostics and clears its allocation on drop.

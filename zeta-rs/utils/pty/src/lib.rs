@@ -46,3 +46,6 @@ pub use win::PsuedoCon;
 pub use win::conpty::RawConPty;
 #[cfg(windows)]
 pub use windows_input::WindowsTtyInputNormalizer;
+
+#[cfg(windows)]
+pub use pipe::CancellablePipeReader;

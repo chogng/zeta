@@ -27,6 +27,9 @@ zeta-file-access = { workspace = true }
 [lints]
 workspace = true
 
+[target.'cfg(windows)'.dependencies]
+zeta-utils-pty = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 zeta-async-utils = { workspace = true }

@@ -113,6 +113,8 @@ use crate::protocol::config::ConfigCommandDispositionDto;
 use crate::protocol::config::ConfigCommandResult;
 use crate::protocol::config::ConfigReadResult;
 use crate::protocol::config::ConfigUpdateParams;
+use crate::protocol::config::CustomProviderConfigDto;
+use crate::protocol::config::CustomProviderProtocolDto;
 use crate::protocol::config::ExecPolicyActionKindDto;
 use crate::protocol::config::ExecPolicyEffectDto;
 use crate::protocol::config::ExecPolicyHostMatcherDto;
@@ -149,8 +151,6 @@ use crate::protocol::config::PluginRequestEnablementDto;
 use crate::protocol::config::PluginRequestRemoveParams;
 use crate::protocol::config::PluginRequestSetEnablementParams;
 use crate::protocol::config::PluginRequestUpsertParams;
-use crate::protocol::config::CustomProviderConfigDto;
-use crate::protocol::config::CustomProviderProtocolDto;
 use crate::protocol::config::ProviderConfigDto;
 use crate::protocol::config::ProviderConfigureParams;
 use crate::protocol::config::ProviderRemoveParams;
@@ -519,7 +519,10 @@ use crate::protocol::provider::ProviderApiKeySetParams;
 use crate::protocol::provider::ProviderApiKeySetResult;
 use crate::protocol::provider::ProviderCatalogEntryDto;
 use crate::protocol::provider::ProviderListResult;
+use crate::protocol::provider::ProviderModelsListFailureCodeDto;
+use crate::protocol::provider::ProviderModelsListFailureDto;
 use crate::protocol::provider::ProviderModelsListParams;
+use crate::protocol::provider::ProviderModelsListResult;
 use crate::protocol::resources::ResourceMetadataParams;
 use crate::protocol::resources::ResourceMetadataResult;
 use crate::protocol::resources::ResourceReadParams;
@@ -1737,7 +1740,7 @@ client_methods! {
     },
     ProviderModelsList => "provider/models/list" {
         params: ProviderModelsListParams,
-        response: ModelListResult,
+        response: ProviderModelsListResult,
         serialization: GlobalSharedRead,
     },
     ProviderApiKeySet => "provider/apiKey/set" {
@@ -3119,6 +3122,9 @@ typescript_bindings! {
     ProviderApiKeySetParams,
     ProviderApiKeySetResult,
     ProviderModelsListParams,
+    ProviderModelsListFailureCodeDto,
+    ProviderModelsListFailureDto,
+    ProviderModelsListResult,
     ProviderCatalogEntryDto,
     ProviderListResult,
     StableTurnErrorCode,

@@ -10,13 +10,15 @@ use crate::widgets::key_hint::KeyHints;
 use crate::widgets::list_selection;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionOutcome;
-use crate::widgets::search_box;
 use crate::widgets::search_box::SearchBoxModel;
-use crate::widgets::search_box::SearchBoxState;
 use crate::widgets::tab_list;
 use crate::widgets::tab_list::FocusedTabListInputOutcome;
+use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
+use crate::widgets::text_field;
+use crate::widgets::text_field::TextField;
+use crate::widgets::text_field::TextFieldOutcome;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -37,19 +39,30 @@ const OFFICIAL_URL: &str = "https://api.openai.com/v1";
 const FIELD_ROWS: u16 = 4;
 
 fn form_hints(action: Keybinding, dismiss: Keybinding) -> KeyHints {
-    KeyHints::new().with_binding(action)
+    KeyHints::new()
+        .with_binding(action)
         .with_binding(bindings::PROVIDER_NEXT_FIELD)
         .with_binding(bindings::PROVIDER_SWITCH_TABS)
         .with_binding(dismiss)
 }
-static EDIT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| form_hints(bindings::PROVIDER_CONFIRM, bindings::CANCEL));
-static SELECT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| form_hints(bindings::PROVIDER_EDIT, bindings::PROVIDER_RETURN_TABS));
-static CREATE_HINTS: LazyLock<KeyHints> = LazyLock::new(|| form_hints(bindings::PROVIDER_CREATE, bindings::PROVIDER_RETURN_TABS));
-static FETCH_HINTS: LazyLock<KeyHints> = LazyLock::new(|| form_hints(bindings::PROVIDER_FETCH_MODELS, bindings::PROVIDER_RETURN_TABS));
-static TAB_HINTS: LazyLock<KeyHints> = LazyLock::new(|| KeyHints::new()
-    .with_binding(bindings::TABS)
-    .with_binding(bindings::PROVIDER_ENTER_TAB)
-    .with_binding(bindings::PROVIDER_RETURN));
+static EDIT_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| form_hints(bindings::PROVIDER_CONFIRM, bindings::CANCEL));
+static SELECT_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| form_hints(bindings::EDIT_FIELD, bindings::PROVIDER_RETURN_TABS));
+static CREATE_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| form_hints(bindings::PROVIDER_CREATE, bindings::PROVIDER_RETURN_TABS));
+static FETCH_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    form_hints(
+        bindings::PROVIDER_FETCH_MODELS,
+        bindings::PROVIDER_RETURN_TABS,
+    )
+});
+static TAB_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    KeyHints::new()
+        .with_binding(bindings::TABS)
+        .with_binding(bindings::PROVIDER_ENTER_TAB)
+        .with_binding(bindings::PROVIDER_RETURN)
+});
 
 enum InputVisibility {
     Visible,
@@ -134,28 +147,26 @@ impl TabListItem for Tab {
 struct Form {
     saved: ProviderConfigDto,
     revision: u64,
-    name: SearchBoxState,
-    url: SearchBoxState,
-    key: SearchBoxState,
+    name: TextField,
+    url: TextField,
+    key: TextField,
     protocol: CustomProviderProtocolDto,
     draft: bool,
-    key_saved: bool,
     focus: usize,
-    editing: bool,
+    protocol_editing: bool,
     message: String,
     models: Vec<String>,
-    confirmed_key: zeroize::Zeroizing<String>,
 }
 
-fn input(value: &str, placeholder: &str, visibility: InputVisibility) -> SearchBoxState {
-    let model = SearchBoxModel::new(placeholder).initially_active();
-    let mut state = SearchBoxState::new(match visibility {
-        InputVisibility::Hidden => model.masked(),
-        InputVisibility::Visible => model,
-    });
-    state.handle_paste(value.into());
-    state.set_input_active(false);
-    state
+fn input(value: &str, placeholder: &str, visibility: InputVisibility) -> TextField {
+    let model = SearchBoxModel::new(placeholder);
+    TextField::new(
+        value,
+        match visibility {
+            InputVisibility::Hidden => model.masked(),
+            InputVisibility::Visible => model,
+        },
+    )
 }
 
 fn empty_config(id: String) -> ProviderConfigDto {
@@ -213,12 +224,10 @@ impl Form {
             saved,
             revision: 0,
             draft,
-            key_saved,
             focus: if official { 2 } else { 0 },
-            editing: true,
+            protocol_editing: false,
             message: String::new(),
             models: Vec::new(),
-            confirmed_key: zeroize::Zeroizing::new(String::new()),
         };
         form.focus(form.focus);
         form
@@ -242,20 +251,43 @@ impl Form {
         }
     }
     fn focus(&mut self, index: usize) {
+        self.name.blur();
+        self.url.blur();
+        self.key.blur();
+        self.protocol_editing = false;
         self.focus = index;
-        self.editing = index < 4;
-        self.name.set_input_active(self.editing && index == 0);
-        self.url
-            .set_input_active(self.editing && index == 1 && !self.official());
-        self.key.set_input_active(self.editing && index == 2);
     }
-    fn next(&mut self) {
-        let fields = self.editable();
-        let position = fields
-            .iter()
-            .position(|index| *index == self.focus)
-            .unwrap_or_default();
-        self.focus(fields[(position + 1).min(fields.len() - 1)]);
+    fn editing(&self) -> bool {
+        match self.focus {
+            0 => self.name.is_editing(),
+            1 => self.url.is_editing(),
+            2 => self.key.is_editing(),
+            3 => self.protocol_editing,
+            _ => false,
+        }
+    }
+    fn accept(&mut self) {
+        match self.focus {
+            0 => self.name.accept(
+                self.saved
+                    .custom
+                    .as_ref()
+                    .map_or("", |custom| custom.name.as_str())
+                    .into(),
+            ),
+            1 => self
+                .url
+                .accept(self.saved.base_url.clone().unwrap_or_default()),
+            2 => self.key.accept(self.key.query().into()),
+            _ => {}
+        }
+        self.protocol_editing = false;
+    }
+    fn fail(&mut self, message: String) {
+        self.message = message;
+        if let Some(field) = self.field_mut() {
+            field.reject();
+        }
     }
     fn move_focus(&mut self, direction: Direction) -> FieldFocusOutcome {
         let fields = self.editable();
@@ -274,7 +306,7 @@ impl Form {
         self.focus(fields[next]);
         FieldFocusOutcome::Moved
     }
-    fn field_mut(&mut self) -> Option<&mut SearchBoxState> {
+    fn field_mut(&mut self) -> Option<&mut TextField> {
         match self.focus {
             0 => Some(&mut self.name),
             1 if !self.official() => Some(&mut self.url),
@@ -331,52 +363,6 @@ impl Form {
         });
         Ok(config)
     }
-    fn cancel_edit(&mut self) {
-        match self.focus {
-            0 => {
-                self.name = input(
-                    self.saved
-                        .custom
-                        .as_ref()
-                        .map_or("", |custom| custom.name.as_str()),
-                    "Provider name",
-                    InputVisibility::Visible,
-                )
-            }
-            1 => {
-                self.url = input(
-                    self.saved.base_url.as_deref().unwrap_or_default(),
-                    "https://your-service.example/v1",
-                    InputVisibility::Visible,
-                )
-            }
-            2 => {
-                self.key = input(
-                    &self.confirmed_key,
-                    if self.key_saved {
-                        "Key saved · Enter a new key to replace"
-                    } else {
-                        "API key"
-                    },
-                    InputVisibility::Hidden,
-                )
-            }
-            3 => {
-                self.protocol = self
-                    .saved
-                    .custom
-                    .as_ref()
-                    .map_or(CustomProviderProtocolDto::Responses, |custom| {
-                        custom.protocol
-                    })
-            }
-            _ => {}
-        }
-        self.editing = false;
-        self.name.set_input_active(false);
-        self.url.set_input_active(false);
-        self.key.set_input_active(false);
-    }
 }
 
 #[derive(Debug)]
@@ -398,6 +384,12 @@ impl Panel {
         let Some(form) = self.form() else {
             return self.subscription.key_hints();
         };
+        match form.focus {
+            0 => return form.name.key_hints(),
+            1 => return form.url.key_hints(),
+            2 => return form.key.key_hints(),
+            _ => {}
+        }
         if form.focus == 4 {
             return if form.draft {
                 CREATE_HINTS.text()
@@ -405,7 +397,7 @@ impl Panel {
                 FETCH_HINTS.text()
             };
         }
-        if form.editing {
+        if form.editing() {
             EDIT_HINTS.text()
         } else {
             SELECT_HINTS.text()
@@ -492,7 +484,12 @@ impl Panel {
             id: self.draft_id.clone(),
             label: "New custom provider".into(),
         });
-        let active = self.tabs.active_tab().id.clone();
+        let active = self
+            .tabs
+            .active_tab()
+            .expect("provider tabs are enabled")
+            .id
+            .clone();
         self.tabs.replace_tabs(tabs);
         if let Some(index) = self.tabs.tabs().iter().position(|tab| tab.id == active) {
             self.tabs.select(index);
@@ -503,14 +500,31 @@ impl Panel {
             .replace(choices.model.without_tab_bar(), choices.actions);
     }
     fn form(&self) -> Option<&Form> {
-        self.forms.get(&self.tabs.active_tab().id)
+        self.forms.get(
+            &self
+                .tabs
+                .active_tab()
+                .expect("provider tabs are enabled")
+                .id,
+        )
     }
     fn form_mut(&mut self) -> Option<&mut Form> {
-        self.forms.get_mut(&self.tabs.active_tab().id)
+        self.forms.get_mut(
+            &self
+                .tabs
+                .active_tab()
+                .expect("provider tabs are enabled")
+                .id,
+        )
     }
     pub(crate) fn select_tab(&mut self, index: usize) -> ConfigEditorOutcome {
-        self.tabs.select(index);
-        if self.tabs.active_index() == 1 {
+        if self.tabs.select(index) == TabListInputOutcome::Unhandled {
+            return ConfigEditorOutcome::Consumed;
+        }
+        if let Some(form) = self.form_mut() {
+            form.focus(form.focus);
+        }
+        if self.tabs.active_index() == Some(1) {
             ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription)
         } else {
             ConfigEditorOutcome::Consumed
@@ -529,12 +543,13 @@ impl Panel {
         {
             self.tabs
                 .handle_key(KeyEvent::new(key.code, KeyModifiers::NONE));
-            return self.select_tab(self.tabs.active_index());
+            return self.select_tab(self.tabs.active_index().expect("provider tabs are enabled"));
         }
         if self.focus == PanelFocus::Tabs {
             match self.tabs.handle_focused_key(key) {
                 FocusedTabListInputOutcome::ActiveChanged => {
-                    return self.select_tab(self.tabs.active_index());
+                    return self
+                        .select_tab(self.tabs.active_index().expect("provider tabs are enabled"));
                 }
                 FocusedTabListInputOutcome::EnterContent
                 | FocusedTabListInputOutcome::FocusNext => self.focus = PanelFocus::Content,
@@ -546,7 +561,7 @@ impl Panel {
             }
             return ConfigEditorOutcome::Consumed;
         }
-        if self.tabs.active_index() == 1 {
+        if self.tabs.active_index() == Some(1) {
             if key.code == KeyCode::Esc || key.code == KeyCode::BackTab {
                 self.focus = PanelFocus::Tabs;
                 return ConfigEditorOutcome::Consumed;
@@ -567,8 +582,24 @@ impl Panel {
             return ConfigEditorOutcome::Consumed;
         }
         let form = self.form_mut().expect("API tab owns a form");
+        if let Some(field) = form.field_mut() {
+            match field.handle_key(key) {
+                TextFieldOutcome::Submit => return self.confirm(),
+                TextFieldOutcome::Consumed => return ConfigEditorOutcome::Consumed,
+                TextFieldOutcome::Unhandled => {}
+            }
+        }
         match key.code {
-            KeyCode::Esc if form.editing => form.cancel_edit(),
+            KeyCode::Esc if form.protocol_editing => {
+                form.protocol = form
+                    .saved
+                    .custom
+                    .as_ref()
+                    .map_or(CustomProviderProtocolDto::Responses, |custom| {
+                        custom.protocol
+                    });
+                form.protocol_editing = false;
+            }
             KeyCode::Esc => self.focus = PanelFocus::Tabs,
             KeyCode::BackTab => {
                 if form.move_focus(Direction::Previous) == FieldFocusOutcome::BeforeFirst {
@@ -580,15 +611,15 @@ impl Panel {
                     self.focus = PanelFocus::Tabs;
                 }
             }
-            KeyCode::Up if !form.editing => {
+            KeyCode::Up if !form.editing() => {
                 if form.move_focus(Direction::Previous) == FieldFocusOutcome::BeforeFirst {
                     self.focus = PanelFocus::Tabs;
                 }
             }
-            KeyCode::Down if !form.editing => {
+            KeyCode::Down if !form.editing() => {
                 form.move_focus(Direction::Next);
             }
-            KeyCode::Left | KeyCode::Right if form.focus == 3 => {
+            KeyCode::Left | KeyCode::Right if form.focus == 3 && form.editing() => {
                 form.protocol = match form.protocol {
                     CustomProviderProtocolDto::Responses => {
                         CustomProviderProtocolDto::ChatCompletions
@@ -598,12 +629,7 @@ impl Panel {
                     }
                 };
             }
-            KeyCode::Enter => return self.confirm(),
-            _ if form.editing => {
-                if let Some(field) = form.field_mut() {
-                    field.handle_key(key);
-                }
-            }
+            KeyCode::Enter if form.focus >= 3 => return self.confirm(),
             _ => {}
         }
         ConfigEditorOutcome::Consumed
@@ -611,10 +637,8 @@ impl Panel {
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         if self.pending.is_none() && self.focus == PanelFocus::Content {
             if let Some(form) = self.form_mut() {
-                if form.editing {
-                    if let Some(field) = form.field_mut() {
-                        field.handle_paste(pasted);
-                    }
+                if let Some(field) = form.field_mut() {
+                    field.handle_paste(pasted);
                 }
             }
         }
@@ -622,8 +646,8 @@ impl Panel {
     fn confirm(&mut self) -> ConfigEditorOutcome {
         let form = self.form_mut().expect("API tab owns a form");
         let revision = form.revision;
-        if form.focus < 4 && !form.editing {
-            form.focus(form.focus);
+        if form.focus == 3 && !form.protocol_editing {
+            form.protocol_editing = true;
             return ConfigEditorOutcome::Consumed;
         }
         if form.draft && form.focus < 4 {
@@ -631,7 +655,7 @@ impl Panel {
             match form.focus {
                 0 => {
                     if form.name.query().trim().is_empty() {
-                        form.message = "Provider name is required".into();
+                        form.fail("Provider name is required".into());
                         return ConfigEditorOutcome::Consumed;
                     }
                     form.saved.custom = Some(CustomProviderConfigDto {
@@ -641,13 +665,12 @@ impl Panel {
                 }
                 1 => {
                     if let Err(message) = form.config() {
-                        form.message = message;
+                        form.fail(message);
                         return ConfigEditorOutcome::Consumed;
                     }
                     form.saved.base_url =
                         Some(form.url.query().trim().trim_end_matches('/').into());
                 }
-                2 => *form.confirmed_key = form.key.query().into(),
                 3 => {
                     if let Some(custom) = &mut form.saved.custom {
                         custom.protocol = form.protocol;
@@ -656,20 +679,20 @@ impl Panel {
                 _ => {}
             }
             form.message.clear();
-            form.next();
+            form.accept();
             return ConfigEditorOutcome::Consumed;
         }
         let config = match form.config() {
             Ok(config) => config,
             Err(message) => {
-                form.message = message;
+                form.fail(message);
                 return ConfigEditorOutcome::Consumed;
             }
         };
         let key = ((form.draft || form.focus == 2) && !form.key.query().is_empty())
             .then(|| ProviderApiKeyEdit::new(config.provider.clone(), form.key.query().into()));
         if !form.draft && form.focus < 4 && config == form.saved && key.is_none() {
-            form.next();
+            form.accept();
             return ConfigEditorOutcome::Consumed;
         }
         let operation = if form.focus == 4 && !form.draft {
@@ -678,6 +701,7 @@ impl Panel {
             Operation::Save
         };
         form.message = if operation == Operation::FetchModels {
+            form.models.clear();
             "Fetching models…"
         } else {
             "Saving…"
@@ -706,8 +730,7 @@ impl Panel {
         match reply.result {
             Err(message) => {
                 if let Some(form) = self.forms.get_mut(&id) {
-                    form.message = message;
-                    form.focus(form.focus);
+                    form.fail(message);
                 }
             }
             Ok((choices, models)) => {
@@ -717,7 +740,6 @@ impl Panel {
                     form.saved = request.config;
                     form.draft = false;
                     if request.key.is_some() {
-                        form.key_saved = true;
                         form.key = input(
                             "",
                             "Key saved · Enter a new key to replace",
@@ -728,6 +750,10 @@ impl Panel {
                         form.models.clear();
                     }
                     form.message = match models {
+                        Some(Ok(models)) if models.is_empty() => {
+                            form.models.clear();
+                            "Failed to fetch models · Provider returned no models".into()
+                        }
                         Some(Ok(models)) => {
                             let message = format!(
                                 "{} models fetched · Invocation not verified",
@@ -736,14 +762,14 @@ impl Panel {
                             form.models = models;
                             message
                         }
-                        Some(Err(message)) => message,
+                        Some(Err(message)) => {
+                            form.models.clear();
+                            message
+                        }
                         None => "Saved · Connection not verified".into(),
                     };
-                    if was_draft {
-                        form.confirmed_key.clear();
-                    }
                     if request.operation == Operation::Save {
-                        form.next();
+                        form.accept();
                     }
                 }
                 if was_draft {
@@ -848,31 +874,35 @@ impl Panel {
                 context.foreground()
             });
             frame.render_widget(
-                Paragraph::new(label).style(style),
+                Paragraph::new(format!(
+                    "{}{label}",
+                    crate::render::selection_marker(focused)
+                ))
+                .style(style),
                 Rect::new(area.x, area.y + y, area.width, 1),
             );
             let field_area = Rect::new(area.x, area.y + y + 1, area.width, h.saturating_sub(1));
             match index {
                 0 | 1 | 2 => {
-                    let mut input = match index {
-                        0 => form.name.clone(),
-                        1 => form.url.clone(),
-                        _ => form.key.clone(),
+                    let field = match index {
+                        0 => &form.name,
+                        1 => &form.url,
+                        _ => &form.key,
                     };
-                    input.set_input_active(
-                        focused && form.editing && !(index == 1 && form.official()),
-                    );
-                    search_box::draw(frame, field_area, &input, focused, false, context);
+                    text_field::draw(frame, field_area, field, focused, context);
                 }
                 3 => {
                     let value = match form.protocol {
-                        CustomProviderProtocolDto::Responses => "Responses   ← / → to change",
-                        CustomProviderProtocolDto::ChatCompletions => {
-                            "Chat Completions   ← / → to change"
-                        }
+                        CustomProviderProtocolDto::Responses => "Responses",
+                        CustomProviderProtocolDto::ChatCompletions => "Chat Completions",
                     };
-                    let input = input(value, "", InputVisibility::Visible);
-                    search_box::draw(frame, field_area, &input, focused, false, context);
+                    let value = if focused && form.editing() {
+                        format!("{value} ← / → to change")
+                    } else {
+                        value.into()
+                    };
+                    let input = input(&value, "", InputVisibility::Visible);
+                    text_field::draw(frame, field_area, &input, focused, context);
                 }
                 _ => {}
             }

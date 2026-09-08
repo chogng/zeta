@@ -27,6 +27,9 @@ use zeta_app_server_protocol::protocol::initialize::InitializeResult;
 use zeta_app_server_protocol::protocol::initialize::ProtocolVersion;
 use zeta_app_server_protocol::protocol::initialize::ServerCapabilities;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
+use zeta_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
+use zeta_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
+use zeta_app_server_protocol::protocol::provider::ProviderModelsListResult;
 use zeta_app_server_protocol::protocol::resources::ResourceMetadataParams;
 use zeta_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use zeta_app_server_protocol::protocol::resources::ResourceReadParams;
@@ -257,7 +260,10 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
-        capabilities.contracts.insert("memoryDiagnostics".into(), zeta_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 });
+        capabilities.contracts.insert(
+            "memoryDiagnostics".into(),
+            zeta_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+        );
         if self.automation.is_some() {
             capabilities.contracts.insert(
                 "automation".into(),
@@ -283,10 +289,20 @@ impl AppServer {
     }
 
     pub(super) fn provider_models_list(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: zeta_app_server_protocol::protocol::provider::ProviderModelsListParams = decode(params)?;
+        let params: zeta_app_server_protocol::protocol::provider::ProviderModelsListParams =
+            decode(params)?;
         let provider = zeta_protocol::ProviderId::new(params.provider)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-        result(&ModelListResult { models: self.model_catalog.refresh(&provider).map_err(core_error)? })
+        let response = match self.model_catalog.refresh(&provider) {
+            Ok(models) if models.is_empty() => ProviderModelsListResult::Empty,
+            Ok(models) => ProviderModelsListResult::Models { models },
+            Err(error) => ProviderModelsListResult::Failed {
+                failure: ProviderModelsListFailureDto {
+                    code: provider_models_failure_code(error),
+                },
+            },
+        };
+        result(&response)
     }
 
     /// Routes one canonical mutation through the owning Session aggregate.
@@ -1460,6 +1476,35 @@ impl AppServer {
             .map_err(core_error)?;
         self.updates.publish_thread(thread_id, &updates);
         Ok(())
+    }
+}
+
+fn provider_models_failure_code(
+    error: crate::model_catalog::ModelCatalogRefreshError,
+) -> ProviderModelsListFailureCodeDto {
+    use crate::model_catalog::ModelCatalogRefreshError;
+    match error {
+        ModelCatalogRefreshError::Authentication => {
+            ProviderModelsListFailureCodeDto::Authentication
+        }
+        ModelCatalogRefreshError::Permission => ProviderModelsListFailureCodeDto::Permission,
+        ModelCatalogRefreshError::Unsupported => ProviderModelsListFailureCodeDto::Unsupported,
+        ModelCatalogRefreshError::RateLimited => ProviderModelsListFailureCodeDto::RateLimited,
+        ModelCatalogRefreshError::Unreachable => ProviderModelsListFailureCodeDto::Unreachable,
+        ModelCatalogRefreshError::ProviderUnavailable => {
+            ProviderModelsListFailureCodeDto::ProviderUnavailable
+        }
+        ModelCatalogRefreshError::InvalidRequest => {
+            ProviderModelsListFailureCodeDto::InvalidRequest
+        }
+        ModelCatalogRefreshError::InvalidResponse => {
+            ProviderModelsListFailureCodeDto::InvalidResponse
+        }
+        ModelCatalogRefreshError::InvalidConfiguration => {
+            ProviderModelsListFailureCodeDto::InvalidConfiguration
+        }
+        ModelCatalogRefreshError::Cancelled => ProviderModelsListFailureCodeDto::Cancelled,
+        ModelCatalogRefreshError::Unknown => ProviderModelsListFailureCodeDto::Unknown,
     }
 }
 

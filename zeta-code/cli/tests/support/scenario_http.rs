@@ -139,6 +139,7 @@ impl HttpResponse {
         }
     }
 
+    #[cfg(unix)]
     pub fn reasoning_tool_call(
         reasoning: &str,
         id: &str,

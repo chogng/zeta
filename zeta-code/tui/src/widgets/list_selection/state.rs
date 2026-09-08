@@ -567,13 +567,12 @@ impl ListSelectionState {
                     || bindings::TAB_PREVIOUS.matches(key)) =>
             {
                 if let Some(id) = self.selected_item_id() {
-                    let adjustment = if bindings::LEFT.matches(key)
-                        || bindings::TAB_PREVIOUS.matches(key)
-                    {
-                        ListSelectionAdjustment::Previous
-                    } else {
-                        ListSelectionAdjustment::Next
-                    };
+                    let adjustment =
+                        if bindings::LEFT.matches(key) || bindings::TAB_PREVIOUS.matches(key) {
+                            ListSelectionAdjustment::Previous
+                        } else {
+                            ListSelectionAdjustment::Next
+                        };
                     return ListSelectionInputOutcome::Adjust(id, adjustment);
                 }
             }
@@ -643,7 +642,7 @@ impl ListSelectionState {
     }
 
     pub(crate) fn active_tab(&self) -> &ListSelectionGroup {
-        self.tabs.active_tab()
+        self.tabs.active_tab().expect("list groups are enabled")
     }
 
     fn selected_item_id(&self) -> Option<ListSelectionItemId> {

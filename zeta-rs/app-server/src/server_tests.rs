@@ -276,31 +276,124 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
 }
 
 #[test]
+fn provider_models_rpc_distinguishes_models_empty_and_classified_failure() {
+    use crate::model_catalog::ModelCatalogRefreshError;
+    use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
+    struct Catalog(Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError>);
+    impl crate::model_catalog::ModelCatalog for Catalog {
+        fn refresh(
+            &self,
+            provider: &ProviderId,
+        ) -> Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError> {
+            assert_eq!(provider.as_str(), "openai");
+            self.0.clone()
+        }
+        fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
+            Ok(vec![])
+        }
+        fn configured_default(&self) -> Result<Option<ModelRef>, CoreError> {
+            Ok(None)
+        }
+    }
+    let model = model_ref("example");
+    let entry = ModelCatalogEntry::from_info(
+        model.clone(),
+        &zeta_protocol::ModelInfo::new(model.model, "Example"),
+        zeta_protocol::ModelOutputTransport::Unary,
+    );
+    for (value, expected) in [
+        (
+            Ok(vec![entry.clone()]),
+            serde_json::json!({"type":"models","models":[entry]}),
+        ),
+        (Ok(vec![]), serde_json::json!({"type":"empty"})),
+        (
+            Err(ModelCatalogRefreshError::Authentication),
+            serde_json::json!({"type":"failed","failure":{"code":"authentication"}}),
+        ),
+        (
+            Err(ModelCatalogRefreshError::Unsupported),
+            serde_json::json!({"type":"failed","failure":{"code":"unsupported"}}),
+        ),
+        (
+            Err(ModelCatalogRefreshError::Unreachable),
+            serde_json::json!({"type":"failed","failure":{"code":"unreachable"}}),
+        ),
+    ] {
+        let server = server().with_model_catalog(Arc::new(Catalog(value)));
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        let reply = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"provider/models/list","params":{"provider":"openai"}}),
+        );
+        assert_eq!(reply["result"], expected);
+        assert!(reply.get("error").is_none());
+    }
+}
+
+#[test]
 fn custom_provider_rpc_round_trips_protocol_and_stores_a_separate_key() {
     let directory = tempfile::tempdir().unwrap();
     let store = Arc::new(ConfigStore::open(directory.path().join("config.sqlite3")).unwrap());
-    let server = server().with_config_store(store).with_provider_credentials(Arc::new(
-        zeta_model_provider::ProviderCredentialService::new(zeta_model_provider_config::ProviderConfigRegistry::builtin(), Arc::new(MemorySecretStore::default())),
-    ));
+    let server = server()
+        .with_config_store(store)
+        .with_provider_credentials(Arc::new(
+            zeta_model_provider::ProviderCredentialService::new(
+                zeta_model_provider_config::ProviderConfigRegistry::builtin(),
+                Arc::new(MemorySecretStore::default()),
+            ),
+        ));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
-    let configured = call(&server, &mut connection, serde_json::json!({
-        "jsonrpc":"2.0","id":2,"method":"provider/configure","params":{
-            "commandId":"create-custom","expectedRevision":0,"config":{
-                "provider":"custom-example","custom":{"name":"Example","protocol":"responses"},"baseUrl":"https://example.test/v1","modelContext":{}
+    let configured = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"provider/configure","params":{
+                "commandId":"create-custom","expectedRevision":0,"config":{
+                    "provider":"custom-example","custom":{"name":"Example","protocol":"responses"},"baseUrl":"https://example.test/v1","modelContext":{}
+                }
             }
-        }
-    }));
+        }),
+    );
     assert!(configured.get("error").is_none(), "{configured}");
-    let saved = call(&server, &mut connection, serde_json::json!({"jsonrpc":"2.0","id":3,"method":"provider/apiKey/set","params":{"provider":"custom-example","apiKey":"test-key"}}));
+    let saved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"provider/apiKey/set","params":{"provider":"custom-example","apiKey":"test-key"}}),
+    );
     assert_eq!(saved["result"]["apiKeyConfigured"], true);
-    let catalog = call(&server, &mut connection, serde_json::json!({"jsonrpc":"2.0","id":4,"method":"provider/list","params":{}}));
+    let catalog = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"provider/list","params":{}}),
+    );
     let providers = catalog["result"]["providers"].as_array().unwrap();
-    assert!(providers.iter().any(|provider| provider["provider"] == "custom-example" && provider["displayName"] == "Example" && provider["apiKeyConfigured"] == true));
-    assert!(providers.iter().any(|provider| provider["provider"] == "openai" && provider["apiKeyConfigured"] == false));
+    assert!(
+        providers
+            .iter()
+            .any(|provider| provider["provider"] == "custom-example"
+                && provider["displayName"] == "Example"
+                && provider["apiKeyConfigured"] == true)
+    );
+    assert!(
+        providers
+            .iter()
+            .any(|provider| provider["provider"] == "openai"
+                && provider["apiKeyConfigured"] == false)
+    );
     assert!(!catalog.to_string().contains("test-key"));
-    let config = call(&server, &mut connection, serde_json::json!({"jsonrpc":"2.0","id":5,"method":"config/read","params":{}}));
-    assert_eq!(config["result"]["providers"]["custom-example"]["custom"]["protocol"], "responses");
+    let config = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"config/read","params":{}}),
+    );
+    assert_eq!(
+        config["result"]["providers"]["custom-example"]["custom"]["protocol"],
+        "responses"
+    );
     assert!(!config.to_string().contains("test-key"));
 }
 

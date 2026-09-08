@@ -82,6 +82,8 @@ pub struct AppServerSession {
 - initialize/ready/closing/closed 生命周期；
 - 显式 shutdown 与 task join。
 
+Windows stdio 输出通过 `zeta-utils-pty::CancellablePipeReader` 读取，连接关闭标记可以停止等待；即使后台服务仍持有管道写端，也不能阻塞客户端 shutdown。系统调用只保留在 PTY/管道工具 crate，客户端继续保持安全 Rust 边界。
+
 它向宿主提供两个运行时端点：
 
 ```rust

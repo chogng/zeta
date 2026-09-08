@@ -222,10 +222,10 @@ just pet click
 ```sh
 just check zeta-tui
 just test zeta-tui
-just test zeta-cli --test tui_real_scenarios
+just test-tui
 ```
 
-功能模块的测试检查状态、请求和完成结果；App 测试检查跨功能路由、优先级和退出；真实 PTY 场景检查完整 CLI/TUI 操作。上述命令是执行入口，不是本次通过记录。
+功能模块的测试检查状态、请求和完成结果；App 测试检查跨功能路由、优先级和退出；真实 PTY 场景检查完整 CLI/TUI 操作。`just test-tui` 先构建配套 daemon，Windows 与 Unix 使用同一宿主；可追加场景过滤器。上述命令是执行入口，不是本次通过记录。
 
 渲染测试使用 Ratatui 字符缓冲区与 `insta`；状态、协议和副作用仍需独立断言。固定尺寸，规范化动态路径和身份，逐项审查 `.snap.new` 后再接受，具体操作见[字符快照测试](../../.agents/skills/zeta-code-snapshot-testing/SKILL.md)。
 
@@ -246,12 +246,14 @@ just test zeta-cli --test tui_real_scenarios
 | Tmux、Zellij | 未实测；必须验证复用器与外层终端的组合，不能只验证外层 |
 | Dumb、Unknown | 没有兼容性承诺；未知身份与缺少交互能力不能等同于已验证的终端 |
 
-这轮验证发现两类边界问题：先绘制整批内容再集中换行会在 WezTerm 的 Windows ConPTY 路径丢失每批最后一行；清空并滚动整个主屏幕则会把 Welcome、补全、输入框和状态栏错误提交到回滚区。历史输出因此逐个借用顶行写入定稿单元并立即恢复原顶行，普通画面只绘制尚未定稿的尾部。协议测试会先放入交互内容，再断言回滚区只出现目标正文。只检查消息去重状态或最终画面都无法发现这一问题。
+这轮验证发现两类边界问题：先绘制整批内容再集中换行会在 WezTerm 的 Windows ConPTY 路径丢失每批最后一行；清空并滚动整个主屏幕则会把 Welcome、补全、输入框和状态栏错误提交到回滚区。先前实现因此逐个借用顶行写入定稿单元并恢复原顶行。issue #4 修复后，Welcome 和定稿正文从交互区域起点顺序追加；屏幕写满后滚动，交互区域移到正文之后。协议测试会先放入交互内容，再断言回滚区只出现目标正文。只检查消息去重状态或最终画面都无法发现这一问题。
 
 可重复验证使用同一份生产输出，避免为不同终端另写一套模拟输出算法：
 
-1. 在仓库根目录生成协议样本：PowerShell 设置 `$env:ZETA_TUI_HISTORY_FIXTURES = "$PWD/output/terminal-history"`，然后执行 `just test zeta-tui --lib history_compatibility_corpus`。完成后移除这个环境变量。测试只替换终端尺寸查询，保留正式的 Fullscreen 与 Crossterm 输出路径。
+1. 在仓库根目录生成协议样本：PowerShell 设置 `$env:ZETA_TUI_HISTORY_FIXTURES = "$PWD/output/terminal-history"`，然后执行 `just test zeta-tui --lib history_compatibility_corpus`。完成后移除这个环境变量。测试只替换终端尺寸查询，调用生产追加函数和 Crossterm 输出路径；样本用整屏大小的区域覆盖最小终端边界，实际产品使用按内容申请高度的区域。
 2. 在待测终端调整到样本尺寸，执行 `python zeta-code/tui/tests/terminal_history.py replay output/terminal-history 80x24-120.ansi`，保持程序等待输入。导出包含回滚区的 UTF-8 纯文本，执行 `python zeta-code/tui/tests/terminal_history.py verify output/terminal-history 80x24-120.ansi --capture <导出文件>`。WezTerm 可使用 `wezterm cli get-text --pane-id <编号> --start-line -10000` 导出。再运行 `80x24-1.ansi` 验证短内容。
 3. 验证 xterm.js 时，将所测版本的 `xterm.js` 与 `xterm.css` 放到样本目录，用 `python -m http.server 8779 --bind 127.0.0.1 --directory output/terminal-history` 提供本地页面。用 Playwright CLI 打开该地址，再运行 `run-code --filename zeta-code/tui/tests/terminal_history.js`。脚本读取全部六组样本，检查旧 shell 内容、所有正文标记恰好一次且顺序正确、缩放后内容完整，以及关闭鼠标捕获时滚轮只移动终端回滚区且不产生按键输入。
 
 样本覆盖 80×24、40×5、12×3、120×40、12×1，以及不足一屏的短内容；长内容有 120 个含中文和 emoji 的标记。验证结果只覆盖样本中实际执行的行为。面板增强开关、会话恢复分页、流式定稿与去重另外由对应的应用状态和协议测试负责，不能用这些样本替代。
+
+2026-09-08 的追加修复通过 Windows ConPTY 实际事件循环与 Chromium 中 xterm.js 的字符缓冲区检查；范围和命令见 [issue #4 验收](../docs/changes/2026-09-08-terminal-append.md)。这不扩大上表未实测的终端范围。
