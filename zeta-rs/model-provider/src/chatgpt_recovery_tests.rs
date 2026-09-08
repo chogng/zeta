@@ -201,7 +201,7 @@ fn chatgpt_stops_after_one_recovery_attempt() {
     let (_home, client, model) = fixture(ResponseCase::Denied);
     assert!(matches!(
         model.invoke(&request()),
-        Err(ModelProviderError::AuthFailed(_))
+        Err(ModelProviderError::Api(zeta_api::ApiError::HttpStatus(401)))
     ));
     assert_eq!(client.calls.lock().unwrap().len(), 3);
     assert!(model.invoke(&request()).is_err());

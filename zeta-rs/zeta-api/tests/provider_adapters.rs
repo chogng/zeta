@@ -1217,16 +1217,12 @@ fn provider_status_and_error_bodies_map_to_semantic_failures() {
         (
             401,
             r#"{"error":{"message":"Incorrect API key"}}"#,
-            zeta_api::ApiError::AuthFailed(
-                r#"{"error":{"message":"Incorrect API key"}}"#.into(),
-            ),
+            zeta_api::ApiError::HttpStatus(401),
         ),
         (
             403,
             r#"{"error":{"status":"PERMISSION_DENIED"}}"#,
-            zeta_api::ApiError::AuthFailed(
-                r#"{"error":{"status":"PERMISSION_DENIED"}}"#.into(),
-            ),
+            zeta_api::ApiError::HttpStatus(403),
         ),
         (
             400,
@@ -1259,7 +1255,7 @@ fn provider_status_and_error_bodies_map_to_semantic_failures() {
                     .into(),
             ),
         ),
-        (529, "overloaded", zeta_api::ApiError::Overloaded),
+        (529, "overloaded", zeta_api::ApiError::HttpStatus(529)),
     ];
 
     for (status, body, expected) in cases {

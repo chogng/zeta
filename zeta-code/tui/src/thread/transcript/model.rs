@@ -4,6 +4,7 @@ use super::history_cell::CellView;
 use super::history_cell::ContentCell;
 use super::history_cell::HistoryCell;
 use super::history_cell::LocalCommandCell;
+use crate::thread::presentation::present_turn_error;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::MessageRole;
 use std::borrow::Cow;
@@ -764,7 +765,10 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
             TranscriptCellBody::Content(ContentCell::new(MessageRole::Plan, present_plan(plan)))
         }
         ThreadTranscriptEntry::TurnError { error, .. } => {
-            TranscriptCellBody::Content(ContentCell::new(MessageRole::Error, error.message.clone()))
+            TranscriptCellBody::Content(ContentCell::new(
+                MessageRole::Error,
+                present_turn_error(error),
+            ))
         }
         ThreadTranscriptEntry::ToolOutput { .. } => {
             unreachable!("Tool output is routed into ExecCell")

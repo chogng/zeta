@@ -113,6 +113,7 @@ pub(crate) enum Event {
     TurnPlanChanged(Option<zeta_protocol::PlanUpdate>),
     PendingInteractionChanged(Option<(zeta_protocol::TurnId, zeta_protocol::RequestId)>),
     TurnCompleted,
+    TurnFailed,
     TurnInterrupted,
 }
 

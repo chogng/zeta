@@ -1581,3 +1581,28 @@ fn test_provider_registry() -> ProviderConfigRegistry {
         .unwrap();
     registry
 }
+
+#[test]
+fn missing_model_or_provider_is_a_configuration_failure_before_invocation() {
+    let provider = Arc::new(RecordingModelProvider::default());
+    let resolver = ModelProviderSnapshotResolver {
+        model_provider: provider.clone(),
+    };
+    for config in [
+        ResolvedConfig::default(),
+        ResolvedConfig {
+            preferred_model: Some(ModelRef::new(
+                ProviderId::new("openai-compatible").unwrap(),
+                ModelId::new("missing").unwrap(),
+            )),
+            ..ResolvedConfig::default()
+        },
+    ] {
+        let model = resolver.resolve(&config);
+        assert_eq!(
+            model.invoke(&zeta_protocol::ModelRequest::text("hello")),
+            Err(ModelProviderError::ConfigurationMissing)
+        );
+        assert!(provider.request.lock().unwrap().is_none());
+    }
+}

@@ -559,8 +559,9 @@ fn apply_active_turn_update(app: &mut App, update: ActiveTurnUpdate) {
         ActiveTurnUpdate::ActivityChanged(activity) => {
             app.update(ThreadEvent::TurnActivityChanged(activity));
         }
+        ActiveTurnUpdate::Failed => app.update(ThreadEvent::TurnFailed),
         ActiveTurnUpdate::Completed => app.update(ThreadEvent::TurnCompleted),
-        ActiveTurnUpdate::Failed(error) => app.update(ThreadEvent::FailureReported(error)),
+        ActiveTurnUpdate::FailureReported(error) => app.update(ThreadEvent::FailureReported(error)),
         ActiveTurnUpdate::Interrupted => app.update(ThreadEvent::TurnInterrupted),
         ActiveTurnUpdate::Unchanged => {}
     }

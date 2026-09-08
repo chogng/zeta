@@ -299,8 +299,11 @@ impl Provider {
             &attempt_client,
             cancellation,
         );
-        if matches!(response, Err(ModelProviderError::AuthFailed(_)))
-            && attempt_client.was_unauthorized()
+        if matches!(
+            response,
+            Err(ModelProviderError::AuthFailed(_)
+                | ModelProviderError::Api(zeta_api::ApiError::HttpStatus(401)))
+        ) && attempt_client.was_unauthorized()
         {
             check_cancellation(cancellation)?;
             if let Some(renewed) = self.target.recover_unauthorized(&target)? {
@@ -312,8 +315,11 @@ impl Provider {
                     &retry_client,
                     cancellation,
                 );
-                if matches!(response, Err(ModelProviderError::AuthFailed(_)))
-                    && retry_client.was_unauthorized()
+                if matches!(
+                    response,
+                    Err(ModelProviderError::AuthFailed(_)
+                        | ModelProviderError::Api(zeta_api::ApiError::HttpStatus(401)))
+                ) && retry_client.was_unauthorized()
                 {
                     self.target.note_rejected(&renewed);
                 }
@@ -351,8 +357,11 @@ impl Provider {
             cancellation,
             &mut attempt,
         );
-        if matches!(response, Err(ModelProviderError::AuthFailed(_)))
-            && !attempt.emitted
+        if matches!(
+            response,
+            Err(ModelProviderError::AuthFailed(_)
+                | ModelProviderError::Api(zeta_api::ApiError::HttpStatus(401)))
+        ) && !attempt.emitted
             && attempt_client.was_unauthorized()
         {
             check_cancellation(cancellation)?;
@@ -366,8 +375,11 @@ impl Provider {
                     cancellation,
                     &mut attempt,
                 );
-                if matches!(response, Err(ModelProviderError::AuthFailed(_)))
-                    && retry_client.was_unauthorized()
+                if matches!(
+                    response,
+                    Err(ModelProviderError::AuthFailed(_)
+                        | ModelProviderError::Api(zeta_api::ApiError::HttpStatus(401)))
+                ) && retry_client.was_unauthorized()
                 {
                     self.target.note_rejected(&renewed);
                 }
@@ -967,20 +979,24 @@ impl RegisteredModelInvoker {
 
 /// Returns a clear model error when Zeta cannot resolve a configured model runtime.
 pub struct UnavailableModel {
-    message: String,
+    error: ModelProviderError,
 }
 
 impl UnavailableModel {
     pub fn new(message: impl Into<String>) -> Self {
         Self {
-            message: message.into(),
+            error: ModelProviderError::Unavailable(message.into()),
         }
+    }
+
+    pub fn from_error(error: ModelProviderError) -> Self {
+        Self { error }
     }
 }
 
 impl ModelInvoker for UnavailableModel {
     fn invoke(&self, _: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
-        Err(ModelProviderError::Unavailable(self.message.clone()))
+        Err(self.error.clone())
     }
 }
 

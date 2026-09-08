@@ -4,13 +4,13 @@ expression: screen
 ---
 
     ▄  ▄     Zeta Code v0.1.0
-  ▗█▛██▜█▖   openai-compatible/zeta-real-scenario · Access unknown
+  ▗█▛██▜█▖   Automatic model · Access unknown
   ▝▜████▛▘   <FIXTURE>/workspace
     ▝  ▘
 
-> 触发 401 鉴权失败
+> hello
 
-● Authentication failed (401). Check your provider credentials in /config.
+● Check your provider and model configuration in /config.
 
 
 
@@ -32,5 +32,5 @@ expression: screen
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 >
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  zeta-real-scenario
+
   ⏸ ask permissions on

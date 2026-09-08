@@ -1700,8 +1700,8 @@ struct ModelProviderSnapshotResolver {
 impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
     fn resolve(&self, config: &ResolvedConfig) -> Arc<dyn ModelInvoker> {
         let Some(model_ref) = config.preferred_model.as_ref() else {
-            return Arc::new(UnavailableModel::new(
-                "model is not configured; configure a provider and set preferredModel",
+            return Arc::new(UnavailableModel::from_error(
+                zeta_model_provider::ModelProviderError::ConfigurationMissing,
             ));
         };
         let provider = config.selected_provider().cloned().or_else(|| {
@@ -1711,13 +1711,13 @@ impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
                 .then(|| ModelProviderConfig::new(model.provider.clone()))
         });
         let Some(provider) = provider else {
-            return Arc::new(UnavailableModel::new(
-                "preferred model provider is not configured",
+            return Arc::new(UnavailableModel::from_error(
+                zeta_model_provider::ModelProviderError::ConfigurationMissing,
             ));
         };
         self.model_provider
             .runtime(ModelRuntimeRequest::new(model_ref.clone(), provider))
-            .unwrap_or_else(|error| Arc::new(UnavailableModel::new(error.to_string())))
+            .unwrap_or_else(|error| Arc::new(UnavailableModel::from_error(error)))
     }
 }
 

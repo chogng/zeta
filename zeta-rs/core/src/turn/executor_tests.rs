@@ -1617,9 +1617,11 @@ fn retries_transient_model_failures_before_completing() {
     let (threads, thread_id, turn_id) = started_turn();
     let model = Arc::new(ScriptedModel::new([
         Err(CoreError::ModelTransient {
+            failure: zeta_protocol::StableTurnError::connection_failed(),
             retry_after_ms: None,
         }),
         Err(CoreError::ModelTransient {
+            failure: zeta_protocol::StableTurnError::connection_failed(),
             retry_after_ms: None,
         }),
         Ok(text_response("recovered")),
@@ -3526,5 +3528,34 @@ fn wait_for_flag(flag: &AtomicBool, message: &str) {
     while !flag.load(Ordering::Relaxed) {
         assert!(Instant::now() < deadline, "{message}");
         thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[test]
+fn model_failure_details_survive_retry_exhaustion() {
+    for stable in [
+        zeta_protocol::StableTurnError::rate_limited(),
+        zeta_protocol::StableTurnError::provider_http(500),
+        zeta_protocol::StableTurnError::connection_failed(),
+    ] {
+        let (threads, thread_id, turn_id) = started_turn();
+        let error = CoreError::ModelTransient {
+            failure: stable.clone(),
+            retry_after_ms: None,
+        };
+        let model = Arc::new(ScriptedModel::new(vec![Err(error.clone()); 4]));
+        let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+        assert_eq!(
+            executor
+                .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+                .err(),
+            Some(error)
+        );
+        assert_eq!(model.requests().len(), 4);
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        assert_eq!(
+            snapshot.turns.last().unwrap().failure.as_ref(),
+            Some(&stable)
+        );
     }
 }

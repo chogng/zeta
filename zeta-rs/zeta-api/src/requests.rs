@@ -98,8 +98,7 @@ pub(crate) fn response_error(response: &zeta_client::ClientResponse) -> ApiError
                 .and_then(|delay| u64::try_from(delay.as_millis()).ok())
                 .map(|delay| delay.min(60_000)),
         },
-        500..=599 => ApiError::Overloaded,
-        401 | 403 => ApiError::AuthFailed(provider_error_detail(response.body())),
+        status @ (401 | 403 | 500..=599) => ApiError::HttpStatus(status),
         400 => classify_provider_error(response.body(), ProviderErrorFallback::InvalidRequest),
         status => classify_provider_error(response.body(), ProviderErrorFallback::Status(status)),
     }

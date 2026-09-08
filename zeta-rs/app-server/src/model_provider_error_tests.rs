@@ -40,7 +40,7 @@ fn provider_failure_categories_cross_the_product_boundary_without_raw_details() 
         ),
         (
             ModelProviderError::Credential("raw credential detail".into()),
-            CoreError::ModelAuthFailed,
+            CoreError::ModelFailure(StableTurnError::provider_credentials()),
             "raw credential detail",
         ),
         (
@@ -69,6 +69,7 @@ fn transient_retry_delay_crosses_the_product_boundary_as_typed_metadata() {
             retry_after_ms: Some(1_250),
         })),
         CoreError::ModelTransient {
+            failure: StableTurnError::rate_limited(),
             retry_after_ms: Some(1_250),
         }
     );
@@ -288,5 +289,59 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
             "provider failure did not terminate"
         );
         thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[test]
+fn configuration_and_http_failures_keep_their_categories() {
+    let cases = [
+        (
+            ModelProviderError::ConfigurationMissing,
+            StableTurnError::model_configuration(),
+        ),
+        (
+            ModelProviderError::Credential("secret detail".into()),
+            StableTurnError::provider_credentials(),
+        ),
+        (
+            ModelProviderError::Api(ApiError::HttpStatus(401)),
+            StableTurnError::provider_http(401),
+        ),
+        (
+            ModelProviderError::Api(ApiError::HttpStatus(403)),
+            StableTurnError::provider_http(403),
+        ),
+        (
+            ModelProviderError::Api(ApiError::HttpStatus(404)),
+            StableTurnError::provider_http(404),
+        ),
+    ];
+    for (error, stable) in cases {
+        assert_eq!(
+            map_model_provider_error(error),
+            CoreError::ModelFailure(stable)
+        );
+    }
+    for (error, stable) in [
+        (
+            ApiError::HttpStatus(503),
+            StableTurnError::provider_http(503),
+        ),
+        (
+            ApiError::Transport("private endpoint".into()),
+            StableTurnError::connection_failed(),
+        ),
+        (
+            ApiError::Overloaded,
+            StableTurnError::provider_unavailable(),
+        ),
+    ] {
+        assert_eq!(
+            map_model_provider_error(error.into()),
+            CoreError::ModelTransient {
+                failure: stable,
+                retry_after_ms: None
+            }
+        );
     }
 }

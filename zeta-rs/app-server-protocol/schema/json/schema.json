@@ -27372,6 +27372,15 @@
         "code": {
           "$ref": "#/$defs/StableTurnErrorCode"
         },
+        "httpStatus": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "message": {
           "type": "string"
         },
@@ -27389,6 +27398,12 @@
     "StableTurnErrorCode": {
       "enum": [
         "modelInvocationFailed",
+        "modelConfiguration",
+        "providerCredentials",
+        "rateLimited",
+        "connectionFailed",
+        "providerUnavailable",
+        "providerHttp",
         "contextOverflow",
         "providerAuth",
         "invalidRequest",

@@ -903,7 +903,7 @@ impl TurnExecutor {
                         }
                         break (response, stream);
                     }
-                    Err(CoreError::ModelTransient { retry_after_ms }) if transient_attempt < 3 => {
+                    Err(CoreError::ModelTransient { retry_after_ms, .. }) if transient_attempt < 3 => {
                         wait_for_model_retry(cancellation, transient_attempt, retry_after_ms)?;
                         transient_attempt += 1;
                     }
@@ -1688,6 +1688,14 @@ impl ExecutionFailure {
 
     fn service(error: CoreError) -> Self {
         match error {
+            CoreError::ModelFailure(ref stable)
+            | CoreError::ModelTransient {
+                failure: ref stable,
+                ..
+            } => Self::Failed {
+                stable: stable.clone(),
+                error,
+            },
             CoreError::Cancelled(_) => Self::Cancelled(error),
             CoreError::PolicyCircuitBreaker(_) => Self::Interrupted(error),
             error @ CoreError::ModelContextOverflow => Self::Failed {

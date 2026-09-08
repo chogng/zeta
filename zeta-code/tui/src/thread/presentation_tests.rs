@@ -67,3 +67,35 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         error: (status == TurnStatus::Failed).then(StableTurnError::model_invocation_failed),
     }
 }
+
+#[test]
+fn configuration_errors_offer_config_and_request_errors_show_the_cause() {
+    for (error, expected) in [
+        (
+            StableTurnError::model_configuration(),
+            "Check your provider and model configuration in /config.",
+        ),
+        (
+            StableTurnError::provider_credentials(),
+            "Credentials unavailable. Check your provider credentials in /config.",
+        ),
+        (
+            StableTurnError::provider_http(401),
+            "Authentication failed (401). Check your provider credentials in /config.",
+        ),
+        (
+            StableTurnError::rate_limited(),
+            "Too many requests (429). Try again later.",
+        ),
+        (
+            StableTurnError::provider_http(500),
+            "Provider request failed (500). Try again later.",
+        ),
+        (
+            StableTurnError::connection_failed(),
+            "Could not connect to the provider. Check your network and service address.",
+        ),
+    ] {
+        assert_eq!(present_turn_error(&error), expected);
+    }
+}
