@@ -334,9 +334,9 @@ fn actual_tui_process_renders_an_http_failure_and_remains_usable() {
     fixture.write_config(&server.base_url());
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Tips for getting started");
+    process.wait_for_screen("ask permissions on");
     process.submit("触发真实 HTTP 500");
-    process.wait_for_stable_screen("Model invocation failed");
+    process.wait_for_stable_screen("Provider request failed (500). Try again later.");
     process.assert_snapshot("real/07-lifecycle/03-http-500");
     assert_eq!(server.request_count(), 4);
 

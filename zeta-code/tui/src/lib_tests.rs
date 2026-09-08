@@ -264,7 +264,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
 }
 
 #[test]
-fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
+fn failed_turn_shows_one_concise_error_on_failure_and_resume() {
     let turn_id = turn_id();
     let mut app = working_app();
     app.set_active_turn(turn_id.clone());
@@ -285,14 +285,43 @@ fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
         error: Some(StableTurnError::model_invocation_failed()),
     };
 
+    let thread = Thread {
+        session_id: SessionId::new("session_1").unwrap(),
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
+        title: "Thread".into(),
+        status: ThreadStatus::Active,
+        sequence: 3,
+        usage: Default::default(),
+        reference_cost: Default::default(),
+        goal: None,
+        turns: vec![turn.clone()],
+    };
+    let snapshot =
+        zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot::from_thread(&thread);
+    app.update(ThreadEvent::TranscriptSnapshotReceived(snapshot.clone()));
     apply_active_turn_snapshot(&mut app, &[turn]);
 
     assert_eq!(app.status(), &Status::Error);
-    let messages = app.messages();
-    let message = &messages.last().unwrap().text();
-    assert!(message.contains("configured model"));
-    assert!(!message.contains("StableTurnError"));
-    assert!(!message.contains("ModelInvocationFailed"));
+    assert_eq!(app.active_turn(), None);
+    let messages: Vec<_> = app
+        .messages()
+        .into_iter()
+        .filter(|message| message.role() == MessageRole::Error)
+        .collect();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].text(), "Request failed. Try again.");
+
+    let mut resumed = App::new();
+    resumed.update(ThreadEvent::TranscriptSnapshotReceived(snapshot));
+    let messages: Vec<_> = resumed
+        .messages()
+        .into_iter()
+        .filter(|message| message.role() == MessageRole::Error)
+        .collect();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].text(), "Request failed. Try again.");
 }
 
 #[test]

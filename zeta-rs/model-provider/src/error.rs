@@ -5,6 +5,7 @@ use zeta_secrets::SecretStoreError;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModelProviderError {
+    ConfigurationMissing,
     InvalidRequest(String),
     InvalidResponse(String),
     ContextOverflow(String),
@@ -24,6 +25,7 @@ pub enum ModelProviderError {
 impl fmt::Display for ModelProviderError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ConfigurationMissing => formatter.write_str("model or provider is not configured"),
             Self::InvalidRequest(message) => write!(formatter, "invalid model request: {message}"),
             Self::InvalidResponse(message) => {
                 write!(formatter, "invalid model response: {message}")
@@ -93,6 +95,7 @@ impl ModelProviderError {
             Self::Api(ApiError::Transport(_))
                 | Self::Api(ApiError::RateLimited { .. })
                 | Self::Api(ApiError::Overloaded)
+                | Self::Api(ApiError::HttpStatus(500..=599))
         )
     }
 

@@ -139,10 +139,10 @@ fn actual_tui_recovers_from_auth_and_rate_limit_failures() {
     ]);
     auth_fixture.write_config(&auth_server.base_url());
     let mut auth = TuiProcess::start(&auth_fixture, &[], LARGE_SIZE);
-    auth.wait_for_screen("Tips for getting started");
+    auth.wait_for_screen("ask permissions on");
     auth.type_text("触发 401 鉴权失败");
     auth.enter();
-    auth.wait_for_stable_screen("Model provider authentication failed");
+    auth.wait_for_stable_screen("Authentication failed (401).");
     auth.assert_snapshot("real/05-errors/00-auth-failure");
     assert_eq!(auth_server.request_count(), 1);
     auth.type_text("鉴权失败后继续下一轮");
@@ -161,10 +161,10 @@ fn actual_tui_recovers_from_auth_and_rate_limit_failures() {
     ]);
     rate_fixture.write_config(&rate_server.base_url());
     let mut rate = TuiProcess::start(&rate_fixture, &[], LARGE_SIZE);
-    rate.wait_for_screen("Tips for getting started");
+    rate.wait_for_screen("ask permissions on");
     rate.type_text("触发 429 限流和自动重试");
     rate.enter();
-    rate.wait_for_stable_screen("Model invocation failed");
+    rate.wait_for_stable_screen("Too many requests (429). Try again later.");
     rate.assert_snapshot("real/05-errors/02-rate-limit-retries-exhausted");
     assert_eq!(rate_server.request_count(), 4);
     rate.submit("限流失败后继续下一轮");
@@ -388,4 +388,15 @@ fn actual_tui_approval_modes_change_file_tool_authority() {
     assert_eq!(bypass_server.request_count(), 2);
     assert!(bypass_server.request_bodies()[1].contains("wrote"));
     bypass.quit();
+}
+
+#[test]
+fn actual_tui_missing_model_points_to_config() {
+    let fixture = Fixture::new();
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("ask permissions on");
+    process.submit("hello");
+    process.wait_for_stable_screen("Check your provider and model configuration in /config.");
+    process.assert_snapshot("real/05-errors/04-missing-model");
+    process.quit();
 }

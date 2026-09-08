@@ -19,7 +19,8 @@ pub(crate) enum TurnActivity {
 pub(crate) enum ActiveTurnUpdate {
     ActivityChanged(TurnActivity),
     Completed,
-    Failed(String),
+    Failed,
+    FailureReported(String),
     Interrupted,
     Unchanged,
 }
@@ -45,14 +46,12 @@ pub(crate) fn evaluate_active_turn(
             {
                 ActiveTurnUpdate::Completed
             } else {
-                ActiveTurnUpdate::Failed("turn completed without an agent message".into())
+                ActiveTurnUpdate::FailureReported("turn completed without an agent message".into())
             }
         }
         TurnStatus::Failed => {
             *active_turn = None;
-            ActiveTurnUpdate::Failed(turn.error.as_ref().map(present_turn_error).unwrap_or_else(
-                || "The request stopped before Zeta could finish. Please try again.".into(),
-            ))
+            ActiveTurnUpdate::Failed
         }
         TurnStatus::Interrupted => {
             *active_turn = None;
@@ -92,20 +91,40 @@ pub(crate) fn recover_active_turn(turns: &[Turn]) -> Option<TurnId> {
 
 pub(crate) fn present_turn_error(error: &StableTurnError) -> String {
     match error.code {
-        StableTurnErrorCode::ModelInvocationFailed => {
-            "Zeta couldn't reach the configured model. Check the model provider and credentials, \
-             then try again."
-                .into()
+        StableTurnErrorCode::ModelConfiguration => {
+            "Check your provider and model configuration in /config.".into()
         }
+        StableTurnErrorCode::ProviderCredentials => {
+            "Credentials unavailable. Check your provider credentials in /config.".into()
+        }
+        StableTurnErrorCode::RateLimited => "Too many requests (429). Try again later.".into(),
+        StableTurnErrorCode::ConnectionFailed => {
+            "Could not connect to the provider. Check your network and service address.".into()
+        }
+        StableTurnErrorCode::ProviderUnavailable => "Provider is busy. Try again later.".into(),
+        StableTurnErrorCode::ProviderHttp => match error.http_status {
+            Some(status) => {
+                let action = if error.retryable {
+                    "Try again later."
+                } else {
+                    "Check your provider and model in /config."
+                };
+                format!("Provider request failed ({status}). {action}")
+            }
+            None => "Provider request failed.".into(),
+        },
+        StableTurnErrorCode::ModelInvocationFailed => "Request failed. Try again.".into(),
         StableTurnErrorCode::ContextOverflow => {
             "The conversation is too large for the configured model. Compact the context or start \
              a new thread, then try again."
                 .into()
         }
         StableTurnErrorCode::ProviderAuth => {
-            "The model provider rejected the current credentials. Sign in again or update the \
-             provider credentials, then retry."
-                .into()
+            let status = error
+                .http_status
+                .map(|status| format!(" ({status})"))
+                .unwrap_or_default();
+            format!("Authentication failed{status}. Check your provider credentials in /config.")
         }
         StableTurnErrorCode::InvalidRequest => {
             "The model rejected this request as invalid. Adjust the request or model settings, then \

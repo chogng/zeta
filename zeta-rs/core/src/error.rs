@@ -6,11 +6,18 @@ pub enum CoreError {
     Cancelled(String),
     Context(String),
     Execution(String),
-    InvalidTransition { from: String, to: String },
+    InvalidTransition {
+        from: String,
+        to: String,
+    },
     InvalidInput(String),
     Journal(String),
     Model(String),
-    ModelTransient { retry_after_ms: Option<u64> },
+    ModelFailure(zeta_protocol::StableTurnError),
+    ModelTransient {
+        failure: zeta_protocol::StableTurnError,
+        retry_after_ms: Option<u64>,
+    },
     ModelContextOverflow,
     ModelAuthFailed,
     ModelInvalidRequest,
@@ -36,7 +43,8 @@ impl fmt::Display for CoreError {
             Self::InvalidInput(message) => write!(formatter, "invalid input: {message}"),
             Self::Journal(message) => write!(formatter, "journal error: {message}"),
             Self::Model(message) => write!(formatter, "model error: {message}"),
-            Self::ModelTransient { retry_after_ms } => match retry_after_ms {
+            Self::ModelFailure(failure) => formatter.write_str(&failure.message),
+            Self::ModelTransient { retry_after_ms, .. } => match retry_after_ms {
                 Some(delay) => write!(formatter, "transient model error; retry after {delay} ms"),
                 None => formatter.write_str("transient model error"),
             },

@@ -1814,6 +1814,12 @@ impl App {
             ThreadEvent::PendingInteractionChanged(pending) => {
                 self.chat_panel.reconcile_request(pending.as_ref());
             }
+            ThreadEvent::TurnFailed => {
+                self.status = Status::Error;
+                self.chat_panel.start_input();
+                self.chat_panel.clear_steers();
+                self.thread_presentations.active_mut().plan.replace(None);
+            }
             ThreadEvent::TurnCompleted => {
                 self.status = Status::Ready;
                 self.chat_panel.start_input();
