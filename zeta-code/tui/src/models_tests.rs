@@ -65,3 +65,28 @@ fn entry(provider: &str, model: &str, access: ModelAccess) -> ModelCatalogEntry 
         default_personality: None,
     }
 }
+
+#[test]
+fn context_capacity_comes_only_from_the_matching_catalog_entry() {
+    let mut selected = entry("provider", "model", ModelAccess::ApiKey);
+    selected.available_context_window = Some(90_000);
+    let catalog = ModelListResult {
+        models: vec![selected],
+    };
+    let summary = ModelSummary::from_catalog(
+        Some(ModelRefDto {
+            provider: "provider".into(),
+            model: "model".into(),
+        }),
+        Some(&catalog),
+    );
+    assert_eq!(summary.context_capacity(), Some(90_000));
+    let other = ModelSummary::from_catalog(
+        Some(ModelRefDto {
+            provider: "provider".into(),
+            model: "other".into(),
+        }),
+        Some(&catalog),
+    );
+    assert_eq!(other.context_capacity(), None);
+}

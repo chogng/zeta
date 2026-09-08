@@ -1017,8 +1017,7 @@ corepack pnpm run generate:protocol
 ## Issue 任务与 PR
 
 CLI/TUI 的 Issue 功能使用以下类型化接口。业务数据与协议源见
-[`issues.rs`](../zeta-rs/app-server-protocol/src/protocol/issues.rs)，行为和验收见
-[Issue 规格](../zeta-code/docs/spec/issues.md)。本轮候选尚在验收。
+[`issues.rs`](../zeta-rs/app-server-protocol/src/protocol/issues.rs)。
 
 | 方法 | 契约 |
 | --- | --- |

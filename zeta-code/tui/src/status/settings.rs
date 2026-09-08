@@ -14,10 +14,11 @@ pub(crate) enum StatusLineItem {
     Cpu,
     GitBranch,
     GitChanges,
+    Context,
 }
 
 impl StatusLineItem {
-    pub(crate) const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 9] = [
         Self::Permissions,
         Self::Model,
         Self::CacheHitRate,
@@ -26,10 +27,12 @@ impl StatusLineItem {
         Self::Cpu,
         Self::GitBranch,
         Self::GitChanges,
+        Self::Context,
     ];
 
     pub(crate) fn from_id(id: &str) -> Option<Self> {
         match id {
+            "context" => Some(Self::Context),
             "permissions" => Some(Self::Permissions),
             "model" => Some(Self::Model),
             "cache-hit-rate" => Some(Self::CacheHitRate),
@@ -44,6 +47,7 @@ impl StatusLineItem {
 
     pub(crate) fn id(self) -> &'static str {
         match self {
+            Self::Context => "context",
             Self::Permissions => "permissions",
             Self::Model => "model",
             Self::CacheHitRate => "cache-hit-rate",
@@ -57,6 +61,7 @@ impl StatusLineItem {
 
     pub(crate) fn label(self) -> &'static str {
         match self {
+            Self::Context => "Context",
             Self::Permissions => "Permissions",
             Self::Model => "Model",
             Self::CacheHitRate => "Cache hit rate",
@@ -70,6 +75,7 @@ impl StatusLineItem {
 
     pub(crate) fn description(self) -> &'static str {
         match self {
+            Self::Context => "Current Thread context usage",
             Self::Permissions => "Current permission mode",
             Self::Model => "Configured model",
             Self::CacheHitRate => "Cached input as a share of total input",
@@ -82,9 +88,33 @@ impl StatusLineItem {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum StatusLineStyle {
+    #[default]
+    Compact,
+    Rich,
+}
+
+impl StatusLineStyle {
+    pub(crate) const fn next(self) -> Self {
+        match self {
+            Self::Compact => Self::Rich,
+            Self::Rich => Self::Compact,
+        }
+    }
+
+    pub(crate) const fn id(self) -> &'static str {
+        match self {
+            Self::Compact => "compact",
+            Self::Rich => "rich",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct StatusLineSettings {
     items: Vec<StatusLineItem>,
+    style: StatusLineStyle,
     show_git_changes_as_diff: bool,
 }
 
@@ -114,6 +144,13 @@ impl StatusLineSettings {
                 "invalid [tui].showGitChangesAsDiff: expected a boolean".to_owned()
             })?;
         }
+        if let Some(value) = section.0.get("statusLineStyle") {
+            settings.style = match value.as_str() {
+                Some("compact") => StatusLineStyle::Compact,
+                Some("rich") => StatusLineStyle::Rich,
+                _ => return Err("invalid [tui].statusLineStyle: expected compact or rich".into()),
+            };
+        }
         Ok(settings)
     }
 
@@ -132,7 +169,19 @@ impl StatusLineSettings {
             SHOW_GIT_CHANGES_AS_DIFF_KEY.into(),
             Value::Bool(self.show_git_changes_as_diff),
         );
+        values.insert(
+            "statusLineStyle".into(),
+            Value::String(self.style.id().into()),
+        );
         FrontendConfigDto(values)
+    }
+
+    pub(crate) const fn style(&self) -> StatusLineStyle {
+        self.style
+    }
+
+    pub(crate) fn set_style(&mut self, style: StatusLineStyle) {
+        self.style = style;
     }
 
     pub(crate) fn enabled(&self, item: StatusLineItem) -> bool {
@@ -172,6 +221,7 @@ impl Default for StatusLineSettings {
                 StatusLineItem::GitChanges,
             ],
             show_git_changes_as_diff: false,
+            style: StatusLineStyle::default(),
         }
     }
 }

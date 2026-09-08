@@ -1,7 +1,6 @@
 # `zeta-ansi-escape`
 
-> `zeta code` 的跨 crate TUI ownership 见 [`zeta-code/docs/design/tui.md`](../docs/design/tui.md)；当前 transcript
-> 调用路径见 [`zeta-tui`](../tui/README.md)。本文拥有 ANSI 到 Ratatui 转换的当前实现契约、
+> 当前 transcript 调用路径见 [`zeta-tui`](../tui/README.md)。本文拥有 ANSI 到 Ratatui 转换的当前实现契约、
 > failure semantics、测试和扩展边界。
 
 `zeta-ansi-escape` 是 `zeta code` 产品边界内的窄 presentation adapter。它把可能包含 ANSI SGR

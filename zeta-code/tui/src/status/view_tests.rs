@@ -32,3 +32,60 @@ fn git_diff_statistics_use_the_theme_marker_colors() {
     assert_eq!(context.inserted_marker(), Color::Rgb(1, 2, 3));
     assert_eq!(context.removed_marker(), Color::Rgb(4, 5, 6));
 }
+
+#[test]
+fn expressive_status_line_renders_emoji_bars_and_permission_text() {
+    use crate::status::StatusLineItem;
+    use crate::status::StatusLineModel;
+    use crate::status::StatusLineRuntime;
+    use crate::status::StatusLineSettings;
+    use crate::status::StatusLineStyle;
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(
+            item,
+            matches!(item, StatusLineItem::Permissions | StatusLineItem::Model),
+        );
+    }
+    settings.set_style(StatusLineStyle::Rich);
+    let mut model = StatusLineModel::new();
+    model.apply_settings(settings);
+    model.apply_preferred_model(Some(
+        &zeta_app_server_protocol::protocol::config::ModelRefDto {
+            provider: "test".into(),
+            model: "model".into(),
+        },
+    ));
+    let runtime = StatusLineRuntime {
+        plan: Some((1, 3)),
+        ..Default::default()
+    };
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(48, 2)).unwrap();
+    terminal
+        .draw(|frame| {
+            super::draw(
+                frame,
+                frame.area(),
+                &model,
+                zeta_protocol::ApprovalMode::AskPermissions.into(),
+                runtime,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rows: Vec<String> = (0..2)
+        .map(|y| {
+            (0..48)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect();
+    insta::assert_snapshot!("expressive_status_line", rows.join("\n"));
+    let progress = model.top_segments_for_width(48, runtime);
+    let rendered = top_line(progress, crate::render::test_context());
+    assert!(rendered.spans.iter().any(|span| span.content == "███"
+        && span.style.fg == Some(crate::render::test_context().accent())));
+}

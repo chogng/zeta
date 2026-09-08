@@ -749,3 +749,45 @@ impl OperationClient for OfflineOperationClient {
         ))
     }
 }
+
+#[test]
+fn status_line_style_persists_and_rejects_stale_edits() {
+    let (mut client, state_root) = client();
+    let server_config = client.read_config().unwrap();
+    let terminal = crate::config::TerminalSettings::from_tui(&server_config.tui).unwrap();
+    let mut status_line = crate::status::StatusLineSettings::from_tui(&server_config.tui).unwrap();
+    status_line.set_style(crate::status::StatusLineStyle::Rich);
+    let edit = crate::config::ConfigEdit {
+        terminal,
+        status_line,
+        server_config,
+        providers: zeta_app_server_protocol::protocol::provider::ProviderListResult {
+            providers: vec![],
+        },
+    };
+    let result = crate::config::set_settings(&mut client, edit.clone()).unwrap();
+    assert_eq!(
+        result.status_line.style(),
+        crate::status::StatusLineStyle::Rich
+    );
+    assert!(crate::config::set_settings(&mut client, edit).is_err());
+    let revision = client.read_config().unwrap().revision;
+    crate::status::set_status_line(
+        &mut client,
+        crate::status::StatusLineEdit {
+            expected_revision: revision,
+            item: crate::status::StatusLineItem::Context,
+            enabled: true,
+        },
+    )
+    .unwrap();
+    let saved = client.read_config().unwrap();
+    assert_eq!(saved.tui.0["statusLineStyle"], serde_json::json!("rich"));
+    assert!(
+        crate::status::StatusLineSettings::from_tui(&saved.tui)
+            .unwrap()
+            .enabled(crate::status::StatusLineItem::Context)
+    );
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}

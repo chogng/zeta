@@ -1,6 +1,6 @@
 # 工程文档
 
-[系统架构](architecture.md) · [Zeta Code](../zeta-code/docs/README.md) · [app](../app/docs/README.md) · [用户文档](https://github.com/chogng/zeta-docs)
+[系统架构](architecture.md) · [Zeta Code](../zeta-code/README.md) · [app](../app/docs/README.md) · [用户文档](https://github.com/chogng/zeta-docs)
 
 普通开发直接完成实现和测试，按需更新现有文档；显式使用 `/develop` 时才采用[阶段产物与验收规则](development-workflow.md)。编写文档见[写作规范](../.github/instructions/documentation.instructions.md)。各模块的代码和测试入口在相邻 README。
 
@@ -76,7 +76,7 @@
 ## 平台与产品
 
 [`architecture.md`](architecture.md)（总入口）、[`zeta-rs-architecture.md`](zeta-rs-architecture.md)、
-[`zeta-code/docs/README.md`](../zeta-code/docs/README.md)、[`workbench-modes.md`](workbench-modes.md)、
+[`zeta-code/README.md`](../zeta-code/README.md)、[`workbench-modes.md`](workbench-modes.md)、
 [`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)、
 [`documentation-guidelines.md`](documentation-guidelines.md)
 

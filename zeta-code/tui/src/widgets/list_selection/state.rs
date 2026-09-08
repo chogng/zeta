@@ -15,6 +15,7 @@ use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
 use crate::widgets::tab_list;
 use crate::widgets::tab_list::FocusedTabListInputOutcome;
+use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
 
@@ -220,6 +221,11 @@ impl ListSelectionModel {
         self
     }
 
+    pub(crate) fn with_key_hint(mut self, binding: Keybinding) -> Self {
+        self.presentation.key_hints = self.presentation.key_hints.with_binding(binding);
+        self
+    }
+
     pub(crate) fn with_key_hint_note(mut self, note: impl Into<String>) -> Self {
         self.presentation.key_hints = self.presentation.key_hints.with_note(note);
         self
@@ -253,11 +259,18 @@ impl ListSelectionModel {
         self
     }
 
+    pub(super) fn show_tabs(&self) -> bool {
+        self.presentation.show_tabs
+    }
+
     pub(crate) fn key_hints(&self) -> KeyHints {
         let presentation = &self.presentation;
         let mut hints = KeyHints::new();
         if presentation.show_activation_hint {
             hints = hints.with_binding(presentation.activation);
+        }
+        if presentation.show_tabs {
+            hints = hints.with_binding(bindings::TABS);
         }
         if presentation.search.is_some() {
             hints = hints.with_binding(bindings::SEARCH);
@@ -483,6 +496,12 @@ impl ListSelectionState {
         if key.kind == KeyEventKind::Release {
             return ListSelectionInputOutcome::Consumed;
         }
+        if self.show_tabs() && bindings::TABS.matches(key) {
+            if self.tabs.handle_key(key) == TabListInputOutcome::ActiveChanged {
+                self.select_first_visible();
+            }
+            return ListSelectionInputOutcome::Consumed;
+        }
         if self.model.dismiss.matches(key) {
             if key.kind != KeyEventKind::Press {
                 return ListSelectionInputOutcome::Consumed;
@@ -574,18 +593,14 @@ impl ListSelectionState {
                 self.focus_search();
             }
             _ if self.focus == ListSelectionFocus::Items
-                && (bindings::LEFT.matches(key)
-                    || bindings::RIGHT.matches(key)
-                    || bindings::TAB_NEXT.matches(key)
-                    || bindings::TAB_PREVIOUS.matches(key)) =>
+                && (bindings::LEFT.matches(key) || bindings::RIGHT.matches(key)) =>
             {
                 if let Some(id) = self.selected_item_id() {
-                    let adjustment =
-                        if bindings::LEFT.matches(key) || bindings::TAB_PREVIOUS.matches(key) {
-                            ListSelectionAdjustment::Previous
-                        } else {
-                            ListSelectionAdjustment::Next
-                        };
+                    let adjustment = if bindings::LEFT.matches(key) {
+                        ListSelectionAdjustment::Previous
+                    } else {
+                        ListSelectionAdjustment::Next
+                    };
                     return ListSelectionInputOutcome::Adjust(id, adjustment);
                 }
             }

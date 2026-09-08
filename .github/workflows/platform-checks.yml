@@ -1,31 +1,8 @@
 name: Platform checks
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/platform-checks.yml"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "Justfile"
-      - "app/**"
-      - "build/**"
-      - "scripts/**"
-      - "third_party/v8/**"
-      - "zeta-code/**"
-      - "zeta-rs/**"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/platform-checks.yml"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "Justfile"
-      - "app/**"
-      - "build/**"
-      - "scripts/**"
-      - "third_party/v8/**"
-      - "zeta-code/**"
-      - "zeta-rs/**"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:

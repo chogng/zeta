@@ -164,23 +164,32 @@ fn saved_field_exits_editing_only_after_success_and_failure_keeps_input() {
 }
 
 #[test]
-fn focus_changes_do_not_save_and_drafts_survive_tab_switches() {
+fn tab_switches_from_editing_without_saving_and_preserves_drafts() {
     let mut panel = panel();
     key(&mut panel, KeyCode::Enter);
     panel.handle_paste("unconfirmed-key".into());
+    assert!(panel.key_hints().contains("Tab/Shift+Tab to switch"));
     assert!(matches!(
         key(&mut panel, KeyCode::Tab),
-        ConfigEditorOutcome::Consumed
+        ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription)
     ));
+    assert_eq!(panel.tabs.active_index(), Some(1));
+    assert_eq!(panel.focus, PanelFocus::Content);
+    key(&mut panel, KeyCode::BackTab);
+    assert_eq!(panel.form().unwrap().key.query(), "unconfirmed-key");
+    assert!(panel.form().unwrap().editing());
     assert!(panel.pending.is_none());
+    key(&mut panel, KeyCode::Esc);
+    assert!(panel.form().unwrap().key.query().is_empty());
     draft(&mut panel);
     let id = panel.tabs.active_tab().unwrap().id.clone();
-    panel.select_tab(0);
-    panel.select_tab(2);
+    key(&mut panel, KeyCode::Tab);
+    assert_eq!(panel.tabs.active_index(), Some(0));
+    key(&mut panel, KeyCode::BackTab);
     assert_eq!(panel.tabs.active_tab().unwrap().id, id);
     assert_eq!(panel.form().unwrap().name.query(), "My service");
     assert_eq!(panel.form().unwrap().key.query(), "test-key");
-    assert!(!panel.form().unwrap().editing());
+    assert!(panel.form().unwrap().editing());
     assert!(panel.pending.is_none());
 }
 
@@ -207,7 +216,8 @@ fn invalid_url_stays_in_field_and_escape_restores_confirmed_value() {
 fn late_creation_reply_does_not_switch_back_to_its_tab() {
     let mut panel = panel();
     let request = create(&mut panel);
-    panel.select_tab(0);
+    key(&mut panel, KeyCode::Tab);
+    assert_eq!(panel.tabs.active_index(), Some(0));
     success(&mut panel, &request);
     assert_eq!(panel.tabs.active_index(), Some(0));
     assert_eq!(panel.tabs.tabs().len(), 4);
@@ -233,7 +243,7 @@ fn existing_name_confirmation_saves_and_keeps_the_current_field_selected() {
     let created = create(&mut panel);
     success(&mut panel, &created);
     for _ in 0..panel.form().unwrap().focus {
-        key(&mut panel, KeyCode::BackTab);
+        key(&mut panel, KeyCode::Up);
     }
     key(&mut panel, KeyCode::Enter);
     panel.handle_paste(" renamed".into());

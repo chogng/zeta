@@ -50,6 +50,7 @@ pub(crate) enum ConfigSelectionAction {
     SetTerminalSettings(ConfigEdit),
     SetVimMode(ConfigEdit),
     SetShowGitChangesAsDiff(ConfigEdit),
+    SetStatusLineStyle(ConfigEdit),
     SetLanguage(ConfigEdit),
     SetLanguageServerMode(LanguageServerEdit),
     OpenProviderApiKey {
@@ -510,6 +511,28 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
+    let style_id = ListSelectionItemId::new("status-line-style");
+    let mut next_status_line = status_line.clone();
+    next_status_line.set_style(status_line.style().next());
+    actions.insert(
+        style_id.clone(),
+        ConfigSelectionAction::SetStatusLineStyle(ConfigEdit {
+            terminal,
+            status_line: next_status_line,
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
+    let (style_label, style_description) = match status_line.style() {
+        crate::status::StatusLineStyle::Compact => (
+            Message::ConfigStatusLineSimple,
+            Message::ConfigStatusLineSimpleDescription,
+        ),
+        crate::status::StatusLineStyle::Rich => (
+            Message::ConfigStatusLineExpressive,
+            Message::ConfigStatusLineExpressiveDescription,
+        ),
+    };
     let issue_merge_id = ListSelectionItemId::new("issue-merge-recommendations");
     let mut toggled_issues = config.issues.clone();
     toggled_issues.recommend_merge = !toggled_issues.recommend_merge;
@@ -593,6 +616,13 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigIssueMerge),
                 nls::text(language, Message::ConfigIssueMergeDescription),
                 checkbox(config.issues.recommend_merge),
+            ),
+        ListSelectionItem::new(nls::text(language, Message::ConfigStatusLineStyle))
+            .with_id(style_id)
+            .with_columns(
+                nls::text(language, Message::ConfigStatusLineStyle),
+                nls::text(language, style_description),
+                nls::text(language, style_label),
             ),
     ];
     let provider_items = provider_items(config, providers, &mut actions);

@@ -5,7 +5,7 @@ applyTo: "zeta-code/**"
 
 # Zeta Code CLI/TUI Guidelines
 
-Use [`zeta-code/docs/README.md`](../../zeta-code/docs/README.md) when documentation needs updating: `capabilities.md` records current support and gaps, `design/` explains architecture, and `spec/` defines behavior. [`zeta-code/tui/README.md`](../../zeta-code/tui/README.md) provides implementation and test entry points. Keep unimplemented proposals explicitly separate from current architecture. Only an explicit `/develop` invocation uses the [staged development workflow](../../docs/development-workflow.md) and registers artifacts in [`changes/README.md`](../../zeta-code/docs/changes/README.md). Ordinary tasks do not create change records. A specification, checked plan, or existing test file is not evidence that a feature has passed acceptance.
+Do not add feature overviews, UI behavior specifications, design notes, change records, plans, or verification reports under `zeta-code/docs`; keep implementation guidance and targeted test commands with the owning crate, and keep cross-client methods, parameters, results, notifications, errors, and machine-output contracts in their owning API documents. See [`zeta-code/README.md`](../../zeta-code/README.md) for the product entry point. A specification or existing test file is not evidence that behavior passed acceptance.
 
 `zeta-code` owns `zeta-cli`, `zeta-tui`, raw-mode lifecycle, Ratatui interaction, and CLI product composition. Do not move this product presentation or lifecycle into `zeta-rs`; shared backend semantics must first form a backend-neutral contract with a real non-TUI consumer.
 
