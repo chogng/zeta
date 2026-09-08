@@ -12,7 +12,7 @@
 just zeta
 ```
 
-[功能现状](../docs/capabilities.md)说明目前能做什么；[交互规格](../docs/spec/interaction.md)说明怎么操作；[架构设计](../docs/design/tui.md)说明各模块为什么这样分工。下面用于定位实现和运行验证。
+Zeta Code 的跨客户端契约从 [API 入口](../docs/README.md)查找；下面用于定位实现和运行验证。
 
 ## 文件与职责
 
@@ -79,7 +79,7 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 
 ### 长文本与图片
 
-粘贴先统一换行符。超过 1000 个 Unicode 字符时，以绑定原文的原子占位符显示，提交前展开；重复内容仍有独立身份，删除占位符同时移除绑定。输入区最多显示六行，最近 100 条纯文本提交用于历史召回。
+粘贴先统一换行符。超过 1000 个 Unicode 字符时，以绑定原文的原子占位符显示，提交前展开；重复内容仍有独立身份，删除占位符同时移除绑定。输入区最多显示六行；↑ / ↓ 在多行草稿内移动，到达首尾后从最近 100 条纯文本提交中召回上一条或下一条。
 
 本地 PNG、JPEG、GIF、WEBP 路径和 Ctrl+V 剪贴板图片使用同一附件流程。单图最多 16 MiB；文件列表优先选择可解码图片，否则读取 RGBA 位图并编码为 PNG。草稿显示 `[Image #N]`，删除后重新编号，文字和图片顺序保持不变。
 
@@ -95,7 +95,7 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 
 命令补全只替换光标所在的首行命令名，保留参数、图片和粘贴绑定。例如 `/mod provider/model` 补全为 `/model provider/model`。移除命令后的空格后可以重新编辑名称。未知命令或不接受参数却带参数的命令按普通消息处理；已注册产品命令没有实现路径时不能冒充成功。
 
-`/resume`、`/rewind`、`/add-dir`、`/fork`、`/model`、`/theme` 和 `/new` 支持行内参数；产品命令拒绝图片参数。命令回显和结果始终更新同一正文单元，输出格式见[正文输出](../docs/spec/transcript.md)。
+`/resume`、`/rewind`、`/add-dir`、`/fork`、`/model`、`/theme` 和 `/new` 支持行内参数；产品命令拒绝图片参数。命令回显和结果始终更新同一正文单元。
 
 文件补全只识别空白分隔的 `@token`，不处理邮箱中的 `@`。扫描遵守 Git 忽略规则、不跟随符号链接，并跳过 `.git`、`.zeta`、`node_modules` 和 `target`；结果按匹配分数与路径稳定排序，最多 50 项。请求同时校验查询文本和版本，关闭补全后释放搜索句柄。
 
@@ -103,7 +103,7 @@ TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需
 
 ## 面板怎样接入后端
 
-通用导航、搜索和返回行为见[面板键表](../docs/spec/commands.md#每个命令面板)。下面只列会影响请求实现的区别。
+下面只列会影响请求实现的导航、搜索和返回差异。
 
 | 功能 | 接入要求 |
 | --- | --- |
@@ -118,11 +118,11 @@ TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需
 
 Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到剪贴板后打开验证网址，按服务端间隔轮询；失败时取消授权流程。目录版本和连接代次用于拒绝过期操作。
 
-配置保存替换完整 `[tui]` 表，因此必须保留其他 TUI 设置。API key 只通过专用凭据接口保存，不进入普通配置或展示状态。快捷键候选先完成全量校验，保存失败时保留上一份有效规则；面板基础键与用户可重绑的应用动作范围见[快捷键规格](../docs/spec/commands.md#快捷键声明与保存)。
+配置保存替换完整 `[tui]` 表，因此必须保留其他 TUI 设置。API key 只通过专用凭据接口保存，不进入普通配置或展示状态。快捷键候选先完成全量校验，保存失败时保留上一份有效规则。
 
 `/config` 的 Providers 页提供独立的 `ChatGPT subscription` 入口，可查看 Zeta 账户和方案、启动设备码登录、取消登录或退出。验证地址与一次性代码显示在账户页；Esc 返回 Providers，待完成登录仍可重新进入查看和取消。TUI 使用共享账户接口，后端有 Codex 时只读复用，无 Codex 时负责续期和重新登录；缺失时生成兼容的 auth.json。复用模式断开不会退出 Codex；自管模式登出清除认证。重新连接仍有效的已有凭据无需浏览器。[认证存储与验收](../../zeta-rs/docs/changes/chatgpt-auth/verification.md)。
 
-资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。统计定义见[进程资源设计](../docs/design/process-resources.md)。
+资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。
 
 ## 正文更新与容量
 
@@ -144,7 +144,7 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 ## 产品支持边界
 
-正文支持普通折行和 fenced code block 高亮，尚未实现完整 Markdown、可点击 Markdown 链接或任意 HTML 展示。增强鼠标只处理可见的详情与补全覆盖浮层；占据布局高度的区域不接收 TUI 鼠标操作，终端自身的历史、文字选择和复制仍由终端处理。Vim 只改变输入框编辑。
+正文支持普通折行和 fenced code block 高亮，尚未实现完整 Markdown、可点击 Markdown 链接或任意 HTML 展示。内容区与详情滚动始终由 TUI 处理；增强鼠标另外提供点击、悬停、按下、拖选和自动复制，补全处理自己的事件。Vim 只改变输入框编辑。
 
 `/export [relative-path]` 导出当前已加载正文，路径限制在本机工作目录内，不能覆盖已有文件。Ctrl+O 复制最后一条 Agent 回复。
 
@@ -152,7 +152,7 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 ## TUI 主题文件
 
-交互事实由[交互契约](../docs/spec/interaction.md#交互状态)定义；内置颜色、字符与绘制优先级由[样式契约](../docs/spec/styles.md)定义。本节只拥有用户主题文件格式。
+本节只拥有用户主题文件格式。
 
 TUI 设置保存在 `<profile>/config.toml` 的根级 `[tui]` 表：
 
@@ -193,19 +193,19 @@ language = "en"
 
 ## 终端生命周期
 
-当前使用终端主屏幕。`TerminalSession::open` 先检测终端，获取模式、查询背景色，再创建 Ratatui 终端并清理当前绘制区域。
+当前使用终端备用屏幕。`TerminalSession::open` 先检测终端，获取模式、查询背景色，再创建覆盖整个终端的 Ratatui 页面；退出后恢复原 shell 画面。
 
-模式按以下顺序获取：原始输入模式 → 主屏幕准备 → 粘贴事件 → 焦点上报。只有增强鼠标开启且存在可见覆盖浮层时才启用鼠标捕获；事件循环还会检查鼠标是否落在浮层内，关闭开关后的残留鼠标事件也会被忽略。
+模式按以下顺序获取：原始输入模式 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。TUI 运行期间始终保留鼠标捕获以获得带位置的滚轮；关闭增强只停止点击、悬停、按下、拖选和自动复制。退出备用屏幕前恢复进入时的滚轮模式。
 
 `TerminalModeGuard` 记录每一步是否成功。任一步失败或退出时，逆序关闭鼠标、焦点上报、粘贴事件，结束当前屏幕并关闭原始输入模式。显式恢复可重复调用，Drop 再次清理不会重复操作；退出或挂起时还要重置光标颜色并显示光标。
 
-鼠标边界回归见 [event_loop_tests.rs](src/app/event_loop_tests.rs)。在窗口至少 40×12 的真实 PTY 中运行 `just test zeta-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，可验证固定面板不捕获、补全开启捕获、关闭浮层或增强开关后释放捕获。该场景不替代各终端自身的选文与复制兼容性验证。
+鼠标边界回归见 [event_loop_tests.rs](src/app/event_loop_tests.rs)。在窗口至少 40×12 的真实 PTY 中运行 `just test zeta-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，可验证整屏捕获、补全点击、增强开关关闭和退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
 
 Ctrl+Z 在 Unix 上先恢复终端，再发送 SIGTSTP；`fg` 后重新获取模式并重绘。SIGINT/SIGTERM 进入正常事件循环退出路径。新增模式时同时修改获取标记、逆序清理和 [session_tests.rs](src/terminal/session_tests.rs) 中的部分失败测试。
 
 ## 修改 Welcome 宠物
 
-只编辑 [pet.sprite](assets/welcome/pet.sprite) 中的终端格、帧和动作；[build.rs](build.rs) 在构建时校验并嵌入数据。规格见[Welcome 宠物](../docs/spec/welcome-pet.md)。
+只编辑 [pet.sprite](assets/welcome/pet.sprite) 中的终端格、帧和动作；[build.rs](build.rs) 在构建时校验并嵌入数据。
 
 ```sh
 just pet
@@ -227,33 +227,29 @@ just test-tui
 
 功能模块的测试检查状态、请求和完成结果；App 测试检查跨功能路由、优先级和退出；真实 PTY 场景检查完整 CLI/TUI 操作。`just test-tui` 先构建配套 daemon，Windows 与 Unix 使用同一宿主；可追加场景过滤器。上述命令是执行入口，不是本次通过记录。
 
+真实场景入口为 `zeta-code/cli/tests/tui_real_scenarios.rs`，只加载共享支持代码和以下四个模块；仍只生成一个集成测试程序。原测试函数名过滤器继续可用，也可用 `just test-tui config::` 按组运行。
+
+| 模块 | 场景归属 |
+| --- | --- |
+| [terminal.rs](../cli/tests/tui/terminal.rs) | PTY、终端历史、滚动、尺寸、输入区域及进程退出恢复 |
+| [conversation.rs](../cli/tests/tui/conversation.rs) | 对话、队列、审批、会话及对话中的 Git 状态 |
+| [config.rs](../cli/tests/tui/config.rs) | 设置、供应商、账户、语言与配置面板导航 |
+| [issues.rs](../cli/tests/tui/issues.rs) | Issue 选择、会话创建与 PR；目前仅 Unix 场景 |
+
+
 渲染测试使用 Ratatui 字符缓冲区与 `insta`；状态、协议和副作用仍需独立断言。固定尺寸，规范化动态路径和身份，逐项审查 `.snap.new` 后再接受，具体操作见[字符快照测试](../../.agents/skills/zeta-code-snapshot-testing/SKILL.md)。
 
 共享完整配置快照使用 `test_support::empty_config_snapshot`，测试只修改自己关心的字段。直接构造 `ThreadItem` 时显式填写各字段，避免测试助手隐藏实际业务要求。
 
-## 终端历史兼容性验证
+## 全屏终端兼容性验证
 
-`terminal-detection` 识别终端身份、颜色和复用器，不证明回滚区行为。完整输出是 TUI 的职责；保留上限由终端的回滚行数决定。以下保留先前文档记录的 2026-09-07 验证范围，本次整理没有重新执行这些验证。表中结论只适用于记录中的协议、引擎、版本和环境，不证明当前候选或所有宿主均通过。
+全屏模式不向终端回滚区写入对话。验证重点是备用屏幕进入与恢复、固定交互区、Transcript 内部滚动、Resize、鼠标捕获和字符选择。
 
-| 检测器中的终端或复用器 | 验证状态 |
+| 环境 | 当前证据 |
 | --- | --- |
-| VsCode | xterm.js 6.0.0 在 Chromium 中通过包含旧交互画面的协议回放、缩放和滚轮断言；未完成 VS Code 整个应用的端到端验证 |
-| WezTerm | 旧版整屏追加协议曾在 Windows 版 20240203-110809-5046fc22 的 ConPTY 路径通过；当前单元前插协议尚未重新实测 |
-| WindowsTerminal | 先前记录未实测；启动别名不构成通过证据 |
-| AppleTerminal、Iterm | 先前记录未实测；需补具体 macOS 终端验证 |
-| Ghostty、Warp、Kitty、Alacritty | 先前记录未实测；需补对应终端验证 |
-| Konsole、Gnome、Vte | 先前记录未实测；需补对应 Linux 终端验证 |
-| Tmux、Zellij | 未实测；必须验证复用器与外层终端的组合，不能只验证外层 |
-| Dumb、Unknown | 没有兼容性承诺；未知身份与缺少交互能力不能等同于已验证的终端 |
+| VS Code / Windows ConPTY | 100×32 与 60×16 的真实 CLI 场景通过输入、回复、Status 开关、固定输入区、Ctrl+Home/End 历史浏览和退出恢复 |
+| 其他环境 | Windows Terminal、WezTerm、macOS、Linux 终端及 tmux/Zellij 组合尚未重新验证 |
 
-这轮验证发现两类边界问题：先绘制整批内容再集中换行会在 WezTerm 的 Windows ConPTY 路径丢失每批最后一行；清空并滚动整个主屏幕则会把 Welcome、补全、输入框和状态栏错误提交到回滚区。先前实现因此逐个借用顶行写入定稿单元并恢复原顶行。issue #4 修复后，Welcome 和定稿正文从交互区域起点顺序追加；屏幕写满后滚动，交互区域移到正文之后。协议测试会先放入交互内容，再断言回滚区只出现目标正文。只检查消息去重状态或最终画面都无法发现这一问题。
+最小真实场景使用 `just test-tui actual_tui_input_keeps_hint_bar_without_blank_line_growth -- --nocapture`。多轮历史使用 `just test zeta-cli --test tui_real_scenarios actual_tui_multiple_commands_preserve_internal_history_and_fixed_input -- --nocapture`，它执行本地命令与 12 轮消息，核对 Welcome、本地命令和最后回复均可从同一 Transcript 到达。
 
-可重复验证使用同一份生产输出，避免为不同终端另写一套模拟输出算法：
-
-1. 在仓库根目录生成协议样本：PowerShell 设置 `$env:ZETA_TUI_HISTORY_FIXTURES = "$PWD/output/terminal-history"`，然后执行 `just test zeta-tui --lib history_compatibility_corpus`。完成后移除这个环境变量。测试只替换终端尺寸查询，调用生产追加函数和 Crossterm 输出路径；样本用整屏大小的区域覆盖最小终端边界，实际产品使用按内容申请高度的区域。
-2. 在待测终端调整到样本尺寸，执行 `python zeta-code/tui/tests/terminal_history.py replay output/terminal-history 80x24-120.ansi`，保持程序等待输入。导出包含回滚区的 UTF-8 纯文本，执行 `python zeta-code/tui/tests/terminal_history.py verify output/terminal-history 80x24-120.ansi --capture <导出文件>`。WezTerm 可使用 `wezterm cli get-text --pane-id <编号> --start-line -10000` 导出。再运行 `80x24-1.ansi` 验证短内容。
-3. 验证 xterm.js 时，将所测版本的 `xterm.js` 与 `xterm.css` 放到样本目录，用 `python -m http.server 8779 --bind 127.0.0.1 --directory output/terminal-history` 提供本地页面。用 Playwright CLI 打开该地址，再运行 `run-code --filename zeta-code/tui/tests/terminal_history.js`。脚本读取全部六组样本，检查旧 shell 内容、所有正文标记恰好一次且顺序正确、缩放后内容完整，以及关闭鼠标捕获时滚轮只移动终端回滚区且不产生按键输入。
-
-样本覆盖 80×24、40×5、12×3、120×40、12×1，以及不足一屏的短内容；长内容有 120 个含中文和 emoji 的标记。验证结果只覆盖样本中实际执行的行为。面板增强开关、会话恢复分页、流式定稿与去重另外由对应的应用状态和协议测试负责，不能用这些样本替代。
-
-2026-09-08 的追加修复通过 Windows ConPTY 实际事件循环与 Chromium 中 xterm.js 的字符缓冲区检查；范围和命令见 [issue #4 验收](../docs/changes/2026-09-08-terminal-append.md)。这不扩大上表未实测的终端范围。
+终端模式协议由 [session_tests.rs](src/terminal/session_tests.rs) 检查，正文分页、稳定锚点和长内容由 [正文绘制测试](src/thread/transcript/view/render_tests.rs) 检查。历史完整性不能再用终端回滚行数判断。

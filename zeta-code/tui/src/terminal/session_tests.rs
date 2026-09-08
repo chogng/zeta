@@ -5,13 +5,6 @@ use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;
 
-fn fullscreen_terminal(
-    width: u16,
-    height: u16,
-) -> ratatui::Terminal<ratatui::backend::TestBackend> {
-    ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap()
-}
-
 const ENABLE_RAW_MODE: &str = "enable raw mode";
 const BEGIN_SCREEN: &str = "begin screen";
 const ENABLE_BRACKETED_PASTE: &str = "enable bracketed paste";
@@ -22,201 +15,6 @@ const DISABLE_FOCUS_CHANGE: &str = "disable focus change";
 const DISABLE_BRACKETED_PASTE: &str = "disable bracketed paste";
 const FINISH_SCREEN: &str = "finish screen";
 const DISABLE_RAW_MODE: &str = "disable raw mode";
-
-#[test]
-fn inline_output_keeps_welcome_and_short_commands_on_screen_without_blank_history() {
-    use ratatui::Terminal;
-    use ratatui::TerminalOptions;
-    use ratatui::Viewport;
-    use ratatui::backend::TestBackend;
-    use ratatui::layout::Rect;
-    use ratatui::style::Style;
-    let mut terminal = Terminal::with_options(
-        TestBackend::new(80, 24),
-        TerminalOptions {
-            viewport: Viewport::Fixed(Rect::new(0, 0, 80, 6)),
-        },
-    )
-    .unwrap();
-    for text in ["WELCOME", "> /status", "status result", "> hello"] {
-        super::append_history(&mut terminal, 1, &mut |buffer, area, _| {
-            buffer.set_string(area.x, area.y, text, Style::default());
-        })
-        .unwrap();
-        terminal
-            .draw(|frame| {
-                let area = frame.area();
-                frame
-                    .buffer_mut()
-                    .set_string(area.x, area.y, "INPUT", Style::default());
-            })
-            .unwrap();
-    }
-    assert_eq!(terminal.backend().scrollback().area.height, 0);
-    for (y, expected) in ["WELCOME", "> /status", "status result", "> hello", "INPUT"]
-        .into_iter()
-        .enumerate()
-    {
-        let text = (0..80)
-            .map(|x| terminal.backend().buffer()[(x, y as u16)].symbol())
-            .collect::<String>();
-        assert_eq!(text.trim_end(), expected);
-    }
-    super::resize_viewport(&mut terminal, 12).unwrap();
-    super::resize_viewport(&mut terminal, 6).unwrap();
-    assert_eq!(terminal.backend().scrollback().area.height, 0);
-    assert_eq!(terminal.get_frame().area().y, 4);
-}
-
-#[test]
-fn transcript_output_protocol_keeps_the_main_buffer_and_existing_history() {
-    use crate::thread::transcript::CellView;
-    use crate::thread::transcript::MessageRole;
-    use ratatui::Terminal;
-    use ratatui::TerminalOptions;
-    use ratatui::Viewport;
-    use ratatui::backend::CrosstermBackend;
-    let mut output = Vec::new();
-    let message = CellView::plain(
-        MessageRole::Agent,
-        (0..120).map(|i| format!("history {i:03}\n")).collect(),
-    );
-    let (cell, rows) =
-        crate::thread::transcript::prepare_history(&message, 40, crate::render::test_context());
-    {
-        let backend = CrosstermBackend::new(&mut output);
-        let mut terminal = Terminal::with_options(
-            backend,
-            TerminalOptions {
-                viewport: Viewport::Inline(5),
-            },
-        )
-        .unwrap();
-        super::append_history(&mut terminal, rows, &mut |buffer, area, offset| {
-            cell.render(buffer, area, offset)
-        })
-        .unwrap();
-    }
-    let text = String::from_utf8(output.clone()).unwrap();
-    assert!(!text.contains("\x1b[3J"));
-    assert!(!text.contains("?1049"));
-    if let Some(path) = std::env::var_os("ZETA_TUI_HISTORY_TRACE") {
-        std::fs::write(path, output).unwrap();
-    }
-}
-
-#[test]
-fn history_longer_than_the_screen_survives_repainting_and_resize() {
-    use ratatui::style::Style;
-    let mut terminal = fullscreen_terminal(40, 5);
-    super::append_history(&mut terminal, 101, &mut |buffer, area, offset| {
-        buffer.set_string(
-            area.x,
-            area.y,
-            format!("message {offset} 中文 🚀"),
-            Style::default(),
-        );
-    })
-    .unwrap();
-    assert_eq!(terminal.backend().scrollback().area.height, 101);
-    terminal
-        .draw(|frame| {
-            frame
-                .buffer_mut()
-                .set_string(0, 0, "Config panel", Style::default());
-        })
-        .unwrap();
-    terminal.backend_mut().resize(40, 8);
-    terminal.autoresize().unwrap();
-    let history = terminal.backend().scrollback();
-    assert_eq!(history.area.height, 101);
-    for row in 0..101_u16 {
-        let text = (0..40)
-            .map(|column| history[(column, row)].symbol())
-            .collect::<String>();
-        let prefix = format!("message {row} ");
-        assert!(text.starts_with(&prefix), "{row}: {text}");
-        assert_eq!(history[(prefix.len() as u16, row)].symbol(), "中");
-        assert_eq!(history[(prefix.len() as u16 + 2, row)].symbol(), "文");
-    }
-}
-
-#[test]
-fn inserting_history_never_commits_the_interactive_frame() {
-    use ratatui::style::Style;
-
-    let mut terminal = fullscreen_terminal(40, 6);
-    terminal
-        .draw(|frame| {
-            frame
-                .buffer_mut()
-                .set_string(0, 0, "WELCOME", Style::default());
-            frame
-                .buffer_mut()
-                .set_string(0, 2, "SLASH COMPLETION", Style::default());
-            frame
-                .buffer_mut()
-                .set_string(0, 5, "> /statusline", Style::default());
-        })
-        .unwrap();
-
-    super::append_history(&mut terminal, 1, &mut |buffer, area, _| {
-        buffer.set_string(area.x, area.y, "> /statusline", Style::default());
-    })
-    .unwrap();
-
-    let history = terminal.backend().scrollback();
-    let text = (0..history.area.height)
-        .map(|row| {
-            (0..history.area.width)
-                .map(|column| history[(column, row)].symbol())
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert_eq!(
-        text.matches("> /statusline").count(),
-        1,
-        "unexpected scrollback: {text:?}"
-    );
-    assert!(!text.contains("WELCOME"));
-    assert!(!text.contains("SLASH COMPLETION"));
-}
-
-#[test]
-fn complete_styled_answer_is_written_to_scrollback_in_small_chunks() {
-    use crate::thread::transcript::CellView;
-    use crate::thread::transcript::MessageRole;
-    let text = (0..200)
-        .map(|row| format!("line {row:03} 中文\n"))
-        .collect::<String>();
-    let message = CellView::plain(MessageRole::Agent, text);
-    let (cell, rows) =
-        crate::thread::transcript::prepare_history(&message, 40, crate::render::test_context());
-    let mut terminal = fullscreen_terminal(40, 5);
-    super::append_history(&mut terminal, rows, &mut |buffer, area, offset| {
-        cell.render(buffer, area, offset);
-    })
-    .unwrap();
-    let history = terminal.backend().scrollback();
-    let lines = (0..history.area.height)
-        .map(|row| {
-            (0..history.area.width)
-                .map(|column| history[(column, row)].symbol())
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>();
-    for row in 0..200 {
-        assert_eq!(
-            lines
-                .iter()
-                .filter(|line| line.contains(&format!("line {row:03}")))
-                .count(),
-            1
-        );
-    }
-    assert!(lines.last().unwrap().trim().is_empty());
-}
 
 #[test]
 fn cursor_color_updates_once_and_resets_before_reapplication() {
@@ -314,11 +112,14 @@ fn mouse_mode_is_applied_idempotently() {
         .set_mouse_mode(MouseMode::TuiCapture)
         .expect("keep TUI pointer capture enabled");
     guard
-        .set_mouse_mode(MouseMode::TerminalSelection)
-        .expect("restore terminal selection");
+        .set_mouse_mode(MouseMode::TuiScroll)
+        .expect("keep capture for content scrolling");
+    guard
+        .set_mouse_mode(MouseMode::TuiScroll)
+        .expect("keep content scrolling enabled");
     guard
         .set_mouse_mode(MouseMode::TerminalSelection)
-        .expect("keep terminal selection restored");
+        .expect("restore terminal selection");
     drop(guard);
 
     assert_eq!(
@@ -364,14 +165,14 @@ fn explicit_restore_is_idempotent() {
 }
 
 #[test]
-fn suspend_cycle_reacquires_requested_mouse_capture() {
+fn suspend_cycle_reacquires_scroll_only_mouse_capture() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
 
     guard
-        .set_mouse_mode(MouseMode::TuiCapture)
-        .expect("enable TUI pointer capture");
+        .set_mouse_mode(MouseMode::TuiScroll)
+        .expect("enable content scrolling capture");
     guard.restore();
     guard.reacquire().expect("reacquire");
     drop(guard);
@@ -466,10 +267,13 @@ impl TerminalModeOperations for FakeOperations {
 }
 
 #[test]
-fn screen_output_preserves_main_buffer_and_leaves_a_prompt_line() {
+fn screen_protocol_disables_alternate_scroll_while_active_and_on_exit() {
     let mut output = Vec::new();
-    super::begin_screen(&mut output, 3).unwrap();
-    output.extend_from_slice(b"panel");
-    super::finish_screen(&mut output, 3).unwrap();
-    assert_eq!(output, b"\x1b[3;1H\r\n\r\n\r\n\x1b[1;1Hpanel\x1b[3;1H\r\n");
+    super::enter_screen(&mut output).unwrap();
+    super::leave_screen(&mut output).unwrap();
+    assert_eq!(
+        output,
+        b"\x1b[?1049h\x1b[?1007s\x1b[?1007l\x1b[?1007r\x1b[?1049l"
+    );
+    assert!(!output.contains(&b'\n'));
 }

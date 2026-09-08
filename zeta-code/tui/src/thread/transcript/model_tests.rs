@@ -2,6 +2,8 @@ use super::CellLifecycle;
 use super::TranscriptCellId;
 use super::TranscriptModel;
 use crate::thread::transcript::CommandStatus;
+use crate::thread::transcript::LocalCommandCompletion;
+use crate::thread::transcript::MessageRole;
 use std::collections::BTreeSet;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
@@ -140,77 +142,23 @@ fn reinstalling_a_cell_advances_its_render_revision() {
 }
 
 #[test]
-fn first_live_cell_splits_committed_history_from_the_rendered_tail() {
-    let turn_id = turn_id("turn");
-    let call_id = call_id("call");
-    let mut model = TranscriptModel::default();
-    model.replace(snapshot(vec![
-        ThreadTranscriptEntry::Item {
-            entry_id: "user-entry".into(),
-            turn_id: turn_id.clone(),
-            item: ThreadItem::UserMessage {
-                item_id: item_id("user-item"),
-                turn_id: turn_id.clone(),
-                text: "committed prompt".into(),
-            },
-            transient: false,
-        },
-        ThreadTranscriptEntry::Item {
-            entry_id: "call-entry".into(),
-            turn_id: turn_id.clone(),
-            item: ThreadItem::ToolCall {
-                item_id: item_id("call-item"),
-                turn_id: turn_id.clone(),
-                tool_call_id: call_id,
-                name: zeta_protocol::ToolName::new("exec").unwrap(),
-                arguments_json: "{}".into(),
-                binding: None,
-            },
-            transient: true,
-        },
-        ThreadTranscriptEntry::Item {
-            entry_id: "agent-entry".into(),
-            turn_id: turn_id.clone(),
-            item: ThreadItem::AgentMessage {
-                item_id: item_id("agent-item"),
-                turn_id,
-                text: "ordered behind live work".into(),
-            },
-            transient: false,
-        },
-    ]));
-
-    assert_eq!(model.committed_cells(None).len(), 1);
-    assert_eq!(model.active_cells(None).len(), 2);
-    assert_eq!(
-        model
-            .active_views(None, &BTreeSet::new(), None)
-            .last()
-            .unwrap()
-            .text(),
-        "ordered behind live work"
-    );
-}
-
-#[test]
-fn a_completed_execution_group_stays_live_until_the_turn_closes() {
+fn a_completed_execution_group_accepts_more_calls_from_the_same_turn() {
     let turn = turn_id("group-turn");
     let mut model = TranscriptModel::default();
     model.replace(snapshot(vec![
         tool_call("one", &turn),
         tool_result("one", &turn),
     ]));
-    assert!(model.committed_cells(Some(&turn)).is_empty());
-    assert_eq!(model.active_cells(Some(&turn)).len(), 1);
     let id = model.cells()[0].cell_id().clone();
     model.upsert(tool_call("two", &turn));
     model.upsert(tool_result("two", &turn));
     assert_eq!(model.cells().len(), 1);
     assert_eq!(model.cells()[0].cell_id(), &id);
-    assert!(model.committed_cells(Some(&turn)).is_empty());
-    let completed = model.committed_cells(None);
-    assert_eq!(completed.len(), 1);
-    let detail = completed[0].history_view().detail().unwrap().into_owned();
+    let detail = model.cells()[0]
+        .history_view()
+        .detail()
+        .unwrap()
+        .into_owned();
     assert!(detail.contains("result one"));
     assert!(detail.contains("result two"));
 }
@@ -226,11 +174,59 @@ fn execution_groups_never_merge_across_turns() {
         tool_call("two", &second),
     ]));
     assert_eq!(model.cells().len(), 2);
-    assert_eq!(model.committed_cells(Some(&second)).len(), 1);
-    assert_eq!(model.active_cells(Some(&second)).len(), 1);
     assert_eq!(
         model.cells()[1].cell_id(),
         &TranscriptCellId::for_tool_call(&call_id("two"))
+    );
+}
+
+#[test]
+fn snapshot_keeps_local_commands_in_order_and_replaces_the_optimistic_user_message() {
+    let first = turn_id("first");
+    let second = turn_id("second");
+    let first_entries = vec![
+        message("first-user", &first, MessageRole::User, "first prompt"),
+        message("first-agent", &first, MessageRole::Agent, "first reply"),
+    ];
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(first_entries.clone()));
+    model.command_submitted("/status".into(), LocalCommandCompletion::Immediate);
+    model.push_message(MessageRole::User, "second prompt".into());
+    model.command_submitted(
+        "/status-after-submit".into(),
+        LocalCommandCompletion::Immediate,
+    );
+
+    let mut confirmed = first_entries;
+    confirmed.push(message(
+        "second-user",
+        &second,
+        MessageRole::User,
+        "second prompt",
+    ));
+    confirmed.push(message(
+        "second-agent",
+        &second,
+        MessageRole::Agent,
+        "second reply",
+    ));
+    model.replace(snapshot(confirmed));
+
+    let texts = model
+        .views(&BTreeSet::new(), None)
+        .into_iter()
+        .map(|cell| cell.text().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        texts,
+        [
+            "first prompt",
+            "first reply",
+            "/status",
+            "second prompt",
+            "/status-after-submit",
+            "second reply"
+        ]
     );
 }
 
@@ -250,6 +246,52 @@ fn tool_call(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
     }
 }
 
+#[test]
+fn local_commands_wait_for_their_history_page_without_being_lost_or_duplicated() {
+    let turn = turn_id("history");
+    let older = message("older", &turn, MessageRole::Agent, "older reply");
+    let newer = message("newer", &turn, MessageRole::Agent, "newer reply");
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![older.clone()]));
+    model.command_submitted("/status".into(), LocalCommandCompletion::Immediate);
+    model.command_submitted("/help".into(), LocalCommandCompletion::Immediate);
+    let ids = model
+        .cells()
+        .iter()
+        .skip(1)
+        .map(|cell| cell.cell_id().clone())
+        .collect::<Vec<_>>();
+    for _ in 0..2 {
+        model.replace(snapshot(vec![newer.clone()]));
+        assert_eq!(model.cells().len(), 1);
+    }
+    for _ in 0..2 {
+        model.prepend_history(snapshot(vec![older.clone()]));
+        assert_eq!(
+            model
+                .views(&BTreeSet::new(), None)
+                .iter()
+                .map(|cell| cell.text().into_owned())
+                .collect::<Vec<_>>(),
+            ["older reply", "/status", "/help", "newer reply"]
+        );
+        assert_eq!(
+            model
+                .cells()
+                .iter()
+                .skip(1)
+                .take(2)
+                .map(|cell| cell.cell_id().clone())
+                .collect::<Vec<_>>(),
+            ids
+        );
+    }
+    model.replace(snapshot(vec![newer]));
+    model.clear();
+    model.prepend_history(snapshot(vec![older]));
+    assert_eq!(model.cells().len(), 1);
+}
+
 fn tool_result(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
     ThreadTranscriptEntry::Item {
         entry_id: format!("result-{name}"),
@@ -263,6 +305,28 @@ fn tool_result(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
             content: None,
             is_error: false,
         },
+    }
+}
+
+fn message(entry: &str, turn: &TurnId, role: MessageRole, text: &str) -> ThreadTranscriptEntry {
+    let item = match role {
+        MessageRole::User => ThreadItem::UserMessage {
+            item_id: item_id(entry),
+            turn_id: turn.clone(),
+            text: text.into(),
+        },
+        MessageRole::Agent => ThreadItem::AgentMessage {
+            item_id: item_id(entry),
+            turn_id: turn.clone(),
+            text: text.into(),
+        },
+        _ => panic!("test helper supports user and agent messages"),
+    };
+    ThreadTranscriptEntry::Item {
+        entry_id: entry.into(),
+        turn_id: turn.clone(),
+        item,
+        transient: false,
     }
 }
 

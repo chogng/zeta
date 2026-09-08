@@ -183,7 +183,6 @@ impl ChatHistoryRenderCache {
                 background: context.background(),
                 user_input_background: context.user_message_background(),
                 user_input_rows,
-                height,
             };
         };
         let Some(buffer_height) = u16::try_from(height).ok() else {
@@ -192,7 +191,6 @@ impl ChatHistoryRenderCache {
                 background: context.background(),
                 user_input_background: context.user_message_background(),
                 user_input_rows,
-                height,
             };
         };
         if key.is_none() || cost > MAX_CELL_CELLS {
@@ -201,7 +199,6 @@ impl ChatHistoryRenderCache {
                 background: context.background(),
                 user_input_background: context.user_message_background(),
                 user_input_rows,
-                height,
             };
         }
 
@@ -459,18 +456,10 @@ pub(crate) enum PreparedCell {
         background: Color,
         user_input_background: Color,
         user_input_rows: usize,
-        height: usize,
     },
 }
 
 impl PreparedCell {
-    pub(crate) fn height(&self) -> usize {
-        match self {
-            Self::Buffered(cell) => usize::from(cell.buffer.area.height),
-            Self::Lines { height, .. } => *height,
-        }
-    }
-
     pub(crate) fn render(&self, target: &mut Buffer, area: Rect, source_row: usize) {
         match self {
             Self::Buffered(cell) => cell.render(target, area, source_row),

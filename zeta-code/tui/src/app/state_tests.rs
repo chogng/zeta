@@ -273,7 +273,7 @@ fn keyboard_activation_uses_the_feature_action_mapping() {
     let mut app = App::new();
     app.update(ThemeEvent::PickerOpened(theme_choices(&theme_catalog())));
 
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -1549,15 +1549,15 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
-fn enhanced_mouse_capture_is_limited_to_visible_overlays() {
+fn enhanced_mouse_capture_covers_the_full_screen() {
     let mut app = App::new();
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     app.insert_text("/");
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     let dir = temporary_dir("mouse-interaction-mention");
     fs::write(dir.join("notes.md"), "notes").unwrap();
@@ -1601,7 +1601,7 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
             ));
             assert!(app.query_view().is_some());
         }
-        assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+        assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
         let area = Rect::new(0, 0, 80, 24);
         for row in 0..area.height {
             for column in 0..area.width {
@@ -1624,7 +1624,7 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
 }
 
 #[test]
-fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
+fn disabled_mouse_interactions_keep_only_content_scrolling() {
     let mut app = App::new();
     app.insert_text("/");
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
@@ -1636,7 +1636,7 @@ fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
     settings.set_mouse_interactions(false);
     app.update(ConfigEvent::SettingsReceived(settings));
 
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
     assert!(app.screen_selection().range().is_none());
 }
 
@@ -1663,7 +1663,7 @@ fn saved_enhancement_disable_clears_hover_press_and_drag_together() {
             StatusLineSettings::default(),
         ),
     }));
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
     assert!(app.hovered_pointer_target().is_none());
     assert!(app.pressed_pointer_target().is_none());
     assert!(app.screen_selection().range().is_none());
@@ -1779,6 +1779,71 @@ fn terminal_screen_change_closes_command_panels_including_status() {
         thread_id: ThreadId::new("other-thread").unwrap(),
     });
     assert!(app.command_panel().is_none());
+}
+
+#[test]
+fn switching_threads_restores_local_commands_after_receiving_a_snapshot() {
+    let mut app = App::new();
+    let session_id = SessionId::new("local-history").unwrap();
+    let first = ThreadId::new("first").unwrap();
+    app.update(ThreadEvent::ContextChanged {
+        session_id: session_id.clone(),
+        thread_id: first.clone(),
+    });
+    app.insert_text("/status");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let before = app
+        .transcript_views()
+        .iter()
+        .map(|cell| (cell.cell_id.clone(), cell.text().into_owned()))
+        .collect::<Vec<_>>();
+    assert!(before.iter().any(|(_, text)| text.contains("/status")));
+    for index in 0..35 {
+        app.update(ThreadEvent::ContextChanged {
+            session_id: session_id.clone(),
+            thread_id: ThreadId::new(format!("other-{index}")).unwrap(),
+        });
+        assert!(app.transcript_views().is_empty());
+        app.update(ThreadEvent::FailureReported(format!(
+            "other thread {index}"
+        )));
+    }
+    app.update(ThreadEvent::ContextChanged {
+        session_id: session_id.clone(),
+        thread_id: first.clone(),
+    });
+    for _ in 0..2 {
+        app.update(ThreadEvent::TranscriptSnapshotReceived(
+            zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot {
+                session_id: session_id.clone(),
+                thread_id: first.clone(),
+                durable_sequence: 1,
+                revision: 1,
+                entries: vec![],
+            },
+        ));
+        let after = app
+            .transcript_views()
+            .iter()
+            .map(|cell| (cell.cell_id.clone(), cell.text().into_owned()))
+            .collect::<Vec<_>>();
+        assert_eq!(after, before);
+    }
+    app.update(ThreadEvent::TranscriptCleared);
+    app.update(ThreadEvent::ContextChanged {
+        session_id: session_id.clone(),
+        thread_id: ThreadId::new("other-0").unwrap(),
+    });
+    assert!(
+        app.transcript_views()
+            .iter()
+            .any(|cell| cell.text().contains("other thread 0"))
+    );
+    app.update(ThreadEvent::ContextChanged {
+        session_id,
+        thread_id: first,
+    });
+    assert!(app.transcript_views().is_empty());
 }
 
 #[test]

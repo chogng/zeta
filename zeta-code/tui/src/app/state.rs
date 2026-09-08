@@ -169,7 +169,6 @@ pub(crate) struct App {
     chat_panel: ChatPanel,
     pub(super) app_keymap: AppKeymap,
     thread: ThreadState,
-    transcript_history: crate::thread::transcript::TranscriptHistory,
     thread_presentations: ThreadPresentationStore,
     sessions: SessionsState,
     issues: crate::issues::Manager,
@@ -197,7 +196,6 @@ impl App {
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
-            transcript_history: Default::default(),
             thread_presentations: ThreadPresentationStore::new(
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
             ),
@@ -259,7 +257,6 @@ impl App {
             chat_panel: ChatPanel::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadState::default(),
-            transcript_history: Default::default(),
             thread_presentations: ThreadPresentationStore::with_input_catalog(
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
                 input_catalog,
@@ -689,9 +686,9 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(
                 request,
             )) => Some(ConfigCommand::Connection(request).into()),
-            crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::OpenOpenAi(_),
-            ) => None,
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenOpenAi(_)) => {
+                None
+            }
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription) => {
                 self.chat_panel
                     .open_subscription(self.subscription.choices());
@@ -922,12 +919,10 @@ impl App {
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
-        if self.terminal_settings.mouse_interactions()
-            && (self.overlay().is_some() || frame::completion_visible(self))
-        {
+        if self.terminal_settings.mouse_interactions() {
             MouseMode::TuiCapture
         } else {
-            MouseMode::TerminalSelection
+            MouseMode::TuiScroll
         }
     }
 
@@ -965,7 +960,7 @@ impl App {
         terminal_area: Rect,
         navigation: crate::widgets::navigation::Navigation,
     ) {
-        if self.mouse_mode() != MouseMode::TuiCapture {
+        if !self.mouse_mode().captures_terminal_input() {
             return;
         }
         self.clear_mouse_interaction();
@@ -1200,53 +1195,7 @@ impl App {
     }
 
     pub(crate) fn visible_transcript_views(&self) -> Vec<CellView<'_>> {
-        if self.transcript_history_browsing() {
-            return self.transcript_views();
-        }
-        self.thread.active_views(
-            &self.thread_presentations.active().expanded_cells,
-            self.thread_presentations.active().selected_cell.as_ref(),
-        )
-    }
-
-    pub(crate) fn transcript_header_visible(&self) -> bool {
-        self.transcript_history_browsing()
-            || (!self.thread.has_committed_cells()
-                && !self
-                    .transcript_history
-                    .header_written(self.thread_presentations.active_id().as_str()))
-    }
-
-    pub(crate) fn write_transcript_header(
-        &mut self,
-        width: u16,
-        output: &mut impl FnMut(&ratatui::buffer::Buffer) -> std::io::Result<()>,
-    ) -> std::io::Result<()> {
-        let scope = self.thread_presentations.active_id().as_str();
-        if !self.transcript_history.header_written(scope) {
-            let header =
-                welcome::history_buffer(width, u16::MAX, &self.welcome, self.render_context());
-            output(&header)?;
-            self.transcript_history.mark_header_written(scope);
-        }
-        Ok(())
-    }
-
-    pub(crate) fn write_transcript_history(
-        &mut self,
-        output: &mut impl FnMut(&CellView<'_>, RenderContext<'_>) -> std::io::Result<()>,
-    ) -> std::io::Result<()> {
-        let context = RenderContext::new(&self.render_theme, self.render_theme_revision);
-        self.transcript_history.write(
-            self.thread_presentations.active_id().as_str(),
-            self.thread.committed_cells(),
-            &mut |message| output(message, context),
-        )
-    }
-
-    fn transcript_history_browsing(&self) -> bool {
-        self.transcript_scroll().anchor().is_some()
-            || self.thread_presentations.active().selected_cell.is_some()
+        self.transcript_views()
     }
 
     pub(crate) fn latest_agent_response(&self) -> Option<&str> {
@@ -1732,6 +1681,12 @@ impl App {
                 let context_changed = self.sessions.active_session_id() != Some(&session_id)
                     || self.sessions.remembered_thread(&session_id) != Some(&thread_id);
                 self.close_transient_surfaces();
+                if context_changed {
+                    self.thread.switch_transcript(
+                        self.thread_presentations.active_id(),
+                        &thread_id,
+                    );
+                }
                 self.thread_presentations.switch(thread_id.clone());
                 self.sessions.activate_context(session_id, thread_id);
                 self.chat_panel.status_line_mut().clear_thread_accounting();
@@ -1926,7 +1881,10 @@ impl App {
             ConfigEvent::IssueModels { request_id, result } => self.chat_panel.finish_issue_models(request_id, result),
             ConfigEvent::Connection(reply) => {
                 if let Err(error) = &reply.result {
-                    self.thread.update(ThreadPresentationEvent::NoticeReceived(format!("Provider update failed: {error}")));
+                    self.thread
+                        .update(ThreadPresentationEvent::NoticeReceived(format!(
+                            "Provider update failed: {error}"
+                        )));
                 }
                 self.chat_panel.complete_connection(reply);
                 self.status = Status::Ready;
