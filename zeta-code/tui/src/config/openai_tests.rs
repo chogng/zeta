@@ -41,23 +41,31 @@ fn success(panel: &mut Panel, request: &Request) {
 }
 fn draft(panel: &mut Panel) {
     panel.select_tab(panel.tabs.tabs().len() - 1);
-    panel.handle_paste("My service".into());
-    assert!(matches!(
-        key(panel, KeyCode::Enter),
-        ConfigEditorOutcome::Consumed
-    ));
-    panel.handle_paste("https://example.test/v1".into());
+    for value in ["My service", "https://example.test/v1", "test-key"] {
+        key(panel, KeyCode::Enter);
+        panel.handle_paste(value.into());
+        assert!(matches!(
+            key(panel, KeyCode::Enter),
+            ConfigEditorOutcome::Consumed
+        ));
+        assert!(!panel.form().unwrap().editing());
+        key(panel, KeyCode::Down);
+    }
     key(panel, KeyCode::Enter);
-    panel.handle_paste("test-key".into());
+}
+
+fn create(panel: &mut Panel) -> Request {
+    draft(panel);
     key(panel, KeyCode::Enter);
+    key(panel, KeyCode::Down);
+    request(key(panel, KeyCode::Enter))
 }
 
 #[test]
 fn form_and_nested_list_return_up_to_the_shared_tab_list() {
     let mut panel = panel();
 
-    key(&mut panel, KeyCode::Esc);
-    assert!(!panel.form().unwrap().editing);
+    assert!(!panel.form().unwrap().editing());
     key(&mut panel, KeyCode::Up);
     assert_eq!(panel.focus, PanelFocus::Tabs);
     assert!(panel.key_hints().starts_with("Tab/Shift+Tab to switch"));
@@ -66,7 +74,7 @@ fn form_and_nested_list_return_up_to_the_shared_tab_list() {
         key(&mut panel, KeyCode::Tab),
         ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription)
     ));
-    assert_eq!(panel.tabs.active_index(), 1);
+    assert_eq!(panel.tabs.active_index(), Some(1));
     assert_eq!(panel.focus, PanelFocus::Tabs);
 
     key(&mut panel, KeyCode::Down);
@@ -92,7 +100,7 @@ fn enter_confirms_each_draft_field_and_creation_preserves_new_tab() {
     let mut panel = panel();
     draft(&mut panel);
     assert_eq!(panel.form().unwrap().focus, 3);
-    assert!(panel.form().unwrap().editing);
+    assert!(panel.form().unwrap().editing());
     assert!(panel.pending.is_none());
     assert_eq!(
         panel.form().unwrap().protocol,
@@ -100,8 +108,10 @@ fn enter_confirms_each_draft_field_and_creation_preserves_new_tab() {
     );
     key(&mut panel, KeyCode::Right);
     key(&mut panel, KeyCode::Enter);
+    assert_eq!(panel.form().unwrap().focus, 3);
+    key(&mut panel, KeyCode::Down);
     assert_eq!(panel.form().unwrap().focus, 4);
-    assert!(!panel.form().unwrap().editing);
+    assert!(!panel.form().unwrap().editing());
     let request = request(key(&mut panel, KeyCode::Enter));
     assert_eq!(
         request.config.custom.as_ref().unwrap().protocol,
@@ -126,7 +136,7 @@ fn enter_confirms_each_draft_field_and_creation_preserves_new_tab() {
             "New custom provider"
         ]
     );
-    assert_eq!(panel.tabs.active_tab().id, request.config.provider);
+    assert_eq!(panel.tabs.active_tab().unwrap().id, request.config.provider);
     assert!(!panel.form().unwrap().draft);
     assert!(panel.form().unwrap().key.query().is_empty());
     panel.select_tab(3);
@@ -134,8 +144,9 @@ fn enter_confirms_each_draft_field_and_creation_preserves_new_tab() {
 }
 
 #[test]
-fn saved_field_advances_only_after_success_and_failure_keeps_input() {
+fn saved_field_exits_editing_only_after_success_and_failure_keeps_input() {
     let mut panel = panel();
+    key(&mut panel, KeyCode::Enter);
     panel.handle_paste("test-key".into());
     let first = request(key(&mut panel, KeyCode::Enter));
     assert_eq!(panel.form().unwrap().focus, 2);
@@ -143,18 +154,19 @@ fn saved_field_advances_only_after_success_and_failure_keeps_input() {
         id: first.id,
         result: Err("Secret store unavailable".into()),
     });
-    assert!(panel.form().unwrap().editing);
+    assert!(panel.form().unwrap().editing());
     assert_eq!(panel.form().unwrap().key.query(), "test-key");
     let retry = request(key(&mut panel, KeyCode::Enter));
     success(&mut panel, &retry);
-    assert_eq!(panel.form().unwrap().focus, 4);
-    assert!(!panel.form().unwrap().editing);
+    assert_eq!(panel.form().unwrap().focus, 2);
+    assert!(!panel.form().unwrap().editing());
     assert!(panel.pending.is_none());
 }
 
 #[test]
 fn focus_changes_do_not_save_and_drafts_survive_tab_switches() {
     let mut panel = panel();
+    key(&mut panel, KeyCode::Enter);
     panel.handle_paste("unconfirmed-key".into());
     assert!(matches!(
         key(&mut panel, KeyCode::Tab),
@@ -162,12 +174,13 @@ fn focus_changes_do_not_save_and_drafts_survive_tab_switches() {
     ));
     assert!(panel.pending.is_none());
     draft(&mut panel);
-    let id = panel.tabs.active_tab().id.clone();
+    let id = panel.tabs.active_tab().unwrap().id.clone();
     panel.select_tab(0);
     panel.select_tab(2);
-    assert_eq!(panel.tabs.active_tab().id, id);
+    assert_eq!(panel.tabs.active_tab().unwrap().id, id);
     assert_eq!(panel.form().unwrap().name.query(), "My service");
     assert_eq!(panel.form().unwrap().key.query(), "test-key");
+    assert!(!panel.form().unwrap().editing());
     assert!(panel.pending.is_none());
 }
 
@@ -175,57 +188,63 @@ fn focus_changes_do_not_save_and_drafts_survive_tab_switches() {
 fn invalid_url_stays_in_field_and_escape_restores_confirmed_value() {
     let mut panel = panel();
     panel.select_tab(2);
+    key(&mut panel, KeyCode::Enter);
     panel.handle_paste("Example".into());
+    key(&mut panel, KeyCode::Enter);
+    key(&mut panel, KeyCode::Down);
     key(&mut panel, KeyCode::Enter);
     panel.handle_paste("not-a-url".into());
     key(&mut panel, KeyCode::Enter);
     assert_eq!(panel.form().unwrap().focus, 1);
-    assert!(panel.form().unwrap().editing);
+    assert!(panel.form().unwrap().editing());
     assert!(panel.pending.is_none());
     key(&mut panel, KeyCode::Esc);
     assert!(panel.form().unwrap().url.query().is_empty());
-    assert!(!panel.form().unwrap().editing);
+    assert!(!panel.form().unwrap().editing());
 }
 
 #[test]
 fn late_creation_reply_does_not_switch_back_to_its_tab() {
     let mut panel = panel();
-    draft(&mut panel);
-    key(&mut panel, KeyCode::Enter);
-    let request = request(key(&mut panel, KeyCode::Enter));
+    let request = create(&mut panel);
     panel.select_tab(0);
     success(&mut panel, &request);
-    assert_eq!(panel.tabs.active_index(), 0);
+    assert_eq!(panel.tabs.active_index(), Some(0));
     assert_eq!(panel.tabs.tabs().len(), 4);
 }
 
 #[test]
-fn unchanged_existing_field_advances_without_request() {
+fn unchanged_existing_field_exits_editing_without_request() {
     let mut panel = panel();
+    key(&mut panel, KeyCode::Enter);
     // Existing empty API key means leave the saved secret unchanged.
     assert!(matches!(
         key(&mut panel, KeyCode::Enter),
         ConfigEditorOutcome::Consumed
     ));
-    assert_eq!(panel.form().unwrap().focus, 4);
+    assert_eq!(panel.form().unwrap().focus, 2);
+    assert!(!panel.form().unwrap().editing());
+    assert!(panel.pending.is_none());
 }
 
 #[test]
-fn existing_name_confirmation_saves_then_immediately_edits_the_next_field() {
+fn existing_name_confirmation_saves_and_keeps_the_current_field_selected() {
     let mut panel = panel();
-    draft(&mut panel);
-    key(&mut panel, KeyCode::Enter);
-    let created = request(key(&mut panel, KeyCode::Enter));
+    let created = create(&mut panel);
     success(&mut panel, &created);
     for _ in 0..panel.form().unwrap().focus {
         key(&mut panel, KeyCode::BackTab);
     }
+    key(&mut panel, KeyCode::Enter);
     panel.handle_paste(" renamed".into());
     let renamed = request(key(&mut panel, KeyCode::Enter));
     assert_eq!(panel.form().unwrap().focus, 0);
     success(&mut panel, &renamed);
-    assert_eq!(panel.form().unwrap().focus, 1);
-    assert!(panel.form().unwrap().editing);
+    assert_eq!(panel.form().unwrap().focus, 0);
+    assert!(!panel.form().unwrap().editing());
+    key(&mut panel, KeyCode::Down);
+    assert!(!panel.form().unwrap().editing());
+    key(&mut panel, KeyCode::Enter);
     panel.handle_paste("/gateway".into());
     assert!(panel.form().unwrap().url.query().ends_with("/gateway"));
     assert_eq!(
@@ -275,4 +294,81 @@ fn openai_form_character_output_masks_key_and_keeps_focused_field_visible() {
         assert!(output.contains("Responses"));
         insta::assert_snapshot!(format!("openai_form_{width}x{height}"), output);
     }
+}
+
+#[test]
+fn entering_and_moving_between_fields_does_not_accept_text_until_enter() {
+    let mut panel = panel();
+    assert!(!panel.form().unwrap().editing());
+    panel.handle_paste("ignored".into());
+    key(&mut panel, KeyCode::Char('x'));
+    assert!(panel.form().unwrap().key.query().is_empty());
+    key(&mut panel, KeyCode::Down);
+    assert_eq!(panel.form().unwrap().focus, 4);
+    key(&mut panel, KeyCode::Up);
+    assert_eq!(panel.form().unwrap().focus, 2);
+    assert!(!panel.form().unwrap().editing());
+    key(&mut panel, KeyCode::Enter);
+    panel.handle_paste("draft-key".into());
+    key(&mut panel, KeyCode::Esc);
+    assert!(panel.form().unwrap().key.query().is_empty());
+    assert!(!panel.form().unwrap().editing());
+    assert_eq!(panel.focus, PanelFocus::Content);
+    assert!(panel.pending.is_none());
+}
+
+#[test]
+fn fetching_clears_old_models_and_failure_can_be_retried_without_saving() {
+    let mut panel = panel();
+    panel.form_mut().unwrap().models = vec!["old-model".into()];
+    key(&mut panel, KeyCode::Down);
+    let first = request(key(&mut panel, KeyCode::Enter));
+    assert_eq!(first.operation, Operation::FetchModels);
+    assert!(first.key.is_none());
+    assert!(panel.form().unwrap().models.is_empty());
+    assert_eq!(panel.form().unwrap().message, "Fetching models…");
+    let choices = || {
+        super::super::config_choices(
+            &crate::test_support::empty_config_snapshot(),
+            &ProviderListResult {
+                providers: Vec::new(),
+            },
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        )
+    };
+    panel.complete(Reply {
+        id: first.id.clone(),
+        result: Ok((
+            choices(),
+            Some(Err("Failed to fetch models · Permission denied".into())),
+        )),
+    });
+    assert!(panel.form().unwrap().message.contains("Permission denied"));
+    assert!(panel.form().unwrap().models.is_empty());
+    let retry = request(key(&mut panel, KeyCode::Enter));
+    panel.complete(Reply {
+        id: first.id,
+        result: Ok((choices(), Some(Ok(vec!["stale".into()])))),
+    });
+    assert!(panel.form().unwrap().models.is_empty());
+    assert!(panel.pending.is_some());
+    panel.complete(Reply {
+        id: retry.id,
+        result: Ok((choices(), Some(Ok(vec!["new-model".into()])))),
+    });
+    assert_eq!(panel.form().unwrap().models, vec!["new-model"]);
+    let empty = request(key(&mut panel, KeyCode::Enter));
+    panel.complete(Reply {
+        id: empty.id,
+        result: Ok((choices(), Some(Ok(Vec::new())))),
+    });
+    assert!(panel.form().unwrap().models.is_empty());
+    assert!(
+        panel
+            .form()
+            .unwrap()
+            .message
+            .contains("Provider returned no models")
+    );
 }

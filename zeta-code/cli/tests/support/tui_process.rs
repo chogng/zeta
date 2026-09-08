@@ -7,7 +7,6 @@ use std::fs;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -43,40 +42,58 @@ pub struct Fixture {
     _root: TempDir,
     workspace: PathBuf,
     profile: PathBuf,
-    fake_ssh: PathBuf,
+    daemon: PathBuf,
 }
 
 impl Fixture {
-    pub fn new(name: &str) -> Self {
-        let root = tempfile::Builder::new()
-            .prefix(&format!("zeta-tui-{name}-"))
-            .tempdir()
-            .unwrap();
+    pub fn new() -> Self {
+        let root = tempfile::Builder::new().prefix("zt-").tempdir().unwrap();
         let workspace = root.path().join("workspace");
         let profile = root.path().join("profile");
-        let fake_ssh = root.path().join("fake-ssh");
         fs::create_dir_all(&workspace).unwrap();
         fs::create_dir_all(&profile).unwrap();
-        let runtime = env!("CARGO_BIN_EXE_zeta");
-        assert!(!profile.to_string_lossy().contains('\''));
-        fs::write(
-            &fake_ssh,
-            format!(
-                "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\nexport ZETA_PROFILE_ROOT='{}'\nexec /bin/sh -c \"$command\"\n",
-                profile.display()
-            ),
-        )
-        .unwrap();
-        let mut permissions = fs::metadata(&fake_ssh).unwrap().permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&fake_ssh, permissions).unwrap();
-        assert!(Path::new(runtime).is_absolute());
+        assert!(Path::new(env!("CARGO_BIN_EXE_zeta")).is_absolute());
+        let daemon = Path::new(env!("CARGO_BIN_EXE_zeta")).with_file_name(format!(
+            "zeta-app-server-daemon{}",
+            std::env::consts::EXE_SUFFIX
+        ));
+        assert!(
+            daemon.is_file(),
+            "build the matching daemon with `just test-tui`"
+        );
         Self {
             _root: root,
             workspace,
             profile,
-            fake_ssh,
+            daemon,
         }
+    }
+
+    fn environment(&self) -> Vec<(&'static str, PathBuf)> {
+        let environment = vec![
+            ("ZETA_PROFILE_ROOT", self.profile.clone()),
+            ("ZETA_WORKSPACE_ROOT", self.workspace.clone()),
+            ("CODEX_HOME", self.codex_home()),
+            ("ZETA_APP_SERVER_DAEMON_PATH", self.daemon.clone()),
+        ];
+        #[cfg(windows)]
+        let environment = {
+            let mut environment = environment;
+            for (name, binary) in [
+                (
+                    "ZETA_WINDOWS_COMMAND_RUNNER_PATH",
+                    "zeta-command-runner.exe",
+                ),
+                (
+                    "ZETA_WINDOWS_SANDBOX_SETUP_PATH",
+                    "zeta-windows-sandbox-setup.exe",
+                ),
+            ] {
+                environment.push((name, self.daemon.with_file_name(binary)));
+            }
+            environment
+        };
+        environment
     }
 
     pub fn write_config(&self, base_url: &str) {
@@ -121,11 +138,13 @@ baseUrl = "{base_url}"
     }
 
     pub fn only_thread(&self) -> (String, String) {
-        let command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta"))
-            .with_argument("remote-server")
-            .with_argument("connect")
-            .with_environment_variable("ZETA_PROFILE_ROOT", &self.profile)
-            .with_environment_variable("ZETA_WORKSPACE_ROOT", &self.workspace);
+        let mut command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta"))
+            .with_argument("app-server")
+            .with_argument("connect");
+        for (name, value) in self.environment() {
+            command = command.with_environment_variable(name, value);
+        }
+        eprintln!("PTY inspector: connecting");
         let session = AppServerSession::start_stdio(
             command,
             ClientInfo {
@@ -135,14 +154,42 @@ baseUrl = "{base_url}"
             zeta_tui::client_capabilities(),
         )
         .unwrap();
+        eprintln!("PTY inspector: listing sessions");
         let sessions = session.client().list_sessions().unwrap().sessions;
+        eprintln!("PTY inspector: shutting down");
         session.shutdown().unwrap();
+        eprintln!("PTY inspector: closed");
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].threads.len(), 1);
         (
             sessions[0].session_id.to_string(),
             sessions[0].threads[0].thread_id.to_string(),
         )
+    }
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
+                for entry in entries.flatten() {
+                    if entry
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "log")
+                    {
+                        if let Ok(log) = fs::read_to_string(entry.path()) {
+                            eprintln!("Test daemon log ({}):\n{log}", entry.path().display());
+                        }
+                    }
+                }
+            }
+        }
+        // Stop only the daemon belonging to this isolated fixture before deleting it.
+        let _ = std::process::Command::new(env!("CARGO_BIN_EXE_zeta"))
+            .args(["app-server", "daemon", "stop"])
+            .envs(self.environment())
+            .output();
     }
 }
 
@@ -161,8 +208,8 @@ fn find_named(root: &Path, name: &str) -> Option<PathBuf> {
 }
 
 pub struct TuiProcess {
-    master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    master: Option<Box<dyn MasterPty + Send>>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     child: ChildGuard,
     capture: Arc<Mutex<TerminalCapture>>,
     reader: Option<thread::JoinHandle<()>>,
@@ -173,7 +220,8 @@ impl TuiProcess {
     pub fn start(fixture: &Fixture, args: &[&str], size: PtySize) -> Self {
         let pair = native_pty_system().openpty(size).unwrap();
         let mut reader = pair.master.try_clone_reader().unwrap();
-        let writer = pair.master.take_writer().unwrap();
+        let writer = Arc::new(Mutex::new(pair.master.take_writer().unwrap()));
+        let reply_writer = Arc::clone(&writer);
         let capture = Arc::new(Mutex::new(TerminalCapture::new(size)));
         let reader_capture = Arc::clone(&capture);
         let reader_thread = thread::spawn(move || {
@@ -181,34 +229,38 @@ impl TuiProcess {
             loop {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
-                    Ok(read) => reader_capture.lock().unwrap().push(&buffer[..read]),
+                    Ok(read) => {
+                        let replies = {
+                            let mut capture = reader_capture.lock().unwrap();
+                            capture.push(&buffer[..read]);
+                            capture.core.take_reply_bytes()
+                        };
+                        if !replies.is_empty() {
+                            let mut writer = reply_writer.lock().unwrap();
+                            if writer
+                                .write_all(&replies)
+                                .and_then(|_| writer.flush())
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
                     Err(error) if error.kind() == ErrorKind::Interrupted => continue,
                     Err(_) => break,
                 }
             }
         });
         let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_zeta"));
-        command.args([
-            "remote",
-            "connect",
-            "--host",
-            "local-real-scenario",
-            "--dir",
-            fixture.workspace.to_str().unwrap(),
-            "--runtime",
-            env!("CARGO_BIN_EXE_zeta"),
-            "--ssh",
-            fixture.fake_ssh.to_str().unwrap(),
-        ]);
         command.args(args);
         command.cwd(&fixture.workspace);
         command.env("TERM", "xterm-256color");
-        command.env("ZETA_PROFILE_ROOT", &fixture.profile);
         // Never let an offline PTY scenario reuse the developer's actual Codex subscription.
         fs::create_dir_all(fixture.codex_home()).unwrap();
-        command.env("CODEX_HOME", fixture.codex_home());
-        command.env("ZETA_WORKSPACE_ROOT", &fixture.workspace);
-        command.env("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "1000");
+        for (name, value) in fixture.environment() {
+            command.env(name, value);
+        }
+        command.env("ZETA_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
         let child = ChildGuard::new(pair.slave.spawn_command(command).unwrap());
         drop(pair.slave);
         let mut snapshot_paths = vec![fixture._root.path().to_string_lossy().into_owned()];
@@ -224,7 +276,7 @@ impl TuiProcess {
             }
         }
         Self {
-            master: pair.master,
+            master: Some(pair.master),
             writer,
             child,
             capture,
@@ -298,8 +350,9 @@ impl TuiProcess {
     }
 
     pub fn send(&mut self, bytes: &[u8]) {
-        self.writer.write_all(bytes).unwrap();
-        self.writer.flush().unwrap();
+        let mut writer = self.writer.lock().unwrap();
+        writer.write_all(bytes).unwrap();
+        writer.flush().unwrap();
     }
 
     fn send_input(&mut self, bytes: &[u8]) {
@@ -312,6 +365,11 @@ impl TuiProcess {
         let deadline = Instant::now() + STATE_TIMEOUT;
         let mut observed_revision = None;
         loop {
+            assert!(
+                Instant::now() < deadline,
+                "TUI did not settle after input; screen:\n{}",
+                self.screen()
+            );
             let current_revision = self.capture.lock().unwrap().revision();
             if current_revision > revision {
                 if observed_revision == Some(current_revision) {
@@ -332,27 +390,32 @@ impl TuiProcess {
     }
 
     pub fn resize(&mut self, size: PtySize) {
-        self.master.resize(size).unwrap();
         self.capture.lock().unwrap().resize(size);
+        self.master
+            .as_ref()
+            .expect("running PTY")
+            .resize(size)
+            .unwrap();
     }
 
     pub fn wait_for_screen(&mut self, expected: &str) {
         let deadline = Instant::now() + STATE_TIMEOUT;
         loop {
-            let screen = self.capture.lock().unwrap().screen();
+            let screen = self.screen();
             if screen.contains(expected) {
                 return;
             }
             if let Some(status) = self.child.try_wait().unwrap() {
+                self.close_terminal();
                 panic!(
                     "TUI exited before drawing {expected:?}: {status:?}; raw:\n{}",
-                    self.capture.lock().unwrap().raw_text()
+                    self.raw_text()
                 );
             }
             if Instant::now() >= deadline {
                 panic!(
                     "TUI screen did not contain {expected:?}; screen:\n{screen}\nraw:\n{}",
-                    self.capture.lock().unwrap().raw_text()
+                    self.raw_text()
                 );
             }
             thread::sleep(Duration::from_millis(20));
@@ -362,7 +425,7 @@ impl TuiProcess {
     pub fn wait_for_output(&mut self, expected: &str) {
         let deadline = Instant::now() + STATE_TIMEOUT;
         loop {
-            if self.capture.lock().unwrap().raw_text().contains(expected) {
+            if self.raw_text().contains(expected) {
                 return;
             }
             if let Some(status) = self.child.try_wait().unwrap() {
@@ -392,22 +455,29 @@ impl TuiProcess {
             if let Some(status) = self.child.try_wait().unwrap() {
                 panic!(
                     "TUI exited before stabilizing {expected:?}: {status:?}; raw:\n{}",
-                    self.capture.lock().unwrap().raw_text()
+                    self.raw_text()
                 );
             }
             if Instant::now() >= deadline {
                 panic!(
                     "TUI screen did not stabilize with {expected:?}; screen:\n{}",
-                    self.capture.lock().unwrap().screen()
+                    self.screen()
                 );
             }
             thread::sleep(Duration::from_millis(20));
         }
     }
 
+    pub fn screen(&self) -> String {
+        self.capture.lock().unwrap().screen()
+    }
+
+    fn raw_text(&self) -> String {
+        self.capture.lock().unwrap().raw_text()
+    }
+
     pub fn assert_snapshot(&self, name: &str) {
-        let screen =
-            normalize_snapshot(self.capture.lock().unwrap().screen(), &self.snapshot_paths);
+        let screen = normalize_snapshot(self.screen(), &self.snapshot_paths);
         assert_named_snapshot(name, screen);
     }
 
@@ -423,34 +493,56 @@ impl TuiProcess {
 
     pub fn quit(&mut self) {
         let deadline = Instant::now() + PROCESS_TIMEOUT;
-        let mut next_interrupt = Instant::now();
+        let mut sent_revision = self.capture.lock().unwrap().revision();
+        let mut observed_revision = sent_revision;
+        let mut changed_at = Instant::now();
+        self.send(&[0x03]);
         loop {
             if let Some(status) = self.child.try_wait().unwrap() {
+                self.close_terminal();
                 assert!(
                     status.success(),
-                    "TUI exited unsuccessfully; output:\n{}",
-                    self.capture.lock().unwrap().raw_text()
+                    "TUI exited unsuccessfully ({status:?}); output:\n{}",
+                    self.raw_text()
                 );
                 break;
             }
-            if Instant::now() >= next_interrupt {
+            let (revision, interactive) = {
+                let capture = self.capture.lock().unwrap();
+                (capture.revision(), capture.core.modes().bracketed_paste())
+            };
+            if revision != observed_revision {
+                observed_revision = revision;
+                changed_at = Instant::now();
+            }
+            // An interrupt may only close a panel. Retry after that redraw settles,
+            // but never send another control event once terminal restoration starts.
+            if interactive
+                && revision > sent_revision
+                && changed_at.elapsed() >= REDRAW_QUIET_PERIOD
+            {
                 self.send(&[0x03]);
-                next_interrupt = Instant::now() + Duration::from_secs(1);
+                sent_revision = revision;
             }
             if Instant::now() >= deadline {
-                panic!(
-                    "TUI did not exit; screen:\n{}",
-                    self.capture.lock().unwrap().screen()
-                );
+                panic!("TUI did not exit; screen:\n{}", self.screen());
             }
             thread::sleep(Duration::from_millis(20));
         }
-        drop(std::mem::replace(
-            &mut self.writer,
-            Box::new(std::io::sink()),
-        ));
+        self.close_terminal();
+    }
+
+    fn close_terminal(&mut self) {
+        *self.writer.lock().unwrap() = Box::new(std::io::sink());
+        // ConPTY keeps its output pipe open until the pseudoconsole is closed.
+        // Keep the reader draining while closing, then join it after EOF.
+        drop(self.master.take());
         if let Some(reader) = self.reader.take() {
-            reader.join().unwrap();
+            if let Err(error) = reader.join() {
+                if !thread::panicking() {
+                    std::panic::resume_unwind(error);
+                }
+            }
         }
     }
 }
@@ -612,6 +704,17 @@ fn terminal_revision_advances_after_raw_capture_reaches_its_limit() {
     assert_eq!(capture.revision(), 42);
 }
 
+#[test]
+fn terminal_capture_answers_fragmented_cursor_queries() {
+    let mut capture = TerminalCapture::new(LARGE_SIZE);
+    capture.push(b"\x1b[");
+    assert!(capture.core.take_reply_bytes().is_empty());
+    capture.push(b"6n");
+    assert_eq!(capture.core.take_reply_bytes(), b"\x1b[1;1R");
+    capture.push(b"\x1b[4;9H\x1b[6n");
+    assert_eq!(capture.core.take_reply_bytes(), b"\x1b[4;9R");
+}
+
 fn assert_named_snapshot(name: &str, screen: String) {
     let name = Path::new(name);
     let snapshot_name = name
@@ -632,6 +735,7 @@ fn assert_named_snapshot(name: &str, screen: String) {
 impl Drop for TuiProcess {
     fn drop(&mut self) {
         self.child.terminate();
+        self.close_terminal();
     }
 }
 
@@ -709,6 +813,12 @@ impl TerminalCapture {
 struct ChildGuard {
     child: Box<dyn portable_pty::Child + Send + Sync>,
     running: bool,
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        self.terminate();
+    }
 }
 
 impl ChildGuard {

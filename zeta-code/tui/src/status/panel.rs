@@ -133,7 +133,7 @@ impl StatusPanel {
             .active_detail()
             .content_height(body.width)
             .saturating_sub(usize::from(body.height));
-        let scroll = &mut self.scroll[self.tabs.active_index()];
+        let scroll = &mut self.scroll[self.tabs.active_index().expect("status tabs are enabled")];
         *scroll = navigation
             .offset(usize::from(*scroll), last, usize::from(body.height))
             .min(usize::from(u16::MAX)) as u16;
@@ -167,7 +167,8 @@ impl StatusPanel {
             frame,
             area,
             detail,
-            self.scroll[self.tabs.active_index()].min(allocated_max_scroll),
+            self.scroll[self.tabs.active_index().expect("status tabs are enabled")]
+                .min(allocated_max_scroll),
             context,
         );
     }
@@ -177,14 +178,25 @@ impl StatusPanel {
     }
 
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
-        if !matches!(self.tabs.active_tab().section, StatusSection::Processes) {
+        if !matches!(
+            self.tabs
+                .active_tab()
+                .expect("status tabs are enabled")
+                .section,
+            StatusSection::Processes
+        ) {
             return false;
         }
         area.width > 0 && area.height > 0
     }
 
     fn active_detail(&self) -> &DetailList {
-        match self.tabs.active_tab().section {
+        match self
+            .tabs
+            .active_tab()
+            .expect("status tabs are enabled")
+            .section
+        {
             StatusSection::Thread => &self.session,
             StatusSection::Processes => &self.processes,
         }

@@ -1005,9 +1005,14 @@ fn enter_openai_form(app: &mut App) {
 }
 
 #[test]
-fn config_provider_api_key_enter_saves_then_focuses_model_button() {
+fn config_provider_api_key_requires_editing_and_explicit_selection_before_fetching() {
     let mut app = App::new();
     enter_openai_form(&mut app);
+    app.handle_paste("ignored-before-edit".into());
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .is_none()
+    );
     app.handle_paste("test-key".into());
     let Some(AppCommand::Config(ConfigCommand::Connection(request))) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -1034,6 +1039,18 @@ fn config_provider_api_key_enter_saves_then_focuses_model_button() {
             None,
         )),
     }));
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .is_none()
+    );
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+            .is_none()
+    );
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
+            .is_none()
+    );
     let Some(AppCommand::Config(ConfigCommand::Connection(next))) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
@@ -1050,6 +1067,10 @@ fn config_provider_api_key_enter_saves_then_focuses_model_button() {
 fn escape_cancels_key_edit_without_saving_and_returns_to_providers() {
     let mut app = App::new();
     enter_openai_form(&mut app);
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .is_none()
+    );
     app.handle_paste("test-key".into());
     for _ in 0..3 {
         assert!(

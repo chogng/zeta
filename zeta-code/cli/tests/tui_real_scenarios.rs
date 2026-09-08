@@ -1,5 +1,3 @@
-#![cfg(unix)]
-
 #[path = "support/scenario_http.rs"]
 mod scenario_http;
 #[path = "support/tui_process.rs"]
@@ -15,9 +13,137 @@ use tui_process::LARGE_SIZE;
 use tui_process::SMALL_SIZE;
 use tui_process::TuiProcess;
 
+fn open_provider(process: &mut TuiProcess) {
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Enhanced TUI");
+    process.up();
+    process.up();
+    process.tab();
+    process.down();
+    process.type_text("OpenAI");
+    process.down();
+    process.enter();
+    process.wait_for_screen("> API key");
+}
+
+#[test]
+fn actual_tui_provider_fields_save_cancel_and_fetch_models() {
+    let fixture = Fixture::new();
+    let models = || HttpResponse::Json {
+        body: br#"{"data":[{"id":"pty-model"}]}"#.to_vec(),
+    };
+    let server = ScenarioServer::start([
+        models(),
+        HttpResponse::Json {
+            body: br#"{"data":[]}"#.to_vec(),
+        },
+        HttpResponse::failure(401, "synthetic-denial"),
+        models(),
+    ]);
+    fixture.write_config(&server.base_url());
+    fixture.append_config(&format!(
+        r#"
+[providers."custom-pty"]
+provider = "custom-pty"
+baseUrl = "{}"
+[providers."custom-pty".custom]
+name = "PTY service"
+protocol = "responses"
+"#,
+        server.base_url()
+    ));
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    open_provider(&mut process);
+    // Official, subscription, existing compatible service, then our named connection.
+    process.send(b"\x1b[1;3C\x1b[1;3C\x1b[1;3C");
+    process.wait_for_screen("> Provider name");
+    process.wait_for_screen("PTY service");
+    process.send(b"ignored-before-edit");
+    process.enter();
+    process.type_text("-中文🚀");
+    process.enter();
+    process.wait_for_screen("Saved · Connection not verified");
+    assert!(fixture.config_source().contains("PTY service-中文🚀"));
+    assert!(!fixture.config_source().contains("ignored-before-edit"));
+    assert!(process.screen().contains("> Provider name"));
+    process.enter();
+    process.type_text("-cancelled");
+    process.escape();
+    assert!(!process.screen().contains("-cancelled"));
+    assert!(!fixture.config_source().contains("-cancelled"));
+    process.down();
+    process.down();
+    process.enter();
+    process.type_text("pty-synthetic-key");
+    process.enter();
+    process.wait_for_screen("Key saved");
+    assert!(process.screen().contains("> API key"));
+    assert!(!process.screen().contains("pty-synthetic-key"));
+    assert!(!fixture.config_source().contains("pty-synthetic-key"));
+    assert_eq!(server.request_count(), 0);
+    process.down();
+    process.down();
+    process.wait_for_screen("> Fetch model list");
+    for expected in [
+        "1 models fetched",
+        "Provider returned no models",
+        "Authentication failed",
+        "1 models fetched",
+    ] {
+        process.enter();
+        process.wait_for_screen(expected);
+        if expected != "1 models fetched" {
+            assert!(!process.screen().contains("pty-model"));
+        }
+    }
+    assert!(process.screen().contains("pty-model"));
+    let requests = server.request_bodies();
+    assert_eq!(requests.len(), 4);
+    for request in requests {
+        assert!(request.starts_with("GET /v1/models "));
+        assert!(request.contains("Bearer pty-synthetic-key"));
+    }
+    process.resize(SMALL_SIZE);
+    process.wait_for_screen("> Fetch model list");
+    process.escape();
+    process.escape();
+    process.quit();
+}
+
+#[test]
+fn actual_tui_pty_streams_utf8_resizes_exits_and_resumes() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([HttpResponse::streaming(["PTY lifecycle reply"], None)]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("PTY 中文输入 🚀");
+    process.wait_for_screen("PTY lifecycle reply");
+    assert_eq!(server.request_count(), 1);
+    assert!(server.request_bodies()[0].contains("PTY 中文输入 🚀"));
+    process.resize(SMALL_SIZE);
+    process.wait_for_screen("PTY lifecycle reply");
+    eprintln!("PTY lifecycle: closing first process");
+    process.quit();
+    eprintln!("PTY lifecycle: reading persisted session");
+    let (session, thread) = fixture.only_thread();
+    eprintln!("PTY lifecycle: starting resumed process");
+    let mut resumed = TuiProcess::start(&fixture, &["resume", &session, &thread], LARGE_SIZE);
+    resumed.wait_for_screen("PTY lifecycle reply");
+    assert_eq!(
+        server.request_count(),
+        1,
+        "resuming must not invoke a model again"
+    );
+    eprintln!("PTY lifecycle: closing resumed process");
+    resumed.quit();
+    eprintln!("PTY lifecycle: complete");
+}
+
 #[test]
 fn actual_tui_opens_chatgpt_subscription_and_returns_to_openai() {
-    let fixture = Fixture::new("chatgpt-provider");
+    let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
@@ -53,7 +179,7 @@ fn actual_tui_opens_chatgpt_subscription_and_returns_to_openai() {
 
 #[test]
 fn actual_tui_reuses_chatgpt_subscription_without_changing_codex_auth() {
-    let fixture = Fixture::new("chatgpt-reuse");
+    let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     fs::create_dir_all(fixture.codex_home()).unwrap();
@@ -106,7 +232,7 @@ fn actual_tui_reuses_chatgpt_subscription_without_changing_codex_auth() {
 
 #[test]
 fn actual_tui_switches_language_and_persists_it() {
-    let fixture = Fixture::new("language");
+    let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
@@ -127,7 +253,7 @@ fn actual_tui_switches_language_and_persists_it() {
 
 #[test]
 fn actual_tui_runs_three_complete_conversation_turns() {
-    let fixture = Fixture::new("multi-turn-trajectory");
+    let fixture = Fixture::new();
     let first = Gate::new();
     let second = Gate::new();
     let third = Gate::new();
@@ -187,7 +313,7 @@ fn actual_tui_runs_three_complete_conversation_turns() {
 
 #[test]
 fn actual_tui_scrolls_the_transcript_with_the_mouse_wheel() {
-    let fixture = Fixture::new("transcript-mouse-scroll");
+    let fixture = Fixture::new();
     let server = ScenarioServer::start([HttpResponse::streaming(
         [
             "line 01\nline 02\nline 03\nline 04\nline 05\nline 06\nline 07\nline 08\nline 09\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20",
@@ -211,7 +337,7 @@ fn actual_tui_scrolls_the_transcript_with_the_mouse_wheel() {
 
 #[test]
 fn actual_tui_displays_git_branch_and_changes() {
-    let fixture = Fixture::new("git-status");
+    let fixture = Fixture::new();
     let initialized = Command::new("git")
         .args(["init", "--quiet", "--initial-branch=main"])
         .current_dir(fixture.workspace())
@@ -230,7 +356,7 @@ fn actual_tui_displays_git_branch_and_changes() {
 
 #[test]
 fn actual_tui_navigates_config_tabs_and_temporary_pickers() {
-    let fixture = Fixture::new("temporary-pages");
+    let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     fixture.append_config(
@@ -295,7 +421,7 @@ command = "zetaCode.action.copyLastResponse"
 
 #[test]
 fn actual_tui_queues_restores_and_completes_messages() {
-    let fixture = Fixture::new("queue-operations");
+    let fixture = Fixture::new();
     let first_gate = Gate::new();
     let server = ScenarioServer::start([
         HttpResponse::streaming(
@@ -339,7 +465,7 @@ fn actual_tui_queues_restores_and_completes_messages() {
 
 #[test]
 fn actual_tui_recovers_from_auth_and_rate_limit_failures() {
-    let auth_fixture = Fixture::new("http-401");
+    let auth_fixture = Fixture::new();
     let auth_server = ScenarioServer::start([
         HttpResponse::failure(401, "invalid-test-credential"),
         HttpResponse::streaming(["401 之后的下一轮恢复成功。"], None),
@@ -358,7 +484,7 @@ fn actual_tui_recovers_from_auth_and_rate_limit_failures() {
     auth.assert_snapshot("real/05-errors/01-auth-recovered");
     auth.quit();
 
-    let rate_fixture = Fixture::new("http-429");
+    let rate_fixture = Fixture::new();
     let rate_server = ScenarioServer::start([
         HttpResponse::failure(429, "test-rate-limit"),
         HttpResponse::failure(429, "test-rate-limit"),
@@ -382,7 +508,7 @@ fn actual_tui_recovers_from_auth_and_rate_limit_failures() {
 
 #[test]
 fn actual_tui_navigates_the_agents_session_manager_and_preview() {
-    let fixture = Fixture::new("agents-manager");
+    let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
@@ -414,7 +540,7 @@ fn actual_tui_navigates_the_agents_session_manager_and_preview() {
     process.wait_for_screen("enter create");
     process.quit();
 
-    let command_fixture = Fixture::new("agents-command");
+    let command_fixture = Fixture::new();
     let command_server = ScenarioServer::start([]);
     command_fixture.write_config(&command_server.base_url());
     let mut command = TuiProcess::start(&command_fixture, &[], LARGE_SIZE);
@@ -430,7 +556,7 @@ fn actual_tui_navigates_the_agents_session_manager_and_preview() {
 
 #[test]
 fn actual_tui_approves_and_declines_real_file_tool_calls() {
-    let approve_fixture = Fixture::new("approve-tool");
+    let approve_fixture = Fixture::new();
     let approve_gate = Gate::new();
     let approve_server = ScenarioServer::start([
         HttpResponse::tool_call(
@@ -479,7 +605,7 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     );
     approve.quit();
 
-    let decline_fixture = Fixture::new("decline-tool");
+    let decline_fixture = Fixture::new();
     let decline_gate = Gate::new();
     let decline_server = ScenarioServer::start([
         HttpResponse::tool_call(
@@ -515,7 +641,7 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
 
 #[test]
 fn actual_tui_approval_modes_change_file_tool_authority() {
-    let auto_fixture = Fixture::new("auto-review-tool");
+    let auto_fixture = Fixture::new();
     let auto_gate = Gate::new();
     let auto_review = serde_json::json!({
         "recommendation": "deny",
@@ -561,7 +687,7 @@ fn actual_tui_approval_modes_change_file_tool_authority() {
     assert!(auto_bodies[2].contains(r#"zeta_action_policy_feedback:{\"kind\":\"denied\""#));
     auto.quit();
 
-    let bypass_fixture = Fixture::new("bypass-tool");
+    let bypass_fixture = Fixture::new();
     let bypass_server = ScenarioServer::start([
         HttpResponse::tool_call(
             "call-bypass",
@@ -597,9 +723,10 @@ fn actual_tui_approval_modes_change_file_tool_authority() {
     bypass.quit();
 }
 
+#[cfg(unix)]
 #[test]
 fn actual_tui_process_details_show_sandbox_enforcement() {
-    let fixture = Fixture::new("sandbox-process");
+    let fixture = Fixture::new();
     let outside_path = fixture
         .workspace()
         .parent()
@@ -655,7 +782,7 @@ fn actual_tui_process_details_show_sandbox_enforcement() {
 
 #[test]
 fn actual_tui_process_streams_queues_resizes_and_resumes() {
-    let fixture = Fixture::new("stream-queue-resume");
+    let fixture = Fixture::new();
     let first_gate = Gate::new();
     let server = ScenarioServer::start([
         HttpResponse::streaming(
@@ -692,7 +819,7 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
     process.quit();
 
     let (session_id, thread_id) = fixture.only_thread();
-    let args = ["--resume", session_id.as_str(), thread_id.as_str()];
+    let args = ["resume", session_id.as_str(), thread_id.as_str()];
     let mut resumed = TuiProcess::start(&fixture, &args, LARGE_SIZE);
     resumed.wait_for_stable_screen("第二轮排队消息已经执行。");
     resumed.assert_snapshot("real/07-lifecycle/01-resumed");
@@ -701,7 +828,7 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
 
 #[test]
 fn actual_tui_process_interrupts_an_inflight_http_stream() {
-    let fixture = Fixture::new("interrupt");
+    let fixture = Fixture::new();
     let gate = Gate::new();
     let server = ScenarioServer::start([HttpResponse::streaming(
         ["这段回复正在等待取消", "不应成为完整回复"],
@@ -723,7 +850,7 @@ fn actual_tui_process_interrupts_an_inflight_http_stream() {
 
 #[test]
 fn actual_tui_process_renders_an_http_failure_and_remains_usable() {
-    let fixture = Fixture::new("http-failure");
+    let fixture = Fixture::new();
     let server = ScenarioServer::start([
         HttpResponse::failure(500, "real-http-500"),
         HttpResponse::failure(500, "real-http-500"),
@@ -748,7 +875,7 @@ fn actual_tui_process_renders_an_http_failure_and_remains_usable() {
 
 #[test]
 fn actual_tui_config_enables_and_disables_memory_diagnostics() {
-    let fixture = Fixture::new("memory-diagnostics");
+    let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);

@@ -11025,6 +11025,7 @@ dependencies = [
  "zeta-install-context",
  "zeta-memory-diagnostics",
  "zeta-protocol",
+ "zeta-utils-pty",
 ]
 
 [[package]]

@@ -1836,32 +1836,41 @@ impl ModelCatalog for ConfigBackedModelService {
     fn refresh(
         &self,
         provider: &zeta_protocol::ProviderId,
-    ) -> Result<Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
-        let config = self.resolved_config()?;
+    ) -> Result<
+        Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>,
+        crate::model_catalog::ModelCatalogRefreshError,
+    > {
+        use crate::model_catalog::ModelCatalogRefreshError;
+        let config = self
+            .resolved_config()
+            .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)?;
         let connection = config.providers.get(provider).cloned().unwrap_or_else(|| {
             zeta_model_provider_config::ModelProviderConfig::new(provider.clone())
         });
         let registry = self
             .provider_configs
             .with_configs(config.providers.values())
-            .map_err(|error| CoreError::Model(error.to_string()))?;
+            .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)?;
         let manager = self.models_manager.with_registry(registry.clone());
         let binding = self
             .catalog_provider
             .catalog_binding(&connection)
-            .map_err(|error| CoreError::Model(error.to_string()))?
-            .ok_or_else(|| {
-                CoreError::Model("This provider does not support model discovery".into())
-            })?;
+            .map_err(|error| match error {
+                zeta_model_provider::ModelProviderError::Credential(_) => {
+                    ModelCatalogRefreshError::Authentication
+                }
+                _ => ModelCatalogRefreshError::InvalidConfiguration,
+            })?
+            .ok_or(ModelCatalogRefreshError::Unsupported)?;
         self.catalog_runtime
             .block_on(manager.refresh(binding.scope().clone(), binding.source()))
-            .map_err(|error| CoreError::Model(error.to_string()))?;
+            .map_err(ModelCatalogRefreshError::from)?;
         let definition = registry
             .get(provider)
-            .ok_or_else(|| CoreError::Model("Unknown provider".into()))?;
+            .ok_or(ModelCatalogRefreshError::InvalidConfiguration)?;
         manager
             .list(&[binding.scope().clone()], &CatalogQuery::all())
-            .map_err(|error| CoreError::Model(error.to_string()))?
+            .map_err(ModelCatalogRefreshError::from)?
             .into_iter()
             .filter(|entry| entry.availability() == zeta_protocol::ModelAvailability::Available)
             .map(|entry| {
@@ -1873,6 +1882,7 @@ impl ModelCatalog for ConfigBackedModelService {
                     ),
                     &config,
                 )
+                .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)
             })
             .collect()
     }

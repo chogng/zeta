@@ -94,17 +94,33 @@ impl ModelCatalogSource for OpenAiCatalogSource {
                     "Model catalog worker stopped",
                 )
             })?
-            .map_err(|_| {
+            .map_err(|error| {
                 CatalogSourceError::new(
-                    CatalogSourceErrorKind::Transient,
+                    match error {
+                        zeta_client::ClientError::Cancelled(_) => CatalogSourceErrorKind::Cancelled,
+                        zeta_client::ClientError::InvalidRequest(_) => {
+                            CatalogSourceErrorKind::InvalidRequest
+                        }
+                        zeta_client::ClientError::Transport(_) => {
+                            CatalogSourceErrorKind::Unreachable
+                        }
+                        zeta_client::ClientError::InvalidResponse(_)
+                        | zeta_client::ClientError::Framing(_) => {
+                            CatalogSourceErrorKind::InvalidPayload
+                        }
+                    },
                     "Could not fetch model list",
                 )
             })?;
             cancel_on_drop.disarm();
             if !response.is_success() {
                 let kind = match response.status() {
+                    401 => CatalogSourceErrorKind::Authentication,
+                    403 => CatalogSourceErrorKind::Permission,
                     404 | 405 | 501 => CatalogSourceErrorKind::Unsupported,
                     429 => CatalogSourceErrorKind::RateLimited,
+                    400..=499 => CatalogSourceErrorKind::InvalidRequest,
+                    500..=599 => CatalogSourceErrorKind::ProviderUnavailable,
                     _ => CatalogSourceErrorKind::Transient,
                 };
                 return Err(CatalogSourceError::new(
@@ -288,19 +304,22 @@ fn capability_support(supported: bool) -> CapabilitySupport {
 }
 
 fn catalog_error(error: OllamaError) -> CatalogSourceError {
-    let kind = if error.is_cancelled() {
-        CatalogSourceErrorKind::Cancelled
-    } else {
-        match error.status() {
-            Some(429) => CatalogSourceErrorKind::RateLimited,
-            Some(404 | 405 | 501) => CatalogSourceErrorKind::Unsupported,
-            _ => match error {
-                OllamaError::InvalidEndpoint(_)
-                | OllamaError::InvalidRequest(_)
-                | OllamaError::InvalidResponse(_) => CatalogSourceErrorKind::InvalidPayload,
-                _ => CatalogSourceErrorKind::Transient,
-            },
+    let kind = match error {
+        OllamaError::Cancelled(_) => CatalogSourceErrorKind::Cancelled,
+        OllamaError::Unavailable(_) => CatalogSourceErrorKind::Unreachable,
+        OllamaError::HttpStatus(401) => CatalogSourceErrorKind::Authentication,
+        OllamaError::HttpStatus(403) => CatalogSourceErrorKind::Permission,
+        OllamaError::HttpStatus(404 | 405 | 501) => CatalogSourceErrorKind::Unsupported,
+        OllamaError::HttpStatus(429) => CatalogSourceErrorKind::RateLimited,
+        OllamaError::HttpStatus(400..=499) => CatalogSourceErrorKind::InvalidRequest,
+        OllamaError::HttpStatus(500..=599) => CatalogSourceErrorKind::ProviderUnavailable,
+        OllamaError::InvalidEndpoint(_) | OllamaError::InvalidRequest(_) => {
+            CatalogSourceErrorKind::InvalidRequest
         }
+        OllamaError::InvalidResponse(_) => CatalogSourceErrorKind::InvalidPayload,
+        OllamaError::HttpStatus(_)
+        | OllamaError::PullFailed(_)
+        | OllamaError::ProgressRejected(_) => CatalogSourceErrorKind::Transient,
     };
     CatalogSourceError::new(kind, "Ollama model discovery failed")
 }

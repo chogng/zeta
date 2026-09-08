@@ -34,7 +34,7 @@ fn mouse_scroll_keeps_the_status_tab_and_clamps_to_its_content() {
     for _ in 0..100 {
         panel.scroll(crate::widgets::navigation::Navigation::Next, area);
     }
-    assert_eq!(panel.tabs.active_index(), 0);
+    assert_eq!(panel.tabs.active_index(), Some(0));
     assert_eq!(
         usize::from(panel.scroll[0]),
         panel.session.content_height(80) - 4
@@ -279,7 +279,7 @@ fn status_panel_switches_tabs_with_keyboard() {
     let mut panel = panel(&usage, &reference_cost);
     let height_before = desired_height(&panel, 80);
 
-    assert_eq!(panel.tabs.active_index(), 0);
+    assert_eq!(panel.tabs.active_index(), Some(0));
     assert_eq!(
         panel.handle_key(
             KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
@@ -287,7 +287,7 @@ fn status_panel_switches_tabs_with_keyboard() {
         ),
         StatusPanelOutcome::Consumed
     );
-    assert_eq!(panel.tabs.active_index(), 1);
+    assert_eq!(panel.tabs.active_index(), Some(1));
     assert_eq!(
         panel.handle_key(
             KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
@@ -295,7 +295,7 @@ fn status_panel_switches_tabs_with_keyboard() {
         ),
         StatusPanelOutcome::Consumed
     );
-    assert_eq!(panel.tabs.active_index(), 0);
+    assert_eq!(panel.tabs.active_index(), Some(0));
     assert_eq!(
         panel.handle_key(
             KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
@@ -303,7 +303,7 @@ fn status_panel_switches_tabs_with_keyboard() {
         ),
         StatusPanelOutcome::Consumed
     );
-    assert_eq!(panel.tabs.active_index(), 1);
+    assert_eq!(panel.tabs.active_index(), Some(1));
     assert_eq!(
         panel.handle_key(
             KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
@@ -311,7 +311,7 @@ fn status_panel_switches_tabs_with_keyboard() {
         ),
         StatusPanelOutcome::Consumed
     );
-    assert_eq!(panel.tabs.active_index(), 0);
+    assert_eq!(panel.tabs.active_index(), Some(0));
     assert_eq!(desired_height(&panel, 80), height_before);
     assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
 }

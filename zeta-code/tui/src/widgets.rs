@@ -6,4 +6,5 @@ pub(crate) mod navigation;
 pub(crate) mod overlay;
 pub(crate) mod search_box;
 pub(crate) mod tab_list;
+pub(crate) mod text_field;
 pub(crate) mod text_prompt;

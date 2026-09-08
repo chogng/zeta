@@ -84,28 +84,66 @@ fn providers_without_dynamic_discovery_return_no_binding() {
 
 #[test]
 fn openai_catalog_handles_empty_lists_invalid_payloads_and_http_errors() {
-    struct Client { responses: Mutex<std::collections::VecDeque<ClientResponse>> }
+    struct Client {
+        responses: Mutex<std::collections::VecDeque<ClientResponse>>,
+    }
     impl OperationClient for Client {
         fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
             Ok(self.responses.lock().unwrap().pop_front().unwrap())
         }
     }
-    let client = Arc::new(Client { responses: Mutex::new(std::collections::VecDeque::from([
-        ClientResponse::new(200, vec![], br#"{"data":[{"id":"example-model"}]}"#.to_vec()),
-        ClientResponse::new(200, vec![], br#"{"data":[]}"#.to_vec()),
-        ClientResponse::new(200, vec![], br#"{"wrong":[]}"#.to_vec()),
-        ClientResponse::new(401, vec![], b"sensitive-response-body".to_vec()),
-    ])) });
+    let client = Arc::new(Client {
+        responses: Mutex::new(std::collections::VecDeque::from([
+            ClientResponse::new(
+                200,
+                vec![],
+                br#"{"data":[{"id":"example-model"}]}"#.to_vec(),
+            ),
+            ClientResponse::new(200, vec![], br#"{"data":[]}"#.to_vec()),
+            ClientResponse::new(200, vec![], br#"{"wrong":[]}"#.to_vec()),
+            ClientResponse::new(401, vec![], b"sensitive-response-body".to_vec()),
+        ])),
+    });
     let runtime = crate::ModelProviderRuntime::builtin_with_client(client);
-    let binding = runtime.catalog_binding(&ModelProviderConfig::new(ProviderId::new("openai").unwrap())).unwrap().unwrap();
-    let executor = tokio::runtime::Builder::new_current_thread().build().unwrap();
+    let binding = runtime
+        .catalog_binding(&ModelProviderConfig::new(
+            ProviderId::new("openai").unwrap(),
+        ))
+        .unwrap()
+        .unwrap();
+    let executor = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
     let manager = runtime.models_manager();
-    let first = executor.block_on(manager.refresh(binding.scope().clone(), binding.source())).unwrap();
-    assert_eq!(first.entries().iter().filter(|entry| entry.availability() == zeta_protocol::ModelAvailability::Available).count(), 1);
-    let empty = executor.block_on(manager.refresh(binding.scope().clone(), binding.source())).unwrap();
-    assert!(empty.entries().iter().all(|entry| entry.availability() != zeta_protocol::ModelAvailability::Available));
-    assert!(executor.block_on(manager.refresh(binding.scope().clone(), binding.source())).is_err());
-    let error = executor.block_on(manager.refresh(binding.scope().clone(), binding.source())).unwrap_err().to_string();
+    let first = executor
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap();
+    assert_eq!(
+        first
+            .entries()
+            .iter()
+            .filter(|entry| entry.availability() == zeta_protocol::ModelAvailability::Available)
+            .count(),
+        1
+    );
+    let empty = executor
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap();
+    assert!(
+        empty
+            .entries()
+            .iter()
+            .all(|entry| entry.availability() != zeta_protocol::ModelAvailability::Available)
+    );
+    assert!(
+        executor
+            .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+            .is_err()
+    );
+    let error = executor
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("401"));
     assert!(!error.contains("sensitive-response-body"));
 }
@@ -191,4 +229,109 @@ fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
         changed_protocol.scope(),
         runtime.catalog_binding(&config).unwrap().unwrap().scope()
     );
+}
+
+#[test]
+fn model_discovery_classifies_http_failures_without_exposing_response_bodies() {
+    struct Client(u16);
+    impl OperationClient for Client {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            Ok(ClientResponse::new(
+                self.0,
+                vec![],
+                b"secret-response".to_vec(),
+            ))
+        }
+    }
+    let executor = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    for (status, expected) in [
+        (401, CatalogSourceErrorKind::Authentication),
+        (403, CatalogSourceErrorKind::Permission),
+        (404, CatalogSourceErrorKind::Unsupported),
+        (405, CatalogSourceErrorKind::Unsupported),
+        (501, CatalogSourceErrorKind::Unsupported),
+        (429, CatalogSourceErrorKind::RateLimited),
+        (400, CatalogSourceErrorKind::InvalidRequest),
+        (503, CatalogSourceErrorKind::ProviderUnavailable),
+    ] {
+        for provider in ["openai", "ollama"] {
+            let runtime =
+                crate::ModelProviderRuntime::builtin_with_client(Arc::new(Client(status)));
+            let binding = runtime
+                .catalog_binding(&ModelProviderConfig::new(
+                    ProviderId::new(provider).unwrap(),
+                ))
+                .unwrap()
+                .unwrap();
+            let error = executor
+                .block_on(
+                    runtime
+                        .models_manager()
+                        .refresh(binding.scope().clone(), binding.source()),
+                )
+                .unwrap_err();
+            assert!(!error.to_string().contains("secret-response"));
+            let zeta_models_manager::ModelsManagerError::Source { error, .. } = error else {
+                panic!("expected source error")
+            };
+            assert_eq!(error.kind(), expected, "{provider}: {status}");
+        }
+    }
+}
+
+#[test]
+fn model_discovery_classifies_client_failures_without_exposing_details() {
+    struct Client(ClientError);
+    impl OperationClient for Client {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            Err(self.0.clone())
+        }
+    }
+    let executor = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    for (error, expected) in [
+        (
+            ClientError::Transport("secret".into()),
+            CatalogSourceErrorKind::Unreachable,
+        ),
+        (
+            ClientError::Cancelled("secret".into()),
+            CatalogSourceErrorKind::Cancelled,
+        ),
+        (
+            ClientError::InvalidRequest("secret".into()),
+            CatalogSourceErrorKind::InvalidRequest,
+        ),
+        (
+            ClientError::InvalidResponse("secret".into()),
+            CatalogSourceErrorKind::InvalidPayload,
+        ),
+        (
+            ClientError::Framing("secret".into()),
+            CatalogSourceErrorKind::InvalidPayload,
+        ),
+    ] {
+        let runtime = crate::ModelProviderRuntime::builtin_with_client(Arc::new(Client(error)));
+        let binding = runtime
+            .catalog_binding(&ModelProviderConfig::new(
+                ProviderId::new("openai").unwrap(),
+            ))
+            .unwrap()
+            .unwrap();
+        let error = executor
+            .block_on(
+                runtime
+                    .models_manager()
+                    .refresh(binding.scope().clone(), binding.source()),
+            )
+            .unwrap_err();
+        assert!(!error.to_string().contains("secret"));
+        let zeta_models_manager::ModelsManagerError::Source { error, .. } = error else {
+            panic!("expected source error")
+        };
+        assert_eq!(error.kind(), expected);
+    }
 }

@@ -285,6 +285,8 @@ fn read_output(
     commands: SyncSender<DriverCommand>,
     closing: Arc<AtomicBool>,
 ) {
+    #[cfg(windows)]
+    let stdout = zeta_utils_pty::CancellablePipeReader::new(stdout, Arc::clone(&closing));
     let mut reader = JsonlReader::new(BufReader::new(stdout), DEFAULT_MAX_MESSAGE_BYTES);
     loop {
         let raw = match reader.read_message() {

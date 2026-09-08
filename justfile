@@ -35,6 +35,11 @@ build-rust *args:
 test *args:
     {{ python }} -B scripts/cargo.py test -p {args}
 
+# Build the matching daemon and run real CLI/TUI scenarios through a PTY.
+test-tui *args:
+    {{ python }} -B scripts/cargo.py build -p zeta-app-server-daemon --bin zeta-app-server-daemon {{ if os_family() == "windows" { "-p zeta-windows-sandbox --bin zeta-command-runner --bin zeta-windows-sandbox-setup" } else { "" } }}
+    {{ python }} -B scripts/cargo.py test -p zeta-cli --test tui_real_scenarios {args}
+
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
 check *args:
     {{ python }} -B scripts/cargo.py check -p {args}

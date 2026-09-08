@@ -8304,7 +8304,7 @@
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/ModelListResult"
+              "$ref": "#/$defs/ProviderModelsListResult"
             }
           },
           "required": [
@@ -23893,6 +23893,33 @@
       ],
       "type": "object"
     },
+    "ProviderModelsListFailureCodeDto": {
+      "enum": [
+        "authentication",
+        "permission",
+        "unsupported",
+        "rateLimited",
+        "unreachable",
+        "providerUnavailable",
+        "invalidRequest",
+        "invalidResponse",
+        "invalidConfiguration",
+        "cancelled",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ProviderModelsListFailureDto": {
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ProviderModelsListFailureCodeDto"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "type": "object"
+    },
     "ProviderModelsListParams": {
       "properties": {
         "provider": {
@@ -23903,6 +23930,57 @@
         "provider"
       ],
       "type": "object"
+    },
+    "ProviderModelsListResult": {
+      "oneOf": [
+        {
+          "properties": {
+            "models": {
+              "items": {
+                "$ref": "#/$defs/ModelCatalogEntry"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "models",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "models"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "empty",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "failure": {
+              "$ref": "#/$defs/ProviderModelsListFailureDto"
+            },
+            "type": {
+              "const": "failed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "failure"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "ProviderRemoveParams": {
       "description": "Removes one provider entry from the user configuration authority.",

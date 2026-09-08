@@ -69,6 +69,13 @@ impl SearchBoxState {
         &self.query
     }
 
+    pub(crate) fn set_query(&mut self, query: String) {
+        use zeroize::Zeroize;
+        self.query.zeroize();
+        self.cursor = query.len();
+        self.query = query;
+    }
+
     pub(crate) fn input_active(&self) -> bool {
         self.input_active
     }
@@ -148,6 +155,13 @@ impl fmt::Debug for SearchBoxState {
             )
             .field("input_active", &self.input_active)
             .finish()
+    }
+}
+
+impl Drop for SearchBoxState {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.query.zeroize();
     }
 }
 

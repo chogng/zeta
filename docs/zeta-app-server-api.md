@@ -286,6 +286,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 修改 Provider declaration |
+| `provider/models/list` | model catalog | 按已保存 Provider 配置主动刷新目录；返回带 `type` 的 `models`（含列表）、`empty` 或 `failed`（含分类 code），不修改配置和凭据。失败分类不包含上游响应正文或秘密；协议 revision 29 |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
 | `mcp/server/connect` / `mcp/server/disconnect` | runtime | 设置 process-local lifecycle intent，不改变 Config revision |
 | `mcp/server/status` | read | 读取 active Config/Plugin/Connector MCP runtime 的 redacted lifecycle 与 generation projection |

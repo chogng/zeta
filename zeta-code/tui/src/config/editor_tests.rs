@@ -65,19 +65,10 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .collect::<Vec<_>>(),
         vec!["Config", "Providers", "Language servers"]
     );
-    assert!(
-        state
-            .visible_items()
-            .iter()
-            .all(|item| !matches!(
-                item.label(),
-                "Revision"
-                    | "Generation"
-                    | "Preferred model"
-                    | "Approval review model"
-                    | "Providers"
-            ))
-    );
+    assert!(state.visible_items().iter().all(|item| !matches!(
+        item.label(),
+        "Revision" | "Generation" | "Preferred model" | "Approval review model" | "Providers"
+    )));
     assert!(
         state
             .visible_items()
@@ -413,6 +404,7 @@ fn openai_editor() -> super::ConfigEditor {
 fn openai_form_owns_keyboard_input_and_esc_returns_to_providers() {
     let mut editor = openai_editor();
     assert!(matches!(editor.page(), super::ConfigEditorPage::OpenAi(_)));
+    editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     editor.handle_paste("unconfirmed-key".into());
     for _ in 0..3 {
         editor.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -428,10 +420,12 @@ fn created_provider_remains_available_after_closing_and_reopening_openai() {
     let mut editor = openai_editor();
     editor.openai.as_mut().unwrap().select_tab(2);
     for value in ["Example", "https://example.test/v1", ""] {
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         editor.handle_paste(value.into());
         editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
-    editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) =
         editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
@@ -461,6 +455,7 @@ fn created_provider_remains_available_after_closing_and_reopening_openai() {
     for _ in 0..2 {
         editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
     }
+    editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     editor.handle_paste(" renamed".into());
     let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(renamed)) =
         editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
