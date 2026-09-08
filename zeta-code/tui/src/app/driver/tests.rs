@@ -1,3 +1,4 @@
+use super::complete_issue_context;
 use super::schedule_command;
 use crate::app::App;
 use crate::app::AppCommand;
@@ -9,6 +10,57 @@ use crate::keymap::Command as KeymapCommand;
 use crate::theme::Command as ThemeCommand;
 use crate::thread::Command as ThreadCommand;
 use std::collections::VecDeque;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
+
+#[test]
+fn failed_issue_context_read_remains_eligible_for_retry() {
+    let current_thread = ThreadId::new("current").unwrap();
+    let mut loaded_thread = None;
+
+    let failed = complete_issue_context(
+        &mut loaded_thread,
+        &current_thread,
+        current_thread.clone(),
+        Err("temporary disconnect".into()),
+    );
+    assert!(matches!(failed, Some(Err(error)) if error == "temporary disconnect"));
+    assert_eq!(loaded_thread, None);
+
+    let succeeded = complete_issue_context(
+        &mut loaded_thread,
+        &current_thread,
+        current_thread.clone(),
+        Ok(crate::issues::Event::ContextReceived {
+            session_id: SessionId::new("session").unwrap(),
+            numbers: vec![3, 5],
+        }),
+    );
+    assert!(matches!(
+        succeeded,
+        Some(Ok(crate::issues::Event::ContextReceived { .. }))
+    ));
+    assert_eq!(loaded_thread, Some(current_thread));
+}
+
+#[test]
+fn stale_issue_context_completion_does_not_mark_the_visible_thread_loaded() {
+    let current_thread = ThreadId::new("current").unwrap();
+    let mut loaded_thread = None;
+
+    let completion = complete_issue_context(
+        &mut loaded_thread,
+        &current_thread,
+        ThreadId::new("previous").unwrap(),
+        Ok(crate::issues::Event::ContextReceived {
+            session_id: SessionId::new("previous").unwrap(),
+            numbers: vec![3],
+        }),
+    );
+
+    assert!(completion.is_none());
+    assert_eq!(loaded_thread, None);
+}
 
 #[test]
 fn unrelated_actions_bypass_a_busy_request_without_losing_same_domain_order() {

@@ -39,6 +39,10 @@ use zeta_protocol::TurnId;
 
 pub(super) enum Completion {
     Memory(crate::memory::Completion),
+    IssueContext {
+        thread_id: zeta_protocol::ThreadId,
+        result: Result<crate::issues::Event, String>,
+    },
     IssueCreated {
         generation: u64,
         result: Result<(ConversationCompletion, Vec<u64>), String>,
@@ -135,6 +139,9 @@ pub(super) fn apply_request_completion(
             Err(error) => app.finish_issue_start(generation, Err(error)),
         },
         Completion::Memory(_) => unreachable!("memory completions are owned by AppDriver"),
+        Completion::IssueContext { .. } => {
+            unreachable!("issue context completions are owned by AppDriver")
+        }
         Completion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, None, app),
         Completion::ConfigRefreshed(Err(error)) => {
             app.update(ThreadEvent::FailureReported(error));

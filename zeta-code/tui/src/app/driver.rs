@@ -150,9 +150,9 @@ impl AppDriver {
             && self.requests.is_idle(Some(RequestKey::IssueContext))
         {
             let session_id = self.conversation.session_id().clone();
-            self.issue_context_thread = Some(self.conversation.thread_id().clone());
+            let thread_id = self.conversation.thread_id().clone();
             let mut client = self.client.clone();
-            self.requests.spawn_presentation(
+            self.requests.spawn(
                 Some(RequestKey::IssueContext),
                 "zeta-tui-issue-context",
                 move || {
@@ -162,21 +162,24 @@ impl AppDriver {
                                 session_id: session_id.clone(),
                             },
                         )
-                        .map_err(|error| error.to_string())?;
-                    let numbers = result
-                        .task
-                        .filter(|task| task.pending_input)
-                        .map(|task| {
-                            task.issues
-                                .into_iter()
-                                .map(|issue| issue.issue.number)
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    Ok(crate::issues::Event::ContextReceived {
-                        session_id,
-                        numbers,
-                    })
+                        .map_err(|error| error.to_string())
+                        .map(|result| {
+                            let numbers = result
+                                .task
+                                .filter(|task| task.pending_input)
+                                .map(|task| {
+                                    task.issues
+                                        .into_iter()
+                                        .map(|issue| issue.issue.number)
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            crate::issues::Event::ContextReceived {
+                                session_id,
+                                numbers,
+                            }
+                        });
+                    Completion::IssueContext { thread_id, result }
                 },
                 &mut self.app,
             );
@@ -192,6 +195,19 @@ impl AppDriver {
                         self.app.update(ThreadEvent::FailureReported(error));
                     }
                     self.publish_memory_status(previous);
+                }
+                Ok(Completion::IssueContext { thread_id, result }) => {
+                    if let Some(result) = complete_issue_context(
+                        &mut self.issue_context_thread,
+                        self.conversation.thread_id(),
+                        thread_id,
+                        result,
+                    ) {
+                        match result {
+                            Ok(event) => self.app.update(event),
+                            Err(error) => self.app.update(ThreadEvent::FailureReported(error)),
+                        }
+                    }
                 }
                 Ok(completion) => apply_request_completion(
                     completion,
@@ -426,6 +442,21 @@ impl AppDriver {
             self.conversation.thread_sequence(),
         )
     }
+}
+
+fn complete_issue_context(
+    loaded_thread: &mut Option<zeta_protocol::ThreadId>,
+    current_thread: &zeta_protocol::ThreadId,
+    requested_thread: zeta_protocol::ThreadId,
+    result: Result<crate::issues::Event, String>,
+) -> Option<Result<crate::issues::Event, String>> {
+    if requested_thread != *current_thread {
+        return None;
+    }
+    if result.is_ok() {
+        *loaded_thread = Some(requested_thread);
+    }
+    Some(result)
 }
 
 pub(super) fn schedule_command(

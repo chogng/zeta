@@ -2,7 +2,37 @@ use crate::SqliteIssueTaskStore;
 use zeta_github::Issue;
 use zeta_github::IssueSnapshot;
 use zeta_github::IssueTask;
+use zeta_github::PullRequest;
+use zeta_github::PullRequestBranch;
 use zeta_github::Repository;
+
+#[test]
+fn record_pull_request_reports_missing_issue_task() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = SqliteIssueTaskStore::open(&directory.path().join("state.sqlite")).unwrap();
+    let pull_request = PullRequest {
+        number: 7,
+        node_id: "pr".into(),
+        html_url: "https://github.com/team/repo/pull/7".into(),
+        state: "open".into(),
+        draft: false,
+        merged_at: None,
+        head: PullRequestBranch {
+            name: "issue/3-task".into(),
+            sha: "a".repeat(40),
+        },
+        base: PullRequestBranch {
+            name: "main".into(),
+            sha: "b".repeat(40),
+        },
+        auto_merge: None,
+    };
+
+    assert_eq!(
+        store.record_pull_request("missing", &pull_request),
+        Err("This Session has no associated issues".into())
+    );
+}
 
 #[test]
 fn combined_issue_preparation_survives_reopen_and_rejects_changed_retries() {

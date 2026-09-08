@@ -2223,7 +2223,7 @@ client_methods! {
     IssuePrPreview => "issue/pr/preview" {
         params: IssueTaskReadParams,
         response: IssuePrPreview,
-        serialization: SessionSharedRead,
+        serialization: GlobalExclusive,
     },
     IssuePrCreate => "issue/pr/create" {
         params: IssuePrCreateParams,
