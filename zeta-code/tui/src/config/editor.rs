@@ -213,7 +213,9 @@ impl ConfigEditor {
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
                 action => ConfigEditorOutcome::Action(action),
             },
-            ListSelectionOutcome::Consumed => ConfigEditorOutcome::Consumed,
+            ListSelectionOutcome::Consumed | ListSelectionOutcome::FocusPrevious => {
+                ConfigEditorOutcome::Consumed
+            }
             ListSelectionOutcome::Dismiss => {
                 if self.openai.take().is_some() {
                     ConfigEditorOutcome::Consumed
@@ -393,6 +395,19 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
+    let memory_diagnostics_id = ListSelectionItemId::new("memory-diagnostics");
+    let memory_diagnostics = terminal.memory_diagnostics();
+    let mut toggled_terminal = terminal;
+    toggled_terminal.set_memory_diagnostics(!memory_diagnostics);
+    actions.insert(
+        memory_diagnostics_id.clone(),
+        ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
+            terminal: toggled_terminal,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
     let git_changes_id = ListSelectionItemId::new("show-git-changes-as-diff");
     let show_git_changes_as_diff = status_line.show_git_changes_as_diff();
     let mut toggled_status_line = status_line.clone();
@@ -420,6 +435,13 @@ pub(crate) fn config_choices(
                 "Vim mode",
                 "Use Vim editing in ChatInput",
                 checkbox(vim_mode),
+            ),
+        ListSelectionItem::new("Memory diagnostics")
+            .with_id(memory_diagnostics_id)
+            .with_columns(
+                "Memory diagnostics",
+                "Continuously collect bounded memory evidence",
+                checkbox(memory_diagnostics),
             ),
         ListSelectionItem::new("Show Git changes as diff")
             .with_id(git_changes_id)

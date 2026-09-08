@@ -82,7 +82,7 @@ flowchart LR
 
 | 产品入口 | 当前证据 | 边界 |
 | --- | --- | --- |
-| TUI：`/memory start`、`read`、`stop`、`export <新文件路径>` | 本机进程与正文单元计数；后端单独采样 | 正文历史的正常增长不能算泄漏；进程内后端的常驻内存只由后端报告 |
+| TUI：Config 中的 `Memory diagnostics` 开关；Status 只读展示 | 本机进程与正文单元计数；后端单独采样 | 配置只保存启用意图，不保存诊断会话或报告；正文历史的正常增长不能算泄漏 |
 | Rust 图形端：键盘快捷键目录中的四项 Memory diagnostics 命令 | 本机进程、窗口、后台任务、保留 UI 片段、GPU 资源句柄和渲染缓存条目计数 | GPU 指标统计应用持有的 wgpu 句柄；缓存统计图片、图标和文字缓冲条目。字节数明确为不支持 |
 | Electron：命令面板中的四项 Memory Diagnostics 命令 | Main/Renderer 等进程的常驻内存；Main 与当前 Renderer 的 JS 堆、当前 Renderer 的 DOM/监听器计数 | 调试器已被占用时返回不支持；不会夺取其他调试会话 |
 | Web：相同命令面板入口 | 当前页面中仍挂载的 DOM 节点数 | 进程内存、JS 堆及脱离页面的节点不由浏览器接口推断 |

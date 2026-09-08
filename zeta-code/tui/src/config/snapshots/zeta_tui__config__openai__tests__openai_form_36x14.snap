@@ -1,17 +1,17 @@
 ---
 source: zeta-code/tui/src/config/openai_tests.rs
-assertion_line: 217
+assertion_line: 274
 expression: output
 ---
  Official API key
  ChatGPT subscription
  New custom provider
 API key
-┌──────────────────────────────────┐
+╭──────────────────────────────────╮
 │ ••••••••                         │
-└──────────────────────────────────┘
+╰──────────────────────────────────╯
 API protocol
-┌──────────────────────────────────┐
+╭──────────────────────────────────╮
 │ Responses ← / → to change        │
-└──────────────────────────────────┘
+╰──────────────────────────────────╯
 Create provider

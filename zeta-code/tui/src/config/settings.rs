@@ -8,10 +8,11 @@ use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 pub(crate) struct TerminalSettings {
     mouse_interactions: bool,
     input_mode: ChatInputMode,
+    memory_diagnostics: bool,
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 2] = ["mouseInteractions", "inputMode"];
+    const KEYS: [&'static str; 3] = ["mouseInteractions", "inputMode", "memoryDiagnostics"];
 
     pub(crate) fn from_tui(section: &FrontendConfigDto) -> Result<Self, String> {
         let defaults = serde_json::to_value(Self::default())
@@ -65,6 +66,14 @@ impl TerminalSettings {
     pub(crate) fn set_input_mode(&mut self, mode: ChatInputMode) {
         self.input_mode = mode;
     }
+
+    pub(crate) const fn memory_diagnostics(self) -> bool {
+        self.memory_diagnostics
+    }
+
+    pub(crate) fn set_memory_diagnostics(&mut self, enabled: bool) {
+        self.memory_diagnostics = enabled;
+    }
 }
 
 impl Default for TerminalSettings {
@@ -72,6 +81,7 @@ impl Default for TerminalSettings {
         Self {
             mouse_interactions: true,
             input_mode: ChatInputMode::Standard,
+            memory_diagnostics: false,
         }
     }
 }

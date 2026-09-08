@@ -13,6 +13,7 @@ pub(crate) enum Event {
     LineEditorOpened(StatusLineEditorUpdate),
     LineEditorUpdated(StatusLineEditorUpdate),
     PanelOpened(StatusPanel),
+    MemoryDiagnosticsChanged(crate::memory::Status),
     GitStatusReceived(zeta_app_server_protocol::protocol::git::GitStatusResult),
     GitTextDiffReceived {
         status: zeta_app_server_protocol::protocol::git::GitStatusResult,

@@ -38,7 +38,7 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 
 pub(super) enum Completion {
-    Memory(Result<Box<zeta_app_server_client::MemoryRecording>, String>),
+    Memory(crate::memory::Completion),
     ConfigRefreshed(Result<ConfigReadResult, String>),
     Sessions(SessionCompletion),
     ProductCommand {
@@ -99,7 +99,6 @@ pub(super) fn apply_request_completion(
     conversation: &mut ActiveConversation,
     thread_subscription: &mut ThreadSubscription,
     app: &mut App,
-    memory: &mut Option<Box<zeta_app_server_client::MemoryRecording>>,
 ) {
     if completion
         .thread_scope()
@@ -108,17 +107,7 @@ pub(super) fn apply_request_completion(
         return;
     }
     match completion {
-        Completion::Memory(result) => match result {
-            Ok(recording) => {
-                app.update(HostEvent::OperationCompleted(
-                    recording
-                        .report()
-                        .map(|report| crate::memory::describe(&report)),
-                ));
-                *memory = Some(recording);
-            }
-            Err(error) => app.update(HostEvent::OperationCompleted(Err(error))),
-        },
+        Completion::Memory(_) => unreachable!("memory completions are owned by AppDriver"),
         Completion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, None, app),
         Completion::ConfigRefreshed(Err(error)) => {
             app.update(ThreadEvent::FailureReported(error));

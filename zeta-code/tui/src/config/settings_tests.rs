@@ -12,6 +12,7 @@ fn tui_table_defaults_missing_terminal_fields() {
     let settings = TerminalSettings::from_tui(&section).unwrap();
 
     assert!(settings.mouse_interactions());
+    assert!(!settings.memory_diagnostics());
 }
 
 #[test]
@@ -39,6 +40,7 @@ fn terminal_settings_update_preserves_other_tui_fields() {
     ]));
     let mut settings = TerminalSettings::default();
     settings.set_mouse_interactions(false);
+    settings.set_memory_diagnostics(true);
 
     let updated = settings.write_to_tui(&section).unwrap();
 
@@ -48,6 +50,7 @@ fn terminal_settings_update_preserves_other_tui_fields() {
         serde_json::json!({"enabled": true})
     );
     assert_eq!(updated.0["mouseInteractions"], serde_json::json!(false));
+    assert_eq!(updated.0["memoryDiagnostics"], serde_json::json!(true));
 }
 
 #[test]

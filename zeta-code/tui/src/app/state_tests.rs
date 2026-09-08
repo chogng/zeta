@@ -815,7 +815,7 @@ fn config_vim_mode_toggles_on_enter() {
 }
 
 #[test]
-fn config_show_git_changes_as_diff_toggles_on_enter() {
+fn config_memory_diagnostics_toggles_on_enter() {
     let mut config = empty_config_snapshot();
     config.revision = 7;
     let mut app = App::new();
@@ -826,6 +826,29 @@ fn config_show_git_changes_as_diff_toggles_on_enter() {
         StatusLineSettings::default(),
     )));
     for _ in 0..2 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Edit(edit)))
+            if edit.server_config.revision == 7
+                && edit.terminal.memory_diagnostics()
+    ));
+}
+
+#[test]
+fn config_show_git_changes_as_diff_toggles_on_enter() {
+    let mut config = empty_config_snapshot();
+    config.revision = 7;
+    let mut app = App::new();
+    app.update(ConfigEvent::EditorOpened(config_choices(
+        &config,
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    )));
+    for _ in 0..3 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -2240,25 +2263,4 @@ fn panel_search_owns_letters_and_paste_then_returns_to_the_list_and_original_dra
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert_eq!(app.input(), "original draft");
-}
-
-#[test]
-fn memory_diagnostics_remain_available_during_a_running_turn() {
-    let mut app = App::new();
-    app.insert_text("first");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.insert_text("/memory start");
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(
-        matches!(action, Some(AppCommand::Thread(ThreadCommand::ExecuteProductCommand(invocation))) if invocation.command.name == "memory")
-    );
-    assert_eq!(app.status(), &Status::Working);
-    app.update(crate::host::Event::OperationCompleted(Ok(
-        "Memory recording started".into(),
-    )));
-    assert_eq!(app.status(), &Status::Working);
-    app.update(crate::host::Event::OperationCompleted(Err(
-        "Memory collection failed".into(),
-    )));
-    assert_eq!(app.status(), &Status::Working);
 }

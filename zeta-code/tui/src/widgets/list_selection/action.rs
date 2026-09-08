@@ -14,6 +14,7 @@ pub(crate) enum ListSelectionOutcome<A> {
     Adjust(A, ListSelectionAdjustment),
     Consumed,
     Dismiss,
+    FocusPrevious,
 }
 
 /// Data supplied by a feature to construct a list-selection surface.
@@ -94,6 +95,7 @@ impl<A: Clone> ListSelection<A> {
                 .unwrap_or(ListSelectionOutcome::Consumed),
             ListSelectionInputOutcome::Consumed => ListSelectionOutcome::Consumed,
             ListSelectionInputOutcome::Dismiss => ListSelectionOutcome::Dismiss,
+            ListSelectionInputOutcome::FocusPrevious => ListSelectionOutcome::FocusPrevious,
         }
     }
 

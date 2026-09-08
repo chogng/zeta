@@ -23,7 +23,7 @@
 | 添加目录、重复与失败反馈、目录权限 | [directories.md](spec/directories.md) |
 | OpenAI 官方 Key、自定义连接、ChatGPT 账户、模型目录 | [providers.md](spec/providers.md) |
 | 状态行、用量和本机进程资源 | [status.md](spec/status.md) |
-| 持续采集与报告导出 | [memory-diagnostics.md](spec/memory-diagnostics.md) |
+| 持续诊断配置与状态展示 | [memory-diagnostics.md](spec/memory-diagnostics.md) |
 | 正文类型、执行结果、合并、容量限制及输出示例 | [transcript.md](spec/transcript.md) |
 | 正文绘制接口、测量和身份一致性 | [transcript-rendering.md](spec/transcript-rendering.md) |
 | 鼠标、终端历史、断线恢复和退出 | [terminal.md](spec/terminal.md) |

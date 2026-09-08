@@ -276,6 +276,15 @@ impl ChatPanel {
         }
     }
 
+    pub(crate) fn apply_memory_diagnostics(
+        &mut self,
+        status: crate::memory::Status,
+    ) {
+        if let Some(command) = self.command.as_mut() {
+            command.apply_memory_diagnostics(status);
+        }
+    }
+
     pub(crate) fn push_custom_theme(&mut self, choices: ThemeChoices) {
         if let Some(command) = self.command.as_mut() {
             command.push_custom_theme(choices);

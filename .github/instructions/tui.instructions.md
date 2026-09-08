@@ -15,5 +15,6 @@ Prefer command-line-observable tests for state, events, terminal output, timing,
 
 ## Learnings
 
-* 固定高度面板需要页签时，直接复用通用 `TabList` 的状态、绘制和交互样式；能力代码只提供页签标签与业务身份，不自行拼接方括号、选中标记或颜色，避免同类面板产生视觉和交互漂移。
+* 固定高度面板需要页签时，直接复用通用 `TabList` 的状态、绘制、命中和页签焦点按键；能力代码只提供页签标签与业务身份，并根据 `TabList` 返回的切页或进入正文结果执行业务动作。嵌入内容不保留未绘制的内部页签，只向父面板报告焦点到达边界；父面板不能检查子组件内部索引来猜边界，避免出现不可见焦点和同类面板交互漂移。
 * 设计 StatusLine 数据需求时，先确认同一数据是否服务其他能力。Git 状态必须持续跟随 ChangeTurn；关闭 StatusLine 的 Git branch 或 Git changes 只能停止对应显示与 StatusLine 专属的额外计算，不能停止基础 Git 状态跟随。
+* Status 只展示状态和证据，不拥有功能启停；需要跨启动保留的 TUI 诊断开关由 Config 写入 `[tui]`，运行层按配置管理诊断会话，不能把会话身份或采样结果写回配置。

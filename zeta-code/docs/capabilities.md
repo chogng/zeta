@@ -15,7 +15,7 @@
 | [正文与执行结果](spec/transcript.md) | 回复逐步显示，相关执行结果合并展示；可展开和滚动，预览及详情受保留容量限制 | [模型](../tui/src/thread/transcript/model.rs)、[执行](../tui/src/thread/transcript/exec_cell.rs)、[测试](../tui/src/thread/transcript/view/render_tests.rs) |
 | [终端历史](spec/terminal.md#鼠标规则) | 已定稿内容写入终端历史，仍在生成的内容继续刷新。不同终端及复用器组合尚未全面验证 | [终端会话](../tui/src/terminal/session.rs)、[协议测试](../tui/src/terminal/history_protocol_tests.rs) |
 | [断线恢复](spec/terminal.md#连接恢复) | TUI 返回持久化身份，由 CLI 重建连接。不恢复旧连接中的待执行请求 | [断线处理](../tui/src/app/recovery.rs)、[恢复测试](../tui/src/sessions/active_tests.rs)、[PTY 场景](../cli/tests/tui_real_scenarios.rs) |
-| [状态与资源](spec/status.md) | `/status` 提供 Thread / Processes 两页，状态行按需采样；`/memory` 提供后端持续诊断与导出，不自动确认泄漏 | [状态页](../tui/src/status/panel.rs)、[采样](../../zeta-rs/memory-diagnostics/src/process_resources.rs)、[测试](../../zeta-rs/memory-diagnostics/src/process_resources_tests.rs) |
+| [状态与资源](spec/status.md) | `/status` 提供 Thread / Processes 两页并只读展示；Config 控制持续内存诊断，状态行按需采样，不自动确认泄漏 | [状态页](../tui/src/status/panel.rs)、[采样](../../zeta-rs/memory-diagnostics/src/process_resources.rs)、[测试](../../zeta-rs/memory-diagnostics/src/process_resources_tests.rs) |
 | [目录管理](spec/directories.md) | `/add-dir` 面板可输入路径并按 Enter 添加；成功刷新并定位权限项，失败保留输入，重复添加保留原权限 | [面板](../tui/src/dirs/panel.rs)、[回归测试](../tui/src/dirs_tests.rs)、[验收](changes/dir-add/verification.md) |
 | [设置与快捷键](spec/commands.md#快捷键声明与保存) | 支持保存 TUI 设置、主题和应用快捷键；面板基础键仍固定，凭据使用专用接口 | [配置](../tui/src/config/request.rs)、[快捷键](../tui/src/keymap/settings.rs)、[主题测试](../tui/src/theme/resource_tests.rs)、[快捷键测试](../tui/src/keymap/settings_tests.rs) |
 | [OpenAI 配置](spec/providers.md) | 官方 Key、ChatGPT 订阅和多个命名连接以 tab 划分；Enter 确认后移到下一项。自定义连接可选 Responses / Chat Completions，独立保存 Key，并主动获取模型目录供 `/model` 选择；八条要求的自动化验证已完成；真实终端与账号未实测 | [面板](../tui/src/config/openai.rs)、[版本与验收](changes/openai-panel/README.md) |
@@ -37,6 +37,6 @@
 - **独立 Agent 运行提示**：[样式中的方案](spec/styles.md#运行提示)尚未接入。
 - **终端兼容性**：部分环境尚未实测，范围与复现方法见[兼容性记录](../tui/README.md#终端历史兼容性验证)。
 
-完整 Markdown、桌面同等鼠标操作及自动确认内存泄漏不属于当前已支持能力；`/memory` 的主动诊断与导出已有接入。未列出的命令从[命令键表](spec/commands.md#每个命令面板)继续核对。
+完整 Markdown、桌面同等鼠标操作及自动确认内存泄漏不属于当前已支持能力；持续诊断由 Config 明确开启，Status 只读展示。未列出的命令从[命令键表](spec/commands.md#每个命令面板)继续核对。
 
 支持范围或缺口变化时更新对应行；本次工作的完成结论记录在[验收文件](../../docs/development-workflow.md#验证)中。

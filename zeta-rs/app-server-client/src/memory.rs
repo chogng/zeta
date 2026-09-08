@@ -161,6 +161,13 @@ impl MemoryRecording {
         self.report.lock().unwrap().clone()
     }
 
+    pub fn status(&self) -> Result<MemoryStatus, String> {
+        match &*self.report.lock().unwrap() {
+            Ok(report) => Ok(report.status),
+            Err(error) => Err(error.clone()),
+        }
+    }
+
     /// Must be called on a request worker; the returned report remains readable after stopping.
     pub fn stop(&mut self) -> Result<MemoryReport, String> {
         self.stop_collector();

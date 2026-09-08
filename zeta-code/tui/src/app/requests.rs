@@ -34,6 +34,7 @@ pub(super) enum RequestKey {
     Clipboard,
     FileExport,
     Git,
+    Memory,
 }
 
 #[derive(Default)]

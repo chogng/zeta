@@ -8,6 +8,7 @@ use super::status_panel;
 use crate::render::horizontal_margin;
 use crate::render::test_context;
 use crate::status::AppServerProcessResourcesView;
+use crate::memory::Status as MemoryDiagnosticsStatus;
 use crate::status::ObservedProcessResourcesView;
 use crate::status::ProcessCpuCurrent;
 use crate::status::ProcessUsageView;
@@ -145,6 +146,10 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
     assert_eq!(panel.scroll, [7, 3]);
     assert!(panel.select_tab(1));
     assert_eq!(
+        row_value(panel.processes.rows(), "Memory diagnostics"),
+        "Disabled"
+    );
+    assert_eq!(
         row_value(panel.processes.rows(), "TUI resident memory"),
         "140.0 MiB"
     );
@@ -214,6 +219,7 @@ fn process_tab_renders_local_total_and_owned_process_details() {
         one_minute_change_bytes: Some(3 * 1024 * 1024),
         five_minute_change_bytes: Some(-8 * i128::from(1024 * 1024)),
     });
+    panel.apply_memory_diagnostics(MemoryDiagnosticsStatus::Recording);
     panel.select_tab(1);
     let backend = TestBackend::new(80, 15);
     let mut terminal = Terminal::new(backend).unwrap();

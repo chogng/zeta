@@ -110,4 +110,9 @@ fn search_box_distinguishes_focus_hover_and_pressed_borders() {
         terminal.backend().buffer()[(0, 0)].fg,
         test_context().focus()
     );
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(0, 0)].symbol(), "╭");
+    assert_eq!(buffer[(19, 0)].symbol(), "╮");
+    assert_eq!(buffer[(0, 2)].symbol(), "╰");
+    assert_eq!(buffer[(19, 2)].symbol(), "╯");
 }

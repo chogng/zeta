@@ -726,40 +726,60 @@ fn actual_tui_process_renders_an_http_failure_and_remains_usable() {
 }
 
 #[test]
-fn actual_tui_records_reads_stops_and_exports_memory_diagnostics() {
+fn actual_tui_config_enables_and_disables_memory_diagnostics() {
     let fixture = Fixture::new("memory-diagnostics");
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
-    process.submit("/memory start");
-    process.wait_for_output("Recording");
-    process.submit("/memory start");
-    process.wait_for_output("already");
-    process.submit("/memory read");
-    process.submit("/memory stop");
-    process.wait_for_output("Stopped");
-    process.submit("/memory export memory-report.json");
-    let path = fixture.workspace().join("memory-report.json");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    let report: serde_json::Value = loop {
-        if let Ok(bytes) = fs::read(&path) {
-            if let Ok(report) = serde_json::from_slice(&bytes) {
-                break report;
-            }
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the diagnostic export did not complete"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    };
-    assert_eq!(report["report"]["version"], 1);
-    assert_eq!(report["report"]["status"], "stopped");
-    assert!(report["report"]["targets"].as_array().is_some());
+    process.submit("/config");
+    process.wait_for_screen("Memory diagnostics");
+    process.down();
+    process.down();
+    process.enter();
+    wait_for_config(&fixture, "memoryDiagnostics = true");
+    process.escape();
+
+    process.submit("/status");
+    process.wait_for_screen("Thread");
+    process.tab();
+    process.wait_for_screen("Memory diagnostics");
+    process.wait_for_stable_screen("Recording");
+    process.escape();
+
+    process.submit("/config");
+    process.wait_for_screen("Memory diagnostics");
+    process.down();
+    process.down();
+    process.enter();
+    wait_for_config(&fixture, "memoryDiagnostics = false");
+    process.escape();
+    process.submit("/status");
+    process.wait_for_screen("Thread");
+    process.tab();
+    process.wait_for_screen("Memory diagnostics");
+    process.wait_for_stable_screen("Disabled");
     process.quit();
     assert!(
         server.request_bodies().is_empty(),
         "diagnostics must not invoke a model"
     );
+}
+
+fn wait_for_config(fixture: &Fixture, expected: &str) {
+    let path = fixture
+        .find_file("config.toml")
+        .expect("the scenario config exists");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let config = fs::read_to_string(&path).unwrap_or_default();
+        if config.contains(expected) {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "config did not contain {expected:?}:\n{config}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
 }

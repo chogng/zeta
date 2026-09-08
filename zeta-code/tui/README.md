@@ -24,6 +24,7 @@ just zeta
 | 正文、执行输出、缓存与滚动 | [transcript](src/thread/transcript) |
 | 会话列表、预览、切换和详情 | [sessions](src/sessions) |
 | 设置、主题、快捷键 | [config](src/config)、[theme](src/theme)、[keymap](src/keymap) |
+| 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
 | 状态信息和本机资源 | [status](src/status)、[process_resources.rs](../../zeta-rs/memory-diagnostics/src/process_resources.rs) |
 | 终端恢复、鼠标和历史输出 | [session.rs](src/terminal/session.rs)、[mouse.rs](src/terminal/mouse.rs) |
 | 命令面板共用控件和文字绘制 | [widgets](src/widgets)、[render](src/render) |
@@ -159,6 +160,7 @@ TUI 设置保存在 `<profile>/config.toml` 的根级 `[tui]` 表：
 theme = "graphite"
 mouseInteractions = true
 inputMode = "standard"
+memoryDiagnostics = false
 showGitChangesAsDiff = false
 ```
 

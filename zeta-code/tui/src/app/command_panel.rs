@@ -205,6 +205,15 @@ impl CommandPanel {
         }
     }
 
+    pub(crate) fn apply_memory_diagnostics(
+        &mut self,
+        status: crate::memory::Status,
+    ) {
+        if let Self::Status(panel) = self {
+            panel.apply_memory_diagnostics(status);
+        }
+    }
+
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
         match self {
             Self::Status(panel) => {
@@ -567,7 +576,8 @@ fn map_read_only(outcome: ListSelectionOutcome<()>) -> CommandPanelOutcome {
         ListSelectionOutcome::Activate(())
         | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Previous)
         | ListSelectionOutcome::Adjust((), ListSelectionAdjustment::Next)
-        | ListSelectionOutcome::Consumed => CommandPanelOutcome::Consumed,
+        | ListSelectionOutcome::Consumed
+        | ListSelectionOutcome::FocusPrevious => CommandPanelOutcome::Consumed,
         ListSelectionOutcome::Dismiss => CommandPanelOutcome::Dismiss,
     }
 }
@@ -578,9 +588,9 @@ fn map_selection<A>(
 ) -> CommandPanelOutcome {
     match outcome {
         ListSelectionOutcome::Activate(action) => activate(action),
-        ListSelectionOutcome::Adjust(_, _) | ListSelectionOutcome::Consumed => {
-            CommandPanelOutcome::Consumed
-        }
+        ListSelectionOutcome::Adjust(_, _)
+        | ListSelectionOutcome::Consumed
+        | ListSelectionOutcome::FocusPrevious => CommandPanelOutcome::Consumed,
         ListSelectionOutcome::Dismiss => CommandPanelOutcome::Dismiss,
     }
 }

@@ -192,9 +192,9 @@ impl KeymapEditor {
                 command_id,
                 kind: KeymapEditKind::ClearUser,
             }),
-            ListSelectionOutcome::Adjust(_, _) | ListSelectionOutcome::Consumed => {
-                KeymapEditorOutcome::Consumed
-            }
+            ListSelectionOutcome::Adjust(_, _)
+            | ListSelectionOutcome::Consumed
+            | ListSelectionOutcome::FocusPrevious => KeymapEditorOutcome::Consumed,
             ListSelectionOutcome::Dismiss if self.pages.len() > 1 => {
                 self.pages.pop();
                 KeymapEditorOutcome::Consumed

@@ -109,9 +109,9 @@ impl ThemePicker {
             ListSelectionOutcome::Activate(ThemeSelectionAction::OpenCustomThemes) => {
                 ThemePickerOutcome::OpenCustomThemes
             }
-            ListSelectionOutcome::Adjust(_, _) | ListSelectionOutcome::Consumed => {
-                ThemePickerOutcome::Consumed
-            }
+            ListSelectionOutcome::Adjust(_, _)
+            | ListSelectionOutcome::Consumed
+            | ListSelectionOutcome::FocusPrevious => ThemePickerOutcome::Consumed,
             ListSelectionOutcome::Dismiss if self.pages.len() > 1 => {
                 self.pages.pop();
                 ThemePickerOutcome::Consumed

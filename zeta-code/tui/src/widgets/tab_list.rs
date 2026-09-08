@@ -28,6 +28,15 @@ pub(crate) enum TabListInputOutcome {
     Unhandled,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum FocusedTabListInputOutcome {
+    ActiveChanged,
+    EnterContent,
+    FocusNext,
+    Consumed,
+    Unhandled,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TabListState<T> {
     tabs: Vec<T>,
@@ -90,6 +99,28 @@ impl<T> TabListState<T> {
             TabListInputOutcome::Consumed
         } else {
             TabListInputOutcome::ActiveChanged
+        }
+    }
+
+    pub(crate) fn handle_focused_key(&mut self, key: KeyEvent) -> FocusedTabListInputOutcome {
+        match self.handle_key(key) {
+            TabListInputOutcome::ActiveChanged => {
+                return FocusedTabListInputOutcome::ActiveChanged;
+            }
+            TabListInputOutcome::Consumed => return FocusedTabListInputOutcome::Consumed,
+            TabListInputOutcome::Unhandled => {}
+        }
+        let outcome = if bindings::ENTER_LIST.matches(key) {
+            FocusedTabListInputOutcome::EnterContent
+        } else if bindings::NEXT.matches(key) {
+            FocusedTabListInputOutcome::FocusNext
+        } else {
+            return FocusedTabListInputOutcome::Unhandled;
+        };
+        if key.kind == KeyEventKind::Press {
+            outcome
+        } else {
+            FocusedTabListInputOutcome::Consumed
         }
     }
 }

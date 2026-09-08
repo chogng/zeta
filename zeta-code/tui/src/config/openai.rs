@@ -14,6 +14,7 @@ use crate::widgets::search_box;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
 use crate::widgets::tab_list;
+use crate::widgets::tab_list::FocusedTabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
 use crossterm::event::KeyCode;
@@ -46,7 +47,7 @@ static SELECT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| form_hints(bindings::
 static CREATE_HINTS: LazyLock<KeyHints> = LazyLock::new(|| form_hints(bindings::PROVIDER_CREATE, bindings::PROVIDER_RETURN_TABS));
 static FETCH_HINTS: LazyLock<KeyHints> = LazyLock::new(|| form_hints(bindings::PROVIDER_FETCH_MODELS, bindings::PROVIDER_RETURN_TABS));
 static TAB_HINTS: LazyLock<KeyHints> = LazyLock::new(|| KeyHints::new()
-    .with_binding(bindings::PROVIDER_TAB_ARROWS)
+    .with_binding(bindings::TABS)
     .with_binding(bindings::PROVIDER_ENTER_TAB)
     .with_binding(bindings::PROVIDER_RETURN));
 
@@ -61,6 +62,19 @@ enum FormKind {
 enum Direction {
     Previous,
     Next,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FieldFocusOutcome {
+    Moved,
+    BeforeFirst,
+    AfterLast,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PanelFocus {
+    Tabs,
+    Content,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -243,18 +257,22 @@ impl Form {
             .unwrap_or_default();
         self.focus(fields[(position + 1).min(fields.len() - 1)]);
     }
-    fn move_focus(&mut self, direction: Direction) {
+    fn move_focus(&mut self, direction: Direction) -> FieldFocusOutcome {
         let fields = self.editable();
         let position = fields
             .iter()
             .position(|index| *index == self.focus)
             .unwrap_or_default();
-        let next = if matches!(direction, Direction::Previous) {
-            position.checked_sub(1).unwrap_or(fields.len() - 1)
-        } else {
-            (position + 1) % fields.len()
+        let next = match direction {
+            Direction::Previous => match position.checked_sub(1) {
+                Some(next) => next,
+                None => return FieldFocusOutcome::BeforeFirst,
+            },
+            Direction::Next if position + 1 < fields.len() => position + 1,
+            Direction::Next => return FieldFocusOutcome::AfterLast,
         };
         self.focus(fields[next]);
+        FieldFocusOutcome::Moved
     }
     fn field_mut(&mut self) -> Option<&mut SearchBoxState> {
         match self.focus {
@@ -367,14 +385,14 @@ pub(crate) struct Panel {
     tabs: TabListState<Tab>,
     forms: BTreeMap<String, Form>,
     draft_id: String,
-    tabs_focused: bool,
+    focus: PanelFocus,
     subscription: ListSelection<ConfigSelectionAction>,
     pending: Option<Request>,
 }
 
 impl Panel {
     pub(crate) fn key_hints(&self) -> &str {
-        if self.tabs_focused {
+        if self.focus == PanelFocus::Tabs {
             return TAB_HINTS.text();
         }
         let Some(form) = self.form() else {
@@ -404,8 +422,8 @@ impl Panel {
             }]),
             forms: BTreeMap::new(),
             draft_id,
-            tabs_focused: false,
-            subscription: ListSelection::new(choices.model, choices.actions),
+            focus: PanelFocus::Content,
+            subscription: ListSelection::new(choices.model.without_tab_bar(), choices.actions),
             pending: None,
         };
         panel.replace(settings);
@@ -481,7 +499,8 @@ impl Panel {
         }
     }
     pub(crate) fn update_subscription(&mut self, choices: ConfigChoices) {
-        self.subscription.replace(choices.model, choices.actions);
+        self.subscription
+            .replace(choices.model.without_tab_bar(), choices.actions);
     }
     fn form(&self) -> Option<&Form> {
         self.forms.get(&self.tabs.active_tab().id)
@@ -491,7 +510,6 @@ impl Panel {
     }
     pub(crate) fn select_tab(&mut self, index: usize) -> ConfigEditorOutcome {
         self.tabs.select(index);
-        self.tabs_focused = false;
         if self.tabs.active_index() == 1 {
             ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription)
         } else {
@@ -513,62 +531,62 @@ impl Panel {
                 .handle_key(KeyEvent::new(key.code, KeyModifiers::NONE));
             return self.select_tab(self.tabs.active_index());
         }
-        if self.tabs_focused {
-            match key.code {
-                KeyCode::Left | KeyCode::Right => {
-                    self.tabs.handle_key(key);
-                    let outcome = self.select_tab(self.tabs.active_index());
-                    self.tabs_focused = true;
-                    return outcome;
+        if self.focus == PanelFocus::Tabs {
+            match self.tabs.handle_focused_key(key) {
+                FocusedTabListInputOutcome::ActiveChanged => {
+                    return self.select_tab(self.tabs.active_index());
                 }
-                KeyCode::Tab | KeyCode::Down | KeyCode::Enter | KeyCode::BackTab => {
-                    self.tabs_focused = false
+                FocusedTabListInputOutcome::EnterContent
+                | FocusedTabListInputOutcome::FocusNext => self.focus = PanelFocus::Content,
+                FocusedTabListInputOutcome::Consumed => return ConfigEditorOutcome::Consumed,
+                FocusedTabListInputOutcome::Unhandled if key.code == KeyCode::Esc => {
+                    return ConfigEditorOutcome::Dismiss;
                 }
-                KeyCode::Esc => return ConfigEditorOutcome::Dismiss,
-                _ => {}
+                FocusedTabListInputOutcome::Unhandled => {}
             }
             return ConfigEditorOutcome::Consumed;
         }
         if self.tabs.active_index() == 1 {
             if key.code == KeyCode::Esc || key.code == KeyCode::BackTab {
-                self.tabs_focused = true;
+                self.focus = PanelFocus::Tabs;
                 return ConfigEditorOutcome::Consumed;
             }
             return match self.subscription.handle_key(key) {
                 ListSelectionOutcome::Activate(action) => ConfigEditorOutcome::Action(action),
+                ListSelectionOutcome::FocusPrevious => {
+                    self.focus = PanelFocus::Tabs;
+                    ConfigEditorOutcome::Consumed
+                }
                 _ => ConfigEditorOutcome::Consumed,
             };
         }
         if self.pending.is_some() {
             if key.code == KeyCode::Esc {
-                self.tabs_focused = true;
+                self.focus = PanelFocus::Tabs;
             }
             return ConfigEditorOutcome::Consumed;
         }
         let form = self.form_mut().expect("API tab owns a form");
         match key.code {
             KeyCode::Esc if form.editing => form.cancel_edit(),
-            KeyCode::Esc => self.tabs_focused = true,
+            KeyCode::Esc => self.focus = PanelFocus::Tabs,
             KeyCode::BackTab => {
-                if form.focus == form.editable()[0] {
-                    self.tabs_focused = true;
-                } else {
-                    form.move_focus(Direction::Previous);
+                if form.move_focus(Direction::Previous) == FieldFocusOutcome::BeforeFirst {
+                    self.focus = PanelFocus::Tabs;
                 }
             }
             KeyCode::Tab => {
-                if form.focus == 4 {
-                    self.tabs_focused = true;
-                } else {
-                    form.move_focus(Direction::Next);
+                if form.move_focus(Direction::Next) == FieldFocusOutcome::AfterLast {
+                    self.focus = PanelFocus::Tabs;
                 }
             }
-            KeyCode::Up | KeyCode::Down if !form.editing => {
-                form.move_focus(if key.code == KeyCode::Up {
-                    Direction::Previous
-                } else {
-                    Direction::Next
-                })
+            KeyCode::Up if !form.editing => {
+                if form.move_focus(Direction::Previous) == FieldFocusOutcome::BeforeFirst {
+                    self.focus = PanelFocus::Tabs;
+                }
+            }
+            KeyCode::Down if !form.editing => {
+                form.move_focus(Direction::Next);
             }
             KeyCode::Left | KeyCode::Right if form.focus == 3 => {
                 form.protocol = match form.protocol {
@@ -591,7 +609,7 @@ impl Panel {
         ConfigEditorOutcome::Consumed
     }
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        if self.pending.is_none() && !self.tabs_focused {
+        if self.pending.is_none() && self.focus == PanelFocus::Content {
             if let Some(form) = self.form_mut() {
                 if form.editing {
                     if let Some(field) = form.field_mut() {
@@ -611,7 +629,7 @@ impl Panel {
         if self.pending.is_some() {
             return ConfigEditorOutcome::Consumed;
         }
-        self.tabs_focused = false;
+        self.focus = PanelFocus::Content;
         if let Some(form) = self.form_mut() {
             if form.editable().contains(&index) {
                 form.focus(index);
@@ -788,7 +806,7 @@ impl Panel {
             frame,
             area,
             &self.tabs,
-            self.tabs_focused,
+            self.focus == PanelFocus::Tabs,
             hovered,
             pressed,
             context,
@@ -858,7 +876,7 @@ impl Panel {
                 _ if form.draft => "Create provider",
                 _ => "Fetch model list",
             };
-            let focused = !self.tabs_focused && form.focus == index;
+            let focused = self.focus == PanelFocus::Content && form.focus == index;
             let style = Style::default().fg(if focused {
                 context.focus()
             } else {

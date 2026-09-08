@@ -10,7 +10,7 @@
 | StatusLine | 权限模式、模型、Git、Plan、Subagent 摘要，可选本机常驻内存与 CPU；Queue 在输入框上方独立显示 |
 | `/statusline` | 选择条目，Enter / Space 开关；Esc 关闭 |
 | Thread 页 | 当前模型、上下文窗口、累计模型调用数、输入/输出 token、缓存读取/写入 token、缓存读取占比、推理输出 token、累计参考费用、Session/Thread 身份 |
-| Processes 页 | 本机常驻内存、观察峰值、1 分钟与 5 分钟变化、CPU；TUI 与本地 App Server 进程树明细 |
+| Processes 页 | 只读显示诊断状态、本机常驻内存、观察峰值、1 分钟与 5 分钟变化、CPU，以及 TUI 与本地 App Server 进程树明细；不提供开关 |
 | 切页 | Tab / Shift+Tab 或左右循环切页；复用统一页签样式，不加方括号；每页保留滚动位置 |
 | 阅读 | ↑↓ / k/j、PageUp/PageDown、Home/End；操作提示为 `Tab to switch · Esc to close`，不重复列出基础导航 |
 | 高度 | 按两页最大完整内容申请并受当前空间限制，详见[布局](layout.md#status-面板) |
@@ -63,4 +63,5 @@
 ## 相关记录
 
 - [功能完整性核对](../changes/tui-completeness/README.md)：AC-27，按需读数。
-- [共享内存诊断验收](../../../zeta-rs/docs/changes/memory-diagnostics/verification.md)：用户主动启动的持续采集。
+- [内存诊断配置开关](../changes/2026-09-08-memory-diagnostics-config/README.md)：Config 启停与 Status 只读边界。
+- [共享内存诊断验收](../../../zeta-rs/docs/changes/memory-diagnostics/verification.md)：后端持续采集能力。

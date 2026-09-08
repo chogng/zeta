@@ -185,6 +185,7 @@ pub(crate) struct App {
     render_theme_revision: u64,
     skill_diagnostic_warnings: SkillDiagnosticWarnings,
     process_resources: ProcessResourcesModel,
+    memory_diagnostics: crate::memory::Status,
     startup_context: TuiStartupContext,
 }
 
@@ -213,6 +214,7 @@ impl App {
             render_theme_revision: 0,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
             process_resources: ProcessResourcesModel::default(),
+            memory_diagnostics: crate::memory::Status::Disabled,
             startup_context: TuiStartupContext::new("."),
         }
     }
@@ -274,6 +276,7 @@ impl App {
             render_theme_revision: 0,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
             process_resources,
+            memory_diagnostics: crate::memory::Status::Disabled,
             startup_context,
         }
     }
@@ -912,6 +915,10 @@ impl App {
         }
     }
 
+    pub(super) const fn memory_diagnostics_enabled(&self) -> bool {
+        self.terminal_settings.memory_diagnostics()
+    }
+
     pub(crate) fn update_pointer_hover(&mut self, target: Option<InputPointerTarget>) {
         self.pointer.update_hover(target);
     }
@@ -1136,6 +1143,7 @@ impl App {
 
     fn show_status_panel(&mut self, mut panel: crate::status::StatusPanel) {
         panel.apply_process_resources(self.process_resources.view());
+        panel.apply_memory_diagnostics(self.memory_diagnostics);
         self.open_command_panel(CommandPanel::status(panel));
     }
 
@@ -1951,6 +1959,10 @@ impl App {
                 self.update_status_line_editor(update.choices);
             }
             StatusEvent::PanelOpened(panel) => self.show_status_panel(panel),
+            StatusEvent::MemoryDiagnosticsChanged(status) => {
+                self.memory_diagnostics = status;
+                self.chat_panel.apply_memory_diagnostics(status);
+            }
             StatusEvent::GitStatusReceived(status) => {
                 self.chat_panel.status_line_mut().apply_git_status(&status);
             }
@@ -2475,10 +2487,7 @@ impl App {
         }
         if matches!(self.status, Status::Working)
             && invocation.origin == SlashCommandOrigin::Local
-            && !matches!(
-                local,
-                Some(TuiSlashCommandAction::Export | TuiSlashCommandAction::Memory)
-            )
+            && !matches!(local, Some(TuiSlashCommandAction::Export))
         {
             self.thread.update(ThreadPresentationEvent::CommandFailed {
                 command: invocation.display_text(),

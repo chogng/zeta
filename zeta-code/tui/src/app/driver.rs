@@ -76,8 +76,7 @@ pub(super) struct AppDriver {
     theme_resource: ThemeResource,
     server_slash_commands: Vec<SlashCommandDefinition>,
     plugins_enabled: bool,
-    memory: Option<Box<zeta_app_server_client::MemoryRecording>>,
-    memory_objects: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    memory: crate::memory::Controller,
 }
 
 pub(super) struct AppDriverResources {
@@ -96,7 +95,7 @@ impl AppDriver {
         thread_subscription: ThreadSubscription,
         resources: AppDriverResources,
     ) -> Self {
-        Self {
+        let mut driver = Self {
             app,
             client,
             conversation,
@@ -112,9 +111,10 @@ impl AppDriver {
             theme_resource: resources.theme_resource,
             server_slash_commands: resources.server_slash_commands,
             plugins_enabled: resources.plugins_enabled,
-            memory: None,
-            memory_objects: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-        }
+            memory: crate::memory::Controller::default(),
+        };
+        driver.reconcile_memory_diagnostics();
+        driver
     }
 
     pub(super) fn app(&self) -> &App {
@@ -144,24 +144,70 @@ impl AppDriver {
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
-        self.memory_objects.store(self.app.memory_object_count(), std::sync::atomic::Ordering::Relaxed);
+        self.memory.observe_objects(self.app.memory_object_count());
         let completions = self.requests.poll();
-        let changed = !completions.is_empty();
+        let mut changed = !completions.is_empty();
         for completion in completions {
             match completion {
+                Ok(Completion::Memory(completion)) => {
+                    let previous = self.memory.status();
+                    if let Err(error) = self.memory.complete(completion) {
+                        self.app.update(ThreadEvent::FailureReported(error));
+                    }
+                    self.publish_memory_status(previous);
+                }
                 Ok(completion) => apply_request_completion(
                     completion,
                     &mut self.conversation,
                     &mut self.thread_subscription,
                     &mut self.app,
-                    &mut self.memory,
                 ),
                 Err(error) => self
                     .app
                     .update(ThreadEvent::FailureReported(error.to_string())),
             }
         }
+        changed |= self.reconcile_memory_diagnostics();
         changed
+    }
+
+    fn reconcile_memory_diagnostics(&mut self) -> bool {
+        let previous = self.memory.status();
+        let request = match self
+            .memory
+            .reconcile(self.app.memory_diagnostics_enabled(), self.client.clone())
+        {
+            Ok(request) => request,
+            Err(error) => {
+                self.app.update(ThreadEvent::FailureReported(error));
+                None
+            }
+        };
+        self.publish_memory_status(previous);
+        let Some(request) = request else {
+            return previous != self.memory.status();
+        };
+        let name = request.name();
+        self.requests.spawn(
+            Some(RequestKey::Memory),
+            name,
+            move || Completion::Memory(request.execute()),
+            &mut self.app,
+        );
+        if self.requests.is_idle(Some(RequestKey::Memory)) {
+            let previous = self.memory.status();
+            self.memory.schedule_failed();
+            self.publish_memory_status(previous);
+        }
+        true
+    }
+
+    fn publish_memory_status(&mut self, previous: crate::memory::Status) {
+        let status = self.memory.status();
+        if status != previous {
+            self.app
+                .update(StatusEvent::MemoryDiagnosticsChanged(status));
+        }
     }
 
     pub(super) fn next_command(

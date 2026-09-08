@@ -14,6 +14,7 @@ use crate::widgets::search_box::SearchBoxInputOutcome;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
 use crate::widgets::tab_list;
+use crate::widgets::tab_list::FocusedTabListInputOutcome;
 use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
@@ -267,6 +268,7 @@ pub(crate) enum ListSelectionInputOutcome {
     Adjust(ListSelectionItemId, ListSelectionAdjustment),
     Consumed,
     Dismiss,
+    FocusPrevious,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -513,6 +515,26 @@ impl ListSelectionState {
                 return ListSelectionInputOutcome::Consumed;
             }
         }
+        if self.focus == ListSelectionFocus::Tabs {
+            match self.tabs.handle_focused_key(key) {
+                FocusedTabListInputOutcome::ActiveChanged => {
+                    self.select_first_visible();
+                    return ListSelectionInputOutcome::Consumed;
+                }
+                FocusedTabListInputOutcome::EnterContent => {
+                    self.set_focus(ListSelectionFocus::Items);
+                    return ListSelectionInputOutcome::Consumed;
+                }
+                FocusedTabListInputOutcome::FocusNext => {
+                    self.move_focus_down();
+                    return ListSelectionInputOutcome::Consumed;
+                }
+                FocusedTabListInputOutcome::Consumed => {
+                    return ListSelectionInputOutcome::Consumed;
+                }
+                FocusedTabListInputOutcome::Unhandled => {}
+            }
+        }
         if self.focus == ListSelectionFocus::Items
             && key.kind == KeyEventKind::Press
             && self.model.activation.matches(key)
@@ -527,7 +549,9 @@ impl ListSelectionState {
             match navigation {
                 Navigation::Previous => {
                     if key.code == KeyCode::Up && key.kind == KeyEventKind::Press {
-                        self.move_focus_up();
+                        if !self.move_focus_up() {
+                            return ListSelectionInputOutcome::FocusPrevious;
+                        }
                     } else if self.focus == ListSelectionFocus::Items {
                         self.move_selection(ListSelectionDirection::Previous);
                     }
@@ -556,31 +580,21 @@ impl ListSelectionState {
             _ if bindings::SEARCH.matches(key) => {
                 self.focus_search();
             }
-            _ if bindings::ENTER_LIST.matches(key) => {
-                if self.focus == ListSelectionFocus::Tabs {
-                    self.set_focus(ListSelectionFocus::Items);
-                }
-            }
-            _ if bindings::LEFT.matches(key)
-                || bindings::RIGHT.matches(key)
-                || bindings::TAB_NEXT.matches(key)
-                || bindings::TAB_PREVIOUS.matches(key) =>
+            _ if self.focus == ListSelectionFocus::Items
+                && (bindings::LEFT.matches(key)
+                    || bindings::RIGHT.matches(key)
+                    || bindings::TAB_NEXT.matches(key)
+                    || bindings::TAB_PREVIOUS.matches(key)) =>
             {
-                match self.focus {
-                    ListSelectionFocus::Tabs => self.switch_tab(key),
-                    ListSelectionFocus::Items => {
-                        if let Some(id) = self.selected_item_id() {
-                            let adjustment = if bindings::LEFT.matches(key)
-                                || bindings::TAB_PREVIOUS.matches(key)
-                            {
-                                ListSelectionAdjustment::Previous
-                            } else {
-                                ListSelectionAdjustment::Next
-                            };
-                            return ListSelectionInputOutcome::Adjust(id, adjustment);
-                        }
-                    }
-                    ListSelectionFocus::Search => {}
+                if let Some(id) = self.selected_item_id() {
+                    let adjustment = if bindings::LEFT.matches(key)
+                        || bindings::TAB_PREVIOUS.matches(key)
+                    {
+                        ListSelectionAdjustment::Previous
+                    } else {
+                        ListSelectionAdjustment::Next
+                    };
+                    return ListSelectionInputOutcome::Adjust(id, adjustment);
                 }
             }
             _ => {}
@@ -597,21 +611,15 @@ impl ListSelectionState {
         }
     }
 
-    fn switch_tab(&mut self, key: KeyEvent) {
-        match self.tabs.handle_key(key) {
-            TabListInputOutcome::ActiveChanged | TabListInputOutcome::Consumed => {
-                self.select_first_visible();
-            }
-            TabListInputOutcome::Unhandled => {}
-        }
-    }
-
-    fn move_focus_up(&mut self) {
+    fn move_focus_up(&mut self) -> bool {
         match self.focus {
-            ListSelectionFocus::Tabs => {}
+            ListSelectionFocus::Tabs => true,
             ListSelectionFocus::Search => {
                 if self.show_tabs() {
                     self.set_focus(ListSelectionFocus::Tabs);
+                    true
+                } else {
+                    false
                 }
             }
             ListSelectionFocus::Items => {
@@ -621,7 +629,10 @@ impl ListSelectionState {
                     self.set_focus(ListSelectionFocus::Search);
                 } else if self.show_tabs() {
                     self.set_focus(ListSelectionFocus::Tabs);
+                } else {
+                    return false;
                 }
+                true
             }
         }
     }

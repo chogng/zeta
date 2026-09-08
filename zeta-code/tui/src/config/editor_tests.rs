@@ -99,7 +99,20 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetVimMode(edit)
             if edit.terminal.input_mode() == ChatInputMode::Vim
     ));
-    let git_changes = &state.visible_items()[2];
+    let memory_diagnostics = &state.visible_items()[2];
+    assert_eq!(memory_diagnostics.label(), "Memory diagnostics");
+    assert_eq!(
+        memory_diagnostics.description(),
+        Some("Continuously collect bounded memory evidence [   ]")
+    );
+    assert!(matches!(
+        view.actions
+            .get(memory_diagnostics.id().unwrap())
+            .unwrap(),
+        ConfigSelectionAction::SetTerminalSettings(edit)
+            if edit.terminal.memory_diagnostics()
+    ));
+    let git_changes = &state.visible_items()[3];
     assert_eq!(git_changes.label(), "Show Git changes as diff");
     assert_eq!(
         git_changes.description(),

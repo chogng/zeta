@@ -53,6 +53,41 @@ fn draft(panel: &mut Panel) {
 }
 
 #[test]
+fn form_and_nested_list_return_up_to_the_shared_tab_list() {
+    let mut panel = panel();
+
+    key(&mut panel, KeyCode::Esc);
+    assert!(!panel.form().unwrap().editing);
+    key(&mut panel, KeyCode::Up);
+    assert_eq!(panel.focus, PanelFocus::Tabs);
+    assert!(panel.key_hints().starts_with("Tab/Shift+Tab to switch"));
+
+    assert!(matches!(
+        key(&mut panel, KeyCode::Tab),
+        ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription)
+    ));
+    assert_eq!(panel.tabs.active_index(), 1);
+    assert_eq!(panel.focus, PanelFocus::Tabs);
+
+    key(&mut panel, KeyCode::Down);
+    assert_eq!(panel.focus, PanelFocus::Content);
+    key(&mut panel, KeyCode::Up);
+    assert_eq!(panel.focus, PanelFocus::Tabs);
+}
+
+#[test]
+fn down_stops_at_the_last_form_action() {
+    let mut panel = panel();
+    let form = panel.form_mut().unwrap();
+    form.focus(4);
+
+    key(&mut panel, KeyCode::Down);
+
+    assert_eq!(panel.focus, PanelFocus::Content);
+    assert_eq!(panel.form().unwrap().focus, 4);
+}
+
+#[test]
 fn enter_confirms_each_draft_field_and_creation_preserves_new_tab() {
     let mut panel = panel();
     draft(&mut panel);

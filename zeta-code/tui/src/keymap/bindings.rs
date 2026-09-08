@@ -567,7 +567,6 @@ pub(crate) const PROVIDER_CREATE: Keybinding = Keybinding::new(ENTER, "create pr
 pub(crate) const PROVIDER_FETCH_MODELS: Keybinding = Keybinding::new(ENTER, "fetch models");
 pub(crate) const PROVIDER_NEXT_FIELD: Keybinding = Keybinding::new(&[(NONE, KeyCode::Tab)], "next field");
 pub(crate) const PROVIDER_SWITCH_TABS: Keybinding = Keybinding::new(&[(KeyModifiers::ALT, KeyCode::Left), (KeyModifiers::ALT, KeyCode::Right)], "switch tabs");
-pub(crate) const PROVIDER_TAB_ARROWS: Keybinding = Keybinding::new(&[(NONE, KeyCode::Left), (NONE, KeyCode::Right)], "switch tabs");
 pub(crate) const PROVIDER_ENTER_TAB: Keybinding = Keybinding::new(ENTER, "enter tab");
 pub(crate) const PROVIDER_RETURN_TABS: Keybinding = Keybinding::new(ESC, "return to tabs");
 pub(crate) const PROVIDER_RETURN: Keybinding = Keybinding::new(ESC, "return to Providers");

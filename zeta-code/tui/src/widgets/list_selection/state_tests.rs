@@ -124,6 +124,25 @@ fn tab_keys_switch_tabs_and_wrap() {
 }
 
 #[test]
+fn list_without_its_own_header_reports_upward_focus_boundary() {
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Nested",
+            vec![ListSelectionGroup::new(
+                "Items",
+                vec![ListSelectionItem::new("First")],
+            )],
+        )
+        .without_tab_bar(),
+    );
+
+    assert_eq!(
+        state.handle_key(key(KeyCode::Up)),
+        ListSelectionInputOutcome::FocusPrevious
+    );
+}
+
+#[test]
 fn arrow_keys_adjust_the_selected_actionable_item() {
     let item_id = ListSelectionItemId::new("follow-up-mode");
     let mut state = ListSelectionState::new(

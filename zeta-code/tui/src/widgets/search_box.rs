@@ -158,6 +158,7 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
+use ratatui::widgets::BorderType;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Padding;
 use ratatui::widgets::Paragraph;
@@ -202,6 +203,7 @@ pub(crate) fn draw(
         Paragraph::new(Line::from(text)).block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(border_style)
                 .padding(Padding::left(SEARCH_BOX_LEFT_PADDING)),
         ),

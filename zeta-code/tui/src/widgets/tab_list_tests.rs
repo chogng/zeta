@@ -1,3 +1,4 @@
+use super::FocusedTabListInputOutcome;
 use super::TabListInputOutcome;
 use super::TabListItem;
 use super::TabListState;
@@ -57,6 +58,29 @@ fn keyboard_navigation_switches_tabs_in_both_directions_and_wraps() {
         TabListInputOutcome::ActiveChanged
     );
     assert_eq!(tabs.active_tab().tab_label(), "Overview");
+}
+
+#[test]
+fn focused_tab_list_owns_switching_and_content_entry() {
+    let mut tabs = TabListState::new(vec![TestTab("Overview"), TestTab("Providers")]);
+
+    assert_eq!(
+        tabs.handle_focused_key(key(KeyCode::Tab)),
+        FocusedTabListInputOutcome::ActiveChanged
+    );
+    assert_eq!(tabs.active_tab().tab_label(), "Providers");
+    assert_eq!(
+        tabs.handle_focused_key(key(KeyCode::Enter)),
+        FocusedTabListInputOutcome::EnterContent
+    );
+    assert_eq!(
+        tabs.handle_focused_key(key(KeyCode::Down)),
+        FocusedTabListInputOutcome::FocusNext
+    );
+    assert_eq!(
+        tabs.handle_focused_key(key(KeyCode::Up)),
+        FocusedTabListInputOutcome::Unhandled
+    );
 }
 
 #[test]

@@ -8,6 +8,7 @@
 
 | 记录日期 | 工作 | 状态与证据边界 | 对应现行规格 | 对应设计 |
 | --- | --- | --- | --- | --- |
+| 2026-09-08 | [内存诊断配置开关](2026-09-08-memory-diagnostics-config/README.md) | Config 独占启停、Status 只读的自动化通过；Unix PTY 待实测 | [内存诊断](../spec/memory-diagnostics.md) | [采样职责](../design/process-resources.md) |
 | 2026-09-08 | [文档整理](docs-organization.md) | 已完成；链接、格式、导航与历史证据检查通过 | 功能总览、规格拆分与导航 | CLI、TUI、采样职责说明 |
 | 2026-09-07 | [目录添加反馈](dir-add/README.md) | 本次 AC 按记录范围通过；Windows 未运行 Unix PTY | [目录与权限](../spec/directories.md) | [TUI 请求与旧结果](../design/tui.md#后台请求与旧结果) |
 | 2026-09-08（整理登记） | [OpenAI 配置面板](openai-panel/README.md) | 新版多连接要求尚待验收；保留旧版五条验收 | [供应商与模型](../spec/providers.md) | [TUI](../design/tui.md)、[共享供应商配置](../../../docs/model-provider-config.md) |

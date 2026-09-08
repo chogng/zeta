@@ -224,6 +224,7 @@ fn memory_recording_collects_product_counters_exports_and_stops_for_rust_product
         let session = AppServerSession::from_embedded_host(Arc::new(app_server()), ClientInfo { name: "memory-test".into(), version: "1".into() }, ClientCapabilities::default()).unwrap();
         let mut client = session.client();
         let mut recording = MemoryRecording::start(client.clone(), product, "memory-test".into(), || vec![MemoryMetric { kind: MemoryMetricKind::UiObjects, value: Some(7), unavailable: None }]).unwrap();
+        assert_eq!(recording.status().unwrap(), MemoryStatus::Recording);
         let deadline = Instant::now() + Duration::from_secs(3);
         loop {
             let report = recording.report().unwrap();
@@ -237,6 +238,7 @@ fn memory_recording_collects_product_counters_exports_and_stops_for_rust_product
         }
         let report = recording.stop().unwrap();
         assert_eq!(report.status, MemoryStatus::Stopped);
+        assert_eq!(recording.status().unwrap(), MemoryStatus::Stopped);
         assert_eq!(report, recording.stop().unwrap());
         let export = client.export_memory_bytes(recording.session_id().to_owned()).unwrap();
         let value: serde_json::Value = serde_json::from_slice(&export).unwrap();

@@ -106,8 +106,7 @@ impl ActiveConversation {
         let mut output = CommandOutput::default();
 
         match command {
-            TuiSlashCommandAction::Memory
-            | TuiSlashCommandAction::Sessions
+            TuiSlashCommandAction::Sessions
             | TuiSlashCommandAction::Agents
             | TuiSlashCommandAction::Subagents => {
                 return Err(CommandExecutionError(format!(

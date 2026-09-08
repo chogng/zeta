@@ -182,7 +182,7 @@ fn tabs_search_and_items_share_the_same_state_column() {
         buffer[(2, 0)].bg,
         test_context().accent_surface_background()
     );
-    assert_eq!(buffer[(2, 1)].symbol(), "┌");
+    assert_eq!(buffer[(2, 1)].symbol(), "╭");
     assert_eq!(buffer[(0, 4)].symbol(), ">");
     assert_eq!(buffer[(2, 4)].symbol(), "s");
 }
