@@ -149,7 +149,7 @@ pub(crate) fn count_input_tokens(
     let response = crate::requests::post_json_to_path(
         client,
         target,
-        "v1/messages/count_tokens",
+        &format!("{}/count_tokens", endpoint.relative_path()),
         endpoint.headers(target),
         build_count_request(model, request)?,
         cancellation,

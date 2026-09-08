@@ -27,7 +27,11 @@ impl AnthropicAdapter {
                 config,
                 InputTokenCountProfile::AnthropicMessages,
             ),
-            endpoint: api_endpoint(config.api_profile),
+            endpoint: if config.provider.as_str().starts_with("custom-") || config.provider.as_str() == "openai-compatible" {
+                ApiEndpoint::AnthropicMessagesAtBase
+            } else {
+                api_endpoint(config.api_profile)
+            },
         }
     }
 }

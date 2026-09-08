@@ -4345,6 +4345,22 @@
         {
           "properties": {
             "method": {
+              "const": "provider/probe",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProviderProbeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "provider/models/list",
               "type": "string"
             },
@@ -8402,6 +8418,22 @@
             },
             "result": {
               "$ref": "#/$defs/ProviderListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "provider/probe",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProviderProbeResult"
             }
           },
           "required": [
@@ -12836,8 +12868,26 @@
     "CustomProviderConfigDto": {
       "additionalProperties": false,
       "properties": {
+        "contextWindow": {
+          "default": 272000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
+        },
+        "order": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         },
         "protocol": {
           "$ref": "#/$defs/CustomProviderProtocolDto"
@@ -12852,7 +12902,8 @@
     "CustomProviderProtocolDto": {
       "enum": [
         "responses",
-        "chatCompletions"
+        "chatCompletions",
+        "anthropicMessages"
       ],
       "type": "string"
     },
@@ -24671,6 +24722,85 @@
           "required": [
             "type",
             "failure"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ProviderProbeParams": {
+      "description": "Tests an unsaved connection without changing configuration or stored credentials.",
+      "properties": {
+        "apiKey": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderApiKeyDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "$ref": "#/$defs/ProviderConfigDto"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "config"
+      ],
+      "type": "object"
+    },
+    "ProviderProbeResult": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "passed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "models": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "models",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "models"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "type": {
+              "const": "failed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message"
           ],
           "type": "object"
         }

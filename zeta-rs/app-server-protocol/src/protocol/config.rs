@@ -130,6 +130,12 @@ pub struct ProviderConfigDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CustomProviderConfigDto {
+    #[serde(default = "default_custom_context_window")]
+    pub context_window: u32,
+    #[serde(default)]
+    pub order: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     pub name: String,
     pub protocol: CustomProviderProtocolDto,
 }
@@ -139,6 +145,7 @@ pub struct CustomProviderConfigDto {
 pub enum CustomProviderProtocolDto {
     Responses,
     ChatCompletions,
+    AnthropicMessages,
 }
 
 /// Model-specific context limits used by Core's deterministic budget planner.
@@ -762,3 +769,5 @@ pub struct HookSetEnablementParams {
     pub hook_id: String,
     pub enablement: HookEnablementDto,
 }
+
+fn default_custom_context_window() -> u32 { 272_000 }

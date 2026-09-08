@@ -6,7 +6,7 @@ use crate::tui_process::SMALL_SIZE;
 use crate::tui_process::TuiProcess;
 use std::fs;
 
-fn open_provider(process: &mut TuiProcess) {
+fn open_provider(process: &mut TuiProcess, label: &str) {
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
     process.wait_for_screen("Enhanced TUI");
@@ -14,10 +14,9 @@ fn open_provider(process: &mut TuiProcess) {
     process.up();
     process.tab();
     process.down();
-    process.type_text("OpenAI");
+    process.type_text(label);
     process.down();
     process.enter();
-    process.wait_for_screen("> API key");
 }
 
 #[test]
@@ -61,123 +60,105 @@ fn actual_tui_issue_config_switch_gates_its_tab() {
 }
 
 #[test]
-fn actual_tui_provider_fields_save_cancel_and_fetch_models() {
+fn actual_tui_provider_autosaves_and_tests_without_fetching_models() {
     let fixture = Fixture::new();
-    let models = || HttpResponse::Json {
-        body: br#"{"data":[{"id":"pty-model"}]}"#.to_vec(),
-    };
     let server = ScenarioServer::start([
-        models(),
-        HttpResponse::Json {
-            body: br#"{"data":[]}"#.to_vec(),
-        },
+        HttpResponse::Json { body: br#"{"id":"test","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"OK"}]}],"status":"completed","usage":{"input_tokens":1,"output_tokens":1}}"#.to_vec() },
         HttpResponse::failure(401, "synthetic-denial"),
-        models(),
     ]);
     fixture.write_config(&server.base_url());
-    fixture.append_config(&format!(
-        r#"
-[providers."custom-pty"]
-provider = "custom-pty"
-baseUrl = "{}"
-[providers."custom-pty".custom]
-name = "PTY service"
-protocol = "responses"
-"#,
-        server.base_url()
-    ));
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    open_provider(&mut process);
-    // Official, subscription, existing compatible service, then our named connection.
-    process.send(b"\x1b[1;3C\x1b[1;3C\x1b[1;3C");
+    open_provider(&mut process, "New custom provider");
     process.wait_for_screen("> Provider name");
-    process.wait_for_screen("PTY service");
-    process.send(b"ignored-before-edit");
+    for (index, value) in ["PTY service", &format!("{}/", server.base_url()), "pty-synthetic-key"].into_iter().enumerate() {
+        process.enter();
+        process.type_text(value);
+        process.enter();
+        if index > 0 { process.wait_for_screen("Saved"); }
+        process.down();
+    }
+    assert!(fixture.config_source().contains("PTY service"));
+    process.wait_for_screen("> Model ID");
     process.enter();
-    process.type_text("-中文🚀");
+    process.type_text("pty-model-alias");
     process.enter();
-    process.wait_for_screen("Saved · Connection not verified");
-    assert!(fixture.config_source().contains("PTY service-中文🚀"));
-    assert!(!fixture.config_source().contains("ignored-before-edit"));
-    assert!(process.screen().contains("> Provider name"));
+    process.wait_for_screen("Saved");
+    process.down(); // API type.
+    process.down(); // Model context window.
+    process.wait_for_screen("Model context window");
+    process.right();
+    process.wait_for_screen("1m");
+    process.wait_for_screen("Saved");
+    assert!(fixture.config_source().contains("1000000"));
+    process.down();
+    process.enter();
+    process.wait_for_screen("Passed");
+    process.enter();
+    process.wait_for_screen("Authentication failed");
+    assert!(fixture.config_source().contains("pty-model-alias"));
+    assert!(!fixture.config_source().contains("pty-synthetic-key"));
+    process.escape();
+    process.wait_for_screen("> PTY service");
+    process.escape();
+    process.submit("/model");
+    process.wait_for_screen("Favorites");
+    process.tab();
+    process.down();
+    process.wait_for_screen("pty-model-alias");
+    process.type_text("p");
+    process.wait_for_screen("Model pinned");
+    assert!(fixture.config_source().contains("pinnedModels"));
+    process.escape();
+    process.submit("/model");
+    process.wait_for_screen("> pty-model-alias");
+    process.tab(); // Switch provider tab and focus its header.
+    process.enter(); // Enter its list, without applying the selected model.
+    process.wait_for_screen("> pty-model-alias");
+    process.escape();
+    open_provider(&mut process, "PTY service");
+    process.wait_for_screen("> Provider name");
     process.enter();
     process.type_text("-cancelled");
     process.escape();
     assert!(!process.screen().contains("-cancelled"));
-    assert!(!fixture.config_source().contains("-cancelled"));
     process.down();
     process.down();
-    process.enter();
-    process.type_text("pty-synthetic-key");
-    process.enter();
     process.wait_for_screen("Key saved");
-    assert!(process.screen().contains("> API key"));
-    assert!(!process.screen().contains("pty-synthetic-key"));
-    assert!(!fixture.config_source().contains("pty-synthetic-key"));
-    assert_eq!(server.request_count(), 0);
-    process.down();
-    process.down();
-    process.wait_for_screen("> Fetch model list");
-    for expected in [
-        "1 models fetched",
-        "Provider returned no models",
-        "Authentication failed",
-        "1 models fetched",
-    ] {
-        process.enter();
-        process.wait_for_screen(expected);
-        if expected != "1 models fetched" {
-            assert!(!process.screen().contains("pty-model"));
-        }
-    }
-    assert!(process.screen().contains("pty-model"));
-    let requests = server.request_bodies();
-    assert_eq!(requests.len(), 4);
-    for request in requests {
-        assert!(request.starts_with("GET /v1/models "));
-        assert!(request.contains("Bearer pty-synthetic-key"));
-    }
     process.resize(SMALL_SIZE);
-    process.wait_for_screen("> Fetch model list");
+    for _ in 0..4 { process.down(); }
+    process.wait_for_screen("Test");
     process.escape();
+    process.send(b"\x1b[3~");
+    process.wait_for_screen("No matching configuration");
+    assert!(!fixture.config_source().contains("PTY service"));
+    assert!(!fixture.config_source().contains("pty-model-alias"));
     process.escape();
     process.quit();
+    let requests = server.request_bodies();
+    assert_eq!(requests.len(), 2);
+    for request in requests {
+        assert!(request.starts_with("POST /v1/responses "));
+        assert!(request.contains("pty-model-alias"));
+        assert!(request.contains("Bearer pty-synthetic-key"));
+    }
 }
 
 #[test]
-fn actual_tui_opens_chatgpt_subscription_and_returns_to_openai() {
+fn actual_tui_opens_chatgpt_subscription_and_returns_to_providers() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Zeta Code v");
-    process.submit("/config");
-    process.wait_for_screen("Enhanced TUI");
-    process.up();
-    process.up();
-    process.tab();
-    process.down();
-    process.type_text("OpenAI");
-    process.down();
-    process.enter();
-    process.wait_for_screen("ChatGPT subscription");
-    process.send(b"\x1b[1;3C");
+    open_provider(&mut process, "ChatGPT");
     process.wait_for_screen("Not signed in");
     process.wait_for_screen("Sign in with ChatGPT");
     process.resize(SMALL_SIZE);
     process.wait_for_screen("Sign in with ChatGPT");
-    process.send(b"\x1b[1;3D");
-    process.wait_for_screen("Base URL (read-only)");
-    process.send(b"\x1b[1;3C");
-    process.wait_for_screen("Not signed in");
     process.escape();
-    process.escape();
+    process.wait_for_screen("Providers");
     process.escape();
     process.quit();
-    assert!(
-        server.request_bodies().is_empty(),
-        "opening an account must not invoke a model"
-    );
+    assert!(server.request_bodies().is_empty());
 }
 
 #[test]
@@ -200,18 +181,7 @@ fn actual_tui_reuses_chatgpt_subscription_without_changing_codex_auth() {
     let auth = fixture.codex_home().join("auth.json");
     fs::write(&auth, &original).unwrap();
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Zeta Code v");
-    process.submit("/config");
-    process.wait_for_screen("Enhanced TUI");
-    process.up();
-    process.up();
-    process.tab();
-    process.down();
-    process.type_text("OpenAI");
-    process.down();
-    process.enter();
-    process.wait_for_screen("ChatGPT subscription");
-    process.send(b"\x1b[1;3C");
+    open_provider(&mut process, "ChatGPT");
     process.wait_for_screen("account@example.invalid");
     process.wait_for_screen("Disconnect from Zeta");
     process.down();
@@ -225,7 +195,6 @@ fn actual_tui_reuses_chatgpt_subscription_without_changing_codex_auth() {
     process.down();
     process.enter();
     process.wait_for_screen("account@example.invalid");
-    process.escape();
     process.escape();
     process.escape();
     process.quit();

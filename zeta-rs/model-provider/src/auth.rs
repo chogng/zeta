@@ -91,6 +91,13 @@ impl ProviderCredentialService {
         Ok(())
     }
 
+    /// Deletes a removed connection's credential without requiring it to remain in the registry.
+    pub fn remove_api_key(&self, provider: &ProviderId) -> Result<(), ProviderCredentialError> {
+        self.secrets
+            .delete(&provider_api_key_secret_key(provider))?;
+        Ok(())
+    }
+
     pub(crate) fn request_headers(
         &self,
         provider: &ProviderId,

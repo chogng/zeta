@@ -273,12 +273,15 @@ pub(super) fn apply_request_completion(
             command,
             result: Ok(update),
         } => {
-            app.update(ModelEvent::SummaryReceived(update.summary));
+            let picker = update.picker;
+            if picker.is_none() {
+                app.update(ModelEvent::SummaryReceived(update.summary));
+            }
             app.update(ThreadEvent::CommandCompleted {
                 command,
                 result: update.notice,
             });
-            app.update(AppEvent::CommandPanelClosed);
+            if let Some(picker) = picker { app.update(ModelEvent::PickerUpdated(picker)); } else { app.update(AppEvent::CommandPanelClosed); }
         }
         Completion::PreferredModelUpdated {
             command,

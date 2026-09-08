@@ -45,6 +45,8 @@ pub enum ApiEndpoint {
     DeepSeekChatCompletions,
     /// An endpoint implementing Anthropic's Messages API.
     AnthropicMessages,
+    /// Messages appended to a caller-supplied API base, including any version path.
+    AnthropicMessagesAtBase,
 }
 
 /// Receives provider-neutral model deltas decoded from one API response stream.
@@ -62,7 +64,9 @@ impl ApiEndpoint {
             Self::OpenAiResponses => ApiProtocol::OpenAiResponses,
             Self::OpenAiChatCompletions => ApiProtocol::OpenAiCompletions,
             Self::DeepSeekChatCompletions => ApiProtocol::OpenAiCompletions,
-            Self::AnthropicMessages => ApiProtocol::AnthropicMessages,
+            Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
+                ApiProtocol::AnthropicMessages
+            }
         }
     }
 
@@ -72,15 +76,18 @@ impl ApiEndpoint {
             Self::OpenAiChatCompletions => "chat/completions",
             Self::DeepSeekChatCompletions => "chat/completions",
             Self::AnthropicMessages => "v1/messages",
+            Self::AnthropicMessagesAtBase => "messages",
         }
     }
 
     pub(crate) fn headers(self, target: &ResolvedApiTarget) -> Vec<HttpHeader> {
         let mut headers = target.headers.clone();
-        if self == Self::AnthropicMessages
-            && !headers
-                .iter()
-                .any(|header| header.name().eq_ignore_ascii_case("anthropic-version"))
+        if matches!(
+            self,
+            Self::AnthropicMessages | Self::AnthropicMessagesAtBase
+        ) && !headers
+            .iter()
+            .any(|header| header.name().eq_ignore_ascii_case("anthropic-version"))
         {
             headers.push(HttpHeader::new(
                 "anthropic-version",
@@ -139,14 +146,16 @@ impl ApiEndpoint {
                     cancellation,
                 )
             }
-            Self::AnthropicMessages => requests::anthropic_messages::complete(
-                self,
-                target,
-                model,
-                request,
-                client,
-                cancellation,
-            ),
+            Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
+                requests::anthropic_messages::complete(
+                    self,
+                    target,
+                    model,
+                    request,
+                    client,
+                    cancellation,
+                )
+            }
         }
     }
 
@@ -186,15 +195,17 @@ impl ApiEndpoint {
                     sink,
                 )
             }
-            Self::AnthropicMessages => requests::anthropic_messages::stream(
-                self,
-                target,
-                model,
-                request,
-                client,
-                cancellation,
-                sink,
-            ),
+            Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
+                requests::anthropic_messages::stream(
+                    self,
+                    target,
+                    model,
+                    request,
+                    client,
+                    cancellation,
+                    sink,
+                )
+            }
         }
     }
 
@@ -235,14 +246,16 @@ impl ApiEndpoint {
                 client,
                 cancellation,
             ),
-            Self::AnthropicMessages => requests::anthropic_messages::count_input_tokens(
-                self,
-                target,
-                model,
-                request,
-                client,
-                cancellation,
-            ),
+            Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
+                requests::anthropic_messages::count_input_tokens(
+                    self,
+                    target,
+                    model,
+                    request,
+                    client,
+                    cancellation,
+                )
+            }
             Self::OpenAiChatCompletions | Self::DeepSeekChatCompletions => {
                 Err(ApiError::InvalidRequest(
                     "OpenAI Chat Completions does not expose a standard input-token count endpoint"

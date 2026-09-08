@@ -6,7 +6,6 @@ use super::layout;
 use super::process_resource_demand;
 use crate::app::App;
 
-
 use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::CommandPanel;
@@ -1672,8 +1671,7 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .join("\n")
 }
 
-#[test]
-fn openai_panel_renders_connection_choices_and_masked_key_in_terminal_output() {
+fn custom_provider_app() -> App {
     let mut app = App::new();
     app.update(crate::config::Event::EditorOpened(
         crate::config::config_choices(
@@ -1691,18 +1689,42 @@ fn openai_panel_renders_connection_choices_and_masked_key_in_terminal_output() {
         KeyCode::Tab,
         KeyCode::Down,
         KeyCode::Down,
+        KeyCode::Down,
         KeyCode::Enter,
     ] {
         app.handle_key(KeyEvent::new(key, KeyModifiers::NONE));
     }
+    app
+}
+
+#[test]
+fn short_provider_panel_uses_space_below_base_url() {
+    let mut app = custom_provider_app();
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let output = render(&app, 100, 17);
+    let buffer = render_buffer(&app, 100, 17);
+    assert_eq!(buffer[(0, 6)].symbol(), ">");
+    assert_eq!(buffer[(2, 6)].symbol(), "B");
+    assert_eq!(buffer[(0, 7)].symbol(), " ");
+    assert_eq!(buffer[(2, 7)].symbol(), "╭");
+    assert_eq!(buffer[(2, 8)].symbol(), "│");
+    assert!(output.contains("> Base URL"));
+    assert_snapshot!("short_provider_panel", output);
+    assert!(output.contains("API key"), "the next field fits when no status message is present");
+}
+
+#[test]
+fn custom_provider_form_renders_fields_and_masks_the_key() {
+    let mut app = custom_provider_app();
     for width in [60, 100] {
-        let output = render(&app, width, 30);
+        let output = render(&app, width, 40);
         for label in [
-            "Official API key",
-            "Base URL (read-only)",
+            "Provider name",
+            "Base URL",
             "API key",
-            "ChatGPT subscription",
-            "New custom provider",
+            "API type",
+            "Model ID",
+            "Model context window",
         ] {
             assert!(
                 output.contains(label),
@@ -1710,9 +1732,12 @@ fn openai_panel_renders_connection_choices_and_masked_key_in_terminal_output() {
             );
         }
     }
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_paste("never-display-this-key".into());
-    let output = render(&app, 100, 30);
-    assert!(output.contains("Official API key"));
+    let output = render(&app, 100, 40);
+    assert!(output.contains("API key"));
     assert!(!output.contains("never-display-this-key"));
 }
 
@@ -1825,4 +1850,80 @@ fn issue_manager_reserves_page_height_when_the_transcript_is_empty() {
         assert_eq!(super::layout(&app, screen).session.bottom.bottom(), height);
         assert!(super::layout(&app, screen).session.transcript.height >= 7);
     }
+}
+
+fn custom_model_choices(pins: Vec<zeta_app_server_protocol::protocol::config::ModelRefDto>) -> crate::models::ModelChoices {
+    use zeta_app_server_protocol::protocol::config::CustomProviderConfigDto;
+    use zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto;
+    use zeta_app_server_protocol::protocol::config::ProviderConfigDto;
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.tui.0.insert("pinnedModels".into(), serde_json::to_value(pins).unwrap());
+    config.providers.insert("custom-gateway".into(), ProviderConfigDto {
+        provider: "custom-gateway".into(), base_url: Some("https://example.test/v1".into()), max_output_tokens: None, model_context: Default::default(),
+        custom: Some(CustomProviderConfigDto { context_window: 272_000, order: 1, name: "My gateway".into(), model: Some("gateway-model".into()), protocol: CustomProviderProtocolDto::Responses }),
+    });
+    let catalog = zeta_app_server_protocol::protocol::model::ModelListResult { models: vec![
+        zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
+            model: zeta_protocol::ModelRef::new(zeta_protocol::ProviderId::new("custom-gateway").unwrap(), zeta_protocol::ModelId::new("gateway-model").unwrap()),
+            display_name: "gateway-model".into(), access: zeta_protocol::ModelAccess::ApiKey,
+            output_transport: zeta_protocol::ModelOutputTransport::Unary, context_window: Some(272_000), auto_compact_token_limit: None,
+            available_context_window: Some(240_000), capabilities: zeta_protocol::ModelCapabilities::UNKNOWN,
+            supported_reasoning_efforts: vec![], default_reasoning_effort: None, default_personality: None,
+        }
+    ]};
+    crate::models::model_choices(&catalog, &config, &zeta_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] }).unwrap()
+}
+
+#[test]
+fn model_favorites_empty_state_explains_pinning_from_provider_tabs() {
+    let mut app = App::new();
+    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![])));
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "Favorites");
+    assert_eq!(app.list_selection().unwrap().tabs()[1].label(), "My gateway");
+    assert_snapshot!("model_favorites_empty", render(&app, 100, 18));
+}
+
+#[test]
+fn model_provider_tab_pins_without_changing_the_selected_model() {
+    let mut app = App::new();
+    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![])));
+    for code in [KeyCode::Tab, KeyCode::Down] {
+        app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "My gateway");
+    assert_eq!(app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)), Some(AppCommand::Models(crate::models::Command::Pin { preference: "custom-gateway/gateway-model".into(), pinned: true })));
+    app.update(ModelEvent::PickerUpdated(custom_model_choices(vec![ModelRefDto { provider: "custom-gateway".into(), model: "gateway-model".into() }])));
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "My gateway");
+    assert_eq!(app.list_selection().unwrap().selected_item().unwrap().label(), "gateway-model");
+    assert_snapshot!("model_provider_pinned", render(&app, 100, 18));
+}
+
+#[test]
+fn model_favorites_reopens_with_saved_pins_and_unpin_action() {
+    let mut app = App::new();
+    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![ModelRefDto { provider: "custom-gateway".into(), model: "gateway-model".into() }])));
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "Favorites");
+    assert_eq!(app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)), Some(AppCommand::Models(crate::models::Command::Pin { preference: "custom-gateway/gateway-model".into(), pinned: false })));
+    assert_snapshot!("model_favorites_pinned", render(&app, 100, 18));
+}
+
+#[test]
+fn model_tab_from_items_moves_the_visible_focus_to_the_tab_bar() {
+    let mut app = App::new();
+    app.update(ModelEvent::PickerOpened(custom_model_choices(vec![ModelRefDto { provider: "custom-gateway".into(), model: "gateway-model".into() }])));
+    assert!(app.list_selection().unwrap().items_focused());
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "My gateway");
+    assert!(app.list_selection().unwrap().tabs_focused());
+    let buffer = render_buffer(&app, 100, 18);
+    assert_ne!(buffer[(0, 15)].symbol(), ">");
+    assert_eq!(buffer[(16, 14)].symbol(), "M");
+    assert_eq!(buffer[(16, 14)].bg, test_context().selection_background());
+    assert_eq!(buffer[(16, 14)].fg, test_context().selection_foreground());
+    assert_snapshot!("model_tab_bar_focused", render(&app, 100, 18));
+    assert!(app.list_selection().unwrap().search().is_none());
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert!(app.list_selection().unwrap().items_focused());
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert!(app.list_selection().unwrap().tabs_focused());
 }

@@ -25,11 +25,15 @@ pub(crate) struct ManagedScope {
 }
 
 impl ManagedScope {
-    pub(crate) fn new(definition: ProviderDefinition, scope: &CatalogScopeKey) -> Self {
+    pub(crate) fn new(
+        definition: ProviderDefinition,
+        scope: &CatalogScopeKey,
+        generation: CatalogGeneration,
+    ) -> Self {
         let records = seed_records(&definition);
         let snapshot = Arc::new(build_snapshot(
             scope,
-            CatalogGeneration::INITIAL,
+            generation,
             ModelCatalogFreshness::StaticOnly,
             &records,
             &[],

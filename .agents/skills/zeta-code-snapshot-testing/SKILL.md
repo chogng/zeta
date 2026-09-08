@@ -38,6 +38,8 @@ Snapshot an overlay, completion popup, approval, query, status notice, retry sta
 
 Freeze or inject the relevant tick when a spinner, timeout, or animation frame is visible; do not race the production clock. A `TestBackend` cannot capture terminal-emulator UI, an OS dialog, the host terminal's native selection, or another surface outside the Ratatui buffer. Cover those with the narrow host/PTY behavior test and assert its observable result rather than fabricating it inside App state.
 
+Text snapshots do not capture foreground/background colors or modifiers. When these convey state or focus, assert the actual rendered buffer cells separately, including marker position, theme color, and modifiers. For animation, inject fixed times into the production renderer and assert representative phases and repeatability; do not copy the animation formula into the test or only test a detached color helper. Keep semantic assertions proving that input/events reached the intended state. When replacing a view, replace its relevant snapshot coverage rather than deleting the old baselines without equivalents.
+
 ## Author snapshots
 
 1. Read the repository, Rust, testing, and `zeta-code` TUI instructions before editing.

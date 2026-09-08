@@ -632,9 +632,10 @@ impl App {
                 }
                 .into(),
             ),
-            CommandPanelOutcome::Model(ModelSelectionAction::Select { preference }) => {
+            CommandPanelOutcome::Model(ModelSelectionAction::Select { preference, .. }) => {
                 Some(ModelCommand::SetPreferred { preference }.into())
             }
+            CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference, pinned }) => Some(ModelCommand::Pin { preference, pinned }.into()),
             CommandPanelOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
                 checkpoint_label,
@@ -679,14 +680,27 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
-            crate::config::ConfigEditorOutcome::LoadIssueModels { request_id, expected_revision } => Some(ConfigCommand::LoadIssueModels { request_id, expected_revision }.into()),
-            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetIssues(edit)) => Some(ConfigCommand::SetIssues(edit).into()),
-            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenIssueModels { .. }) => None,
+            crate::config::ConfigEditorOutcome::LoadIssueModels {
+                request_id,
+                expected_revision,
+            } => Some(
+                ConfigCommand::LoadIssueModels {
+                    request_id,
+                    expected_revision,
+                }
+                .into(),
+            ),
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetIssues(edit)) => {
+                Some(ConfigCommand::SetIssues(edit).into())
+            }
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::OpenIssueModels { .. },
+            ) => None,
 
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(
                 request,
             )) => Some(ConfigCommand::Connection(request).into()),
-            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenOpenAi(_)) => {
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenProvider(_)) => {
                 None
             }
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription) => {
@@ -1683,10 +1697,8 @@ impl App {
                     || self.sessions.remembered_thread(&session_id) != Some(&thread_id);
                 self.close_transient_surfaces();
                 if context_changed {
-                    self.thread.switch_transcript(
-                        self.thread_presentations.active_id(),
-                        &thread_id,
-                    );
+                    self.thread
+                        .switch_transcript(self.thread_presentations.active_id(), &thread_id);
                 }
                 self.thread_presentations.switch(thread_id.clone());
                 self.sessions.activate_context(session_id, thread_id);
@@ -1888,7 +1900,9 @@ impl App {
 
     fn apply_config_event(&mut self, event: ConfigEvent) {
         match event {
-            ConfigEvent::IssueModels { request_id, result } => self.chat_panel.finish_issue_models(request_id, result),
+            ConfigEvent::IssueModels { request_id, result } => {
+                self.chat_panel.finish_issue_models(request_id, result)
+            }
             ConfigEvent::Connection(reply) => {
                 if let Err(error) = &reply.result {
                     self.thread
@@ -1952,6 +1966,7 @@ impl App {
                 self.welcome.apply_model_summary(&summary);
             }
             ModelEvent::PickerOpened(view) => self.show_model_picker(view),
+            ModelEvent::PickerUpdated(view) => self.chat_panel.replace_model(view),
         }
     }
 
@@ -2468,7 +2483,11 @@ impl App {
         let elapsed_changed = self.agent_thread_switcher.refresh_elapsed();
         let manager_changed = matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.refresh_manager_time(now);
-        chord_expired || top_tip_changed || elapsed_changed || manager_changed
+        chord_expired
+            || top_tip_changed
+            || elapsed_changed
+            || manager_changed
+            || self.command_panel().is_some_and(CommandPanel::is_testing)
     }
 
     fn hide_navigation_for_existing_conversation(&mut self) {

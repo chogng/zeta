@@ -137,7 +137,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(state.visible_items().len(), 2);
+    assert_eq!(state.visible_items().len(), 4);
     assert_eq!(state.visible_items()[0].label(), "OpenAI");
     assert_eq!(state.visible_items()[1].label(), "Ollama");
     assert!(
@@ -150,7 +150,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         view.actions
             .get(state.visible_items()[0].id().unwrap())
             .unwrap(),
-        ConfigSelectionAction::OpenOpenAi(_)
+        ConfigSelectionAction::OpenProviderApiKey { .. }
     ));
     assert!(state.visible_items()[1].id().is_none());
 }
@@ -160,8 +160,18 @@ fn issue_config_switch_disables_the_tab_without_clearing_the_model() {
     use crate::widgets::list_selection::ListSelectionItemId;
     use crate::widgets::tab_list::TabListItem;
     let mut config = empty_config_snapshot();
-    config.issues.analysis_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto { provider: "ollama".into(), model: "small".into() });
-    let choices = |config: &_| config_choices(config, &providers(), TerminalSettings::default(), StatusLineSettings::default());
+    config.issues.analysis_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto {
+        provider: "ollama".into(),
+        model: "small".into(),
+    });
+    let choices = |config: &_| {
+        config_choices(
+            config,
+            &providers(),
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        )
+    };
     let spec = choices(&config);
     let switch = ListSelectionItemId::new("issue-merge-recommendations");
     let model_row = ListSelectionItemId::new("issue-analysis-model");
@@ -190,8 +200,18 @@ fn issue_config_switch_disables_the_tab_without_clearing_the_model() {
 fn issue_config_has_no_implicit_model_and_ignores_a_disabled_tabs_pending_picker() {
     use crate::widgets::list_selection::ListSelectionItemId;
     let mut config = empty_config_snapshot();
-    config.preferred_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto { provider: "ollama".into(), model: "conversation".into() });
-    let choices = |config: &_| config_choices(config, &providers(), TerminalSettings::default(), StatusLineSettings::default());
+    config.preferred_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto {
+        provider: "ollama".into(),
+        model: "conversation".into(),
+    });
+    let choices = |config: &_| {
+        config_choices(
+            config,
+            &providers(),
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        )
+    };
     let mut editor = super::ConfigEditor::new(choices(&config));
     assert!(editor.selection.state_mut().focus_item(&ListSelectionItemId::new("issue-analysis-model")));
     assert!(editor.selection.state().visible_items()[0].description().unwrap().contains("Not configured"));
@@ -208,10 +228,29 @@ fn issue_config_has_no_implicit_model_and_ignores_a_disabled_tabs_pending_picker
 #[test]
 fn issue_config_model_response_does_not_reopen_after_leaving_the_tab() {
     use crate::widgets::list_selection::ListSelectionItemId;
-    let mut editor = super::ConfigEditor::new(config_choices(&empty_config_snapshot(), &providers(), TerminalSettings::default(), StatusLineSettings::default()));
-    assert!(editor.selection.state_mut().focus_item(&ListSelectionItemId::new("issue-analysis-model")));
-    let super::ConfigEditorOutcome::LoadIssueModels { request_id, .. } = editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)) else { panic!("expected catalog request"); };
-    assert!(editor.selection.state_mut().focus_item(&ListSelectionItemId::new("language")));
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    assert!(
+        editor
+            .selection
+            .state_mut()
+            .focus_item(&ListSelectionItemId::new("issue-analysis-model"))
+    );
+    let super::ConfigEditorOutcome::LoadIssueModels { request_id, .. } =
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected catalog request");
+    };
+    assert!(
+        editor
+            .selection
+            .state_mut()
+            .focus_item(&ListSelectionItemId::new("language"))
+    );
     editor.finish_issue_models(request_id, Err("late error".into()));
     assert!(editor.issue_models.is_none());
     assert!(editor.selection.state().message().is_none());
@@ -441,33 +480,31 @@ fn provider_api_key_input_is_masked_keeps_its_explanation_and_submits_with_enter
     assert_eq!(prompt.provider, "openai");
 }
 
-fn openai_editor() -> super::ConfigEditor {
+fn custom_editor() -> super::ConfigEditor {
     let mut editor = super::ConfigEditor::new(config_choices(
         &empty_config_snapshot(),
         &providers(),
         TerminalSettings::default(),
         StatusLineSettings::default(),
     ));
-    for key in [
-        KeyCode::Up,
-        KeyCode::Up,
-        KeyCode::Tab,
-        KeyCode::Down,
-        KeyCode::Down,
-        KeyCode::Enter,
-    ] {
-        editor.handle_key(KeyEvent::new(key, KeyModifiers::NONE));
-    }
+    editor.selection.state_mut().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("new-custom-provider"),
+    );
+    editor.selection.handle_paste("New custom provider".into());
+    editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     editor
 }
 
 #[test]
-fn openai_form_owns_keyboard_input_and_esc_returns_to_providers() {
-    let mut editor = openai_editor();
-    assert!(matches!(editor.page(), super::ConfigEditorPage::OpenAi(_)));
+fn custom_form_owns_keyboard_input_and_esc_returns_to_providers() {
+    let mut editor = custom_editor();
+    assert!(matches!(
+        editor.page(),
+        super::ConfigEditorPage::Provider(_)
+    ));
     editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    editor.handle_paste("unconfirmed-key".into());
-    for _ in 0..3 {
+    editor.handle_paste("unconfirmed-name".into());
+    for _ in 0..2 {
         editor.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     }
     assert_eq!(
@@ -477,54 +514,75 @@ fn openai_form_owns_keyboard_input_and_esc_returns_to_providers() {
 }
 
 #[test]
-fn created_provider_remains_available_after_closing_and_reopening_openai() {
-    let mut editor = openai_editor();
-    editor.openai.as_mut().unwrap().select_tab(2);
-    for value in ["Example", "https://example.test/v1", ""] {
-        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        editor.handle_paste(value.into());
-        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
+fn created_provider_autosaves_without_leaving_form_and_next_edit_uses_new_revision() {
+    let mut editor = custom_editor();
+    editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    editor.handle_paste("Example".into());
+    assert!(matches!(editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), super::ConfigEditorOutcome::Consumed));
     editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) =
-        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-    else {
-        panic!("expected creation")
-    };
+    editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    editor.handle_paste("https://example.test/v1".into());
+    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) = editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)) else { panic!("expected autosave") };
     let mut config = empty_config_snapshot();
     config.revision = 1;
-    config
-        .providers
-        .insert(request.config.provider.clone(), request.config.clone());
-    editor.complete_connection(crate::config::openai::Reply {
-        id: request.id,
-        result: Ok((
-            config_choices(
-                &config,
-                &providers(),
-                TerminalSettings::default(),
-                StatusLineSettings::default(),
-            ),
-            None,
-        )),
-    });
-    for code in [KeyCode::Esc, KeyCode::Esc, KeyCode::Enter] {
-        editor.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
-    }
-    assert!(matches!(editor.page(), super::ConfigEditorPage::OpenAi(_)));
-    for _ in 0..2 {
-        editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
-    }
+    config.providers.insert(request.config.provider.clone(), request.config.clone());
+    editor.complete_connection(crate::config::provider::Reply { id: request.id, result: Ok((config_choices(&config, &providers(), TerminalSettings::default(), StatusLineSettings::default()), None)) });
+    assert!(matches!(editor.page(), super::ConfigEditorPage::Provider(_)));
+    editor.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     editor.handle_paste(" renamed".into());
-    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(renamed)) =
-        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-    else {
-        panic!("expected existing connection edit")
-    };
+    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(renamed)) = editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)) else { panic!("expected autosave") };
     assert_eq!(renamed.config.provider, request.config.provider);
     assert_eq!(renamed.revision, 1);
+}
+
+#[test]
+fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
+    use zeta_app_server_protocol::protocol::config::*;
+    let mut config = empty_config_snapshot();
+    for (id, name, order) in [("custom-a", "Zulu", 2), ("custom-b", "Alpha", 1)] {
+        config.providers.insert(
+            id.into(),
+            ProviderConfigDto {
+                provider: id.into(),
+                custom: Some(CustomProviderConfigDto {
+                    context_window: 272_000,
+                    model: None,
+                    name: name.into(),
+                    protocol: CustomProviderProtocolDto::Responses,
+                    order,
+                }),
+                base_url: Some("https://example.test".into()),
+                max_output_tokens: None,
+                model_context: Default::default(),
+            },
+        );
+    }
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &config,
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    let id = crate::widgets::list_selection::ListSelectionItemId::new("custom-a");
+    editor.selection.state_mut().focus_item(&id);
+    assert_eq!(
+        editor.selection().unwrap().visible_items()[0].label(),
+        "Zulu"
+    );
+    assert!(editor.key_hints().contains("Delete"));
+    assert!(
+        matches!(editor.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)), super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) if request.operation == crate::config::provider::Operation::Remove)
+    );
+    editor.removing = None;
+    editor.selection.state_mut().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("provider-api-key-openai"),
+    );
+    assert!(!editor.key_hints().contains("Delete"));
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Consumed
+    ));
 }
 
 #[test]

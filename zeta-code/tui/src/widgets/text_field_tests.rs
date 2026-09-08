@@ -54,15 +54,10 @@ fn escape_restores_the_confirmed_value_and_only_a_second_escape_leaves_the_field
 }
 
 #[test]
-fn rejected_save_keeps_input_for_retry_and_blur_does_not_save_or_resume_editing() {
+fn blur_preserves_draft_without_submitting_and_enter_resumes_editing() {
     let mut field = TextField::new("", SearchBoxModel::new("URL"));
     field.handle_key(key(KeyCode::Enter));
     field.handle_paste("invalid".into());
-    assert_eq!(
-        field.handle_key(key(KeyCode::Enter)),
-        TextFieldOutcome::Submit
-    );
-    field.reject();
     assert!(field.is_editing());
     assert_eq!(field.query(), "invalid");
     field.blur();

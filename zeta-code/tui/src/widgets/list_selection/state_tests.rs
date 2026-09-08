@@ -163,10 +163,12 @@ fn tab_switching_preserves_the_search_query() {
         state.handle_key(key(KeyCode::Char(character)));
     }
     state.handle_key(key(KeyCode::Tab));
-    assert!(state.search_focused());
+    assert!(state.tabs_focused());
+    assert!(!state.search().unwrap().input_active());
     assert_eq!(active_tab_label(&state), "Keys");
     state.handle_key(key(KeyCode::BackTab));
-    assert!(state.search_focused());
+    assert!(state.tabs_focused());
+    assert!(!state.search().unwrap().input_active());
     assert_eq!(active_tab_label(&state), "Commands");
     state.handle_key(key(KeyCode::Tab));
     assert_eq!(state.query(), "esc");
@@ -533,7 +535,7 @@ fn tab_from_items_skips_disabled_pages_and_repeat_does_not_switch() {
         ListSelectionInputOutcome::Consumed
     );
     assert_eq!(active_tab_label(&state), "Empty");
-    assert!(state.items_focused());
+    assert!(state.tabs_focused());
     assert_eq!(state.selected_visible_index(), None);
     for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
         state.handle_key(KeyEvent::new_with_kind(
@@ -568,4 +570,36 @@ fn hidden_tab_list_neither_switches_nor_adjusts_values_on_tab() {
         assert!(state.items_focused());
         assert_eq!(active_tab_label(&state), "Items");
     }
+}
+
+#[test]
+fn tab_from_items_focuses_tabs_and_arrows_follow_the_visual_regions() {
+    let mut view = state();
+    assert!(view.items_focused());
+    view.handle_key(key(KeyCode::Tab));
+    assert!(view.tabs_focused());
+    assert_eq!(view.active_tab().label(), "Keys");
+    view.handle_key(key(KeyCode::Left));
+    assert_eq!(view.active_tab().label(), "Commands");
+    assert!(view.tabs_focused());
+    view.handle_key(key(KeyCode::Down));
+    assert!(view.search_focused());
+    view.handle_key(key(KeyCode::Down));
+    assert!(view.items_focused());
+    view.handle_key(key(KeyCode::BackTab));
+    assert!(view.tabs_focused());
+    assert_eq!(view.active_tab().label(), "Keys");
+}
+
+#[test]
+fn repeated_tab_does_not_move_focus_and_a_single_tab_still_receives_focus() {
+    let mut view = ListSelectionState::new(ListSelectionModel::new("One", vec![ListSelectionGroup::new("Only", vec![ListSelectionItem::new("Item")])]));
+    view.handle_key(KeyEvent::new_with_kind(KeyCode::Tab, KeyModifiers::NONE, crossterm::event::KeyEventKind::Repeat));
+    assert!(view.items_focused());
+    view.handle_key(key(KeyCode::Tab));
+    assert!(view.tabs_focused());
+    view.handle_key(key(KeyCode::Down));
+    assert!(view.items_focused());
+    view.handle_key(key(KeyCode::Up));
+    assert!(view.tabs_focused());
 }

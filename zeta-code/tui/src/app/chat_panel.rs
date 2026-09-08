@@ -206,8 +206,14 @@ impl ChatPanel {
         }
     }
 
-    pub(crate) fn finish_issue_models(&mut self, request_id: zeta_protocol::CommandId, result: Result<ConfigChoices, String>) {
-        if let Some(command) = self.command.as_mut() { command.finish_issue_models(request_id, result); }
+    pub(crate) fn finish_issue_models(
+        &mut self,
+        request_id: zeta_protocol::CommandId,
+        result: Result<ConfigChoices, String>,
+    ) {
+        if let Some(command) = self.command.as_mut() {
+            command.finish_issue_models(request_id, result);
+        }
     }
 
     pub(crate) fn replace_config(&mut self, choices: ConfigChoices) {
@@ -222,7 +228,7 @@ impl ChatPanel {
         }
     }
 
-    pub(crate) fn complete_connection(&mut self, reply: crate::config::openai::Reply) {
+    pub(crate) fn complete_connection(&mut self, reply: crate::config::provider::Reply) {
         if let Some(CommandPanel::Config(editor)) = self.command.as_mut() {
             editor.complete_connection(reply);
         }
@@ -244,6 +250,10 @@ impl ChatPanel {
         if let Some(command) = self.command.as_mut() {
             command.replace_connectors(choices);
         }
+    }
+
+    pub(crate) fn replace_model(&mut self, choices: crate::models::ModelChoices) {
+        if let Some(CommandPanel::Model(selection)) = self.command.as_mut() { selection.replace(choices.model, choices.actions); }
     }
 
     pub(crate) fn replace_mcp(&mut self, choices: McpChoices) {
@@ -276,10 +286,7 @@ impl ChatPanel {
         }
     }
 
-    pub(crate) fn apply_memory_diagnostics(
-        &mut self,
-        status: crate::memory::Status,
-    ) {
+    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
         if let Some(command) = self.command.as_mut() {
             command.apply_memory_diagnostics(status);
         }

@@ -43,8 +43,8 @@ pub(crate) enum ConfigSelectionAction {
     OpenIssueModels {
         expected_revision: u64,
     },
-    OpenOpenAi(super::openai::Settings),
-    Connection(super::openai::Request),
+    OpenProvider(super::provider::Settings),
+    Connection(super::provider::Request),
     OpenSubscription,
     Subscription(super::SubscriptionCommand),
     SetTerminalSettings(ConfigEdit),
@@ -110,9 +110,10 @@ pub(crate) struct ConfigEditor {
     issue_models: Option<ListSelection<ConfigSelectionAction>>,
     issue_model_request: Option<zeta_protocol::CommandId>,
     selection: ListSelection<ConfigSelectionAction>,
-    openai: Option<super::openai::Panel>,
+    provider_panel: Option<super::provider::Panel>,
     subscription: Option<ListSelection<ConfigSelectionAction>>,
     prompt: Option<ProviderApiKeyPromptState>,
+    removing: Option<super::provider::Request>,
 }
 
 #[derive(Debug)]
@@ -138,7 +139,7 @@ pub(crate) enum ConfigEditorOutcome {
 pub(crate) enum ConfigEditorPage<'a> {
     Selection(&'a crate::widgets::list_selection::ListSelectionState),
     Prompt(&'a TextPrompt),
-    OpenAi(&'a super::openai::Panel),
+    Provider(&'a super::provider::Panel),
 }
 
 impl ConfigEditor {
@@ -148,9 +149,10 @@ impl ConfigEditor {
             issue_models: None,
             issue_model_request: None,
             selection: ListSelection::new(spec.model, spec.actions),
-            openai: None,
+            provider_panel: None,
             subscription: None,
             prompt: None,
+            removing: None,
         }
     }
 
@@ -169,13 +171,13 @@ impl ConfigEditor {
             self.issue_model_request = None;
         }
         self.revision = revision;
-        if let Some(openai) = &mut self.openai {
-            if let Some(ConfigSelectionAction::OpenOpenAi(settings)) = spec
+        if let Some(provider_panel) = &mut self.provider_panel {
+            if let Some(ConfigSelectionAction::OpenProvider(settings)) = spec
                 .actions
                 .values()
-                .find(|action| matches!(action, ConfigSelectionAction::OpenOpenAi(_)))
+                .find(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.provider == provider_panel.provider_id()))
             {
-                openai.replace(settings.clone());
+                provider_panel.replace(settings.clone());
             }
         }
         self.selection.replace(spec.model, spec.actions);
@@ -216,13 +218,49 @@ impl ConfigEditor {
                 ),
             };
         }
-        if let Some(openai) = &mut self.openai {
-            let outcome = openai.handle_key(key);
+        if let Some(provider_panel) = &mut self.provider_panel {
+            let outcome = provider_panel.handle_key(key);
             if matches!(outcome, ConfigEditorOutcome::Dismiss) {
-                self.openai = None;
+                self.provider_panel = None;
                 return ConfigEditorOutcome::Consumed;
             }
             return outcome;
+        }
+        if key.code == crossterm::event::KeyCode::Delete
+            && key.modifiers.is_empty()
+            && self.selection.state().items_focused()
+            && key.kind == crossterm::event::KeyEventKind::Press
+        {
+            if self.removing.is_some() {
+                return ConfigEditorOutcome::Consumed;
+            }
+            if let Some(id) = self
+                .selection
+                .state()
+                .selected_item()
+                .and_then(ListSelectionItem::id)
+                .cloned()
+            {
+                if let Some(ConfigSelectionAction::OpenProvider(settings)) =
+                    self.selection.action(&id)
+                {
+                    if settings.config.custom.is_some() {
+                        let request = super::provider::Request {
+                            id: crate::client::new_command_id("provider-remove"),
+                            revision: self.revision,
+                            config: settings.config.clone(),
+                            key: None,
+                            operation: super::provider::Operation::Remove,
+                            model: None,
+                        };
+                        self.removing = Some(request.clone());
+                        return ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(
+                            request,
+                        ));
+                    }
+                }
+            }
+            return ConfigEditorOutcome::Consumed;
         }
         let outcome = self.selection.handle_key(key);
         self.handle_selection_outcome(outcome)
@@ -246,8 +284,8 @@ impl ConfigEditor {
             ListSelectionOutcome::Activate(ConfigSelectionAction::SetLanguage(edit)) => {
                 language_outcome(edit, ListSelectionAdjustment::Next)
             }
-            ListSelectionOutcome::Activate(ConfigSelectionAction::OpenOpenAi(settings)) => {
-                self.openai = Some(super::openai::Panel::new(settings));
+            ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProvider(settings)) => {
+                self.provider_panel = Some(super::provider::Panel::new(settings));
                 ConfigEditorOutcome::Consumed
             }
             ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProviderApiKey {
@@ -261,7 +299,7 @@ impl ConfigEditor {
             ListSelectionOutcome::Adjust(action, adjustment) => match action {
                 ConfigSelectionAction::OpenIssueModels { .. }
                 | ConfigSelectionAction::OpenProviderApiKey { .. }
-                | ConfigSelectionAction::OpenOpenAi(_)
+                | ConfigSelectionAction::OpenProvider(_)
                 | ConfigSelectionAction::Connection(_)
                 | ConfigSelectionAction::OpenSubscription
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
@@ -272,7 +310,7 @@ impl ConfigEditor {
                 ConfigEditorOutcome::Consumed
             }
             ListSelectionOutcome::Dismiss => {
-                if self.openai.take().is_some() {
+                if self.provider_panel.take().is_some() {
                     ConfigEditorOutcome::Consumed
                 } else {
                     ConfigEditorOutcome::Dismiss
@@ -290,8 +328,8 @@ impl ConfigEditor {
             subscription.handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
             prompt.prompt.handle_paste(pasted);
-        } else if let Some(openai) = self.openai.as_mut() {
-            openai.handle_paste(pasted);
+        } else if let Some(provider_panel) = self.provider_panel.as_mut() {
+            provider_panel.handle_paste(pasted);
         } else {
             self.selection.handle_paste(pasted);
         }
@@ -306,9 +344,9 @@ impl ConfigEditor {
         }
         match &self.prompt {
             Some(prompt) => ConfigEditorPage::Prompt(&prompt.prompt),
-            None => self.openai.as_ref().map_or_else(
+            None => self.provider_panel.as_ref().map_or_else(
                 || ConfigEditorPage::Selection(self.selection.state()),
-                ConfigEditorPage::OpenAi,
+                ConfigEditorPage::Provider,
             ),
         }
     }
@@ -324,10 +362,12 @@ impl ConfigEditor {
             .as_ref()
             .map(|prompt| prompt.key_hints.text())
             .unwrap_or_else(|| {
-                if let Some(openai) = &self.openai {
-                    openai.key_hints()
+                if let Some(provider_panel) = &self.provider_panel {
+                    provider_panel.key_hints()
                 } else {
-                    self.selection.key_hints()
+                    if self.selection.state().items_focused() && self.selection.state().selected_item().and_then(ListSelectionItem::id).and_then(|id| self.selection.action(id)).is_some_and(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.custom.is_some())) {
+                        "Enter to edit  ·  Delete to remove provider  ·  Esc to return"
+                    } else { self.selection.key_hints() }
                 }
             })
     }
@@ -339,7 +379,7 @@ impl ConfigEditor {
         if let Some(subscription) = &self.subscription {
             return Some(subscription.state());
         }
-        (self.prompt.is_none() && self.openai.is_none()).then(|| self.selection.state())
+        (self.prompt.is_none() && self.provider_panel.is_none()).then(|| self.selection.state())
     }
 
     pub(crate) fn finish_issue_models(
@@ -368,32 +408,66 @@ impl ConfigEditor {
     }
 
     pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
-        if let Some(openai) = &mut self.openai {
-            openai.update_subscription(spec);
-        } else {
-            self.subscription = Some(ListSelection::new(spec.model, spec.actions));
-        }
+        self.subscription = Some(ListSelection::new(spec.model, spec.actions));
     }
 
-    pub(crate) fn complete_connection(&mut self, reply: super::openai::Reply) {
-        if let Ok((choices, _)) = &reply.result {
-            let revision = config_revision(choices);
-            if revision >= self.revision {
-                self.revision = revision;
-                self.selection
-                    .replace(choices.model.clone(), choices.actions.clone());
+    pub(crate) fn is_testing(&self) -> bool {
+        self.provider_panel
+            .as_ref()
+            .is_some_and(|panel| panel.is_testing())
+    }
+
+    pub(crate) fn complete_connection(&mut self, reply: super::provider::Reply) {
+        let removing = self
+            .removing
+            .as_ref()
+            .is_some_and(|request| request.id == reply.id);
+        let saving = self
+            .provider_panel
+            .as_ref()
+            .is_some_and(|panel| panel.is_saving(&reply.id));
+        if !removing
+            && self
+                .provider_panel
+                .as_ref()
+                .is_none_or(|panel| !panel.accepts(&reply.id))
+        {
+            return;
+        }
+        let focus = if removing {
+            None
+        } else {
+            self.provider_panel
+                .as_ref()
+                .map(|panel| ListSelectionItemId::new(panel.provider_id()))
+        };
+        if removing {
+            self.removing = None;
+        }
+        if saving || removing {
+            match &reply.result {
+                Ok((choices, _)) if config_revision(choices) >= self.revision => {
+                    self.revision = config_revision(choices);
+                    if saving {
+                        self.selection = ListSelection::new(choices.model.clone(), choices.actions.clone());
+                    } else {
+                        self.selection.replace(choices.model.clone(), choices.actions.clone());
+                    }
+                    if let Some(id) = focus {
+                        self.selection.state_mut().focus_item(&id);
+                    }
+                }
+                Err(message) if removing => self
+                    .selection
+                    .state_mut()
+                    .set_message(Some(message.clone())),
+                _ => {}
             }
         }
-        if let Some(panel) = &mut self.openai {
-            panel.complete(reply);
-        }
+        if let Some(panel) = self.provider_panel.as_mut() { panel.complete(reply); }
     }
 
     pub(crate) fn update_subscription(&mut self, spec: ConfigChoices) {
-        if let Some(openai) = &mut self.openai {
-            openai.update_subscription(spec);
-            return;
-        }
         if let Some(subscription) = self.subscription.as_mut() {
             subscription.replace(spec.model, spec.actions);
         }
@@ -430,7 +504,7 @@ fn config_revision(choices: &ConfigChoices) -> u64 {
         .actions
         .values()
         .find_map(|action| match action {
-            ConfigSelectionAction::OpenOpenAi(settings) => Some(settings.revision),
+            ConfigSelectionAction::OpenProvider(settings) => Some(settings.revision),
             ConfigSelectionAction::SetIssues(edit) => Some(edit.expected_revision),
             _ => None,
         })
@@ -689,23 +763,65 @@ fn provider_items(
     catalog: &ProviderListResult,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> Vec<ListSelectionItem> {
-    let mut items: Vec<_> = catalog
+    let mut custom = config
+        .providers
+        .values()
+        .filter(|entry| entry.custom.is_some())
+        .collect::<Vec<_>>();
+    custom.sort_by(|left, right| {
+        right
+            .custom
+            .as_ref()
+            .unwrap()
+            .order
+            .cmp(&left.custom.as_ref().unwrap().order)
+            .then_with(|| left.provider.cmp(&right.provider))
+    });
+    let mut items = Vec::new();
+    for entry in custom {
+        let id = ListSelectionItemId::new(&entry.provider);
+        actions.insert(
+            id.clone(),
+            ConfigSelectionAction::OpenProvider(super::provider::Settings::new(
+                config,
+                catalog,
+                &entry.provider,
+            )),
+        );
+        items.push(ListSelectionItem::new(&entry.custom.as_ref().unwrap().name).with_id(id));
+    }
+    for provider in &catalog.providers {
+        if config
+            .providers
+            .get(&provider.provider)
+            .is_some_and(|entry| entry.custom.is_some())
+            || provider.provider == "openai-compatible"
+        {
+            continue;
+        }
+        if provider.provider == "openai-chatgpt" {
+            let id = ListSelectionItemId::new("openai-chatgpt");
+            actions.insert(id.clone(), ConfigSelectionAction::OpenSubscription);
+            items.push(ListSelectionItem::new("ChatGPT").with_id(id));
+        } else {
+            items.push(provider_item(provider, actions));
+        }
+    }
+    if !catalog
         .providers
         .iter()
-        .filter(|provider| {
-            !matches!(
-                provider.provider.as_str(),
-                "openai" | "openai-chatgpt" | "openai-compatible"
-            ) && !provider.provider.starts_with("custom-")
-        })
-        .map(|provider| provider_item(provider, actions))
-        .collect();
-    let id = ListSelectionItemId::new("openai");
+        .any(|provider| provider.provider == "openai-chatgpt")
+    {
+        let id = ListSelectionItemId::new("openai-chatgpt");
+        actions.insert(id.clone(), ConfigSelectionAction::OpenSubscription);
+        items.push(ListSelectionItem::new("ChatGPT").with_id(id));
+    }
+    let id = ListSelectionItemId::new("new-custom-provider");
     actions.insert(
         id.clone(),
-        ConfigSelectionAction::OpenOpenAi(super::openai::Settings::new(config, catalog)),
+        ConfigSelectionAction::OpenProvider(super::provider::Settings::new(config, catalog, "")),
     );
-    items.insert(0, ListSelectionItem::new("OpenAI").with_id(id));
+    items.push(ListSelectionItem::new("New custom provider").with_id(id));
     items
 }
 

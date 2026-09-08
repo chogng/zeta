@@ -1,0 +1,22 @@
+---
+source: zeta-code/tui/src/app/frame_tests.rs
+expression: "render(&app, 100, 18)"
+---
+                                                                                                    
+    ▄  ▄     Zeta Code v0.1.0                                                                       
+  ▗█▛██▜█▖   Automatic model · Access unknown                                                       
+  ▝▜████▛▘   .                                                                                      
+    ▝  ▘                                                                                            
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+─ Model ────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+   Favorites    My gateway                                                                          
+  No models here · Pin models from a provider tab to Favorites                                      
+                                                                                                    
+  Enter to apply  ·  Tab/Shift+Tab to switch  ·  Esc to close  ·  P to pin/unpin

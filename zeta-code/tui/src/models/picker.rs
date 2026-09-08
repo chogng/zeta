@@ -4,72 +4,112 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
-use crate::widgets::search_box::SearchBoxModel;
 use std::collections::BTreeMap;
+use zeta_app_server_protocol::protocol::config::ConfigReadResult;
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
+use zeta_app_server_protocol::protocol::provider::ProviderListResult;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ModelSelectionAction {
-    Select { preference: String },
+    Select { preference: String, pinned: bool },
+    Pin { preference: String, pinned: bool },
 }
 
 pub(crate) type ModelChoices = ListSelectionSpec<ModelSelectionAction>;
 
+pub(super) fn pinned_models(tui: &FrontendConfigDto) -> Result<Vec<ModelRefDto>, String> {
+    let pins: Vec<ModelRefDto> = tui
+        .0
+        .get("pinnedModels")
+        .map(|value| serde_json::from_value(value.clone()))
+        .transpose()
+        .map_err(|error| format!("Invalid pinned models: {error}"))?
+        .unwrap_or_default();
+    let mut seen = std::collections::BTreeSet::new();
+    for pin in &pins {
+        zeta_protocol::ProviderId::new(&pin.provider).map_err(|error| error.to_string())?;
+        zeta_protocol::ModelId::new(&pin.model).map_err(|error| error.to_string())?;
+        if !seen.insert((&pin.provider, &pin.model)) {
+            return Err("Duplicate pinned model".into());
+        }
+    }
+    Ok(pins)
+}
+
 pub(crate) fn model_choices(
     catalog: &ModelListResult,
-    preferred_model: Option<&ModelRefDto>,
-) -> ModelChoices {
-    let current = preferred_model.map(|model| format!("{}/{}", model.provider, model.model));
+    config: &ConfigReadResult,
+    providers: &ProviderListResult,
+) -> Result<ModelChoices, String> {
+    let pins = pinned_models(&config.tui)?;
     let mut actions = BTreeMap::new();
-    let automatic_id = ListSelectionItemId::new("model-automatic");
-    actions.insert(
-        automatic_id.clone(),
-        ModelSelectionAction::Select {
-            preference: "clear".into(),
-        },
-    );
-    let automatic_selected = current.is_none();
-    let mut selected = 0;
-    let mut items = vec![
-        ListSelectionItem::new(format!(
-            "Automatic{}",
-            if automatic_selected { " ✓" } else { "" }
-        ))
-        .with_id(automatic_id)
-        .with_description("use the product default"),
-    ];
-    items.extend(catalog.models.iter().enumerate().map(|(index, entry)| {
-        let preference = format!("{}/{}", entry.model.provider, entry.model.model);
-        let is_selected = current.as_deref() == Some(preference.as_str());
-        if is_selected {
-            selected = index + 1;
-        }
-        let item_id = ListSelectionItemId::new(format!("model-{index}"));
+    let mut groups = BTreeMap::<String, Vec<ListSelectionItem>>::new();
+    let mut favorites = Vec::new();
+    for entry in &catalog.models {
+        let model = ModelRefDto {
+            provider: entry.model.provider.to_string(),
+            model: entry.model.model.to_string(),
+        };
+        let preference = format!("{}/{}", model.provider, model.model);
+        let pinned = pins.contains(&model);
+        let id = ListSelectionItemId::new(&preference);
         actions.insert(
-            item_id.clone(),
+            id.clone(),
             ModelSelectionAction::Select {
-                preference: preference.clone(),
+                preference,
+                pinned,
             },
         );
-        ListSelectionItem::new(format!(
-            "{}{}",
-            entry.display_name,
-            if is_selected { " ✓" } else { "" }
-        ))
-        .with_id(item_id)
-        .with_description(preference)
-    }));
-
-    ModelChoices {
-        model: ListSelectionModel::new("Model", vec![ListSelectionGroup::new("Models", items)])
-            .with_activation(bindings::MODEL_APPLY)
-            .without_tab_bar()
-            .with_initial_selected(selected)
-            .with_search(SearchBoxModel::new("Search models"))
-            .with_empty_message("No matching models"),
-        actions,
+        let item = ListSelectionItem::new(entry.display_name.clone()).with_id(id);
+        groups.entry(model.provider).or_default().push(item.clone());
+        if pinned {
+            favorites.push(item);
+        }
     }
+    let mut tabs = vec![ListSelectionGroup::new("Favorites", favorites)];
+    let mut custom = config
+        .providers
+        .values()
+        .filter(|provider| provider.custom.is_some())
+        .collect::<Vec<_>>();
+    custom.sort_by(|a, b| {
+        b.custom
+            .as_ref()
+            .unwrap()
+            .order
+            .cmp(&a.custom.as_ref().unwrap().order)
+            .then_with(|| a.provider.cmp(&b.provider))
+    });
+    for provider in custom {
+        tabs.push(ListSelectionGroup::new(
+            &provider.custom.as_ref().unwrap().name,
+            groups.remove(&provider.provider).unwrap_or_default(),
+        ));
+    }
+    for provider in &providers.providers {
+        if config
+            .providers
+            .get(&provider.provider)
+            .is_some_and(|provider| provider.custom.is_some())
+        {
+            continue;
+        }
+        if let Some(items) = groups.remove(&provider.provider) {
+            tabs.push(ListSelectionGroup::new(&provider.display_name, items));
+        }
+    }
+    for (provider, items) in groups {
+        tabs.push(ListSelectionGroup::new(provider, items));
+    }
+    Ok(ModelChoices {
+        model: ListSelectionModel::new("Model", tabs)
+            .with_activation(bindings::MODEL_APPLY)
+            .with_key_hint_note("P to pin/unpin")
+            .with_empty_message("No models here · Pin models from a provider tab to Favorites"),
+        actions,
+    })
 }
 
 #[cfg(test)]

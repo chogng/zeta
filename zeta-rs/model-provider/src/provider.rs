@@ -559,6 +559,106 @@ impl ModelProviderRuntime {
         self
     }
 
+    /// Invokes a small request against an unsaved connection, or discovers its model IDs.
+    /// The optional key is used only for this call; stored credentials are never changed.
+    pub fn probe_connection(
+        &self,
+        config: &ModelProviderConfig,
+        api_key: Option<Vec<u8>>,
+        model: Option<&str>,
+    ) -> Result<Option<Vec<String>>, ModelProviderError> {
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize(config)?;
+        let definition = runtime
+            .configs
+            .get(&config.provider)
+            .expect("validated provider");
+        let adapter = providers::instantiate(definition.adapter, &normalized);
+        let credentials = match api_key {
+            Some(key) => {
+                let credentials = ProviderCredentialService::new(
+                    runtime.configs.clone(),
+                    Arc::new(zeta_secrets::MemorySecretStore::default()),
+                );
+                credentials
+                    .set_api_key(&config.provider, key)
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+                Some(credentials)
+            }
+            None => runtime.credentials.clone(),
+        };
+        let mut headers = adapter.fixed_headers();
+        if let Some(credentials) = credentials {
+            headers.extend(
+                credentials
+                    .request_headers(&config.provider)
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+            );
+        }
+        if definition.adapter == zeta_model_provider_config::ProviderAdapter::Anthropic {
+            headers.push(zeta_http_client::HttpHeader::new(
+                "anthropic-version",
+                "2023-06-01",
+            ));
+        }
+        let target = ResolvedApiTarget::new(normalized.base_url, headers);
+        let cancellation = CancellationSource::new();
+        if let Some(model) = model {
+            ModelId::new(model)
+                .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
+            let mut request = ModelRequest::text("Reply with OK.");
+            request.max_output_tokens = Some(1024);
+            adapter.complete(
+                &target,
+                model,
+                &request,
+                self.client.as_ref(),
+                &cancellation.token(),
+            )?;
+            return Ok(None);
+        }
+        let request = ClientRequest::new(
+            zeta_http_client::HttpMethod::Get,
+            target
+                .endpoint("models")
+                .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?,
+            target.headers,
+            Vec::new(),
+            zeta_client::RetryPolicy::never(),
+        )
+        .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
+        let response = self
+            .client
+            .execute_with_cancellation(&request, &cancellation.token())
+            .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?;
+        if !(200..300).contains(&response.status()) {
+            return Err(zeta_api::ApiError::HttpStatus(response.status()).into());
+        }
+        let value: serde_json::Value = serde_json::from_slice(response.body())
+            .map_err(|_| ModelProviderError::InvalidResponse("Invalid model list".into()))?;
+        let rows = value
+            .get("data")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| {
+                ModelProviderError::InvalidResponse("Expected a model data list".into())
+            })?;
+        let mut models = Vec::new();
+        for row in rows {
+            let id = row
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    ModelProviderError::InvalidResponse("Model entry has no ID".into())
+                })?;
+            ModelId::new(id)
+                .map_err(|error| ModelProviderError::InvalidResponse(error.to_string()))?;
+            if !models.iter().any(|existing| existing == id) {
+                models.push(id.to_owned());
+            }
+        }
+        Ok(Some(models))
+    }
+
     pub fn builtin() -> Self {
         Self::new(ProviderConfigRegistry::builtin())
     }

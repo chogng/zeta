@@ -1438,6 +1438,9 @@ fn custom_provider_catalog_fetch_is_explicit_and_feeds_model_selection() {
     let mut connection = ModelProviderConfig::new(provider.clone());
     connection.base_url = Some("https://example.test/v1".into());
     connection.custom = Some(zeta_model_provider_config::CustomProviderConfig {
+        context_window: 272_000,
+        order: 0,
+        model: None,
         name: "Example".into(),
         protocol: zeta_model_provider_config::CustomProviderProtocol::Responses,
     });

@@ -36,8 +36,8 @@ pub(crate) enum TextFieldOutcome {
     Submit,
 }
 
-/// Owns text-field editing and cancellation; callers validate and persist Submit,
-/// then report success with accept or failure with reject. Focus never advances here.
+/// Owns text-field editing and cancellation; callers accept submitted text
+/// and own validation and persistence of the form. Focus never advances here.
 #[derive(Clone)]
 pub(crate) struct TextField {
     input: SearchBoxState,
@@ -79,11 +79,6 @@ impl TextField {
         }
     }
 
-    pub(crate) fn with_key_hint(mut self, binding: bindings::Keybinding) -> Self {
-        self.hints = self.hints.map(|hints| hints.with_binding(binding));
-        self
-    }
-
     pub(crate) fn blur(&mut self) {
         if self.mode == Mode::Editing {
             self.set_mode(Mode::Selected);
@@ -94,10 +89,6 @@ impl TextField {
         self.confirmed = Zeroizing::new(value.clone());
         self.input.set_query(value);
         self.set_mode(Mode::Selected);
-    }
-
-    pub(crate) fn reject(&mut self) {
-        self.set_mode(Mode::Editing);
     }
 
     fn set_mode(&mut self, mode: Mode) {

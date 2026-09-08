@@ -225,8 +225,14 @@ fn issue_config_defaults_on_and_preserves_its_model_across_disable_and_restart()
     let store = ConfigStore::open(&path).unwrap();
     assert_eq!(store.read_snapshot().unwrap().values.issues, IssueConfig { recommend_merge: true, analysis_model: None });
     let invalid = store.apply(ConfigCommandRequest {
-        command_id: CommandId::new("unknown-issue-model").unwrap(), expected_revision: ConfigRevision::INITIAL,
-        command: UserConfigCommand::ConfigureIssues { config: IssueConfig { recommend_merge: true, analysis_model: Some(model_ref("missing", "small")) } },
+        command_id: CommandId::new("unknown-issue-model").unwrap(),
+        expected_revision: ConfigRevision::INITIAL,
+        command: UserConfigCommand::ConfigureIssues {
+            config: IssueConfig {
+                recommend_merge: true,
+                analysis_model: Some(model_ref("missing", "small")),
+            },
+        },
     });
     assert!(matches!(invalid, Err(ConfigCommandError::Config(_))));
     let configured = configure_provider(&store, 0, "ollama");
@@ -236,21 +242,44 @@ fn issue_config_defaults_on_and_preserves_its_model_across_disable_and_restart()
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate { preferred_model: Patch::Value(chat.clone()), ..Default::default() }),
     }).unwrap();
     let analysis = model_ref("ollama", "issue-model");
-    let disabled = IssueConfig { recommend_merge: false, analysis_model: Some(analysis.clone()) };
-    let outcome = store.apply(ConfigCommandRequest {
-        command_id: CommandId::new("disable-issue-recommendations").unwrap(), expected_revision: preferred.revision,
-        command: UserConfigCommand::ConfigureIssues { config: disabled.clone() },
-    }).unwrap();
+    let disabled = IssueConfig {
+        recommend_merge: false,
+        analysis_model: Some(analysis.clone()),
+    };
+    let outcome = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("disable-issue-recommendations").unwrap(),
+            expected_revision: preferred.revision,
+            command: UserConfigCommand::ConfigureIssues {
+                config: disabled.clone(),
+            },
+        })
+        .unwrap();
     assert_eq!(store.read_snapshot().unwrap().values.issues, disabled);
-    assert!(store.apply(ConfigCommandRequest {
-        command_id: CommandId::new("stale-issue-settings").unwrap(), expected_revision: preferred.revision,
-        command: UserConfigCommand::ConfigureIssues { config: IssueConfig::default() },
-    }).is_err());
-    let enabled = IssueConfig { recommend_merge: true, analysis_model: Some(analysis) };
-    store.apply(ConfigCommandRequest {
-        command_id: CommandId::new("enable-issue-recommendations").unwrap(), expected_revision: outcome.revision,
-        command: UserConfigCommand::ConfigureIssues { config: enabled.clone() },
-    }).unwrap();
+    assert!(
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("stale-issue-settings").unwrap(),
+                expected_revision: preferred.revision,
+                command: UserConfigCommand::ConfigureIssues {
+                    config: IssueConfig::default()
+                },
+            })
+            .is_err()
+    );
+    let enabled = IssueConfig {
+        recommend_merge: true,
+        analysis_model: Some(analysis),
+    };
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("enable-issue-recommendations").unwrap(),
+            expected_revision: outcome.revision,
+            command: UserConfigCommand::ConfigureIssues {
+                config: enabled.clone(),
+            },
+        })
+        .unwrap();
     drop(store);
     let reopened = ConfigStore::open(&path).unwrap();
     let snapshot = reopened.read_snapshot().unwrap();
@@ -269,6 +298,9 @@ fn custom_provider_survives_restart_and_rejects_stale_update() {
     let mut config = ModelProviderConfig::new(provider_id("custom-test"));
     config.base_url = Some("https://example.test/v1".into());
     config.custom = Some(zeta_model_provider_config::CustomProviderConfig {
+        context_window: 272_000,
+        order: 0,
+        model: None,
         name: "Example".into(),
         protocol: zeta_model_provider_config::CustomProviderProtocol::Responses,
     });
@@ -286,6 +318,7 @@ fn custom_provider_survives_restart_and_rejects_stale_update() {
         zeta_model_provider_config::CustomProviderProtocol::ChatCompletions;
     assert!(store.apply(command("stale", changed)).is_err());
     drop(store);
+    config.custom.as_mut().unwrap().order = 1;
     let reopened = ConfigStore::open(&path).unwrap();
     assert_eq!(
         reopened

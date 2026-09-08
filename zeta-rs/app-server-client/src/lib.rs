@@ -564,7 +564,10 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::IssuePrCreate, params)
     }
 
-    pub fn configure_issues(&mut self, params: zeta_app_server_protocol::protocol::issues::IssueConfigureParams) -> Result<zeta_app_server_protocol::protocol::config::ConfigCommandResult, ClientError> {
+    pub fn configure_issues(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issues::IssueConfigureParams,
+    ) -> Result<zeta_app_server_protocol::protocol::config::ConfigCommandResult, ClientError> {
         self.call(ClientMethod::IssueConfigure, params)
     }
 
@@ -1007,6 +1010,32 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: ProviderConfigureParams,
     ) -> Result<ConfigCommandResult, ClientError> {
         self.call(ClientMethod::ProviderConfigure, params)
+    }
+
+    /// Probes the current form without saving it. Secret serialization is outbound-only.
+    pub fn probe_provider(
+        &mut self,
+        config: zeta_app_server_protocol::protocol::config::ProviderConfigDto,
+        api_key: Option<String>,
+        model: Option<String>,
+    ) -> Result<zeta_app_server_protocol::protocol::provider::ProviderProbeResult, ClientError>
+    {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Probe<'a> {
+            config: zeta_app_server_protocol::protocol::config::ProviderConfigDto,
+            api_key: Option<&'a str>,
+            model: Option<String>,
+        }
+        let key = api_key.map(zeroize::Zeroizing::new);
+        self.call_secret(
+            ClientMethod::ProviderProbe,
+            Probe {
+                config,
+                api_key: key.as_ref().map(|key| key.as_str()),
+                model,
+            },
+        )
     }
 
     pub fn remove_provider(
