@@ -40,6 +40,32 @@ enum HitBarStyle {
 
 const BOTTOM_ROWS: u16 = 2;
 
+pub(crate) fn desired_height(app: &App, screen: Rect) -> u16 {
+    if app.session_preview().is_some()
+        || app.session_manager_view().is_some()
+        || app.transcript_scroll().anchor().is_some()
+    {
+        return screen.height;
+    }
+    let areas = layout(app, screen);
+    let chrome = screen
+        .height
+        .saturating_sub(areas.session.transcript.height);
+    let messages = app.visible_transcript_views();
+    let rows = ChatHistoryView {
+        header: None,
+        messages: &messages,
+        scroll: app.transcript_scroll(),
+        render_cache: app.transcript_render_cache(),
+        pointer: Default::default(),
+    }
+    .desired_height(screen.width, app.render_context());
+    chrome
+        .saturating_add(rows.max(super::layout::MIN_TRANSCRIPT_ROWS))
+        .min(screen.height)
+        .max(1)
+}
+
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let context = app.render_context();
     frame.render_widget(

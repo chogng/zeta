@@ -1197,7 +1197,26 @@ impl App {
     }
 
     pub(crate) fn transcript_header_visible(&self) -> bool {
-        self.transcript_history_browsing() || !self.thread.has_committed_cells()
+        self.transcript_history_browsing()
+            || (!self.thread.has_committed_cells()
+                && !self
+                    .transcript_history
+                    .header_written(self.thread_presentations.active_id().as_str()))
+    }
+
+    pub(crate) fn write_transcript_header(
+        &mut self,
+        width: u16,
+        output: &mut impl FnMut(&ratatui::buffer::Buffer) -> std::io::Result<()>,
+    ) -> std::io::Result<()> {
+        let scope = self.thread_presentations.active_id().as_str();
+        if !self.transcript_history.header_written(scope) {
+            let header =
+                welcome::history_buffer(width, u16::MAX, &self.welcome, self.render_context());
+            output(&header)?;
+            self.transcript_history.mark_header_written(scope);
+        }
+        Ok(())
     }
 
     pub(crate) fn write_transcript_history(

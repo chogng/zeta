@@ -1,6 +1,6 @@
 use ratatui::layout::Rect;
 
-const MIN_TRANSCRIPT_ROWS: u16 = 4;
+pub(super) const MIN_TRANSCRIPT_ROWS: u16 = 4;
 const MIN_MANAGER_ROWS: u16 = 4;
 const TOP_TIP_ROWS: u16 = 1;
 

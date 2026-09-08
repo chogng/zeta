@@ -16,6 +16,8 @@ use crossterm::event::EnableMouseCapture;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
+use ratatui::TerminalOptions;
+use ratatui::Viewport;
 use ratatui::backend::Backend;
 use ratatui::backend::ClearType;
 use ratatui::backend::CrosstermBackend;
@@ -41,9 +43,14 @@ impl TerminalSession {
         let host_terminal = detect_host_terminal();
         let modes = TerminalModeGuard::acquire(CrosstermModeOperations)?;
         let background_color = super::terminal_probe::query_background(&host_terminal);
-        let terminal = Terminal::new(MainScreenBackend {
-            inner: CrosstermBackend::new(io::stdout()),
-        })?;
+        let terminal = Terminal::with_options(
+            MainScreenBackend {
+                inner: CrosstermBackend::new(io::stdout()),
+            },
+            TerminalOptions {
+                viewport: Viewport::Fixed(Rect::new(0, 0, crossterm::terminal::size()?.0, 1)),
+            },
+        )?;
         let mut session = Self {
             background_color,
             terminal,
@@ -68,10 +75,20 @@ impl TerminalSession {
         Ok(())
     }
 
-    pub(crate) fn area(&self) -> io::Result<Rect> {
+    pub(crate) fn screen_area(&self) -> io::Result<Rect> {
         self.terminal
             .size()
             .map(|size| Rect::new(0, 0, size.width, size.height))
+    }
+
+    pub(crate) fn area(&self) -> io::Result<Rect> {
+        self.rendered_frame
+            .as_ref()
+            .map_or_else(|| self.screen_area(), |frame| Ok(frame.area))
+    }
+
+    pub(crate) fn set_height(&mut self, height: u16) -> io::Result<()> {
+        resize_viewport(&mut self.terminal, height)
     }
 
     pub(crate) fn append_history(
@@ -79,12 +96,7 @@ impl TerminalSession {
         rows: usize,
         mut render: impl FnMut(&mut Buffer, Rect, usize),
     ) -> io::Result<()> {
-        append_history(
-            &mut self.terminal,
-            self.rendered_frame.as_ref(),
-            rows,
-            &mut render,
-        )
+        append_history(&mut self.terminal, rows, &mut render)
     }
 
     pub(crate) fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
@@ -315,78 +327,77 @@ impl TerminalModeOperations for CrosstermModeOperations {
     }
 }
 
-fn append_history<B: HistoryBackend>(
+fn resize_viewport<B: Backend>(terminal: &mut Terminal<B>, height: u16) -> io::Result<()> {
+    let size = terminal.size()?;
+    if size.width == 0 || size.height == 0 {
+        return Err(io::Error::other(
+            "terminal has no space for interactive output",
+        ));
+    }
+    let old = terminal.get_frame().area();
+    let height = height.max(1).min(size.height);
+    let y = old
+        .y
+        .min(size.height.saturating_sub(old.height.min(size.height)));
+    if old.width == size.width && old.height == height && old.bottom() <= size.height {
+        return Ok(());
+    }
+    terminal.backend_mut().set_cursor_position((0, y))?;
+    terminal
+        .backend_mut()
+        .clear_region(ClearType::AfterCursor)?;
+    reserve_viewport(terminal, y, height)
+}
+
+fn reserve_viewport<B: Backend>(terminal: &mut Terminal<B>, y: u16, height: u16) -> io::Result<()> {
+    let size = terminal.size()?;
+    let height = height.max(1).min(size.height);
+    terminal.backend_mut().set_cursor_position((0, y))?;
+    terminal
+        .backend_mut()
+        .append_lines(height.saturating_sub(1))?;
+    let top = y.min(size.height.saturating_sub(height));
+    terminal.resize(Rect::new(0, top, size.width, height))
+}
+
+fn append_history<B: Backend>(
     terminal: &mut Terminal<B>,
-    rendered_frame: Option<&Buffer>,
     rows: usize,
     render: &mut impl FnMut(&mut Buffer, Rect, usize),
 ) -> io::Result<()> {
-    let area = terminal.size()?;
-    if area.width == 0 || area.height == 0 {
+    if rows == 0 {
+        return Ok(());
+    }
+    let size = terminal.size()?;
+    if size.width == 0 || size.height == 0 {
         return Err(io::Error::other(
             "terminal has no space for transcript output",
         ));
     }
-    let row_area = Rect::new(0, 0, area.width, 1);
-    let empty = Buffer::empty(row_area);
-    let borrowed_rows = area.height.min(2);
+    let viewport = terminal.get_frame().area();
+    let mut y = viewport.y.min(size.height - 1);
+    // Only the interactive region is erased. The completed transcript above it remains
+    // ordinary terminal output, so short additions consume free screen rows before scrolling.
+    terminal.backend_mut().set_cursor_position((0, y))?;
+    terminal
+        .backend_mut()
+        .clear_region(ClearType::AfterCursor)?;
     for offset in 0..rows {
+        let area = Rect::new(0, y, size.width, 1);
+        let empty = Buffer::empty(area);
         let mut row = empty.clone();
-        render(&mut row, row_area, offset);
-        terminal.backend_mut().set_cursor_position((0, 0))?;
+        render(&mut row, area, offset);
+        terminal.backend_mut().set_cursor_position((0, y))?;
         terminal
             .backend_mut()
             .clear_region(ClearType::CurrentLine)?;
         terminal.backend_mut().draw(empty.diff(&row).into_iter())?;
-        terminal.backend_mut().commit_top_row(borrowed_rows)?;
+        // Advance immediately, including on ConPTY, before writing another row.
+        terminal.backend_mut().append_lines(1)?;
+        y = y.saturating_add(1).min(size.height - 1);
     }
-    if let Some(frame) = rendered_frame {
-        let restore_rows = borrowed_rows.min(frame.area.height);
-        let restore_right = frame.area.right().min(area.width);
-        terminal
-            .backend_mut()
-            .draw((frame.area.y..frame.area.y + restore_rows).flat_map(|y| {
-                (frame.area.x..restore_right).map(move |x| (x, y, &frame[(x, y)]))
-            }))?;
-    }
+    reserve_viewport(terminal, y, viewport.height)?;
     terminal.backend_mut().flush()
-}
-
-/// Moves the prepared top row into terminal history without scrolling the interactive frame.
-///
-/// Production uses a line feed at the bottom of a two-row region because xterm.js does not add
-/// `CSI S` partial-region scrolls to its scrollback. Test backends apply the equivalent semantic
-/// operation directly.
-trait HistoryBackend: Backend {
-    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()>;
-}
-
-impl<B: HistoryBackend> HistoryBackend for MainScreenBackend<B> {
-    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()> {
-        self.inner.commit_top_row(borrowed_rows)
-    }
-}
-
-impl<W: Write> HistoryBackend for CrosstermBackend<W> {
-    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()> {
-        if borrowed_rows == 1 {
-            return self.append_lines(1);
-        }
-        // A one-row DEC scrolling region is ignored by xterm.js. The history row occupies the
-        // first row; the second borrowed row gives the line feed a valid region to scroll.
-        write!(
-            self.writer_mut(),
-            "\x1b[1;{borrowed_rows}r\x1b[{borrowed_rows};1H\r\n\x1b[r"
-        )?;
-        self.writer_mut().flush()
-    }
-}
-
-#[cfg(test)]
-impl HistoryBackend for ratatui::backend::TestBackend {
-    fn commit_top_row(&mut self, borrowed_rows: u16) -> io::Result<()> {
-        self.scroll_region_up(0..borrowed_rows, 1)
-    }
 }
 
 // Keep the main buffer: xterm.js translates wheel input into arrow keys in
