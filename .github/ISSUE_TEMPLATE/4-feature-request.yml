@@ -5,7 +5,7 @@ labels:
 body:
   - type: markdown
     attributes:
-      value: 
+      value: |
         Is Zeta missing a feature that you'd like to see? Feel free to propose it here.
 
         Before you submit a feature:
