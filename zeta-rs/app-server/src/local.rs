@@ -1211,6 +1211,7 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
     .with_state_runtime(state_runtime)
+    .with_provider_runtime(model_provider.clone())
     .with_semantic_model_provider(model_provider)
     .with_cloud_codebase_storage_root(cloud_codebase_root)
     .with_cloud_codebase_providers(providers.cloud)
@@ -1899,7 +1900,7 @@ impl ModelCatalog for ConfigBackedModelService {
             .providers()
             .map(|provider| CatalogScopeKey::provider_seed(provider.id.clone()))
             .collect::<Vec<_>>();
-        for provider in config.providers.values() {
+        for provider in config.providers.values().filter(|provider| provider.custom.is_none()) {
             let binding = match self.catalog_provider.catalog_binding(provider) {
                 Ok(Some(binding)) => binding,
                 Ok(None) => continue,
@@ -1953,7 +1954,35 @@ impl ModelCatalog for ConfigBackedModelService {
                 )
             })
             .collect::<Result<Vec<_>, CoreError>>()?;
+        for provider in config
+            .providers
+            .values()
+            .filter(|provider| provider.custom.is_some())
+        {
+            if let Some(id) = provider.custom.as_ref().and_then(|custom| custom.model.as_ref()) {
+                let model = zeta_protocol::ModelRef::new(provider.provider.clone(), id.clone());
+                if models.iter().any(|entry| entry.model == model) {
+                    continue;
+                }
+                let resolved = manager
+                    .resolve_static(&model, &ModelRequirements::agent())
+                    .map_err(|error| CoreError::Model(error.to_string()))?;
+                let transport = registry
+                    .get(&provider.provider)
+                    .expect("configured provider")
+                    .output_transport;
+                models.push(runtime_catalog_entry(
+                    zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                        model,
+                        resolved.entry().info(),
+                        transport,
+                    ),
+                    &config,
+                )?);
+            }
+        }
         if let Some(preferred) = config.preferred_model.clone()
+            && config.providers.get(&preferred.provider).is_none_or(|provider| provider.custom.is_none())
             && !models.iter().any(|entry| entry.model == preferred)
         {
             let output_transport = registry
@@ -2057,12 +2086,19 @@ fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, C
         .models
         .iter()
         .find(|model| model.id == model_ref.model);
-    let configured_context = provider_config.model_context.get(&model_ref.model);
+    let custom_context = provider_config.custom.as_ref().map(|custom| zeta_model_provider_config::ModelContextConfig {
+        context_window: custom.context_window, auto_compact_token_limit: None,
+    });
+    let configured_context = custom_context.as_ref().or_else(|| provider_config.model_context.get(&model_ref.model));
     let (context_window, auto_compact_token_limit) = match configured_context {
         Some(context) => {
-            let default_limit = context.context_window.saturating_mul(9) / 10;
+            let window = match catalog_model.map(|model| model.context_window) {
+                Some(ContextWindow::Known(limit)) => context.context_window.min(limit),
+                _ => context.context_window,
+            };
+            let default_limit = window.saturating_mul(9) / 10;
             (
-                context.context_window,
+                window,
                 Some(
                     context
                         .auto_compact_token_limit

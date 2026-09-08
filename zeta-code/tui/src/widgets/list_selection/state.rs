@@ -221,11 +221,6 @@ impl ListSelectionModel {
         self
     }
 
-    pub(crate) fn with_key_hint(mut self, binding: Keybinding) -> Self {
-        self.presentation.key_hints = self.presentation.key_hints.with_binding(binding);
-        self
-    }
-
     pub(crate) fn with_key_hint_note(mut self, note: impl Into<String>) -> Self {
         self.presentation.key_hints = self.presentation.key_hints.with_note(note);
         self
@@ -424,7 +419,7 @@ impl ListSelectionState {
         self.focus == ListSelectionFocus::Search
     }
 
-    pub(super) fn items_focused(&self) -> bool {
+    pub(crate) fn items_focused(&self) -> bool {
         self.focus == ListSelectionFocus::Items
     }
 
@@ -499,6 +494,9 @@ impl ListSelectionState {
         if self.show_tabs() && bindings::TABS.matches(key) {
             if self.tabs.handle_key(key) == TabListInputOutcome::ActiveChanged {
                 self.select_first_visible();
+            }
+            if key.kind == KeyEventKind::Press {
+                self.set_focus(ListSelectionFocus::Tabs);
             }
             return ListSelectionInputOutcome::Consumed;
         }

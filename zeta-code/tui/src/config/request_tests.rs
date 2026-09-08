@@ -44,12 +44,22 @@ fn issue_config_write_uses_its_backend_contract_without_changing_tui_preferences
     let mut client = AppServerClient::new(RecordingTransport {
         requests: requests.clone(),
         responses: VecDeque::from([
-            response(1, serde_json::json!({"revision":2,"generation":2,"disposition":"updated"})),
+            response(
+                1,
+                serde_json::json!({"revision":2,"generation":2,"disposition":"updated"}),
+            ),
             response(2, serde_json::to_value(&current).unwrap()),
             response(3, serde_json::json!({"providers":[]})),
         ]),
     });
-    super::set_issue_settings(&mut client, crate::config::IssueConfigEdit { expected_revision: 1, config: current.issues.clone() }).unwrap();
+    super::set_issue_settings(
+        &mut client,
+        crate::config::IssueConfigEdit {
+            expected_revision: 1,
+            config: current.issues.clone(),
+        },
+    )
+    .unwrap();
     let requests = requests.lock().unwrap();
     assert_eq!(requests.iter().map(|request| request["method"].as_str().unwrap()).collect::<Vec<_>>(), ["issue/configure", "config/read", "provider/list"]);
     assert_eq!(requests[0]["params"]["expectedRevision"], 1);
@@ -67,109 +77,89 @@ fn issue_config_disabled_does_not_load_a_model_catalog() {
         requests: requests.clone(),
         responses: VecDeque::from([response(1, serde_json::to_value(&config).unwrap())]),
     });
-    let result = super::execute(&mut client, crate::config::Command::LoadIssueModels {
-        request_id: crate::client::new_command_id("test-issue-models"), expected_revision: config.revision,
-    }).unwrap();
-    assert!(matches!(result, crate::config::Event::IssueModels { result: Err(_), .. }));
+    let result = super::execute(
+        &mut client,
+        crate::config::Command::LoadIssueModels {
+            request_id: crate::client::new_command_id("test-issue-models"),
+            expected_revision: config.revision,
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        result,
+        crate::config::Event::IssueModels { result: Err(_), .. }
+    ));
     let requests = requests.lock().unwrap();
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0]["method"], "config/read");
 }
 
 #[test]
-fn fetching_models_is_read_only_and_decodes_empty_and_failed_results() {
-    for (result, expected) in [
-        (
-            serde_json::json!({"type":"empty"}),
-            "Provider returned no models",
-        ),
-        (
-            serde_json::json!({"type":"failed","failure":{"code":"authentication"}}),
-            "Check the API key",
-        ),
-        (
-            serde_json::json!({"type":"failed","failure":{"code":"invalidResponse"}}),
-            "invalid model list",
-        ),
+fn probing_unsaved_values_does_not_write_configuration_or_credentials() {
+    for operation in [
+        crate::config::provider::Operation::Test,
     ] {
         let current = empty_config_snapshot();
         let requests = Arc::new(Mutex::new(Vec::new()));
         let mut client = AppServerClient::new(RecordingTransport {
             requests: requests.clone(),
             responses: VecDeque::from([
-                response(1, serde_json::to_value(&current).unwrap()),
-                response(2, result),
-                response(3, serde_json::to_value(&current).unwrap()),
-                response(4, serde_json::json!({"providers":[]})),
+                response(
+                    1,
+                    serde_json::json!({"type":"failed","message":"Check the API key"}),
+                ),
+                response(2, serde_json::to_value(&current).unwrap()),
+                response(3, serde_json::json!({"providers":[]})),
             ]),
         });
-        let (_, models) = super::execute_connection(
+        let (_, result) = super::execute_connection(
             &mut client,
-            crate::config::openai::Request {
-                id: crate::client::new_command_id("test"),
-                revision: current.revision,
+            crate::config::provider::Request {
+            model: Some("alias".into()),
+                id: crate::client::new_command_id("probe"),
+                revision: 7,
                 config: zeta_app_server_protocol::protocol::config::ProviderConfigDto {
-                    provider: "openai".into(),
+                    provider: "custom-test".into(),
                     custom: None,
-                    base_url: None,
+                    base_url: Some("https://example.test/v1".into()),
                     max_output_tokens: None,
-                    model_context: Default::default(),
+                    model_context: [(
+                        "alias".into(),
+                        zeta_app_server_protocol::protocol::config::ModelContextConfigDto {
+                            context_window: 272_000,
+                            auto_compact_token_limit: None,
+                        },
+                    )]
+                    .into(),
                 },
-                key: None,
-                operation: crate::config::openai::Operation::FetchModels,
+                key: Some(crate::config::ProviderApiKeyEdit::new(
+                    "custom-test".into(),
+                    "draft-key".into(),
+                )),
+                operation,
             },
         )
         .unwrap();
-        assert!(models.unwrap().unwrap_err().contains(expected));
+        assert_eq!(result.unwrap().unwrap_err(), "Check the API key");
+        let requests = requests.lock().unwrap();
         assert_eq!(
             requests
-                .lock()
-                .unwrap()
                 .iter()
-                .map(|r| r["method"].as_str().unwrap().to_owned())
+                .map(|request| request["method"].as_str().unwrap())
                 .collect::<Vec<_>>(),
-            vec![
-                "config/read",
-                "provider/models/list",
-                "config/read",
-                "provider/list"
-            ]
+            ["provider/probe", "config/read", "provider/list"]
         );
+        assert_eq!(requests[0]["params"]["apiKey"], "draft-key");
+        assert_eq!(
+            requests[0]["params"]["config"]["baseUrl"],
+            "https://example.test/v1"
+        );
+        if operation == crate::config::provider::Operation::Test {
+            assert_eq!(requests[0]["params"]["model"], "alias");
+        } else {
+            assert!(requests[0]["params"]["model"].is_null());
+        }
     }
-}
-
-#[test]
-fn fetching_with_a_stale_revision_does_not_rewrite_external_changes() {
-    let mut current = empty_config_snapshot();
-    current.revision = 9;
-    let requests = Arc::new(Mutex::new(Vec::new()));
-    let mut client = AppServerClient::new(RecordingTransport {
-        requests: requests.clone(),
-        responses: VecDeque::from([response(1, serde_json::to_value(&current).unwrap())]),
-    });
-    let result = super::execute_connection(
-        &mut client,
-        crate::config::openai::Request {
-            id: crate::client::new_command_id("test"),
-            revision: 8,
-            config: zeta_app_server_protocol::protocol::config::ProviderConfigDto {
-                provider: "openai".into(),
-                custom: None,
-                base_url: None,
-                max_output_tokens: None,
-                model_context: Default::default(),
-            },
-            key: None,
-            operation: crate::config::openai::Operation::FetchModels,
-        },
-    );
-    assert!(
-        result
-            .err()
-            .unwrap()
-            .contains("Configuration changed elsewhere")
-    );
-    assert_eq!(requests.lock().unwrap().len(), 1);
 }
 
 #[test]
@@ -254,67 +244,31 @@ fn response(id: u64, result: serde_json::Value) -> String {
 }
 
 #[test]
-fn connection_fetch_failure_keeps_saved_configuration_and_can_retry() {
-    use crate::config::openai::Operation;
-    use crate::config::openai::Request;
-    let mut current = empty_config_snapshot();
-    let config = zeta_app_server_protocol::protocol::config::ProviderConfigDto {
-        provider: "custom-one".into(),
-        base_url: Some("https://example.test/v1".into()),
-        custom: Some(
-            zeta_app_server_protocol::protocol::config::CustomProviderConfigDto {
-                name: "Example".into(),
-                protocol:
-                    zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
-            },
-        ),
-        max_output_tokens: None,
-        model_context: Default::default(),
-    };
-    current
-        .providers
-        .insert(config.provider.clone(), config.clone());
-    current.revision = 4;
+fn probe_transport_failure_returns_without_writing_or_refreshing() {
     let requests = Arc::new(Mutex::new(Vec::new()));
     let mut client = AppServerClient::new(RecordingTransport {
         requests: requests.clone(),
-        responses: VecDeque::from([
-            response(1, serde_json::to_value(&current).unwrap()),
-            serde_json::json!({"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"Model endpoint unavailable"}}).to_string(),
-            response(3, serde_json::to_value(&current).unwrap()),
-            response(4, serde_json::json!({"providers":[]})),
-        ]),
+        responses: VecDeque::new(),
     });
-    let result = super::execute(
+    let result = super::execute_connection(
         &mut client,
-        super::Command::Connection(Request {
+        crate::config::provider::Request {
+            model: Some("alias".into()),
             id: crate::client::new_command_id("test"),
-            revision: 4,
-            config,
+            revision: 0,
+            config: zeta_app_server_protocol::protocol::config::ProviderConfigDto {
+                provider: "custom-test".into(),
+                custom: None,
+                base_url: Some("https://example.test/v1".into()),
+                max_output_tokens: None,
+                model_context: Default::default(),
+            },
             key: None,
-            operation: Operation::FetchModels,
-        }),
-    )
-    .unwrap();
-    let super::Event::Connection(reply) = result else {
-        panic!("expected connection result")
-    };
-    let (_, models) = reply.result.unwrap();
-    assert!(models.unwrap().is_err());
-    let requests = requests.lock().unwrap();
-    assert_eq!(
-        requests
-            .iter()
-            .map(|request| request["method"].as_str().unwrap())
-            .collect::<Vec<_>>(),
-        vec![
-            "config/read",
-            "provider/models/list",
-            "config/read",
-            "provider/list"
-        ]
+            operation: crate::config::provider::Operation::Test,
+        },
     );
-    assert_eq!(requests[1]["params"]["provider"], "custom-one");
+    assert!(result.is_err());
+    assert_eq!(requests.lock().unwrap().len(), 1);
 }
 
 #[test]
@@ -323,6 +277,9 @@ fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
         provider: "custom-one".into(),
         custom: Some(
             zeta_app_server_protocol::protocol::config::CustomProviderConfigDto {
+                context_window: 272_000,
+        order: 0,
+                model: None,
                 name: "Example".into(),
                 protocol:
                     zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
@@ -356,7 +313,8 @@ fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
     });
     let result = super::execute(
         &mut client,
-        super::Command::Connection(crate::config::openai::Request {
+        super::Command::Connection(crate::config::provider::Request {
+            model: Some("alias".into()),
             id: crate::client::new_command_id("test"),
             revision: 7,
             config: config.clone(),
@@ -364,7 +322,7 @@ fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
                 "custom-one".into(),
                 "test-key".into(),
             )),
-            operation: crate::config::openai::Operation::Save,
+            operation: crate::config::provider::Operation::Save,
         }),
     )
     .unwrap();
@@ -393,7 +351,8 @@ fn rejected_connection_update_does_not_send_key_or_report_saved() {
     });
     let result = super::execute(
         &mut client,
-        super::Command::Connection(crate::config::openai::Request {
+        super::Command::Connection(crate::config::provider::Request {
+            model: Some("alias".into()),
             id: crate::client::new_command_id("test"),
             revision: 7,
             config: zeta_app_server_protocol::protocol::config::ProviderConfigDto {
@@ -407,7 +366,7 @@ fn rejected_connection_update_does_not_send_key_or_report_saved() {
                 "openai-compatible".into(),
                 "test-key".into(),
             )),
-            operation: crate::config::openai::Operation::Save,
+            operation: crate::config::provider::Operation::Save,
         }),
     )
     .unwrap();
@@ -500,12 +459,13 @@ fn saving_unchanged_connection_with_no_model_still_configures_provider() {
     });
     let result = super::execute(
         &mut client,
-        super::Command::Connection(crate::config::openai::Request {
+        super::Command::Connection(crate::config::provider::Request {
+            model: Some("alias".into()),
             id: crate::client::new_command_id("test"),
             revision: current.revision,
             config,
             key: None,
-            operation: crate::config::openai::Operation::Save,
+            operation: crate::config::provider::Operation::Save,
         }),
     )
     .unwrap();

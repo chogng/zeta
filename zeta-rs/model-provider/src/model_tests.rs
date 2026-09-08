@@ -305,6 +305,9 @@ fn custom_provider_uses_selected_protocol_and_isolated_credentials() {
     ] {
         let mut config = ModelProviderConfig::new(provider_id("custom-test"));
         config.custom = Some(CustomProviderConfig {
+            context_window: 272_000,
+        order: 0,
+            model: None,
             name: "My service".into(),
             protocol,
         });
@@ -1695,6 +1698,82 @@ fn read_http_request(stream: &mut impl Read) -> String {
             .unwrap();
         if request.len() >= headers_end + 4 + content_length {
             return String::from_utf8(request).unwrap();
+        }
+    }
+}
+
+#[test]
+fn unsaved_provider_probe_uses_exact_ids_and_draft_keys_without_persisting() {
+    use zeta_model_provider_config::CustomProviderConfig;
+    use zeta_model_provider_config::CustomProviderProtocol;
+    for (protocol, suffix, response) in [
+        (
+            CustomProviderProtocol::Responses,
+            "responses",
+            responses_response("OK"),
+        ),
+        (
+            CustomProviderProtocol::ChatCompletions,
+            "chat/completions",
+            completion_response("OK"),
+        ),
+        (
+            CustomProviderProtocol::AnthropicMessages,
+            "messages",
+            json!({"id":"test", "type":"message", "role":"assistant", "model":"alias", "content":[{"type":"text","text":"OK"}], "stop_reason":"end_turn", "usage":{"input_tokens":1,"output_tokens":1}}),
+        ),
+    ] {
+        let transport = Arc::new(CapturingTransport::new(response));
+        let secrets = Arc::new(MemorySecretStore::default());
+        let runtime = ModelProviderRuntime::with_client_and_secrets(
+            ProviderConfigRegistry::builtin(),
+            transport.clone(),
+            secrets.clone(),
+        );
+        let mut config = ModelProviderConfig::new(provider_id("custom-probe"));
+        config.base_url = Some("https://example.test/gateway/v1".into());
+        config.custom = Some(CustomProviderConfig {
+            context_window: 272_000,
+        order: 0,
+            model: None,
+            name: "Draft".into(),
+            protocol,
+        });
+        assert_eq!(
+            runtime
+                .probe_connection(
+                    &config,
+                    Some(b"draft-key".to_vec()),
+                    Some("private-model-alias")
+                )
+                .unwrap(),
+            None
+        );
+        assert!(
+            secrets
+                .load(&crate::provider_api_key_secret_key(&config.provider))
+                .unwrap()
+                .is_none()
+        );
+        let (url, headers, body) = transport.request.lock().unwrap().clone().unwrap();
+        assert_eq!(url, format!("https://example.test/gateway/v1/{suffix}"));
+        assert_eq!(body["model"], "private-model-alias");
+        if protocol == CustomProviderProtocol::AnthropicMessages {
+            assert!(
+                headers
+                    .iter()
+                    .any(|header| header.name() == "x-api-key" && header.value() == "draft-key")
+            );
+            assert!(
+                headers
+                    .iter()
+                    .any(|header| header.name() == "anthropic-version")
+            );
+        } else {
+            assert!(
+                headers.iter().any(|header| header.name() == "Authorization"
+                    && header.value() == "Bearer draft-key")
+            );
         }
     }
 }

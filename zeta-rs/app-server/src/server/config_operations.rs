@@ -406,13 +406,38 @@ impl AppServer {
             .config
             .clone()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let snapshot = store
+            .read_snapshot()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        if snapshot
+            .values
+            .providers
+            .get(&provider)
+            .is_some_and(|config| config.custom.is_none())
+            || zeta_model_provider_config::ProviderConfigRegistry::builtin()
+                .get(&provider)
+                .is_some()
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let credentials = self.provider_credentials.as_ref().ok_or_else(|| {
+            RpcError::new(-32093, AppServerErrorName::ProviderCredentialsUnavailable)
+        })?;
         let outcome = store
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::RemoveProvider { provider },
+                command: UserConfigCommand::RemoveProvider {
+                    provider: provider.clone(),
+                },
             })
             .map_err(config_operation_error)?;
+        credentials.remove_api_key(&provider).map_err(|_| {
+            RpcError::new(
+                -32094,
+                AppServerErrorName::ProviderCredentialOperationFailed,
+            )
+        })?;
         result(&config_command_result(outcome))
     }
 
@@ -1004,10 +1029,14 @@ fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
     ProviderConfigDto {
         provider: config.provider.to_string(),
         custom: config.custom.map(|custom| zeta_app_server_protocol::protocol::config::CustomProviderConfigDto {
+            context_window: custom.context_window,
+        order: custom.order,
+        model: custom.model.map(|model| model.to_string()),
             name: custom.name,
             protocol: match custom.protocol {
                 zeta_model_provider_config::CustomProviderProtocol::Responses => zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
                 zeta_model_provider_config::CustomProviderProtocol::ChatCompletions => zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::ChatCompletions,
+                zeta_model_provider_config::CustomProviderProtocol::AnthropicMessages => zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::AnthropicMessages,
             },
         }),
         base_url: config.base_url,
@@ -1028,7 +1057,9 @@ fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
     }
 }
 
-fn provider_config_from_dto(config: ProviderConfigDto) -> Result<ModelProviderConfig, RpcError> {
+pub(super) fn provider_config_from_dto(
+    config: ProviderConfigDto,
+) -> Result<ModelProviderConfig, RpcError> {
     let model_context = config
         .model_context
         .into_iter()
@@ -1043,12 +1074,23 @@ fn provider_config_from_dto(config: ProviderConfigDto) -> Result<ModelProviderCo
             ))
         })
         .collect::<Result<_, RpcError>>()?;
+    let custom_model = config
+        .custom
+        .as_ref()
+        .and_then(|custom| custom.model.as_ref())
+        .map(|model| ModelId::new(model.clone()))
+        .transpose()
+        .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
     Ok(ModelProviderConfig {
         custom: config.custom.map(|custom| zeta_model_provider_config::CustomProviderConfig {
+            context_window: custom.context_window,
+        order: custom.order,
+        model: custom_model,
             name: custom.name,
             protocol: match custom.protocol {
                 zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses => zeta_model_provider_config::CustomProviderProtocol::Responses,
                 zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::ChatCompletions => zeta_model_provider_config::CustomProviderProtocol::ChatCompletions,
+                zeta_app_server_protocol::protocol::config::CustomProviderProtocolDto::AnthropicMessages => zeta_model_provider_config::CustomProviderProtocol::AnthropicMessages,
             },
         }),
         provider: ProviderId::new(config.provider)

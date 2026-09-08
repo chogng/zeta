@@ -64,7 +64,7 @@ struct ModelsManagerInner {
 }
 
 impl ModelsManager {
-    /// Uses a new definition snapshot while retaining endpoint-scoped discovery results.
+    /// Uses a new definition snapshot; cached scopes are reused only while their provider definition matches.
     pub fn with_registry(&self, providers: ProviderConfigRegistry) -> Self {
         Self {
             inner: Arc::new(ModelsManagerInner {
@@ -308,14 +308,24 @@ impl ModelsManager {
             .cloned()
             .ok_or_else(|| ModelsManagerError::UnknownProvider(scope.provider().clone()))?;
         if let Some(managed) = read_lock(&self.inner.scopes).get(scope) {
-            return Ok(managed.clone());
+            if managed.definition == definition {
+                return Ok(managed.clone());
+            }
         }
-        let managed = Arc::new(ManagedScope::new(definition, scope));
         let mut scopes = write_lock(&self.inner.scopes);
-        Ok(scopes
-            .entry(scope.clone())
-            .or_insert_with(|| managed.clone())
-            .clone())
+        if let Some(managed) = scopes.get(scope) {
+            if managed.definition == definition {
+                return Ok(managed.clone());
+            }
+        }
+        let generation = scopes
+            .get(scope)
+            .map_or(crate::CatalogGeneration::INITIAL, |managed| {
+                read_lock(&managed.state).snapshot.generation().next()
+            });
+        let managed = Arc::new(ManagedScope::new(definition, scope, generation));
+        scopes.insert(scope.clone(), managed.clone());
+        Ok(managed)
     }
 
     fn update_freshness(&self, scope: &CatalogScopeKey, managed: &ManagedScope) {

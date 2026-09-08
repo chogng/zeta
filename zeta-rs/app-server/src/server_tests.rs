@@ -94,6 +94,7 @@ use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::NetworkAccess;
 use zeta_sandboxing::SandboxPolicy;
 use zeta_secrets::MemorySecretStore;
+use zeta_secrets::SecretStore;
 use zeta_uds::UnixStream;
 
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
@@ -5489,4 +5490,93 @@ fn dir_authorization(root: &std::path::Path, permission: DirPermission) -> Autho
     )
     .authorize(permission)
     .unwrap()
+}
+
+#[test]
+fn custom_provider_order_survives_edits_and_remove_cleans_only_its_secret() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Arc::new(ConfigStore::open(directory.path().join("config.sqlite3")).unwrap());
+    let secrets = Arc::new(MemorySecretStore::default());
+    let registry = zeta_model_provider_config::ProviderConfigRegistry::builtin();
+    let credentials = Arc::new(zeta_model_provider::ProviderCredentialService::new(
+        registry,
+        secrets.clone(),
+    ));
+    let server = server()
+        .with_config_store(store.clone())
+        .with_provider_credentials(credentials.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (revision, id, name) in [
+        (0, "custom-a", "Zulu"),
+        (1, "custom-b", "Alpha"),
+        (2, "custom-a", "Renamed"),
+    ] {
+        let reply = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":revision+2,"method":"provider/configure","params":{"commandId":format!("configure-{revision}"),"expectedRevision":revision,"config":{"provider":id,"baseUrl":"https://example.test/v1","custom":{"name":name,"protocol":"anthropicMessages","order":999}}}}),
+        );
+        assert!(reply.get("error").is_none(), "{reply}");
+    }
+    let snapshot = store.read_snapshot().unwrap();
+    assert_eq!(
+        snapshot.values.providers[&zeta_protocol::ProviderId::new("custom-a").unwrap()]
+            .custom
+            .as_ref()
+            .unwrap()
+            .order,
+        1
+    );
+    assert_eq!(
+        snapshot.values.providers[&zeta_protocol::ProviderId::new("custom-b").unwrap()]
+            .custom
+            .as_ref()
+            .unwrap()
+            .order,
+        2
+    );
+    let configured = credentials
+        .with_configs(snapshot.values.providers.values())
+        .unwrap();
+    let id = zeta_protocol::ProviderId::new("custom-a").unwrap();
+    configured
+        .set_api_key(&id, b"removed-key".to_vec())
+        .unwrap();
+    let builtin = zeta_protocol::ProviderId::new("openai").unwrap();
+    configured
+        .set_api_key(&builtin, b"keep-key".to_vec())
+        .unwrap();
+    let denied = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"provider/remove","params":{"commandId":"remove-builtin","expectedRevision":3,"provider":"openai"}}),
+    );
+    assert!(denied.get("error").is_some());
+    let removed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"provider/remove","params":{"commandId":"remove-custom","expectedRevision":3,"provider":"custom-a"}}),
+    );
+    assert!(removed.get("error").is_none(), "{removed}");
+    assert!(
+        secrets
+            .load(&zeta_model_provider::provider_api_key_secret_key(&id))
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        secrets
+            .load(&zeta_model_provider::provider_api_key_secret_key(&builtin))
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        !store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .providers
+            .contains_key(&id)
+    );
 }

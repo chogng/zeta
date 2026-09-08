@@ -358,7 +358,9 @@ fn parse_usage(endpoint: ApiEndpoint, usage: Option<&Value>) -> Option<ModelUsag
         ApiEndpoint::OpenAiChatCompletions => usage
             .pointer("/prompt_tokens_details/cached_tokens")
             .and_then(Value::as_u64),
-        ApiEndpoint::OpenAiResponses | ApiEndpoint::AnthropicMessages => {
+        ApiEndpoint::OpenAiResponses
+        | ApiEndpoint::AnthropicMessages
+        | ApiEndpoint::AnthropicMessagesAtBase => {
             unreachable!("Chat Completions parser requires a Chat Completions endpoint")
         }
     };

@@ -171,6 +171,9 @@ fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
     let mut config = ModelProviderConfig::new(ProviderId::new("custom-test").unwrap());
     config.base_url = Some("https://example.test/v1/".into());
     config.custom = Some(CustomProviderConfig {
+        context_window: 272_000,
+        order: 0,
+        model: None,
         name: "Example".into(),
         protocol: CustomProviderProtocol::Responses,
     });

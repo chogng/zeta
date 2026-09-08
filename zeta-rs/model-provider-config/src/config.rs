@@ -75,10 +75,16 @@ impl ModelProviderConfig {
     }
 }
 
-/// User-defined OpenAI-compatible connection, independent of built-in provider identities.
+/// User-defined API connection, independent of built-in provider identities.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CustomProviderConfig {
+    #[serde(default = "default_custom_context_window")]
+    pub context_window: u32,
+    #[serde(default)]
+    pub order: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelId>,
     pub name: String,
     pub protocol: CustomProviderProtocol,
 }
@@ -88,9 +94,34 @@ pub struct CustomProviderConfig {
 pub enum CustomProviderProtocol {
     Responses,
     ChatCompletions,
+    AnthropicMessages,
 }
 
 impl CustomProviderConfig {
+    fn catalog_models(&self) -> Vec<crate::Model> {
+        let registry = crate::ProviderConfigRegistry::builtin();
+        let profile = match self.protocol {
+            CustomProviderProtocol::Responses => ApiProfile::OpenAiResponses,
+            CustomProviderProtocol::ChatCompletions => ApiProfile::OpenAiChatCompletions,
+            CustomProviderProtocol::AnthropicMessages => ApiProfile::AnthropicMessages,
+        };
+        crate::STATIC_MODEL_CATALOG
+            .iter()
+            .filter(|entry| {
+                entry.runtime == crate::StaticModelRuntime::ProviderApi
+                    && match &self.model {
+                        Some(id) => entry.model_id == id.as_str(),
+                        None => registry
+                            .get(&ProviderId::new(entry.provider_id).expect("static provider"))
+                            .is_some_and(|provider| provider.api_profile == profile),
+                    }
+            })
+            .map(|entry| (entry.model_id, entry.model()))
+            .collect::<BTreeMap<_, _>>()
+            .into_values()
+            .collect()
+    }
+
     pub(crate) fn definition(
         &self,
         config: &ModelProviderConfig,
@@ -121,6 +152,12 @@ impl CustomProviderConfig {
                 base_url: base_url.into(),
             });
         }
+        if !matches!(self.context_window, 272_000 | 1_000_000) {
+            return Err(ProviderConfigError::InvalidProvider {
+                provider: config.provider.clone(),
+                message: "context window must be 272000 or 1000000".into(),
+            });
+        }
         if self.name.trim().is_empty()
             || self.name.chars().count() > 80
             || self.name.chars().any(char::is_control)
@@ -133,16 +170,33 @@ impl CustomProviderConfig {
         Ok(crate::ProviderDefinition::new(
             config.provider.clone(),
             self.name.trim(),
-            crate::ProviderAdapter::OpenAiCompatible,
+            match self.protocol {
+                CustomProviderProtocol::AnthropicMessages => crate::ProviderAdapter::Anthropic,
+                _ => crate::ProviderAdapter::OpenAiCompatible,
+            },
             match self.protocol {
                 CustomProviderProtocol::Responses => ApiProfile::OpenAiResponses,
                 CustomProviderProtocol::ChatCompletions => ApiProfile::OpenAiChatCompletions,
+                CustomProviderProtocol::AnthropicMessages => ApiProfile::AnthropicMessages,
             },
             crate::EndpointPolicy::ProviderDefault {
                 base_url: base_url.into(),
             },
             crate::ModelCatalogPolicy::AllowUnlisted,
         )
+        .with_models(self.catalog_models())
+        .with_api_key_header(match self.protocol {
+            CustomProviderProtocol::AnthropicMessages => crate::ApiKeyHeader::XApiKey,
+            _ => crate::ApiKeyHeader::Bearer,
+        })
+        .with_defaults(crate::ProviderDefaults {
+            max_output_tokens: Some(if self.context_window == 1_000_000 {
+                32_768
+            } else {
+                8_192
+            }),
+            ..Default::default()
+        })
         .with_api_key_policy(crate::ApiKeyPolicy::Optional)
         .with_native_streaming())
     }
@@ -179,4 +233,8 @@ pub(crate) fn is_http_url(value: &str) -> bool {
     };
     let authority = authority_and_path.split('/').next().unwrap_or_default();
     !authority.is_empty() && !authority.chars().any(char::is_whitespace)
+}
+
+fn default_custom_context_window() -> u32 {
+    272_000
 }

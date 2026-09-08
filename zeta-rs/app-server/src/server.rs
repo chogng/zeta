@@ -110,13 +110,13 @@ mod marketplace_projection;
 pub(crate) mod marketplace_runtime;
 mod marketplace_skill_sources;
 mod mcp_operations;
+mod memory_operations;
 #[cfg(feature = "multi-agent-evals")]
 mod multi_agent_evaluation;
 #[cfg(feature = "multi-agent-evals")]
 mod multi_agent_evaluation_loop;
 pub(crate) mod multi_agent_tools;
 pub(crate) mod notification_queue;
-mod memory_operations;
 mod operations;
 mod plugin_extension_sources;
 mod plugin_operations;
@@ -266,6 +266,7 @@ pub struct AppServer {
     env_state: EnvStateMode,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
     codebase_models: Option<CodebaseModels>,
+    provider_runtime: Option<Arc<zeta_model_provider::ModelProviderRuntime>>,
     semantic_model_provider: Option<Arc<dyn zeta_model_provider::SemanticModelProvider>>,
     cloud_codebase_storage_root: Option<std::path::PathBuf>,
     cloud_codebase_providers: zeta_cloud_codebase::CloudCodebaseProviderRegistry,
@@ -587,6 +588,7 @@ impl AppServer {
             env_state: EnvStateMode::Unconfigured,
             fast_regex_worker_command: None,
             codebase_models: None,
+            provider_runtime: None,
             semantic_model_provider: None,
             cloud_codebase_storage_root: None,
             cloud_codebase_providers: zeta_cloud_codebase::CloudCodebaseProviderRegistry::default(),
@@ -1230,6 +1232,14 @@ impl AppServer {
     /// Installs immutable embedding/rerank adapters for local semantic indexing.
     pub(crate) fn with_codebase_models(mut self, models: CodebaseModels) -> Self {
         self.codebase_models = Some(models);
+        self
+    }
+
+    pub(crate) fn with_provider_runtime(
+        mut self,
+        runtime: Arc<zeta_model_provider::ModelProviderRuntime>,
+    ) -> Self {
+        self.provider_runtime = Some(runtime);
         self
     }
 
@@ -2049,6 +2059,9 @@ impl AppServer {
             Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(),
             Some(ClientMethod::ProviderModelsList) => self.provider_models_list(&request.params),
+            Some(ClientMethod::ProviderProbe) => {
+                self.provider_probe(std::mem::take(&mut request.params))
+            }
             Some(ClientMethod::ProviderList) => self.provider_list(),
             Some(ClientMethod::ProviderApiKeySet) => {
                 self.provider_api_key_set(std::mem::take(&mut request.params))

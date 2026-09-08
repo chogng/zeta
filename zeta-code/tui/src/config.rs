@@ -1,7 +1,7 @@
 mod editor;
 mod issues;
 pub(crate) use issues::IssueConfigEdit;
-pub(crate) mod openai;
+pub(crate) mod provider;
 mod request;
 mod settings;
 mod subscription;
@@ -36,7 +36,7 @@ pub(crate) enum Event {
         request_id: zeta_protocol::CommandId,
         result: Result<ConfigChoices, String>,
     },
-    Connection(openai::Reply),
+    Connection(provider::Reply),
     Subscription(SubscriptionEvent),
     SettingsReceived(TerminalSettings),
     Updated(ConfigEditResult),
@@ -54,7 +54,7 @@ pub(crate) enum Command {
         request_id: zeta_protocol::CommandId,
         expected_revision: u64,
     },
-    Connection(openai::Request),
+    Connection(provider::Request),
     Subscription(SubscriptionCommand),
     OpenEditor,
     Edit(ConfigEdit),

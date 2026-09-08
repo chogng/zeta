@@ -69,6 +69,10 @@ impl<A> ListSelection<A> {
         }
     }
 
+    pub(crate) fn action(&self, id: &ListSelectionItemId) -> Option<&A> {
+        self.actions.get(id)
+    }
+
     pub(crate) fn state(&self) -> &ListSelectionState {
         &self.state
     }

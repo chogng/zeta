@@ -17,7 +17,26 @@ pub(crate) fn apply_command(
                     provider, config.provider
                 )));
             }
-            document.providers.insert(provider.clone(), config.clone());
+            let mut config = config.clone();
+            if let Some(custom) = &mut config.custom {
+                custom.order = match document
+                    .providers
+                    .get(provider)
+                    .and_then(|entry| entry.custom.as_ref())
+                {
+                    Some(previous) => previous.order,
+                    None => document
+                        .providers
+                        .values()
+                        .filter_map(|entry| entry.custom.as_ref())
+                        .map(|entry| entry.order)
+                        .max()
+                        .unwrap_or(0)
+                        .checked_add(1)
+                        .ok_or_else(|| ConfigError("provider order exhausted".into()))?,
+                };
+            }
+            document.providers.insert(provider.clone(), config);
             if document.agent.preferred_model.is_none() {
                 document.agent.preferred_model = STATIC_MODEL_CATALOG
                     .iter()
@@ -29,6 +48,17 @@ pub(crate) fn apply_command(
             }
         }
         UserConfigCommand::RemoveProvider { provider } => {
+            if document
+                .issues
+                .analysis_model
+                .as_ref()
+                .is_some_and(|model| model.provider == *provider)
+            {
+                return Err(ConfigError(format!(
+                    "cannot remove provider '{}' while Issue analysis uses it",
+                    provider
+                )));
+            }
             if document
                 .agent
                 .preferred_model

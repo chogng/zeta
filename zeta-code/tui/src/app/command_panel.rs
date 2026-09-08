@@ -1,4 +1,3 @@
-use crate::widgets::panel::PanelLayout;
 use crate::TuiStartupContext;
 use crate::config::ConfigChoices;
 use crate::config::ConfigEditor;
@@ -38,6 +37,7 @@ use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionAdjustment;
 use crate::widgets::list_selection::ListSelectionOutcome;
 use crate::widgets::list_selection::ListSelectionState;
+use crate::widgets::panel::PanelLayout;
 use crate::widgets::text_prompt;
 use crate::widgets::text_prompt::TextPrompt;
 use crossterm::event::KeyEvent;
@@ -49,7 +49,7 @@ use std::collections::BTreeMap;
 enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
     Prompt(&'a TextPrompt),
-    OpenAi(&'a crate::config::openai::Panel),
+    Provider(&'a crate::config::provider::Panel),
     KeyCapture(&'a KeyCapture),
     Status(&'a StatusPanel),
 }
@@ -90,6 +90,10 @@ pub(crate) enum CommandPanelOutcome {
 }
 
 impl CommandPanel {
+    pub(crate) fn is_testing(&self) -> bool {
+        matches!(self, Self::Config(editor) if editor.is_testing())
+    }
+
     pub(crate) fn help(model: crate::widgets::list_selection::ListSelectionModel) -> Self {
         Self::Help(ListSelection::new(model, BTreeMap::new()))
     }
@@ -151,10 +155,7 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn apply_memory_diagnostics(
-        &mut self,
-        status: crate::memory::Status,
-    ) {
+    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
         if let Self::Status(panel) = self {
             panel.apply_memory_diagnostics(status);
         }
@@ -177,10 +178,7 @@ impl CommandPanel {
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> CommandPanelOutcome {
         let body = self.body();
-        let layout = PanelLayout::new(
-            area,
-            body.tab_rows(PanelLayout::content_width(area.width)),
-        );
+        let layout = PanelLayout::new(area, body.tab_rows(PanelLayout::content_width(area.width)));
         match self {
             Self::Help(content) => map_read_only(content.handle_key(key)),
             Self::Dirs(content) => {
@@ -193,6 +191,11 @@ impl CommandPanel {
             Self::Keymap(content) => CommandPanelOutcome::Keymap(content.handle_key(key)),
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
             Self::Model(content) => {
+                if key.kind == crossterm::event::KeyEventKind::Press && key.modifiers.is_empty() && key.code == crossterm::event::KeyCode::Char('p') && content.state().items_focused() {
+                    if let Some(ModelSelectionAction::Select { preference, pinned }) = content.state().selected_item().and_then(|item| item.id()).and_then(|id| content.action(id)) {
+                        return CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference: preference.clone(), pinned: !pinned });
+                    }
+                }
                 map_selection(content.handle_key(key), CommandPanelOutcome::Model)
             }
             Self::Rewind(content) => {
@@ -261,7 +264,7 @@ impl CommandPanel {
             Self::Config(editor) => match editor.page() {
                 ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
                 ConfigEditorPage::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
-                ConfigEditorPage::OpenAi(panel) => CommandPanelBody::OpenAi(panel),
+                ConfigEditorPage::Provider(panel) => CommandPanelBody::Provider(panel),
             },
             Self::Connectors(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Keymap(editor) => match editor.page() {
@@ -340,8 +343,14 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn finish_issue_models(&mut self, request_id: zeta_protocol::CommandId, result: Result<ConfigChoices, String>) {
-        if let Self::Config(content) = self { content.finish_issue_models(request_id, result); }
+    pub(crate) fn finish_issue_models(
+        &mut self,
+        request_id: zeta_protocol::CommandId,
+        result: Result<ConfigChoices, String>,
+    ) {
+        if let Self::Config(content) = self {
+            content.finish_issue_models(request_id, result);
+        }
     }
 
     pub(crate) fn replace_config(&mut self, spec: ConfigChoices) -> bool {
@@ -458,7 +467,7 @@ impl<'a> CommandPanelBody<'a> {
         match self {
             Self::Selection(selection) => selection.title(),
             Self::Prompt(prompt) => prompt.title(),
-            Self::OpenAi(_) => "OpenAI",
+            Self::Provider(_) => "Custom provider",
             Self::KeyCapture(capture) => capture.title(),
             Self::Status(panel) => panel.title(),
         }
@@ -468,8 +477,7 @@ impl<'a> CommandPanelBody<'a> {
         match self {
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
-            Self::OpenAi(panel) => panel.tab_rows(width),
-            Self::Prompt(_) | Self::KeyCapture(_) => 0,
+            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => 0,
         }
     }
 
@@ -479,14 +487,14 @@ impl<'a> CommandPanelBody<'a> {
             Self::Prompt(prompt) => prompt.desired_height(),
             Self::KeyCapture(capture) => capture.desired_height(),
             Self::Status(panel) => panel.body_rows(width),
-            Self::OpenAi(panel) => panel.body_rows(),
+            Self::Provider(panel) => panel.body_rows(),
         }
     }
 
     fn presentation_focus(self) -> Option<ratatui::style::Color> {
         match self {
             Self::Selection(selection) => selection.presentation_focus(),
-            Self::Prompt(_) | Self::KeyCapture(_) | Self::Status(_) | Self::OpenAi(_) => None,
+            Self::Prompt(_) | Self::KeyCapture(_) | Self::Status(_) | Self::Provider(_) => None,
         }
     }
 
@@ -503,8 +511,7 @@ impl<'a> CommandPanelBody<'a> {
                 list_selection::draw_tabs(frame, area, selection, hovered_tab, pressed_tab, context)
             }
             Self::Status(panel) => panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context),
-            Self::OpenAi(panel) => panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context),
-            Self::Prompt(_) | Self::KeyCapture(_) => {}
+            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => {}
         }
     }
 
@@ -521,7 +528,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
             Self::Status(panel) => panel.draw_body(frame, area, context),
-            Self::OpenAi(panel) => panel.draw_body(frame, area, context),
+            Self::Provider(panel) => panel.draw_body(frame, area, context),
         }
     }
 }

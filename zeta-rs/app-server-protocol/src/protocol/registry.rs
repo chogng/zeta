@@ -534,6 +534,8 @@ use crate::protocol::provider::ProviderModelsListFailureCodeDto;
 use crate::protocol::provider::ProviderModelsListFailureDto;
 use crate::protocol::provider::ProviderModelsListParams;
 use crate::protocol::provider::ProviderModelsListResult;
+use crate::protocol::provider::ProviderProbeParams;
+use crate::protocol::provider::ProviderProbeResult;
 use crate::protocol::resources::ResourceMetadataParams;
 use crate::protocol::resources::ResourceMetadataResult;
 use crate::protocol::resources::ResourceReadParams;
@@ -1747,6 +1749,11 @@ client_methods! {
     ProviderList => "provider/list" {
         params: EmptyParams,
         response: ProviderListResult,
+        serialization: GlobalSharedRead,
+    },
+    ProviderProbe => "provider/probe" {
+        params: ProviderProbeParams,
+        response: ProviderProbeResult,
         serialization: GlobalSharedRead,
     },
     ProviderModelsList => "provider/models/list" {
@@ -3186,6 +3193,8 @@ typescript_bindings! {
     ProviderApiKeyPolicyDto,
     ProviderApiKeySetParams,
     ProviderApiKeySetResult,
+    ProviderProbeParams,
+    ProviderProbeResult,
     ProviderModelsListParams,
     ProviderModelsListFailureCodeDto,
     ProviderModelsListFailureDto,

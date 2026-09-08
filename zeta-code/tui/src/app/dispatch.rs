@@ -266,7 +266,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(models::Event::PickerOpened(models::load_selection(client)?).into());
+                        .push(models::Event::PickerOpened(models::load_selection(client).map_err(|error| CommandExecutionError(error.to_string()))?).into());
                 } else {
                     let update = models::set_preferred_model(client, &arguments)
                         .map_err(|error| CommandExecutionError(error.to_string()))?;

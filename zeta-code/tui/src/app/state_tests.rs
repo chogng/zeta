@@ -985,99 +985,51 @@ fn directory_permission_selection_emits_a_revision_bound_server_edit() {
     ));
 }
 
-fn enter_openai_form(app: &mut App) {
+fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
     app.update(ConfigEvent::EditorOpened(config_choices(
         &empty_config_snapshot(),
-        &ProviderListResult { providers: vec![] },
+        &ProviderListResult {
+            providers: vec![ProviderCatalogEntryDto {
+                provider: "openai".into(),
+                display_name: "OpenAI".into(),
+                api_key_policy: ProviderApiKeyPolicyDto::Required,
+                api_key_configured: false,
+            }],
+        },
         TerminalSettings::default(),
         StatusLineSettings::default(),
     )));
-    for code in [
-        KeyCode::Up,
-        KeyCode::Up,
-        KeyCode::Tab,
-        KeyCode::Down,
-        KeyCode::Down,
-        KeyCode::Enter,
-    ] {
+    for code in [KeyCode::Up, KeyCode::Up, KeyCode::Tab, KeyCode::Down] {
         app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
     }
+    app.handle_paste(label.into());
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
 #[test]
-fn config_provider_api_key_requires_editing_and_explicit_selection_before_fetching() {
+fn official_provider_uses_the_api_key_prompt_and_redacts_its_command() {
     let mut app = App::new();
-    enter_openai_form(&mut app);
-    app.handle_paste("ignored-before-edit".into());
-    assert!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-            .is_none()
-    );
+    enter_provider_row(&mut app, "OpenAI");
     app.handle_paste("test-key".into());
-    let Some(AppCommand::Config(ConfigCommand::Connection(request))) =
+    let Some(AppCommand::Config(ConfigCommand::SetProviderApiKey(request))) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
-        panic!("expected connection save")
+        panic!("expected key save");
     };
-    assert_eq!(
-        request.key.clone().unwrap().into_parts(),
-        ("openai".into(), "test-key".into())
-    );
     assert!(!format!("{request:?}").contains("test-key"));
-    let mut config = empty_config_snapshot();
-    config.revision = 1;
-    config.providers.insert("openai".into(), request.config);
-    app.update(ConfigEvent::Connection(crate::config::openai::Reply {
-        id: request.id,
-        result: Ok((
-            config_choices(
-                &config,
-                &ProviderListResult { providers: vec![] },
-                TerminalSettings::default(),
-                StatusLineSettings::default(),
-            ),
-            None,
-        )),
-    }));
-    assert!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-            .is_none()
-    );
-    assert!(
-        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-            .is_none()
-    );
-    assert!(
-        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
-            .is_none()
-    );
-    let Some(AppCommand::Config(ConfigCommand::Connection(next))) =
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-    else {
-        panic!("expected explicit fetch from focused button")
-    };
-    assert_eq!(
-        next.operation,
-        crate::config::openai::Operation::FetchModels
-    );
-    assert!(next.key.is_none());
+    assert_eq!(request.into_parts(), ("openai".into(), "test-key".into()));
 }
 
 #[test]
 fn escape_cancels_key_edit_without_saving_and_returns_to_providers() {
     let mut app = App::new();
-    enter_openai_form(&mut app);
+    enter_provider_row(&mut app, "OpenAI");
+    app.handle_paste("test-key".into());
     assert!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
             .is_none()
     );
-    app.handle_paste("test-key".into());
-    for _ in 0..3 {
-        assert!(
-            app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-                .is_none()
-        );
-    }
     assert_eq!(
         app.list_selection().unwrap().active_tab().label(),
         "Providers"
@@ -1085,15 +1037,14 @@ fn escape_cancels_key_edit_without_saving_and_returns_to_providers() {
 }
 
 #[test]
-fn chatgpt_subscription_keeps_pending_login_across_tab_navigation_and_cancels_by_id() {
+fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id() {
     use crate::config::SubscriptionCommand;
     use crate::config::SubscriptionEvent;
     use zeta_app_server_protocol::protocol::account::AccountLoginStartResult;
     use zeta_app_server_protocol::protocol::account::AccountReadResult;
     let mut app = App::new();
-    enter_openai_form(&mut app);
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT)),
+        enter_provider_row(&mut app, "ChatGPT"),
         Some(AppCommand::Config(ConfigCommand::Subscription(
             SubscriptionCommand::Read
         )))
@@ -1111,7 +1062,7 @@ fn chatgpt_subscription_keeps_pending_login_across_tab_navigation_and_cancels_by
             SubscriptionCommand::SignIn
         )))
     );
-    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Started(
         AccountLoginStartResult::DeviceCode {
             login_id: "login-1".into(),
@@ -1119,13 +1070,18 @@ fn chatgpt_subscription_keeps_pending_login_across_tab_navigation_and_cancels_by
             user_code: "ABCD-1234".into(),
         },
     )));
-    assert!(app.list_selection().is_none());
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "Providers"
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionCommand::Read
+        )))
+    );
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Read(
-        AccountReadResult {
-            revision: 1,
-            accounts: vec![],
-        },
+        AccountReadResult { revision: 1, accounts: vec![] },
     )));
     for _ in 0..3 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -1141,8 +1097,7 @@ fn chatgpt_subscription_keeps_pending_login_across_tab_navigation_and_cancels_by
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Cancelled {
         login_id: "login-1".into(),
     }));
-    // Closing the form must not be undone by a later account notification.
-    for _ in 0..3 {
+    for _ in 0..2 {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     }
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Read(
@@ -2119,12 +2074,18 @@ fn late_issue_context_does_not_restore_tags_after_the_user_has_sent() {
         session_id: session_id.clone(),
         thread_id: ThreadId::new(session_id.to_string()).unwrap(),
     });
-    app.update(crate::issues::Event::ContextReceived { session_id: session_id.clone(), numbers: vec![3, 5] });
+    app.update(crate::issues::Event::ContextReceived {
+        session_id: session_id.clone(),
+        numbers: vec![3, 5],
+    });
     assert_eq!(app.input(), "[issue #3] [issue #5] ");
     app.insert_text("implement together");
     assert!(matches!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), Some(AppCommand::Thread(ThreadCommand::SubmitTurn { .. }))));
     assert_eq!(app.input(), "");
-    app.update(crate::issues::Event::ContextReceived { session_id, numbers: vec![3, 5] });
+    app.update(crate::issues::Event::ContextReceived {
+        session_id,
+        numbers: vec![3, 5],
+    });
     assert_eq!(app.input(), "");
 }
 

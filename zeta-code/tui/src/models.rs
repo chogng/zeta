@@ -5,11 +5,13 @@ mod request;
 pub(crate) enum Event {
     SummaryReceived(ModelSummary),
     PickerOpened(ModelChoices),
+    PickerUpdated(ModelChoices),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
     SetPreferred { preference: String },
+    Pin { preference: String, pinned: bool },
 }
 
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
@@ -22,6 +24,7 @@ pub(crate) use picker::model_choices;
 pub(crate) use request::PreferredModelUpdate;
 pub(crate) use request::execute;
 pub(crate) use request::load_selection;
+pub(crate) use request::remove_provider_pins;
 pub(crate) use request::set_preferred_model;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

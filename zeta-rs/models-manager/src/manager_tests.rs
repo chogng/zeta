@@ -465,3 +465,58 @@ fn provider_id(value: &str) -> ProviderId {
 fn model_id(value: &str) -> ModelId {
     ModelId::new(value).unwrap()
 }
+
+#[tokio::test]
+async fn changed_provider_definitions_replace_seed_cache_and_keep_unaffected_discovery() {
+    let manager = ModelsManager::new(registry());
+    assert_eq!(
+        manager
+            .static_snapshot(&provider_id("strict"))
+            .unwrap()
+            .entries()
+            .len(),
+        2
+    );
+    let scope = dynamic_scope("flexible", "endpoint");
+    let source = Arc::new(QueueSource::new([Ok(modified(
+        &scope,
+        DiscoveryCoverage::CompleteAgentCatalog,
+        [DiscoveredModel::new(model_id("remote"))],
+    ))]));
+    manager
+        .refresh(scope.clone(), source.clone())
+        .await
+        .unwrap();
+    let changed = ProviderConfigRegistry::from_definitions([
+        definition("strict", ModelCatalogPolicy::ListedOnly)
+            .with_models([ModelInfo::new(model_id("replacement"), "Replacement")]),
+        definition("flexible", ModelCatalogPolicy::AllowUnlisted),
+    ])
+    .unwrap();
+    let updated = manager.with_registry(changed);
+    let snapshot = updated.static_snapshot(&provider_id("strict")).unwrap();
+    assert!(snapshot.generation() > crate::CatalogGeneration::INITIAL);
+    assert_eq!(snapshot.entries().len(), 1);
+    assert_eq!(snapshot.entries()[0].model().model, model_id("replacement"));
+    assert_eq!(
+        updated.snapshot(&scope).unwrap().entries()[0].model().model,
+        model_id("remote")
+    );
+    assert_eq!(
+        manager
+            .static_snapshot(&provider_id("strict"))
+            .unwrap()
+            .entries()
+            .len(),
+        2
+    );
+    assert_eq!(
+        updated
+            .static_snapshot(&provider_id("strict"))
+            .unwrap()
+            .entries()
+            .len(),
+        1
+    );
+    assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+}

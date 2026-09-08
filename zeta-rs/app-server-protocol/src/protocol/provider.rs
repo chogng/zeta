@@ -105,3 +105,20 @@ pub struct ProviderApiKeySetResult {
     pub provider: String,
     pub api_key_configured: bool,
 }
+
+/// Tests an unsaved connection without changing configuration or stored credentials.
+#[derive(Debug, Deserialize, Eq, JsonSchema, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderProbeParams {
+    pub config: crate::protocol::config::ProviderConfigDto,
+    pub api_key: Option<ProviderApiKeyDto>,
+    pub model: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ProviderProbeResult {
+    Passed,
+    Models { models: Vec<String> },
+    Failed { message: String },
+}

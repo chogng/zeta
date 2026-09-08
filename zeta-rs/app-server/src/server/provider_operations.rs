@@ -14,7 +14,7 @@ use zeta_model_provider_config::ApiKeyPolicy;
 use zeta_model_provider_config::ProviderId;
 
 impl AppServer {
-    fn configured_credentials(
+    pub(super) fn configured_credentials(
         &self,
     ) -> Result<zeta_model_provider::ProviderCredentialService, RpcError> {
         let credentials = self
@@ -31,6 +31,29 @@ impl AppServer {
             .with_configs(config.values.providers.values())
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
     }
+    pub(super) fn provider_probe(&self, params: Value) -> Result<Value, RpcError> {
+        use zeta_app_server_protocol::protocol::provider::ProviderProbeParams;
+        use zeta_app_server_protocol::protocol::provider::ProviderProbeResult;
+        let params: ProviderProbeParams = decode(&params)?;
+        let config = super::config_operations::provider_config_from_dto(params.config)?;
+        let runtime = self
+            .provider_runtime
+            .as_ref()
+            .ok_or_else(provider_credentials_unavailable)?;
+        let response = match runtime.probe_connection(
+            &config,
+            params.api_key.map(|key| key.into_bytes()),
+            params.model.as_deref(),
+        ) {
+            Ok(None) => ProviderProbeResult::Passed,
+            Ok(Some(models)) => ProviderProbeResult::Models { models },
+            Err(error) => ProviderProbeResult::Failed {
+                message: probe_error(error),
+            },
+        };
+        result(&response)
+    }
+
     pub(super) fn provider_list(&self) -> Result<Value, RpcError> {
         let providers = self
             .configured_credentials()?
@@ -90,5 +113,27 @@ fn api_key_policy_dto(policy: ApiKeyPolicy) -> ProviderApiKeyPolicyDto {
         ApiKeyPolicy::Unsupported => ProviderApiKeyPolicyDto::Unsupported,
         ApiKeyPolicy::Optional => ProviderApiKeyPolicyDto::Optional,
         ApiKeyPolicy::Required => ProviderApiKeyPolicyDto::Required,
+    }
+}
+
+fn probe_error(error: zeta_model_provider::ModelProviderError) -> String {
+    use zeta_model_provider::ModelProviderError;
+    match error {
+        ModelProviderError::AuthFailed(_) | ModelProviderError::Credential(_) => {
+            "Authentication failed · Check the API key".into()
+        }
+        ModelProviderError::Api(zeta_model_provider::ApiError::HttpStatus(401 | 403)) => {
+            "Authentication failed · Check the API key and model access".into()
+        }
+        ModelProviderError::Api(zeta_model_provider::ApiError::HttpStatus(status)) => {
+            format!("Endpoint returned HTTP {status} · Check the URL, API type and model ID")
+        }
+        ModelProviderError::InvalidResponse(_) => {
+            "Endpoint returned an invalid response · Check the API type".into()
+        }
+        ModelProviderError::InvalidRequest(_) | ModelProviderError::Config(_) => {
+            "Invalid connection settings · Check the URL and model ID".into()
+        }
+        _ => "Endpoint test failed · Check the connection, API type and model availability".into(),
     }
 }

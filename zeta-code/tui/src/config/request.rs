@@ -62,7 +62,7 @@ where
         Command::Connection(request) => {
             let id = request.id.clone();
             let result = execute_connection(client, request);
-            return Ok(Event::Connection(super::openai::Reply { id, result }));
+            return Ok(Event::Connection(super::provider::Reply { id, result }));
         }
         Command::Subscription(command) => Ok(Event::Subscription(super::subscription::execute(
             client, command,
@@ -106,18 +106,62 @@ fn set_issue_settings<T: JsonRpcTransport>(
 
 fn execute_connection<T: JsonRpcTransport>(
     client: &mut AppServerClient<T>,
-    request: super::openai::Request,
+    mut request: super::provider::Request,
 ) -> Result<(ConfigChoices, Option<Result<Vec<String>, String>>), String> {
     let provider = request.config.provider.clone();
-    let current = client.read_config().map_err(|error| error.to_string())?;
-    if request.operation == super::openai::Operation::FetchModels
-        && current.revision != request.revision
-    {
-        return Err(
-            "Configuration changed elsewhere · Reopen this panel before fetching models".into(),
-        );
+    if matches!(
+        request.operation,
+        super::provider::Operation::Test
+    ) {
+        use zeta_app_server_protocol::protocol::provider::ProviderProbeResult;
+        let model = request.model.clone();
+        let key = request.key.map(|key| key.into_parts().1);
+        let result = match client
+            .probe_provider(request.config, key, model)
+            .map_err(|error| error.to_string())?
+        {
+            ProviderProbeResult::Passed
+                if request.operation == super::provider::Operation::Test =>
+            {
+                Ok(Vec::new())
+            }
+            ProviderProbeResult::Failed { message } => Err(message),
+            _ => Err("Unexpected endpoint test response".into()),
+        };
+        return Ok((
+            read_config_choices(client).map_err(|error| error.to_string())?,
+            Some(result),
+        ));
     }
-    if request.operation == super::openai::Operation::Save
+    if request.operation == super::provider::Operation::Remove {
+        client
+            .remove_provider(
+                zeta_app_server_protocol::protocol::config::ProviderRemoveParams {
+                    command_id: request.id,
+                    expected_revision: request.revision,
+                    provider: provider.clone(),
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        crate::models::remove_provider_pins(client, &provider)?;
+        return Ok((
+            read_config_choices(client).map_err(|error| error.to_string())?,
+            None,
+        ));
+    }
+
+    let current = client.read_config().map_err(|error| error.to_string())?;
+    if let Some(custom) = &mut request.config.custom {
+        if let Some(saved) = current
+            .providers
+            .get(&provider)
+            .and_then(|config| config.custom.as_ref())
+        {
+            custom.order = saved.order;
+        }
+    }
+
+    if request.operation == super::provider::Operation::Save
         && (current.providers.get(&provider) != Some(&request.config)
             || current.preferred_model.is_none())
     {
@@ -133,70 +177,19 @@ fn execute_connection<T: JsonRpcTransport>(
     }
     if let Some(key) = request
         .key
-        .filter(|_| request.operation == super::openai::Operation::Save)
+        .filter(|_| request.operation == super::provider::Operation::Save)
     {
         let (provider, key) = key.into_parts();
         client
             .set_provider_api_key(ProviderApiKeySetRequest::new(provider, key))
             .map_err(|error| format!("Provider settings saved; API key was not saved: {error}"))?;
     }
-    let models = if request.operation == super::openai::Operation::FetchModels {
-        Some(
-            client
-                .list_provider_models(provider)
-                .map_err(|error| format!("Failed to fetch models · {error}"))
-                .and_then(provider_models),
-        )
-    } else {
-        None
-    };
+
     Ok((
         read_config_choices(client)
             .map_err(|error| format!("Saved; could not refresh provider settings: {error}"))?,
-        models,
+        None,
     ))
-}
-
-fn provider_models(
-    result: zeta_app_server_protocol::protocol::provider::ProviderModelsListResult,
-) -> Result<Vec<String>, String> {
-    use zeta_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
-    use zeta_app_server_protocol::protocol::provider::ProviderModelsListResult;
-    match result {
-        ProviderModelsListResult::Models { models } => Ok(models
-            .into_iter()
-            .map(|entry| entry.model.model.to_string())
-            .collect()),
-        ProviderModelsListResult::Empty => {
-            Err("Failed to fetch models · Provider returned no models".into())
-        }
-        ProviderModelsListResult::Failed { failure } => {
-            let message = match failure.code {
-                ProviderModelsListFailureCodeDto::Authentication => {
-                    "Authentication failed · Check the API key"
-                }
-                ProviderModelsListFailureCodeDto::Permission => "Permission denied",
-                ProviderModelsListFailureCodeDto::Unsupported => {
-                    "Provider does not support model discovery"
-                }
-                ProviderModelsListFailureCodeDto::RateLimited => "Rate limited · Try again later",
-                ProviderModelsListFailureCodeDto::Unreachable => "Could not reach the provider",
-                ProviderModelsListFailureCodeDto::ProviderUnavailable => {
-                    "Provider is unavailable · Try again later"
-                }
-                ProviderModelsListFailureCodeDto::InvalidRequest => "Provider rejected the request",
-                ProviderModelsListFailureCodeDto::InvalidResponse => {
-                    "Provider returned an invalid model list"
-                }
-                ProviderModelsListFailureCodeDto::InvalidConfiguration => {
-                    "Invalid provider configuration"
-                }
-                ProviderModelsListFailureCodeDto::Cancelled => "Request cancelled",
-                ProviderModelsListFailureCodeDto::Unknown => "Model discovery failed",
-            };
-            Err(format!("Failed to fetch models · {message}"))
-        }
-    }
 }
 
 pub(crate) fn read_config_choices<T>(
@@ -228,15 +221,19 @@ where
     let (provider, api_key) = edit.into_parts();
     let current = client.read_config()?;
     if !current.providers.contains_key(&provider) || current.preferred_model.is_none() {
-        let config = current.providers.get(&provider).cloned().unwrap_or_else(|| {
-            zeta_app_server_protocol::protocol::config::ProviderConfigDto {
-                provider: provider.clone(),
-                custom: None,
-                base_url: None,
-                max_output_tokens: None,
-                model_context: Default::default(),
-            }
-        });
+        let config = current
+            .providers
+            .get(&provider)
+            .cloned()
+            .unwrap_or_else(
+                || zeta_app_server_protocol::protocol::config::ProviderConfigDto {
+                    provider: provider.clone(),
+                    custom: None,
+                    base_url: None,
+                    max_output_tokens: None,
+                    model_context: Default::default(),
+                },
+            );
         client.configure_provider(
             zeta_app_server_protocol::protocol::config::ProviderConfigureParams {
                 command_id: new_command_id("provider-config"),
