@@ -24,19 +24,7 @@ use ratatui::text::Line;
 use unicode_width::UnicodeWidthStr;
 
 const JUMP_TO_BOTTOM_LABEL: &str = "Ctrl+End to jump to bottom ↓";
-
-pub(crate) fn prepare_history(
-    cell: &CellView<'_>,
-    width: u16,
-    context: RenderContext<'_>,
-) -> (super::history_cell::PreparedCell, usize) {
-    let cache = ChatHistoryRenderCache::default();
-    let cell = cache.prepare(cell, width, context, || {
-        cell_lines_with_code(cell, context, None, SyntaxHighlighting::Enabled)
-    });
-    let height = cell.height();
-    (cell, height)
-}
+const JUMP_TO_BOTTOM_CLICK_LABEL: &str = "Jump to bottom (click) ↓";
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) header: Option<&'a Buffer>,
@@ -48,6 +36,7 @@ pub(crate) struct ChatHistoryView<'a> {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ChatHistoryPointerState<'a> {
+    pub(crate) enabled: bool,
     pub(crate) hovered_jump_to_bottom: bool,
     pub(crate) hovered_toggle: Option<&'a str>,
     pub(crate) hovered_details: Option<&'a str>,
@@ -69,7 +58,7 @@ impl Renderable for ChatHistoryView<'_> {
     fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
         let heights = measured_heights(self.messages, self.render_cache, area.width, context);
         let header_rows = header_rows(self.header);
-        let (content_area, jump_area) = scroll_areas(area, header_rows, &heights, self.scroll);
+        let (content_area, _) = scroll_areas(area, header_rows, &heights, self.scroll);
         let total_rows = header_rows.saturating_add(heights.iter().sum::<usize>());
         let bottom_offset = total_rows.saturating_sub(usize::from(content_area.height));
         let viewport_start = viewport_offset(
@@ -96,7 +85,29 @@ impl Renderable for ChatHistoryView<'_> {
             self.pointer,
             context,
         );
-        render_jump_to_bottom(frame, jump_area, self.pointer, context);
+        render_jump_to_bottom(frame, self.jump_area(area, context), self.pointer, context);
+    }
+}
+
+impl ChatHistoryView<'_> {
+    pub(crate) fn jump_area(&self, area: Rect, context: RenderContext<'_>) -> Option<Rect> {
+        let heights = measured_heights(self.messages, self.render_cache, area.width, context);
+        let mut target =
+            jump_to_bottom_area(area, header_rows(self.header), &heights, self.scroll)?;
+        let width = jump_label(self.pointer)
+            .width()
+            .min(usize::from(area.width)) as u16;
+        target.x = area.x + (area.width - width) / 2;
+        target.width = width;
+        Some(target)
+    }
+}
+
+fn jump_label(pointer: ChatHistoryPointerState<'_>) -> &'static str {
+    if pointer.enabled {
+        JUMP_TO_BOTTOM_CLICK_LABEL
+    } else {
+        JUMP_TO_BOTTOM_LABEL
     }
 }
 
@@ -286,7 +297,7 @@ fn render_jump_to_bottom(
     frame.buffer_mut().set_stringn(
         area.x,
         area.y,
-        JUMP_TO_BOTTOM_LABEL,
+        jump_label(pointer),
         usize::from(area.width),
         style,
     );

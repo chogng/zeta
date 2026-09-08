@@ -4,7 +4,6 @@ mod local_command;
 mod text;
 
 pub(crate) use cache::ChatHistoryRenderCache;
-pub(super) use cache::PreparedCell;
 pub(super) use content::ContentCell;
 pub(super) use local_command::LocalCommandCell;
 pub(crate) use local_command::LocalCommandCompletion;

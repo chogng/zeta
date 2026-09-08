@@ -18,7 +18,7 @@
 | 资源设计混入用户字段与统计口径 | [状态规格](../spec/status.md)、[采样设计](../design/process-resources.md) | 分离用户行为与后台线程、版本和历史职责 |
 | 终端鼠标、历史和连接恢复分散 | [终端规格](../spec/terminal.md) | 汇集行为并链接实现与支持边界 |
 | CLI 设计混入命令用法与退出码 | [CLI 规格](../spec/cli.md)、[CLI 架构](../design/cli.md) | 分离用法与架构，按代码纠正 TUI 与无交互连接模式 |
-| changes 缺少归属和版本入口 | [变更索引](README.md)、每项工作 README | 列出日期、状态、长期文档和版本证据；完整性 AC 映射到对应主题 |
+| changes 缺少归属和版本入口 | 当时的变更索引 `README.md`、每项工作 README | 列出日期、状态、长期文档和版本证据；完整性 AC 映射到对应主题 |
 | 完成后历史保留约定不明确 | [开发流程](../../../docs/development-workflow.md)、[写作规范](../../../.github/instructions/documentation.instructions.md) | 明确增量修改、独立工作另建记录、保留原候选验收；同步模板 |
 
 ## 保留的边界

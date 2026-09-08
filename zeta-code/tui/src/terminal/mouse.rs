@@ -1,10 +1,21 @@
-/// Declares whether the active TUI surface leaves pointer input to the terminal or receives it for
-/// screen selection and click handling.
+/// Declares whether the terminal releases pointer input, forwards only content scrolling, or
+/// enables every TUI pointer interaction.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum MouseMode {
     #[default]
     TerminalSelection,
+    TuiScroll,
     TuiCapture,
+}
+
+impl MouseMode {
+    pub(crate) const fn captures_terminal_input(self) -> bool {
+        !matches!(self, Self::TerminalSelection)
+    }
+
+    pub(crate) const fn enables_pointer_actions(self) -> bool {
+        matches!(self, Self::TuiCapture)
+    }
 }
 
 /// Keeps pointer hover separate from keyboard selection and click activation.

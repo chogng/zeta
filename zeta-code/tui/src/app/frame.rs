@@ -1,6 +1,5 @@
 use crate::app::App;
 use crate::app::welcome;
-use zeta_memory_diagnostics::ProcessResourceDemand;
 use crate::keymap::bindings;
 use crate::render::Renderable;
 use crate::sessions;
@@ -14,6 +13,7 @@ use crate::thread::interaction::approval;
 use crate::thread::interaction::query;
 use crate::thread::plan;
 use crate::thread::queue;
+use crate::thread::transcript::ChatHistoryPointerState;
 use crate::thread::transcript::ChatHistoryView;
 use crate::widgets::key_hint;
 use ratatui::Frame;
@@ -22,6 +22,7 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
 use std::borrow::Cow;
+use zeta_memory_diagnostics::ProcessResourceDemand;
 
 enum BottomContent<'a> {
     HitBar {
@@ -39,33 +40,6 @@ enum HitBarStyle {
 }
 
 const BOTTOM_ROWS: u16 = 2;
-
-pub(crate) fn desired_height(app: &App, screen: Rect) -> u16 {
-    if app.session_preview().is_some()
-        || app.issue_manager().is_some()
-        || app.session_manager_view().is_some()
-        || app.transcript_scroll().anchor().is_some()
-    {
-        return screen.height;
-    }
-    let areas = layout(app, screen);
-    let chrome = screen
-        .height
-        .saturating_sub(areas.session.transcript.height);
-    let messages = app.visible_transcript_views();
-    let rows = ChatHistoryView {
-        header: None,
-        messages: &messages,
-        scroll: app.transcript_scroll(),
-        render_cache: app.transcript_render_cache(),
-        pointer: Default::default(),
-    }
-    .desired_height(screen.width, app.render_context());
-    chrome
-        .saturating_add(rows.max(super::layout::MIN_TRANSCRIPT_ROWS))
-        .min(screen.height)
-        .max(1)
-}
 
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let context = app.render_context();
@@ -91,7 +65,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             messages: &messages,
             scroll: &preview.scroll,
             render_cache: &preview.cache,
-            pointer: Default::default(),
+            pointer: transcript_pointer(app),
         }
         .render(frame, areas.session.transcript, context);
         let title = format!("  Preview · {} · read only", preview.title);
@@ -130,20 +104,18 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         sessions::draw_manager(frame, manager_areas.sessions, manager, None, None, context);
     } else {
         let messages = app.visible_transcript_views();
-        let header = app.transcript_header_visible().then(|| {
-            welcome::history_buffer(
-                areas.session.transcript.width,
-                areas.session.transcript.height,
-                app.welcome(),
-                context,
-            )
-        });
+        let header = welcome::history_buffer(
+            areas.session.transcript.width,
+            areas.session.transcript.height,
+            app.welcome(),
+            context,
+        );
         ChatHistoryView {
-            header: header.as_ref(),
+            header: Some(&header),
             messages: &messages,
             scroll: app.transcript_scroll(),
             render_cache: app.transcript_render_cache(),
-            pointer: Default::default(),
+            pointer: transcript_pointer(app),
         }
         .render(frame, areas.session.transcript, context);
     }
@@ -245,6 +217,18 @@ pub(crate) fn input_overlay_index_at(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InputPointerTarget {
     Composer(ChatComposerPointerTarget),
+    TranscriptJumpToBottom,
+}
+
+fn transcript_pointer(app: &App) -> ChatHistoryPointerState<'_> {
+    ChatHistoryPointerState {
+        enabled: app.mouse_mode().enables_pointer_actions(),
+        hovered_jump_to_bottom: app.hovered_pointer_target()
+            == Some(&InputPointerTarget::TranscriptJumpToBottom),
+        pressed_jump_to_bottom: app.pressed_pointer_target()
+            == Some(&InputPointerTarget::TranscriptJumpToBottom),
+        ..Default::default()
+    }
 }
 
 pub(crate) fn input_pointer_target_at(
@@ -253,19 +237,54 @@ pub(crate) fn input_pointer_target_at(
     column: u16,
     row: u16,
 ) -> Option<InputPointerTarget> {
-    if app.mouse_mode() != crate::terminal::mouse::MouseMode::TuiCapture || !completion_visible(app)
-    {
+    if !app.mouse_mode().enables_pointer_actions() || app.issue_manager().is_some() {
         return None;
     }
     let areas = layout(app, terminal_area);
-    chat_composer::pointer_target_at(
-        completion_area(&areas),
-        &app.chat_composer_view(),
-        true,
-        column,
-        row,
-    )
-    .map(InputPointerTarget::Composer)
+    let position = ratatui::layout::Position::new(column, row);
+    if app.overlay().is_some() {
+        return None;
+    }
+    if completion_visible(app) && overlay_mouse_contains(app, terminal_area, position) {
+        return chat_composer::pointer_target_at(
+            completion_area(&areas),
+            &app.chat_composer_view(),
+            true,
+            column,
+            row,
+        )
+        .map(InputPointerTarget::Composer);
+    }
+    if app.session_manager_view().is_some() && app.session_preview().is_none() {
+        return None;
+    }
+    let context = app.render_context();
+    let header = welcome::history_buffer(
+        areas.session.transcript.width,
+        areas.session.transcript.height,
+        app.welcome(),
+        context,
+    );
+    let messages = if let Some(preview) = app.session_preview() {
+        preview.messages()
+    } else {
+        app.visible_transcript_views()
+    };
+    let (scroll, render_cache) = if let Some(preview) = app.session_preview() {
+        (&preview.scroll, &preview.cache)
+    } else {
+        (app.transcript_scroll(), app.transcript_render_cache())
+    };
+    ChatHistoryView {
+        header: Some(&header),
+        messages: &messages,
+        scroll,
+        render_cache,
+        pointer: transcript_pointer(app),
+    }
+    .jump_area(areas.session.transcript, context)
+    .filter(|area| area.contains(position))
+    .map(|_| InputPointerTarget::TranscriptJumpToBottom)
 }
 
 pub(crate) fn overlay_mouse_contains(
@@ -273,7 +292,7 @@ pub(crate) fn overlay_mouse_contains(
     terminal_area: Rect,
     position: ratatui::layout::Position,
 ) -> bool {
-    if app.mouse_mode() != crate::terminal::mouse::MouseMode::TuiCapture {
+    if !app.mouse_mode().captures_terminal_input() {
         return false;
     }
     let areas = layout(app, terminal_area);
@@ -282,10 +301,17 @@ pub(crate) fn overlay_mouse_contains(
             .surface(transient_area_from_layout(&areas))
             .contains(position);
     }
-    matches!(
-        input_pointer_target_at(app, terminal_area, position.x, position.y),
-        Some(InputPointerTarget::Composer(_))
+    if !completion_visible(app) {
+        return false;
+    }
+    chat_composer::pointer_target_at(
+        completion_area(&areas),
+        &app.chat_composer_view(),
+        true,
+        position.x,
+        position.y,
     )
+    .is_some()
 }
 
 pub(crate) struct FrameLayout {

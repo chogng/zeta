@@ -31,7 +31,7 @@
 | AC-14 归档、恢复与删除 | 有相关测试入口 | [Session 测试](../../../tui/src/sessions/active_tests.rs)、[归档列表场景](../../../tui/src/app/session_manager_tests.rs)；删除失败及选中对象正确性待验 | 尚未验证 |
 | AC-15 分支与回退 | 入口待核实 | [回退请求](../../../tui/src/thread/rewind/request.rs)、[恢复测试](../../../tui/src/sessions/active_tests.rs)；需核对历史边界和原对话不变 | 尚未验证 |
 | AC-16 长输出与滚动 | 实现已更新，待重新核对 | [正文测试](../../../tui/src/thread/transcript/view/render_tests.rs)包含折行和滚动锚点；截断详情、窄窗口与所有输出类型需实测 | 尚未验证 |
-| AC-17 终端历史 | 有协议与渲染测试 | [终端测试](../../../tui/src/terminal/session_tests.rs)、[历史协议测试](../../../tui/src/terminal/history_protocol_tests.rs)；真实宿主范围依赖 Q-2 | 尚未验证 |
+| AC-17 对话历史 | 全屏实现已替换原终端回滚协议 | [终端测试](../../../tui/src/terminal/session_tests.rs)、[正文绘制测试](../../../tui/src/thread/transcript/view/render_tests.rs)；真实宿主范围依赖 Q-2 | 尚未按本记录逐项复验 |
 | AC-18 复制与导出 | 已核对导出限制 | [导出](../../../tui/src/host/transcript_export.rs)使用禁止覆盖的文件创建方式并校验目录；[导出测试](../../../tui/src/host/transcript_export_tests.rs)；剪贴板需实测 | 尚未验证 |
 | AC-19 设置保存 | 已核对部分版本检查 | [配置请求](../../../tui/src/config/request.rs)、[快捷键测试](../../../tui/src/keymap/settings_tests.rs)；需验证模型、主题、冲突和重新读取 | 尚未验证 |
 | AC-20 面板输入与返回 | 有应用场景入口 | [实际面板场景](../../../cli/tests/tui_real_scenarios.rs)、[通用控件](../../../tui/src/widgets)；逐面板焦点和录制隔离待验 | 尚未验证 |
@@ -48,7 +48,7 @@
 | 问题 | 当前结论 | 对完成判断的影响 |
 | --- | --- | --- |
 | Q-1 · Markdown | 当前支持边界记录正文链接尚不可点击；尚未逐项审计表格及其他 Markdown 行为 | 先确定需要的呈现范围，再补对应要求与验证 |
-| Q-2 · 终端组合 | 既有[兼容性记录](../../../tui/README.md#终端历史兼容性验证)仅覆盖列明的历史环境；CLI PTY 测试文件有 `cfg(unix)` 限制 | 不能把 Unix 场景或单个引擎通过外推为所有平台通过 |
+| Q-2 · 终端组合 | 既有[兼容性记录](../../../tui/README.md#全屏终端兼容性验证)仅覆盖列明的环境；CLI PTY 测试文件有 `cfg(unix)` 限制 | 不能把 Unix 场景或单个引擎通过外推为所有平台通过 |
 | Q-3 · 未发送内容恢复 | 恢复类型只携带 Session/Thread 身份，不携带本地草稿或队列 | 需要确定持久化要求；目前无法宣称未发送内容可跨断线恢复 |
 | Q-4 · 宠物点击播放 | [Welcome 绘制](../../../tui/src/app/welcome/pet.rs)仍取 `idle()`，动作资源和预览不能证明点击已接入 | 明确是否本轮必做；若是，登记实现与验收步骤 |
 
