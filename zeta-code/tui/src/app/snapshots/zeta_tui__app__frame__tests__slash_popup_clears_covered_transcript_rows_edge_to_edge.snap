@@ -1,17 +1,17 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
-assertion_line: 1252
+assertion_line: 1310
 expression: "render(&app, terminal_area.width, terminal_area.height)"
 ---
+content underlying transcript content underlying transcript content             
                                                                                 
+● Model invocation failed 8 underlying transcript content underlying transcript 
+content underlying transcript content underlying transcript content             
                                                                                 
+● Model invocation failed 9 underlying transcript content underlying transcript 
+content underlying transcript content underlying transcript content             
                                                                                 
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
+● Model invocation failed 10 underlying transcript content underlying transcript
   /status                    show the active session, thread, and model         
   /statusline                choose the items shown in the status line          
   /skills                    browse configured skill sources                    
@@ -23,3 +23,4 @@ expression: "render(&app, terminal_area.width, terminal_area.height)"
 ────────────────────────────────────────────────────────────────────────────────
                                                                                 
   ⏸ ask permissions on
+

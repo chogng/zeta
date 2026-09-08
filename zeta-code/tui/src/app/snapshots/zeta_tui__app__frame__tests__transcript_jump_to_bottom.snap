@@ -1,6 +1,6 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
-assertion_line: 1171
+assertion_line: 1218
 expression: "render(&app, 50, 16)"
 ---
 ● Model invocation failed 1                       
@@ -12,7 +12,7 @@ expression: "render(&app, 50, 16)"
 ● Model invocation failed 4                       
                                                   
 ● Model invocation failed 5                       
-           Ctrl+End to jump to bottom ↓           
+             Jump to bottom (click) ↓             
                                                   
 ──────────────────────────────────────────────────
 >                                                 

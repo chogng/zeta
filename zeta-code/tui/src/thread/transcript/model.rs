@@ -7,6 +7,7 @@ use super::history_cell::LocalCommandCell;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::MessageRole;
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
@@ -128,6 +129,19 @@ impl TranscriptCell {
             _ => self.source_entry_id.iter().map(String::as_str).collect(),
         }
     }
+
+    fn local_user_text(&self) -> Option<&str> {
+        if self.source_entry_id.is_some() {
+            return None;
+        }
+        match &self.body {
+            TranscriptCellBody::Content(ContentCell {
+                role: MessageRole::User,
+                text,
+            }) => Some(text),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -139,9 +153,67 @@ pub(crate) struct TranscriptModel {
 
 impl TranscriptModel {
     pub(in crate::thread) fn replace(&mut self, snapshot: ThreadTranscriptSnapshot) {
+        let existing_source_ids = self
+            .cells
+            .iter()
+            .flat_map(TranscriptCell::source_ids)
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>();
+        let mut confirmed_local_users = snapshot
+            .entries
+            .iter()
+            .filter(|entry| !existing_source_ids.contains(entry.entry_id()))
+            .filter_map(|entry| match entry {
+                ThreadTranscriptEntry::Item {
+                    entry_id,
+                    item: ThreadItem::UserMessage { text, .. },
+                    ..
+                } => Some((text.clone(), entry_id.clone())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut local_cells = Vec::new();
+        let mut preceding_source_id = None;
+        for cell in std::mem::take(&mut self.cells) {
+            let source_ids = cell.source_ids();
+            if let Some(source_id) = source_ids.last() {
+                preceding_source_id = Some((*source_id).to_owned());
+            } else {
+                local_cells.push((preceding_source_id.clone(), cell));
+            }
+        }
         self.cells.clear();
         for entry in snapshot.entries {
             self.upsert(entry);
+        }
+        let mut confirmed_anchors = BTreeMap::new();
+        for (anchor, cell) in local_cells {
+            if let Some(text) = cell.local_user_text()
+                && !confirmed_local_users.is_empty()
+            {
+                let index = confirmed_local_users
+                    .iter()
+                    .position(|(confirmed, _)| confirmed == text)
+                    .unwrap_or(0);
+                let (_, entry_id) = confirmed_local_users.remove(index);
+                confirmed_anchors.insert(anchor.clone(), entry_id);
+                continue;
+            }
+            let effective_anchor = confirmed_anchors
+                .get(&anchor)
+                .map(String::as_str)
+                .or(anchor.as_deref());
+            let Some(mut insert_at) = self.local_insert_index(effective_anchor) else {
+                continue;
+            };
+            while self
+                .cells
+                .get(insert_at)
+                .is_some_and(|existing| existing.source_ids().is_empty())
+            {
+                insert_at += 1;
+            }
+            self.cells.insert(insert_at, cell);
         }
     }
 
@@ -191,23 +263,6 @@ impl TranscriptModel {
             .collect()
     }
 
-    pub(in crate::thread) fn active_views(
-        &self,
-        active_turn: Option<&TurnId>,
-        expanded: &BTreeSet<TranscriptCellId>,
-        selected: Option<&TranscriptCellId>,
-    ) -> Vec<CellView<'_>> {
-        self.active_cells(active_turn)
-            .iter()
-            .map(|cell| {
-                cell.view(
-                    expanded.contains(cell.cell_id()),
-                    selected == Some(cell.cell_id()),
-                )
-            })
-            .collect()
-    }
-
     pub(in crate::thread) fn has_user_message(&self) -> bool {
         self.cells.iter().any(|cell| {
             matches!(
@@ -232,24 +287,6 @@ impl TranscriptModel {
 
     pub(in crate::thread) fn cells(&self) -> &[TranscriptCell] {
         &self.cells
-    }
-
-    pub(in crate::thread) fn committed_cells(
-        &self,
-        active_turn: Option<&TurnId>,
-    ) -> &[TranscriptCell] {
-        &self.cells[..self.active_start(active_turn)]
-    }
-
-    pub(in crate::thread) fn active_cells(
-        &self,
-        active_turn: Option<&TurnId>,
-    ) -> &[TranscriptCell] {
-        &self.cells[self.active_start(active_turn)..]
-    }
-
-    pub(in crate::thread) fn has_committed_cells(&self, active_turn: Option<&TurnId>) -> bool {
-        self.active_start(active_turn) > 0
     }
 
     pub(in crate::thread) fn details(&self, cell_id: &TranscriptCellId) -> Option<String> {
@@ -650,22 +687,15 @@ impl TranscriptModel {
         self.next_render_revision
     }
 
-    fn active_start(&self, active_turn: Option<&TurnId>) -> usize {
-        let first_live = self
-            .cells
-            .iter()
-            .position(|cell| cell.lifecycle() == CellLifecycle::Live)
-            .unwrap_or(self.cells.len());
-        // A final tool result does not close a group while its turn can add more calls.
-        let tail = self.cells.len().saturating_sub(1);
-        if let Some(cell) = self.cells.last()
-            && active_turn.is_some()
-            && cell.turn_id.as_ref() == active_turn
-            && matches!(cell.body, TranscriptCellBody::Exec(_))
-        {
-            return first_live.min(tail);
+    fn local_insert_index(&self, preceding_source_id: Option<&str>) -> Option<usize> {
+        match preceding_source_id {
+            None => Some(0),
+            Some(source_id) => self
+                .cells
+                .iter()
+                .position(|cell| cell.source_ids().contains(&source_id))
+                .map(|index| index + 1),
         }
-        first_live
     }
 }
 

@@ -156,6 +156,10 @@ fn session_manager_preview_reads_conversation_and_restores_focus_without_editing
     );
     assert!(app.session_preview().unwrap().scroll.anchor().is_some());
     assert_snapshot!("session_manager_preview_scrolled", render(&app));
+    let background_anchor = app.transcript_scroll().anchor().cloned();
+    app.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL));
+    assert!(app.session_preview().unwrap().scroll.anchor().is_none());
+    assert_eq!(app.transcript_scroll().anchor(), background_anchor.as_ref());
     app.handle_key(key(KeyCode::Esc));
     assert!(app.session_preview().is_none());
     assert!(app.session_manager_focused());
@@ -289,7 +293,6 @@ fn session_manager_group_keys_collapse_expand_and_skip_hidden_sessions() {
     assert!(matches!(app.handle_key(key(KeyCode::Enter)),
         Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. })) if session_id == "current"));
 }
-
 
 fn preview_result(
     range: std::ops::Range<usize>,

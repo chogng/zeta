@@ -218,6 +218,19 @@ pub struct TuiProcess {
 
 impl TuiProcess {
     pub fn start(fixture: &Fixture, args: &[&str], size: PtySize) -> Self {
+        Self::start_with_terminal(fixture, args, size, None)
+    }
+
+    pub fn start_in_vscode(fixture: &Fixture, args: &[&str], size: PtySize) -> Self {
+        Self::start_with_terminal(fixture, args, size, Some(("vscode", "1.136.1")))
+    }
+
+    fn start_with_terminal(
+        fixture: &Fixture,
+        args: &[&str],
+        size: PtySize,
+        terminal: Option<(&str, &str)>,
+    ) -> Self {
         let pair = native_pty_system().openpty(size).unwrap();
         let mut reader = pair.master.try_clone_reader().unwrap();
         let writer = Arc::new(Mutex::new(pair.master.take_writer().unwrap()));
@@ -255,6 +268,10 @@ impl TuiProcess {
         command.args(args);
         command.cwd(&fixture.workspace);
         command.env("TERM", "xterm-256color");
+        if let Some((program, version)) = terminal {
+            command.env("TERM_PROGRAM", program);
+            command.env("TERM_PROGRAM_VERSION", version);
+        }
         // Never let an offline PTY scenario reuse the developer's actual Codex subscription.
         fs::create_dir_all(fixture.codex_home()).unwrap();
         for (name, value) in fixture.environment() {
@@ -269,6 +286,15 @@ impl TuiProcess {
             if !snapshot_paths.contains(&path) {
                 snapshot_paths.push(path);
             }
+        }
+        if let Some(profile) = std::env::var_os("USERPROFILE")
+            && let Ok(relative) = fixture._root.path().strip_prefix(profile)
+        {
+            snapshot_paths.push(format!(
+                "~{}{}",
+                std::path::MAIN_SEPARATOR,
+                relative.display()
+            ));
         }
         for path in snapshot_paths.clone() {
             if path.starts_with("/var/") {
@@ -316,6 +342,14 @@ impl TuiProcess {
 
     pub fn control_up(&mut self) {
         self.send_input(b"\x1b[1;5A");
+    }
+
+    pub fn control_home(&mut self) {
+        self.send_input(b"\x1b[1;5H");
+    }
+
+    pub fn control_end(&mut self) {
+        self.send_input(b"\x1b[1;5F");
     }
 
     pub fn down(&mut self) {

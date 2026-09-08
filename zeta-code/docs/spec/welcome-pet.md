@@ -2,7 +2,7 @@
 
 本文规定宠物资源格式和点击动作。资源、构建与独立预览已实现；Welcome 中的点击播放尚未接入。预览命令见[实现指南](../../tui/README.md#修改-welcome-宠物)。
 
-- 当前[终端鼠标规则](terminal.md#鼠标规则)仅允许可见覆盖浮层捕获鼠标；下文 Welcome 点击为未交付要求，不能从独立预览推断已支持。其交付范围仍见[完整性工作 Q-4](../changes/tui-completeness/README.md#尚未确定的范围)。
+- 当前[终端鼠标规则](terminal.md#鼠标规则)允许整屏字符选择和内容滚动，但没有 Welcome 点击动作；下文 Welcome 点击为未交付要求，不能从独立预览推断已支持。其交付范围仍见[完整性工作 Q-4](../changes/tui-completeness/README.md#尚未确定的范围)。
 
 Pet 采用和 Claude Code 同一类的终端绘制方案：设计源直接写出每个终端格要使用的字符、前景色和背景色，运行时原样绘制，不再把高分辨率像素自动编码成 Unicode 八分块字符。
 

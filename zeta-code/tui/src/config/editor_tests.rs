@@ -79,7 +79,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(mouse.label(), "Enhanced TUI");
     assert_eq!(
         mouse.description(),
-        Some("Click, scroll, hover, and auto-copy text in overlays only [ ✔ ]")
+        Some("Click, hover, drag-select text, and copy automatically [ ✔ ]")
     );
     assert!(matches!(
         view.actions.get(mouse.id().unwrap()).unwrap(),
@@ -308,7 +308,7 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
 
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("Click, scroll, hover, and auto-copy text in overlays only [   ]")
+        Some("Click, hover, drag-select text, and copy automatically [   ]")
     );
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(state.search().unwrap().input_active());

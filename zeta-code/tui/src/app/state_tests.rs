@@ -273,7 +273,7 @@ fn keyboard_activation_uses_the_feature_action_mapping() {
     let mut app = App::new();
     app.update(ThemeEvent::PickerOpened(theme_choices(&theme_catalog())));
 
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -1537,15 +1537,15 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
-fn enhanced_mouse_capture_is_limited_to_visible_overlays() {
+fn enhanced_mouse_capture_covers_the_full_screen() {
     let mut app = App::new();
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     app.insert_text("/");
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     let dir = temporary_dir("mouse-interaction-mention");
     fs::write(dir.join("notes.md"), "notes").unwrap();
@@ -1589,7 +1589,7 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
             ));
             assert!(app.query_view().is_some());
         }
-        assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+        assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
         let area = Rect::new(0, 0, 80, 24);
         for row in 0..area.height {
             for column in 0..area.width {
@@ -1612,7 +1612,7 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
 }
 
 #[test]
-fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
+fn disabled_mouse_interactions_keep_only_content_scrolling() {
     let mut app = App::new();
     app.insert_text("/");
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
@@ -1624,7 +1624,7 @@ fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
     settings.set_mouse_interactions(false);
     app.update(ConfigEvent::SettingsReceived(settings));
 
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
     assert!(app.screen_selection().range().is_none());
 }
 
@@ -1651,7 +1651,7 @@ fn saved_enhancement_disable_clears_hover_press_and_drag_together() {
             StatusLineSettings::default(),
         ),
     }));
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
     assert!(app.hovered_pointer_target().is_none());
     assert!(app.pressed_pointer_target().is_none());
     assert!(app.screen_selection().range().is_none());

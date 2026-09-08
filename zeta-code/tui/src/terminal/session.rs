@@ -1,25 +1,20 @@
-use crate::terminal::backend::MainScreenBackend;
 use crate::terminal::mouse::MouseMode;
 use crate::terminal::screen_selection::ScreenSelectionRange;
 use crate::terminal::screen_selection::line_range_at;
 use crate::terminal::screen_selection::text_in_range;
 use crate::terminal::screen_selection::token_range_at;
 use crossterm::ExecutableCommand;
-use crossterm::QueueableCommand;
-use crossterm::cursor::MoveTo;
 use crossterm::event::DisableBracketedPaste;
 use crossterm::event::DisableFocusChange;
 use crossterm::event::DisableMouseCapture;
 use crossterm::event::EnableBracketedPaste;
 use crossterm::event::EnableFocusChange;
 use crossterm::event::EnableMouseCapture;
+use crossterm::terminal::EnterAlternateScreen;
+use crossterm::terminal::LeaveAlternateScreen;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
-use ratatui::TerminalOptions;
-use ratatui::Viewport;
-use ratatui::backend::Backend;
-use ratatui::backend::ClearType;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
@@ -30,9 +25,14 @@ use std::io::Write;
 use zeta_terminal_detection::TerminalRgb;
 use zeta_terminal_detection::detect_host_terminal;
 
+// Preserve the host setting while preventing wheel input from becoming arrow keys inside the TUI.
+const SAVE_ALTERNATE_SCROLL: &[u8] = b"\x1b[?1007s";
+const DISABLE_ALTERNATE_SCROLL: &[u8] = b"\x1b[?1007l";
+const RESTORE_ALTERNATE_SCROLL: &[u8] = b"\x1b[?1007r";
+
 pub(crate) struct TerminalSession {
     background_color: Option<TerminalRgb>,
-    terminal: Terminal<MainScreenBackend<CrosstermBackend<Stdout>>>,
+    terminal: Terminal<CrosstermBackend<Stdout>>,
     modes: TerminalModeGuard<CrosstermModeOperations>,
     rendered_frame: Option<Buffer>,
     cursor_color: CursorColor,
@@ -43,14 +43,7 @@ impl TerminalSession {
         let host_terminal = detect_host_terminal();
         let modes = TerminalModeGuard::acquire(CrosstermModeOperations)?;
         let background_color = super::terminal_probe::query_background(&host_terminal);
-        let terminal = Terminal::with_options(
-            MainScreenBackend {
-                inner: CrosstermBackend::new(io::stdout()),
-            },
-            TerminalOptions {
-                viewport: Viewport::Fixed(Rect::new(0, 0, crossterm::terminal::size()?.0, 1)),
-            },
-        )?;
+        let terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
         let mut session = Self {
             background_color,
             terminal,
@@ -85,18 +78,6 @@ impl TerminalSession {
         self.rendered_frame
             .as_ref()
             .map_or_else(|| self.screen_area(), |frame| Ok(frame.area))
-    }
-
-    pub(crate) fn set_height(&mut self, height: u16) -> io::Result<()> {
-        resize_viewport(&mut self.terminal, height)
-    }
-
-    pub(crate) fn append_history(
-        &mut self,
-        rows: usize,
-        mut render: impl FnMut(&mut Buffer, Rect, usize),
-    ) -> io::Result<()> {
-        append_history(&mut self.terminal, rows, &mut render)
     }
 
     pub(crate) fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
@@ -217,7 +198,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             self.bracketed_paste = true;
             self.operations.enable_focus_change()?;
             self.focus_change = true;
-            if self.mouse_mode == MouseMode::TuiCapture {
+            if self.mouse_mode.captures_terminal_input() {
                 self.operations.enable_mouse_capture()?;
                 self.mouse_capture = true;
             }
@@ -240,7 +221,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
                     self.mouse_capture = false;
                 }
             }
-            MouseMode::TuiCapture => {
+            MouseMode::TuiScroll | MouseMode::TuiCapture => {
                 if self.screen_active && !self.mouse_capture {
                     self.operations.enable_mouse_capture()?;
                     self.mouse_capture = true;
@@ -289,8 +270,7 @@ impl TerminalModeOperations for CrosstermModeOperations {
     }
 
     fn begin_screen(&mut self) -> io::Result<()> {
-        let (_, rows) = crossterm::terminal::size()?;
-        begin_screen(&mut io::stdout(), rows)
+        enter_screen(&mut io::stdout())
     }
 
     fn enable_bracketed_paste(&mut self) -> io::Result<()> {
@@ -318,8 +298,7 @@ impl TerminalModeOperations for CrosstermModeOperations {
     }
 
     fn finish_screen(&mut self) -> io::Result<()> {
-        let (_, rows) = crossterm::terminal::size()?;
-        finish_screen(&mut io::stdout(), rows)
+        leave_screen(&mut io::stdout())
     }
 
     fn disable_raw_mode(&mut self) -> io::Result<()> {
@@ -327,94 +306,30 @@ impl TerminalModeOperations for CrosstermModeOperations {
     }
 }
 
-fn resize_viewport<B: Backend>(terminal: &mut Terminal<B>, height: u16) -> io::Result<()> {
-    let size = terminal.size()?;
-    if size.width == 0 || size.height == 0 {
-        return Err(io::Error::other(
-            "terminal has no space for interactive output",
-        ));
+fn enter_screen(output: &mut impl Write) -> io::Result<()> {
+    output.execute(EnterAlternateScreen)?;
+    if let Err(error) = prepare_alternate_scroll(output) {
+        let _ = restore_alternate_scroll(output);
+        let _ = output.execute(LeaveAlternateScreen);
+        return Err(error);
     }
-    let old = terminal.get_frame().area();
-    let height = height.max(1).min(size.height);
-    let y = old
-        .y
-        .min(size.height.saturating_sub(old.height.min(size.height)));
-    if old.width == size.width && old.height == height && old.bottom() <= size.height {
-        return Ok(());
-    }
-    terminal.backend_mut().set_cursor_position((0, y))?;
-    terminal
-        .backend_mut()
-        .clear_region(ClearType::AfterCursor)?;
-    reserve_viewport(terminal, y, height)
+    Ok(())
 }
 
-fn reserve_viewport<B: Backend>(terminal: &mut Terminal<B>, y: u16, height: u16) -> io::Result<()> {
-    let size = terminal.size()?;
-    let height = height.max(1).min(size.height);
-    terminal.backend_mut().set_cursor_position((0, y))?;
-    terminal
-        .backend_mut()
-        .append_lines(height.saturating_sub(1))?;
-    let top = y.min(size.height.saturating_sub(height));
-    terminal.resize(Rect::new(0, top, size.width, height))
+fn leave_screen(output: &mut impl Write) -> io::Result<()> {
+    let alternate_scroll = restore_alternate_scroll(output);
+    let alternate_screen = output.execute(LeaveAlternateScreen).map(|_| ());
+    alternate_scroll.and(alternate_screen)
 }
 
-fn append_history<B: Backend>(
-    terminal: &mut Terminal<B>,
-    rows: usize,
-    render: &mut impl FnMut(&mut Buffer, Rect, usize),
-) -> io::Result<()> {
-    if rows == 0 {
-        return Ok(());
-    }
-    let size = terminal.size()?;
-    if size.width == 0 || size.height == 0 {
-        return Err(io::Error::other(
-            "terminal has no space for transcript output",
-        ));
-    }
-    let viewport = terminal.get_frame().area();
-    let mut y = viewport.y.min(size.height - 1);
-    // Only the interactive region is erased. The completed transcript above it remains
-    // ordinary terminal output, so short additions consume free screen rows before scrolling.
-    terminal.backend_mut().set_cursor_position((0, y))?;
-    terminal
-        .backend_mut()
-        .clear_region(ClearType::AfterCursor)?;
-    for offset in 0..rows {
-        let area = Rect::new(0, y, size.width, 1);
-        let empty = Buffer::empty(area);
-        let mut row = empty.clone();
-        render(&mut row, area, offset);
-        terminal.backend_mut().set_cursor_position((0, y))?;
-        terminal
-            .backend_mut()
-            .clear_region(ClearType::CurrentLine)?;
-        terminal.backend_mut().draw(empty.diff(&row).into_iter())?;
-        // Advance immediately, including on ConPTY, before writing another row.
-        terminal.backend_mut().append_lines(1)?;
-        y = y.saturating_add(1).min(size.height - 1);
-    }
-    reserve_viewport(terminal, y, viewport.height)?;
-    terminal.backend_mut().flush()
-}
-
-// Keep the main buffer: xterm.js translates wheel input into arrow keys in
-// the alternate buffer whenever mouse reporting is disabled. Reserving fresh
-// rows also keeps the caller's output in terminal scrollback.
-fn begin_screen(output: &mut impl Write, rows: u16) -> io::Result<()> {
-    output.queue(MoveTo(0, rows.saturating_sub(1)))?;
-    for _ in 0..rows {
-        output.write_all(b"\r\n")?;
-    }
-    output.queue(MoveTo(0, 0))?;
+fn prepare_alternate_scroll(output: &mut impl Write) -> io::Result<()> {
+    output.write_all(SAVE_ALTERNATE_SCROLL)?;
+    output.write_all(DISABLE_ALTERNATE_SCROLL)?;
     output.flush()
 }
 
-fn finish_screen(output: &mut impl Write, rows: u16) -> io::Result<()> {
-    output.queue(MoveTo(0, rows.saturating_sub(1)))?;
-    output.write_all(b"\r\n")?;
+fn restore_alternate_scroll(output: &mut impl Write) -> io::Result<()> {
+    output.write_all(RESTORE_ALTERNATE_SCROLL)?;
     output.flush()
 }
 
@@ -435,7 +350,3 @@ fn suspend_process() -> io::Result<()> {
 #[cfg(test)]
 #[path = "session_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "history_protocol_tests.rs"]
-mod history_protocol_tests;

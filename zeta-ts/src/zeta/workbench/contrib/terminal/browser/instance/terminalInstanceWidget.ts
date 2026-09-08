@@ -5,6 +5,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
 import { terminalTheme } from "./terminalTheme.js";
+import { AlternateScrollMode } from "./alternateScroll.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
 
@@ -13,6 +14,7 @@ export class TerminalInstanceWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly terminal: Terminal;
 	private readonly fitAddon = new FitAddon();
+	private readonly alternateScroll = new AlternateScrollMode();
 	private readonly commandDecorations = new Map<string, TerminalCommandDecoration>();
 	private visible = false;
 
@@ -37,6 +39,7 @@ export class TerminalInstanceWidget extends Disposable {
 		}));
 		this.terminal.loadAddon(this.fitAddon);
 		this.terminal.open(this.element);
+		this.registerAlternateScrollMode();
 		this._register(toDisposable(() => this.terminal.dispose()));
 		const input = this.terminal.onData((data) => this.instance.write(data));
 		this._register(toDisposable(() => input.dispose()));
@@ -87,6 +90,24 @@ export class TerminalInstanceWidget extends Disposable {
 			rows: Math.min(512, Math.max(1, this.terminal.rows)),
 			cols: Math.min(512, Math.max(1, this.terminal.cols)),
 		};
+	}
+
+	private registerAlternateScrollMode(): void {
+		const registerMode = (final: string, update: (parameters: (number | number[])[]) => void): void => {
+			const registration = this.terminal.parser.registerCsiHandler({ prefix: '?', final }, parameters => {
+				update(parameters);
+				return false;
+			});
+			this._register(toDisposable(() => registration.dispose()));
+		};
+		registerMode("h", parameters => this.alternateScroll.set(parameters, true));
+		registerMode("l", parameters => this.alternateScroll.set(parameters, false));
+		registerMode("s", parameters => this.alternateScroll.save(parameters));
+		registerMode("r", parameters => this.alternateScroll.restore(parameters));
+		this.terminal.attachCustomWheelEventHandler(() => this.alternateScroll.shouldProcessWheel(
+			this.terminal.buffer.active.type,
+			this.terminal.modes.mouseTrackingMode,
+		));
 	}
 
 	private renderCommandStatus(event: ITerminalCommandStatusEvent): void {

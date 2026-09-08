@@ -15,7 +15,6 @@ use crate::client;
 use crate::host;
 use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
-use zeta_memory_diagnostics::ProcessResourceDemand;
 use crate::terminal;
 use crate::terminal::screen_selection::ClickCount;
 use crate::terminal::screen_selection::ScreenSelectionOutcome;
@@ -30,6 +29,7 @@ use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
 use std::time::Instant;
 use zeta_app_server_client::AppServerSession;
+use zeta_memory_diagnostics::ProcessResourceDemand;
 
 pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
     let result = run_session(&mut session, options);
@@ -176,8 +176,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         driver.app_mut().handle_key_in_area(key, terminal.area()?)
                     }
                     Event::Mouse(mouse) => {
-                        let outcome = handle_mouse(driver.app_mut(), terminal.area()?, mouse);
-                        finish_pointer_gesture(driver.app_mut(), &terminal, outcome)?
+                        match handle_mouse(driver.app_mut(), terminal.area()?, mouse) {
+                            MouseAction::Selection(outcome) => {
+                                finish_pointer_gesture(driver.app_mut(), &terminal, outcome)?
+                            }
+                            MouseAction::Command(command) => command,
+                        }
                     }
                     Event::Paste(text) => {
                         driver.app_mut().handle_paste(text);
@@ -218,12 +222,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             }
         }
     })();
-    // A quit can arrive before a batched redraw. Commit the latest finalized
-    // transcript before releasing the terminal, too.
-    let result = result.and_then(|exit| {
-        draw_terminal(&mut terminal, driver.app_mut())?;
-        Ok(exit)
-    });
     let pump_result = pump.shutdown();
     match (result, pump_result) {
         (Err(error), _) => Err(error),
@@ -247,24 +245,47 @@ fn sync_process_resource_demand(
     *current = next;
 }
 
-fn handle_mouse(
-    app: &mut App,
-    area: ratatui::layout::Rect,
-    mouse: MouseEvent,
-) -> Option<ScreenSelectionOutcome> {
-    let position = ratatui::layout::Position::new(mouse.column, mouse.row);
-    if !frame::overlay_mouse_contains(app, area, position) {
+enum MouseAction {
+    Selection(Option<ScreenSelectionOutcome>),
+    Command(Option<AppCommand>),
+}
+
+fn handle_mouse(app: &mut App, area: ratatui::layout::Rect, mouse: MouseEvent) -> MouseAction {
+    let mouse_mode = app.mouse_mode();
+    if !mouse_mode.captures_terminal_input() {
         app.clear_mouse_interaction();
-        return None;
+        return MouseAction::Selection(None);
     }
+    let position = ratatui::layout::Position::new(mouse.column, mouse.row);
+    let overlay_contains = frame::overlay_mouse_contains(app, area, position);
     match mouse.kind {
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            let direction = if mouse.kind == MouseEventKind::ScrollUp {
+                TranscriptScrollDirection::Up
+            } else {
+                TranscriptScrollDirection::Down
+            };
+            let command = if overlay_contains {
+                scroll_pointer_item(app, area, mouse.column, mouse.row, direction)
+            } else if app.session_manager_view().is_none()
+                && frame::layout(app, area)
+                    .session
+                    .transcript
+                    .contains(position)
+            {
+                app.navigate_transcript(direction, area)
+            } else {
+                None
+            };
+            return MouseAction::Command(command);
+        }
+        _ if !mouse_mode.enables_pointer_actions() => {
+            app.clear_mouse_interaction();
+            return MouseAction::Selection(None);
+        }
         MouseEventKind::Down(MouseButton::Left) => {
-            app.update_pointer_pressed(frame::input_pointer_target_at(
-                app,
-                area,
-                mouse.column,
-                mouse.row,
-            ));
+            let target = frame::input_pointer_target_at(app, area, mouse.column, mouse.row);
+            app.update_pointer_pressed(target);
             app.begin_screen_selection(position);
         }
         MouseEventKind::Drag(MouseButton::Left) => {
@@ -274,20 +295,12 @@ fn handle_mouse(
         MouseEventKind::Up(MouseButton::Left) => {
             let outcome = app.finish_screen_selection(position, Instant::now());
             app.clear_pointer_pressed();
-            return outcome;
+            return MouseAction::Selection(outcome);
         }
         MouseEventKind::Moved => update_pointer_hover(app, area, mouse.column, mouse.row),
-        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-            let direction = if mouse.kind == MouseEventKind::ScrollUp {
-                TranscriptScrollDirection::Up
-            } else {
-                TranscriptScrollDirection::Down
-            };
-            scroll_pointer_item(app, area, mouse.column, mouse.row, direction);
-        }
         _ => {}
     }
-    None
+    MouseAction::Selection(None)
 }
 
 fn activate_pointer_item(
@@ -298,6 +311,10 @@ fn activate_pointer_item(
 ) -> Option<AppCommand> {
     let target = frame::input_pointer_target_at(app, area, column, row)?;
     match target {
+        InputPointerTarget::TranscriptJumpToBottom => {
+            app.follow_latest_transcript();
+            None
+        }
         InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
             app.activate_input_completion(index)
         }
@@ -389,27 +406,11 @@ fn draw_terminal(
     terminal: &mut terminal::TerminalSession,
     app: &mut App,
 ) -> Result<(), std::io::Error> {
-    if app.mouse_mode() == crate::terminal::mouse::MouseMode::TerminalSelection {
+    if !app.mouse_mode().enables_pointer_actions() {
         app.clear_mouse_interaction();
     }
     terminal.set_mouse_mode(app.mouse_mode())?;
     terminal.set_cursor_color(app.render_context().cursor_color())?;
-    let screen = terminal.screen_area()?;
-    terminal.set_height(frame::desired_height(app, screen))?;
-    let width = screen.width;
-    app.write_transcript_header(width, &mut |header| {
-        terminal.append_history(usize::from(header.area.height), |buffer, area, offset| {
-            for x in 0..area.width.min(header.area.width) {
-                buffer[(area.x + x, area.y)] = header[(x, offset as u16)].clone();
-            }
-        })
-    })?;
-    app.write_transcript_history(&mut |message, context| {
-        let (cell, rows) = crate::thread::transcript::prepare_history(message, width, context);
-        terminal.append_history(rows, |buffer, area, offset| {
-            cell.render(buffer, area, offset)
-        })
-    })?;
     terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
 }
 

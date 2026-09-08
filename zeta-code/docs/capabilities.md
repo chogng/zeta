@@ -13,14 +13,14 @@
 | [会话管理](spec/sessions.md) | 各分组独立展开收起，支持归档与恢复。Archived 默认收起，其余默认展开 | [列表](../tui/src/sessions/manager.rs)、[场景测试](../tui/src/app/session_manager_tests.rs) |
 | [预览与详情](spec/sessions.md) | 预览只读快照并可加载较早历史；Agent 详情持续刷新 | [详情](../tui/src/sessions/details.rs)、[详情测试](../tui/src/sessions/details_tests.rs)、[预览测试](../tui/src/app/session_manager_tests.rs) |
 | [正文与执行结果](spec/transcript.md) | 回复逐步显示，相关执行结果合并展示；可展开和滚动，预览及详情受保留容量限制 | [模型](../tui/src/thread/transcript/model.rs)、[执行](../tui/src/thread/transcript/exec_cell.rs)、[测试](../tui/src/thread/transcript/view/render_tests.rs) |
-| [终端历史](spec/terminal.md#鼠标规则) | Welcome、命令和定稿消息顺序追加，屏幕写满后进入回滚区；仍在生成的内容继续刷新。不同终端及复用器组合尚未全面验证 | [终端会话](../tui/src/terminal/session.rs)、[协议测试](../tui/src/terminal/history_protocol_tests.rs) |
+| [全屏对话与历史](spec/terminal.md#鼠标规则) | Welcome、命令、消息和流式内容由内容区统一绘制；输入框和状态固定在底部，完整历史支持键盘与滚轮浏览。不同终端及复用器组合尚未全面验证 | [终端会话](../tui/src/terminal/session.rs)、[正文测试](../tui/src/thread/transcript/view/render_tests.rs)、[真实场景](../cli/tests/tui_real_scenarios.rs) |
 | [断线恢复](spec/terminal.md#连接恢复) | TUI 返回持久化身份，由 CLI 重建连接。不恢复旧连接中的待执行请求 | [断线处理](../tui/src/app/recovery.rs)、[恢复测试](../tui/src/sessions/active_tests.rs)、[PTY 场景](../cli/tests/tui_real_scenarios.rs) |
 | [状态与资源](spec/status.md) | `/status` 提供 Thread / Processes 两页并只读展示；Config 控制持续内存诊断，状态行按需采样，不自动确认泄漏 | [状态页](../tui/src/status/panel.rs)、[采样](../../zeta-rs/memory-diagnostics/src/process_resources.rs)、[测试](../../zeta-rs/memory-diagnostics/src/process_resources_tests.rs) |
 | [目录管理](spec/directories.md) | `/add-dir` 面板可输入路径并按 Enter 添加；成功刷新并定位权限项，失败保留输入，重复添加保留原权限 | [面板](../tui/src/dirs/panel.rs)、[回归测试](../tui/src/dirs_tests.rs)、[验收](changes/dir-add/verification.md) |
 | [设置与快捷键](spec/commands.md#设置与快捷键) | 支持保存 TUI 设置、主题和应用快捷键；Config 可在 English、日本語、中文、Français 间切换并立即刷新根页面；面板基础键仍固定，凭据使用专用接口 | [配置](../tui/src/config/request.rs)、[本地化文案](../tui/src/nls.rs)、[快捷键](../tui/src/keymap/settings.rs)、[主题测试](../tui/src/theme/resource_tests.rs) |
 | [OpenAI 配置](spec/providers.md) | 官方 Key、ChatGPT 订阅和多个命名连接以 tab 划分；先选中字段再 Enter 编辑，确认后停留当前字段；空目录和发现失败清除旧结果并提示原因。自定义连接可选 Responses / Chat Completions，独立保存 Key，并主动获取模型目录供 `/model` 选择；字段交互已自动化验证，Windows ConPTY 的编辑、取消、保存和模型发现已实测；真实账号未实测 | [面板](../tui/src/config/openai.rs)、[版本与验收](changes/2026-09-08-provider-input-tabs/verification.md) |
 | [ChatGPT 订阅](spec/providers.md#chatgpt-账户) | Providers → OpenAI 可查看账户、设备码登录、取消和退出；有 Codex 时只读复用，无 Codex 时维护登录和续期，缺失时创建兼容文件 | [账户页面与请求](../tui/src/config/subscription.rs)、[初始与后续验收](changes/chatgpt-provider/README.md) |
-| [增强鼠标](spec/terminal.md#鼠标规则) | 仅可见的详情、补全覆盖浮层支持交互和字符选择；占布局高度的区域由终端管理鼠标 | [鼠标](../tui/src/terminal/mouse.rs)、[选择测试](../tui/src/terminal/screen_selection_tests.rs) |
+| [鼠标交互](spec/terminal.md#鼠标规则) | 内容区与详情滚动始终可用；Enhanced TUI 另外提供点击、悬停、拖选和自动复制 | [鼠标](../tui/src/terminal/mouse.rs)、[选择测试](../tui/src/terminal/screen_selection_tests.rs)、[事件循环测试](../tui/src/app/event_loop_tests.rs) |
 | [Welcome 宠物](spec/welcome-pet.md) | 部分实现：静止绘制、动作资源和独立预览可用，Welcome 点击播放尚未接入 | [绘制](../tui/src/app/welcome/pet.rs)、[资源测试](../tui/src/app/welcome_view_tests.rs) |
 
 ## CLI 与扩展入口
@@ -35,7 +35,7 @@
 
 - **正文 Markdown 链接**：尚不可点击，见[正文实现](../tui/src/thread/transcript/view.rs)和[支持边界](../tui/README.md#产品支持边界)。
 - **独立 Agent 运行提示**：[样式中的方案](spec/styles.md#运行提示)尚未接入。
-- **终端兼容性**：部分环境尚未实测，范围与复现方法见[兼容性记录](../tui/README.md#终端历史兼容性验证)。
+- **终端兼容性**：部分环境尚未实测，范围与复现方法见[兼容性记录](../tui/README.md#全屏终端兼容性验证)。
 
 完整 Markdown、桌面同等鼠标操作及自动确认内存泄漏不属于当前已支持能力；持续诊断由 Config 明确开启，Status 只读展示。未列出的命令从[命令键表](spec/commands.md#每个命令面板)继续核对。
 

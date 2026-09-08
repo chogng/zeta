@@ -12,8 +12,6 @@ use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
 use crate::host::clipboard::ClipboardImageFingerprint;
-use zeta_memory_diagnostics::ProcessResourceDemand;
-use zeta_memory_diagnostics::ProcessResourceMetrics;
 use crate::models::Event as ModelEvent;
 use crate::models::ModelSummary;
 use crate::render::test_context;
@@ -55,6 +53,8 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
+use zeta_memory_diagnostics::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceMetrics;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
@@ -767,7 +767,7 @@ fn welcome_header_remains_at_the_start_of_scrollable_history() {
     assert!(!empty.lines().last().unwrap().contains("/work/zeta"));
 
     app.update(ThreadEvent::ProductNotice("Conversation started.".into()));
-    assert!(!render(&app, 80, 20).contains("/work/zeta"));
+    assert!(render(&app, 80, 20).contains("/work/zeta"));
 
     for index in 0..12 {
         app.update(ThreadEvent::FailureReported(format!(
@@ -1040,7 +1040,7 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn read_only_command_panel_does_not_repaint_committed_history() {
+fn read_only_command_panel_keeps_the_visible_transcript_above_it() {
     let mut app = App::new();
     app.update(ThreadEvent::ProductNotice(
         "Conversation remains visible.".into(),
@@ -1049,7 +1049,7 @@ fn read_only_command_panel_does_not_repaint_committed_history() {
 
     let rendered = render(&app, 80, 24);
 
-    assert!(!rendered.contains("Conversation remains visible."));
+    assert!(rendered.contains("Conversation remains visible."));
     assert!(rendered.contains("Help"));
     assert!(rendered.contains("Commands"));
     assert!(rendered.contains("Keys"));
@@ -1152,7 +1152,7 @@ fn theme_candidate_focus_repaints_only_the_command_panel_focus_border() {
 }
 
 #[test]
-fn committed_error_leaves_the_current_frame_and_status_line_only_offers_recovery() {
+fn completed_error_remains_visible_in_the_scrollable_transcript() {
     let mut app = App::new();
     app.update(ThreadEvent::FailureReported(
         "The configured model is unavailable.".into(),
@@ -1161,7 +1161,7 @@ fn committed_error_leaves_the_current_frame_and_status_line_only_offers_recovery
     let rendered = render(&app, 80, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(!rendered.contains("The configured model is unavailable."));
+    assert!(rendered.contains("The configured model is unavailable."));
     assert!(rendered.contains("ask permissions on"));
     assert!(!rows.iter().any(|line| line.trim() == "error"));
     assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
@@ -1171,56 +1171,35 @@ fn committed_error_leaves_the_current_frame_and_status_line_only_offers_recovery
 }
 
 #[test]
-fn submitted_slash_command_moves_out_of_the_current_frame() {
+fn submitted_slash_command_remains_in_the_scrollable_transcript() {
     let mut app = App::new();
     app.insert_text("/status");
 
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let rendered = render(&app, 80, 20);
-    assert!(!rendered.lines().any(|line| line.contains("> /status")));
-    let mut history = Vec::new();
-    app.write_transcript_history(&mut |message, _| {
-        history.push(message.text().into_owned());
-        Ok(())
-    })
-    .unwrap();
-    assert_eq!(history, ["/status"]);
+    assert!(rendered.lines().any(|line| line.contains("> /status")));
 }
 
 #[test]
-fn queued_local_command_waits_for_completion_before_entering_history() {
+fn queued_local_command_updates_the_same_visible_transcript_cell() {
     let mut app = App::new();
     app.insert_text("/theme zeta-code-light");
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
             .is_some()
     );
-    app.write_transcript_history(&mut |_, _| panic!("queued command is not final"))
-        .unwrap();
+    let pending = render(&app, 80, 20);
+    assert_eq!(pending.matches("/theme zeta-code-light").count(), 1);
+    assert!(!pending.contains("Theme set to Light"));
     app.update(ThreadEvent::CommandStarted("/theme zeta-code-light".into()));
     app.update(ThreadEvent::CommandCompleted {
         command: "/theme zeta-code-light".into(),
         result: "Theme set to Light".into(),
     });
-    let mut history = Vec::new();
-    for _ in 0..2 {
-        app.write_transcript_history(&mut |cell, _| {
-            history.push((
-                cell.text().into_owned(),
-                cell.detail().unwrap().into_owned(),
-            ));
-            Ok(())
-        })
-        .unwrap();
-    }
-    assert_eq!(
-        history,
-        [(
-            "/theme zeta-code-light".to_owned(),
-            "Theme set to Light".to_owned()
-        )]
-    );
+    let completed = render(&app, 80, 20);
+    assert_eq!(completed.matches("/theme zeta-code-light").count(), 1);
+    assert_eq!(completed.matches("Theme set to Light").count(), 1);
 }
 
 #[test]
@@ -1237,6 +1216,16 @@ fn scrolled_transcript_shows_jump_control_at_the_bottom_of_the_content_area() {
     );
 
     assert_snapshot!("transcript_jump_to_bottom", render(&app, 50, 16));
+    assert!(matches!(
+        super::bottom_content(&app),
+        super::BottomContent::StatusLine
+    ));
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_mouse_interactions(false);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    let screen = render(&app, 50, 16);
+    assert!(screen.contains("Ctrl+End to jump to bottom ↓"));
+    assert!(!screen.contains("(click)"));
 }
 
 #[test]
@@ -1684,18 +1673,39 @@ fn render(app: &App, width: u16, height: u16) -> String {
 #[test]
 fn openai_panel_renders_connection_choices_and_masked_key_in_terminal_output() {
     let mut app = App::new();
-    app.update(crate::config::Event::EditorOpened(crate::config::config_choices(
-        &crate::test_support::empty_config_snapshot(),
-        &zeta_app_server_protocol::protocol::provider::ProviderListResult { providers: Vec::new() },
-        crate::config::TerminalSettings::default(), StatusLineSettings::default(),
-    )));
-    for key in [KeyCode::Up, KeyCode::Up, KeyCode::Tab, KeyCode::Down, KeyCode::Down, KeyCode::Enter] {
+    app.update(crate::config::Event::EditorOpened(
+        crate::config::config_choices(
+            &crate::test_support::empty_config_snapshot(),
+            &zeta_app_server_protocol::protocol::provider::ProviderListResult {
+                providers: Vec::new(),
+            },
+            crate::config::TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ),
+    ));
+    for key in [
+        KeyCode::Up,
+        KeyCode::Up,
+        KeyCode::Tab,
+        KeyCode::Down,
+        KeyCode::Down,
+        KeyCode::Enter,
+    ] {
         app.handle_key(KeyEvent::new(key, KeyModifiers::NONE));
     }
     for width in [60, 100] {
         let output = render(&app, width, 30);
-        for label in ["Official API key", "Base URL (read-only)", "API key", "ChatGPT subscription", "New custom provider"] {
-            assert!(output.contains(label), "missing {label} at width {width}: {output}");
+        for label in [
+            "Official API key",
+            "Base URL (read-only)",
+            "API key",
+            "ChatGPT subscription",
+            "New custom provider",
+        ] {
+            assert!(
+                output.contains(label),
+                "missing {label} at width {width}: {output}"
+            );
         }
     }
     app.handle_paste("never-display-this-key".into());

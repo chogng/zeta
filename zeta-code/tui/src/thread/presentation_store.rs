@@ -140,10 +140,6 @@ pub(crate) struct ThreadPresentationStore {
 }
 
 impl ThreadPresentationStore {
-    pub(crate) fn active_id(&self) -> &ThreadId {
-        &self.active
-    }
-
     #[cfg(test)]
     pub(crate) fn new(active: ThreadId) -> Self {
         Self::with_input_catalog(active, ChatInputCatalog::default())
