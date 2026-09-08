@@ -8,7 +8,6 @@ use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::CommandPanel;
-use crate::app::command_panel::CommandPanelPointerTarget;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageAvailability;
@@ -217,7 +216,7 @@ fn status_command_panel_uses_the_shared_title_and_close_hint() {
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
 
     terminal
-        .draw(|frame| panel.draw(frame, frame.area(), None, None, test_context()))
+        .draw(|frame| panel.draw(frame, frame.area(), test_context()))
         .unwrap();
 
     let buffer = terminal.backend().buffer();
@@ -252,7 +251,7 @@ fn command_panel_layout_keeps_wrapped_tabs_between_title_and_body() {
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
 
     terminal
-        .draw(|frame| panel.draw(frame, area, None, None, test_context()))
+        .draw(|frame| panel.draw(frame, area, test_context()))
         .unwrap();
 
     let buffer = terminal.backend().buffer();
@@ -269,14 +268,6 @@ fn command_panel_layout_keeps_wrapped_tabs_between_title_and_body() {
     assert!(rows[2].contains("First tab"));
     assert!(rows[3].contains("Second tab"));
     assert!(rows[4].contains("First item"));
-    assert_eq!(
-        panel.pointer_target_at(area, 3, 3),
-        Some(CommandPanelPointerTarget::Tab(1))
-    );
-    assert_eq!(
-        panel.pointer_target_at(area, 3, 4),
-        Some(CommandPanelPointerTarget::Item(0))
-    );
 }
 
 #[test]

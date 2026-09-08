@@ -101,16 +101,6 @@ impl DirPanel {
         }
     }
 
-    pub(crate) fn activate_visible_item(
-        &mut self,
-        index: usize,
-    ) -> Option<ListSelectionOutcome<DirSelectionAction>> {
-        if self.pending.is_some() {
-            return Some(ListSelectionOutcome::Consumed);
-        }
-        self.selection.activate_visible_item(index)
-    }
-
     pub(crate) fn finish_add(&mut self, request_id: u64, result: Result<AddedDir, String>) {
         if self.pending != Some(request_id) {
             return;

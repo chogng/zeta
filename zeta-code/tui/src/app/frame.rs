@@ -127,7 +127,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     if let Some(approval) = app.approval_view() {
         approval::draw(frame, areas.session.composer, approval, None, None, context);
     } else if let Some(panel) = app.command_panel() {
-        panel.draw(frame, areas.session.composer, None, None, context);
+        panel.draw(frame, areas.session.composer, context);
     } else {
         ChatComposerSurface {
             view: &input_view,

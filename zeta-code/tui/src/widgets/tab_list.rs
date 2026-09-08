@@ -125,31 +125,6 @@ impl<T> TabListState<T> {
     }
 }
 
-impl<T: TabListItem> TabListState<T> {
-    pub(crate) fn index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
-        if area.width == 0
-            || area.height == 0
-            || column < area.x
-            || column >= area.right()
-            || row < area.y
-            || row >= area.bottom()
-        {
-            return None;
-        }
-        let row = usize::from(row - area.y);
-        let column = usize::from(column - area.x);
-        tab_positions(&self.tabs, area.width)
-            .into_iter()
-            .enumerate()
-            .find_map(|(index, position)| {
-                (position.row == row
-                    && column >= position.start
-                    && column < position.start.saturating_add(position.width))
-                .then_some(index)
-            })
-    }
-}
-
 pub(crate) fn desired_height<T: TabListItem>(tabs: &[T], width: u16) -> u16 {
     tab_positions(tabs, width)
         .last()

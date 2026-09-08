@@ -55,13 +55,6 @@ const TITLE_BODY_GAP_ROWS: u16 = 1;
 const HEADER_ROWS: u16 = TITLE_BAR_ROWS + TITLE_BODY_GAP_ROWS;
 const CONTENT_HORIZONTAL_MARGIN: u16 = 2;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum CommandPanelPointerTarget {
-    Tab(usize),
-    Search,
-    Item(usize),
-}
-
 #[derive(Clone, Copy, Debug)]
 enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
@@ -308,25 +301,6 @@ impl CommandPanel {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn key_capture(&self) -> Option<&KeyCapture> {
-        match self {
-            Self::Keymap(editor) => editor.capture(),
-            Self::Help(_)
-            | Self::Dirs(_)
-            | Self::Config(_)
-            | Self::Connectors(_)
-            | Self::Mcp(_)
-            | Self::Model(_)
-            | Self::Rewind(_)
-            | Self::Sessions(_)
-            | Self::Skills(_)
-            | Self::Startup(_)
-            | Self::Status(_)
-            | Self::StatusLine(_)
-            | Self::Theme(_) => None,
-        }
-    }
     fn body(&self) -> CommandPanelBody<'_> {
         match self {
             Self::Help(selection) => CommandPanelBody::Selection(selection.state()),
@@ -365,8 +339,6 @@ impl CommandPanel {
         &self,
         frame: &mut Frame<'_>,
         area: Rect,
-        hovered: Option<CommandPanelPointerTarget>,
-        pressed: Option<CommandPanelPointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
         let body = self.body();
@@ -386,26 +358,8 @@ impl CommandPanel {
                 ])),
             area,
         );
-        body.draw_tabs(
-            frame,
-            layout.tabs,
-            tab_index(hovered),
-            tab_index(pressed),
-            context,
-        );
-        body.draw_body(frame, layout.body, hovered, pressed, context);
-    }
-
-    pub(crate) fn pointer_target_at(
-        &self,
-        area: Rect,
-        column: u16,
-        row: u16,
-    ) -> Option<CommandPanelPointerTarget> {
-        let body = self.body();
-        let content_width = CommandPanelLayout::content_width(area.width);
-        let layout = CommandPanelLayout::new(area, body.tab_rows(content_width));
-        body.pointer_target_at(layout, column, row)
+        body.draw_tabs(frame, layout.tabs, None, None, context);
+        body.draw_body(frame, layout.body, context);
     }
 
     pub(crate) fn key_hints(&self) -> &str {
@@ -424,47 +378,6 @@ impl CommandPanel {
             Self::Status(content) => content.key_hints(),
             Self::StatusLine(content) => content.key_hints(),
             Self::Theme(content) => content.key_hints(),
-        }
-    }
-
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<CommandPanelOutcome> {
-        match self {
-            Self::Help(content) => content.activate_visible_item(index).map(map_read_only),
-            Self::Dirs(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Dirs)),
-            Self::Config(content) => content
-                .activate_visible_item(index)
-                .map(CommandPanelOutcome::Config),
-            Self::Connectors(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Connectors)),
-            Self::Keymap(content) => content
-                .activate_visible_item(index)
-                .map(CommandPanelOutcome::Keymap),
-            Self::Mcp(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Mcp)),
-            Self::Model(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Model)),
-            Self::Rewind(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Rewind)),
-            Self::Sessions(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Sessions)),
-            Self::Skills(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::Skills)),
-            Self::Startup(content) => content.activate_visible_item(index).map(map_read_only),
-            Self::Status(_) => None,
-            Self::StatusLine(content) => content
-                .activate_visible_item(index)
-                .map(|outcome| map_selection(outcome, CommandPanelOutcome::StatusLine)),
-            Self::Theme(content) => content
-                .activate_visible_item(index)
-                .map(CommandPanelOutcome::Theme),
         }
     }
 
@@ -654,74 +567,16 @@ impl<'a> CommandPanelBody<'a> {
         self,
         frame: &mut Frame<'_>,
         area: Rect,
-        hovered: Option<CommandPanelPointerTarget>,
-        pressed: Option<CommandPanelPointerTarget>,
         context: crate::render::RenderContext<'_>,
     ) {
         match self {
             Self::Selection(selection) => list_selection::draw_body_with_pointer(
-                frame,
-                area,
-                selection,
-                hovered == Some(CommandPanelPointerTarget::Search),
-                pressed == Some(CommandPanelPointerTarget::Search),
-                item_index(hovered),
-                item_index(pressed),
-                context,
+                frame, area, selection, false, false, None, None, context,
             ),
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
             Self::Status(panel) => panel.draw_body(frame, area, context),
             Self::OpenAi(panel) => panel.draw_body(frame, area, context),
         }
-    }
-
-    fn pointer_target_at(
-        self,
-        layout: CommandPanelLayout,
-        column: u16,
-        row: u16,
-    ) -> Option<CommandPanelPointerTarget> {
-        match self {
-            Self::Selection(selection) => selection
-                .tab_index_in(layout.tabs, column, row)
-                .map(CommandPanelPointerTarget::Tab)
-                .or_else(|| {
-                    selection
-                        .search_contains_in(layout.body, column, row)
-                        .then_some(CommandPanelPointerTarget::Search)
-                })
-                .or_else(|| {
-                    selection
-                        .item_index_in(layout.body, column, row)
-                        .map(CommandPanelPointerTarget::Item)
-                }),
-            Self::OpenAi(panel) => panel
-                .tab_index_in(layout.tabs, column, row)
-                .map(CommandPanelPointerTarget::Tab)
-                .or_else(|| {
-                    panel
-                        .item_index_in(layout.body, column, row)
-                        .map(CommandPanelPointerTarget::Item)
-                }),
-            Self::Status(panel) => panel
-                .tab_index_in(layout.tabs, column, row)
-                .map(CommandPanelPointerTarget::Tab),
-            Self::Prompt(_) | Self::KeyCapture(_) => None,
-        }
-    }
-}
-
-fn tab_index(target: Option<CommandPanelPointerTarget>) -> Option<usize> {
-    match target {
-        Some(CommandPanelPointerTarget::Tab(index)) => Some(index),
-        Some(CommandPanelPointerTarget::Search | CommandPanelPointerTarget::Item(_)) | None => None,
-    }
-}
-
-fn item_index(target: Option<CommandPanelPointerTarget>) -> Option<usize> {
-    match target {
-        Some(CommandPanelPointerTarget::Item(index)) => Some(index),
-        Some(CommandPanelPointerTarget::Tab(_) | CommandPanelPointerTarget::Search) | None => None,
     }
 }

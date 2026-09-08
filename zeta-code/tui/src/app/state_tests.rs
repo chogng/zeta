@@ -15,10 +15,10 @@ use crate::keymap::Command as KeymapCommand;
 use crate::keymap::Event as KeymapEvent;
 use crate::keymap::KeymapEditIntent;
 use crate::keymap::KeymapEditKind;
-use crate::nls::Language;
 use crate::keymap::KeymapEditorUpdate;
 use crate::keymap::keymap_choices;
 use crate::keymap::settings_from_tui as keymap_settings_from_tui;
+use crate::nls::Language;
 use crate::render::RenderTheme;
 use crate::sessions::Command as SessionCommand;
 use crate::sessions::Event as SessionEvent;
@@ -269,18 +269,19 @@ fn selected_render_theme_is_read_through_the_frame_context() {
 }
 
 #[test]
-fn feature_activation_uses_the_feature_action_mapping() {
+fn keyboard_activation_uses_the_feature_action_mapping() {
     let mut app = App::new();
     app.update(ThemeEvent::PickerOpened(theme_choices(&theme_catalog())));
 
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
-        app.activate_visible_item(1),
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Theme(ThemeCommand::OpenCustomPicker))
     );
     assert_eq!(
         app.list_selection().unwrap().selected_visible_index(),
-        Some(0)
+        Some(1)
     );
 }
 

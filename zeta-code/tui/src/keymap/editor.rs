@@ -105,10 +105,6 @@ impl KeymapEditor {
         self.apply_selection_outcome(outcome)
     }
 
-    #[cfg(test)]
-    pub(crate) fn capture(&self) -> Option<&KeyCapture> {
-        self.capture.as_ref().map(|capture| &capture.view)
-    }
     pub(crate) fn page(&self) -> KeymapEditorPage<'_> {
         match &self.capture {
             Some(capture) => KeymapEditorPage::Capture(&capture.view),
@@ -148,14 +144,6 @@ impl KeymapEditor {
                 .expect("a keymap editor always has a selection page")
                 .state()
         })
-    }
-
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<KeymapEditorOutcome> {
-        if self.capture.is_some() {
-            return None;
-        }
-        let outcome = self.pages.last_mut()?.activate_visible_item(index)?;
-        Some(self.apply_selection_outcome(outcome))
     }
 
     fn apply_selection_outcome(

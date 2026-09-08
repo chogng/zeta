@@ -126,16 +126,6 @@ impl Approval {
         }
     }
 
-    pub(crate) fn activate(&mut self, index: usize) -> Option<ApprovalOutcome> {
-        let decision = decision_at(index)?;
-        if self.submitting {
-            return None;
-        }
-        self.submitting = true;
-        self.error = None;
-        Some(ApprovalOutcome::Respond(decision))
-    }
-
     pub(crate) fn submission_failed(&mut self, error: String) {
         self.submitting = false;
         self.error = Some(error);
@@ -171,14 +161,6 @@ fn capability_kind(kind: ActionApprovalCapabilityKind) -> &'static str {
         ActionApprovalCapabilityKind::ExternalMutation => "External mutation",
         ActionApprovalCapabilityKind::SystemConfiguration => "System configuration",
         ActionApprovalCapabilityKind::UserInterface => "User interface",
-    }
-}
-
-fn decision_at(index: usize) -> Option<ApprovalDecision> {
-    match index {
-        0 => Some(ApprovalDecision::ApproveOnce),
-        1 => Some(ApprovalDecision::Decline),
-        _ => None,
     }
 }
 

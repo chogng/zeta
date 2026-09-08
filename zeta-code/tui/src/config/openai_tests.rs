@@ -217,7 +217,9 @@ fn existing_name_confirmation_saves_then_immediately_edits_the_next_field() {
     key(&mut panel, KeyCode::Enter);
     let created = request(key(&mut panel, KeyCode::Enter));
     success(&mut panel, &created);
-    panel.activate(0);
+    for _ in 0..panel.form().unwrap().focus {
+        key(&mut panel, KeyCode::BackTab);
+    }
     panel.handle_paste(" renamed".into());
     let renamed = request(key(&mut panel, KeyCode::Enter));
     assert_eq!(panel.form().unwrap().focus, 0);

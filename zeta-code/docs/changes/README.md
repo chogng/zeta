@@ -8,6 +8,7 @@
 
 | 记录日期 | 工作 | 状态与证据边界 | 对应现行规格 | 对应设计 |
 | --- | --- | --- | --- | --- |
+| 2026-09-07 | [清理无入口的鼠标接口](2026-09-07-unused-pointer-apis/verification.md) | 已完成；普通构建无警告，701 项测试通过、1 项忽略 | [终端鼠标规则](../spec/terminal.md#鼠标规则) | [TUI](../design/tui.md) |
 | 2026-09-08 | [内存诊断配置开关](2026-09-08-memory-diagnostics-config/README.md) | Config 独占启停、Status 只读的自动化通过；Unix PTY 待实测 | [内存诊断](../spec/memory-diagnostics.md) | [采样职责](../design/process-resources.md) |
 | 2026-09-07 | [界面语言设置](2026-09-07-interface-language/verification.md) | 已完成本次范围；配置、持久化、生产检查和真实 PTY 场景通过 | [命令面板与设置](../spec/commands.md#设置与快捷键) | [TUI](../design/tui.md) |
 | 2026-09-08 | [文档整理](docs-organization.md) | 已完成；链接、格式、导航与历史证据检查通过 | 功能总览、规格拆分与导航 | CLI、TUI、采样职责说明 |

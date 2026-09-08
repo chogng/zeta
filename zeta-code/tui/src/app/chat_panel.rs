@@ -190,10 +190,6 @@ impl ChatPanel {
         self.command.as_ref().and_then(CommandPanel::list_selection)
     }
 
-    pub(crate) fn activate_command_item(&mut self, index: usize) -> Option<CommandPanelOutcome> {
-        self.command.as_mut()?.activate_visible_item(index)
-    }
-
     pub(crate) fn replace_dirs(&mut self, choices: DirChoices) {
         if let Some(command) = self.command.as_mut() {
             command.replace_dirs(choices);

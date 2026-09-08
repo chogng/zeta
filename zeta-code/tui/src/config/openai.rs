@@ -619,27 +619,6 @@ impl Panel {
             }
         }
     }
-    pub(crate) fn activate(&mut self, index: usize) -> ConfigEditorOutcome {
-        if self.tabs.active_index() == 1 {
-            return match self.subscription.activate_visible_item(index) {
-                Some(ListSelectionOutcome::Activate(action)) => ConfigEditorOutcome::Action(action),
-                _ => ConfigEditorOutcome::Consumed,
-            };
-        }
-        if self.pending.is_some() {
-            return ConfigEditorOutcome::Consumed;
-        }
-        self.focus = PanelFocus::Content;
-        if let Some(form) = self.form_mut() {
-            if form.editable().contains(&index) {
-                form.focus(index);
-                if index == 4 {
-                    return self.confirm();
-                }
-            }
-        }
-        ConfigEditorOutcome::Consumed
-    }
     fn confirm(&mut self) -> ConfigEditorOutcome {
         let form = self.form_mut().expect("API tab owns a form");
         let revision = form.revision;
@@ -791,9 +770,6 @@ impl Panel {
             },
         )
     }
-    pub(crate) fn tab_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
-        self.tabs.index_at(area, column, row)
-    }
     pub(crate) fn draw_tabs(
         &self,
         frame: &mut Frame<'_>,
@@ -839,17 +815,6 @@ impl Panel {
                 result
             })
             .collect()
-    }
-    pub(crate) fn item_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
-        if self.tabs.active_index() == 1 {
-            return self.subscription.state().item_index_in(area, column, row);
-        }
-        if column < area.x || column >= area.right() || row < area.y || row >= area.bottom() {
-            return None;
-        }
-        self.visible_fields(area.height)
-            .into_iter()
-            .find_map(|(index, y, h)| (row - area.y >= y && row - area.y < y + h).then_some(index))
     }
     pub(crate) fn draw_body(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
         let Some(form) = self.form() else {

@@ -181,69 +181,11 @@ pub(crate) fn draw_body_with_pointer(
 
 impl ListSelectionState {
     fn viewport(&self, area: Rect) -> ListViewport {
-        match self.scroll_start {
-            Some(start) => ListViewport::at_start(area, self.visible_items().len(), start),
-            None => ListViewport::new(
-                area,
-                self.visible_items().len(),
-                self.selected_visible_index(),
-            ),
-        }
-    }
-
-    pub(crate) fn scroll(
-        &mut self,
-        body: Rect,
-        navigation: crate::widgets::navigation::Navigation,
-        position: ratatui::layout::Position,
-    ) {
-        let area = body_areas(body, self)[1];
-        if !area.contains(position) || area.is_empty() {
-            return;
-        }
-        let viewport = self.viewport(area);
-        let count = self.visible_items().len();
-        if count <= usize::from(area.height) {
-            return;
-        }
-        let last = count.saturating_sub(usize::from(area.height.saturating_sub(1).max(1)));
-        self.scroll_start = Some(navigation.offset(viewport.start, last, 3));
-    }
-    pub(crate) fn tab_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
-        if !self.show_tabs() {
-            return None;
-        }
-        self.tab_list().index_at(area, column, row)
-    }
-
-    pub(crate) fn item_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
-        if area.is_empty() {
-            return None;
-        }
-        let areas = body_areas(area, self);
-        let viewport = self.viewport(areas[1]);
-        let list_area = with_state_column(viewport.items);
-        if column < list_area.x
-            || column >= list_area.right()
-            || row < list_area.y
-            || row >= list_area.bottom()
-        {
-            return None;
-        }
-        let index = viewport
-            .start
-            .saturating_add(usize::from(row - list_area.y));
-        (index < viewport.end).then_some(index)
-    }
-
-    pub(crate) fn search_contains_in(&self, area: Rect, column: u16, row: u16) -> bool {
-        if self.search().is_none() {
-            return false;
-        }
-        if area.is_empty() {
-            return false;
-        }
-        body_areas(area, self)[0].contains(ratatui::layout::Position::new(column, row))
+        ListViewport::new(
+            area,
+            self.visible_items().len(),
+            self.selected_visible_index(),
+        )
     }
 }
 
@@ -256,29 +198,6 @@ struct ListViewport {
 }
 
 impl ListViewport {
-    fn at_start(area: Rect, count: usize, start: usize) -> Self {
-        if count <= usize::from(area.height) {
-            return Self::new(area, count, None);
-        }
-        let last = count.saturating_sub(usize::from(area.height.saturating_sub(1).max(1)));
-        let start = start.min(last);
-        let above_rows = u16::from(start > 0 && area.height > 1);
-        let available = area.height.saturating_sub(above_rows);
-        let below_rows = u16::from(count - start > usize::from(available) && available > 1);
-        let item_rows = usize::from(available.saturating_sub(below_rows)).min(count - start) as u16;
-        Self {
-            start,
-            end: start + usize::from(item_rows),
-            items: Rect::new(area.x, area.y + above_rows, area.width, item_rows),
-            above: Rect::new(area.x, area.y, area.width, above_rows),
-            below: Rect::new(
-                area.x,
-                area.y + above_rows + item_rows,
-                area.width,
-                below_rows,
-            ),
-        }
-    }
     fn new(area: Rect, count: usize, selected: Option<usize>) -> Self {
         let height = usize::from(area.height);
         let selected = selected.unwrap_or(0).min(count.saturating_sub(1));

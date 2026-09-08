@@ -14,7 +14,6 @@ use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::navigation::Navigation;
 use crate::widgets::tab_list;
-use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
 use crossterm::event::KeyEvent;
@@ -138,15 +137,6 @@ impl StatusPanel {
         *scroll = navigation
             .offset(usize::from(*scroll), last, usize::from(body.height))
             .min(usize::from(u16::MAX)) as u16;
-    }
-
-    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        let outcome = self.tabs.select(index);
-        !matches!(outcome, TabListInputOutcome::Unhandled)
-    }
-
-    pub(crate) fn tab_index_in(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
-        self.tabs.index_at(area, column, row)
     }
 
     pub(crate) fn draw_tabs(

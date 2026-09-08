@@ -98,16 +98,4 @@ impl<A: Clone> ListSelection<A> {
             ListSelectionInputOutcome::FocusPrevious => ListSelectionOutcome::FocusPrevious,
         }
     }
-
-    pub(crate) fn activate_visible_item(
-        &mut self,
-        index: usize,
-    ) -> Option<ListSelectionOutcome<A>> {
-        let item_id = self.state.activate_visible_item(index)?;
-        self.actions
-            .get(&item_id)
-            .cloned()
-            .map(ListSelectionOutcome::Activate)
-            .or(Some(ListSelectionOutcome::Consumed))
-    }
 }

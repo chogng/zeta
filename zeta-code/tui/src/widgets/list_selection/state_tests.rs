@@ -10,7 +10,6 @@ use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use ratatui::layout::Rect;
 
 fn state() -> ListSelectionState {
     ListSelectionState::new(
@@ -46,7 +45,7 @@ fn active_tab_label(state: &ListSelectionState) -> &str {
 }
 
 #[test]
-fn actionable_rows_expose_pointer_hit_testing_and_activation() {
+fn keyboard_activation_returns_the_selected_action() {
     let first_id = ListSelectionItemId::new("first");
     let second_id = ListSelectionItemId::new("second");
     let mut state = ListSelectionState::new(
@@ -62,13 +61,13 @@ fn actionable_rows_expose_pointer_hit_testing_and_activation() {
         )
         .without_tab_bar(),
     );
-    let area = Rect::new(2, 0, 76, 10);
 
-    assert_eq!(state.item_index_in(area, 0, 0), Some(0));
-    assert_eq!(state.item_index_in(area, 2, 1), Some(1));
-    assert_eq!(state.item_index_in(area, 78, 1), None);
-    assert_eq!(state.activate_visible_item(1), Some(second_id));
-    assert_eq!(state.selected_visible_index(), Some(0));
+    state.handle_key(key(KeyCode::Down));
+    assert_eq!(
+        state.handle_key(key(KeyCode::Enter)),
+        ListSelectionInputOutcome::Activate(second_id)
+    );
+    assert_eq!(state.selected_visible_index(), Some(1));
 }
 
 #[test]
@@ -82,27 +81,16 @@ fn read_only_rows_cannot_be_activated() {
     ));
 
     assert!(!state.select_visible_item(0));
-    assert_eq!(state.activate_visible_item(0), None);
+    assert_eq!(
+        state.handle_key(key(KeyCode::Enter)),
+        ListSelectionInputOutcome::Consumed
+    );
 }
 
 #[test]
-fn mouse_click_switches_tabs() {
+fn explicit_search_focus_routes_text_to_the_query() {
     let mut state = state();
-    let area = Rect::new(2, 0, 76, 10);
 
-    assert_eq!(state.tab_index_in(area, 14, 0), Some(1));
-    assert!(state.select_tab(1));
-    assert_eq!(active_tab_label(&state), "Keys");
-    assert_eq!(state.selected_visible_index(), Some(0));
-}
-
-#[test]
-fn search_hit_testing_and_explicit_focus_share_the_search_geometry() {
-    let mut state = state();
-    let area = Rect::new(2, 1, 76, 9);
-
-    assert!(state.search_contains_in(area, 2, 1));
-    assert!(!state.search_contains_in(area, 1, 1));
     assert!(state.focus_search());
     state.handle_key(key(KeyCode::Char('m')));
 

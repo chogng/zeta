@@ -1,9 +1,7 @@
 use super::ChatHistoryPointerState;
-use super::ChatHistoryPointerTarget;
 use super::ChatHistoryView;
 use super::first_scroll_target;
 use super::message_lines;
-use super::pointer_target_at;
 use super::scroll_target;
 use crate::render::Renderable;
 use crate::render::test_context;
@@ -282,34 +280,7 @@ fn multiline_command_output_keeps_detail_prefix_alignment() {
 }
 
 #[test]
-fn pointer_rows_follow_the_same_multiline_height_as_rendering() {
-    let messages = vec![
-        CellView::plain(MessageRole::Agent, "first\nsecond".into()),
-        CellView::plain(
-            MessageRole::Reasoning,
-            "first thought\nsecond thought".into(),
-        )
-        .with_cell_id("reasoning")
-        .with_presentation(false, false),
-    ];
-
-    assert_eq!(
-        pointer_target_at(
-            Rect::new(0, 0, 30, 10),
-            0,
-            &messages,
-            &ChatHistoryScroll::default(),
-            &ChatHistoryRenderCache::default(),
-            test_context(),
-            0,
-            3,
-        ),
-        Some(ChatHistoryPointerTarget::Toggle("reasoning".into()))
-    );
-}
-
-#[test]
-fn wrapped_details_link_is_clickable_on_its_first_visible_row() {
+fn wrapped_details_link_remains_visible_in_a_narrow_terminal() {
     let messages = vec![
         CellView::plain(MessageRole::Reasoning, "line\n".repeat(14))
             .with_cell_id("reasoning")
@@ -330,7 +301,7 @@ fn wrapped_details_link_is_clickable_on_its_first_visible_row() {
     terminal
         .draw(|frame| view.render(frame, area, test_context()))
         .unwrap();
-    let row = (0..area.height)
+    (0..area.height)
         .find(|&row| {
             (0..area.width)
                 .map(|column| terminal.backend().buffer()[(column, row)].symbol())
@@ -338,10 +309,6 @@ fn wrapped_details_link_is_clickable_on_its_first_visible_row() {
                 .starts_with("   view")
         })
         .expect("the details link is visible");
-    assert_eq!(
-        pointer_target_at(area, 0, &messages, &scroll, &cache, test_context(), 0, row),
-        Some(ChatHistoryPointerTarget::Details("reasoning".into()))
-    );
 }
 
 #[test]
@@ -451,19 +418,6 @@ fn scrolled_transcript_draws_a_themed_jump_control_inside_its_bottom_row() {
     assert_eq!(
         buffer[(start, area.bottom() - 1)].bg,
         test_context().transcript_jump_background()
-    );
-    assert_eq!(
-        pointer_target_at(
-            area,
-            0,
-            &messages,
-            &scroll,
-            &render_cache,
-            test_context(),
-            start,
-            area.bottom() - 1,
-        ),
-        Some(ChatHistoryPointerTarget::JumpToBottom)
     );
 }
 
@@ -611,20 +565,20 @@ fn jump_control_is_hidden_while_following_the_latest_content() {
     let scroll = ChatHistoryScroll::default();
     let render_cache = ChatHistoryRenderCache::default();
     let area = Rect::new(0, 0, 40, 6);
-
-    assert_eq!(
-        pointer_target_at(
-            area,
-            0,
-            &messages,
-            &scroll,
-            &render_cache,
-            test_context(),
-            8,
-            area.bottom() - 1,
-        ),
-        None
-    );
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| {
+            ChatHistoryView {
+                header: None,
+                messages: &messages,
+                scroll: &scroll,
+                render_cache: &render_cache,
+                pointer: Default::default(),
+            }
+            .render(frame, area, test_context())
+        })
+        .unwrap();
+    assert!(!terminal.backend().to_string().contains("jump to bottom"));
 }
 
 fn render_first_row(

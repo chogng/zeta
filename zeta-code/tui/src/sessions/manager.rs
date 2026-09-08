@@ -5,7 +5,6 @@ use crate::render::RenderContext;
 use crate::render::interaction_style;
 use crate::render::selection_marker;
 use ratatui::Frame;
-use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
@@ -314,26 +313,6 @@ pub(crate) struct SessionManagerView<'a> {
 pub(crate) enum SessionManagerPointerTarget {
     Session(SessionId),
     Group(SessionGroup),
-}
-
-pub(crate) fn pointer_target_at(
-    area: Rect,
-    view: SessionManagerView<'_>,
-    column: u16,
-    row: u16,
-) -> Option<SessionManagerPointerTarget> {
-    if !area.contains(Position::new(column, row)) {
-        return None;
-    }
-    let rows = manager_rows(view.sessions, view.pinned, view.collapsed);
-    let selected_row = rows
-        .iter()
-        .position(|row| Some(&row.target()) == view.selected);
-    let viewport = manager_viewport(rows.len(), selected_row, usize::from(area.height));
-    let line = usize::from(row.saturating_sub(area.y));
-    let top_notice = usize::from(viewport.start > 0);
-    let index = viewport.start.saturating_add(line.checked_sub(top_notice)?);
-    (index < viewport.end).then(|| rows[index].target())
 }
 
 pub(crate) fn draw_manager(

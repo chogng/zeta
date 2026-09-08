@@ -9,7 +9,6 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TestTab(&'static str);
@@ -81,27 +80,6 @@ fn focused_tab_list_owns_switching_and_content_entry() {
         tabs.handle_focused_key(key(KeyCode::Up)),
         FocusedTabListInputOutcome::Unhandled
     );
-}
-
-#[test]
-fn mouse_hit_testing_selects_tabs_and_ignores_the_gap() {
-    let mut tabs = TabListState::new(vec![TestTab("One"), TestTab("Two")]);
-    let area = Rect::new(4, 7, 20, 1);
-
-    assert_eq!(tabs.index_at(area, 4, 7), Some(0));
-    assert_eq!(tabs.index_at(area, 9, 7), None);
-    let second = tabs.index_at(area, 11, 7).unwrap();
-    assert_eq!(tabs.select(second), TabListInputOutcome::ActiveChanged);
-    assert_eq!(tabs.active_index(), 1);
-    assert_eq!(tabs.select(second), TabListInputOutcome::Consumed);
-}
-
-#[test]
-fn mouse_hit_testing_follows_wrapped_tabs() {
-    let tabs = TabListState::new(vec![TestTab("One"), TestTab("Two")]);
-    let area = Rect::new(0, 0, 10, 2);
-
-    assert_eq!(tabs.index_at(area, 0, 1), Some(1));
 }
 
 #[test]

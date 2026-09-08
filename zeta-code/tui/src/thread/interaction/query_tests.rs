@@ -11,8 +11,11 @@ use crossterm::event::KeyModifiers;
 fn fixed_answers_advance_pages_and_complete_once() {
     let mut query = Query::new(vec![question("one"), question("two")]).unwrap();
 
-    assert_eq!(query.activate(0), Some(QueryOutcome::Consumed));
-    let outcome = query.activate(0).unwrap();
+    assert_eq!(
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        QueryOutcome::Consumed
+    );
+    let outcome = query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let QueryOutcome::Completed(answers) = outcome else {
         panic!("expected completed query");
@@ -20,7 +23,10 @@ fn fixed_answers_advance_pages_and_complete_once() {
     assert_eq!(answers[0].question_id, "one");
     assert_eq!(answers[1].question_id, "two");
     assert_eq!(answers[0].value, "Yes");
-    assert!(query.activate(0).is_none());
+    assert_eq!(
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        QueryOutcome::Consumed
+    );
 }
 
 #[test]
@@ -37,7 +43,11 @@ fn custom_answer_keeps_the_question_until_text_is_submitted() {
     }])
     .unwrap();
 
-    assert_eq!(query.activate(1), Some(QueryOutcome::Consumed));
+    query.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        QueryOutcome::Consumed
+    );
     assert_eq!(query.view().current, 0);
     for character in "jk/i p".chars() {
         assert_eq!(
@@ -64,14 +74,17 @@ fn paste_is_owned_by_the_custom_answer_editor() {
     }])
     .unwrap();
 
-    assert_eq!(query.activate(0), Some(QueryOutcome::Consumed));
+    assert_eq!(
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        QueryOutcome::Consumed
+    );
     query.handle_paste("first\r\nsecond".into());
 
     assert_eq!(query.view().custom_answer, Some("first second"));
 }
 
 #[test]
-fn pointer_activation_answers_its_exact_target() {
+fn keyboard_activation_answers_the_selected_choice() {
     let mut query = Query::new(vec![QueryQuestion {
         id: "choice".into(),
         header: "Choose".into(),
@@ -90,8 +103,11 @@ fn pointer_activation_answers_its_exact_target() {
     }])
     .unwrap();
 
-    let Some(QueryOutcome::Completed(answers)) = query.activate(1) else {
-        panic!("expected the pointer target to complete the query");
+    query.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let QueryOutcome::Completed(answers) =
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected the selected choice to complete the query");
     };
     assert_eq!(answers[0].value, "Second");
 }

@@ -15,40 +15,7 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 
 #[test]
-fn mouse_scroll_clamps_and_keyboard_navigation_reveals_the_current_item() {
-    use crate::widgets::navigation::Navigation;
-    use ratatui::layout::Position;
-    use ratatui::layout::Rect;
-    let mut view = ListSelectionState::new(
-        ListSelectionModel::new(
-            "Items",
-            vec![ListSelectionGroup::new(
-                "All",
-                (0..30)
-                    .map(|index| ListSelectionItem::new(format!("Item {index}")))
-                    .collect(),
-            )],
-        )
-        .without_tab_bar(),
-    );
-    let area = Rect::new(2, 1, 38, 8);
-    for _ in 0..40 {
-        view.scroll(area, Navigation::Next, Position::new(2, 2));
-    }
-    assert_eq!(view.selected_visible_index(), Some(0));
-    assert_eq!(view.item_index_in(area, 2, area.bottom() - 1), Some(29));
-    assert_eq!(view.item_index_in(Rect::new(2, 1, 38, 30), 2, 1), Some(0));
-    view.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(view.selected_visible_index(), Some(1));
-    assert_eq!(view.item_index_in(area, 2, 1), Some(0));
-    for _ in 0..40 {
-        view.scroll(area, Navigation::Previous, Position::new(2, 2));
-    }
-    assert_eq!(view.item_index_in(area, 2, 1), Some(0));
-}
-
-#[test]
-fn overflowing_lists_keep_selection_visible_and_notices_out_of_hit_testing() {
+fn overflowing_lists_keep_selection_visible_and_notices_inside_the_area() {
     use ratatui::layout::Rect;
     let mut view = ListSelectionState::new(
         ListSelectionModel::new(
@@ -76,13 +43,6 @@ fn overflowing_lists_keep_selection_visible_and_notices_out_of_hit_testing() {
             let viewport = super::ListViewport::new(area, 30, Some(selected));
             assert!(viewport.start <= selected && selected < viewport.end);
             assert!(viewport.below.bottom() <= area.bottom());
-            let row = viewport.items.y + (selected - viewport.start) as u16;
-            assert_eq!(view.item_index_in(area, 2, row), Some(selected));
-            for notice in [viewport.above, viewport.below] {
-                if notice.height > 0 {
-                    assert_eq!(view.item_index_in(area, 2, notice.y), None);
-                }
-            }
         }
     }
     view.select_visible_item(14);

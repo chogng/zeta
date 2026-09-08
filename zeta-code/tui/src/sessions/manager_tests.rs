@@ -55,10 +55,6 @@ fn archived_is_a_peer_heading_and_owns_archived_sessions_even_when_pinned() {
         assert_eq!(heading.trim_end(), "  Archived (1)");
         assert_eq!(buffer[(0, 0)].fg, buffer[(0, 2)].fg);
         assert_eq!(buffer[(0, 0)].modifier, buffer[(0, 2)].modifier);
-        assert_eq!(
-            pointer_target_at(Rect::new(0, 0, 40, 8), state.view(&sessions), 0, 2),
-            Some(SessionManagerPointerTarget::Group(SessionGroup::Archived))
-        );
         let rows = manager_rows(&sessions, &state.pinned, &state.collapsed);
         assert_eq!(rows.len(), if expanded { 4 } else { 3 });
     }
@@ -201,27 +197,6 @@ fn viewport_reserves_rows_for_both_overflow_notices() {
         manager_viewport(20, Some(10), 5),
         ManagerViewport { start: 8, end: 11 }
     );
-}
-
-#[test]
-fn pointer_activation_does_not_take_keyboard_focus_or_selection() {
-    let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
-    let mut state = SessionManagerState::default();
-    state.reconcile(&sessions);
-    assert_eq!(
-        pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 0),
-        Some(SessionManagerPointerTarget::Group(SessionGroup::Idle))
-    );
-    let target = pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 1)
-        .expect("the first session row is interactive");
-
-    assert_eq!(
-        target,
-        SessionManagerPointerTarget::Session(SessionId::new("idle").unwrap())
-    );
-
-    assert!(!state.focused());
-    assert_eq!(state.selected_session().unwrap().as_str(), "idle");
 }
 
 #[test]

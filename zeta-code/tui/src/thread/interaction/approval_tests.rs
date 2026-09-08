@@ -24,27 +24,17 @@ fn approval_uses_fixed_choices_and_blocks_duplicate_submission() {
 #[test]
 fn submission_failure_restores_the_approval_and_exposes_the_error() {
     let mut approval = approval();
-    approval.activate(0);
+    approval.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     approval.submission_failed("request failed".into());
 
     assert!(!approval.view().submitting);
     assert_eq!(approval.view().error, Some("request failed"));
+    approval.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
-        approval.activate(1),
-        Some(ApprovalOutcome::Respond(ApprovalDecision::Decline))
+        approval.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ApprovalOutcome::Respond(ApprovalDecision::Decline)
     );
-}
-
-#[test]
-fn pointer_activation_responds_to_its_target_without_moving_the_keyboard_choice() {
-    let mut approval = approval();
-
-    assert_eq!(
-        approval.activate(1),
-        Some(ApprovalOutcome::Respond(ApprovalDecision::Decline))
-    );
-    assert_eq!(approval.view().selected, ApprovalDecision::ApproveOnce);
 }
 
 fn approval() -> Approval {

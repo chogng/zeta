@@ -5,10 +5,10 @@ use super::RemainingContextWindow;
 use super::StatusPanelOutcome;
 use super::StatusViewData;
 use super::status_panel;
+use crate::memory::Status as MemoryDiagnosticsStatus;
 use crate::render::horizontal_margin;
 use crate::render::test_context;
 use crate::status::AppServerProcessResourcesView;
-use crate::memory::Status as MemoryDiagnosticsStatus;
 use crate::status::ObservedProcessResourcesView;
 use crate::status::ProcessCpuCurrent;
 use crate::status::ProcessUsageView;
@@ -144,7 +144,10 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
     });
 
     assert_eq!(panel.scroll, [7, 3]);
-    assert!(panel.select_tab(1));
+    panel.handle_key(
+        KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+        Rect::new(2, 1, 76, 7),
+    );
     assert_eq!(
         row_value(panel.processes.rows(), "Memory diagnostics"),
         "Disabled"
@@ -220,7 +223,10 @@ fn process_tab_renders_local_total_and_owned_process_details() {
         five_minute_change_bytes: Some(-8 * i128::from(1024 * 1024)),
     });
     panel.apply_memory_diagnostics(MemoryDiagnosticsStatus::Recording);
-    panel.select_tab(1);
+    panel.handle_key(
+        KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+        Rect::new(2, 1, 76, 7),
+    );
     let backend = TestBackend::new(80, 15);
     let mut terminal = Terminal::new(backend).unwrap();
 
@@ -267,17 +273,13 @@ fn status_panel_scrolls_when_allocated_height_is_shorter_than_content() {
 }
 
 #[test]
-fn status_panel_switches_tabs_with_keyboard_and_exposes_mouse_targets() {
+fn status_panel_switches_tabs_with_keyboard() {
     let usage = usage();
     let reference_cost = reference_cost();
     let mut panel = panel(&usage, &reference_cost);
     let height_before = desired_height(&panel, 80);
 
     assert_eq!(panel.tabs.active_index(), 0);
-    assert_eq!(
-        panel.tab_index_in(ratatui::layout::Rect::new(2, 0, 76, 1), 16, 0),
-        Some(1)
-    );
     assert_eq!(
         panel.handle_key(
             KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),

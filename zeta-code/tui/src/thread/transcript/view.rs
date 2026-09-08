@@ -100,63 +100,6 @@ impl Renderable for ChatHistoryView<'_> {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ChatHistoryPointerTarget {
-    JumpToBottom,
-    Toggle(String),
-    Details(String),
-}
-
-pub(crate) fn pointer_target_at(
-    area: Rect,
-    header_rows: usize,
-    messages: &[CellView<'_>],
-    scroll: &ChatHistoryScroll,
-    render_cache: &ChatHistoryRenderCache,
-    context: RenderContext<'_>,
-    column: u16,
-    row: u16,
-) -> Option<ChatHistoryPointerTarget> {
-    if column < area.x || column >= area.right() || row < area.y || row >= area.bottom() {
-        return None;
-    }
-    let heights = measured_heights(messages, render_cache, area.width, context);
-    let (content_area, jump_area) = scroll_areas(area, header_rows, &heights, scroll);
-    if jump_area.is_some_and(|button| {
-        column >= button.x && column < button.right() && row >= button.y && row < button.bottom()
-    }) {
-        return Some(ChatHistoryPointerTarget::JumpToBottom);
-    }
-    if row >= content_area.bottom() {
-        return None;
-    }
-    let total_rows = header_rows.saturating_add(heights.iter().sum::<usize>());
-    let bottom_offset = total_rows.saturating_sub(usize::from(content_area.height));
-    let visible_offset = viewport_offset(messages, header_rows, &heights, scroll, bottom_offset);
-    let target_row = visible_offset.saturating_add(usize::from(row - content_area.y));
-    let mut start = header_rows;
-    for (cell, rows) in messages.iter().zip(heights) {
-        let Some(cell_id) = cell.cell_id.as_ref() else {
-            start = start.saturating_add(rows);
-            continue;
-        };
-        if cell.can_expand && target_row == start && column < area.x.saturating_add(2) {
-            return Some(ChatHistoryPointerTarget::Toggle(cell_id.clone()));
-        }
-        let layout = render_cache.measure(cell, area.width, context, || {
-            cell.lines(context, None, SyntaxHighlighting::Disabled)
-        });
-        if layout
-            .details_row
-            .is_some_and(|details_row| target_row == start.saturating_add(details_row))
-        {
-            return Some(ChatHistoryPointerTarget::Details(cell_id.clone()));
-        }
-        start = start.saturating_add(rows);
-    }
-    None
-}
-
 pub(crate) fn scroll_target(
     area: Rect,
     header_rows: usize,

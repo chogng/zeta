@@ -30,7 +30,13 @@ fn startup_choices_show_the_effective_new_session_context() {
             ("Connection", Some("Local App Server")),
         ]
     );
-    assert!(state.activate_visible_item(0).is_none());
+    assert!(matches!(
+        state.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE
+        )),
+        crate::widgets::list_selection::ListSelectionInputOutcome::Consumed
+    ));
 }
 
 #[test]

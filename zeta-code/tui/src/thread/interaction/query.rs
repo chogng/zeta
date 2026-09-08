@@ -230,13 +230,6 @@ impl Query {
         }
     }
 
-    pub(crate) fn activate(&mut self, index: usize) -> Option<QueryOutcome> {
-        if self.submitting || index >= self.option_count() {
-            return None;
-        }
-        Some(self.activate_at(index))
-    }
-
     pub(crate) fn submission_failed(&mut self, error: String) {
         self.submitting = false;
         self.error = Some(error);

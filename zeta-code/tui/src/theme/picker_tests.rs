@@ -136,8 +136,6 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
                     height: panel_height,
                     ..frame.area()
                 },
-                None,
-                None,
                 test_context(),
             );
             crate::widgets::key_hint::draw(

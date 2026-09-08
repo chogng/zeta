@@ -90,11 +90,6 @@ impl ThemePicker {
             .handle_paste(pasted);
     }
 
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ThemePickerOutcome> {
-        let outcome = self.pages.last_mut()?.activate_visible_item(index)?;
-        Some(self.apply_selection_outcome(outcome))
-    }
-
     fn apply_selection_outcome(
         &mut self,
         outcome: ListSelectionOutcome<ThemeSelectionAction>,

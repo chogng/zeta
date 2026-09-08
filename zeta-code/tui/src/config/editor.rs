@@ -281,21 +281,6 @@ impl ConfigEditor {
         (self.prompt.is_none() && self.openai.is_none()).then(|| self.selection.state())
     }
 
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ConfigEditorOutcome> {
-        if self.prompt.is_some() {
-            return None;
-        }
-        if let Some(subscription) = self.subscription.as_mut() {
-            let outcome = subscription.activate_visible_item(index)?;
-            return Some(self.handle_subscription_outcome(outcome));
-        }
-        if let Some(openai) = &mut self.openai {
-            return Some(openai.activate(index));
-        }
-        let outcome = self.selection.activate_visible_item(index)?;
-        Some(self.handle_selection_outcome(outcome))
-    }
-
     pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
         if let Some(openai) = &mut self.openai {
             openai.update_subscription(spec);

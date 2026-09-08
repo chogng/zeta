@@ -15,7 +15,6 @@ use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
 use crate::widgets::tab_list;
 use crate::widgets::tab_list::FocusedTabListInputOutcome;
-use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
 
@@ -279,7 +278,6 @@ pub(crate) enum ListSelectionAdjustment {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ListSelectionState {
-    pub(super) scroll_start: Option<usize>,
     model: ListSelectionPresentation,
     tabs: TabListState<ListSelectionGroup>,
     selected_visible: Option<usize>,
@@ -300,7 +298,6 @@ impl ListSelectionState {
         let (model, tabs) = model.into_parts();
         let search = model.search.clone().map(SearchBoxState::new);
         let mut state = Self {
-            scroll_start: None,
             model,
             tabs: TabListState::new(tabs),
             selected_visible: None,
@@ -380,18 +377,6 @@ impl ListSelectionState {
         self.tabs.tabs()
     }
 
-    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
-        self.set_focus(ListSelectionFocus::Tabs);
-        match self.tabs.select(index) {
-            TabListInputOutcome::ActiveChanged => {
-                self.select_first_visible();
-                true
-            }
-            TabListInputOutcome::Consumed => true,
-            TabListInputOutcome::Unhandled => false,
-        }
-    }
-
     pub(crate) fn focus_search(&mut self) -> bool {
         if self.search.is_none() {
             return false;
@@ -457,10 +442,6 @@ impl ListSelectionState {
         }
         self.selected_visible = Some(index);
         true
-    }
-
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ListSelectionItemId> {
-        self.visible_items().get(index)?.id().cloned()
     }
 
     pub(crate) fn tab_rows(&self, width: u16) -> u16 {
@@ -545,7 +526,6 @@ impl ListSelectionState {
                 .unwrap_or(ListSelectionInputOutcome::Consumed);
         }
         if let Some(navigation) = Navigation::from_key(key) {
-            self.scroll_start = None;
             match navigation {
                 Navigation::Previous => {
                     if key.code == KeyCode::Up && key.kind == KeyEventKind::Press {
@@ -652,9 +632,6 @@ impl ListSelectionState {
     }
 
     fn set_focus(&mut self, focus: ListSelectionFocus) {
-        if focus == ListSelectionFocus::Items {
-            self.scroll_start = None;
-        }
         self.focus = focus;
         self.sync_search_focus();
     }
@@ -719,12 +696,10 @@ impl ListSelectionState {
     }
 
     fn select_first_visible(&mut self) {
-        self.scroll_start = None;
         self.selected_visible = (self.visible_len() > 0).then_some(0);
     }
 
     fn reconcile_selection(&mut self) {
-        self.scroll_start = None;
         let visible_len = self.visible_len();
         self.selected_visible = match (self.selected_visible, visible_len) {
             (_, 0) => None,

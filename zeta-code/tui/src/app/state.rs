@@ -1167,11 +1167,6 @@ impl App {
         self.chat_panel.command_list_selection()
     }
 
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<AppCommand> {
-        let outcome = self.chat_panel.activate_command_item(index)?;
-        self.handle_command_panel_outcome(outcome)
-    }
-
     pub(crate) fn mention_query(&self) -> Option<&str> {
         if self.chat_panel.command_active() {
             return None;
