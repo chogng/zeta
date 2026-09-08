@@ -206,6 +206,10 @@ impl ChatPanel {
         }
     }
 
+    pub(crate) fn finish_issue_models(&mut self, request_id: zeta_protocol::CommandId, result: Result<ConfigChoices, String>) {
+        if let Some(command) = self.command.as_mut() { command.finish_issue_models(request_id, result); }
+    }
+
     pub(crate) fn replace_config(&mut self, choices: ConfigChoices) {
         if let Some(command) = self.command.as_mut() {
             command.replace_config(choices);

@@ -1,6 +1,8 @@
 //! Profile-local database runtime, durable state adapters, and rebuildable index leases.
 
 mod dir_index;
+mod issue_tasks;
+pub use issue_tasks::SqliteIssueTaskStore;
 mod sqlite;
 mod sqlite_runtime;
 
@@ -22,3 +24,7 @@ mod work_coordination_store_tests;
 #[cfg(test)]
 #[path = "project_store_tests.rs"]
 mod project_store_tests;
+
+#[cfg(test)]
+#[path = "issue_tasks_tests.rs"]
+mod issue_tasks_tests;

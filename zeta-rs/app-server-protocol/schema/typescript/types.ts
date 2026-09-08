@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 1 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 29 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 3 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:f2afb15ec0a3cdb6dcdb021e12395a5530005012090071bc8a43182cf7f48756" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:18f4a1f7e71b1820390f2c1dd50cb289d21cba83ba6cea70188ee23ee0ce1e6e" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -12,6 +12,25 @@ export type JsonRpcFailure<E> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; error:
 export type JsonRpcResponse<R, E> = JsonRpcSuccess<R> | JsonRpcFailure<E>;
 export type JsonRpcError = { code: number; message: string; data: unknown };
 export type AppServerListenInfo = { kind: "app-server-listen-info", version: 1, endpoint: string, };
+export type IssueConfigDto = { recommendMerge: boolean, analysisModel: ModelRef | null, };
+export type IssueConfigureParams = { commandId: CommandId, expectedRevision: number, config: IssueConfigDto, };
+export type IssueStartPoint = "currentBranch" | "main";
+export type IssueTaskCreateParams = { commandId: CommandId, repository: IssueRepository, numbers: number[], start: IssueStartPoint, };
+export type IssueTaskReadParams = { sessionId: SessionId, };
+export type IssueTaskResult = { task: IssueTask | null, };
+export type IssueTask = { pendingInput: boolean, sessionId: SessionId, repository: IssueRepository, issues: Array<IssueReadResult>, startCommit: string, branch: string, targetBranch: string, readAt: number, };
+export type IssueRepository = { host: string, owner: string, name: string, };
+export type IssueSummary = { number: number, title: string, url: string, updatedAt: string, state: string, };
+export type IssueState = "open" | "closed";
+export type IssueListParams = { state: IssueState, page: number, };
+export type IssueListResult = { repository: IssueRepository, issues: Array<IssueSummary>, nextPage: number | null, };
+export type IssueReadParams = { repository: IssueRepository, number: number, };
+export type IssueReadResult = { issue: IssueSummary, body: string, comments: Array<IssueComment>, };
+export type IssueComment = { body: string, url: string, updatedAt: string, };
+export type IssuePrMode = "ordinary" | "draft" | "merge" | "squash" | "rebase";
+export type IssuePrPreview = { sessionId: SessionId, title: string, body: string, branch: string, targetBranch: string, startCommit: string, targetCommit: string, expectedTree: string, files: Array<string>, modes: Array<IssuePrMode>, pullRequest: IssuePrStatus | null, };
+export type IssuePrCreateParams = { commandId: CommandId, sessionId: SessionId, expectedTree: string, mode: IssuePrMode, };
+export type IssuePrStatus = { url: string, state: string, draft: boolean, merged: boolean, automaticMerge: boolean | null, refreshError: string | null, checks: string, automaticMergeError: string | null, };
 export type AccountDto = { provider: string, accountId: string, email: string | null, displayName: string | null, organization: string | null, plan: string | null, status: AccountStatusDto, credentialRevision: number, };
 export type AccountLoginCancelParams = { loginId: string, };
 export type AccountLoginCancelResult = { status: AccountLoginCancelStatusDto, };
@@ -214,7 +233,7 @@ export type HookConfigDto = { id: string, event: HookEventDto, matcher: HookMatc
 export type LanguageServerModeDto = "disabled" | "enabled";
 export type LanguageServerConfigDto = { mode: LanguageServerModeDto, executable?: string | null, };
 export type FrontendConfigDto = Record<string, unknown>;
-export type ConfigReadResult = { revision: number, generation: number, preferredModel: ModelRef | null, approvalReviewModel: ApprovalReviewModelSelection, commitMessageModel?: ModelRef | null, commitMessageActiveDirAuthorized: boolean, toolMode: ToolMode, agentGrepBackend: AgentGrepBackendDto, gui: FrontendConfigDto, providers: { [key in string]: ProviderConfigDto }, mcpServers: { [key in string]: McpServerConfigDto }, skillSources: { [key in string]: SkillSourceConfigDto }, pluginRequests: { [key in string]: PluginRequestDto }, hooks: { [key in string]: HookConfigDto }, languageServers: { [key in string]: LanguageServerConfigDto }, toolSearch: ToolSearchConfigDto, codebase: CodebaseConfigDto, execPolicyRules: Array<ExecPolicyRuleDto>, tui: FrontendConfigDto, };
+export type ConfigReadResult = { issues: IssueConfigDto, revision: number, generation: number, preferredModel: ModelRef | null, approvalReviewModel: ApprovalReviewModelSelection, commitMessageModel?: ModelRef | null, commitMessageActiveDirAuthorized: boolean, toolMode: ToolMode, agentGrepBackend: AgentGrepBackendDto, gui: FrontendConfigDto, providers: { [key in string]: ProviderConfigDto }, mcpServers: { [key in string]: McpServerConfigDto }, skillSources: { [key in string]: SkillSourceConfigDto }, pluginRequests: { [key in string]: PluginRequestDto }, hooks: { [key in string]: HookConfigDto }, languageServers: { [key in string]: LanguageServerConfigDto }, toolSearch: ToolSearchConfigDto, codebase: CodebaseConfigDto, execPolicyRules: Array<ExecPolicyRuleDto>, tui: FrontendConfigDto, };
 export type ConfigChanged = { revision: number, generation: number, };
 export type ConfigCommandDispositionDto = "updated" | "replayed";
 export type ConfigCommandResult = { revision: number, generation: number, disposition: ConfigCommandDispositionDto, };
@@ -565,7 +584,7 @@ export type ThreadTranscriptEntry = { "type": "item", entryId: string, turnId: T
 export type ThreadTranscriptSnapshot = { sessionId: SessionId, threadId: ThreadId, durableSequence: number, revision: number, entries: Array<ThreadTranscriptEntry>, };
 export type ThreadTranscriptChange = { "type": "upsert", entry: ThreadTranscriptEntry, } | { "type": "remove", entryIds: Array<string>, } | { "type": "clearTransient" };
 export type ThreadTranscriptUpdateEnvelope = { sessionId: SessionId, threadId: ThreadId, durableSequence: number, revision: number, streamCursor?: StreamCursor | null, changes: Array<ThreadTranscriptChange>, };
-export type InputItem = { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };
+export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };
 export type TurnStartResult = { turnId: TurnId, sequence: number, };
 export type TurnSteerResult = { turnId: TurnId, sequence: number, };
 export type TurnInterruptResult = { sequence: number, };
@@ -1014,7 +1033,7 @@ export type DebugAdapterReadParams = { dirId?: string, sessionId: string, afterS
 export type DebugAdapterMessageDto = { sequence: number, message: unknown, };
 export type DebugAdapterReadResult = { messages: Array<DebugAdapterMessageDto>, nextSequence: number, outputGap: boolean, stderr: string, exited: boolean, exitCode: number | null, protocolError: string | null, };
 export type DebugAdapterCloseParams = { dirId?: string, sessionId: string, };
-export type AppServerErrorName = "ParseError" | "InvalidRequest" | "MethodNotFound" | "InvalidParams" | "InternalError" | "MemoryUnavailable" | "MemoryNotFound" | "MemoryConflict" | "MemoryCapacity" | "MemoryStopped" | "MemoryStale" | "AutomationUnavailable" | "AutomationNotFound" | "AutomationConflict" | "AutomationBusy" | "AutomationOperationFailed" | "ServerOverloaded" | "RequestCancelled" | "NotInitialized" | "AlreadyInitialized" | "CommandConflict" | "CoreOperationFailed" | "AgentInteractionNotOwner" | "AgentInteractionExpired" | "ResourceNotFound" | "ResourceNotOwner" | "ResourceTooLarge" | "InvalidResourceChunkSize" | "InvalidResourceOffset" | "FileSystemUnavailable" | "FileSystemOperationFailed" | "FileSystemNotFound" | "FileSystemRevisionConflict" | "GitUnavailable" | "GitNotRepository" | "GitOperationFailed" | "TurnChangesUnavailable" | "TurnChangesRevisionConflict" | "TurnChangesOperationFailed" | "WorkCoordinationUnavailable" | "WorkCoordinationNotFound" | "WorkCoordinationRevisionConflict" | "WorkCoordinationOperationFailed" | "ProjectsUnavailable" | "ProjectNotFound" | "ProjectRevisionConflict" | "ProjectOperationFailed" | "DiffOperationFailed" | "SyntaxAnalysisFailed" | "CodebaseUnavailable" | "CodebaseNotReady" | "CodebaseOperationFailed" | "CodebaseSymbolsUnavailable" | "CodebaseSymbolsNotReady" | "CodebaseSymbolsOperationFailed" | "CodebaseRetrievalOperationFailed" | "CloudCodebaseUnavailable" | "CloudCodebaseInvalidGrant" | "CloudCodebaseConsentConflict" | "CloudCodebaseEgressLimitExceeded" | "CloudCodebaseProviderUnavailable" | "CloudCodebaseOperationFailed" | "LanguageServiceUnavailable" | "LanguageRequestFailed" | "MarketplaceUnavailable" | "MarketplaceNotFound" | "MarketplaceUntrusted" | "MarketplaceIncompatible" | "MarketplaceInstallationInUse" | "MarketplaceOperationFailed" | "SearchUnavailable" | "SearchNotFound" | "SearchNotOwner" | "SearchBusy" | "TerminalUnavailable" | "TerminalNotFound" | "TerminalNotOwner" | "TerminalAttachRejected" | "TerminalBusy" | "TerminalOperationFailed" | "DebugAdapterUnavailable" | "DebugAdapterNotFound" | "DebugAdapterNotOwner" | "DebugAdapterBusy" | "DebugAdapterOperationFailed" | "ConfigUnavailable" | "ConfigRevisionConflict" | "ProviderCredentialsUnavailable" | "ProviderCredentialOperationFailed" | "McpRuntimeUnavailable" | "McpServerNotFound" | "McpOAuthUnavailable" | "McpOAuthInvalidCallback" | "McpOAuthExpired" | "McpOAuthOperationFailed" | "AccountUnavailable" | "AccountLoginNotFound" | "AccountLoginConflict" | "AccountOperationFailed" | "ConnectorsUnavailable" | "ConnectorGenerationConflict" | "ConnectorOperationFailed" | "ConnectorOAuthUnavailable" | "ConnectorOAuthInvalidCallback" | "ConnectorOAuthExpired" | "PluginsUnavailable" | "PluginRevisionConflict" | "PluginOperationFailed" | "ToolSearchUnavailable" | "SkillsUnavailable" | "SkillOperationFailed" | "SkillNotFound" | "EnvCwdSetUnavailable" | "EnvCwdSetBusy" | "EnvCwdSetFailed" | "RevisionConflict" | "PermissionRequired" | "ExtensionsUnavailable" | "ExtensionGenerationConflict" | "ExtensionNotFound" | "ExtensionResourceNotFound" | "ExtensionResourceInvalidPath" | "ExtensionOperationFailed" | "ExtensionHostUnavailable" | "ExtensionHostStale" | "ExtensionHostInvocationNotFound" | "ExtensionHostQuotaExceeded";
+export type AppServerErrorName = "ParseError" | "InvalidRequest" | "MethodNotFound" | "InvalidParams" | "InternalError" | "MemoryUnavailable" | "MemoryNotFound" | "MemoryConflict" | "MemoryCapacity" | "MemoryStopped" | "MemoryStale" | "AutomationUnavailable" | "AutomationNotFound" | "AutomationConflict" | "AutomationBusy" | "AutomationOperationFailed" | "ServerOverloaded" | "RequestCancelled" | "NotInitialized" | "AlreadyInitialized" | "CommandConflict" | "CoreOperationFailed" | "AgentInteractionNotOwner" | "AgentInteractionExpired" | "ResourceNotFound" | "ResourceNotOwner" | "ResourceTooLarge" | "InvalidResourceChunkSize" | "InvalidResourceOffset" | "FileSystemUnavailable" | "FileSystemOperationFailed" | "FileSystemNotFound" | "FileSystemRevisionConflict" | "IssueOperationFailed" | "GitUnavailable" | "GitNotRepository" | "GitOperationFailed" | "TurnChangesUnavailable" | "TurnChangesRevisionConflict" | "TurnChangesOperationFailed" | "WorkCoordinationUnavailable" | "WorkCoordinationNotFound" | "WorkCoordinationRevisionConflict" | "WorkCoordinationOperationFailed" | "ProjectsUnavailable" | "ProjectNotFound" | "ProjectRevisionConflict" | "ProjectOperationFailed" | "DiffOperationFailed" | "SyntaxAnalysisFailed" | "CodebaseUnavailable" | "CodebaseNotReady" | "CodebaseOperationFailed" | "CodebaseSymbolsUnavailable" | "CodebaseSymbolsNotReady" | "CodebaseSymbolsOperationFailed" | "CodebaseRetrievalOperationFailed" | "CloudCodebaseUnavailable" | "CloudCodebaseInvalidGrant" | "CloudCodebaseConsentConflict" | "CloudCodebaseEgressLimitExceeded" | "CloudCodebaseProviderUnavailable" | "CloudCodebaseOperationFailed" | "LanguageServiceUnavailable" | "LanguageRequestFailed" | "MarketplaceUnavailable" | "MarketplaceNotFound" | "MarketplaceUntrusted" | "MarketplaceIncompatible" | "MarketplaceInstallationInUse" | "MarketplaceOperationFailed" | "SearchUnavailable" | "SearchNotFound" | "SearchNotOwner" | "SearchBusy" | "TerminalUnavailable" | "TerminalNotFound" | "TerminalNotOwner" | "TerminalAttachRejected" | "TerminalBusy" | "TerminalOperationFailed" | "DebugAdapterUnavailable" | "DebugAdapterNotFound" | "DebugAdapterNotOwner" | "DebugAdapterBusy" | "DebugAdapterOperationFailed" | "ConfigUnavailable" | "ConfigRevisionConflict" | "ProviderCredentialsUnavailable" | "ProviderCredentialOperationFailed" | "McpRuntimeUnavailable" | "McpServerNotFound" | "McpOAuthUnavailable" | "McpOAuthInvalidCallback" | "McpOAuthExpired" | "McpOAuthOperationFailed" | "AccountUnavailable" | "AccountLoginNotFound" | "AccountLoginConflict" | "AccountOperationFailed" | "ConnectorsUnavailable" | "ConnectorGenerationConflict" | "ConnectorOperationFailed" | "ConnectorOAuthUnavailable" | "ConnectorOAuthInvalidCallback" | "ConnectorOAuthExpired" | "PluginsUnavailable" | "PluginRevisionConflict" | "PluginOperationFailed" | "ToolSearchUnavailable" | "SkillsUnavailable" | "SkillOperationFailed" | "SkillNotFound" | "EnvCwdSetUnavailable" | "EnvCwdSetBusy" | "EnvCwdSetFailed" | "RevisionConflict" | "PermissionRequired" | "ExtensionsUnavailable" | "ExtensionGenerationConflict" | "ExtensionNotFound" | "ExtensionResourceNotFound" | "ExtensionResourceInvalidPath" | "ExtensionOperationFailed" | "ExtensionHostUnavailable" | "ExtensionHostStale" | "ExtensionHostInvocationNotFound" | "ExtensionHostQuotaExceeded";
 export type AppServerErrorData = { kind: AppServerErrorName, };
 export type AppServerError = { code: number, message: string, data: AppServerErrorData, };
 export interface AppServerNotificationMap {
@@ -1254,6 +1273,13 @@ export interface AppServerRequestMap {
   "fs/createFile": { params: FsCreateFileParams; response: FsGetMetadataResult };
   "fs/rename": { params: FsRenameParams; response: null };
   "fs/delete": { params: FsDeleteParams; response: null };
+  "issue/pr/preview": { params: IssueTaskReadParams; response: IssuePrPreview };
+  "issue/pr/create": { params: IssuePrCreateParams; response: IssuePrStatus };
+  "issue/task/create": { params: IssueTaskCreateParams; response: IssueTaskResult };
+  "issue/task/read": { params: IssueTaskReadParams; response: IssueTaskResult };
+  "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
+  "issue/list": { params: IssueListParams; response: IssueListResult };
+  "issue/read": { params: IssueReadParams; response: IssueReadResult };
   "git/repositories": { params: Record<string, never>; response: GitRepositoriesResult };
   "git/status": { params: GitRepositoryParams; response: GitStatusResult };
   "git/textDiff": { params: GitRepositoryParams; response: GitTextDiffResult };
@@ -1513,6 +1539,13 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "fs/createFile": { method: "fs/createFile" },
   "fs/rename": { method: "fs/rename" },
   "fs/delete": { method: "fs/delete" },
+  "issue/pr/preview": { method: "issue/pr/preview" },
+  "issue/pr/create": { method: "issue/pr/create" },
+  "issue/task/create": { method: "issue/task/create" },
+  "issue/task/read": { method: "issue/task/read" },
+  "issue/configure": { method: "issue/configure" },
+  "issue/list": { method: "issue/list" },
+  "issue/read": { method: "issue/read" },
   "git/repositories": { method: "git/repositories" },
   "git/status": { method: "git/status" },
   "git/textDiff": { method: "git/textDiff" },

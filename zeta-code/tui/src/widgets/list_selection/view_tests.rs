@@ -148,18 +148,28 @@ fn tabs_search_and_items_share_the_same_state_column() {
 }
 
 #[test]
-fn keyboard_focus_does_not_add_markers_to_search_or_tabs() {
+fn item_marker_is_visible_only_while_the_list_has_focus() {
     let mut state = state();
+
+    let items = render(&state);
+    assert_eq!(items[(0, 4)].symbol(), ">");
 
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let search = render(&state);
     assert_eq!(search[(0, 2)].symbol(), " ");
-    assert_eq!(search[(0, 4)].symbol(), ">");
+    assert_eq!(search[(0, 4)].symbol(), " ");
+    assert_eq!(state.selected_visible_index(), Some(0));
 
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let tabs = render(&state);
     assert_eq!(tabs[(0, 0)].symbol(), " ");
-    assert_eq!(tabs[(0, 4)].symbol(), ">");
+    assert_eq!(tabs[(0, 4)].symbol(), " ");
+    assert_eq!(state.selected_visible_index(), Some(0));
+
+    state.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    state.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let items = render(&state);
+    assert_eq!(items[(0, 4)].symbol(), ">");
 }
 
 #[test]

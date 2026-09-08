@@ -1,4 +1,6 @@
 mod editor;
+mod issues;
+pub(crate) use issues::IssueConfigEdit;
 pub(crate) mod openai;
 mod request;
 mod settings;
@@ -30,6 +32,10 @@ pub(crate) struct ConfigEditResult {
 
 /// A completed configuration operation delivered to the TUI state owner.
 pub(crate) enum Event {
+    IssueModels {
+        request_id: zeta_protocol::CommandId,
+        result: Result<ConfigChoices, String>,
+    },
     Connection(openai::Reply),
     Subscription(SubscriptionEvent),
     SettingsReceived(TerminalSettings),
@@ -43,6 +49,11 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    SetIssues(IssueConfigEdit),
+    LoadIssueModels {
+        request_id: zeta_protocol::CommandId,
+        expected_revision: u64,
+    },
     Connection(openai::Request),
     Subscription(SubscriptionCommand),
     OpenEditor,

@@ -3,6 +3,8 @@
 //! This crate owns ordinary, non-secret user configuration. It does not own credential values,
 //! Plugin packages, MCP connections, or any live runtime state.
 
+mod issues;
+pub use issues::IssueConfig;
 mod codebase;
 mod command;
 mod commit_messages;

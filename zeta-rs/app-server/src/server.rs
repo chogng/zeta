@@ -91,6 +91,9 @@ mod git_operations;
 mod git_runtime;
 pub(crate) mod goal_tool;
 mod interaction_runtime;
+mod issue_operations;
+mod issue_pr;
+mod issue_tasks;
 mod language_document_features;
 mod language_operations;
 mod language_runtime;
@@ -278,6 +281,7 @@ pub struct AppServer {
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     turn_changes: Option<Arc<turn_changes_runtime::TurnChangesRuntime>>,
+    issue_tasks: Option<Arc<zeta_state::SqliteIssueTaskStore>>,
     work_coordination: Option<Arc<work_coordination_runtime::WorkCoordinationRuntime>>,
     projects: Option<Arc<zeta_projects::ProjectCoordinator>>,
     automation: Option<Arc<zeta_automation::AutomationStore>>,
@@ -598,6 +602,7 @@ impl AppServer {
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             turn_changes: None,
+            issue_tasks: None,
             work_coordination: None,
             projects: None,
             automation: None,
@@ -667,7 +672,11 @@ impl AppServer {
             hooks,
             Arc::clone(&self.updates),
         )?;
-        self.with_turn_changes_runtime(runtime)
+        let mut server = self.with_turn_changes_runtime(runtime)?;
+        server.issue_tasks = Some(Arc::new(zeta_state::SqliteIssueTaskStore::open(
+            database_path,
+        )?));
+        Ok(server)
     }
 
     pub(crate) fn with_local_work_coordination(
@@ -1614,7 +1623,14 @@ impl AppServer {
             let response = match self.dispatch(connection, &mut request, &cancellation) {
                 Ok(result) => serde_json::to_value(JsonRpcSuccess::new(request.id.clone(), result))
                     .expect("JSON-RPC success response must serialize"),
-                Err(error) => error_response(request.id.clone(), error.code, error.message),
+                Err(error) => {
+                    let mut response = AppServerError::new(error.code, error.message);
+                    if let Some(detail) = error.detail {
+                        response.message.push_str(&format!(": {detail}"));
+                    }
+                    serde_json::to_value(JsonRpcFailure::new(request.id.clone(), response))
+                        .expect("error response must serialize")
+                }
             };
             if cancellation.is_cancelled() {
                 error_response(
@@ -1855,6 +1871,15 @@ impl AppServer {
             Some(ClientMethod::DocumentCollaborationPresenceRead) => {
                 self.document_collaboration_presence_read(&request.params)
             }
+            Some(ClientMethod::IssuePrPreview) => self.issue_pr_preview(&request.params),
+            Some(ClientMethod::IssuePrCreate) => self.issue_pr_create(&request.params),
+            Some(ClientMethod::IssueTaskCreate) => {
+                self.issue_task_create(connection, &request.params)
+            }
+            Some(ClientMethod::IssueTaskRead) => self.issue_task_read(&request.params),
+            Some(ClientMethod::IssueConfigure) => self.issue_configure(&request.params),
+            Some(ClientMethod::IssueList) => self.issue_list(&request.params),
+            Some(ClientMethod::IssueRead) => self.issue_read(&request.params),
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
             Some(ClientMethod::SessionRead) => self.session_read(&request.params),
             Some(ClientMethod::SessionList) => self.session_list(),
@@ -2371,11 +2396,16 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
 pub(super) struct RpcError {
     code: i64,
     message: AppServerErrorName,
+    detail: Option<String>,
 }
 
 impl RpcError {
     pub(super) fn new(code: i64, message: AppServerErrorName) -> Self {
-        Self { code, message }
+        Self {
+            code,
+            message,
+            detail: None,
+        }
     }
 }
 

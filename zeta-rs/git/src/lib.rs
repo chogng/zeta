@@ -3,6 +3,7 @@
 //! This crate owns invocation and parsing of the system Git executable. It does not own
 //! App Server repository lifecycles, model tool authorization, or desktop presentation.
 
+mod branch;
 mod client;
 mod content;
 mod error;

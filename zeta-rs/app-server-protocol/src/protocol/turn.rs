@@ -13,6 +13,11 @@ use zeta_protocol::SkillRef;
     rename_all_fields = "camelCase"
 )]
 pub enum InputItem {
+    /// Resolves an issue from the receiving Session's durable issue-task association.
+    Issue {
+        #[ts(type = "number")]
+        number: u64,
+    },
     Text {
         text: String,
     },
