@@ -6,6 +6,7 @@ pub(crate) fn apply_command(
     command: &UserConfigCommand,
 ) -> Result<(), ConfigError> {
     match command {
+        UserConfigCommand::ConfigureIssues { config } => document.issues = config.clone(),
         UserConfigCommand::UpdatePreferences(update) => apply_preferences(document, update),
         UserConfigCommand::ConfigureProvider { provider, config } => {
             if &config.provider != provider {

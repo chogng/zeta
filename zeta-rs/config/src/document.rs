@@ -125,6 +125,8 @@ pub struct AgentConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UserConfigDocument {
     #[serde(default)]
+    pub issues: crate::IssueConfig,
+    #[serde(default)]
     pub agent: AgentConfig,
     #[serde(default)]
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
@@ -171,6 +173,9 @@ impl UserConfigDocument {
             provider
                 .validate_static()
                 .map_err(|error| ConfigError(error.to_string()))?;
+        }
+        if let Some(model) = &self.issues.analysis_model {
+            if !self.providers.contains_key(&model.provider) { return Err(ConfigError(format!("issue analysis provider '{}' is not configured", model.provider))); }
         }
         if let Some(model) = &self.agent.preferred_model
             && !self.providers.contains_key(&model.provider)
@@ -249,6 +254,7 @@ impl UserConfigDocument {
 /// type without exposing file or authority implementation details to runtime consumers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedConfig {
+    pub issues: crate::IssueConfig,
     pub preferred_model: Option<ModelRef>,
     pub approval_review_model: ApprovalReviewModelSelection,
     pub commit_message_model: Option<ModelRef>,
@@ -333,6 +339,7 @@ fn provider_config_error(error: ProviderConfigError) -> ConfigError {
 impl From<&UserConfigDocument> for ResolvedConfig {
     fn from(document: &UserConfigDocument) -> Self {
         Self {
+            issues: document.issues.clone(),
             preferred_model: document.agent.preferred_model.clone(),
             approval_review_model: document.agent.approval_review_model.clone(),
             commit_message_model: document.agent.commit_message_model.clone(),

@@ -25,3 +25,14 @@
 - 三份字符快照只改变回到底部文案和居中空格。环境未安装 cargo-insta，逐份检查 `.snap.new` 后复制到各自对应基线，未批量接受其他快照。
 
 本次没有重跑 Unix 终端。AC-1 至 AC-4 的状态、事件与 Windows 终端证据见上述测试。
+
+## PR #20 合并主分支后的复验
+
+2026-09-08，将 `origin/main` 的 `7692f5860` 合入 PR 分支 `7c5e8d0d0`。保留全屏正文布局、回到底部控件、Issue 管理器及双方 PTY 场景；补回 Issue 上下文需要的当前线程 ID 读取，并阻止 Issue 页面上的鼠标操作改变背景正文。
+
+- `just check zeta-tui`：通过。
+- `just test zeta-tui -- --quiet`：728 项通过，1 项忽略；包含 Issue 页面高度与背景鼠标隔离回归。
+- Windows PTY 首轮因配套 daemon 二进制仍使用旧协议而在 TUI 启动前失败。`just test-tui actual_tui_issue_config_switch_gates_its_tab -- --nocapture` 构建匹配的 daemon 后通过。
+- `just test zeta-cli --test tui_real_scenarios actual_tui_scrolls_the_transcript_with_the_mouse_wheel -- --nocapture`：通过。
+- 固定输入区快照首轮受到本机剪贴板图片提示影响；测试改为等待剪贴板与权限临时提示消失后取稳定画面。检查并更新 `issue13/fullscreen_conversation`，正文与输入区位置不变；`just test zeta-cli --test tui_real_scenarios actual_tui_input_keeps_hint_bar_without_blank_line_growth -- --nocapture` 在两种尺寸通过，无待接受快照。
+- 本次仅自查；Unix 专属 Issue 提交与 PR 场景未在 Windows 执行。

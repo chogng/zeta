@@ -93,7 +93,9 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     }
     let hovered = app.hovered_pointer_target();
     let pressed = app.pressed_pointer_target();
-    if let Some(manager) = app.session_manager_view() {
+    if let Some(manager) = app.issue_manager() {
+        manager.draw(frame, areas.session.transcript, context);
+    } else if let Some(manager) = app.session_manager_view() {
         let manager_areas = super::layout::manager_areas(
             areas.session.transcript,
             welcome::desired_height(areas.session.transcript.width),
@@ -235,7 +237,7 @@ pub(crate) fn input_pointer_target_at(
     column: u16,
     row: u16,
 ) -> Option<InputPointerTarget> {
-    if !app.mouse_mode().enables_pointer_actions() {
+    if !app.mouse_mode().enables_pointer_actions() || app.issue_manager().is_some() {
         return None;
     }
     let areas = layout(app, terminal_area);
@@ -482,6 +484,12 @@ fn draw_bottom(
 }
 
 fn bottom_content(app: &App) -> BottomContent<'_> {
+    if let Some(manager) = app.issue_manager() {
+        return BottomContent::HitBar {
+            text: Cow::Borrowed(manager.key_hints()),
+            style: HitBarStyle::Keys,
+        };
+    }
     if app.overlay().is_some() || app.session_preview().is_some() {
         return BottomContent::HitBar {
             text: Cow::Borrowed(bindings::CLOSE_HINTS.as_str()),

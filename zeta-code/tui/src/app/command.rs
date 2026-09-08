@@ -5,6 +5,7 @@ pub(crate) enum AppCommand {
     Connectors(crate::connectors::Command),
     Dirs(crate::dirs::Command),
     Host(crate::host::Command),
+    Issues(crate::issues::Command),
     Keymap(crate::keymap::Command),
     Mcp(crate::mcp::Command),
     Models(crate::models::Command),
@@ -39,3 +40,5 @@ app_command_from!(crate::skills::Command, Skills);
 app_command_from!(crate::status::Command, Status);
 app_command_from!(crate::theme::Command, Theme);
 app_command_from!(crate::thread::Command, Thread);
+
+app_command_from!(crate::issues::Command, Issues);

@@ -4,6 +4,7 @@ pub(crate) mod key_hint;
 pub(crate) mod list_selection;
 pub(crate) mod navigation;
 pub(crate) mod overlay;
+pub(crate) mod panel;
 pub(crate) mod search_box;
 pub(crate) mod tab_list;
 pub(crate) mod text_field;

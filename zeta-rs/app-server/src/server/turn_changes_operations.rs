@@ -243,7 +243,7 @@ impl AppServer {
         result(&response)
     }
 
-    fn turn_changes_runtime(&self) -> Result<Arc<TurnChangesRuntime>, RpcError> {
+    pub(super) fn turn_changes_runtime(&self) -> Result<Arc<TurnChangesRuntime>, RpcError> {
         self.turn_changes
             .as_ref()
             .cloned()

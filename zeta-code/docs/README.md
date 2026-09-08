@@ -19,6 +19,7 @@
 | CLI 命令、输出和退出码 | [cli.md](spec/cli.md) |
 | 消息、附件、Queue、审批和提问 | [conversation.md](spec/conversation.md) |
 | 会话列表、预览、详情、归档、恢复和回退 | [sessions.md](spec/sessions.md) |
+| Issue 多选、会话标签、开发起点与 PR | [issues.md](spec/issues.md) |
 | 命令面板、设置、快捷键、Skill、Connector、MCP | [commands.md](spec/commands.md) |
 | 添加目录、重复与失败反馈、目录权限 | [directories.md](spec/directories.md) |
 | OpenAI 官方 Key、自定义连接、ChatGPT 账户、模型目录 | [providers.md](spec/providers.md) |

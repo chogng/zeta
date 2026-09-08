@@ -2035,6 +2035,23 @@ fn sessions_and_agents_commands_open_the_manager_screen() {
 }
 
 #[test]
+fn late_issue_context_does_not_restore_tags_after_the_user_has_sent() {
+    let mut app = App::new();
+    let session_id = SessionId::new("issue-context").unwrap();
+    app.update(ThreadEvent::ContextChanged {
+        session_id: session_id.clone(),
+        thread_id: ThreadId::new(session_id.to_string()).unwrap(),
+    });
+    app.update(crate::issues::Event::ContextReceived { session_id: session_id.clone(), numbers: vec![3, 5] });
+    assert_eq!(app.input(), "[issue #3] [issue #5] ");
+    app.insert_text("implement together");
+    assert!(matches!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), Some(AppCommand::Thread(ThreadCommand::SubmitTurn { .. }))));
+    assert_eq!(app.input(), "");
+    app.update(crate::issues::Event::ContextReceived { session_id, numbers: vec![3, 5] });
+    assert_eq!(app.input(), "");
+}
+
+#[test]
 fn manager_session_keys_archive_show_details_and_open_the_selected_session() {
     let mut app = App::new();
     app.update(SessionEvent::CatalogReceived(vec![

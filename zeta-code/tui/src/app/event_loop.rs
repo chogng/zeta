@@ -268,6 +268,7 @@ fn handle_mouse(app: &mut App, area: ratatui::layout::Rect, mouse: MouseEvent) -
             let command = if overlay_contains {
                 scroll_pointer_item(app, area, mouse.column, mouse.row, direction)
             } else if app.session_manager_view().is_none()
+                && app.issue_manager().is_none()
                 && frame::layout(app, area)
                     .session
                     .transcript

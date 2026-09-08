@@ -33,6 +33,8 @@ use crate::thread::interaction::query::Query;
 use crate::thread::read_thread_history;
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::time::Duration;
+use std::time::Instant;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 
@@ -77,6 +79,7 @@ pub(super) struct AppDriver {
     server_slash_commands: Vec<SlashCommandDefinition>,
     plugins_enabled: bool,
     memory: crate::memory::Controller,
+    issue_context: IssueContext,
 }
 
 pub(super) struct AppDriverResources {
@@ -112,6 +115,7 @@ impl AppDriver {
             server_slash_commands: resources.server_slash_commands,
             plugins_enabled: resources.plugins_enabled,
             memory: crate::memory::Controller::default(),
+            issue_context: IssueContext::default(),
         };
         driver.reconcile_memory_diagnostics();
         driver
@@ -144,6 +148,46 @@ impl AppDriver {
     }
 
     pub(super) fn poll_request_completions(&mut self) -> bool {
+        if self
+            .issue_context
+            .should_load(self.conversation.thread_id(), Instant::now())
+            && self.requests.is_idle(Some(RequestKey::IssueContext))
+        {
+            let session_id = self.conversation.session_id().clone();
+            let thread_id = self.conversation.thread_id().clone();
+            let mut client = self.client.clone();
+            self.requests.spawn(
+                Some(RequestKey::IssueContext),
+                "zeta-tui-issue-context",
+                move || {
+                    let result = client
+                        .read_issue_task(
+                            zeta_app_server_protocol::protocol::issues::IssueTaskReadParams {
+                                session_id: session_id.clone(),
+                            },
+                        )
+                        .map_err(|error| error.to_string())
+                        .map(|result| {
+                            let numbers = result
+                                .task
+                                .filter(|task| task.pending_input)
+                                .map(|task| {
+                                    task.issues
+                                        .into_iter()
+                                        .map(|issue| issue.issue.number)
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            crate::issues::Event::ContextReceived {
+                                session_id,
+                                numbers,
+                            }
+                        });
+                    Completion::IssueContext { thread_id, result }
+                },
+                &mut self.app,
+            );
+        }
         self.memory.observe_objects(self.app.memory_object_count());
         let completions = self.requests.poll();
         let mut changed = !completions.is_empty();
@@ -155,6 +199,19 @@ impl AppDriver {
                         self.app.update(ThreadEvent::FailureReported(error));
                     }
                     self.publish_memory_status(previous);
+                }
+                Ok(Completion::IssueContext { thread_id, result }) => {
+                    if let Some(result) = self.issue_context.complete(
+                        self.conversation.thread_id(),
+                        thread_id,
+                        result,
+                        Instant::now(),
+                    ) {
+                        match result {
+                            Ok(event) => self.app.update(event),
+                            Err(error) => self.app.update(ThreadEvent::FailureReported(error)),
+                        }
+                    }
                 }
                 Ok(completion) => apply_request_completion(
                     completion,
@@ -388,6 +445,65 @@ impl AppDriver {
             self.conversation.thread_id(),
             self.conversation.thread_sequence(),
         )
+    }
+}
+
+/// Tracks issue context loading and one failure episode for the visible thread.
+struct IssueContext {
+    thread: Option<zeta_protocol::ThreadId>,
+    loaded: bool,
+    retry_at: Option<Instant>,
+    retry_delay: Duration,
+}
+
+impl Default for IssueContext {
+    fn default() -> Self {
+        Self {
+            thread: None,
+            loaded: false,
+            retry_at: None,
+            retry_delay: Duration::from_secs(1),
+        }
+    }
+}
+
+impl IssueContext {
+    fn should_load(&mut self, thread: &zeta_protocol::ThreadId, now: Instant) -> bool {
+        if self.thread.as_ref() != Some(thread) {
+            *self = Self {
+                thread: Some(thread.clone()),
+                ..Self::default()
+            };
+        }
+        !self.loaded && self.retry_at.is_none_or(|deadline| now >= deadline)
+    }
+
+    fn complete(
+        &mut self,
+        current_thread: &zeta_protocol::ThreadId,
+        requested_thread: zeta_protocol::ThreadId,
+        result: Result<crate::issues::Event, String>,
+        now: Instant,
+    ) -> Option<Result<crate::issues::Event, String>> {
+        if requested_thread != *current_thread || self.thread.as_ref() != Some(current_thread) {
+            return None;
+        }
+        match result {
+            Ok(event) => {
+                self.loaded = true;
+                self.retry_at = None;
+                self.retry_delay = Duration::from_secs(1);
+                Some(Ok(event))
+            }
+            Err(error) => {
+                let report = self.retry_at.is_none();
+                // Measure from completion so a slow failure still gets a full delay.
+                self.retry_at = Some(now + self.retry_delay);
+                self.retry_delay = (self.retry_delay * 2).min(Duration::from_secs(30));
+                // A continuing outage must not keep growing the transcript.
+                report.then_some(Err(error))
+            }
+        }
     }
 }
 

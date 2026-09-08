@@ -38,6 +38,7 @@ pub enum AppServerErrorName {
     FileSystemOperationFailed,
     FileSystemNotFound,
     FileSystemRevisionConflict,
+    IssueOperationFailed,
     GitUnavailable,
     GitNotRepository,
     GitOperationFailed,

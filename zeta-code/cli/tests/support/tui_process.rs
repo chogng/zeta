@@ -7,6 +7,8 @@ use std::fs;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -94,6 +96,57 @@ impl Fixture {
             environment
         };
         environment
+    }
+
+    #[cfg(unix)]
+    pub fn install_issue_provider(&self) {
+        let bin = self._root.path().join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let issue = serde_json::json!({"number":3,"title":"Repair first issue","body":"First requirement","html_url":"https://github.com/team/repo/issues/3","updated_at":"2026-09-07T00:00:00Z","state":"open"});
+        let mut second = issue.clone();
+        second["number"] = 5.into();
+        second["title"] = "Repair second issue".into();
+        second["html_url"] = "https://github.com/team/repo/issues/5".into();
+        for (name, data) in [
+            (
+                "issues.json",
+                serde_json::json!([issue.clone(), second.clone()]),
+            ),
+            ("3.json", issue),
+            ("5.json", second),
+        ] {
+            fs::write(bin.join(name), serde_json::to_vec(&data).unwrap()).unwrap();
+        }
+        let script = bin.join("gh");
+        fs::write(&script, include_str!("issue_provider.py")).unwrap();
+        fs::set_permissions(script, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+
+    #[cfg(unix)]
+    pub fn prepare_issue_remote(&self) {
+        let bin = self._root.path().join("bin");
+        let remote = bin.join("origin.git");
+        assert!(
+            std::process::Command::new("/usr/bin/git")
+                .args(["init", "--bare", "--quiet"])
+                .arg(&remote)
+                .status()
+                .unwrap()
+                .success()
+        );
+        assert!(
+            std::process::Command::new("/usr/bin/git")
+                .arg("push")
+                .arg(&remote)
+                .arg("main")
+                .current_dir(&self.workspace)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let script = bin.join("git");
+        fs::write(&script, format!("#!/usr/bin/env python3\nimport os,sys\nargs=sys.argv[1:]\nif 'fetch' in args or 'push' in args: args=[{0:?} if arg=='origin' else arg for arg in args]\nos.execv('/usr/bin/git',['git']+args)\n", remote.to_string_lossy())).unwrap();
+        fs::set_permissions(script, fs::Permissions::from_mode(0o700)).unwrap();
     }
 
     pub fn write_config(&self, base_url: &str) {
@@ -271,6 +324,14 @@ impl TuiProcess {
         if let Some((program, version)) = terminal {
             command.env("TERM_PROGRAM", program);
             command.env("TERM_PROGRAM_VERSION", version);
+        }
+        let fixture_bin = fixture._root.path().join("bin");
+        if fixture_bin.is_dir() {
+            let mut paths = vec![fixture_bin];
+            paths.extend(std::env::split_paths(
+                &std::env::var_os("PATH").unwrap_or_default(),
+            ));
+            command.env("PATH", std::env::join_paths(paths).unwrap());
         }
         // Never let an offline PTY scenario reuse the developer's actual Codex subscription.
         fs::create_dir_all(fixture.codex_home()).unwrap();
@@ -450,6 +511,33 @@ impl TuiProcess {
                 panic!(
                     "TUI screen did not contain {expected:?}; screen:\n{screen}\nraw:\n{}",
                     self.raw_text()
+                );
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    pub fn wait_for_transcript(&mut self, expected: &str) {
+        let deadline = Instant::now() + STATE_TIMEOUT;
+        loop {
+            let (text, revision) = {
+                let capture = self.capture.lock().unwrap();
+                (capture.transcript(), capture.revision())
+            };
+            if text.contains(expected) {
+                thread::sleep(REDRAW_QUIET_PERIOD);
+                let capture = self.capture.lock().unwrap();
+                if capture.revision() == revision && capture.transcript().contains(expected) {
+                    return;
+                }
+            }
+            if let Some(status) = self.child.try_wait().unwrap() {
+                panic!("TUI exited before emitting {expected:?}: {status:?}");
+            }
+            if Instant::now() >= deadline {
+                panic!(
+                    "TUI transcript did not contain {expected:?}; transcript:\n{text}\nraw:\n{}",
+                    self.capture.lock().unwrap().raw_text()
                 );
             }
             thread::sleep(Duration::from_millis(20));
@@ -809,6 +897,17 @@ impl TerminalCapture {
             .grid()
             .lines()
             .iter()
+            .map(|line| line.text())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn transcript(&self) -> String {
+        self.core
+            .grid()
+            .scrollback_lines()
+            .iter()
+            .chain(self.core.grid().lines().iter())
             .map(|line| line.text())
             .collect::<Vec<_>>()
             .join("\n")

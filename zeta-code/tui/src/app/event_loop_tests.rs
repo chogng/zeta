@@ -289,6 +289,40 @@ fn scroll_only_mouse_mode_still_scrolls_the_transcript() {
 }
 
 #[test]
+fn issue_manager_blocks_background_transcript_scroll_and_clicks() {
+    let mut app = App::new();
+    let area = Rect::new(0, 0, 80, 24);
+    for index in 0..30 {
+        app.update(ThreadEvent::FailureReported(format!("failure {index}")));
+    }
+    app.handle_key_in_area(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE), area);
+    let anchor = app.transcript_scroll().anchor().cloned();
+    assert!(anchor.is_some());
+    app.insert_text("/issue");
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Issues(_))
+    ));
+    assert!(app.issue_manager().is_some());
+    let content = frame::layout(&app, area).session.transcript;
+    handle_mouse(
+        &mut app,
+        area,
+        MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: content.x,
+            row: content.y,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    for column in content.x..content.right() {
+        assert!(frame::input_pointer_target_at(&app, area, column, content.bottom() - 1).is_none());
+        activate_pointer_item(&mut app, area, column, content.bottom() - 1);
+    }
+    assert_eq!(app.transcript_scroll().anchor(), anchor.as_ref());
+}
+
+#[test]
 fn jump_control_click_and_keyboard_restore_latest_without_changing_the_draft() {
     for width in [16, 50] {
         let mut app = App::new();

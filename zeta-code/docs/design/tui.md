@@ -32,6 +32,7 @@ TUI 通过 `zeta-app-server-client` 调用后端。即使连接在进程内，�
 | --- | --- |
 | `thread` | 当前对话的输入、排队、批准、提问、正文、滚动和分页 |
 | `sessions` | 会话列表、预览、详情、创建、切换和归档 |
+| `issues` | Issue 状态页签、列表、多选、详情、起点选择和 PR 操作；复用 `widgets/panel`、TabList、SearchBox 和列表样式；`request` 机械转换后端协议 |
 | `config`、`keymap`、`theme` | 各自的设置、编辑、校验和保存 |
 | `nls` | TUI 支持的界面语言、语言自称和类型化文案键；调用方显式提供当前语言 |
 | `skills`、`models`、`connectors`、`mcp`、`dirs` | 各自的目录、面板和操作请求 |

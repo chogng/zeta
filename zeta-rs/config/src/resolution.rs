@@ -17,6 +17,7 @@ pub enum ConfigValueSource {
 /// Origin information for consumer-visible configuration values.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ConfigProvenance {
+    pub issues: ConfigValueSource,
     pub preferred_model: Option<ConfigValueSource>,
     pub approval_review_model: ConfigValueSource,
     pub commit_message_model: Option<ConfigValueSource>,
@@ -33,6 +34,7 @@ pub struct ConfigProvenance {
 impl ConfigProvenance {
     pub(crate) fn from_user(document: &UserConfigDocument) -> Self {
         Self {
+            issues: ConfigValueSource::User,
             preferred_model: document
                 .agent
                 .preferred_model

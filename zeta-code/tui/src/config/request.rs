@@ -26,6 +26,8 @@ pub(crate) struct ProviderApiKeyUpdate {
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
+            Self::SetIssues(_) => "zeta-tui-configure-issues",
+            Self::LoadIssueModels { .. } => "zeta-tui-issue-models",
             Self::Connection(_) => "zeta-tui-provider-connection",
             Self::Subscription(_) => "zeta-tui-chatgpt-account",
             Self::OpenEditor => "zeta-tui-read-config",
@@ -41,6 +43,22 @@ where
     T: JsonRpcTransport,
 {
     match command {
+        Command::LoadIssueModels {
+            request_id,
+            expected_revision,
+        } => {
+            let result = (|| {
+                let config = client.read_config().map_err(|error| error.to_string())?;
+                if config.revision != expected_revision || !config.issues.recommend_merge {
+                    return Err("Issue settings changed; reopen model selection".into());
+                }
+                let language = TerminalSettings::from_tui(&config.tui)?.language();
+                let models = client.list_models().map_err(|error| error.to_string())?;
+                Ok(super::issues::model_choices(&config, models, language))
+            })();
+            return Ok(Event::IssueModels { request_id, result });
+        }
+        Command::SetIssues(edit) => set_issue_settings(client, edit).map(Event::Updated),
         Command::Connection(request) => {
             let id = request.id.clone();
             let result = execute_connection(client, request);
@@ -62,6 +80,28 @@ where
         }
     }
     .map_err(|error| error.to_string())
+}
+
+fn set_issue_settings<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    edit: super::IssueConfigEdit,
+) -> Result<ConfigEditResult, ConfigCommandError> {
+    client.configure_issues(
+        zeta_app_server_protocol::protocol::issues::IssueConfigureParams {
+            command_id: new_command_id("issues-config"),
+            expected_revision: edit.expected_revision,
+            config: edit.config,
+        },
+    )?;
+    let config = client.read_config()?;
+    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let providers = client.list_providers()?;
+    Ok(ConfigEditResult {
+        terminal,
+        status_line: status_line.clone(),
+        choices: config_choices(&config, &providers, terminal, status_line),
+    })
 }
 
 fn execute_connection<T: JsonRpcTransport>(

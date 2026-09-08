@@ -5,6 +5,8 @@ use super::input_pointer_target_at;
 use super::layout;
 use super::process_resource_demand;
 use crate::app::App;
+
+
 use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::CommandPanel;
@@ -1810,5 +1812,17 @@ fn detail_overlay_keeps_content_above_the_shared_hitbar_at_every_height() {
         if height >= 8 {
             assert!(rendered.contains("line 39"));
         }
+    }
+}
+
+#[test]
+fn issue_manager_reserves_page_height_when_the_transcript_is_empty() {
+    let mut app = App::new();
+    app.insert_text("/issue");
+    assert!(matches!(app.handle_key(crossterm::event::KeyEvent::new(crossterm::event::KeyCode::Enter, crossterm::event::KeyModifiers::NONE)), Some(crate::app::AppCommand::Issues(_))));
+    for (width, height) in [(100, 32), (60, 16)] {
+        let screen = ratatui::layout::Rect::new(0, 0, width, height);
+        assert_eq!(super::layout(&app, screen).session.bottom.bottom(), height);
+        assert!(super::layout(&app, screen).session.transcript.height >= 7);
     }
 }

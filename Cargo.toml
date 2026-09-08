@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "zeta-rs/agent-environment",
+    "zeta-rs/github",
     "zeta-rs/agent-import",
     "zeta-rs/agents",
     "zeta-rs/attachments",
@@ -352,6 +353,7 @@ zeta-immutable-generation-store = { path = "zeta-rs/immutable-generation-store" 
 zeta-package-store = { path = "zeta-rs/package-store" }
 zeta-file-watcher = { path = "zeta-rs/file-watcher" }
 zeta-files = { path = "app/files" }
+zeta-github = { path = "zeta-rs/github" }
 zeta-git = { path = "zeta-rs/git" }
 zeta-history = { path = "zeta-rs/history" }
 zeta-hooks = { path = "zeta-rs/hooks" }

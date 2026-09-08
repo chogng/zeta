@@ -25,6 +25,20 @@ fn session_scope_uses_the_declared_session_identity() {
 }
 
 #[test]
+fn issue_pr_preview_excludes_concurrent_shared_ref_updates() {
+    let scope = definition("issue/pr/preview")
+        .serialization_scope(&serde_json::json!({ "sessionId": "session-1" }))
+        .unwrap();
+
+    assert_eq!(
+        scope,
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::Exclusive,
+        })
+    );
+}
+
+#[test]
 fn resource_scope_keeps_resource_families_separate() {
     let resource = definition("resource/read")
         .serialization_scope(&serde_json::json!({ "resourceId": "same" }))

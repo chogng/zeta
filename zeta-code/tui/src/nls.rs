@@ -61,6 +61,17 @@ impl Default for Language {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Message {
+    ConfigIssues,
+    ConfigIssueMerge,
+    ConfigIssueMergeDescription,
+    ConfigIssueModel,
+    ConfigIssueModelDescription,
+    ConfigIssueModelMissing,
+    ConfigIssueModelPicker,
+    ConfigIssueModelSearch,
+    ConfigIssueModelEmpty,
+    ConfigIssueModelClear,
+
     ConfigTitle,
     ConfigProviders,
     ConfigLanguageServers,
@@ -81,6 +92,17 @@ pub(crate) enum Message {
 
 const fn english(message: Message) -> &'static str {
     match message {
+        Message::ConfigIssues => "Issues",
+        Message::ConfigIssueMerge => "Recommend issue grouping",
+        Message::ConfigIssueMergeDescription => "Suggest issues to implement together",
+        Message::ConfigIssueModel => "Analysis model",
+        Message::ConfigIssueModelDescription => "Use this model to analyse related issues",
+        Message::ConfigIssueModelMissing => "Not configured - choose a model",
+        Message::ConfigIssueModelPicker => "Issue analysis model",
+        Message::ConfigIssueModelSearch => "Search models",
+        Message::ConfigIssueModelEmpty => "No models from configured providers",
+        Message::ConfigIssueModelClear => "Clear model selection",
+
         Message::ConfigTitle => "Config",
         Message::ConfigProviders => "Providers",
         Message::ConfigLanguageServers => "Language servers",
@@ -108,6 +130,17 @@ const fn english(message: Message) -> &'static str {
 
 const fn japanese(message: Message) -> &'static str {
     match message {
+        Message::ConfigIssues => "Issues",
+        Message::ConfigIssueMerge => "Issue のまとめ処理を提案",
+        Message::ConfigIssueMergeDescription => "一緒に実装できる Issue を提案",
+        Message::ConfigIssueModel => "分析モデル",
+        Message::ConfigIssueModelDescription => "関連する Issue の分析に使うモデル",
+        Message::ConfigIssueModelMissing => "未設定 - モデルを選択",
+        Message::ConfigIssueModelPicker => "Issue 分析モデル",
+        Message::ConfigIssueModelSearch => "モデルを検索",
+        Message::ConfigIssueModelEmpty => "設定済みプロバイダーのモデルがありません",
+        Message::ConfigIssueModelClear => "モデルの選択を解除",
+
         Message::ConfigTitle => "設定",
         Message::ConfigProviders => "プロバイダー",
         Message::ConfigLanguageServers => "言語サーバー",
@@ -135,6 +168,17 @@ const fn japanese(message: Message) -> &'static str {
 
 const fn chinese(message: Message) -> &'static str {
     match message {
+        Message::ConfigIssues => "Issues",
+        Message::ConfigIssueMerge => "推荐合并处理",
+        Message::ConfigIssueMergeDescription => "推荐适合一起解决的 issue",
+        Message::ConfigIssueModel => "分析模型",
+        Message::ConfigIssueModelDescription => "用于分析相似或重复的 issue",
+        Message::ConfigIssueModelMissing => "尚未配置，请选择模型",
+        Message::ConfigIssueModelPicker => "Issue 分析模型",
+        Message::ConfigIssueModelSearch => "搜索模型",
+        Message::ConfigIssueModelEmpty => "已配置供应商中没有可用模型",
+        Message::ConfigIssueModelClear => "清除模型选择",
+
         Message::ConfigTitle => "配置",
         Message::ConfigProviders => "提供商",
         Message::ConfigLanguageServers => "语言服务器",
@@ -156,6 +200,17 @@ const fn chinese(message: Message) -> &'static str {
 
 const fn french(message: Message) -> &'static str {
     match message {
+        Message::ConfigIssues => "Issues",
+        Message::ConfigIssueMerge => "Suggérer des groupes d’issues",
+        Message::ConfigIssueMergeDescription => "Suggérer les issues à traiter ensemble",
+        Message::ConfigIssueModel => "Modèle d’analyse",
+        Message::ConfigIssueModelDescription => "Analyser les issues liées avec ce modèle",
+        Message::ConfigIssueModelMissing => "Non configuré - choisir un modèle",
+        Message::ConfigIssueModelPicker => "Modèle d’analyse des issues",
+        Message::ConfigIssueModelSearch => "Rechercher des modèles",
+        Message::ConfigIssueModelEmpty => "Aucun modèle des fournisseurs configurés",
+        Message::ConfigIssueModelClear => "Effacer le choix du modèle",
+
         Message::ConfigTitle => "Configuration",
         Message::ConfigProviders => "Fournisseurs",
         Message::ConfigLanguageServers => "Serveurs de langage",

@@ -132,6 +132,7 @@ impl ListSelectionItemId {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ListSelectionGroup {
+    enabled: bool,
     label: String,
     items: Vec<ListSelectionItem>,
 }
@@ -139,9 +140,15 @@ pub(crate) struct ListSelectionGroup {
 impl ListSelectionGroup {
     pub(crate) fn new(label: impl Into<String>, items: Vec<ListSelectionItem>) -> Self {
         Self {
+            enabled: true,
             label: label.into(),
             items,
         }
+    }
+
+    pub(crate) fn disabled(mut self) -> Self {
+        self.enabled = false;
+        self
     }
 
     pub(crate) fn label(&self) -> &str {
@@ -150,6 +157,10 @@ impl ListSelectionGroup {
 }
 
 impl TabListItem for ListSelectionGroup {
+    fn tab_enabled(&self) -> bool {
+        self.enabled
+    }
+
     fn tab_label(&self) -> &str {
         self.label()
     }
@@ -355,6 +366,9 @@ impl ListSelectionState {
             .iter()
             .enumerate()
             .find_map(|(tab, group)| {
+                if !group.enabled {
+                    return None;
+                }
                 group
                     .items
                     .iter()
@@ -397,7 +411,6 @@ impl ListSelectionState {
         self.focus == ListSelectionFocus::Search
     }
 
-    #[cfg(test)]
     pub(super) fn items_focused(&self) -> bool {
         self.focus == ListSelectionFocus::Items
     }

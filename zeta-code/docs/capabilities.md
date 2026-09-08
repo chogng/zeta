@@ -8,6 +8,7 @@
 
 | 功能 | 当前行为与限制 | 代码 / 测试 |
 | --- | --- | --- |
+| [Issue 开发与 PR](spec/issues.md) | 候选实现：统一面板与 Open / Closed 页签、多选合并为一个 Session、输入标签、固定开发起点、普通/草稿/自动合并 PR；正在验收 | [管理器](../tui/src/issues.rs)、[验收](changes/2026-09-07-issue-manager/verification.md) |
 | [消息输入](spec/conversation.md) | 空闲时提交新任务；运行中可排队等下一轮（Queue）或补充当前任务（Steer）。Steer 不能改变 Skill | [提交](../tui/src/thread/composer/submission.rs)、[测试](../tui/src/thread/composer/submission_tests.rs) |
 | [审批与提问](spec/conversation.md) | 支持一次批准、拒绝、选项和自定义回答。Esc 不隐式提交结果 | [审批](../tui/src/thread/interaction/approval.rs)、[回答](../tui/src/thread/interaction/query.rs)、[测试](../tui/src/thread/request_tests.rs) |
 | [会话管理](spec/sessions.md) | 各分组独立展开收起，支持归档与恢复。Archived 默认收起，其余默认展开 | [列表](../tui/src/sessions/manager.rs)、[场景测试](../tui/src/app/session_manager_tests.rs) |

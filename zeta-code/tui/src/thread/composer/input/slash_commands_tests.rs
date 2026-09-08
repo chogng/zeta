@@ -32,9 +32,11 @@ fn builtins_follow_enum_presentation_order() {
             "sessions",
             "agents",
             "subagents",
+            "issue",
+            "pr",
         ]
     );
-    assert_eq!(definitions.len(), 22);
+    assert_eq!(definitions.len(), 24);
 }
 
 #[test]

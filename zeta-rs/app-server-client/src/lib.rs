@@ -536,6 +536,52 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::GitTextDiff, GitRepositoryParams::default())
     }
 
+    pub fn create_issue_task(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issues::IssueTaskCreateParams,
+    ) -> Result<zeta_app_server_protocol::protocol::issues::IssueTaskResult, ClientError> {
+        self.call(ClientMethod::IssueTaskCreate, params)
+    }
+
+    pub fn read_issue_task(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issues::IssueTaskReadParams,
+    ) -> Result<zeta_app_server_protocol::protocol::issues::IssueTaskResult, ClientError> {
+        self.call(ClientMethod::IssueTaskRead, params)
+    }
+
+    pub fn preview_issue_pr(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issues::IssueTaskReadParams,
+    ) -> Result<zeta_app_server_protocol::protocol::issues::IssuePrPreview, ClientError> {
+        self.call(ClientMethod::IssuePrPreview, params)
+    }
+
+    pub fn create_issue_pr(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issues::IssuePrCreateParams,
+    ) -> Result<zeta_app_server_protocol::protocol::issues::IssuePrStatus, ClientError> {
+        self.call(ClientMethod::IssuePrCreate, params)
+    }
+
+    pub fn configure_issues(&mut self, params: zeta_app_server_protocol::protocol::issues::IssueConfigureParams) -> Result<zeta_app_server_protocol::protocol::config::ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::IssueConfigure, params)
+    }
+
+    pub fn list_issues(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issues::IssueListParams,
+    ) -> Result<zeta_app_server_protocol::protocol::issues::IssueListResult, ClientError> {
+        self.call(ClientMethod::IssueList, params)
+    }
+
+    pub fn read_issue(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issues::IssueReadParams,
+    ) -> Result<zeta_app_server_protocol::protocol::issues::IssueReadResult, ClientError> {
+        self.call(ClientMethod::IssueRead, params)
+    }
+
     pub fn git_status(&mut self) -> Result<GitStatusResult, ClientError> {
         self.call(ClientMethod::GitStatus, GitRepositoryParams::default())
     }

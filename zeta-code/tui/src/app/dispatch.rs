@@ -106,7 +106,9 @@ impl ActiveConversation {
         let mut output = CommandOutput::default();
 
         match command {
-            TuiSlashCommandAction::Sessions
+            TuiSlashCommandAction::Pr
+            | TuiSlashCommandAction::Issue
+            | TuiSlashCommandAction::Sessions
             | TuiSlashCommandAction::Agents
             | TuiSlashCommandAction::Subagents => {
                 return Err(CommandExecutionError(format!(
@@ -310,7 +312,7 @@ fn text_arguments(arguments: &[ChatInputItem]) -> Result<String, CommandExecutio
     if arguments.iter().any(|argument| {
         matches!(
             argument,
-            ChatInputItem::Image { .. } | ChatInputItem::Skill { .. }
+            ChatInputItem::Image { .. } | ChatInputItem::Skill { .. } | ChatInputItem::Issue { .. }
         )
     }) {
         return Err(CommandExecutionError(
@@ -321,7 +323,9 @@ fn text_arguments(arguments: &[ChatInputItem]) -> Result<String, CommandExecutio
         .iter()
         .filter_map(|argument| match argument {
             ChatInputItem::Text(text) => Some(text.as_str()),
-            ChatInputItem::Image { .. } | ChatInputItem::Skill { .. } => None,
+            ChatInputItem::Image { .. }
+            | ChatInputItem::Skill { .. }
+            | ChatInputItem::Issue { .. } => None,
         })
         .collect::<Vec<_>>()
         .join(" ")

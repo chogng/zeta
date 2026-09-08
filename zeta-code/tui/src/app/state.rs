@@ -171,6 +171,7 @@ pub(crate) struct App {
     thread: ThreadState,
     thread_presentations: ThreadPresentationStore,
     sessions: SessionsState,
+    issues: crate::issues::Manager,
     agent_thread_switcher: AgentThreadSwitcher,
     overlay: Option<DetailOverlay>,
     welcome: WelcomeModel,
@@ -199,6 +200,7 @@ impl App {
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
             ),
             sessions: SessionsState::default(),
+            issues: crate::issues::Manager::default(),
             agent_thread_switcher: AgentThreadSwitcher::default(),
             overlay: None,
             welcome: WelcomeModel::for_workspace(Path::new(".")),
@@ -260,6 +262,7 @@ impl App {
                 input_catalog,
             ),
             sessions: SessionsState::default(),
+            issues: crate::issues::Manager::default(),
             agent_thread_switcher: AgentThreadSwitcher::default(),
             overlay: None,
             welcome: WelcomeModel::for_workspace(dir_root),
@@ -308,6 +311,9 @@ impl App {
     ) -> Option<AppCommand> {
         if key.kind == KeyEventKind::Press {
             self.pointer.clear();
+        }
+        if self.issues.is_open() {
+            return self.issues.handle_key(key).map(Into::into);
         }
         let overlay_area = frame::transient_area(self, terminal_area);
         if let Some(overlay) = self.overlay_mut() {
@@ -673,6 +679,10 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::LoadIssueModels { request_id, expected_revision } => Some(ConfigCommand::LoadIssueModels { request_id, expected_revision }.into()),
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetIssues(edit)) => Some(ConfigCommand::SetIssues(edit).into()),
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenIssueModels { .. }) => None,
+
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(
                 request,
             )) => Some(ConfigCommand::Connection(request).into()),
@@ -783,6 +793,9 @@ impl App {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
+        if self.issues.is_open() {
+            return;
+        }
         self.pointer.clear();
         if self.overlay().is_some() || self.sessions.preview.is_some() {
             return;
@@ -1322,6 +1335,26 @@ impl App {
         self.thread_presentations.active().plan.view()
     }
 
+    pub(crate) fn issue_manager(&self) -> Option<&crate::issues::Manager> {
+        self.issues.is_open().then_some(&self.issues)
+    }
+
+    pub(crate) fn finish_issue_start(&mut self, generation: u64, result: Result<Vec<u64>, String>) {
+        match result {
+            Ok(numbers) => {
+                self.issues.finish_start(generation, None);
+                for number in numbers {
+                    self.thread_presentations
+                        .active_mut()
+                        .input
+                        .attach_issue(number);
+                }
+                self.chat_panel.start_input();
+            }
+            Err(error) => self.issues.finish_start(generation, Some(error)),
+        }
+    }
+
     pub(crate) fn session_manager_view(&self) -> Option<SessionManagerView<'_>> {
         (self.sessions.preview.is_none()
             && matches!(self.sessions.screen(), Some(TerminalScreen::Manager)))
@@ -1511,7 +1544,8 @@ impl App {
     }
 
     pub(crate) fn accepts_input(&self) -> bool {
-        self.sessions.preview.is_none()
+        !self.issues.is_open()
+            && self.sessions.preview.is_none()
             && !self.session_manager_focused_internal()
             && self.approval_view().is_none()
             && self.query_view().is_none()
@@ -1556,6 +1590,23 @@ impl App {
             self.pointer.clear();
         }
         match event {
+            AppEvent::Issues(crate::issues::Event::ContextReceived {
+                session_id,
+                numbers,
+            }) => {
+                if self.sessions.active_session_id() == Some(&session_id)
+                    && self.thread_presentations.active_id().as_str() == session_id.as_str()
+                    && !self.thread.has_user_message()
+                {
+                    for number in numbers {
+                        self.thread_presentations
+                            .active_mut()
+                            .input
+                            .attach_issue(number);
+                    }
+                }
+            }
+            AppEvent::Issues(event) => self.issues.update(event),
             AppEvent::Dirs(event) => self.apply_dir_event(event),
             AppEvent::Host(event) => self.apply_host_event(event),
             AppEvent::Config(event) => self.apply_config_event(event),
@@ -1824,6 +1875,7 @@ impl App {
 
     fn apply_config_event(&mut self, event: ConfigEvent) {
         match event {
+            ConfigEvent::IssueModels { request_id, result } => self.chat_panel.finish_issue_models(request_id, result),
             ConfigEvent::Connection(reply) => {
                 if let Err(error) = &reply.result {
                     self.thread
@@ -2144,6 +2196,12 @@ impl App {
         if !key.modifiers.is_empty() || !self.chat_input_focused() || !self.input().is_empty() {
             return None;
         }
+        if key.code == KeyCode::Right
+            && self.session_manager_view().is_none()
+            && self.visible_transcript_views().is_empty()
+        {
+            return Some(self.issues.open().map(Into::into));
+        }
         let target = match empty_input_navigation(self.sessions.screen(), key.code)? {
             EmptyInputNavigation::PreviousScreen => match self.sessions.previous_screen() {
                 Some(target) => target,
@@ -2433,6 +2491,15 @@ impl App {
         }
         if invocation.origin == SlashCommandOrigin::Local && invocation.arguments.is_empty() {
             match local {
+                Some(TuiSlashCommandAction::Pr) => {
+                    let session_id = self.sessions.active_session_id()?.clone();
+                    self.close_transient_surfaces();
+                    return self.issues.open_pr(session_id).map(Into::into);
+                }
+                Some(TuiSlashCommandAction::Issue) => {
+                    self.close_transient_surfaces();
+                    return self.issues.open().map(Into::into);
+                }
                 Some(TuiSlashCommandAction::Sessions | TuiSlashCommandAction::Agents) => {
                     self.agent_thread_switcher.blur();
                     self.close_transient_surfaces();
