@@ -28,6 +28,123 @@ fn open_provider(process: &mut TuiProcess) {
 }
 
 #[test]
+fn actual_tui_multiple_commands_preserve_internal_history_and_fixed_input() {
+    const REPLIES: [&str; 12] = [
+        "REPLY-00", "REPLY-01", "REPLY-02", "REPLY-03", "REPLY-04", "REPLY-05", "REPLY-06",
+        "REPLY-07", "REPLY-08", "REPLY-09", "REPLY-10", "REPLY-11",
+    ];
+    for size in [LARGE_SIZE, SMALL_SIZE] {
+        let fixture = Fixture::new();
+        let server =
+            ScenarioServer::start(REPLIES.map(|reply| HttpResponse::streaming([reply], None)));
+        fixture.write_config(&server.base_url());
+        let mut process = TuiProcess::start_in_vscode(&fixture, &[], size);
+        process.wait_for_stable_screen("ask permissions on");
+        for _ in 0..12 {
+            process.submit("/status");
+            process.wait_for_screen("Full context window");
+            process.escape();
+            process.wait_for_stable_screen("ask permissions on");
+        }
+        for (index, reply) in REPLIES.iter().enumerate() {
+            process.submit(&format!("MESSAGE-{index:02}"));
+            process.wait_for_screen(reply);
+            process.wait_for_stable_screen("ask permissions on");
+            assert_input_surface_visible(&process);
+        }
+        assert_eq!(server.request_count(), REPLIES.len());
+        process.scroll_up(2, 2);
+        process.wait_for_screen("Jump to bottom (click) ↓");
+        process.control_home();
+        process.wait_for_screen("Zeta Code v");
+        let visible_history = process.screen();
+        assert!(
+            visible_history.contains("> /status"),
+            "local commands must remain reachable at the start of the transcript:\n{visible_history}"
+        );
+        process.control_end();
+        process.wait_for_screen("REPLY-11");
+        assert!(process.screen().contains("MESSAGE-11"));
+        process.quit();
+    }
+}
+
+#[test]
+fn actual_tui_input_keeps_hint_bar_without_blank_line_growth() {
+    for size in [LARGE_SIZE, SMALL_SIZE] {
+        let fixture = Fixture::new();
+        let server = ScenarioServer::start([HttpResponse::streaming(["ISSUE13-REPLY"], None)]);
+        fixture.write_config(&server.base_url());
+        let mut process = TuiProcess::start_in_vscode(&fixture, &[], size);
+        process.wait_for_stable_screen("ask permissions on");
+        assert_input_surface_visible(&process);
+        let hint_row = |process: &TuiProcess| {
+            process
+                .screen()
+                .lines()
+                .position(|line| line.contains("ask permissions on"))
+                .expect("hint bar remains visible")
+        };
+        let initial_hint = hint_row(&process);
+        let initial_input = input_top_row(&process);
+        for ch in "hello".chars() {
+            process.type_text(&ch.to_string());
+            assert_eq!(
+                hint_row(&process),
+                initial_hint,
+                "typing must not move the hint bar"
+            );
+        }
+        process.enter();
+        process.wait_for_screen("ISSUE13-REPLY");
+        process.wait_for_stable_screen("ask permissions on");
+        assert_eq!(input_top_row(&process), initial_input);
+        assert_eq!(server.request_count(), 1);
+        if size.cols == LARGE_SIZE.cols && size.rows == LARGE_SIZE.rows {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            loop {
+                let screen = process.screen();
+                if !screen.contains("image in clipboard")
+                    && !screen.contains("shift+tab to cycle policy")
+                {
+                    break;
+                }
+                assert!(std::time::Instant::now() < deadline, "temporary input tips did not expire");
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            process.wait_for_stable_screen("ask permissions on");
+            process.assert_snapshot("issue13/fullscreen_conversation");
+        }
+        process.submit("/status");
+        process.wait_for_screen("Full context window");
+        process.escape();
+        process.wait_for_stable_screen("ask permissions on");
+        assert_input_surface_visible(&process);
+        assert_eq!(input_top_row(&process), initial_input);
+        let closed_hint = hint_row(&process);
+        process.type_text("next");
+        assert_eq!(hint_row(&process), closed_hint);
+        process.quit();
+    }
+}
+
+fn assert_input_surface_visible(process: &TuiProcess) {
+    let screen = process.screen();
+    assert!(
+        screen.lines().filter(|line| line.starts_with("──")).count() >= 2,
+        "chat input borders must remain visible:\n{screen}"
+    );
+}
+
+fn input_top_row(process: &TuiProcess) -> usize {
+    process
+        .screen()
+        .lines()
+        .position(|line| line.starts_with("──"))
+        .expect("chat input top border remains visible")
+}
+
+#[test]
 fn actual_tui_issue_config_switch_gates_its_tab() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
@@ -372,6 +489,25 @@ fn actual_tui_scrolls_the_transcript_with_the_mouse_wheel() {
 
     process.wait_for_stable_screen("Zeta Code v");
     process.wait_for_screen("Jump to bottom (click) ↓");
+    let screen = process.screen();
+    let (row, line) = screen
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.contains("Jump to bottom (click) ↓"))
+        .unwrap();
+    let column = line[..line.find("Jump to bottom").unwrap()].chars().count();
+    process.send(
+        format!(
+            "\x1b[<0;{};{}M\x1b[<0;{};{}m",
+            column + 1,
+            row + 1,
+            column + 1,
+            row + 1
+        )
+        .as_bytes(),
+    );
+    process.wait_for_stable_screen("line 20");
+    assert!(!process.screen().contains("Jump to bottom"));
     process.quit();
 }
 

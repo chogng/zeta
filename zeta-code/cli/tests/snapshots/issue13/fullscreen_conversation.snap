@@ -1,22 +1,17 @@
 ---
-source: zeta-code/tui/src/app/conversation_flow_tests.rs
-assertion_line: 143
-expression: render(&app)
+source: zeta-code/cli/tests/support/tui_process.rs
+assertion_line: 854
+expression: screen
 ---
 
     ▄  ▄     Zeta Code v0.1.0
-  ▗█▛██▜█▖   Automatic model · Access unknown
-  ▝▜████▛▘   .
+  ▗█▛██▜█▖   openai-compatible/zeta-real-scenario · Access unknown
+  ▝▜████▛▘   <FIXTURE>\workspace
     ▝  ▘
 
-> 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
+> hello
 
-● 你 好 ！ 普 通 对 话 已 经 连 通 。
-  fn main() { println!("zeta"); }
-
-
-  - 流 式 输 出 正 常
-  - 多 行 文 本 正 常
+● ISSUE13-REPLY
 
 
 
@@ -29,9 +24,14 @@ expression: render(&app)
 
 
 
-                                                                         shift+tab to cycle policy
+
+
+
+
+
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 >
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-
+  zeta-real-scenario
   ⏸ ask permissions on

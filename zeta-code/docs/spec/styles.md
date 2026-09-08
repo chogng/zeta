@@ -105,7 +105,7 @@ Vim Insert 模式使用同一个 `> `；Normal 和 Visual 模式继续使用各�
 - 正文中的用户消息和本地命令输入行使用独立表面颜色，命令结果仍使用普通背景。
 - 该表面不复用选择、悬停或浮层状态：`userMessageBackground` 在 Dark 与 Dark Colorblind 中为 `#161B22`，在 Light 与 Light Colorblind 中为 `#F6F8FA`。
 
-正文离开最新位置时，`Ctrl+End to jump to bottom ↓` 提示位于正文区最后一行中央，使用 `transcriptJumpBackground` 灰色表面；正文不属于增强鼠标捕获区域，提示使用实际可用的 Ctrl+End 键盘动作。
+正文离开最新位置时，`Jump to bottom (click) ↓` 位于正文区最后一行中央，使用 `transcriptJumpBackground` 灰色表面；整块文字与箭头可点击，悬停和按下使用统一交互色。Ctrl+End 同样可用，但不与按钮文案重复显示；增强鼠标关闭时改为 `Ctrl+End to jump to bottom ↓`。回到最新位置后隐藏，不改写 TopTip，也不因滚动将 StatusLine 切成 HitBar。
 
 ## 输入框边线
 

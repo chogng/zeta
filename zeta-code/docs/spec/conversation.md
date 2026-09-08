@@ -20,7 +20,7 @@
 
 | 界面 / 进入方式 | 完整操作方案 | 返回方式与必要区别 |
 | --- | --- | --- |
-| Session / 管理页面的输入框 | 字符编辑草稿；Enter 提交，运行中 Enter 排队、Ctrl+Enter 单次 Steer；Shift+Tab 切权限模式；Ctrl+V 粘贴图片；空输入时左右切页面，管理页 ↑ 进入管理列表，Session 页 ↓ 进入 Agents，Alt+↑ 进入 Queue | 编辑模式与候选状态由输入组件负责；普通字母不作为列表导航 |
+| Session / 管理页面的输入框 | 字符编辑草稿；Enter 提交，运行中 Enter 排队、Ctrl+Enter 单次 Steer；↑ / ↓ 在多行草稿内移动，到达首尾后召回上一条或下一条纯文本提交；Shift+Tab 切权限模式；Ctrl+V 粘贴图片；空输入时左右切页面，管理页 ↑ 进入管理列表，Session 页 ↓ 进入 Agents，Alt+↑ 进入 Queue | 编辑模式与候选状态由输入组件负责；普通字母不作为列表导航 |
 | 正文条目选择 / 空输入时 Ctrl+↑或Ctrl+↓ | 列表导航；Space 展开可展开内容，Enter 查看完整详情；Ctrl+↑/↓ 保留已有条目选择入口 | Esc 回输入框；Space 展开输出，不承担会话预览 |
 | Queue / Alt+↑ | 列表导航；Enter 恢复编辑，Ctrl+Enter 立即发送，Ctrl+↑/↓ 调序，Delete 删除 | Esc 回输入框；到边界保持焦点；Ctrl+C 保留中断当前运行的应用动作 |
 | Agents / 空输入时 ↓ | 列表导航；Enter 切换所选 Thread | Esc 回输入框；到边界保持焦点，不向草稿输入字母 |
