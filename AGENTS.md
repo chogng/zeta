@@ -26,6 +26,7 @@ Before modifying this repository:
 - 写 Readme.md 描述 crate 职责时，请用不超过3点来简洁高效描述
 - 禁止使用 mod.rs, 有 mod.rs 让其退场
 - 思考问题时，避免局部视角看问题，从整体看
+- Read [`pull_request_template.md`](.github/pull_request_template.md) for pr
 
 ## Learnings
 
