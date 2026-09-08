@@ -30,7 +30,9 @@ impl SqliteIssueTaskStore {
                 [session_id],
                 |row| row.get(0),
             )
-            .map_err(|error| error.to_string())?;
+            .optional()
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "This Session has no associated issues".to_string())?;
         let mut task: IssueTask =
             serde_json::from_str(&value).map_err(|error| error.to_string())?;
         if task

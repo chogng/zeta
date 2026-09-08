@@ -94,3 +94,19 @@ The Issue manager and command panels now share `widgets/panel.rs` for the title 
 The terminal scenario uses an offline GitHub provider and preserves the existing source-change and no-model-call assertions. No live GitHub PR is published. Review is self-review. Disk pressure during validation was handled by removing completed TUI incremental cache and older TUI object files under the ignored build directory; source files and current test executables were retained.
 
 Final AC-12 result: accepted for the tested macOS TUI scope. `just test-tui actual_tui_issue_regular_and_draft_prs -- --nocapture` also passed both ordinary and draft PR flows after the shared panel change. Both matching builds passed again. The final source fingerprint is unchanged; all 9 touched documents have valid local file links and `git diff --check` passes. The new panel work is complete; the separately recorded similarity-analysis implementation remains outside this correction.
+
+
+## 2026-09-08 PR #16：Issue 上下文失败重试
+
+来源：[评审意见](https://github.com/chogng/zeta/pull/16#discussion_r3957752033)。上一轮允许失败请求再次加载，但每次终端轮询都会重新发起，造成请求和错误正文持续增长。本轮只修复这一恢复路径，延续本次工作记录。
+
+基线：`637d4164d5925a1c4cd5b821ca3457d39f433961`；代码范围为 `zeta-code/tui/src/app/driver.rs` 和 `zeta-code/tui/src/app/driver/tests.rs`。现行行为见 [Issue 选择与开始](../../spec/issues.md#选择与开始)，职责仍由 [TUI 后台请求](../../design/tui.md#后台请求与旧结果) 中的 AppDriver 承担。
+
+| 验收项 | 必要行为 | 验证 |
+| --- | --- | --- |
+| R-1 | 连续失败按 1、2、4、8、16、30 秒等待，之后保持 30 秒；从失败完成时计时 | 通过：`just test zeta-tui --lib issue_context` |
+| R-2 | 两分钟的 25 毫秒轮询只触发 8 次立即失败的请求，正文仅增加一条错误 | 通过：`just test zeta-tui --lib issue_context` |
+| R-3 | 延迟重试成功后停止请求；空结果也停止请求 | 通过：`just test zeta-tui --lib issue_context` |
+| R-4 | 切换 Thread 重置等待，旧成功或失败不能修改当前状态，切回也重新加载 | 通过：`just test zeta-tui --lib issue_context` |
+
+候选代码指纹：`9b0d4958e0a5a51cf92b3c26f34f1c6e28587198b564ee99e3d092cbefc76c1d`，为上述两个 Rust 文件相对基线的 `git diff --binary` 输出的 SHA-256，不包含文档。`just test zeta-tui --lib issue_context` 完成，5 项通过，包含原有的发送后拒绝迟到标签回归。`just check zeta-tui` 完成通过；定向 `rustfmt --check`、`git diff --check` 与 3 份修改文档的 49 个本地文件链接检查通过。本轮 R-1 至 R-4 已完成验收。测试使用可控的单调时间，并将失败事件送入实际 App 正文状态；本轮没有新增界面或终端输出布局，不以截图验收，也没有重跑真实 PTY 或访问真实 GitHub Issue 的场景。审查方式为自查。
