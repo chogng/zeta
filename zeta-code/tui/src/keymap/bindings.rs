@@ -565,15 +565,6 @@ pub(crate) const PROVIDER_CONFIRM: Keybinding = Keybinding::new(ENTER, "confirm"
 pub(crate) const EDIT_FIELD: Keybinding = Keybinding::new(ENTER, "edit");
 pub(crate) const PROVIDER_CREATE: Keybinding = Keybinding::new(ENTER, "create provider");
 pub(crate) const PROVIDER_FETCH_MODELS: Keybinding = Keybinding::new(ENTER, "fetch models");
-pub(crate) const PROVIDER_NEXT_FIELD: Keybinding =
-    Keybinding::new(&[(NONE, KeyCode::Tab)], "next field");
-pub(crate) const PROVIDER_SWITCH_TABS: Keybinding = Keybinding::new(
-    &[
-        (KeyModifiers::ALT, KeyCode::Left),
-        (KeyModifiers::ALT, KeyCode::Right),
-    ],
-    "switch tabs",
-);
 pub(crate) const PROVIDER_ENTER_TAB: Keybinding = Keybinding::new(ENTER, "enter tab");
 pub(crate) const PROVIDER_RETURN_TABS: Keybinding = Keybinding::new(ESC, "return to tabs");
 pub(crate) const PROVIDER_RETURN: Keybinding = Keybinding::new(ESC, "return to Providers");
@@ -634,12 +625,6 @@ fn hints(actions: &[Keybinding]) -> String {
 // HitBar composition lives here; callers only select the recipe for their state.
 pub(crate) static CLOSE_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[CLOSE]));
 pub(crate) static STATUS_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[TAB_NEXT, CLOSE]));
-pub(crate) static SEARCH_HINTS: LazyLock<String> = LazyLock::new(|| {
-    hints(&[Keybinding {
-        shown: 2,
-        ..SEARCH_RETURN
-    }])
-});
 pub(crate) static TAB_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[TABS, ENTER_LIST, CLOSE]));
 pub(crate) static APPROVAL_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[APPROVE]));
 pub(crate) static ANSWER_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[ANSWER]));
@@ -734,10 +719,7 @@ pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static s
                 SEARCH.keys(),
                 "focus search in a searchable panel; Enter or Esc returns to its list",
             ),
-            (
-                TABS.keys(),
-                "switch panel tabs; Enter enters the active list",
-            ),
+            (TABS.keys(), "switch panel tabs from tabs, lists or search"),
             (
                 CLOSE.keys(),
                 "return one interaction level; pending approval/query requires an explicit answer",

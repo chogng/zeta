@@ -361,6 +361,50 @@ fn actual_tui_config_enables_and_disables_memory_diagnostics() {
 }
 
 #[test]
+fn actual_tui_tab_switches_from_content_search_and_unsaved_field() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Enhanced TUI");
+    let original_config = fixture.config_source();
+    process.tab();
+    process.wait_for_screen("> OpenAI");
+    process.type_text("/OpenAI");
+    process.tab();
+    process.wait_for_screen("No matching configuration");
+    assert!(process.screen().contains("OpenAI"));
+    process.back_tab();
+    process.enter();
+    process.wait_for_screen("> OpenAI");
+    process.enter();
+    process.wait_for_screen("> API key");
+    process.back_tab();
+    process.wait_for_screen("> Provider name");
+    process.enter();
+    process.type_text("Unsubmitted service");
+    process.tab();
+    process.wait_for_screen("> API key");
+    process.back_tab();
+    process.wait_for_screen("Unsubmitted service");
+    process.type_text(" continued");
+    process.wait_for_screen("Unsubmitted service continued");
+    process.resize(SMALL_SIZE);
+    process.wait_for_screen("Unsubmitted service continued");
+    process.escape();
+    assert!(!process.screen().contains("Unsubmitted service"));
+    assert_eq!(fixture.config_source(), original_config);
+    process.escape();
+    process.escape();
+    process.escape();
+    process.quit();
+
+    assert!(server.request_bodies().is_empty());
+}
+
+#[test]
 fn actual_tui_status_line_style_persists_across_restart() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);

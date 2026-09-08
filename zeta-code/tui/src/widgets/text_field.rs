@@ -43,6 +43,7 @@ pub(crate) struct TextField {
     input: SearchBoxState,
     confirmed: Zeroizing<String>,
     mode: Mode,
+    hints: [KeyHints; 3],
 }
 
 impl TextField {
@@ -54,6 +55,11 @@ impl TextField {
             input,
             confirmed: Zeroizing::new(value.into()),
             mode: Mode::Selected,
+            hints: [
+                SELECT_HINTS.clone(),
+                EDIT_HINTS.clone(),
+                KeyHints::new().with_note("Saving…"),
+            ],
         }
     }
 
@@ -67,10 +73,15 @@ impl TextField {
 
     pub(crate) fn key_hints(&self) -> &str {
         match self.mode {
-            Mode::Selected => SELECT_HINTS.text(),
-            Mode::Editing => EDIT_HINTS.text(),
-            Mode::Saving => "Saving…",
+            Mode::Selected => self.hints[0].text(),
+            Mode::Editing => self.hints[1].text(),
+            Mode::Saving => self.hints[2].text(),
         }
+    }
+
+    pub(crate) fn with_key_hint(mut self, binding: bindings::Keybinding) -> Self {
+        self.hints = self.hints.map(|hints| hints.with_binding(binding));
+        self
     }
 
     pub(crate) fn blur(&mut self) {

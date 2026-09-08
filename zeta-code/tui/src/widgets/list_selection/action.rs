@@ -30,6 +30,7 @@ pub(crate) struct ListSelection<A> {
     state: ListSelectionState,
     actions: BTreeMap<ListSelectionItemId, A>,
     key_hints: KeyHints,
+    search_hints: KeyHints,
 }
 
 impl<A> ListSelection<A> {
@@ -38,10 +39,12 @@ impl<A> ListSelection<A> {
         actions: BTreeMap<ListSelectionItemId, A>,
     ) -> Self {
         let key_hints = model.key_hints();
+        let search_hints = search_hints(&model);
         Self {
             state: ListSelectionState::new(model),
             actions,
             key_hints,
+            search_hints,
         }
     }
 
@@ -51,13 +54,14 @@ impl<A> ListSelection<A> {
         actions: BTreeMap<ListSelectionItemId, A>,
     ) {
         self.key_hints = model.key_hints();
+        self.search_hints = search_hints(&model);
         self.state.replace_model(model);
         self.actions = actions;
     }
 
     pub(crate) fn key_hints(&self) -> &str {
         if self.state.search_focused() {
-            bindings::SEARCH_HINTS.as_str()
+            self.search_hints.text()
         } else if self.state.tabs_focused() {
             bindings::TAB_HINTS.as_str()
         } else {
@@ -98,4 +102,12 @@ impl<A: Clone> ListSelection<A> {
             ListSelectionInputOutcome::FocusPrevious => ListSelectionOutcome::FocusPrevious,
         }
     }
+}
+
+fn search_hints(model: &ListSelectionModel) -> KeyHints {
+    let mut hints = KeyHints::new().with_binding(bindings::SEARCH_RETURN);
+    if model.show_tabs() {
+        hints = hints.with_binding(bindings::TABS);
+    }
+    hints
 }

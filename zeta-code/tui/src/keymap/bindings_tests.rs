@@ -33,7 +33,7 @@ fn a_panel_binding_drives_both_activation_and_hint_without_stealing_search_text(
     .with_search(SearchBoxModel::new("Search"));
     assert_eq!(
         model.key_hints().text(),
-        "r to resume  ·  / to search  ·  Esc to close"
+        "r to resume  ·  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close"
     );
     let mut state = ListSelectionState::new(model);
     assert_eq!(
