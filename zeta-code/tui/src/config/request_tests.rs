@@ -414,3 +414,113 @@ fn rejected_connection_update_does_not_send_key_or_report_saved() {
     assert!(matches!(result, super::Event::Connection(reply) if reply.result.is_err()));
     assert_eq!(requests.lock().unwrap().len(), 2);
 }
+
+#[test]
+fn saving_key_configures_default_model_without_fetching_models() {
+    for existing in [false, true] {
+        let mut current = empty_config_snapshot();
+        let config = zeta_app_server_protocol::protocol::config::ProviderConfigDto {
+            provider: "openai".into(),
+            custom: None,
+            base_url: Some("https://proxy.example.test/v1".into()),
+            max_output_tokens: None,
+            model_context: Default::default(),
+        };
+        if existing {
+            current.providers.insert("openai".into(), config.clone());
+        }
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let mut client = AppServerClient::new(RecordingTransport {
+            requests: requests.clone(),
+            responses: VecDeque::from([
+                response(1, serde_json::to_value(&current).unwrap()),
+                response(
+                    2,
+                    serde_json::json!({"revision":8,"generation":2,"disposition":"updated"}),
+                ),
+                response(
+                    3,
+                    serde_json::json!({"provider":"openai","apiKeyConfigured":true}),
+                ),
+                response(4, serde_json::to_value(&current).unwrap()),
+                response(5, serde_json::json!({"providers":[]})),
+            ]),
+        });
+        super::set_provider_api_key(
+            &mut client,
+            crate::config::ProviderApiKeyEdit::new("openai".into(), "test-key".into()),
+        )
+        .unwrap();
+        let requests = requests.lock().unwrap();
+        assert_eq!(
+            requests
+                .iter()
+                .map(|request| request["method"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            [
+                "config/read",
+                "provider/configure",
+                "provider/apiKey/set",
+                "config/read",
+                "provider/list"
+            ]
+        );
+        if existing {
+            assert_eq!(
+                requests[1]["params"]["config"],
+                serde_json::to_value(&config).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
+fn saving_unchanged_connection_with_no_model_still_configures_provider() {
+    let mut current = empty_config_snapshot();
+    let config = zeta_app_server_protocol::protocol::config::ProviderConfigDto {
+        provider: "openai".into(),
+        custom: None,
+        base_url: None,
+        max_output_tokens: None,
+        model_context: Default::default(),
+    };
+    current.providers.insert("openai".into(), config.clone());
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(1, serde_json::to_value(&current).unwrap()),
+            response(
+                2,
+                serde_json::json!({"revision":8,"generation":2,"disposition":"updated"}),
+            ),
+            response(3, serde_json::to_value(&current).unwrap()),
+            response(4, serde_json::json!({"providers":[]})),
+        ]),
+    });
+    let result = super::execute(
+        &mut client,
+        super::Command::Connection(crate::config::openai::Request {
+            id: crate::client::new_command_id("test"),
+            revision: current.revision,
+            config,
+            key: None,
+            operation: crate::config::openai::Operation::Save,
+        }),
+    )
+    .unwrap();
+    assert!(matches!(result, super::Event::Connection(reply) if reply.result.is_ok()));
+    let requests = requests.lock().unwrap();
+    assert_eq!(
+        requests
+            .iter()
+            .map(|request| request["method"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "config/read",
+            "provider/configure",
+            "config/read",
+            "provider/list"
+        ]
+    );
+}

@@ -19,7 +19,7 @@
 | [状态与资源](spec/status.md) | `/status` 提供 Thread / Processes 两页并只读展示；Config 控制持续内存诊断，状态行按需采样，不自动确认泄漏 | [状态页](../tui/src/status/panel.rs)、[采样](../../zeta-rs/memory-diagnostics/src/process_resources.rs)、[测试](../../zeta-rs/memory-diagnostics/src/process_resources_tests.rs) |
 | [目录管理](spec/directories.md) | `/add-dir` 面板可输入路径并按 Enter 添加；成功刷新并定位权限项，失败保留输入，重复添加保留原权限 | [面板](../tui/src/dirs/panel.rs)、[回归测试](../tui/src/dirs_tests.rs)、[验收](changes/dir-add/verification.md) |
 | [设置与快捷键](spec/commands.md#设置与快捷键) | 支持保存 TUI 设置、主题和应用快捷键；Config 可在 English、日本語、中文、Français 间切换并立即刷新根页面；面板基础键仍固定，凭据使用专用接口 | [配置](../tui/src/config/request.rs)、[本地化文案](../tui/src/nls.rs)、[快捷键](../tui/src/keymap/settings.rs)、[主题测试](../tui/src/theme/resource_tests.rs) |
-| [OpenAI 配置](spec/providers.md) | 官方 Key、ChatGPT 订阅和多个命名连接以 tab 划分；先选中字段再 Enter 编辑，确认后停留当前字段；空目录和发现失败清除旧结果并提示原因。自定义连接可选 Responses / Chat Completions，独立保存 Key，并主动获取模型目录供 `/model` 选择；字段交互已自动化验证，Windows ConPTY 的编辑、取消、保存和模型发现已实测；真实账号未实测 | [面板](../tui/src/config/openai.rs)、[版本与验收](changes/2026-09-08-provider-input-tabs/verification.md) |
+| [OpenAI 配置](spec/providers.md) | 官方 Key、ChatGPT 订阅和多个命名连接以 tab 划分；保存内置供应商时自动补齐默认 API 模型，无需先获取目录；先选中字段再 Enter 编辑，确认后停留当前字段；空目录和发现失败清除旧结果并提示原因。自定义连接可选 Responses / Chat Completions，独立保存 Key，并主动获取模型目录供 `/model` 选择；字段交互已自动化验证，Windows ConPTY 的编辑、取消、保存和模型发现已实测；真实账号未实测 | [面板](../tui/src/config/openai.rs)、[版本与验收](changes/2026-09-08-provider-input-tabs/verification.md) |
 | [ChatGPT 订阅](spec/providers.md#chatgpt-账户) | Providers → OpenAI 可查看账户、设备码登录、取消和退出；有 Codex 时只读复用，无 Codex 时维护登录和续期，缺失时创建兼容文件 | [账户页面与请求](../tui/src/config/subscription.rs)、[初始与后续验收](changes/chatgpt-provider/README.md) |
 | [鼠标交互](spec/terminal.md#鼠标规则) | 内容区与详情滚动始终可用；Enhanced TUI 另外提供点击、悬停、拖选和自动复制 | [鼠标](../tui/src/terminal/mouse.rs)、[选择测试](../tui/src/terminal/screen_selection_tests.rs)、[事件循环测试](../tui/src/app/event_loop_tests.rs) |
 | [Welcome 宠物](spec/welcome-pet.md) | 部分实现：静止绘制、动作资源和独立预览可用，Welcome 点击播放尚未接入 | [绘制](../tui/src/app/welcome/pet.rs)、[资源测试](../tui/src/app/welcome_view_tests.rs) |
@@ -40,4 +40,4 @@
 
 完整 Markdown、桌面同等鼠标操作及自动确认内存泄漏不属于当前已支持能力；持续诊断由 Config 明确开启，Status 只读展示。未列出的命令从[命令键表](spec/commands.md#每个命令面板)继续核对。
 
-支持范围或缺口变化时更新对应行；本次工作的完成结论记录在[验收文件](../../docs/development-workflow.md#验证)中。
+支持范围或缺口变化时更新对应行；普通任务在回复中说明验证结果，仅 `/develop` 使用[验收文件](../../docs/development-workflow.md#验证)。

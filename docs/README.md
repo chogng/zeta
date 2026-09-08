@@ -2,13 +2,13 @@
 
 [系统架构](architecture.md) · [Zeta Code](../zeta-code/docs/README.md) · [app](../app/docs/README.md) · [用户文档](https://github.com/chogng/zeta-docs)
 
-开发功能见[开发与验收流程](development-workflow.md)，编写文档见[写作规范](documentation-guidelines.md)。各模块的代码和测试入口在相邻 README。
+普通开发直接完成实现和测试，按需更新现有文档；显式使用 `/develop` 时才采用[阶段产物与验收规则](development-workflow.md)。编写文档见[写作规范](../.github/instructions/documentation.instructions.md)。各模块的代码和测试入口在相邻 README。
 
 ## 意图驱动的 Agent 开发流程
 
 | 文档 | 类型 | 一句话 |
 | --- | --- | --- |
-| [`development-workflow.md`](development-workflow.md) | 规范 | 当前仓库使用的意图、规格、计划与验收方法，含四份记录模板；不依赖 `/develop` 产品实现 |
+| [`development-workflow.md`](development-workflow.md) | 规范 | 仅 `/develop` 使用的阶段产物、记录模板与验收规则 |
 | [`develop.md`](develop.md) | 设计 | 从自然对话到 Intent、Spec、Plan、实施、验收和收口的统一系统设计 |
 
 ## Agent 与运行时

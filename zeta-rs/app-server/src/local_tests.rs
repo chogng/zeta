@@ -1177,6 +1177,40 @@ impl ModelProvider for RecordingModelProvider {
 }
 
 #[test]
+fn configured_provider_resolves_default_model_with_its_saved_endpoint() {
+    let path = config_path("provider-default-runtime");
+    let store = ConfigStore::open(&path).unwrap();
+    let mut config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
+    config.base_url = Some("https://proxy.example.test/v1".into());
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-default").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureProvider {
+                provider: config.provider.clone(),
+                config: config.clone(),
+            },
+        })
+        .unwrap();
+    let provider = Arc::new(RecordingModelProvider::default());
+    let resolver = ModelProviderSnapshotResolver {
+        model_provider: provider.clone(),
+    };
+    let _ = resolver.resolve(&store.read_snapshot().unwrap().values);
+    let request = provider.request.lock().unwrap().clone().unwrap();
+    assert_eq!(
+        request.model,
+        ModelRef::new(
+            ProviderId::new("openai").unwrap(),
+            ModelId::new("gpt-6-astra").unwrap(),
+        )
+    );
+    assert_eq!(request.config, config);
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
 fn subscription_model_resolution_does_not_require_an_api_key_provider_config() {
     let provider = Arc::new(RecordingModelProvider::default());
     let resolver = ModelProviderSnapshotResolver {
@@ -1333,6 +1367,16 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
     };
 
     let models = model.list().unwrap();
+
+    let api_models = models
+        .iter()
+        .filter(|entry| {
+            entry.model.provider.as_str() == "openai"
+                && entry.access == zeta_protocol::ModelAccess::ApiKey
+        })
+        .map(|entry| entry.model.model.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(api_models, ["gpt-6-astra", "gpt-5.6"]);
 
     let custom = models
         .iter()

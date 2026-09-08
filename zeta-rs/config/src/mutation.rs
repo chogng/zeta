@@ -1,4 +1,6 @@
 use crate::{ConfigError, PreferencesUpdate, UserConfigCommand, UserConfigDocument};
+use zeta_model_provider_config::STATIC_MODEL_CATALOG;
+use zeta_model_provider_config::StaticModelRuntime;
 use zeta_protocol::Patch;
 
 pub(crate) fn apply_command(
@@ -16,6 +18,15 @@ pub(crate) fn apply_command(
                 )));
             }
             document.providers.insert(provider.clone(), config.clone());
+            if document.agent.preferred_model.is_none() {
+                document.agent.preferred_model = STATIC_MODEL_CATALOG
+                    .iter()
+                    .find(|model| {
+                        model.provider_id == provider.as_str()
+                            && model.runtime == StaticModelRuntime::ProviderApi
+                    })
+                    .map(|model| model.model_ref());
+            }
         }
         UserConfigCommand::RemoveProvider { provider } => {
             if document

@@ -9,7 +9,7 @@
 | [capabilities.md](capabilities.md) | 目前支持什么，还有什么缺口？ | 随实现更新摘要，链接规格和证据 |
 | `spec/` | 功能现在应该怎样工作？ | 每个主题保留一份现行要求；写进规格不等于已验收 |
 | `design/` | 状态、模块、请求和生命周期怎样分工，为什么？ | 随架构更新，不重复命令用法和完整键表 |
-| [changes/](changes/README.md) | 某次为什么改、改了哪些要求、实际验证了什么？ | 记录一次工作；完成后保留，后续独立工作另建记录 |
+| [changes/](changes/README.md) | 某次为什么改、改了哪些要求、实际验证了什么？ | 保留既有历史；仅 `/develop` 新建阶段记录 |
 | [TUI 开发指南](../tui/README.md) | 实现入口、配置格式和测试命令在哪里？ | 跟随代码维护 |
 
 ## 按功能查规格
@@ -53,8 +53,8 @@
 ## 修改文档的顺序
 
 1. 从功能表确定主题；跨功能规则只有变化时才更新。
-2. 在[变更索引](changes/README.md)登记本次工作及对应的长期规格、设计。
-3. 变更规格写本次差异，计划跟踪实施；验收绑定具体要求版本和候选代码。
-4. 完成时合并有效要求到现行规格、更新功能状态，并保留历史记录与证据。
+2. 按需修改对应现行规格、设计或功能状态，避免重复维护。
+3. 普通任务在回复中说明改动和验证，不生成阶段记录或登记变更索引。
+4. 仅用户显式使用 `/develop` 时，生成阶段产物并在[变更索引](changes/README.md)登记。
 
-详细规则见[开发流程](../../docs/development-workflow.md)与[文档写作规范](../../.github/instructions/documentation.instructions.md)。
+阶段记录规则见 [`/develop` 工作流](../../docs/development-workflow.md)；日常写作见[文档写作规范](../../.github/instructions/documentation.instructions.md)。

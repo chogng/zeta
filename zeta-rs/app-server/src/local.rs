@@ -1973,9 +1973,19 @@ impl ModelCatalog for ConfigBackedModelService {
             )?);
         }
         models.sort_by(|left, right| {
+            let catalog_position = |model: &zeta_protocol::ModelRef| {
+                zeta_model_provider_config::STATIC_MODEL_CATALOG
+                    .iter()
+                    .position(|entry| {
+                        entry.provider_id == model.provider.as_str()
+                            && entry.model_id == model.model.as_str()
+                    })
+                    .unwrap_or(usize::MAX)
+            };
             left.model
                 .provider
                 .cmp(&right.model.provider)
+                .then_with(|| catalog_position(&left.model).cmp(&catalog_position(&right.model)))
                 .then_with(|| left.model.model.cmp(&right.model.model))
         });
         Ok(models)

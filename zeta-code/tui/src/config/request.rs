@@ -118,7 +118,8 @@ fn execute_connection<T: JsonRpcTransport>(
         );
     }
     if request.operation == super::openai::Operation::Save
-        && current.providers.get(&provider) != Some(&request.config)
+        && (current.providers.get(&provider) != Some(&request.config)
+            || current.preferred_model.is_none())
     {
         client
             .configure_provider(
@@ -225,6 +226,25 @@ where
     T: JsonRpcTransport,
 {
     let (provider, api_key) = edit.into_parts();
+    let current = client.read_config()?;
+    if !current.providers.contains_key(&provider) || current.preferred_model.is_none() {
+        let config = current.providers.get(&provider).cloned().unwrap_or_else(|| {
+            zeta_app_server_protocol::protocol::config::ProviderConfigDto {
+                provider: provider.clone(),
+                custom: None,
+                base_url: None,
+                max_output_tokens: None,
+                model_context: Default::default(),
+            }
+        });
+        client.configure_provider(
+            zeta_app_server_protocol::protocol::config::ProviderConfigureParams {
+                command_id: new_command_id("provider-config"),
+                expected_revision: current.revision,
+                config,
+            },
+        )?;
+    }
     client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
     let choices = read_config_choices(client)?;
     Ok(ProviderApiKeyUpdate { provider, choices })

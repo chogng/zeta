@@ -155,6 +155,71 @@ fn configure_provider(store: &ConfigStore, revision: u64, provider: &str) -> Con
 }
 
 #[test]
+fn configuring_provider_selects_its_first_api_model_and_preserves_selection_after_restart() {
+    let path = config_path("provider-default-model");
+    let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "openai");
+    let expected = model_ref("openai", "gpt-6-astra");
+    assert_eq!(
+        store.read_snapshot().unwrap().values.preferred_model,
+        Some(expected.clone())
+    );
+    configure_provider(&store, configured.revision.get(), "anthropic");
+    drop(store);
+    let reopened = ConfigStore::open(&path).unwrap();
+    assert_eq!(
+        reopened.read_snapshot().unwrap().values.preferred_model,
+        Some(expected)
+    );
+    drop(reopened);
+    remove_config_files(&path);
+}
+
+#[test]
+fn saving_existing_provider_restores_missing_model_but_preserves_explicit_choice() {
+    let path = config_path("provider-existing-model");
+    let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "anthropic");
+    let cleared = store
+        .apply(update_preferences(
+            "clear",
+            configured.revision.get(),
+            Patch::Null,
+        ))
+        .unwrap();
+    let saved = configure_provider(&store, cleared.revision.get(), "anthropic");
+    assert_eq!(
+        store.read_snapshot().unwrap().values.preferred_model,
+        Some(model_ref("anthropic", "claude-sonnet-4-20250514"))
+    );
+    let explicit = model_ref("anthropic", "custom-deployment");
+    let selected = store
+        .apply(update_preferences(
+            "select",
+            saved.revision.get(),
+            Patch::Value(explicit.clone()),
+        ))
+        .unwrap();
+    configure_provider(&store, selected.revision.get(), "anthropic");
+    assert_eq!(
+        store.read_snapshot().unwrap().values.preferred_model,
+        Some(explicit)
+    );
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn configuring_provider_without_builtin_models_does_not_invent_a_model() {
+    let path = config_path("provider-no-default");
+    let store = ConfigStore::open(&path).unwrap();
+    configure_provider(&store, 0, "ollama");
+    assert_eq!(store.read_snapshot().unwrap().values.preferred_model, None);
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
 fn issue_config_defaults_on_and_preserves_its_model_across_disable_and_restart() {
     let path = config_path("issues");
     let store = ConfigStore::open(&path).unwrap();
