@@ -32,6 +32,12 @@ Zeta Code 的跨客户端契约从 [API 入口](../docs/README.md)查找；下�
 
 Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 [dirs.rs](src/dirs.rs)。新增功能从对应模块进入，不在 App 里再建一套状态和请求流程。
 
+一级模块按能力归属组织，模块内部按实际职责拆文件；小组件直接在同名文件中保留状态、交互和绘制。只有需要能力和依赖隔离时才另拆 crate。共享 `widgets` 提供列表、输入和提示绘制，`TopTip`、`ChatPanel`、`CommandPanel` 等应用交互组件归 `app`。
+
+跨功能命令由 [dispatch.rs](src/app/dispatch.rs) 分发，通过各功能接口执行，不在 `app` 中为功能类型追加方法。功能模块解释后端返回值：例如 `dirs::add` 统一校验添加结果，并返回 `AddedDir`，供行内命令和目录面板共用。测试执行助手只放在测试模块中。
+
+会话管理器的导航、分组、归档、删除、恢复、预览和置顶按键由 [SessionsState](src/sessions/state.rs) 处理，向 App 返回会话命令或打开详情的请求。App 负责全局焦点路由与浮层协调，不读取分组和归档状态来决定这些按键的含义。
+
 ## 启动与事件循环
 
 CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：

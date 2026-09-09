@@ -50,6 +50,7 @@ use crate::render::RenderTheme;
 use crate::sessions::Command as SessionCommand;
 use crate::sessions::Event as SessionEvent;
 use crate::sessions::SessionChoices;
+use crate::sessions::SessionManagerInputOutcome;
 use crate::sessions::SessionManagerView;
 use crate::sessions::SessionSelectionAction;
 use crate::sessions::SessionsState;
@@ -2161,110 +2162,16 @@ impl App {
         if matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.manager().focused()
         {
-            let catalog = self.sessions.catalog().to_vec();
-            if let Some(navigation) = Navigation::from_key(key) {
-                self.sessions.manager_mut().navigate(&catalog, navigation);
-                return Some(None);
-            }
-            if (self.sessions.manager().selected_is_archived()
-                && bindings::SESSION_DELETE.matches(key))
-                || (!self.sessions.manager().selected_is_archived()
-                    && bindings::SESSION_ARCHIVE.matches(key))
-            {
-                if self.sessions.manager().selected_is_archived() {
-                    return Some(
-                        self.sessions
-                            .manager()
-                            .selected_session()
-                            .cloned()
-                            .map(|session_id| SessionCommand::Delete { session_id }.into()),
-                    );
-                }
-                let session_ids = self.sessions.manager().selected_archive_ids(&catalog);
-                return Some(
-                    (!session_ids.is_empty())
-                        .then_some(SessionCommand::Archive { session_ids }.into()),
-                );
-            }
-            return match key.code {
-                _ if (self.sessions.manager().selected_group().is_some()
-                    && if self.sessions.manager().selected_group_expanded() {
-                        bindings::GROUP_COLLAPSE.matches(key)
-                    } else {
-                        bindings::GROUP_EXPAND.matches(key)
-                    })
-                    || (self.sessions.manager().selected_group().is_none()
-                        && if self.sessions.manager().selected_is_archived() {
-                            bindings::SESSION_RESTORE.matches(key)
-                        } else {
-                            bindings::SESSION_OPEN.matches(key)
-                        }) =>
-                {
-                    if self.sessions.manager().selected_group().is_some() {
-                        self.sessions.manager_mut().toggle_selected_group();
-                        Some(None)
-                    } else {
-                        Some(
-                            self.sessions
-                                .manager()
-                                .selected_session()
-                                .map(|session_id| {
-                                    if self.sessions.manager().selected_is_archived() {
-                                        SessionCommand::Restore {
-                                            session_id: session_id.clone(),
-                                        }
-                                        .into()
-                                    } else {
-                                        SessionCommand::Resume {
-                                            session_id: session_id.to_string(),
-                                            preferred_thread_id: self
-                                                .sessions
-                                                .remembered_thread(session_id)
-                                                .cloned(),
-                                        }
-                                        .into()
-                                    }
-                                }),
-                        )
-                    }
-                }
-                _ if bindings::SESSION_PREVIEW.matches(key) => {
-                    if self.sessions.manager().selected_group().is_some() {
-                        self.sessions.manager_mut().toggle_selected_group();
-                        Some(None)
-                    } else {
-                        let id = self.sessions.manager().selected_session().cloned();
-                        Some(
-                            id.and_then(|id| self.sessions.open_preview(&id))
-                                .map(Into::into),
-                        )
-                    }
-                }
-                _ if bindings::SESSION_DETAILS.matches(key) => {
+            return match self.sessions.handle_manager_key(key) {
+                SessionManagerInputOutcome::Unhandled => None,
+                SessionManagerInputOutcome::Consumed => Some(None),
+                SessionManagerInputOutcome::Command(command) => Some(Some(command.into())),
+                SessionManagerInputOutcome::DetailsRequested => {
                     self.overlay = None;
                     self.sessions.open_details();
                     self.pointer.clear();
                     Some(None)
                 }
-                _ if (bindings::LEFT.matches(key) || bindings::RIGHT.matches(key))
-                    && self.sessions.manager().selected_group().is_some() =>
-                {
-                    if bindings::RIGHT.matches(key) {
-                        self.sessions.manager_mut().expand_selected_group();
-                    } else {
-                        self.sessions.manager_mut().collapse_selected_group();
-                    }
-                    Some(None)
-                }
-                _ if bindings::SESSION_PIN.matches(key) => {
-                    self.sessions.manager_mut().toggle_selected_pin();
-                    Some(None)
-                }
-                _ if bindings::RETURN_INPUT.matches(key) => {
-                    self.sessions.manager_mut().blur();
-                    Some(None)
-                }
-                _ => None,
             };
         }
         if self.agent_thread_switcher.focused() {

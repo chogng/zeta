@@ -1,5 +1,10 @@
+use super::Command;
 use super::manager::SessionManagerState;
+use crate::keymap::bindings;
 use crate::thread::preview::ConversationPreview;
+use crate::widgets::navigation::Navigation;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 use std::collections::BTreeMap;
 use std::time::Instant;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
@@ -16,6 +21,15 @@ pub(crate) enum TerminalScreen {
     Session(SessionId),
 }
 
+/// The manager handles local interaction and returns work for the application to coordinate.
+#[derive(Debug)]
+pub(crate) enum SessionManagerInputOutcome {
+    Unhandled,
+    Consumed,
+    Command(Command),
+    DetailsRequested,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct SessionsState {
     pub(crate) details: Option<super::details::SessionDetails>,
@@ -30,6 +44,99 @@ pub(crate) struct SessionsState {
 }
 
 impl SessionsState {
+    pub(crate) fn handle_manager_key(&mut self, key: KeyEvent) -> SessionManagerInputOutcome {
+        use SessionManagerInputOutcome as Outcome;
+
+        if !matches!(self.screen(), Some(TerminalScreen::Manager))
+            || !self.manager.focused()
+            || key.kind == KeyEventKind::Release
+            || (key.kind == KeyEventKind::Repeat && Navigation::from_key(key).is_none())
+        {
+            return Outcome::Unhandled;
+        }
+        if let Some(navigation) = Navigation::from_key(key) {
+            self.manager.navigate(&self.catalog, navigation);
+            return Outcome::Consumed;
+        }
+        if (self.manager.selected_is_archived() && bindings::SESSION_DELETE.matches(key))
+            || (!self.manager.selected_is_archived() && bindings::SESSION_ARCHIVE.matches(key))
+        {
+            let command = if self.manager.selected_is_archived() {
+                self.manager
+                    .selected_session()
+                    .cloned()
+                    .map(|session_id| Command::Delete { session_id })
+            } else {
+                let session_ids = self.manager.selected_archive_ids(&self.catalog);
+                (!session_ids.is_empty()).then_some(Command::Archive { session_ids })
+            };
+            return command.map_or(Outcome::Consumed, Outcome::Command);
+        }
+        if (self.manager.selected_group().is_some()
+            && if self.manager.selected_group_expanded() {
+                bindings::GROUP_COLLAPSE.matches(key)
+            } else {
+                bindings::GROUP_EXPAND.matches(key)
+            })
+            || (self.manager.selected_group().is_none()
+                && if self.manager.selected_is_archived() {
+                    bindings::SESSION_RESTORE.matches(key)
+                } else {
+                    bindings::SESSION_OPEN.matches(key)
+                })
+        {
+            if self.manager.selected_group().is_some() {
+                self.manager.toggle_selected_group();
+                return Outcome::Consumed;
+            }
+            let command = self.manager.selected_session().map(|session_id| {
+                if self.manager.selected_is_archived() {
+                    Command::Restore {
+                        session_id: session_id.clone(),
+                    }
+                } else {
+                    Command::Resume {
+                        session_id: session_id.to_string(),
+                        preferred_thread_id: self.remembered_thread(session_id).cloned(),
+                    }
+                }
+            });
+            return command.map_or(Outcome::Consumed, Outcome::Command);
+        }
+        if bindings::SESSION_PREVIEW.matches(key) {
+            if self.manager.selected_group().is_some() {
+                self.manager.toggle_selected_group();
+                return Outcome::Consumed;
+            }
+            let session_id = self.manager.selected_session().cloned();
+            return session_id
+                .and_then(|id| self.open_preview(&id))
+                .map_or(Outcome::Consumed, Outcome::Command);
+        }
+        if bindings::SESSION_DETAILS.matches(key) {
+            return Outcome::DetailsRequested;
+        }
+        if (bindings::LEFT.matches(key) || bindings::RIGHT.matches(key))
+            && self.manager.selected_group().is_some()
+        {
+            if bindings::RIGHT.matches(key) {
+                self.manager.expand_selected_group();
+            } else {
+                self.manager.collapse_selected_group();
+            }
+            return Outcome::Consumed;
+        }
+        if bindings::SESSION_PIN.matches(key) {
+            self.manager.toggle_selected_pin();
+            return Outcome::Consumed;
+        }
+        if bindings::RETURN_INPUT.matches(key) {
+            self.manager.blur();
+            return Outcome::Consumed;
+        }
+        Outcome::Unhandled
+    }
+
     pub(crate) fn open_details(&mut self) {
         let Some(session) = self.manager.selected_session().and_then(|id| {
             self.catalog

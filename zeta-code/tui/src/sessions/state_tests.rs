@@ -1,5 +1,11 @@
+use super::SessionManagerInputOutcome;
 use super::SessionsState;
 use super::TerminalScreen;
+use crate::sessions::Command;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerStatus;
@@ -117,6 +123,81 @@ fn reentering_a_session_falls_back_to_main_after_the_viewed_subagent_completes()
     assert_eq!(
         state.restorable_thread(&session_id("one")),
         Some(thread_id("one"))
+    );
+}
+
+#[test]
+fn manager_input_requires_a_visible_focused_manager_and_resumes_the_remembered_thread() {
+    let mut state = SessionsState::default();
+    state.install_catalog(vec![session("one")], session_id("one"), thread_id("child"));
+    let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+    state.manager_mut().focus();
+    assert!(matches!(
+        state.handle_manager_key(enter),
+        SessionManagerInputOutcome::Unhandled
+    ));
+    state.show_manager();
+    state.manager_mut().blur();
+    assert!(matches!(
+        state.handle_manager_key(enter),
+        SessionManagerInputOutcome::Unhandled
+    ));
+    state.manager_mut().focus();
+    let SessionManagerInputOutcome::Command(command) = state.handle_manager_key(enter) else {
+        panic!("focused manager must resume the selected session");
+    };
+    assert_eq!(
+        command,
+        Command::Resume {
+            session_id: "one".into(),
+            preferred_thread_id: Some(thread_id("child")),
+        }
+    );
+    assert_eq!(state.screen(), Some(&TerminalScreen::Manager));
+}
+
+#[test]
+fn manager_repeats_only_navigation_and_keeps_mutations_for_key_presses() {
+    let mut state = SessionsState::default();
+    state.install_catalog(vec![session("one")], session_id("one"), thread_id("one"));
+    state.show_manager();
+    state.manager_mut().focus();
+    for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
+        for (code, modifiers) in [
+            (KeyCode::Enter, KeyModifiers::NONE),
+            (KeyCode::Char(' '), KeyModifiers::NONE),
+            (KeyCode::Char('i'), KeyModifiers::NONE),
+            (KeyCode::Char('p'), KeyModifiers::NONE),
+            (KeyCode::Char('x'), KeyModifiers::CONTROL),
+        ] {
+            assert!(matches!(
+                state.handle_manager_key(KeyEvent::new_with_kind(code, modifiers, kind)),
+                SessionManagerInputOutcome::Unhandled
+            ));
+        }
+    }
+    assert!(state.preview.is_none());
+    assert!(state.details.is_none());
+    assert!(matches!(
+        state.handle_manager_key(KeyEvent::new_with_kind(
+            KeyCode::Home,
+            KeyModifiers::NONE,
+            KeyEventKind::Repeat
+        )),
+        SessionManagerInputOutcome::Consumed
+    ));
+    // Home selects the group heading; Down selects its first session.
+    state.handle_manager_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let SessionManagerInputOutcome::Command(command) =
+        state.handle_manager_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL))
+    else {
+        panic!("a key press must archive the selected active session");
+    };
+    assert_eq!(
+        command,
+        Command::Archive {
+            session_ids: vec![session_id("one")]
+        }
     );
 }
 

@@ -98,7 +98,7 @@ impl SessionManagerState {
         self.select_offset(sessions, 1)
     }
 
-    pub(crate) fn navigate(
+    pub(super) fn navigate(
         &mut self,
         sessions: &[Session],
         navigation: crate::widgets::navigation::Navigation,
@@ -122,7 +122,7 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn selected_group(&self) -> Option<SessionGroup> {
+    pub(super) fn selected_group(&self) -> Option<SessionGroup> {
         match self.selected {
             Some(SessionManagerPointerTarget::Group(group)) => Some(group),
             _ => None,
@@ -137,30 +137,30 @@ impl SessionManagerState {
         self.selected_archived = false;
     }
 
-    pub(crate) fn toggle_selected_group(&mut self) {
+    pub(super) fn toggle_selected_group(&mut self) {
         if let Some(group) = self.selected_group() {
             self.toggle_group(group);
         }
     }
 
-    pub(crate) fn expand_selected_group(&mut self) {
+    pub(super) fn expand_selected_group(&mut self) {
         if let Some(group) = self.selected_group() {
             self.collapsed.remove(&group);
         }
     }
 
-    pub(crate) fn collapse_selected_group(&mut self) {
+    pub(super) fn collapse_selected_group(&mut self) {
         if let Some(group) = self.selected_group() {
             self.collapsed.insert(group);
         }
     }
 
-    pub(crate) fn selected_group_expanded(&self) -> bool {
+    pub(super) fn selected_group_expanded(&self) -> bool {
         self.selected_group()
             .is_some_and(|group| !self.collapsed.contains(&group))
     }
 
-    pub(crate) fn selected_is_archived(&self) -> bool {
+    pub(super) fn selected_is_archived(&self) -> bool {
         self.selected_archived
     }
 
@@ -172,7 +172,7 @@ impl SessionManagerState {
         });
     }
 
-    pub(crate) fn selected_archive_ids(&self, sessions: &[Session]) -> Vec<SessionId> {
+    pub(super) fn selected_archive_ids(&self, sessions: &[Session]) -> Vec<SessionId> {
         let Some(selected) = self.selected_session() else {
             return Vec::new();
         };
@@ -209,7 +209,7 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn toggle_selected_pin(&mut self) -> bool {
+    pub(super) fn toggle_selected_pin(&mut self) -> bool {
         if self.selected_archived {
             return false;
         }

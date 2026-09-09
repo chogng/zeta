@@ -1,4 +1,10 @@
-use super::ActiveConversation;
+use super::execute_product_command;
+use crate::sessions::ActiveConversation;
+use crate::sessions::ConversationChange;
+use crate::sessions::ConversationTranscript;
+use crate::thread::read_thread;
+use zeta_app_server_client::JsonRpcTransport;
+use zeta_protocol::Thread;
 use crate::app::command_panel::CommandPanel;
 use crate::app::{App, AppCommand, AppEvent, Status};
 use crate::dirs::Command as DirCommand;
@@ -46,7 +52,8 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
     let original_thread = conversation.thread_id().clone();
     let mut app = App::new();
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Fork, "investigation"),
         &mut app,
@@ -86,7 +93,8 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
     assert!(persisted_thread.turns.is_empty());
     assert_eq!(model.calls(), 0);
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::New, "fresh task"),
         &mut app,
@@ -97,7 +105,8 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
         "Started a new session."
     );
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Resume, original_session.as_str()),
         &mut app,
@@ -124,7 +133,8 @@ fn archive_persists_status_starts_a_new_session_and_does_not_call_the_model() {
     let archived_session_id = conversation.session_id().clone();
     let mut app = App::new();
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Archive, ""),
         &mut app,
@@ -162,7 +172,8 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     let mut conversation = ActiveConversation::start(&mut client, "commands".into()).unwrap();
     let mut app = App::new();
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Status, ""),
         &mut app,
@@ -171,7 +182,8 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     assert!(app.overlay().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Mcp, ""),
         &mut app,
@@ -180,7 +192,8 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     assert!(app.list_selection().unwrap().search().is_some());
     app.update(AppEvent::CommandPanelClosed);
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Connectors, ""),
         &mut app,
@@ -189,7 +202,8 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     assert!(app.list_selection().unwrap().search().is_some());
     app.update(AppEvent::CommandPanelClosed);
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Skills, ""),
         &mut app,
@@ -210,7 +224,8 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     let mut conversation = ActiveConversation::start(&mut client, "skills".into()).unwrap();
     let mut app = App::new();
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Skills, ""),
         &mut app,
@@ -297,7 +312,8 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
         .unwrap();
     let mut app = App::new();
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Model, "test/model-one"),
         &mut app,
@@ -318,7 +334,8 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
         "⏸ ask permissions on"
     );
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Model, "clear"),
         &mut app,
@@ -470,7 +487,8 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
     let current_session = conversation.session_id().to_string();
     let mut app = App::new();
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Resume, ""),
         &mut app,
@@ -487,7 +505,8 @@ fn resume_and_model_without_arguments_open_actionable_pickers() {
     );
     app.update(AppEvent::CommandPanelClosed);
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Model, ""),
         &mut app,
@@ -507,7 +526,8 @@ fn rewind_without_arguments_opens_the_checkpoint_picker() {
     let mut conversation = ActiveConversation::start(&mut client, "rewind".into()).unwrap();
     let mut app = App::new();
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Rewind, ""),
         &mut app,
@@ -552,7 +572,8 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     let mut conversation = ActiveConversation::start(&mut client, "add dir".into()).unwrap();
     let mut app = App::new();
 
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::AddDir, ""),
         &mut app,
@@ -574,6 +595,29 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         app.update(event);
     }
 
+    let repeated = execute_product_command(
+        conversation.clone(),
+        &mut client,
+        invocation(
+            TuiSlashCommandAction::AddDir,
+            &additional.display().to_string(),
+        ),
+    )
+    .unwrap();
+    assert!(repeated.conversation_change.is_none());
+    assert_eq!(repeated.events.len(), 2);
+    assert!(matches!(
+        &repeated.events[0],
+        AppEvent::Thread(crate::thread::Event::CommandStarted(command))
+            if command == &format!("/add-dir {}", additional.display())
+    ));
+    assert!(matches!(
+        &repeated.events[1],
+        AppEvent::Thread(crate::thread::Event::CommandCompleted { command, result })
+            if command == &format!("/add-dir {}", additional.display())
+                && result == &format!("Directory already added: {}", additional.display())
+    ));
+
     let listed = client
         .list_session_dirs(SessionDirListParams {
             session_id: conversation.session_id().clone(),
@@ -585,7 +629,8 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         additional.canonicalize().unwrap()
     );
     assert_eq!(listed.dirs[0].permissions, Vec::<PermissionDto>::new());
-    conversation.execute(
+    execute(
+        &mut conversation,
         &mut client,
         invocation(TuiSlashCommandAction::AddDir, ""),
         &mut app,
@@ -637,7 +682,7 @@ fn product_commands_reject_image_arguments_instead_of_silently_dropping_them() {
         }],
     };
 
-    conversation.execute(&mut client, invocation, &mut app);
+    execute(&mut conversation, &mut client, invocation, &mut app);
 
     assert_eq!(app.status(), &Status::Error);
     assert_eq!(app.messages().last().unwrap().role(), MessageRole::Error);
@@ -851,4 +896,43 @@ fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
     assert_eq!(transport.calls(), 0);
     drop(client);
     let _ = fs::remove_dir_all(root);
+}
+
+fn execute<T>(
+    conversation: &mut ActiveConversation,
+    client: &mut AppServerClient<T>,
+    invocation: SlashCommandInvocation,
+    app: &mut App,
+) where
+    T: JsonRpcTransport,
+{
+    match execute_product_command(conversation.clone(), client, invocation) {
+        Ok(output) => {
+            *conversation = output.conversation;
+            for event in output.events {
+                app.update(event);
+            }
+            if let Some(change) = output.conversation_change {
+                match read_thread(client, conversation.session_id(), conversation.thread_id()) {
+                    Ok(snapshot) => apply_conversation_change(app, change, snapshot),
+                    Err(error) => {
+                        app.update(crate::thread::Event::FailureReported(error.to_string()))
+                    }
+                }
+            }
+        }
+        Err(error) => app.update(crate::thread::Event::FailureReported(error)),
+    }
+}
+
+fn apply_conversation_change(app: &mut App, change: ConversationChange, snapshot: Thread) {
+    if matches!(change.transcript, ConversationTranscript::Clear) {
+        app.update(crate::thread::Event::TranscriptCleared);
+    }
+    app.update(crate::thread::Event::TranscriptSnapshotReceived(
+        zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot::from_thread(
+            &snapshot,
+        ),
+    ));
+    app.update(crate::thread::Event::ProductNotice(change.notice));
 }

@@ -326,12 +326,14 @@ fn panel_add_uses_server_paths_preserves_permissions_and_reports_missing_directo
 
     let repeated = super::add(&mut client, session, "../extra  folder/.".into()).unwrap();
     assert_eq!(repeated.path, canonical);
-    assert_eq!(
-        repeated.mutation,
-        zeta_app_server_protocol::protocol::environment::SessionDirMutationDto::AlreadyPresent
-    );
-    assert_eq!(repeated.dirs.len(), 1);
-    assert_eq!(repeated.dirs[0].permissions, vec![PermissionDto::ReadFiles]);
+    assert!(repeated.already_present);
+    let listed = client
+        .list_session_dirs(zeta_app_server_protocol::protocol::environment::SessionDirListParams {
+            session_id: session.clone(),
+        })
+        .unwrap();
+    assert_eq!(listed.dirs.len(), 1);
+    assert_eq!(listed.dirs[0].permissions, vec![PermissionDto::ReadFiles]);
     let super::Event::AddCompleted { result, .. } = super::execute(
         &mut client,
         session,

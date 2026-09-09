@@ -25,6 +25,7 @@ pub(crate) use manager::draw_manager;
 pub(crate) use picker::SessionChoices;
 pub(crate) use picker::SessionSelectionAction;
 pub(crate) use picker::session_choices;
+pub(crate) use state::SessionManagerInputOutcome;
 pub(crate) use state::SessionsState;
 pub(crate) use state::TerminalScreen;
 

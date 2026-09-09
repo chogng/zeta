@@ -15,7 +15,6 @@ use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirAddParams;
-use zeta_app_server_protocol::protocol::environment::SessionDirAddResult;
 use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
 use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
 use zeta_app_server_protocol::protocol::environment::SessionDirMutationDto;
@@ -88,14 +87,36 @@ pub(crate) fn add<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
     path: PathBuf,
-) -> Result<SessionDirAddResult, ClientError>
+) -> Result<AddedDir, String>
 where
     T: JsonRpcTransport,
 {
-    client.add_session_dir(SessionDirAddParams {
-        session_id: session_id.clone(),
-        path,
-        permissions: Vec::new(),
+    let result = client
+        .add_session_dir(SessionDirAddParams {
+            session_id: session_id.clone(),
+            path,
+            permissions: Vec::new(),
+        })
+        .map_err(|error| error.to_string())?;
+    let already_present = match result.mutation {
+        SessionDirMutationDto::Added => false,
+        SessionDirMutationDto::AlreadyPresent => true,
+        SessionDirMutationDto::Updated
+        | SessionDirMutationDto::Removed
+        | SessionDirMutationDto::NotPresent => {
+            return Err("add-dir returned an invalid mutation result".into());
+        }
+    };
+    Ok(AddedDir {
+        path: result.path,
+        already_present,
+        choices: choices(
+            session_id,
+            SessionDirListResult {
+                revision: result.revision,
+                dirs: result.dirs,
+            },
+        ),
     })
 }
 
@@ -152,26 +173,7 @@ where
 {
     match command {
         Command::Add { request_id, path } => {
-            let result = add(client, session_id, path)
-                .map_err(|error| error.to_string())
-                .and_then(|result| {
-                    let already_present = match result.mutation {
-                        SessionDirMutationDto::Added => false,
-                        SessionDirMutationDto::AlreadyPresent => true,
-                        _ => return Err("add-dir returned an invalid mutation result".into()),
-                    };
-                    Ok(AddedDir {
-                        path: result.path,
-                        already_present,
-                        choices: choices(
-                            session_id,
-                            SessionDirListResult {
-                                revision: result.revision,
-                                dirs: result.dirs,
-                            },
-                        ),
-                    })
-                });
+            let result = add(client, session_id, path);
             return Ok(Event::AddCompleted { request_id, result });
         }
         Command::Remove { path } => {
