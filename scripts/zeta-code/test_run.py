@@ -78,12 +78,40 @@ class SourceRunnerTests(unittest.TestCase):
             run.development_binaries(platform_name="win32"),
         )
         self.assertIn(
+            "zeta-windows-sandbox-service",
+            run.development_binaries(platform_name="win32"),
+        )
+        self.assertIn(
+            "zeta-windows-sandbox-worker",
+            run.development_binaries(platform_name="win32"),
+        )
+        self.assertIn(
             "bwrap",
             run.development_binaries(platform_name="linux"),
         )
         self.assertIn(
             "zeta-code-mode-host",
             run.development_binaries(platform_name="darwin", code_mode="host"),
+        )
+
+    def test_windows_development_service_uses_the_staged_product_binary(self) -> None:
+        executables = self._executables(Path("C:/staged"))
+        environment = {"PATH": "tools"}
+        with (
+            patch.object(run.sys, "platform", "win32"),
+            patch.object(run.subprocess, "Popen") as popen,
+        ):
+            process = run.start_development_sandbox_service(environment, executables)
+
+        self.assertIs(process, popen.return_value)
+        self.assertEqual(environment["ZETA_WINDOWS_SANDBOX_SERVICE_FOREGROUND"], "1")
+        popen.assert_called_once_with(
+            [
+                str(executables["zeta-windows-sandbox-service"]),
+                "--foreground",
+            ],
+            cwd=run.REPOSITORY_ROOT,
+            env=environment,
         )
 
     def test_stage_runtime_reuses_one_content_generation(self) -> None:
@@ -109,7 +137,8 @@ class SourceRunnerTests(unittest.TestCase):
             "zeta": root / "zeta.exe",
             "zeta-app-server-daemon": root / "zeta-app-server-daemon.exe",
             "zeta-command-runner": root / "zeta-command-runner.exe",
-            "zeta-windows-sandbox-setup": root / "zeta-windows-sandbox-setup.exe",
+            "zeta-windows-sandbox-service": root / "zeta-windows-sandbox-service.exe",
+            "zeta-windows-sandbox-worker": root / "zeta-windows-sandbox-worker.exe",
         }
 
 

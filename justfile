@@ -37,7 +37,7 @@ test *args:
 
 # Build the matching daemon and run real CLI/TUI scenarios through a PTY.
 test-tui *args:
-    {{ python }} -B scripts/cargo.py build -p zeta-app-server-daemon --bin zeta-app-server-daemon {{ if os_family() == "windows" { "-p zeta-windows-sandbox --bin zeta-command-runner --bin zeta-windows-sandbox-setup" } else { "" } }}
+    {{ python }} -B scripts/cargo.py build -p zeta-app-server-daemon --bin zeta-app-server-daemon {{ if os_family() == "windows" { "-p zeta-windows-sandbox --bin zeta-command-runner --bin zeta-windows-sandbox-worker -p zeta-windows-sandbox-service --bin zeta-windows-sandbox-service" } else { "" } }}
     {{ python }} -B scripts/cargo.py test -p zeta-cli --test tui_real_scenarios {args}
 
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
@@ -96,6 +96,10 @@ app-release:
 # Build a canonical Zeta package; pass normal build_zeta_package.py flags.
 package *args:
     {{ python }} -B build/release/build_zeta_package.py {args}
+
+# Build the machine-wide sandbox runtime MSI from a canonical Windows Zeta package.
+windows-sandbox-runtime *args:
+    {{ python }} -B build/release/build_windows_sandbox_runtime.py {args}
 
 [unix]
 install:

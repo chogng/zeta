@@ -13,48 +13,66 @@ from build.lib.zeta_build.targets import TargetSpec
 
 
 COMMAND_RUNNER_NAME = "zeta-command-runner.exe"
-SANDBOX_SETUP_NAME = "zeta-windows-sandbox-setup.exe"
+SANDBOX_SERVICE_NAME = "zeta-windows-sandbox-service.exe"
+SANDBOX_WORKER_NAME = "zeta-windows-sandbox-worker.exe"
 
 
 @dataclass(frozen=True)
 class WindowsSandboxHelpers:
     command_runner: Path
-    sandbox_setup: Path
+    sandbox_service: Path
+    sandbox_worker: Path
     source: str
     command_runner_sha256: str
-    sandbox_setup_sha256: str
+    sandbox_service_sha256: str
+    sandbox_worker_sha256: str
 
 
 def resolve_windows_sandbox_helpers(
     repository_root: Path,
     spec: TargetSpec,
     command_runner: Optional[Path],
-    sandbox_setup: Optional[Path],
+    sandbox_service: Optional[Path],
+    sandbox_worker: Optional[Path],
     cargo: str,
     cargo_profile: str,
 ) -> Optional[WindowsSandboxHelpers]:
     if not spec.is_windows:
-        if command_runner is not None or sandbox_setup is not None:
+        if (
+            command_runner is not None
+            or sandbox_service is not None
+            or sandbox_worker is not None
+        ):
             raise RuntimeError(
                 "Windows sandbox helper overrides are only supported for Windows packages"
             )
         return None
 
-    if command_runner is not None and sandbox_setup is not None:
+    if all(
+        executable is not None
+        for executable in (command_runner, sandbox_service, sandbox_worker)
+    ):
         source = "local-override"
-    elif command_runner is None and sandbox_setup is None:
+    elif all(
+        executable is None
+        for executable in (command_runner, sandbox_service, sandbox_worker)
+    ):
         source = "cargo-build"
     else:
         source = "mixed"
-    if command_runner is None or sandbox_setup is None:
-        built_runner, built_setup = build_windows_sandbox_helpers(
+    if any(
+        executable is None
+        for executable in (command_runner, sandbox_service, sandbox_worker)
+    ):
+        built_runner, built_service, built_worker = build_windows_sandbox_helpers(
             repository_root,
             spec,
             cargo,
             cargo_profile,
         )
         command_runner = command_runner or built_runner
-        sandbox_setup = sandbox_setup or built_setup
+        sandbox_service = sandbox_service or built_service
+        sandbox_worker = sandbox_worker or built_worker
 
     runner = validate_input_binary(
         command_runner,
@@ -62,18 +80,26 @@ def resolve_windows_sandbox_helpers(
         "--windows-command-runner-bin",
         True,
     )
-    setup = validate_input_binary(
-        sandbox_setup,
-        "Windows sandbox setup helper",
-        "--windows-sandbox-setup-bin",
+    service = validate_input_binary(
+        sandbox_service,
+        "Windows sandbox service",
+        "--windows-sandbox-service-bin",
+        True,
+    )
+    worker = validate_input_binary(
+        sandbox_worker,
+        "Windows sandbox provisioning worker",
+        "--windows-sandbox-worker-bin",
         True,
     )
     return WindowsSandboxHelpers(
         command_runner=runner,
-        sandbox_setup=setup,
+        sandbox_service=service,
+        sandbox_worker=worker,
         source=source,
         command_runner_sha256=sha256(runner),
-        sandbox_setup_sha256=sha256(setup),
+        sandbox_service_sha256=sha256(service),
+        sandbox_worker_sha256=sha256(worker),
     )
 
 
@@ -82,7 +108,7 @@ def build_windows_sandbox_helpers(
     spec: TargetSpec,
     cargo: str,
     cargo_profile: str,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path]:
     rust_workspace = repository_root
     target_directory = resolve_cargo_target_directory(rust_workspace)
     subprocess.run(
@@ -103,9 +129,32 @@ def build_windows_sandbox_helpers(
         ],
         check=True,
     )
+    subprocess.run(
+        [
+            cargo,
+            "build",
+            "--manifest-path",
+            str(rust_workspace / "Cargo.toml"),
+            "--package",
+            "zeta-windows-sandbox-service",
+            "--bin",
+            "zeta-windows-sandbox-service",
+            "--profile",
+            cargo_profile,
+            "--target",
+            spec.target,
+            "--target-dir",
+            str(target_directory),
+        ],
+        check=True,
+    )
     profile_directory = cargo_profile_directory(cargo_profile)
     output = target_directory / spec.target / profile_directory
-    return output / COMMAND_RUNNER_NAME, output / SANDBOX_SETUP_NAME
+    return (
+        output / COMMAND_RUNNER_NAME,
+        output / SANDBOX_SERVICE_NAME,
+        output / SANDBOX_WORKER_NAME,
+    )
 
 
 def sha256(path: Path) -> str:

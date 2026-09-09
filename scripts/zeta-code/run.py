@@ -22,7 +22,13 @@ def development_binaries(
     platform_name = platform_name or sys.platform
     binaries = ["zeta", "zeta-app-server-daemon"]
     if platform_name == "win32":
-        binaries.extend(["zeta-command-runner", "zeta-windows-sandbox-setup"])
+        binaries.extend(
+            [
+                "zeta-command-runner",
+                "zeta-windows-sandbox-service",
+                "zeta-windows-sandbox-worker",
+            ]
+        )
     elif platform_name.startswith("linux"):
         binaries.append("bwrap")
     if (code_mode or "embedded").strip().lower() == "host":
@@ -110,13 +116,38 @@ def runtime_environment(
     )
     if command_runner := executables.get("zeta-command-runner"):
         runtime["ZETA_WINDOWS_COMMAND_RUNNER_PATH"] = str(command_runner.resolve())
-    if sandbox_setup := executables.get("zeta-windows-sandbox-setup"):
-        runtime["ZETA_WINDOWS_SANDBOX_SETUP_PATH"] = str(sandbox_setup.resolve())
     if bubblewrap := executables.get("bwrap"):
         runtime["ZETA_BWRAP_PATH"] = str(bubblewrap.resolve())
     if code_mode_host := executables.get("zeta-code-mode-host"):
         runtime["ZETA_CODE_MODE_HOST_BIN"] = str(code_mode_host.resolve())
     return runtime
+
+
+def start_development_sandbox_service(
+    environment: dict[str, str], executables: dict[str, Path]
+) -> subprocess.Popen[bytes] | None:
+    if sys.platform != "win32":
+        return None
+    service = executables.get("zeta-windows-sandbox-service")
+    if service is None:
+        raise RuntimeError("Zeta development sandbox service is missing")
+    environment["ZETA_WINDOWS_SANDBOX_SERVICE_FOREGROUND"] = "1"
+    return subprocess.Popen(
+        [str(service), "--foreground"],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+    )
+
+
+def stop_development_sandbox_service(service: subprocess.Popen[bytes] | None) -> None:
+    if service is None or service.poll() is not None:
+        return
+    service.terminate()
+    try:
+        service.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        service.kill()
+        service.wait()
 
 
 def main(arguments: list[str] | None = None) -> int:
@@ -127,12 +158,16 @@ def main(arguments: list[str] | None = None) -> int:
         return returncode
     executables = stage_runtime(built)
     environment = runtime_environment(environment, executables)
-    return subprocess.run(
-        [str(executables["zeta"]), *(arguments or [])],
-        cwd=REPOSITORY_ROOT,
-        env=environment,
-        check=False,
-    ).returncode
+    service = start_development_sandbox_service(environment, executables)
+    try:
+        return subprocess.run(
+            [str(executables["zeta"]), *(arguments or [])],
+            cwd=REPOSITORY_ROOT,
+            env=environment,
+            check=False,
+        ).returncode
+    finally:
+        stop_development_sandbox_service(service)
 
 
 if __name__ == "__main__":

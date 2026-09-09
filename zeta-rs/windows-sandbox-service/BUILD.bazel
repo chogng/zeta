@@ -1,0 +1,13 @@
+load("//:defs.bzl", "zeta_rust_binary", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "windows-sandbox-service",
+    crate_name = "zeta_windows_sandbox_service",
+)
+
+zeta_rust_binary(
+    name = "zeta-windows-sandbox-service",
+    crate_name = "zeta_windows_sandbox_service_bin",
+    crate_root = "src/main.rs",
+    deps = [":windows-sandbox-service"],
+)

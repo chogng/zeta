@@ -16,7 +16,8 @@ notarization, installer formats, or update delivery.
 └── zeta-resources/
     ├── bwrap                         # Linux only
     ├── zeta-command-runner.exe       # Windows only
-    ├── zeta-windows-sandbox-setup.exe # Windows only
+    ├── zeta-windows-sandbox-service.exe # Windows only
+    ├── zeta-windows-sandbox-worker.exe # Windows only
     ├── node/                           # packaged-node variant only
     │   └── bin/
     │       └── node[.exe]          # shared JavaScript LSP runtime
@@ -47,9 +48,9 @@ member, and rejects non-regular archive members. `node.py` applies the same
 locked size/SHA-256 gate to the shared Node.js runtime, extracts only `node[.exe]`
 and its license, and never resolves Node from the host `PATH`. Official Node.js
 releases do not contain musl builds, so musl release jobs must supply an exact
-`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`zeta-rs/vendor/bubblewrap`](../../zeta-rs/vendor/bubblewrap/README.md), then builds the `zeta-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. For Windows, `windows_helpers.py` builds both
-first-party AppContainer helpers
-from `zeta-windows-sandbox`, or validates the two explicit helper overrides.
+`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`zeta-rs/vendor/bubblewrap`](../../zeta-rs/vendor/bubblewrap/README.md), then builds the `zeta-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. For Windows, `windows_helpers.py` builds the
+AppContainer command runner and provisioning worker from `zeta-windows-sandbox`, plus the machine
+service from `zeta-windows-sandbox-service`, or validates the three explicit executable overrides.
 Repository-owned built-in Skills come from
 `zeta-rs/skills/assets/`; `layout.py` rejects linked or malformed Skill trees,
 stages them under `zeta-resources/skills/`, validates the complete package in a
@@ -91,6 +92,10 @@ creating a second target-triple tree. It neither installs nor invokes Python.
 This Python package remains the release builder, also honors `CARGO_TARGET_DIR`,
 and retains its refusal to replace an explicit output directory.
 
+On Windows, the source and complete-package Zeta Code runners start the packaged sandbox service
+in debug-only foreground mode and stop it with the CLI process. Release binaries reject that mode
+and require the service identity installed by the machine Runtime MSI.
+
 ```sh
 python3 -B build/release/build_zeta_package.py \
   --target aarch64-apple-darwin \
@@ -111,9 +116,22 @@ Release jobs that already built or signed binaries should use `--server-bin` and
 optionally `--rg-bin` or, for the `packaged-node` variant, `--node-bin`; those overrides are copied verbatim and their binary
 digest is recorded in `zeta-package.json`. `buildId` covers the sorted digest manifest of every package file together with all identity metadata except `buildId` and the file manifest itself; it is not a mutable release selector. Linux jobs can likewise pass
 `--bwrap-bin`. Signing and archive serialization must happen after this staging
-step. Windows jobs can supply `--windows-command-runner-bin` and
-`--windows-sandbox-setup-bin`; omitting either causes the missing first-party
-helper to be built for the selected target.
+step. Windows jobs can supply `--windows-command-runner-bin`,
+`--windows-sandbox-service-bin` and `--windows-sandbox-worker-bin`; omitting any executable causes
+that first-party component to be built for the selected target. The complete package is the only
+input accepted by `build/release/build_windows_sandbox_runtime.py`, which generates a per-machine
+WiX MSI installing all three files under `Program Files/Zeta/Sandbox` and registering the fixed
+`ZetaSandboxService`. CLI, Electron and Rust app release installers must chain the same signed
+Runtime MSI; no product installer may register a competing service copy. The generated MSI is an
+unsigned staging artifact and must pass the Windows release signing and verification job before
+publication.
+
+```sh
+python3 -B build/release/build_windows_sandbox_runtime.py \
+  --target x86_64-pc-windows-msvc \
+  --package-dir /absolute/path/to/zeta-package \
+  --output-dir /absolute/path/to/runtime-installer
+```
 
 Zeta Code release jobs pass `--cli-bin` and `--update-public-key` to include `bin/zeta[.exe]`, its
 digest, and the Ed25519 update trust key. They then run
@@ -148,7 +166,7 @@ builder, authenticates the resulting catalog.
 | --- | --- |
 | macOS | Native Seatbelt; no helper executable |
 | Linux | `zeta-resources/bwrap` is required and validated |
-| Windows | Both AppContainer helpers are required and validated |
+| Windows | Command runner, one-process worker and machine service are required and validated |
 
 Tests are offline and cover target-lock completeness, both runtime package layouts, the packaged
 Node executable/license and host-provided omission, all thirteen built-in

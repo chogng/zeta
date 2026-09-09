@@ -2,11 +2,14 @@
 
 mod discovery;
 mod protocol;
+mod service_protocol;
 
 #[cfg(target_os = "windows")]
 mod appcontainer;
 #[cfg(target_os = "windows")]
 mod runner;
+#[cfg(target_os = "windows")]
+mod service_client;
 #[cfg(target_os = "windows")]
 mod setup;
 
@@ -21,6 +24,17 @@ use zeta_sandboxing::{
 };
 
 pub use discovery::WindowsSandboxDiscoveryError;
+pub use service_protocol::SANDBOX_SERVICE_NAME;
+pub use service_protocol::SANDBOX_SERVICE_PIPE_NAME;
+pub use service_protocol::SANDBOX_SERVICE_PROTOCOL_VERSION;
+pub use service_protocol::SANDBOX_WORKER_EXECUTABLE_NAME;
+pub use service_protocol::WindowsSandboxProvisioningAccess;
+pub use service_protocol::WindowsSandboxProvisioningFrame;
+pub use service_protocol::WindowsSandboxProvisioningMessage;
+pub use service_protocol::WindowsSandboxProvisioningRequest;
+pub use service_protocol::WindowsSandboxProvisioningResponse;
+pub use service_protocol::read_provisioning_frame;
+pub use service_protocol::write_provisioning_frame;
 
 /// Materialized authority passed to the Windows AppContainer helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -47,29 +61,23 @@ impl WindowsSandboxPlan {
 /// Resolves shared policy into the packaged Windows AppContainer command runner.
 pub struct WindowsSandbox {
     command_runner: PathBuf,
-    sandbox_setup: PathBuf,
 }
 
 impl WindowsSandbox {
-    /// Uses explicit helper paths. Production composition should prefer [`Self::discover`].
-    pub fn new(command_runner: impl Into<PathBuf>, sandbox_setup: impl Into<PathBuf>) -> Self {
+    /// Uses an explicit runner path. Production composition should prefer [`Self::discover`].
+    pub fn new(command_runner: impl Into<PathBuf>) -> Self {
         Self {
             command_runner: command_runner.into(),
-            sandbox_setup: sandbox_setup.into(),
         }
     }
 
-    /// Resolves, probes, canonicalizes, and freezes both packaged Windows helpers.
+    /// Resolves, probes, canonicalizes, and freezes the packaged Windows runner.
     pub fn discover(context: &InstallContext) -> Result<Self, WindowsSandboxDiscoveryError> {
         discovery::discover(context)
     }
 
     pub fn command_runner(&self) -> &Path {
         &self.command_runner
-    }
-
-    pub fn sandbox_setup(&self) -> &Path {
-        &self.sandbox_setup
     }
 
     pub fn plan(&self, policy: SandboxPolicy, dir: &Dir) -> WindowsSandboxPlan {
@@ -113,8 +121,6 @@ impl SandboxBackend for WindowsSandbox {
             FileSystemAccess::FullAccess => unreachable!("full access was rejected above"),
         };
         let mut arguments = vec![
-            protocol::SETUP_HELPER_FLAG.into(),
-            self.sandbox_setup.clone().into_os_string(),
             protocol::ACCESS_FLAG.into(),
             access.into(),
             protocol::DIR_FLAG.into(),
@@ -196,16 +202,37 @@ pub fn command_runner_main() -> ! {
     }
 }
 
-/// Runs the packaged sandbox-setup binary.
+/// Applies one request after the Windows service has authenticated and pinned its caller paths.
+#[cfg(target_os = "windows")]
+pub fn provision_windows_appcontainer(
+    request: &WindowsSandboxProvisioningRequest,
+) -> Result<(), String> {
+    setup::provision(request)
+}
+
+/// Runs the service-owned worker process that applies one already-authenticated request.
 #[doc(hidden)]
-pub fn sandbox_setup_main() -> ! {
+pub fn sandbox_worker_main() -> ! {
     #[cfg(target_os = "windows")]
     {
-        setup::main()
+        let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+        let result = match arguments.as_slice() {
+            [request] => serde_json::from_str::<WindowsSandboxProvisioningRequest>(request)
+                .map_err(|error| format!("invalid provisioning worker request: {error}"))
+                .and_then(|request| setup::provision(&request)),
+            _ => Err("provisioning worker expects exactly one request".to_owned()),
+        };
+        match result {
+            Ok(()) => std::process::exit(0),
+            Err(error) => {
+                eprintln!("zeta-windows-sandbox-worker: {error}");
+                std::process::exit(1)
+            }
+        }
     }
     #[cfg(not(target_os = "windows"))]
     {
-        eprintln!("{} sandbox setup is Windows-only", protocol::ERROR_PREFIX);
+        eprintln!("zeta-windows-sandbox-worker is Windows-only");
         std::process::exit(1)
     }
 }

@@ -485,7 +485,7 @@ class PackageTests(unittest.TestCase):
                 metadata["components"]["bubblewrap"]["source"],
             )
 
-    def test_windows_package_contains_both_sandbox_helpers(self) -> None:
+    def test_windows_package_contains_sandbox_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             server_binary = root / "zeta-server.exe"
@@ -498,8 +498,10 @@ class PackageTests(unittest.TestCase):
             rg_binary.write_bytes(b"ripgrep")
             command_runner = root / "zeta-command-runner.exe"
             command_runner.write_bytes(b"runner")
-            sandbox_setup = root / "zeta-windows-sandbox-setup.exe"
-            sandbox_setup.write_bytes(b"setup")
+            sandbox_service = root / "zeta-windows-sandbox-service.exe"
+            sandbox_service.write_bytes(b"service")
+            sandbox_worker = root / "zeta-windows-sandbox-worker.exe"
+            sandbox_worker.write_bytes(b"worker")
             spec = TARGETS["x86_64-pc-windows-msvc"]
             ripgrep = resolve_ripgrep(
                 spec,
@@ -512,7 +514,8 @@ class PackageTests(unittest.TestCase):
                 REPOSITORY_ROOT,
                 spec,
                 command_runner,
-                sandbox_setup,
+                sandbox_service,
+                sandbox_worker,
                 cargo="cargo",
                 cargo_profile="release",
             )
@@ -538,8 +541,12 @@ class PackageTests(unittest.TestCase):
                 (resources / "zeta-command-runner.exe").read_bytes(),
             )
             self.assertEqual(
-                b"setup",
-                (resources / "zeta-windows-sandbox-setup.exe").read_bytes(),
+                b"service",
+                (resources / "zeta-windows-sandbox-service.exe").read_bytes(),
+            )
+            self.assertEqual(
+                b"worker",
+                (resources / "zeta-windows-sandbox-worker.exe").read_bytes(),
             )
             metadata = json.loads(
                 (output / "zeta-package.json").read_text(encoding="utf-8")
@@ -551,8 +558,12 @@ class PackageTests(unittest.TestCase):
                 component["commandRunnerSha256"],
             )
             self.assertEqual(
-                hashlib.sha256(b"setup").hexdigest(),
-                component["sandboxSetupSha256"],
+                hashlib.sha256(b"service").hexdigest(),
+                component["sandboxServiceSha256"],
+            )
+            self.assertEqual(
+                hashlib.sha256(b"worker").hexdigest(),
+                component["sandboxWorkerSha256"],
             )
 
     def test_windows_helper_overrides_are_rejected_for_other_targets(self) -> None:
@@ -564,6 +575,7 @@ class PackageTests(unittest.TestCase):
                 resolve_windows_sandbox_helpers(
                     REPOSITORY_ROOT,
                     TARGETS["aarch64-apple-darwin"],
+                    helper,
                     helper,
                     helper,
                     cargo="cargo",

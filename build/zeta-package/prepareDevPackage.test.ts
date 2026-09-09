@@ -149,7 +149,8 @@ test("assembles and validates the canonical Windows development layout", async (
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     codeModeHost: join(root, "zeta-code-mode-host.exe"),
     commandRunner: join(root, "zeta-command-runner.exe"),
-    sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
+    sandboxService: join(root, "zeta-windows-sandbox-service.exe"),
+    sandboxWorker: join(root, "zeta-windows-sandbox-worker.exe"),
     serverHost: join(root, "zeta-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
@@ -162,7 +163,8 @@ test("assembles and validates the canonical Windows development layout", async (
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.codeModeHost, "zeta-code-mode-host"),
       writeFile(executables.commandRunner, "runner"),
-      writeFile(executables.sandboxSetup, "setup"),
+      writeFile(executables.sandboxService, "service"),
+      writeFile(executables.sandboxWorker, "worker"),
       writeFile(executables.serverHost, "zeta-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
       writeFile(nodeExecutable, "node"),
@@ -219,6 +221,9 @@ test("assembles and validates the canonical Windows development layout", async (
     assert.equal(await readFile(join(staging, "bin", "zeta-app-server-daemon.exe"), "utf8"), "zeta-app-server-daemon");
     assert.equal(await readFile(join(staging, "zeta-resources", "node", "bin", "node.exe"), "utf8"), "node");
     assert.equal(await readFile(join(staging, "zeta-resources", "zeta-command-runner.exe"), "utf8"), "runner");
+    assert.equal(await readFile(join(staging, "zeta-resources", "zeta-windows-sandbox-service.exe"), "utf8"), "service");
+    assert.equal(await readFile(join(staging, "zeta-resources", "zeta-windows-sandbox-worker.exe"), "utf8"), "worker");
+    assert.equal(await readFile(join(staging, "zeta-resources", "zeta-windows-sandbox-worker.exe"), "utf8"), "worker");
     const productServices = JSON.parse(await readFile(join(staging, "zeta-resources", "product-services", "product-services.json"), "utf8"));
     assert.equal(productServices.marketplaceManager.metadataBaseUrl, "https://chogng.github.io/marketplace/metadata/");
     assert.equal(productServices.marketplaceManager.catalogRefreshIntervalSeconds, 300);
@@ -272,7 +277,8 @@ test("host-provided runtime package omits the standalone Node payload", async ()
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     codeModeHost: join(root, "zeta-code-mode-host.exe"),
     commandRunner: join(root, "zeta-command-runner.exe"),
-    sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
+    sandboxService: join(root, "zeta-windows-sandbox-service.exe"),
+    sandboxWorker: join(root, "zeta-windows-sandbox-worker.exe"),
     serverHost: join(root, "zeta-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
@@ -281,7 +287,8 @@ test("host-provided runtime package omits the standalone Node payload", async ()
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.codeModeHost, "zeta-code-mode-host"),
       writeFile(executables.commandRunner, "runner"),
-      writeFile(executables.sandboxSetup, "setup"),
+      writeFile(executables.sandboxService, "service"),
+      writeFile(executables.sandboxWorker, "worker"),
       writeFile(executables.serverHost, "zeta-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
     ]);

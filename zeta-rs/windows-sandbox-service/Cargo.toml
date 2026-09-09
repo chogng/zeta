@@ -1,5 +1,5 @@
 [package]
-name = "zeta-windows-sandbox"
+name = "zeta-windows-sandbox-service"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,41 +7,33 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_windows_sandbox"
+name = "zeta_windows_sandbox_service"
 path = "src/lib.rs"
 
 [[bin]]
-name = "zeta-command-runner"
-path = "src/bin/command_runner.rs"
-
-[[bin]]
-name = "zeta-windows-sandbox-worker"
-path = "src/bin/sandbox_worker.rs"
+name = "zeta-windows-sandbox-service"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 sha2 = { workspace = true }
-zeta-install-context = { workspace = true }
-zeta-sandboxing = { workspace = true }
-zeta-file-access = { workspace = true }
+serde_json = { workspace = true }
+zeta-windows-sandbox = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Security_Authorization",
-    "Win32_Security_Isolation",
     "Win32_Storage_FileSystem",
-    "Win32_System_Console",
+    "Win32_System_EventLog",
+    "Win32_System_IO",
     "Win32_System_JobObjects",
     "Win32_System_Pipes",
     "Win32_System_Services",
     "Win32_System_Threading",
-    "Win32_System_WindowsProgramming",
 ] }
 
 [lints.rust]
-# Windows AppContainer, ACL, process, and Job Object integration is a narrow Win32 FFI boundary.
+# The service lifecycle, authenticated pipe, token, and pinned-path boundary require Win32 FFI.
 unsafe_code = "allow"

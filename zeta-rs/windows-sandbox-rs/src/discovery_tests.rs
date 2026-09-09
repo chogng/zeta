@@ -26,8 +26,8 @@ fn search_reports_all_candidate_failures() {
 
     let error = discover_helper(
         ExecutableCandidates::SearchPaths(vec![missing.clone(), wrong.clone()]),
-        "Windows sandbox setup",
-        SETUP_PROBE,
+        "Windows command runner",
+        RUNNER_PROBE,
     )
     .unwrap_err();
 

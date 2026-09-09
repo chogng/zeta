@@ -46,6 +46,8 @@ flowchart TD
 | --- | --- |
 | `zeta-sandboxing` | 统一管理要限制的文件、网络和进程能力 |
 | `zeta-linux-sandbox` | 决定这些限制在 Linux 下如何转换并强制执行 |
+| `zeta-windows-sandbox` | 把共享限制转换成 AppContainer token、ACL 与受限进程 |
+| `zeta-windows-sandbox-service` | 认证 Zeta command runner 并执行机器级 Windows 配置 |
 | `zeta-rs/vendor/bubblewrap` | 保存 Linux 隔离工具 Bubblewrap 的上游源码 |
 
 ### 2.0 `zeta-install-context`
@@ -56,8 +58,9 @@ flowchart TD
 
 当前本地 `rg`、Linux Bubblewrap 与 Windows AppContainer 的运行时组合已经接入该契约。规范包
 写入 `zeta-package.json` 与 `zeta-path/rg`；Linux 另带 `zeta-resources/bwrap`，Windows 另带
-命令运行器和沙箱设置辅助程序。平台后端在主机组合阶段完成候选项验证、能力与协议探测，并冻结
-规范身份。
+命令运行器、配置 worker 和机器服务。平台后端在主机组合阶段完成命令运行器的候选项验证、能力
+与协议探测，并冻结规范身份；service/worker 由独立 per-machine Runtime MSI 安装，不通过
+PATH 或环境变量选择。
 
 ### 2.1 `zeta-sandboxing`
 
@@ -103,21 +106,43 @@ macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平�
 
 - 从共享策略到 Windows 文件系统与网络授权的解析；
 - AppContainer 配置文件与能力、ACL、子进程策略和 Job Object 强制执行；
-- Windows 辅助程序与启动器的生命周期和平台诊断。
+- service 协议、命令运行器和平台诊断。
 
-当前 `zeta-command-runner.exe` 先调用 `zeta-windows-sandbox-setup.exe` 创建或复用按
-规范目录与读写模式隔离的 AppContainer 配置文件，为已授权目录和冻结的内部可执行文件安装 ACL，
-再以零能力的 AppContainer 令牌启动进程。零网络能力负责断网，配置文件 SID 与 ACL 负责文件
+当前 `zeta-command-runner.exe` 核对固定 `ZetaSandboxService` 的进程身份，再通过
+`\\.\pipe\Zeta.Sandbox` 请求创建或复用按规范目录与读写模式隔离的 AppContainer 配置文件。
+服务核对 command runner 摘要、进程用户和调用者对目标路径
+已有的权限，钉住路径后才为已授权目录和冻结的内部可执行文件安装 ACL，再由 runner 以零能力的
+AppContainer 令牌启动进程。零网络能力负责断网，配置文件 SID 与 ACL 负责文件
 访问；子进程限制与单进程 Job Object 补充进程树控制。当前只支持只读或目录可写模式
 `ReadOnly` / `DirectoryWrite` 与禁止网络 `Denied` 的组合；其他受限组合必须失败即关闭。
 
-这不是 Codex 专用本地用户与 WFP 防火墙实现的复制。Zeta v1 选择 Windows 原生 AppContainer
-边界，并明确记录 ACL 是持久化的文件系统元数据。辅助程序已接入包、资源发现、App Server 与
+这不是 Codex 专用本地用户与 WFP 防火墙实现的复制。Zeta 使用 Codex 同类的产品绑定服务边界，
+但仍选择 AppContainer 落实执行限制。ACL 是持久化的文件系统元数据。辅助程序已接入包、资源发现、App Server 与
 MSVC 目标交叉检查；真实 Windows AppContainer、ACL 和网络集成测试尚未完成，因此暂不标记为
 生产环境强制执行。
 Windows 测试人员应按
 [`windows-sandbox-acceptance-runbook.md`](windows-sandbox-acceptance-runbook.md)
 回填实际结果、退出码、执行记录和 ACL 证据，再与固定预期结果比对。
+
+### 2.5 `zeta-windows-sandbox-service`
+
+`zeta-windows-sandbox-service` 使用固定 `ZetaSandboxService` 身份与
+`\\.\pipe\Zeta.Sandbox` 管道。它只接受摘要与受保护安装副本一致的
+`zeta-command-runner.exe`，并核对进程用户、管道用户以及调用者对目标路径已有的权限。请求只接受
+固定本地磁盘；UNC、非磁盘前缀和非固定驱动器会被拒绝。目录、程序及其现有祖先在配置完成前保持
+打开，reparse point 会在进入 ACL 修改前被拒绝。ACL
+遍历由受保护安装目录中的 `zeta-windows-sandbox-worker.exe` 执行；worker 在恢复运行前进入
+`ActiveProcessLimit=1 + JobMemoryLimit=512 MiB + kill-on-close` 的 Job Object，并有 120 秒总期限。
+
+服务串行处理单连接，请求不超过 4 KiB，空闲读取期限为 5 秒；Stop/Shutdown 只启动一个唤醒
+线程，不会按请求或系统 Session 创建常驻线程。服务只负责 AppContainer profile 与 ACL 配置，
+不接收具体命令，也不拥有 Agent、Thread、批准、重试或命令进程。命令仍由
+`zeta-command-runner.exe` 放入 `kill-on-close + ActiveProcessLimit=1` 的 Job Object。
+
+[`build/release/windows_sandbox_runtime.py`](../build/release/windows_sandbox_runtime.py) 从完整 Windows
+Zeta package 生成 per-machine WiX MSI，把服务、worker 与 runner 安装到受保护的
+`Program Files/Zeta/Sandbox`。CLI、Electron 和 Rust app 的 release installer 必须链入同一个已签名
+Runtime MSI 与服务身份，不能各自注册一份机器服务；本地生成的未签名 MSI 只用于测试。
 
 ## 3. 依赖方向
 
@@ -126,6 +151,7 @@ Windows 测试人员应按
 ```text
 zeta-linux-sandbox   → zeta-sandboxing
 zeta-windows-sandbox → zeta-install-context + zeta-sandboxing
+zeta-windows-sandbox-service → zeta-windows-sandbox
 zeta-bwrap build     → zeta-rs/vendor/bubblewrap
 主机组合              → zeta-install-context + 平台沙箱 + 工具运行时
 zeta-action-policy   → zeta-execpolicy + zeta-sandboxing
@@ -139,6 +165,7 @@ zeta-auto-review     → zeta-action-policy + zeta-sandboxing
 ```text
 zeta-bwrap → zeta-sandboxing / zeta-linux-sandbox / protocol / core
 平台沙箱 → zeta-core / ThreadStore / 批准界面
+Windows service → zeta-core / ThreadStore / app-server / 具体命令
 zeta-sandboxing → shell-command / file-system / apply-patch / app-server / provider
 zeta-sandboxing → zeta-action-policy / zeta-auto-review
 zeta-execpolicy → zeta-action-policy / zeta-sandboxing / Core

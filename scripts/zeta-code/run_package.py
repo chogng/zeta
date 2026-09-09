@@ -108,12 +108,20 @@ def main(arguments: list[str] | None = None) -> int:
     environment = environment.copy()
     environment["ZETA_APP_SERVER_DAEMON_PATH"] = str(daemon.resolve())
     environment["ZETA_PRODUCT_SERVICES_PATH"] = str(product_services.resolve())
-    return subprocess.run(
-        [str(executable), *(arguments or [])],
-        cwd=run.REPOSITORY_ROOT,
-        env=environment,
-        check=False,
-    ).returncode
+    service_executable = package_root / "zeta-resources" / f"zeta-windows-sandbox-service{suffix}"
+    service = run.start_development_sandbox_service(
+        environment,
+        {"zeta-windows-sandbox-service": service_executable},
+    )
+    try:
+        return subprocess.run(
+            [str(executable), *(arguments or [])],
+            cwd=run.REPOSITORY_ROOT,
+            env=environment,
+            check=False,
+        ).returncode
+    finally:
+        run.stop_development_sandbox_service(service)
 
 
 if __name__ == "__main__":

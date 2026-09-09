@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::WindowsSandbox;
-use crate::protocol::{PROBE_FLAG, RUNNER_PROBE, SETUP_PROBE};
+use crate::protocol::{PROBE_FLAG, RUNNER_PROBE};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -40,12 +40,7 @@ pub(crate) fn discover(
         "Windows command runner",
         RUNNER_PROBE,
     )?;
-    let sandbox_setup = discover_helper(
-        context.executable_candidates(ManagedExecutable::WindowsSandboxSetup),
-        "Windows sandbox setup",
-        SETUP_PROBE,
-    )?;
-    Ok(WindowsSandbox::new(command_runner, sandbox_setup))
+    Ok(WindowsSandbox::new(command_runner))
 }
 
 fn discover_helper(

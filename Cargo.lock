@@ -12767,11 +12767,25 @@ dependencies = [
 name = "zeta-windows-sandbox"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
  "sha2 0.10.9",
  "windows-sys 0.59.0",
  "zeta-file-access",
  "zeta-install-context",
  "zeta-sandboxing",
+]
+
+[[package]]
+name = "zeta-windows-sandbox-service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "sha2 0.10.9",
+ "windows-sys 0.59.0",
+ "zeta-windows-sandbox",
 ]
 
 [[package]]

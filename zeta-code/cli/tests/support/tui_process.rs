@@ -81,18 +81,10 @@ impl Fixture {
         #[cfg(windows)]
         let environment = {
             let mut environment = environment;
-            for (name, binary) in [
-                (
-                    "ZETA_WINDOWS_COMMAND_RUNNER_PATH",
-                    "zeta-command-runner.exe",
-                ),
-                (
-                    "ZETA_WINDOWS_SANDBOX_SETUP_PATH",
-                    "zeta-windows-sandbox-setup.exe",
-                ),
-            ] {
-                environment.push((name, self.daemon.with_file_name(binary)));
-            }
+            environment.push((
+                "ZETA_WINDOWS_COMMAND_RUNNER_PATH",
+                self.daemon.with_file_name("zeta-command-runner.exe"),
+            ));
             environment
         };
         environment

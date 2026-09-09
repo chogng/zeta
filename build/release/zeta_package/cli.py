@@ -138,9 +138,14 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         help="Prebuilt Windows AppContainer command runner.",
     )
     parser.add_argument(
-        "--windows-sandbox-setup-bin",
+        "--windows-sandbox-service-bin",
         type=Path,
-        help="Prebuilt Windows AppContainer profile and ACL setup helper.",
+        help="Prebuilt Zeta Windows sandbox service.",
+    )
+    parser.add_argument(
+        "--windows-sandbox-worker-bin",
+        type=Path,
+        help="Prebuilt Windows AppContainer provisioning worker.",
     )
     parser.add_argument(
         "--cargo",
@@ -240,7 +245,8 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         REPOSITORY_ROOT,
         spec,
         args.windows_command_runner_bin,
-        args.windows_sandbox_setup_bin,
+        args.windows_sandbox_service_bin,
+        args.windows_sandbox_worker_bin,
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )

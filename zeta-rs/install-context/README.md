@@ -23,7 +23,8 @@ approval、sandbox capability probe、下载、更新或安装 mutation。
 └── zeta-resources/
     ├── bwrap              # Linux
     ├── zeta-command-runner.exe              # Windows
-    ├── zeta-windows-sandbox-setup.exe        # Windows
+    ├── zeta-windows-sandbox-service.exe      # Windows machine-runtime input
+    ├── zeta-windows-sandbox-worker.exe       # Windows service-owned worker
     ├── node/bin/node[.exe] # packaged-node variant only
     ├── skills/            # built-in Agent Skills
     └── product-services/  # product Marketplace config + pinned public TUF root
@@ -48,10 +49,14 @@ layout marker，不解析或信任其中的字段。
 `ZETA_BWRAP_PATH` 时只返回 override；否则顺序为 package `zeta-resources/bwrap`、启动时 host
 `PATH` candidates。它不会采用 executable sibling legacy path。
 
-`ManagedExecutable::WindowsCommandRunner` 与 `WindowsSandboxSetup` 分别使用
-`ZETA_WINDOWS_COMMAND_RUNNER_PATH` 和 `ZETA_WINDOWS_SANDBOX_SETUP_PATH`。无 override 时顺序
-为 package `zeta-resources/`、启动时 host `PATH`；两个 helper 分开解析，但 Windows backend
-只有在两者都通过精确 probe 后才可用。
+`ManagedExecutable::WindowsCommandRunner` 使用 `ZETA_WINDOWS_COMMAND_RUNNER_PATH`。无 override
+时顺序为 package `zeta-resources/`、启动时 host `PATH`；Windows backend 只有在 runner 通过精确
+probe 后才可用。
+
+`zeta-windows-sandbox-service.exe` 不是进程运行时按 PATH 选择的 helper。它只作为完整 Windows
+package 中的机器级 Runtime 输入，由 MSI 安装到受保护目录并注册为固定服务；command runner
+通过 Windows Service Manager 和协议版本发现它。因此本 crate 不为 service/worker 暴露环境
+override 或候选列表。
 
 ## 公共契约
 
@@ -73,7 +78,7 @@ host composition
    │  └─ RipgrepExecutable validation + canonical identity freeze
    ├─ executable_candidates(Bubblewrap)
    │  └─ LinuxSandbox validation + capability probe + canonical identity freeze
-   ├─ executable_candidates(WindowsCommandRunner / WindowsSandboxSetup)
+   ├─ executable_candidates(WindowsCommandRunner)
    │  └─ WindowsSandbox validation + protocol probe + canonical identity freeze
    ├─ bundled_resource_directory("skills")
       └─ zeta-skills controlled BuiltIn source validation

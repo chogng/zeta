@@ -127,6 +127,7 @@ members = [
     "zeta-rs/utils/template",
     "zeta-rs/utils/typst",
     "zeta-rs/windows-sandbox-rs",
+    "zeta-rs/windows-sandbox-service",
     "zeta-rs/file-access",
     "zeta-rs/worktree",
     "zeta-rs/content-search",

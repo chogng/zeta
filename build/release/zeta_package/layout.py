@@ -16,7 +16,8 @@ from .ripgrep import RipgrepResolution
 from build.lib.zeta_build.targets import TargetSpec
 from .windows_helpers import (
     COMMAND_RUNNER_NAME,
-    SANDBOX_SETUP_NAME,
+    SANDBOX_SERVICE_NAME,
+    SANDBOX_WORKER_NAME,
     WindowsSandboxHelpers,
 )
 
@@ -158,14 +159,20 @@ def build_package_directory(
                 is_windows=True,
             )
             copy_executable(
-                windows_helpers.sandbox_setup,
-                resources_directory / SANDBOX_SETUP_NAME,
+                windows_helpers.sandbox_service,
+                resources_directory / SANDBOX_SERVICE_NAME,
+                is_windows=True,
+            )
+            copy_executable(
+                windows_helpers.sandbox_worker,
+                resources_directory / SANDBOX_WORKER_NAME,
                 is_windows=True,
             )
             windows_sandbox_metadata = {
                 "source": windows_helpers.source,
                 "commandRunnerSha256": windows_helpers.command_runner_sha256,
-                "sandboxSetupSha256": windows_helpers.sandbox_setup_sha256,
+                "sandboxServiceSha256": windows_helpers.sandbox_service_sha256,
+                "sandboxWorkerSha256": windows_helpers.sandbox_worker_sha256,
             }
 
         ripgrep_metadata = {
@@ -388,11 +395,30 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
                     "Missing Bubblewrap license: {}".format(license_path)
                 )
     if spec.is_windows:
-        for helper_name in (COMMAND_RUNNER_NAME, SANDBOX_SETUP_NAME):
+        windows_sandbox = components.get("windowsSandbox")
+        if not isinstance(windows_sandbox, dict):
+            raise RuntimeError("Windows package has no sandbox component metadata")
+        helper_digests = (
+            (COMMAND_RUNNER_NAME, "commandRunnerSha256"),
+            (SANDBOX_SERVICE_NAME, "sandboxServiceSha256"),
+            (SANDBOX_WORKER_NAME, "sandboxWorkerSha256"),
+        )
+        for helper_name, digest_name in helper_digests:
             helper = package / "zeta-resources" / helper_name
             if not helper.is_file():
                 raise RuntimeError(
                     "Windows package is missing sandbox helper {}".format(helper_name)
+                )
+            expected_digest = windows_sandbox.get(digest_name)
+            if (
+                not isinstance(expected_digest, str)
+                or re.fullmatch(r"[a-f0-9]{64}", expected_digest) is None
+                or file_sha256(helper) != expected_digest
+            ):
+                raise RuntimeError(
+                    "Windows sandbox component digest does not match: {}".format(
+                        helper_name
+                    )
                 )
 
 

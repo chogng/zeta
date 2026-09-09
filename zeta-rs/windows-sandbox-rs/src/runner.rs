@@ -1,3 +1,5 @@
+use crate::WindowsSandboxProvisioningAccess;
+use crate::WindowsSandboxProvisioningRequest;
 use crate::appcontainer::{
     AppContainerSid, OwnedHandle, canonical_directory, canonical_file, command_line, last_error,
     to_wide,
@@ -5,12 +7,11 @@ use crate::appcontainer::{
 use crate::profile_name;
 use crate::protocol::{
     ACCESS_FLAG, COMMAND_SEPARATOR, CWD_FLAG, DIR_FLAG, DIR_WRITE_ACCESS,
-    ENFORCEMENT_FAILURE_EXIT_CODE, ERROR_PREFIX, PROBE_FLAG, PROGRAM_FLAG, READ_ONLY_ACCESS,
-    RUNNER_PROBE, SETUP_HELPER_FLAG, remap_inner_exit_code,
+    ENFORCEMENT_FAILURE_EXIT_CODE, ERROR_PREFIX, PROBE_FLAG, READ_ONLY_ACCESS, RUNNER_PROBE,
+    remap_inner_exit_code,
 };
 use std::ffi::{OsStr, OsString, c_void};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use windows_sys::Win32::Foundation::{
     HANDLE, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation, WAIT_FAILED,
@@ -50,7 +51,6 @@ fn run(arguments: Vec<OsString>) -> Result<i32, String> {
         return Ok(0);
     }
     let request = RunnerRequest::parse(arguments)?;
-    let setup_helper = canonical_file(&request.setup_helper, "sandbox setup helper")?;
     let dir = canonical_directory(&request.dir, "dir")?;
     let cwd = canonical_directory(&request.cwd, "working directory")?;
     if !cwd.starts_with(&dir) {
@@ -60,9 +60,11 @@ fn run(arguments: Vec<OsString>) -> Result<i32, String> {
         .access
         .to_str()
         .ok_or("filesystem access mode is not valid Unicode")?;
-    if !matches!(access, READ_ONLY_ACCESS | DIR_WRITE_ACCESS) {
-        return Err("unsupported filesystem access mode".to_owned());
-    }
+    let provisioning_access = match access {
+        READ_ONLY_ACCESS => WindowsSandboxProvisioningAccess::ReadOnly,
+        DIR_WRITE_ACCESS => WindowsSandboxProvisioningAccess::DirectoryWrite,
+        _ => return Err("unsupported filesystem access mode".to_owned()),
+    };
     let profile = profile_name(&dir, access);
     let source_program = canonical_file(
         PathBuf::from(&request.command[0]).as_path(),
@@ -71,21 +73,11 @@ fn run(arguments: Vec<OsString>) -> Result<i32, String> {
     let staged_program = StagedProgram::copy_from(&source_program)?;
     let program = staged_program.path();
 
-    let setup_output = Command::new(setup_helper)
-        .arg(ACCESS_FLAG)
-        .arg(&request.access)
-        .arg(DIR_FLAG)
-        .arg(&dir)
-        .arg(PROGRAM_FLAG)
-        .arg(program)
-        .output()
-        .map_err(|error| format!("could not run sandbox setup helper: {error}"))?;
-    if !setup_output.status.success() {
-        return Err(format!(
-            "sandbox setup helper failed: {}",
-            String::from_utf8_lossy(&setup_output.stderr).trim()
-        ));
-    }
+    crate::service_client::provision(&WindowsSandboxProvisioningRequest {
+        dir: dir.clone(),
+        program: program.to_path_buf(),
+        access: provisioning_access,
+    })?;
 
     let sid = AppContainerSid::ensure(OsStr::new(&profile))?;
     let mut command = request.command;
@@ -150,7 +142,6 @@ impl Drop for StagedProgram {
 }
 
 struct RunnerRequest {
-    setup_helper: PathBuf,
     access: OsString,
     dir: PathBuf,
     cwd: PathBuf,
@@ -159,7 +150,6 @@ struct RunnerRequest {
 
 impl RunnerRequest {
     fn parse(arguments: Vec<OsString>) -> Result<Self, String> {
-        let mut setup_helper = None;
         let mut access = None;
         let mut dir = None;
         let mut cwd = None;
@@ -174,7 +164,6 @@ impl RunnerRequest {
                 .next()
                 .ok_or_else(|| format!("missing value for {}", flag.to_string_lossy()))?;
             match flag.to_str() {
-                Some(SETUP_HELPER_FLAG) => setup_helper = Some(PathBuf::from(value)),
                 Some(ACCESS_FLAG) => access = Some(value),
                 Some(DIR_FLAG) => dir = Some(PathBuf::from(value)),
                 Some(CWD_FLAG) => cwd = Some(PathBuf::from(value)),
@@ -186,7 +175,6 @@ impl RunnerRequest {
             return Err("missing sandboxed command".to_owned());
         }
         Ok(Self {
-            setup_helper: setup_helper.ok_or("missing setup helper")?,
             access: access.ok_or("missing access mode")?,
             dir: dir.ok_or("missing dir")?,
             cwd: cwd.ok_or("missing working directory")?,

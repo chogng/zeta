@@ -1,10 +1,8 @@
 use super::*;
-use crate::protocol::{
-    ACCESS_FLAG, COMMAND_SEPARATOR, CWD_FLAG, DIR_FLAG, READ_ONLY_ACCESS, SETUP_HELPER_FLAG,
-};
+use crate::protocol::{ACCESS_FLAG, COMMAND_SEPARATOR, CWD_FLAG, DIR_FLAG, READ_ONLY_ACCESS};
 
 fn sandbox() -> WindowsSandbox {
-    WindowsSandbox::new("zeta-command-runner.exe", "zeta-windows-sandbox-setup.exe")
+    WindowsSandbox::new("zeta-command-runner.exe")
 }
 
 #[test]
@@ -20,7 +18,7 @@ fn resolves_dir_and_network_authority_for_the_native_launcher() {
 }
 
 #[test]
-fn prepares_appcontainer_runner_with_frozen_setup_and_inner_command() {
+fn prepares_appcontainer_runner_with_policy_and_inner_command() {
     let dir = Dir::open_local(".").unwrap();
     let command = SandboxCommand::new("rg.exe", ["--files"], dir.canonical_path());
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
@@ -34,10 +32,8 @@ fn prepares_appcontainer_runner_with_frozen_setup_and_inner_command() {
         .iter()
         .map(|argument| argument.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    assert_eq!(arguments[0], SETUP_HELPER_FLAG);
-    assert_eq!(arguments[1], "zeta-windows-sandbox-setup.exe");
-    assert_eq!(arguments[2], ACCESS_FLAG);
-    assert_eq!(arguments[3], READ_ONLY_ACCESS);
+    assert_eq!(arguments[0], ACCESS_FLAG);
+    assert_eq!(arguments[1], READ_ONLY_ACCESS);
     assert!(arguments.contains(&DIR_FLAG.to_owned()));
     assert!(arguments.contains(&CWD_FLAG.to_owned()));
     assert_eq!(
