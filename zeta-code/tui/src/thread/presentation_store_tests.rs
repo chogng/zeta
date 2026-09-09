@@ -116,3 +116,16 @@ fn thread_presentations_evict_the_least_recent_inactive_thread() {
 fn thread_id(value: &str) -> ThreadId {
     ThreadId::new(value).unwrap()
 }
+
+#[test]
+fn status_indicator_timer_survives_thread_switching() {
+    let now = std::time::Instant::now();
+    let main = thread_id("timer-main");
+    let mut store = ThreadPresentationStore::new(main.clone());
+    store.active_mut().status_timer.start(now);
+    store.switch(thread_id("timer-child"));
+    store.active_mut().status_timer.start(now + std::time::Duration::from_secs(10));
+    store.switch(main);
+    store.active_mut().status_timer.tick(now + std::time::Duration::from_secs(30));
+    assert_eq!(store.active().status_timer.elapsed(), std::time::Duration::from_secs(30));
+}

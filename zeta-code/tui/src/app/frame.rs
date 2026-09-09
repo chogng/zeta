@@ -162,6 +162,9 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             context,
         );
     }
+    if let Some(indicator) = app.status_indicator() {
+        indicator.draw(frame, areas.session.status_indicator, context);
+    }
     draw_top_tip(frame, areas.session.top_tip, app, context);
     if let Some(overlay) = app.overlay() {
         crate::widgets::overlay::draw(frame, transient_area_from_layout(&areas), overlay, context);
@@ -321,7 +324,7 @@ pub(crate) struct FrameLayout {
 
 pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
     if app.session_preview().is_some() {
-        let session = super::layout::session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0);
+        let session = super::layout::session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0, 0);
         return FrameLayout {
             input: Rect::default(),
             session,
@@ -379,6 +382,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         composer_rows,
         BOTTOM_ROWS,
         app.agent_thread_switcher_rows(),
+        u16::from(app.status_indicator().is_some()),
     );
     let input = if approval_rows > 0 {
         Rect {

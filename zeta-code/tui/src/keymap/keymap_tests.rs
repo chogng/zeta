@@ -388,3 +388,30 @@ fn captured_terminal_keys_use_portable_keybinding_syntax() {
         "ctrl+k ctrl+y"
     );
 }
+
+#[test]
+fn status_indicator_hint_respects_remapping_and_blocking() {
+    let mut keymap = AppKeymap::default();
+    let action = AppKeymapAction::InterruptOrQuit;
+    assert_eq!(
+        keymap.action_hint(action, context()).as_deref(),
+        Some("ctrl+c")
+    );
+    let rules = compile_app_user_bindings(
+        &serde_json::json!([
+            {"key":"ctrl+y","command":"zetaCode.action.interruptOrQuit"},
+            {"key":"ctrl+c","block":true}
+        ]),
+        HostPlatform::current(),
+    )
+    .unwrap();
+    keymap.replace_user_bindings(rules).unwrap();
+    assert_eq!(
+        keymap.action_hint(action, context()).as_deref(),
+        Some("ctrl+y")
+    );
+    assert_eq!(
+        keymap.resolve_single(&control('y'), context()),
+        Some(action)
+    );
+}

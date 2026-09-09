@@ -297,6 +297,78 @@ impl AppKeymap {
             .collect()
     }
 
+    pub(crate) fn action_hint(
+        &self,
+        action: AppKeymapAction,
+        context: AppKeymapContext,
+    ) -> Option<String> {
+        let defaults = APP_KEYBINDINGS
+            .iter()
+            .filter(|spec| spec.action == action)
+            .map(|spec| parse_key_sequence(spec.keybinding).expect("valid built-in shortcut"));
+        let users = self
+            .user_bindings
+            .iter()
+            .rev()
+            .filter(|rule| rule.target == UserBindingTarget::Command(action))
+            .map(|rule| rule.keybinding.clone());
+        users.chain(defaults).find_map(|sequence| {
+            let events = sequence
+                .chords()
+                .iter()
+                .map(|chord| {
+                    let zeta_keybinding::KeyIdentity::Logical(key) = chord.key() else {
+                        return None;
+                    };
+                    let modifiers = chord.modifiers();
+                    let mut actual = zeta_keybinding::Modifiers::none();
+                    if modifiers.uses_control() {
+                        actual = actual.with_control();
+                    }
+                    if modifiers.uses_shift() {
+                        actual = actual.with_shift();
+                    }
+                    if modifiers.uses_alt() {
+                        actual = actual.with_alt();
+                    }
+                    if modifiers.uses_meta() {
+                        actual = actual.with_meta();
+                    }
+                    if modifiers.uses_primary() {
+                        actual = if self.platform == HostPlatform::MacOs {
+                            actual.with_meta()
+                        } else {
+                            actual.with_control()
+                        };
+                    }
+                    Some(zeta_keybinding::KeyStroke::new(key.clone(), None, actual))
+                })
+                .collect::<Option<Vec<_>>>()?;
+            let bindings = if events.len() == 1 {
+                &self.single_bindings
+            } else {
+                &self.chord_bindings
+            };
+            let resolver = KeybindingResolver::new(bindings, self.platform);
+            if events.len() > 1 {
+                for end in 1..events.len() {
+                    if !matches!(
+                        resolver.resolve(&context, &events[..end], condition_matches),
+                        ResolveResult::PendingChord { .. }
+                    ) {
+                        return None;
+                    }
+                }
+            }
+            match resolver.resolve(&context, &events, condition_matches) {
+                ResolveResult::Command { command, .. } if command == action => {
+                    Some(serialize_key_sequence(&sequence))
+                }
+                _ => None,
+            }
+        })
+    }
+
     pub(crate) fn resolve_single(
         &self,
         key: &KeyEvent,

@@ -10,6 +10,7 @@ pub(crate) mod queue;
 mod request;
 pub(crate) mod rewind;
 mod state;
+pub(crate) mod status_indicator;
 mod subscription;
 pub(crate) mod transcript;
 mod update;

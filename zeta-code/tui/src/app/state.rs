@@ -453,7 +453,7 @@ impl App {
                 self.follow_latest_transcript();
                 self.thread_presentations.active_mut().queue.finish_edit();
                 if matches!(self.sessions.screen(), Some(TerminalScreen::Manager)) {
-                    self.status = Status::Working;
+                    self.set_status(Status::Working);
                     return Some(SessionCommand::CreateAndEnter { submission }.into());
                 }
                 let starts_conversation = !self.thread.has_user_message();
@@ -474,7 +474,7 @@ impl App {
                         .into(),
                     );
                 }
-                self.status = Status::Working;
+                self.set_status(Status::Working);
                 self.chat_panel.queue_input();
                 Some(ThreadCommand::SubmitTurn { submission }.into())
             }
@@ -564,7 +564,7 @@ impl App {
         self.thread.update(ThreadPresentationEvent::UserSubmitted(
             submission.display_text.clone(),
         ));
-        self.status = Status::Working;
+        self.set_status(Status::Working);
         self.chat_panel.queue_input();
         Some(
             ThreadCommand::SubmitQueuedTurn {
@@ -1311,15 +1311,68 @@ impl App {
         )
     }
 
+    fn set_status(&mut self, status: Status) {
+        let timer = &mut self.thread_presentations.active_mut().status_timer;
+        match status {
+            Status::Ready | Status::Error => timer.clear(),
+            _ => timer.start(Instant::now()),
+        }
+        self.status = status;
+    }
+
+    pub(crate) fn status_indicator(
+        &self,
+    ) -> Option<crate::thread::status_indicator::StatusIndicator<'_>> {
+        if self.session_manager_view().is_some()
+            || self.issue_manager().is_some()
+            || self.session_preview().is_some()
+            || self.command_panel().is_some()
+        {
+            return None;
+        }
+        let activity = match self.status {
+            Status::Ready | Status::Error => return None,
+            Status::Working if self.active_turn().is_none() => TurnActivity::Starting,
+            Status::Working => TurnActivity::Working,
+            Status::WaitingForApproval => TurnActivity::WaitingForApproval,
+            Status::WaitingForUserInput => TurnActivity::WaitingForUserInput,
+            Status::WaitingForCapability => TurnActivity::WaitingForCapability,
+            Status::Cancelling => TurnActivity::Cancelling,
+        };
+        let interrupt_hint = if self.active_turn().is_some() && self.status != Status::Cancelling {
+            self.app_keymap.action_hint(
+                AppKeymapAction::InterruptOrQuit,
+                self.app_keymap_context(true),
+            )
+        } else {
+            None
+        };
+        Some(crate::thread::status_indicator::StatusIndicator {
+            activity,
+            timer: &self.thread_presentations.active().status_timer,
+            interrupt_hint,
+        })
+    }
+
     pub(crate) fn active_turn(&self) -> Option<&TurnId> {
         self.thread.active_turn()
     }
 
     pub(crate) fn set_active_turn(&mut self, turn_id: TurnId) {
+        self.thread_presentations
+            .active_mut()
+            .status_timer
+            .bind_turn(&turn_id, Instant::now());
         self.thread.set_active_turn(turn_id);
     }
 
     pub(crate) fn set_active_turn_if_idle(&mut self, turn_id: TurnId) {
+        if self.active_turn().is_none() {
+            self.thread_presentations
+                .active_mut()
+                .status_timer
+                .bind_turn(&turn_id, Instant::now());
+        }
         self.thread.set_active_turn_if_idle(turn_id);
     }
 
@@ -1331,7 +1384,14 @@ impl App {
         &mut self,
         turns: &[Turn],
     ) -> Vec<crate::thread::ActiveTurnUpdate> {
-        self.thread.sync_active_turn(turns)
+        let updates = self.thread.sync_active_turn(turns);
+        if let Some(turn_id) = self.thread.active_turn() {
+            self.thread_presentations
+                .active_mut()
+                .status_timer
+                .bind_turn(turn_id, Instant::now());
+        }
+        updates
     }
 
     pub(crate) fn steers_active_turn(&self) -> bool {
@@ -1464,7 +1524,7 @@ impl App {
         self.thread.update(ThreadPresentationEvent::UserSubmitted(
             submission.display_text.clone(),
         ));
-        self.status = Status::Working;
+        self.set_status(Status::Working);
         self.chat_panel.queue_input();
         Some(
             ThreadCommand::SubmitQueuedTurn {
@@ -1653,19 +1713,19 @@ impl App {
             ThreadEvent::CommandCompleted { command, result } => {
                 self.thread
                     .update(ThreadPresentationEvent::CommandCompleted { command, result });
-                self.status = Status::Ready;
+                self.set_status(Status::Ready);
                 self.chat_panel.start_input();
             }
             ThreadEvent::FailureReported(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
-                self.status = Status::Error;
+                self.set_status(Status::Error);
                 self.chat_panel.start_input();
             }
             ThreadEvent::ProductNotice(notice) => {
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(notice));
-                self.status = Status::Ready;
+                self.set_status(Status::Ready);
                 self.chat_panel.start_input();
             }
             ThreadEvent::FileSearchSnapshotReceived(snapshot) => {
@@ -1679,7 +1739,7 @@ impl App {
                     .update(ThreadPresentationEvent::FailureReported(format!(
                         "could not interrupt turn: {error}"
                     )));
-                self.status = Status::Working;
+                self.set_status(Status::Working);
                 self.chat_panel.steer_input();
             }
             ThreadEvent::ApprovalRequested(approval) => self.chat_panel.show_approval(approval),
@@ -1764,7 +1824,7 @@ impl App {
                     .update(ThreadPresentationEvent::FailureReported(format!(
                         "could not send the queued Turn: {error}"
                     )));
-                self.status = Status::Error;
+                self.set_status(Status::Error);
                 self.chat_panel.start_input();
             }
             ThreadEvent::TranscriptSnapshotReceived(transcript) => {
@@ -1807,17 +1867,17 @@ impl App {
                     .follow_latest();
                 self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().queue.clear();
-                self.status = Status::Ready;
+                self.set_status(Status::Ready);
                 self.chat_panel.start_input();
             }
             ThreadEvent::TurnActivityChanged(activity) => {
-                self.status = match activity {
+                self.set_status(match activity {
                     TurnActivity::Starting | TurnActivity::Working => Status::Working,
                     TurnActivity::WaitingForApproval => Status::WaitingForApproval,
                     TurnActivity::WaitingForUserInput => Status::WaitingForUserInput,
                     TurnActivity::WaitingForCapability => Status::WaitingForCapability,
                     TurnActivity::Cancelling => Status::Cancelling,
-                };
+                });
                 self.chat_panel.apply_turn_activity(activity);
             }
             ThreadEvent::TurnPlanChanged(plan) => {
@@ -1827,20 +1887,20 @@ impl App {
                 self.chat_panel.reconcile_request(pending.as_ref());
             }
             ThreadEvent::TurnFailed => {
-                self.status = Status::Error;
+                self.set_status(Status::Error);
                 self.chat_panel.start_input();
                 self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().plan.replace(None);
             }
             ThreadEvent::TurnCompleted => {
-                self.status = Status::Ready;
+                self.set_status(Status::Ready);
                 self.chat_panel.start_input();
                 self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().plan.replace(None);
             }
             ThreadEvent::TurnInterrupted => {
                 self.thread.update(ThreadPresentationEvent::Interrupted);
-                self.status = Status::Ready;
+                self.set_status(Status::Ready);
                 self.chat_panel.start_input();
                 self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().plan.replace(None);
@@ -1861,7 +1921,7 @@ impl App {
                         "Removed directory {}",
                         path.display()
                     )));
-                self.status = Status::Ready;
+                self.set_status(Status::Ready);
                 self.chat_panel.start_input();
             }
             DirEvent::PermissionsUpdated(choices) => self.update_dirs_picker(choices),
@@ -1911,7 +1971,7 @@ impl App {
                         )));
                 }
                 self.chat_panel.complete_connection(reply);
-                self.status = Status::Ready;
+                self.set_status(Status::Ready);
             }
             ConfigEvent::Subscription(event) => {
                 self.subscription.update(event);
@@ -1948,7 +2008,7 @@ impl App {
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
                         "Saved API key for {provider}"
                     )));
-                self.status = Status::Ready;
+                self.set_status(Status::Ready);
                 self.chat_panel.start_input();
             }
         }
@@ -2479,11 +2539,17 @@ impl App {
     pub(crate) fn handle_tick(&mut self, now: Instant) -> bool {
         let context = self.app_keymap_context(true);
         let chord_expired = self.app_keymap.expire(context, now);
+        let status_changed = self
+            .thread_presentations
+            .active_mut()
+            .status_timer
+            .tick(now);
         let top_tip_changed = self.chat_panel.poll_top_tip(now);
         let elapsed_changed = self.agent_thread_switcher.refresh_elapsed();
         let manager_changed = matches!(self.sessions.screen(), Some(TerminalScreen::Manager))
             && self.sessions.refresh_manager_time(now);
         chord_expired
+            || status_changed
             || top_tip_changed
             || elapsed_changed
             || manager_changed
@@ -2636,7 +2702,7 @@ impl App {
                         .into(),
                     );
                 }
-                self.status = Status::Working;
+                self.set_status(Status::Working);
                 self.chat_panel.queue_input();
                 Some(ThreadCommand::SubmitTurn { submission }.into())
             }
@@ -2653,7 +2719,7 @@ impl App {
             | Status::WaitingForApproval
             | Status::WaitingForUserInput
             | Status::WaitingForCapability => {
-                self.status = Status::Cancelling;
+                self.set_status(Status::Cancelling);
                 Some(ThreadCommand::Interrupt.into())
             }
             Status::Cancelling => None,

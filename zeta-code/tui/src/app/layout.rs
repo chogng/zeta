@@ -40,6 +40,7 @@ pub(crate) struct SessionAreas {
     pub(crate) queue: Rect,
     pub(crate) request: Rect,
     pub(crate) top_tip: Rect,
+    pub(crate) status_indicator: Rect,
     pub(crate) composer: Rect,
     pub(crate) bottom: Rect,
     pub(crate) agent_thread_switcher: Rect,
@@ -74,6 +75,7 @@ pub(crate) fn session_areas(
     composer_desired_rows: u16,
     bottom_desired_rows: u16,
     switcher_desired_rows: u16,
+    status_desired_rows: u16,
 ) -> SessionAreas {
     let switcher_rows = switcher_desired_rows.min(area.height);
     let available_above_switcher = area.height.saturating_sub(switcher_rows);
@@ -91,6 +93,8 @@ pub(crate) fn session_areas(
     let available_inline = available_input
         .saturating_sub(composer_rows)
         .saturating_sub(request_rows);
+    let status_rows = status_desired_rows.min(available_inline);
+    let available_inline = available_inline.saturating_sub(status_rows);
     let queue_rows = queue_desired_rows.min(available_inline);
     let plan_rows = plan_desired_rows.min(available_inline.saturating_sub(queue_rows));
     let goal_rows = goal_desired_rows.min(
@@ -105,7 +109,8 @@ pub(crate) fn session_areas(
         .saturating_sub(bottom_rows);
     let composer_y = bottom_y.saturating_sub(composer_rows);
     let top_tip_y = composer_y.saturating_sub(top_tip_rows);
-    let request_y = top_tip_y.saturating_sub(request_rows);
+    let status_y = top_tip_y.saturating_sub(status_rows);
+    let request_y = status_y.saturating_sub(request_rows);
     let queue_y = request_y.saturating_sub(queue_rows);
     let plan_y = queue_y.saturating_sub(plan_rows);
     let goal_y = plan_y.saturating_sub(goal_rows);
@@ -133,6 +138,11 @@ pub(crate) fn session_areas(
         request: Rect {
             y: request_y,
             height: request_rows,
+            ..area
+        },
+        status_indicator: Rect {
+            y: status_y,
+            height: status_rows,
             ..area
         },
         top_tip: Rect {

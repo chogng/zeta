@@ -921,9 +921,9 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
             .contains("shift+tab to cycle policy")
     );
 
-    assert!(!app.handle_tick(policy_changed + Duration::from_secs(4)));
+    assert!(app.handle_tick(policy_changed + Duration::from_secs(4))); // Active status animates.
     app.cycle_next_approval_mode(policy_changed + Duration::from_secs(4));
-    assert!(!app.handle_tick(policy_changed + Duration::from_secs(5)));
+    assert!(app.handle_tick(policy_changed + Duration::from_secs(5)));
     assert!(app.handle_tick(policy_changed + Duration::from_secs(9)));
     let after_refreshed_tip = render(&app, 80, 20);
     assert!(
@@ -1926,4 +1926,41 @@ fn model_tab_from_items_moves_the_visible_focus_to_the_tab_bar() {
     assert!(app.list_selection().unwrap().items_focused());
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(app.list_selection().unwrap().tabs_focused());
+}
+
+#[test]
+fn status_indicator_tracks_turn_events_without_hiding_top_tip() {
+    let mut app = App::new();
+    app.set_active_turn(zeta_protocol::TurnId::new("status-test").unwrap());
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
+    app.update(HostEvent::TopTipNoticeShown("Copied 42 chars".into()));
+    let areas = layout(&app, Rect::new(0, 0, 80, 20)).session;
+    assert_eq!(areas.status_indicator.height, 1);
+    assert_eq!(areas.status_indicator.bottom(), areas.top_tip.y);
+    let working = render(&app, 80, 20);
+    assert!(working.contains("Working"));
+    assert!(working.contains("ctrl+c to interrupt"));
+    assert!(working.contains("Copied 42 chars"));
+    assert_snapshot!("status_indicator_with_notice", working);
+    app.update(ThreadEvent::TurnActivityChanged(
+        TurnActivity::WaitingForUserInput,
+    ));
+    assert!(render(&app, 80, 20).contains("Waiting for input"));
+    let command = app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+    assert!(matches!(
+        command,
+        Some(AppCommand::Thread(ThreadCommand::Interrupt))
+    ));
+    let cancelling = render(&app, 80, 20);
+    assert!(cancelling.contains("Cancelling"));
+    assert!(!cancelling.contains("to interrupt"));
+    app.update(ThreadEvent::TurnCompleted);
+    assert!(app.status_indicator().is_none());
+    assert_eq!(
+        layout(&app, Rect::new(0, 0, 80, 20))
+            .session
+            .status_indicator
+            .height,
+        0
+    );
 }
