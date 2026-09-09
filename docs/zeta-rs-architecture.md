@@ -71,7 +71,6 @@ zeta-rs/
 ├── app-server-transport/
 ├── app-server-client/
 ├── app-server/
-├── mcp-server/           # current stdio/HTTP Agent-as-tool App Server adapter
 ├── config/
 ├── secrets/              # provider-neutral secret persistence primitives
 ├── login/                # target interactive account-login control plane
@@ -372,16 +371,11 @@ channel wiring 和显式 shutdown，详细边界见
 [`app-server-client.md`](app-server-client.md)。进程内 typed channel 是性能优化，不是语义
 捷径；Rust 本地路径与 Desktop JSONL 路径都必须经过 typed request/response、initialize、
 dispatcher 和 notification contract。对于 `Session`、`Thread`、`Turn`、`ThreadItem` 产品能力，
-App Server 是唯一外部进入/输出边界；长期可增加相同契约的远程 App Server 后端。
+App Server 是唯一外部进入/输出边界；外部程序与远程 Zeta 使用同一份 App Server 契约，
+不再提供 MCP Agent-as-tool 接口。
 
 `app` 当前的 Rust 进程内直接组合只覆盖终端/PTY 宿主。它不能把该宿主路径扩展成 Agent
 产品的 Core 旁路；Native Agent 能力必须复用同一个 App Server 契约和分发器。
-
-`zeta-mcp-server` 当前通过该 client 将 stdio/Streamable HTTP MCP `zeta` / `zeta-reply` tool
-call 映射到 canonical Session/Thread/Turn，并提供 bounded progress、approval/user-input form
-interaction 与 principal-scoped durable invocation recovery。它是外层 adapter，不直接依赖
-Core 或 stores；HTTP security、SSE recovery、remote App Server 和 remote Agent bridge 边界见
-[`mcp-server.md`](mcp-server.md)。
 
 产品 Session、App Server connection session 与 terminal session 是三种不同生命周期，命名
 时必须带领域限定。

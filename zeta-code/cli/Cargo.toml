@@ -17,7 +17,6 @@ zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-exec = { workspace = true }
 zeta-install-context = { workspace = true }
-zeta-mcp-server = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-remote = { workspace = true }
 zeta-remote-connections = { workspace = true }

@@ -5,7 +5,6 @@
 > Wire contract：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > Canonical 产品模型：[`protocol.md`](protocol.md)  
 > Headless 与远程调度：[`exec.md`](exec.md)
-> MCP Agent server consumer：[`mcp-server.md`](mcp-server.md)
 > 当前 crate contract：[`zeta-rs/app-server-client/README.md`](../zeta-rs/app-server-client/README.md)
 
 ## 快速理解
@@ -57,9 +56,6 @@ stdio 连接 profile-scoped local App Server，并把初始 `cwd` 作为执行�
 
 当前 `zeta-cli` 的交互式和无界面提示词路径已经使用自有
 `AppServerSession`、可克隆请求句柄、独立 `AppServerEvents` 与显式关闭。
-`zeta-mcp-server` 的 per-session adapter 当前使用同步 client 和 bounded polling/drain；这是
-MCP 外层生命周期的实现选择，不改变 App Server 的 canonical request contract。
-
 ## 2. 抽象单位：一个运行中的 App Server Session
 
 共享层的顶层抽象应是一个有明确所有权的运行会话，而不是裸 transport：
@@ -474,7 +470,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - `start_in_process_client` 已经体现“由共享 crate 创建本地 App Server”的正确方向；
 - `open_in_process_app_server` 返回可克隆的 `InProcessAppServer` host；
 - `InProcessAppServer::connect` 为同一个 `Arc<AppServer>` 建立各自 initialize 完成的 typed
-  connection，当前供 MCP HTTP session 共享一个 embedded composition；
+  connection，供 embedded host 和 contract tests 共享一个 composition；
 - `InProcessTransport::from_shared_server` 明确表达共享 host，不要求每个 transport 重建
   SQLite repository/config/model composition；
 - typed client methods，包括 app Remote 编辑器消费的文档同步、关闭、Hover、Completion 与位置请求；
@@ -494,7 +490,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 
 | 边界 | 状态 |
 | --- | --- |
-| `start_in_process_client` / generic `AppServerClient<T>` | MCP、rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
+| `start_in_process_client` / generic `AppServerClient<T>` | rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
 | typed method 同步等待 completion | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop |
 | bounded event/data plane | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供 |
 | stdio child backend | 已实现；`AppServerSession::start_stdio` 完成 initialize/schema gate 与同一 request/event contract；本地与 Remote `zeta code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |

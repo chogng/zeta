@@ -34,7 +34,6 @@ fn main() {
             "exec" => execute(arguments.collect()),
             "resume" => resume(arguments.collect()),
             "app-server" => app_server_command(arguments.collect()).map_err(CliError::failure),
-            "mcp-server" => mcp_server_command(arguments.collect()).map_err(CliError::failure),
             "remote" => remote::run(arguments.collect()).map_err(CliError::failure),
             "remote-server" => {
                 zeta_server_host::run(std::iter::once("remote-server".to_owned()).chain(arguments))
@@ -88,40 +87,6 @@ fn run_app_server(arguments: Vec<String>) -> Result<(), String> {
 
 fn app_server_command(arguments: Vec<String>) -> Result<(), String> {
     run_app_server(arguments)
-}
-
-fn mcp_server_command(arguments: Vec<String>) -> Result<(), String> {
-    let options = zeta_mcp_server::McpServerOptions::new(local_profile_root(), configured_dir()?);
-    match arguments.as_slice() {
-        [] => zeta_mcp_server::run_stdio(options).map_err(|error| error.to_string()),
-        [listen, address] if listen == "--listen" && address == "stdio://" => {
-            zeta_mcp_server::run_stdio(options).map_err(|error| error.to_string())
-        }
-        [listen, address] if listen == "--listen" => {
-            let (socket, path) = parse_mcp_http_address(address)?;
-            let token = env::var("ZETA_MCP_BEARER_TOKEN")
-                .map_err(|_| "ZETA_MCP_BEARER_TOKEN is required for Streamable HTTP".to_string())?;
-            let mut http_options = zeta_mcp_server::HttpServerOptions::new(socket, path, token);
-            if let Ok(origin) = env::var("ZETA_MCP_ALLOWED_ORIGIN") {
-                http_options = http_options.with_allowed_origin(origin);
-            }
-            zeta_mcp_server::run_http(options, http_options).map_err(|error| error.to_string())
-        }
-        _ => Err("usage: zeta mcp-server [--listen stdio://|http://IP:PORT/PATH]".into()),
-    }
-}
-
-fn parse_mcp_http_address(address: &str) -> Result<(std::net::SocketAddr, String), String> {
-    let remainder = address.strip_prefix("http://").ok_or_else(|| {
-        "MCP HTTP listener must use http:// behind a TLS reverse proxy".to_string()
-    })?;
-    let (authority, path) = remainder
-        .split_once('/')
-        .ok_or_else(|| "MCP HTTP listener must include an endpoint path".to_string())?;
-    let socket = authority
-        .parse()
-        .map_err(|_| "MCP HTTP listener authority must be an IP:PORT pair".to_string())?;
-    Ok((socket, format!("/{path}")))
 }
 
 fn current_dir() -> Result<PathBuf, String> {

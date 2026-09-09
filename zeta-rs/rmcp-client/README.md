@@ -2,8 +2,7 @@
 
 > 本 README 是外部 MCP client 协议与 transport 实现的 canonical 文档。跨 crate 产品语义、
 > catalog/approval/durability 边界及 `zeta-mcp` 演进见
-> [`../../docs/mcp.md`](../../docs/mcp.md)。反方向的 Zeta MCP server 见
-> [`../../docs/mcp-server.md`](../../docs/mcp-server.md)。
+> [`../../docs/mcp.md`](../../docs/mcp.md)。
 
 本 crate 直接使用官方 `rmcp` SDK，为一个外部 MCP server 建立一个隔离 client session。它拥有
 initialize、原始 tool discovery/call、server notification/elicitation 回调以及 stdio /

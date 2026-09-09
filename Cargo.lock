@@ -11192,7 +11192,6 @@ dependencies = [
  "zeta-app-server-protocol",
  "zeta-exec",
  "zeta-install-context",
- "zeta-mcp-server",
  "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
@@ -11919,24 +11918,6 @@ dependencies = [
  "zeta-rmcp-client",
  "zeta-secrets",
  "zeta-tools",
-]
-
-[[package]]
-name = "zeta-mcp-server"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "zeta-app-server",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-async-utils",
- "zeta-core",
- "zeta-protocol",
- "zeta-state",
 ]
 
 [[package]]

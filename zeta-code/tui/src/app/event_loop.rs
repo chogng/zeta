@@ -304,13 +304,11 @@ fn handle_mouse(app: &mut App, area: ratatui::layout::Rect, mouse: MouseEvent) -
             };
             return MouseAction::Command(command);
         }
-        _ if !mouse_mode.enables_pointer_actions() => {
-            app.clear_mouse_interaction();
-            return MouseAction::Selection(None);
-        }
         MouseEventKind::Down(MouseButton::Left) => {
-            let target = frame::input_pointer_target_at(app, area, mouse.column, mouse.row);
-            app.update_pointer_pressed(target);
+            if app.mouse_interactions() {
+                let target = frame::input_pointer_target_at(app, area, mouse.column, mouse.row);
+                app.update_pointer_pressed(target);
+            }
             app.begin_screen_selection(position);
         }
         MouseEventKind::Drag(MouseButton::Left) => {
@@ -320,9 +318,16 @@ fn handle_mouse(app: &mut App, area: ratatui::layout::Rect, mouse: MouseEvent) -
         MouseEventKind::Up(MouseButton::Left) => {
             let outcome = app.finish_screen_selection(position, Instant::now());
             app.clear_pointer_pressed();
+            if !app.mouse_interactions()
+                && matches!(outcome, Some(ScreenSelectionOutcome::Click { .. }))
+            {
+                return MouseAction::Selection(None);
+            }
             return MouseAction::Selection(outcome);
         }
-        MouseEventKind::Moved => update_pointer_hover(app, area, mouse.column, mouse.row),
+        MouseEventKind::Moved if app.mouse_interactions() => {
+            update_pointer_hover(app, area, mouse.column, mouse.row)
+        }
         _ => {}
     }
     MouseAction::Selection(None)
@@ -383,7 +388,7 @@ fn finish_pointer_gesture(
             count: ClickCount::Double,
         }) => {
             if let Some(range) = terminal.token_range_at(position) {
-                copy_screen_range(app, terminal, range);
+                apply_screen_selection(app, terminal, range);
             }
             Ok(None)
         }
@@ -392,24 +397,27 @@ fn finish_pointer_gesture(
             count: ClickCount::Triple,
         }) => {
             if let Some(range) = terminal.line_range_at(position) {
-                copy_screen_range(app, terminal, range);
+                apply_screen_selection(app, terminal, range);
             }
             Ok(None)
         }
-        Some(ScreenSelectionOutcome::Copy(range)) => {
-            copy_screen_range(app, terminal, range);
+        Some(ScreenSelectionOutcome::Selection(range)) => {
+            apply_screen_selection(app, terminal, range);
             Ok(None)
         }
         None => Ok(None),
     }
 }
 
-fn copy_screen_range(
+fn apply_screen_selection(
     app: &mut App,
     terminal: &terminal::TerminalSession,
     range: crate::terminal::screen_selection::ScreenSelectionRange,
 ) {
     app.select_screen_range(range);
+    if !app.copy_on_select() {
+        return;
+    }
     let Some(text) = terminal.selected_text(range) else {
         return;
     };

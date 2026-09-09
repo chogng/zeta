@@ -20,6 +20,51 @@ fn open_provider(process: &mut TuiProcess, label: &str) {
 }
 
 #[test]
+fn actual_tui_copy_on_select_is_opt_in_and_persists_across_restart() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Copy on select");
+    assert!(process.screen().contains("General"));
+    assert!(
+        process
+            .screen()
+            .lines()
+            .find(|line| line.contains("Copy on select"))
+            .unwrap()
+            .contains("[   ]")
+    );
+    process.down();
+    process.enter();
+    assert!(fixture.config_source().contains("copyOnSelect = true"));
+    assert!(fixture.config_source().contains("mouseInteractions = true"));
+    process.escape();
+    process.quit();
+
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Zeta Code v");
+    process.submit("/config");
+    process.wait_for_screen("Copy on select");
+    assert!(
+        process
+            .screen()
+            .lines()
+            .find(|line| line.contains("Copy on select"))
+            .unwrap()
+            .contains("[ ✔ ]")
+    );
+    process.down();
+    process.enter();
+    assert!(fixture.config_source().contains("copyOnSelect = false"));
+    assert!(fixture.config_source().contains("mouseInteractions = true"));
+    process.escape();
+    process.quit();
+}
+
+#[test]
 fn actual_tui_issue_config_switch_gates_its_tab() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([]);
@@ -215,6 +260,7 @@ fn actual_tui_switches_language_and_persists_it() {
     process.down();
     process.down();
     process.down();
+    process.down();
     process.enter();
     process.wait_for_screen("拡張 TUI");
     process.escape();
@@ -382,7 +428,7 @@ fn actual_tui_status_line_style_persists_across_restart() {
     process.wait_for_screen("Zeta Code v");
     process.submit("/config");
     process.wait_for_screen("Enhanced TUI");
-    for _ in 0..6 {
+    for _ in 0..7 {
         process.down();
     }
     process.enter();
@@ -400,7 +446,7 @@ fn actual_tui_status_line_style_persists_across_restart() {
     process.wait_for_screen("🤖 zeta-real-scenario");
     process.submit("/config");
     process.wait_for_screen("Emoji and progress bars at a glance");
-    for _ in 0..6 {
+    for _ in 0..7 {
         process.down();
     }
     process.enter();

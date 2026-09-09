@@ -22,10 +22,9 @@ fn drag_selection_normalizes_both_directions_and_remains_visible_after_release()
 
     assert_eq!(
         selection.finish(Position::new(2, 1), now),
-        Some(ScreenSelectionOutcome::Copy(ScreenSelectionRange::new(
-            Position::new(8, 3),
-            Position::new(2, 1),
-        )))
+        Some(ScreenSelectionOutcome::Selection(
+            ScreenSelectionRange::new(Position::new(8, 3), Position::new(2, 1),)
+        ))
     );
     assert_eq!(
         selection.range(),
@@ -108,7 +107,7 @@ fn slow_click_or_drag_starts_a_new_click_sequence() {
     selection.drag(Position::new(8, 2));
     assert!(matches!(
         selection.finish(Position::new(8, 2), started + Duration::from_millis(600)),
-        Some(ScreenSelectionOutcome::Copy(_))
+        Some(ScreenSelectionOutcome::Selection(_))
     ));
     assert_click(
         &mut selection,

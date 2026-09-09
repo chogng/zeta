@@ -83,7 +83,6 @@ members = [
     "zeta-rs/multi-agent-evals",
     "zeta-rs/ollama",
     "zeta-rs/mcp",
-    "zeta-rs/mcp-server",
     "zeta-rs/action-policy",
     "zeta-rs/plugins",
     "zeta-rs/prompts",
@@ -375,7 +374,6 @@ zeta-linux-sandbox = { path = "zeta-rs/linux-sandbox" }
 zeta-lsp = { path = "zeta-rs/lsp" }
 zeta-markdown = { path = "app/markdown" }
 zeta-mcp = { path = "zeta-rs/mcp" }
-zeta-mcp-server = { path = "zeta-rs/mcp-server" }
 zeta-model-accounting = { path = "zeta-rs/model-accounting" }
 zeta-model-provider = { path = "zeta-rs/model-provider" }
 zeta-model-provider-config = { path = "zeta-rs/model-provider-config" }

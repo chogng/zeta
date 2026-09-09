@@ -7,7 +7,7 @@
 `zeta-core` 以 Thread 为恢复、顺序和执行边界。它没有 SessionCoordinator，也不维护独立 Session 状态：同一 `session_id` 下的 Thread 组成一棵会话树，需要树级操作时由 `ThreadController` 枚举和协调这些 Thread。
 
 ```text
-App Server / Exec / MCP
+App Server
           │ typed request
           ▼
 ThreadController
@@ -100,7 +100,7 @@ zeta-protocol / zeta-history
           zeta-core ──► zeta-thread-store (trait)
               ▲
               │
-       app-server / exec / mcp-server
+              app-server
 
 zeta-state ── implements ──► zeta-thread-store
 ```

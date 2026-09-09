@@ -1671,6 +1671,24 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .join("\n")
 }
 
+#[test]
+fn config_general_tab_uses_localized_label() {
+    let mut app = App::new();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::EditorOpened(
+        crate::config::config_choices(
+            &crate::test_support::empty_config_snapshot(),
+            &zeta_app_server_protocol::protocol::provider::ProviderListResult {
+                providers: Vec::new(),
+            },
+            settings,
+            StatusLineSettings::default(),
+        ),
+    ));
+    assert_snapshot!("config_general_tab", render(&app, 100, 20));
+}
+
 fn custom_provider_app() -> App {
     let mut app = App::new();
     app.update(crate::config::Event::EditorOpened(

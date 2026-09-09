@@ -30,7 +30,7 @@
 | [`localization.md`](localization.md) | 设计 | 内置 locale catalog、Marketplace localization 包与 UI fallback |
 | [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界 |
 | [`editor-extensions.md`](editor-extensions.md) | 设计 | 声明式扩展与 Zeta 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态 |
-| [`mcp.md`](mcp.md) / [`mcp-server.md`](mcp-server.md) | 设计 | MCP 协议会话与能力调用、Connector ready binding，以及 Zeta 作为 MCP server |
+| [`mcp.md`](mcp.md) | 设计 | MCP 客户端协议会话、能力调用与 Connector ready binding |
 | [`slash-commands.md`](slash-commands.md) | 设计 | Slash Command 与统一斜杠启动面板边界 |
 
 ## 协议与 API

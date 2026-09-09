@@ -959,6 +959,14 @@ impl App {
         }
     }
 
+    pub(crate) const fn mouse_interactions(&self) -> bool {
+        self.terminal_settings.mouse_interactions()
+    }
+
+    pub(crate) const fn copy_on_select(&self) -> bool {
+        self.terminal_settings.copy_on_select()
+    }
+
     pub(super) const fn memory_diagnostics_enabled(&self) -> bool {
         self.terminal_settings.memory_diagnostics()
     }
@@ -2013,7 +2021,6 @@ impl App {
                 self.terminal_settings = settings;
                 if !settings.mouse_interactions() {
                     self.pointer.clear();
-                    self.screen_selection.clear();
                 }
                 self.thread_presentations
                     .set_input_mode(settings.input_mode());
@@ -2024,7 +2031,7 @@ impl App {
                     .status_line_mut()
                     .apply_settings(result.status_line);
                 if !result.terminal.mouse_interactions() {
-                    self.clear_mouse_interaction();
+                    self.pointer.clear();
                 }
                 self.thread_presentations
                     .set_input_mode(result.terminal.input_mode());

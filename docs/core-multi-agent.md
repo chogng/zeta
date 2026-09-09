@@ -16,7 +16,7 @@
 > Core 总体边界：[`core.md`](core.md)
 > Context 与 ContextManager：[`core-context.md`](core-context.md)
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
-> 外部 MCP Host 调用 Zeta 与 remote Agent bridge：[`mcp-server.md`](mcp-server.md)
+> 外部客户端与 Remote Zeta 接入：[`zeta-app-server-api.md`](zeta-app-server-api.md)
 > 多个 Agent 共同修改代码时的工作契约、范围冲突、验证和集成：[`multi-agent-development.md`](multi-agent-development.md)
 > 内置与自定义 Agent 的统一定义、专化职责、启动范围、模型和工具边界：[`agents.md`](agents.md)
 
@@ -64,9 +64,9 @@ Session
 多 Agent 不是多个执行 task 共享一份 `SessionHistory`。父子和 sibling 不共享 mutable context、
 projection、provider conversation ID 或 Tool state。
 
-同进程 Agent 委托运行由本架构定义的 `MultiAgentCoordinator` 创建，不通过 `zeta-mcp-server`
-自调用。跨 runtime Zeta 可以使用 MCP transport，但调用方仍必须在本地拥有 delegation、budget、
-cancellation 和 result delivery；MCP 只承担远端执行通信。
+同进程 Agent 委托运行由本架构定义的 `MultiAgentCoordinator` 创建，不通过外部 App Server
+连接自调用。跨 runtime Zeta 使用 App Server transport；调用方仍必须在本地拥有 delegation、
+budget、cancellation 和 result delivery，远端连接只承担执行通信。
 
 长期必须把定义和三种运行关系分开：
 

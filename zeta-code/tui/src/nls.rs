@@ -73,10 +73,13 @@ pub(crate) enum Message {
     ConfigIssueModelClear,
 
     ConfigTitle,
+    ConfigGeneral,
     ConfigProviders,
     ConfigLanguageServers,
     ConfigEnhancedTui,
     ConfigEnhancedTuiDescription,
+    ConfigCopyOnSelect,
+    ConfigCopyOnSelectDescription,
     ConfigVimMode,
     ConfigVimModeDescription,
     ConfigMemoryDiagnostics,
@@ -109,12 +112,13 @@ const fn english(message: Message) -> &'static str {
         Message::ConfigIssueModelClear => "Clear model selection",
 
         Message::ConfigTitle => "Config",
+        Message::ConfigGeneral => "General",
         Message::ConfigProviders => "Providers",
         Message::ConfigLanguageServers => "Language servers",
         Message::ConfigEnhancedTui => "Enhanced TUI",
-        Message::ConfigEnhancedTuiDescription => {
-            "Click, hover, drag-select text, and copy automatically"
-        }
+        Message::ConfigEnhancedTuiDescription => "Enable clicks and hover feedback",
+        Message::ConfigCopyOnSelect => "Copy on select",
+        Message::ConfigCopyOnSelectDescription => "Copy selected text automatically",
         Message::ConfigVimMode => "Vim mode",
         Message::ConfigVimModeDescription => "Use Vim editing in ChatInput",
         Message::ConfigMemoryDiagnostics => "Memory diagnostics",
@@ -152,12 +156,13 @@ const fn japanese(message: Message) -> &'static str {
         Message::ConfigIssueModelClear => "モデルの選択を解除",
 
         Message::ConfigTitle => "設定",
+        Message::ConfigGeneral => "一般",
         Message::ConfigProviders => "プロバイダー",
         Message::ConfigLanguageServers => "言語サーバー",
         Message::ConfigEnhancedTui => "拡張 TUI",
-        Message::ConfigEnhancedTuiDescription => {
-            "クリック、ホバー表示、文字のドラッグ選択、自動コピーを有効にする"
-        }
+        Message::ConfigEnhancedTuiDescription => "クリックとホバー表示を有効にする",
+        Message::ConfigCopyOnSelect => "選択時にコピー",
+        Message::ConfigCopyOnSelectDescription => "選択した文字を自動的にコピーする",
         Message::ConfigVimMode => "Vim モード",
         Message::ConfigVimModeDescription => "ChatInput で Vim 編集を使用する",
         Message::ConfigMemoryDiagnostics => "メモリ診断",
@@ -195,10 +200,13 @@ const fn chinese(message: Message) -> &'static str {
         Message::ConfigIssueModelClear => "清除模型选择",
 
         Message::ConfigTitle => "配置",
+        Message::ConfigGeneral => "通用",
         Message::ConfigProviders => "提供商",
         Message::ConfigLanguageServers => "语言服务器",
         Message::ConfigEnhancedTui => "增强 TUI",
-        Message::ConfigEnhancedTuiDescription => "启用点击、悬停反馈、拖选文字和自动复制",
+        Message::ConfigEnhancedTuiDescription => "启用点击和悬停反馈",
+        Message::ConfigCopyOnSelect => "选中后复制",
+        Message::ConfigCopyOnSelectDescription => "选中文字后自动复制",
         Message::ConfigVimMode => "Vim 模式",
         Message::ConfigVimModeDescription => "在 ChatInput 中使用 Vim 编辑",
         Message::ConfigMemoryDiagnostics => "内存诊断",
@@ -232,12 +240,13 @@ const fn french(message: Message) -> &'static str {
         Message::ConfigIssueModelClear => "Effacer le choix du modèle",
 
         Message::ConfigTitle => "Configuration",
+        Message::ConfigGeneral => "Général",
         Message::ConfigProviders => "Fournisseurs",
         Message::ConfigLanguageServers => "Serveurs de langage",
         Message::ConfigEnhancedTui => "TUI améliorée",
-        Message::ConfigEnhancedTuiDescription => {
-            "Activer les clics, le survol, la sélection par glissement et la copie automatique"
-        }
+        Message::ConfigEnhancedTuiDescription => "Activer les clics et le survol",
+        Message::ConfigCopyOnSelect => "Copier à la sélection",
+        Message::ConfigCopyOnSelectDescription => "Copier automatiquement le texte sélectionné",
         Message::ConfigVimMode => "Mode Vim",
         Message::ConfigVimModeDescription => "Utiliser l’édition Vim dans ChatInput",
         Message::ConfigMemoryDiagnostics => "Diagnostic mémoire",

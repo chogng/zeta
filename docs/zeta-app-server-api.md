@@ -7,17 +7,12 @@ owner: zeta-rs
 consumers:
   - desktop
   - cli
-lastUpdated: 2026-09-08
+  - external-clients
+lastUpdated: 2026-09-09
 ```
 
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
 的兼容入口；Rust DTO、生成的 TypeScript 和 JSON Schema 必须始终一致。
-
-当前 [`zeta-mcp-server`](mcp-server.md) stdio/Streamable HTTP 接口面是本 API 的外层
-Agent-as-tool adapter；它通过 App Server client 复用这里定义的 Session/Thread/Turn contract，
-不建立第二套 execution API。该 adapter 已将 Thread subscription/update 投影为 MCP progress，
-将 approval/user-input 映射为 form elicitation，并在共享 profile SQLite 中持久化外部 invocation
-receipt。Receipt 只拥有 MCP correlation/recovery，不改变本 API 的 durable authority。
 
 具体 method registry、artifact generator 与 schema fixture 见
 [`zeta-app-server-protocol` README](../zeta-rs/app-server-protocol/README.md)；JSON-RPC dispatch、
@@ -27,7 +22,7 @@ subscription broker、resource store 与 local composition 见
 
 ## 快速理解
 
-App Server API 是 Desktop、CLI、TUI 和其他适配器访问 Zeta 产品能力的唯一版本化接口；它暴露
+App Server API 是 Desktop、CLI、TUI 和外部客户端访问 Zeta 产品能力的唯一版本化接口；它暴露
 Session、Thread、Turn 和更新流，不建立第二套领域模型。
 
 | 客户端需求 | 使用方式 | 关键保证 |

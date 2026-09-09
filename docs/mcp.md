@@ -15,7 +15,6 @@
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > Connector account 与 ready binding：[`connectors.md`](connectors.md)
 > Skill 指令边界：[`skills.md`](skills.md)
-> 将 Zeta Agent 暴露为 MCP server：[`mcp-server.md`](mcp-server.md)
 
 > 官方规范核对日期：2026-07-25。第一版以 MCP `2025-11-25` protocol revision 为实现目标。
 > MCP 仍会演进；wire schema、授权流程和 experimental capability 必须以实现时的
@@ -24,13 +23,12 @@
 
 ## 快速理解
 
-MCP 客户端把外部 Server 的工具转换成 Zeta 的工具目录；方向相反的 MCP Server 把 Zeta Agent
-暴露给外部 Host。两条路径共享协议概念，但不共享运行时所有权。
+MCP 客户端把外部 Server 的工具转换成 Zeta 的工具目录。外部客户端控制 Zeta 统一使用
+[`App Server API`](zeta-app-server-api.md)，不提供第二套 MCP Agent 接口。
 
 | 场景 | 使用的边界 | 当前状态 |
 | --- | --- | --- |
 | Zeta 连接外部 MCP Server | `zeta-rmcp-client` 建立单连接，`zeta-mcp` 管理多 Server 和工具目录 | 工具纵向切片已实现 |
-| 外部 Host 调用 Zeta Agent | 独立的 `zeta-mcp-server` 通过 App Server 启动和继续 Agent | 见 MCP Server 文档 |
 | MCP 暴露工具 | 转成带来源、绑定和失效 generation 的统一工具 | 已实现基础目录与调用路由 |
 | MCP 暴露资源或提示词 | 进入各自的上下文和产品契约 | 仍属计划设计 |
 | Server 需要 bearer 或 OAuth | 凭据保存在 SecretStore；具体 provider adapter 决定 discovery、scope 与 token wire | 独立 Config 与 Connector 路径均已具备窄实现 |
@@ -53,9 +51,6 @@ browser callback 已实现。独立 Config credential reference materialization�
 PKCE/callback/refresh/revoke、process-local connect/disconnect/status，以及 MCP form elicitation 到 Core
 durable interaction 的同调用恢复也已实现。通用自动 OAuth discovery、内建具体 provider、resources、
 prompts、reconnect/health 和更完整的 interaction surface 仍是 Proposed。
-
-方向相反的 `zeta-mcp-server` 通过 App Server 将 Zeta Agent 暴露给外部 MCP Host。两者不共享
-runtime ownership，也不互相依赖；具体边界见 [`mcp-server.md`](mcp-server.md)。
 
 它不是：
 

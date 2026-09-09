@@ -542,6 +542,19 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
+    let copy_on_select_id = ListSelectionItemId::new("terminal-copy-on-select");
+    let copy_on_select_enabled = terminal.copy_on_select();
+    let mut toggled_copy_on_select = terminal;
+    toggled_copy_on_select.set_copy_on_select(!copy_on_select_enabled);
+    actions.insert(
+        copy_on_select_id.clone(),
+        ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
+            terminal: toggled_copy_on_select,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
     let language_id = ListSelectionItemId::new("language");
     actions.insert(
         language_id.clone(),
@@ -697,6 +710,13 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigEnhancedTuiDescription),
                 checkbox(mouse_enabled),
             ),
+        ListSelectionItem::new(nls::text(language, Message::ConfigCopyOnSelect))
+            .with_id(copy_on_select_id)
+            .with_columns(
+                nls::text(language, Message::ConfigCopyOnSelect),
+                nls::text(language, Message::ConfigCopyOnSelectDescription),
+                checkbox(copy_on_select_enabled),
+            ),
         ListSelectionItem::new(nls::text(language, Message::ConfigVimMode))
             .with_id(vim_mode_id)
             .with_columns(
@@ -746,7 +766,7 @@ pub(crate) fn config_choices(
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigTitle),
             vec![
-                ListSelectionGroup::new(nls::text(language, Message::ConfigTitle), config_items),
+                ListSelectionGroup::new(nls::text(language, Message::ConfigGeneral), config_items),
                 ListSelectionGroup::new(
                     nls::text(language, Message::ConfigProviders),
                     provider_items,

@@ -289,6 +289,46 @@ fn scroll_only_mouse_mode_still_scrolls_the_transcript() {
 }
 
 #[test]
+fn text_selection_remains_available_without_enhanced_pointer_actions() {
+    let mut app = App::new();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_mouse_interactions(false);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    let area = Rect::new(0, 0, 50, 16);
+    let event = |kind, column| MouseEvent {
+        kind,
+        column,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Down(MouseButton::Left), 2),
+    );
+    handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Drag(MouseButton::Left), 8),
+    );
+    let outcome = handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Up(MouseButton::Left), 8),
+    );
+
+    assert!(matches!(
+        outcome,
+        super::MouseAction::Selection(Some(
+            crate::terminal::screen_selection::ScreenSelectionOutcome::Selection(_)
+        ))
+    ));
+    assert!(app.hovered_pointer_target().is_none());
+    assert!(app.pressed_pointer_target().is_none());
+}
+
+#[test]
 fn overlays_block_background_wheel_and_selection_until_dismissed() {
     for detail in [false, true] {
         let mut app = App::new();
@@ -556,7 +596,7 @@ fn transcript_keyboard_navigation_still_requests_older_history() {
 }
 
 #[test]
-fn disabling_enhancement_during_a_drag_ignores_queued_mouse_events() {
+fn disabling_enhancement_during_a_drag_keeps_the_baseline_selection() {
     let mut app = App::new();
     app.insert_text("/");
     let area = Rect::new(0, 0, 80, 24);
@@ -590,9 +630,14 @@ fn disabling_enhancement_during_a_drag_ignores_queued_mouse_events() {
             area,
             event(MouseEventKind::Up(MouseButton::Left), 8)
         ),
-        super::MouseAction::Selection(_)
+        super::MouseAction::Selection(Some(
+            crate::terminal::screen_selection::ScreenSelectionOutcome::Selection(_)
+        ))
     ));
-    assert_scroll_only_mouse(&mut app);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiScroll);
+    assert!(app.hovered_pointer_target().is_none());
+    assert!(app.pressed_pointer_target().is_none());
+    assert!(app.screen_selection().range().is_some());
     assert_eq!(app.input(), "/");
 }
 

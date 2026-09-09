@@ -6,7 +6,7 @@ expression: screen
 
 ─ Config ───────────────────────────────────────────────────
 
-   Config    Providers    Language servers    Issues
+   General    Providers    Language servers    Issues
   ╭──────────────────────────────────────────────────────╮
   │ Search configuration                                 │
   ╰──────────────────────────────────────────────────────╯

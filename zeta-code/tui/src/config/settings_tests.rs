@@ -13,6 +13,7 @@ fn tui_table_defaults_missing_terminal_fields() {
     let settings = TerminalSettings::from_tui(&section).unwrap();
 
     assert!(settings.mouse_interactions());
+    assert!(!settings.copy_on_select());
     assert!(!settings.memory_diagnostics());
     assert_eq!(settings.language(), Language::English);
 }
@@ -32,6 +33,28 @@ fn terminal_settings_update_removes_legacy_fields() {
 
     assert!(!updated.0.contains_key("dirPermissions"));
     assert!(!updated.0.contains_key("followUpMode"));
+    assert!(!settings.copy_on_select());
+}
+
+#[test]
+fn copy_on_select_round_trips_and_rejects_non_boolean_values() {
+    for enabled in [false, true] {
+        let section = FrontendConfigDto(BTreeMap::from([
+            ("copyOnSelect".into(), serde_json::json!(enabled)),
+            ("mouseInteractions".into(), serde_json::json!(!enabled)),
+        ]));
+        let settings = TerminalSettings::from_tui(&section).unwrap();
+        assert_eq!(settings.copy_on_select(), enabled);
+        assert_eq!(settings.mouse_interactions(), !enabled);
+        let updated = settings.write_to_tui(&section).unwrap();
+        assert_eq!(updated.0["copyOnSelect"], serde_json::json!(enabled));
+        assert_eq!(updated.0["mouseInteractions"], serde_json::json!(!enabled));
+    }
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "copyOnSelect".into(),
+        serde_json::json!("true"),
+    )]));
+    assert!(TerminalSettings::from_tui(&section).is_err());
 }
 
 #[test]
@@ -53,6 +76,7 @@ fn terminal_settings_update_preserves_other_tui_fields() {
         serde_json::json!({"enabled": true})
     );
     assert_eq!(updated.0["mouseInteractions"], serde_json::json!(false));
+    assert_eq!(updated.0["copyOnSelect"], serde_json::json!(false));
     assert_eq!(updated.0["memoryDiagnostics"], serde_json::json!(true));
     assert_eq!(updated.0["language"], serde_json::json!("fr"));
 }

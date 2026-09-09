@@ -8,14 +8,16 @@ use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct TerminalSettings {
     mouse_interactions: bool,
+    copy_on_select: bool,
     input_mode: ChatInputMode,
     memory_diagnostics: bool,
     language: Language,
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 4] = [
+    const KEYS: [&'static str; 5] = [
         "mouseInteractions",
+        "copyOnSelect",
         "inputMode",
         "memoryDiagnostics",
         "language",
@@ -66,6 +68,14 @@ impl TerminalSettings {
         self.mouse_interactions = enabled;
     }
 
+    pub(crate) const fn copy_on_select(self) -> bool {
+        self.copy_on_select
+    }
+
+    pub(crate) fn set_copy_on_select(&mut self, enabled: bool) {
+        self.copy_on_select = enabled;
+    }
+
     pub(crate) const fn input_mode(self) -> ChatInputMode {
         self.input_mode
     }
@@ -95,6 +105,7 @@ impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
             mouse_interactions: true,
+            copy_on_select: false,
             input_mode: ChatInputMode::Standard,
             memory_diagnostics: false,
             language: Language::English,

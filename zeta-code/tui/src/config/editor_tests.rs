@@ -63,7 +63,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["Config", "Providers", "Language servers", "Issues"]
+        vec!["General", "Providers", "Language servers", "Issues"]
     );
     assert!(state.visible_items().iter().all(|item| !matches!(
         item.label(),
@@ -79,7 +79,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(mouse.label(), "Enhanced TUI");
     assert_eq!(
         mouse.description(),
-        Some("Click, hover, drag-select text, and copy automatically [ ✔ ]")
+        Some("Enable clicks and hover feedback [ ✔ ]")
     );
     assert!(matches!(
         view.actions.get(mouse.id().unwrap()).unwrap(),
@@ -87,7 +87,20 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             if edit.server_config.revision == 4
                 && !edit.terminal.mouse_interactions()
     ));
-    let vim_mode = &state.visible_items()[1];
+    let copy_on_select = &state.visible_items()[1];
+    assert_eq!(copy_on_select.label(), "Copy on select");
+    assert_eq!(
+        copy_on_select.description(),
+        Some("Copy selected text automatically [   ]")
+    );
+    assert!(matches!(
+        view.actions.get(copy_on_select.id().unwrap()).unwrap(),
+        ConfigSelectionAction::SetTerminalSettings(edit)
+            if edit.server_config.revision == 4
+                && edit.terminal.mouse_interactions()
+                && edit.terminal.copy_on_select()
+    ));
+    let vim_mode = &state.visible_items()[2];
     assert_eq!(vim_mode.label(), "Vim mode");
     assert_eq!(
         vim_mode.description(),
@@ -98,7 +111,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetVimMode(edit)
             if edit.terminal.input_mode() == ChatInputMode::Vim
     ));
-    let memory_diagnostics = &state.visible_items()[2];
+    let memory_diagnostics = &state.visible_items()[3];
     assert_eq!(memory_diagnostics.label(), "Memory diagnostics");
     assert_eq!(
         memory_diagnostics.description(),
@@ -111,7 +124,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetTerminalSettings(edit)
             if edit.terminal.memory_diagnostics()
     ));
-    let git_changes = &state.visible_items()[3];
+    let git_changes = &state.visible_items()[4];
     assert_eq!(git_changes.label(), "Show Git changes as diff");
     assert_eq!(
         git_changes.description(),
@@ -122,7 +135,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
             if edit.status_line.show_git_changes_as_diff()
     ));
-    let language = &state.visible_items()[4];
+    let language = &state.visible_items()[5];
     assert_eq!(language.label(), "Language");
     assert_eq!(
         language.description(),
@@ -275,7 +288,7 @@ fn issue_config_model_response_does_not_reopen_after_leaving_the_tab() {
     editor.finish_issue_models(request_id, Err("late error".into()));
     assert!(editor.issue_models.is_none());
     assert!(editor.selection.state().message().is_none());
-    assert_eq!(editor.selection.state().active_tab().label(), "Config");
+    assert_eq!(editor.selection.state().active_tab().label(), "General");
 }
 
 #[test]
@@ -289,7 +302,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
         )
     };
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..4 {
+    for _ in 0..5 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -300,7 +313,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     ));
 
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..4 {
+    for _ in 0..5 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     assert!(matches!(
@@ -310,7 +323,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     ));
 
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..4 {
+    for _ in 0..5 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     assert!(matches!(
@@ -339,13 +352,14 @@ fn config_root_uses_the_selected_language_through_nls() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["配置", "提供商", "语言服务器", "Issues"]
+        vec!["通用", "提供商", "语言服务器", "Issues"]
     );
     assert_eq!(state.visible_items()[0].label(), "增强 TUI");
-    assert_eq!(state.visible_items()[2].label(), "内存诊断");
-    assert_eq!(state.visible_items()[4].label(), "语言");
+    assert_eq!(state.visible_items()[1].label(), "选中后复制");
+    assert_eq!(state.visible_items()[3].label(), "内存诊断");
+    assert_eq!(state.visible_items()[5].label(), "语言");
     assert_eq!(
-        state.visible_items()[4].description(),
+        state.visible_items()[5].description(),
         Some("切换界面语言 中文")
     );
 }
@@ -417,9 +431,9 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
 }
 
 #[test]
-fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabled() {
+fn config_editor_uses_an_empty_unicode_checkbox_when_copy_on_select_are_disabled() {
     let mut terminal = TerminalSettings::default();
-    terminal.set_mouse_interactions(false);
+    terminal.set_copy_on_select(false);
 
     let view = config_choices(
         &empty_config_snapshot(),
@@ -430,8 +444,8 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disa
     let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(
-        state.visible_items()[0].description(),
-        Some("Click, hover, drag-select text, and copy automatically [   ]")
+        state.visible_items()[1].description(),
+        Some("Copy selected text automatically [   ]")
     );
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(state.search().unwrap().input_active());
@@ -454,9 +468,10 @@ fn config_option_arrows_toggle_values_without_switching_pages() {
             TerminalSettings::default(),
             StatusLineSettings::default(),
         ));
+        editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert!(matches!(editor.handle_key(key),
             super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
-                if !edit.terminal.mouse_interactions()
+                if edit.terminal.copy_on_select()
         ));
     }
 }
@@ -475,7 +490,7 @@ fn config_editor_shows_a_checked_vim_mode_when_enabled() {
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(
-        state.visible_items()[1].description(),
+        state.visible_items()[2].description(),
         Some("Use Vim editing in ChatInput [ ✔ ]")
     );
 }
@@ -641,7 +656,7 @@ fn tab_from_config_option_switches_page_without_changing_setting() {
         TerminalSettings::default(),
         StatusLineSettings::default(),
     ));
-    for (code, expected) in [(KeyCode::Tab, "Providers"), (KeyCode::BackTab, "Config")] {
+    for (code, expected) in [(KeyCode::Tab, "Providers"), (KeyCode::BackTab, "General")] {
         assert!(matches!(
             editor.handle_key(KeyEvent::new(code, KeyModifiers::NONE)),
             super::ConfigEditorOutcome::Consumed

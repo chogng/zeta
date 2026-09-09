@@ -14,7 +14,7 @@ pub(crate) enum ScreenSelectionOutcome {
         position: Position,
         count: ClickCount,
     },
-    Copy(ScreenSelectionRange),
+    Selection(ScreenSelectionRange),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -89,9 +89,9 @@ impl ScreenSelection {
         self.dragging |= position != anchor;
         if self.dragging {
             self.click_sequence = None;
-            Some(ScreenSelectionOutcome::Copy(ScreenSelectionRange::new(
-                anchor, position,
-            )))
+            Some(ScreenSelectionOutcome::Selection(
+                ScreenSelectionRange::new(anchor, position),
+            ))
         } else {
             self.anchor = None;
             self.focus = None;
