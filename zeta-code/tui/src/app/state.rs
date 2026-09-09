@@ -32,11 +32,11 @@ use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
-use crate::keymap::Command as KeymapCommand;
-use crate::keymap::Event as KeymapEvent;
-use crate::keymap::KeymapChoices;
-use crate::keymap::KeymapEditorOutcome;
 use crate::keymap::bindings;
+use crate::keymap_setup::Command as KeymapCommand;
+use crate::keymap_setup::Event as KeymapEvent;
+use crate::keymap_setup::KeymapChoices;
+use crate::keymap_setup::KeymapEditorOutcome;
 use crate::mcp::Command as McpCommand;
 use crate::mcp::Event as McpEvent;
 use crate::mcp::McpChoices;
@@ -635,7 +635,9 @@ impl App {
             CommandPanelOutcome::Model(ModelSelectionAction::Select { preference, .. }) => {
                 Some(ModelCommand::SetPreferred { preference }.into())
             }
-            CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference, pinned }) => Some(ModelCommand::Pin { preference, pinned }.into()),
+            CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference, pinned }) => {
+                Some(ModelCommand::Pin { preference, pinned }.into())
+            }
             CommandPanelOutcome::Rewind(RewindSelectionAction::Rewind {
                 before_turn_id,
                 checkpoint_label,

@@ -11,7 +11,7 @@ use crate::connectors;
 use crate::dirs;
 use crate::host::Command as HostCommand;
 use crate::host::Operation as HostOperation;
-use crate::keymap;
+use crate::keymap_setup;
 use crate::mcp;
 use crate::sessions;
 use crate::sessions::CommandRequest as SessionCommandRequest;
@@ -97,7 +97,7 @@ impl AppDriver {
                 self.requests.spawn_presentation(
                     request_key,
                     name,
-                    move || keymap::execute(&mut client, command),
+                    move || keymap_setup::execute(&mut client, command),
                     &mut self.app,
                 );
             }

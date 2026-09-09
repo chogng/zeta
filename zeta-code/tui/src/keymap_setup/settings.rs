@@ -11,8 +11,8 @@ use crate::client::new_command_id;
 use crate::keymap::AppKeymap;
 use crate::keymap::compile_app_user_bindings;
 
-use super::editor::KeymapChoices;
-use super::editor::keymap_choices;
+use super::KeymapChoices;
+use super::keymap_choices;
 
 const CONFIG_KEY: &str = "keybindings";
 

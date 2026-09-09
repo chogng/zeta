@@ -6,7 +6,7 @@ use crate::app::completion::Completion;
 use crate::app::requests::RequestKey;
 use crate::app::requests::RequestTasks;
 use crate::host::Command as HostCommand;
-use crate::keymap::Command as KeymapCommand;
+use crate::keymap_setup::Command as KeymapCommand;
 use crate::theme::Command as ThemeCommand;
 use crate::thread::Command as ThreadCommand;
 use std::collections::VecDeque;

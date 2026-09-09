@@ -82,6 +82,10 @@ all clients ── semantic command only ──→ App Server
 
 如果 `zeta-keybinding` 开始依赖 `zui`、`zeta-ui-components`、`winit`、Crossterm、profile 路径或产品命令，说明共享边界已经漂移。若 Zeta Renderer 需要 IPC 才能决定是否阻止浏览器按键，也说明执行边界已经漂移。
 
+`app/keybindings` 是 GUI 内部的独立能力边界，不是三端共用的快捷键框架。它用 `KeybindingCatalog` 接收 Workbench 提供的命令和上下文，管理输入转换、规则和连续按键状态；Settings 只复用它的录入转换。独立 crate 限制其依赖方向，避免快捷键运行逻辑直接访问 Workbench 的业务状态。
+
+TUI 的 `keymap` 负责运行时规则和匹配，`keymap_setup` 负责 `/shortcuts` 的选择、录入和配置编辑；设置交互依赖运行时规则，运行时不依赖设置界面。
+
 ## 4. 共享语义与产品差异
 
 三端共享以下语义：

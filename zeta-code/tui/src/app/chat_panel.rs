@@ -5,7 +5,7 @@ use crate::config::ConfigChoices;
 use crate::connectors::ConnectorChoices;
 use crate::dirs::DirChoices;
 use crate::host::clipboard::ClipboardImageFingerprint;
-use crate::keymap::KeymapChoices;
+use crate::keymap_setup::KeymapChoices;
 use crate::mcp::McpChoices;
 use crate::skills::SkillChoices;
 use crate::status::ProcessResourcesView;

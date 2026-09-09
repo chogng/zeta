@@ -5,30 +5,7 @@
 
 pub(crate) mod bindings;
 mod chords;
-mod editor;
 mod input;
-mod settings;
-
-/// A completed keymap operation delivered to the TUI state owner.
-pub(crate) enum Event {
-    SettingsReceived(KeymapSettings),
-    EditorOpened(KeymapEditorUpdate),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum Command {
-    OpenEditor,
-    Edit(KeymapEdit),
-}
-
-impl Command {
-    pub(crate) const fn request_name(&self) -> &'static str {
-        match self {
-            Self::OpenEditor => "zeta-tui-read-keymap",
-            Self::Edit(_) => "zeta-tui-set-keymap",
-        }
-    }
-}
 
 use bindings::AppKeymapCondition;
 use chords::PendingChord;
@@ -46,37 +23,8 @@ pub(crate) use bindings::fixed_bindings;
 pub(crate) use chords::AppChordMatch;
 #[cfg(test)]
 use chords::KEY_CHORD_TIMEOUT;
-pub(crate) use editor::KeymapChoices;
-pub(crate) use editor::KeymapEditor;
-pub(crate) use editor::KeymapEditorOutcome;
-pub(crate) use editor::KeymapEditorPage;
-#[cfg(test)]
-pub(crate) use editor::keymap_choices;
 pub(crate) use input::compose_config_chord;
 pub(crate) use input::key_event_to_config_key;
-pub(crate) use settings::KeymapCaptureMode;
-pub(crate) use settings::KeymapEdit;
-pub(crate) use settings::KeymapEditIntent;
-pub(crate) use settings::KeymapEditKind;
-pub(crate) use settings::KeymapEditorUpdate;
-pub(crate) use settings::KeymapSettings;
-pub(crate) use settings::read_keymap;
-pub(crate) use settings::set_keymap;
-pub(crate) use settings::settings_from_tui;
-
-pub(crate) fn execute<T>(
-    client: &mut zeta_app_server_client::AppServerClient<T>,
-    command: Command,
-) -> Result<Event, String>
-where
-    T: zeta_app_server_client::JsonRpcTransport,
-{
-    match command {
-        Command::OpenEditor => read_keymap(client),
-        Command::Edit(edit) => set_keymap(client, edit),
-    }
-    .map(Event::EditorOpened)
-}
 
 /// Application-level shortcuts that sit above individual TUI components.
 #[derive(Debug)]

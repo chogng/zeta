@@ -1,10 +1,11 @@
-use crate::keymap::bindings;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use std::collections::BTreeMap;
+//! Interactive shortcut selection, capture, and configuration commands.
+
+mod settings;
 
 use crate::keymap::KeymapActionSnapshot;
+use crate::keymap::bindings;
 use crate::keymap::compose_config_chord;
+use crate::keymap::fixed_bindings;
 use crate::keymap::key_event_to_config_key;
 use crate::widgets::key_capture::KeyCapture;
 use crate::widgets::list_selection::ListSelection;
@@ -15,12 +16,53 @@ use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionOutcome;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+pub(crate) use settings::KeymapCaptureMode;
+pub(crate) use settings::KeymapEdit;
+pub(crate) use settings::KeymapEditIntent;
+pub(crate) use settings::KeymapEditKind;
+pub(crate) use settings::KeymapEditorUpdate;
+pub(crate) use settings::KeymapSettings;
+use settings::read_keymap;
+pub(crate) use settings::set_keymap;
+pub(crate) use settings::settings_from_tui;
+use std::collections::BTreeMap;
 
-use super::KeymapCaptureMode;
-use super::KeymapEdit;
-use super::KeymapEditIntent;
-use super::KeymapEditKind;
-use super::fixed_bindings;
+/// A completed keymap operation delivered to the TUI state owner.
+pub(crate) enum Event {
+    SettingsReceived(KeymapSettings),
+    EditorOpened(KeymapEditorUpdate),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Command {
+    OpenEditor,
+    Edit(KeymapEdit),
+}
+
+impl Command {
+    pub(crate) const fn request_name(&self) -> &'static str {
+        match self {
+            Self::OpenEditor => "zeta-tui-read-keymap",
+            Self::Edit(_) => "zeta-tui-set-keymap",
+        }
+    }
+}
+
+pub(crate) fn execute<T>(
+    client: &mut zeta_app_server_client::AppServerClient<T>,
+    command: Command,
+) -> Result<Event, String>
+where
+    T: zeta_app_server_client::JsonRpcTransport,
+{
+    match command {
+        Command::OpenEditor => read_keymap(client),
+        Command::Edit(edit) => set_keymap(client, edit),
+    }
+    .map(Event::EditorOpened)
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum KeymapAction {
@@ -542,5 +584,5 @@ fn is_cancel(key: KeyEvent) -> bool {
 }
 
 #[cfg(test)]
-#[path = "editor_tests.rs"]
+#[path = "keymap_setup/editor_tests.rs"]
 mod tests;

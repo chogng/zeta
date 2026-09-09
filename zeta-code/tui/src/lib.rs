@@ -8,6 +8,7 @@ mod dirs;
 mod host;
 mod issues;
 mod keymap;
+mod keymap_setup;
 mod mcp;
 mod memory;
 mod models;

@@ -5,8 +5,8 @@ use super::dispatch::ProductCommandOutput;
 use crate::config;
 use crate::config::Event as ConfigEvent;
 use crate::host::Event as HostEvent;
-use crate::keymap;
-use crate::keymap::Event as KeymapEvent;
+use crate::keymap_setup;
+use crate::keymap_setup::Event as KeymapEvent;
 use crate::models;
 use crate::models::Event as ModelEvent;
 use crate::sessions::ConversationChange;
@@ -476,7 +476,7 @@ pub(super) fn apply_tui_config(
         Ok(settings) => app.update(ConfigEvent::SettingsReceived(settings)),
         Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }
-    match keymap::settings_from_tui(&config.tui) {
+    match keymap_setup::settings_from_tui(&config.tui) {
         Ok(settings) => app.update(KeymapEvent::SettingsReceived(settings)),
         Err(error) => app.update(ThreadEvent::FailureReported(error)),
     }

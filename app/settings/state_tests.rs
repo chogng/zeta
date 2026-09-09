@@ -21,7 +21,8 @@ use zui::ui::Rect;
 fn keybindings_viewport() -> SettingsKeybindingsViewport {
     SettingsKeybindingsViewport::new(
         Rect::from_xywh(0.0, 0.0, 600.0, 500.0),
-        AppCommandId::BINDABLE.len(),
+        // Keep scroll geometry independent of additions to the command catalog.
+        18,
         0,
         ScrollViewStyle::new(ScrollbarStyle::new(
             Color::TRANSPARENT,
@@ -171,4 +172,50 @@ fn focused_keybinding_is_scrolled_into_the_list_viewport() {
         Instant::now(),
     ));
     assert_eq!(settings.keybindings_scroll_state().vertical_offset(), 0.0);
+}
+
+#[test]
+fn shortcut_recording_routes_platform_keys_to_portable_bindings() {
+    use zeta_keybinding::HostPlatform;
+    use zeta_keybinding::serialize_key_sequence;
+    use zui::input::ElementState;
+    use zui::input::Key;
+    use zui::input::KeyEvent;
+    use zui::input::ModifiersState;
+    use zui::input::NamedKey;
+
+    for (platform, modifiers) in [
+        (
+            HostPlatform::Windows,
+            ModifiersState::default().with_control(),
+        ),
+        (
+            HostPlatform::Linux,
+            ModifiersState::default().with_control(),
+        ),
+        (HostPlatform::MacOs, ModifiersState::default().with_super()),
+    ] {
+        let mut settings = SettingsState::default();
+        let now = Instant::now();
+        settings.start_keyboard_shortcut_recording(AppCommandId::Copy);
+        let modifier = KeyEvent::new(Key::Named(NamedKey::Shift), ElementState::Pressed);
+        assert!(settings.route_keyboard_shortcut_input(&modifier, modifiers, platform, now));
+        assert!(settings.keyboard_shortcuts_deadline().is_none());
+        let event = KeyEvent::new(Key::Character("c".into()), ElementState::Pressed);
+        assert!(settings.route_keyboard_shortcut_input(&event, modifiers, platform, now));
+        assert!(settings.route_keyboard_shortcut_input(
+            &event.repeated(),
+            modifiers,
+            platform,
+            now
+        ));
+        let deadline = settings
+            .keyboard_shortcuts_deadline()
+            .expect("recording deadline");
+        let commit = settings
+            .advance_keyboard_shortcuts(deadline)
+            .expect("recorded shortcut");
+        assert_eq!(commit.command, AppCommandId::Copy);
+        assert_eq!(serialize_key_sequence(&commit.keybinding), "primary+c");
+    }
 }

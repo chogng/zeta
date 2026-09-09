@@ -5,8 +5,8 @@ use zeta_keybinding::KeySequence;
 use zeta_keybinding::serialize_key_sequence;
 
 use crate::catalog::KeybindingCatalog;
-use crate::engine::UserBinding;
-use crate::engine::UserBindingTarget;
+use crate::runtime::UserBinding;
+use crate::runtime::UserBindingTarget;
 
 /// Shared validation error for malformed user keybinding configuration.
 pub type KeybindingsConfigError = zeta_keybinding::UserBindingsError;

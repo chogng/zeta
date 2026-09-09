@@ -11,13 +11,13 @@ use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
 use crate::host::clipboard::ClipboardImageFingerprint;
-use crate::keymap::Command as KeymapCommand;
-use crate::keymap::Event as KeymapEvent;
-use crate::keymap::KeymapEditIntent;
-use crate::keymap::KeymapEditKind;
-use crate::keymap::KeymapEditorUpdate;
-use crate::keymap::keymap_choices;
-use crate::keymap::settings_from_tui as keymap_settings_from_tui;
+use crate::keymap_setup::Command as KeymapCommand;
+use crate::keymap_setup::Event as KeymapEvent;
+use crate::keymap_setup::KeymapEditIntent;
+use crate::keymap_setup::KeymapEditKind;
+use crate::keymap_setup::KeymapEditorUpdate;
+use crate::keymap_setup::keymap_choices;
+use crate::keymap_setup::settings_from_tui as keymap_settings_from_tui;
 use crate::nls::Language;
 use crate::render::RenderTheme;
 use crate::sessions::Command as SessionCommand;
@@ -1268,7 +1268,7 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
         assert_eq!(
             edit,
             Some(AppCommand::Keymap(KeymapCommand::Edit(
-                crate::keymap::KeymapEdit {
+                crate::keymap_setup::KeymapEdit {
                     expected_revision: 7,
                     command_id: "zetaCode.action.cycleApprovalMode".into(),
                     kind: KeymapEditKind::Set {

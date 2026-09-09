@@ -12,7 +12,6 @@ use zeta_remote_connections::RemoteConnectionProfileStore;
 
 #[cfg(unix)]
 use std::fs;
-#[cfg(unix)]
 use std::path::Path;
 
 #[cfg(unix)]

@@ -1,58 +1,33 @@
 # `zeta-keybinding`
 
-> 文档所有权：三端快捷键架构与端侧边界见 [`docs/keybindings.md`](../../docs/keybindings.md)。
-> 本 README 只说明产品无关 Rust 语义核心的当前实现。
+供 Rust GUI 和 TUI 使用的通用快捷键规则库。各端自己管理命令、默认键位、焦点、连续按键超时、配置读写和设置界面；本 crate 只共享规则算法，不依赖 UI 或 App Server。
 
-## 快速理解
+## 职责
 
-`zeta-keybinding` 把标准化按键、条件和有序规则解析成命令、阻止、等待下一段 Chord 或不匹配；它也能把一份内存中的严格配置值编译成产品提供的 command/condition 类型。它不接收 DOM、winit、Crossterm 事件，不读文件，不绘制 UI，也不执行产品命令。
+1. 表示和解析标准按键、修饰键、一至四段快捷键序列及 `when` 条件，并提供序列化和显示标签。
+2. 根据条件、规则来源、优先级和注册顺序匹配命令或阻止规则，返回命令、等待后续按键、阻止或不匹配。
+3. 编译各端提供的用户规则，校验字段、平台覆盖、命令和条件，报告重复规则；不读写文件、不执行命令。
 
-App 和 Zeta Code 直接依赖这个 crate；Zeta Renderer 保留 TypeScript 实现，并与它读取同一份 [`conformance.json`](../../resources/keybindings/conformance.json)。
+## 文件与调用方
 
-## 当前所有权
-
-| 能力 | 当前 owner | 边界 |
-| --- | --- | --- |
-| 逻辑键、物理键、实际与 portable modifier | `key` | adapter 必须先完成平台事件转换 |
-| 一至四段 Chord、parser 与 canonical serializer | `key` / `parser` | 不定义产品默认键位 |
-| `when` 表达式解析与求值 | `context` | context key catalog 和 value 由产品提供 |
-| Builtin/Workbench/User、priority、注册顺序与 blocker | `binding` | 不读取用户文件 |
-| 前缀、冲突与命令解析 | `resolver` | 不拥有 timeout、焦点或命令副作用 |
-| 用户配置 shape、平台覆盖与重复诊断 | `user` | 产品通过回调提供 command catalog/condition；不读取路径或替换 resolver |
-| Rust/TypeScript 共同 conformance 向量 | `resources/keybindings` | 固定两端共同的语法、优先级、condition、blocker 和 prefix 子集 |
-
-依赖方向固定为：
-
-```text
-App adapter ─┐
-                ├─→ zeta-keybinding
-Zeta Code TUI ──┘
-```
-
-本 crate 不得依赖 `zui`、`zeta-ui`、`zeta-winit`、Crossterm、profile 路径、App Server 或产品 command 类型。
-
-## 公共接口
-
-| Symbol | 职责 |
+| 文件 | 内容 |
 | --- | --- |
-| `LogicalKey` / `PhysicalKey` / `KeyStroke` | 表示 adapter 已标准化的一次按键 |
-| `Chord` / `KeySequence` | 表示一至四段有序快捷键 |
-| `parse_key_sequence` / `serialize_key_sequence` | 读写共享用户配置语法 |
-| `ContextExpression` | 解析并求值通用条件表达式 |
-| `BindingSet` | 注册命令或 blocker 规则 |
-| `KeybindingResolver` | 根据产品上下文返回 `ResolveResult` |
-| `compile_user_bindings` | 严格编译完整配置值；未知 command/condition 或任一坏项使整次编译失败 |
-| `UserBinding` / `UserBindingTarget` | 表示验证后的 User command 或 blocker，不携带产品副作用 |
-| `user_binding_diagnostics` | 报告同 key/condition 的重复规则，并保留后声明获胜语义 |
+| `key.rs` | 按键、修饰键和按键序列类型 |
+| `parser.rs` | 按键序列解析、序列化和标签 |
+| `context.rs` | 条件表达式解析和求值 |
+| `binding.rs` | 规则集合、来源和优先级 |
+| `resolver.rs` | 条件与按键序列匹配 |
+| `user.rs` | 用户规则编译、平台覆盖和重复诊断 |
 
-Resolver 先过滤条件和按键前缀，再按 User/Workbench/Builtin 来源、同来源内显式 priority 和注册顺序选择获胜规则；priority 不能跨越来源层级。
+[App Workbench](../../app/workbench/platform/keybindings.rs) 和 [Zeta Code TUI](../../zeta-code/tui/src/keymap.rs) 在本端转换输入事件，再调用本库。两端的命令和配置相互独立。TypeScript 端保留自己的实现，通过同一份 [一致性测试向量](../../resources/keybindings/conformance.json) 验证共同规则。
+
+完整的端侧边界、配置格式与优先级见[快捷键架构](../../docs/keybindings.md)。
 
 ## 验证
 
-```bash
-cargo test -p zeta-keybinding
-cargo clippy -p zeta-keybinding --all-targets -- -D warnings
-bazel test //zeta-rs/keybinding:keybinding-unit-tests
+```sh
+just check zeta-keybinding
+just test zeta-keybinding
 ```
 
-测试覆盖逻辑/物理键、portable modifier、parser/serializer、Unicode 空白、条件表达式、来源与极值优先级、blocker、Chord prefix、严格用户配置编译和共享 conformance 向量。
+现有测试覆盖解析和序列化、条件、优先级、阻止规则、多段匹配、严格用户配置编译及跨语言一致性向量。

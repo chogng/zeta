@@ -354,14 +354,14 @@ fn keybindings_and_status_line_are_persisted_in_the_tui_toml_section() {
     let (mut client, state_root) = client();
     let revision = client.read_config().unwrap().revision;
 
-    crate::keymap::set_keymap(
+    crate::keymap_setup::set_keymap(
         &mut client,
-        crate::keymap::KeymapEdit {
+        crate::keymap_setup::KeymapEdit {
             expected_revision: revision,
             command_id: "zetaCode.action.copyLastResponse".into(),
-            kind: crate::keymap::KeymapEditKind::Set {
+            kind: crate::keymap_setup::KeymapEditKind::Set {
                 key: "ctrl+y".into(),
-                intent: crate::keymap::KeymapEditIntent::AddAlternate,
+                intent: crate::keymap_setup::KeymapEditIntent::AddAlternate,
             },
         },
     )

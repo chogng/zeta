@@ -6,7 +6,7 @@ pub(crate) enum AppCommand {
     Dirs(crate::dirs::Command),
     Host(crate::host::Command),
     Issues(crate::issues::Command),
-    Keymap(crate::keymap::Command),
+    Keymap(crate::keymap_setup::Command),
     Mcp(crate::mcp::Command),
     Models(crate::models::Command),
     Sessions(crate::sessions::Command),
@@ -32,7 +32,7 @@ app_command_from!(crate::config::Command, Config);
 app_command_from!(crate::connectors::Command, Connectors);
 app_command_from!(crate::dirs::Command, Dirs);
 app_command_from!(crate::host::Command, Host);
-app_command_from!(crate::keymap::Command, Keymap);
+app_command_from!(crate::keymap_setup::Command, Keymap);
 app_command_from!(crate::mcp::Command, Mcp);
 app_command_from!(crate::models::Command, Models);
 app_command_from!(crate::sessions::Command, Sessions);

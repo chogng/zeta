@@ -7,7 +7,7 @@ use crate::config::Command as ConfigCommand;
 use crate::connectors::Command as ConnectorCommand;
 use crate::dirs::Command as DirCommand;
 use crate::host::Command as HostCommand;
-use crate::keymap::Command as KeymapCommand;
+use crate::keymap_setup::Command as KeymapCommand;
 use crate::sessions::Command as SessionCommand;
 use crate::status::Command as StatusCommand;
 use crate::theme::Command as ThemeCommand;

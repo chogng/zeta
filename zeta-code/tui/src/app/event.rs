@@ -8,7 +8,7 @@ pub(crate) enum AppEvent {
     Dirs(crate::dirs::Event),
     Host(crate::host::Event),
     Issues(crate::issues::Event),
-    Keymap(crate::keymap::Event),
+    Keymap(crate::keymap_setup::Event),
     Mcp(crate::mcp::Event),
     Models(crate::models::Event),
     Sessions(crate::sessions::Event),
@@ -35,7 +35,7 @@ app_event_from!(crate::config::Event, Config);
 app_event_from!(crate::connectors::Event, Connectors);
 app_event_from!(crate::dirs::Event, Dirs);
 app_event_from!(crate::host::Event, Host);
-app_event_from!(crate::keymap::Event, Keymap);
+app_event_from!(crate::keymap_setup::Event, Keymap);
 app_event_from!(crate::mcp::Event, Mcp);
 app_event_from!(crate::models::Event, Models);
 app_event_from!(crate::sessions::Event, Sessions);
