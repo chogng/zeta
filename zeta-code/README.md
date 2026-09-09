@@ -78,7 +78,9 @@ checks limited to once per six hours per channel. `latest` follows each GitHub R
 Each update requires an Ed25519 descriptor signed by the release key stored outside the repository,
 then verifies the archive SHA-256 and every file digest in `zeta-package.json`. Source builds and
 packages outside this layout are never rewritten, and changing streams never downgrades an installed
-version. A completed background install uses the existing TUI notice row and takes effect after
+version. Published macOS and Windows executables also carry platform code signatures; macOS release
+ZIPs are submitted to Apple notarization before the update descriptor is signed. A completed
+background install uses the existing TUI notice row and takes effect after
 restart; failures are retained for `zeta update --status`. Run `zeta update` or
 `zeta update --channel stable` for an immediate check. Install the latest managed package directly
 with:

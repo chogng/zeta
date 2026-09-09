@@ -31,6 +31,7 @@ const SCHEDULE_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const MAX_RELEASE_DOCUMENT_BYTES: usize = 256 * 1024;
 const MAX_SIGNED_RELEASE_BYTES: usize = 64 * 1024;
 const MAX_ARCHIVE_BYTES: usize = 1024 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES: usize = 100_000;
 const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 pub(super) struct AutomaticUpdater {
@@ -295,9 +296,11 @@ fn run_for_install(
         .join(format!(".update-package-{}", std::process::id()));
     fs::create_dir(&staging)
         .map_err(|error| format!("could not create update staging: {error}"))?;
-    let archive_path = install
-        .versions
-        .join(format!(".update-archive-{}.tar.gz", std::process::id()));
+    let archive_path = install.versions.join(format!(
+        ".update-archive-{}-{}",
+        std::process::id(),
+        resolved.release.package.file_name
+    ));
     let result = (|| {
         let downloaded =
             transport.fetch_file(&resolved.archive_url, &archive_path, MAX_ARCHIVE_BYTES)?;
@@ -305,7 +308,7 @@ fn run_for_install(
         {
             return Err("downloaded Zeta package does not match its SHA-256 checksum".into());
         }
-        extract_package(&archive_path, &staging)?;
+        extract_package(&archive_path, resolved.release.package.format, &staging)?;
         let metadata = validate_package(&staging, &latest, target)?;
         let id = format!(
             "{}-{}",
@@ -725,7 +728,19 @@ fn decode_sha256(value: &str) -> Result<[u8; 32], String> {
     Ok(decoded)
 }
 
-fn extract_package(archive: &Path, destination: &Path) -> Result<(), String> {
+fn extract_package(
+    archive: &Path,
+    format: zeta_product_update::PackageFormat,
+    destination: &Path,
+) -> Result<(), String> {
+    match format {
+        zeta_product_update::PackageFormat::TarGz => extract_tar_gz(archive, destination),
+        zeta_product_update::PackageFormat::Zip => extract_zip(archive, destination),
+        _ => Err("Zeta Code update package has an unsupported format".into()),
+    }
+}
+
+fn extract_tar_gz(archive: &Path, destination: &Path) -> Result<(), String> {
     let file =
         File::open(archive).map_err(|error| format!("could not open update archive: {error}"))?;
     let mut archive = tar::Archive::new(GzDecoder::new(file));
@@ -759,6 +774,84 @@ fn extract_package(archive: &Path, destination: &Path) -> Result<(), String> {
         entry
             .unpack_in(destination)
             .map_err(|error| format!("could not unpack {}: {error}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn extract_zip(archive: &Path, destination: &Path) -> Result<(), String> {
+    let file =
+        File::open(archive).map_err(|error| format!("could not open update archive: {error}"))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|error| format!("could not read update archive: {error}"))?;
+    if archive.len() > MAX_ARCHIVE_ENTRIES {
+        return Err("update archive contains too many entries".into());
+    }
+    let mut unpacked = 0u64;
+    let mut paths = BTreeSet::new();
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .map_err(|error| format!("could not read archive entry: {error}"))?;
+        let path = entry
+            .enclosed_name()
+            .ok_or_else(|| format!("archive entry path is invalid: {}", entry.name()))?
+            .to_owned();
+        if !safe_relative_path(&path) || !paths.insert(path.clone()) {
+            return Err(format!(
+                "archive entry escapes or repeats the package root: {}",
+                path.display()
+            ));
+        }
+        if entry.is_symlink() || entry.encrypted() {
+            return Err(format!(
+                "archive entry has unsupported type: {}",
+                path.display()
+            ));
+        }
+        unpacked = unpacked
+            .checked_add(entry.size())
+            .filter(|total| *total <= MAX_UNPACKED_BYTES)
+            .ok_or_else(|| "unpacked Zeta package exceeds the size limit".to_owned())?;
+        let output = destination.join(&path);
+        if entry.is_dir() {
+            fs::create_dir_all(&output)
+                .map_err(|error| format!("could not create {}: {error}", path.display()))?;
+            continue;
+        }
+        if !entry.is_file() {
+            return Err(format!(
+                "archive entry has unsupported type: {}",
+                path.display()
+            ));
+        }
+        if let Some(parent) = output.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
+        }
+        let mut target = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&output)
+            .map_err(|error| format!("could not create {}: {error}", path.display()))?;
+        let expected = entry.size();
+        #[cfg(unix)]
+        let unix_mode = entry.unix_mode();
+        let copied = std::io::copy(&mut entry.take(expected + 1), &mut target)
+            .map_err(|error| format!("could not unpack {}: {error}", path.display()))?;
+        if copied != expected {
+            return Err(format!("archive entry is truncated: {}", path.display()));
+        }
+        target
+            .flush()
+            .map_err(|error| format!("could not flush {}: {error}", path.display()))?;
+        #[cfg(unix)]
+        if let Some(mode) = unix_mode {
+            use std::os::unix::fs::PermissionsExt;
+            let installed_mode = if mode & 0o111 == 0 { 0o644 } else { 0o755 };
+            fs::set_permissions(&output, fs::Permissions::from_mode(installed_mode)).map_err(
+                |error| format!("could not set {} permissions: {error}", path.display()),
+            )?;
+        }
     }
     Ok(())
 }

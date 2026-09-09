@@ -81,6 +81,7 @@ fn sign_release(arguments: Arguments, encoded_key: &str) -> Result<(), String> {
     };
     let format = match arguments.format.as_str() {
         "tar-gz" => zeta_product_update::PackageFormat::TarGz,
+        "zip" => zeta_product_update::PackageFormat::Zip,
         "macos-package" => zeta_product_update::PackageFormat::MacOsPackage,
         "linux-app-image" => zeta_product_update::PackageFormat::LinuxAppImage,
         "windows-msi" => zeta_product_update::PackageFormat::WindowsMsi,

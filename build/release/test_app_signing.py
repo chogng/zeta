@@ -12,7 +12,7 @@ from build_app_package import build_package
 from build_app_package import remote_runtime_network_release
 from remote_runtime_bundle import build_remote_runtime_bundle
 from test_remote_runtime_bundle import create_package
-from app_signing import sign_package, verify_package
+from app_signing import record_verified_package, sign_package, verify_package
 
 
 class AppSigningTests(unittest.TestCase):
@@ -59,7 +59,9 @@ class AppSigningTests(unittest.TestCase):
             commands = []
 
             with patch.dict(
-                os.environ, {"APP_WINDOWS_CERTIFICATE": "test-certificate"}, clear=False
+                os.environ,
+                {"ZETA_WINDOWS_SIGNING_THUMBPRINT": "test-certificate"},
+                clear=False,
             ):
                 signed = sign_package(
                     package, lambda command: commands.append(list(command))
@@ -72,6 +74,8 @@ class AppSigningTests(unittest.TestCase):
             self.assertEqual("verified", verified["status"])
             self.assertEqual("signtool", commands[0][0])
             self.assertEqual("sign", commands[0][1])
+            self.assertEqual("SHA256", commands[0][commands[0].index("/td") + 1])
+            self.assertIn("/tr", commands[0])
             self.assertEqual("verify", commands[1][1])
 
     def test_sign_rejects_a_tampered_staged_binary(self) -> None:
@@ -89,6 +93,26 @@ class AppSigningTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(RuntimeError, "digest"):
                     sign_package(package, lambda _: None)
+
+    def test_windows_managed_signature_is_verified_and_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / "app.exe"
+            binary.write_bytes(b"unsigned-app")
+            package = root / "package"
+            build_package(package, binary, "x86_64-pc-windows-msvc", "release")
+            staged = package / "bin/app.exe"
+            staged.write_bytes(b"managed-signature")
+            commands = []
+
+            record = record_verified_package(
+                package, lambda command: commands.append(list(command))
+            )
+
+            self.assertEqual("verified", record["status"])
+            self.assertEqual("verify", commands[0][1])
+            metadata = json.loads((package / "app-package.json").read_text())
+            self.assertEqual(record["signedSha256"], metadata["binary"]["sha256"])
 
     def test_signature_record_binds_the_compiled_remote_runtime_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

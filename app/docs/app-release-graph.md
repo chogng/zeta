@@ -118,9 +118,11 @@ just app-package \
 
 `app/packaging/app-signing-policy.json` 是 release job 的输入，不是开发机默认行为：
 
-- macOS 使用 `codesign` 和 `APP_MACOS_SIGNING_IDENTITY`，验证后再打包/公证；
+- macOS 使用 `codesign` 和 `ZETA_MACOS_SIGNING_IDENTITY`，验证后再打包/公证；
 - Linux 使用 `cosign sign-blob`，签名文件和 binary digest 一起进入 provenance artifact；
-- Windows 使用 `signtool` 和 `APP_WINDOWS_CERTIFICATE`，验证 Authenticode chain；
+- Windows 使用 `signtool` 和 `ZETA_WINDOWS_SIGNING_THUMBPRINT`，签名时加入 RFC 3161
+  SHA-256 时间戳，并验证 Authenticode chain；GitHub Release 应使用 Azure Artifact Signing 后执行
+  `sign_app_package.py --verify-only`，不把代码签名私钥下载到 runner；
 - 签名 job 只能读取 staging 输出，不能重建 binary；verify job 必须重新计算 digest，并检查与
   `app-package.json`、signature record 一致；
 - 声明本地 Remote bundle 时，sign/verify 必须重新验证 catalog、archive 和 binary 内嵌 digest；
@@ -136,17 +138,17 @@ provider-neutral job 入口是：
 ```bash
 APP_PACKAGE_DIR=/absolute/path/to/app-package \
 APP_REMOTE_RUNTIME_BUNDLE=/absolute/path/to/remote-runtimes \
-APP_MACOS_SIGNING_IDENTITY="Developer ID Application: ..." \
+ZETA_MACOS_SIGNING_IDENTITY="Developer ID Application: ..." \
 python -B build/release/release_app_package.py
 ```
 
 网络包改用 `APP_REMOTE_RUNTIME_CATALOG_URL` 与
 `APP_REMOTE_RUNTIME_CATALOG_SHA256`，两者必须同时存在。
 
-Linux 使用 `APP_COSIGN_IDENTITY` 指向 cosign key，Windows 使用
-`APP_WINDOWS_CERTIFICATE` 指向 CI 证书文件或证书存储标识。脚本只把 identity 传给 native signer，
-不写入 metadata 或 signature record；CI provider
-负责把这些变量绑定到 secret store。脚本完成后，`app-package.json` 和
+Linux 使用 `APP_COSIGN_IDENTITY` 指向 cosign key。本地或自管 Windows runner 使用
+`ZETA_WINDOWS_SIGNING_THUMBPRINT` 选择已经安装在用户证书库中的代码签名证书；GitHub-hosted runner
+由 Azure Artifact Signing 修改 binary 后运行 `sign_app_package.py --verify-only`，重新验证签名并更新
+metadata 和 signature record。脚本完成后，`app-package.json` 和
 `app-signature.json` 都必须是 `verified` 状态，才允许进入 publish step。
 
 ## CI 契约

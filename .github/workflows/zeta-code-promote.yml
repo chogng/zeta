@@ -43,7 +43,10 @@ jobs:
             aarch64-pc-windows-msvc \
             x86_64-pc-windows-msvc
           do
-            archive="zeta-code-${target}.tar.gz"
+            case "$target" in
+              *-apple-darwin) archive="zeta-code-${target}.zip"; format="zip" ;;
+              *) archive="zeta-code-${target}.tar.gz"; format="tar-gz" ;;
+            esac
             gh release download "$release_tag" --pattern "$archive" --dir "$output"
             .build/cargo/debug/zeta-update-sign \
               --repository chogng/zeta \
@@ -52,7 +55,7 @@ jobs:
               --version "$version" \
               --release-tag "$release_tag" \
               --target "$target" \
-              --format tar-gz \
+              --format "$format" \
               --archive "$output/$archive" \
               --output "$output/zeta-code-stable-${target}.update.json" \
               --public-key "$ZETA_UPDATE_PUBLIC_KEY"

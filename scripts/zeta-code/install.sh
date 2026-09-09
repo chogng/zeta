@@ -3,14 +3,14 @@ set -eu
 
 repository="chogng/zeta"
 case "$(uname -s):$(uname -m)" in
-  Darwin:arm64) target="aarch64-apple-darwin" ;;
-  Darwin:x86_64) target="x86_64-apple-darwin" ;;
-  Linux:aarch64|Linux:arm64) target="aarch64-unknown-linux-gnu" ;;
-  Linux:x86_64|Linux:amd64) target="x86_64-unknown-linux-gnu" ;;
+  Darwin:arm64) target="aarch64-apple-darwin"; format="zip" ;;
+  Darwin:x86_64) target="x86_64-apple-darwin"; format="zip" ;;
+  Linux:aarch64|Linux:arm64) target="aarch64-unknown-linux-gnu"; format="tar.gz" ;;
+  Linux:x86_64|Linux:amd64) target="x86_64-unknown-linux-gnu"; format="tar.gz" ;;
   *) printf '%s\n' "Zeta Code does not publish a managed package for this platform." >&2; exit 1 ;;
 esac
 
-archive="zeta-code-$target.tar.gz"
+archive="zeta-code-$target.$format"
 base="https://github.com/$repository/releases/latest/download"
 temporary="$(mktemp -d "${TMPDIR:-/tmp}/zeta-install.XXXXXX")"
 trap 'rm -rf "$temporary"' EXIT HUP INT TERM
@@ -31,7 +31,11 @@ fi
 
 package="$temporary/package"
 mkdir "$package"
-tar -xzf "$temporary/$archive" -C "$package"
+if [ "$format" = "zip" ]; then
+  unzip -q "$temporary/$archive" -d "$package"
+else
+  tar -xzf "$temporary/$archive" -C "$package"
+fi
 version_output="$($package/bin/zeta --version)"
 version="${version_output#zeta }"
 [ "$version" != "$version_output" ] && [ -n "$version" ] || {

@@ -11238,6 +11238,7 @@ dependencies = [
  "zeta-server-host",
  "zeta-terminal",
  "zeta-tui",
+ "zip 4.6.1",
 ]
 
 [[package]]

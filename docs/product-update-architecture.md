@@ -108,6 +108,52 @@ Idle
 - 自动更新和手动更新都拒绝降级；回滚是显式选择已验证历史版本的独立操作。
 - 发布产物不可覆盖；只有 `stable` 指针允许在通过签名验证的晋升操作中更新。
 
+### 系统签名、公证与更新签名
+
+这三件事解决的是不同问题，不能互相代替：
+
+| 检查 | 用户机器相信什么 | 实现位置 |
+| --- | --- | --- |
+| macOS / Windows 系统签名 | “这个可执行文件确实由 Zeta 发布，且签名证书有效” | `build/release/system_signing.py` |
+| macOS 公证 | “Apple 已扫描并接受这个最终发布包” | `build/release/notarize_release.py` |
+| Ed25519 更新描述签名 | “更新器拿到的版本、通道、下载地址和 SHA-256 没被替换” | `zeta-product-update` 与 `zeta-update-sign` |
+
+发布顺序固定为：构建可执行文件 → 组包 → 系统签名并验证所有可执行文件 → 重算包内摘要与
+`buildId` → 生成最终安装包或压缩包 → macOS 公证或 Windows 安装包签名 → 为最终产物生成
+Ed25519 更新描述 → 发布。签过名后再改一个字节，后面的摘要和签名都必须重做。
+
+macOS 使用 Developer ID Application 证书、Hardened Runtime 和安全时间戳。最终的 `.app`、
+`.pkg` 或 `.dmg` 必须提交公证；Zeta Code 的 `.zip` 提交公证但无法附加离线票据，Desktop 的
+`.pkg` / `.dmg` 在公证后还必须运行 `stapler staple` 和 `stapler validate`。Windows 使用代码签名
+证书、SHA-256 文件摘要和 RFC 3161 时间戳。GitHub Release 使用 Azure Artifact Signing 与 OIDC，
+Windows 代码签名私钥不进入 GitHub secret，也不落到 runner 文件系统；本地或自管 runner 仍可让
+`system_signing.py` 按证书指纹使用已经安装在用户证书库中的证书。
+
+三个产品共用下列发布凭据，产品代码和安装包都不能读取它们：
+
+| GitHub 配置 | 类型 | 用途 |
+| --- | --- | --- |
+| `ZETA_MACOS_SIGNING_IDENTITY` | repository variable | Developer ID 证书名称 |
+| `ZETA_MACOS_CERTIFICATE_P12` | secret | base64 编码的 Developer ID 证书与私钥 |
+| `ZETA_MACOS_CERTIFICATE_PASSWORD` | secret | P12 密码 |
+| `ZETA_MACOS_NOTARY_KEY_P8` | secret | base64 编码的 App Store Connect API key |
+| `ZETA_MACOS_NOTARY_KEY_ID` | secret | API key ID |
+| `ZETA_MACOS_NOTARY_ISSUER` | secret | API issuer ID |
+| `ZETA_AZURE_CLIENT_ID` | repository variable | 与 GitHub OIDC 绑定的 Entra 应用 ID |
+| `ZETA_AZURE_TENANT_ID` | repository variable | Entra tenant ID |
+| `ZETA_AZURE_SUBSCRIPTION_ID` | repository variable | Artifact Signing 所在订阅 |
+| `ZETA_WINDOWS_SIGNING_ENDPOINT` | repository variable | Artifact Signing 区域 endpoint |
+| `ZETA_WINDOWS_SIGNING_ACCOUNT` | repository variable | Artifact Signing account 名称 |
+| `ZETA_WINDOWS_CERTIFICATE_PROFILE` | repository variable | 发布证书 profile 名称 |
+| `ZETA_WINDOWS_SIGNING_THUMBPRINT` | 本地/自管 runner 环境变量 | 已安装证书的指纹；GitHub Release 不使用 |
+| `ZETA_WINDOWS_TIMESTAMP_URL` | 本地/自管 runner 环境变量，可省略 | RFC 3161 服务；省略时使用 DigiCert |
+| `ZETA_UPDATE_PUBLIC_KEY` | repository variable | 随产品分发的 Ed25519 公钥 |
+| `ZETA_UPDATE_SIGNING_KEY` | secret | 只在发布工作流使用的 Ed25519 私钥种子 |
+
+没有这些凭据时，Release 工作流应直接失败，而不是上传一个看似成功但系统不信任的包。证书到期后，
+带可信时间戳的旧版本仍可验证；新版本必须换用续期后的证书。Ed25519 密钥与系统证书分别轮换，不能
+把 P12/PFX 私钥当成更新描述私钥。
+
 ## 三端安装边界
 
 ### Electron Desktop
@@ -196,12 +242,13 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `zeta-remote-
 | Zeta Code 更新 | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `zeta-code/cli/src/update.rs` | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断 |
 | Rust Desktop 更新 | `app/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui` | 继续迁出通用下载，`zui` 只保留 facade |
 | Electron Desktop 更新 | 尚无完整产品更新调用链 | 增加 update host、Main adapter、Renderer service 与 UI |
-| 签名工具 | `zeta-code/update-sign` 已直接消费共享发布描述与 canonical encoding | 保留密钥输入和 release artifact adapter |
-| 发布工作流 | Zeta Code 已有最新版本签名和稳定版本晋升工作流 | 扩展为按 product/target 发布三端产物 |
+| 系统签名 | App 与 Zeta Code 已共用 `build/release/system_signing.py`；Zeta Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证 | Electron 打包和三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据，Windows 安装器再次签名 |
+| 更新描述签名 | `zeta-code/update-sign` 已直接消费共享发布描述与 canonical encoding | 保留密钥输入和 release artifact adapter |
+| 发布工作流 | Zeta Code 已有系统签名、macOS 公证、最新版本描述签名和稳定版本晋升工作流 | 扩展为按 product/target 发布 Electron 与 Rust Desktop 产物 |
 | 共享更新 crate | `zeta-rs/product-update` 已拥有策略、product/target/package 描述、签名与验证 | 继续迁入通用下载、调度、状态与错误 |
 
-“已有代码”不代表共享架构已经完成。当前 Zeta Code 和 `zui` 的重复签名实现是待迁移状态，不能被
-其他端复制为第三套实现。
+“已有代码”不代表共享架构已经完成。当前 Zeta Code 和 `zui` 仍各自拥有下载与调度代码，这些逻辑
+需要继续迁到共享领域，不能被 Electron 复制为第三套实现。
 
 ## 演进顺序
 
@@ -235,6 +282,10 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `zeta-remote-
 ### 发布系统
 
 - 六个平台目标完整、版本与 tag 一致、产物不可覆盖；
+- macOS 可执行文件通过 `codesign --verify --strict`，最终产物通过公证；可附加票据的 Desktop
+  产物还必须通过 `stapler validate`；
+- Windows 每个 Zeta 可执行文件和最终安装器通过 `signtool verify /pa /all /v`，且签名包含
+  SHA-256 RFC 3161 时间戳；
 - 私钥缺失或公私钥不匹配时停止发布；
 - 签名 payload 与运行时 decoder 使用同一 schema fixture；
 - `stable` 只能由显式晋升工作流改变，并且不能成为 GitHub Latest release。

@@ -135,8 +135,10 @@ python3 -B build/release/build_windows_sandbox_runtime.py \
 
 Zeta Code release jobs pass `--cli-bin` and `--update-public-key` to include `bin/zeta[.exe]`, its
 digest, and the Ed25519 update trust key. They then run
-`build/release/build_zeta_code_archive.py` and `zeta-update-sign`. The archive is rootless and
-deterministic; the initial installer checks its named SHA-256 sidecar, while later updates require
+`build/release/sign_zeta_package.py`, `build/release/build_zeta_code_archive.py`, and
+`zeta-update-sign`. macOS and Windows sign and verify every executable before package hashes and
+`buildId` are recomputed. macOS produces a rootless `.zip` for Apple notarization; Linux and
+Windows produce rootless `.tar.gz` archives. The archives are deterministic; the initial installer checks its named SHA-256 sidecar, while later updates require
 the signed descriptor and recheck every package file. CI reads the public key from the
 `ZETA_UPDATE_PUBLIC_KEY` repository variable and the matching 32-byte hex or base64 signing seed
 from the `ZETA_UPDATE_SIGNING_KEY` secret. The stable stream changes only through the explicit
@@ -146,6 +148,10 @@ Release administrators derive the public value from the secret seed without expo
 build scripts: build `zeta-update-sign`, then invoke the built executable as `zeta-update-sign
 public-key` with `ZETA_UPDATE_SIGNING_KEY` present only in that process. Store the printed value as
 `ZETA_UPDATE_PUBLIC_KEY`; do not commit the seed or place it in build arguments.
+
+System signing credentials and the reason they are separate from the Ed25519 update key are
+documented in `docs/product-update-architecture.md`. Missing macOS or Windows credentials stop a
+Release before upload.
 
 For app Remote delivery, one or more completed packaged-node directories can be serialized into
 deterministic rootless archives and a strict local catalog:

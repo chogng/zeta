@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -33,14 +34,14 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 json.dumps(
                     {
                         "layoutVersion": 2,
-                        "target": "aarch64-apple-darwin",
+                        "target": "aarch64-unknown-linux-gnu",
                         "components": {"cli": {}},
                     }
                 ),
                 encoding="utf-8",
             )
-            first = root / "first/zeta-code-aarch64-apple-darwin.tar.gz"
-            second = root / "second/zeta-code-aarch64-apple-darwin.tar.gz"
+            first = root / "first/zeta-code-aarch64-unknown-linux-gnu.tar.gz"
+            second = root / "second/zeta-code-aarch64-unknown-linux-gnu.tar.gz"
 
             with patch.object(archive_builder, "validate_package_directory"):
                 checksum = archive_builder.create_archive(package, first)
@@ -55,6 +56,39 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 self.assertEqual(
                     archive.getnames(),
                     ["bin", "bin/zeta", "zeta-package.json"],
+                )
+
+    def test_macos_archive_is_a_deterministic_rootless_zip(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "package"
+            executable = package / "bin/zeta"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"zeta")
+            executable.chmod(0o755)
+            (package / "zeta-package.json").write_text(
+                json.dumps(
+                    {
+                        "layoutVersion": 2,
+                        "target": "aarch64-apple-darwin",
+                        "components": {"cli": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            first = root / "first/zeta-code-aarch64-apple-darwin.zip"
+            second = root / "second/zeta-code-aarch64-apple-darwin.zip"
+
+            with patch.object(archive_builder, "validate_package_directory"), patch.object(
+                archive_builder, "require_verified_system_signing"
+            ):
+                archive_builder.create_archive(package, first)
+                archive_builder.create_archive(package, second)
+
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            with zipfile.ZipFile(first) as archive:
+                self.assertEqual(
+                    archive.namelist(), ["bin/", "bin/zeta", "zeta-package.json"]
                 )
 
     def test_archive_requires_cli_package_identity_and_new_output(self) -> None:
@@ -72,9 +106,29 @@ class ZetaCodeArchiveTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            output = root / "zeta-code-aarch64-apple-darwin.tar.gz"
+            output = root / "zeta-code-aarch64-apple-darwin.zip"
             with self.assertRaisesRegex(RuntimeError, "identity is invalid"):
                 archive_builder.create_archive(package, output)
+
+    def test_macos_archive_refuses_an_unsigned_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "package"
+            package.mkdir()
+            (package / "zeta-package.json").write_text(
+                json.dumps(
+                    {
+                        "layoutVersion": 2,
+                        "target": "aarch64-apple-darwin",
+                        "components": {"cli": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output = root / "zeta-code-aarch64-apple-darwin.zip"
+            with patch.object(archive_builder, "validate_package_directory"):
+                with self.assertRaisesRegex(RuntimeError, "system signing"):
+                    archive_builder.create_archive(package, output)
 
     @unittest.skipIf(os.name == "nt", "the POSIX installer is tested on POSIX hosts")
     def test_posix_installer_publishes_a_version_and_stable_launcher(self) -> None:
@@ -85,19 +139,27 @@ class ZetaCodeArchiveTests(unittest.TestCase):
             executable.parent.mkdir(parents=True)
             executable.write_text("#!/bin/sh\nprintf 'zeta 1.2.3\\n'\n", encoding="utf-8")
             executable.chmod(0o755)
-            archive = root / "package.tar.gz"
-            with tarfile.open(archive, "w:gz") as output:
-                output.add(fixture / "bin", arcname="bin")
-            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             target = {
                 ("Darwin", "arm64"): "aarch64-apple-darwin",
                 ("Darwin", "x86_64"): "x86_64-apple-darwin",
                 ("Linux", "aarch64"): "aarch64-unknown-linux-gnu",
                 ("Linux", "x86_64"): "x86_64-unknown-linux-gnu",
             }[(platform.system(), platform.machine())]
+            if platform.system() == "Darwin":
+                archive = root / "package.zip"
+                with zipfile.ZipFile(archive, "w") as output:
+                    output.write(fixture / "bin", arcname="bin/")
+                    output.write(executable, arcname="bin/zeta")
+                release_name = f"zeta-code-{target}.zip"
+            else:
+                archive = root / "package.tar.gz"
+                with tarfile.open(archive, "w:gz") as output:
+                    output.add(fixture / "bin", arcname="bin")
+                release_name = f"zeta-code-{target}.tar.gz"
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             checksum = root / "package.sha256"
             checksum.write_text(
-                f"{digest}  zeta-code-{target}.tar.gz\n", encoding="ascii"
+                f"{digest}  {release_name}\n", encoding="ascii"
             )
             tools = root / "tools"
             tools.mkdir()

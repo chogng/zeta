@@ -11,6 +11,7 @@ import os
 import stat
 import sys
 import tarfile
+import zipfile
 from pathlib import Path
 
 
@@ -18,6 +19,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.zeta_build.targets import target_spec  # noqa: E402
+from build.release.zeta_package.layout import require_verified_system_signing  # noqa: E402
 from build.release.zeta_package.layout import validate_package_directory  # noqa: E402
 
 
@@ -29,30 +31,27 @@ def create_archive(package: Path, output: Path) -> Path:
     metadata = json.loads((package / "zeta-package.json").read_text(encoding="utf-8"))
     target = metadata.get("target")
     components = metadata.get("components")
-    expected_name = f"zeta-code-{target}.tar.gz"
+    if not isinstance(target, str):
+        raise RuntimeError("Zeta Code release package identity is invalid")
+    spec = target_spec(target)
+    suffix = ".zip" if spec.operating_system.value == "darwin" else ".tar.gz"
+    expected_name = f"zeta-code-{target}{suffix}"
     if (
         metadata.get("layoutVersion") != 2
-        or not isinstance(target, str)
         or not isinstance(components, dict)
         or "cli" not in components
         or output.name != expected_name
     ):
         raise RuntimeError("Zeta Code release package identity is invalid")
-    validate_package_directory(package, target_spec(target))
+    validate_package_directory(package, spec)
+    require_verified_system_signing(package, spec)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.{os.getpid()}.part")
     try:
-        with temporary.open("xb") as raw:
-            with gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as compressed:
-                with tarfile.open(fileobj=compressed, mode="w") as archive:
-                    for path in package_paths(package):
-                        relative = path.relative_to(package).as_posix()
-                        archive.add(
-                            path,
-                            arcname=relative,
-                            recursive=False,
-                            filter=normalized_tar_info,
-                        )
+        if suffix == ".zip":
+            create_zip(package, temporary)
+        else:
+            create_tar_gz(package, temporary)
         temporary.replace(output)
     except Exception:
         temporary.unlink(missing_ok=True)
@@ -61,6 +60,45 @@ def create_archive(package: Path, output: Path) -> Path:
     checksum = output.with_suffix(output.suffix + ".sha256")
     checksum.write_text(f"{digest}  {output.name}\n", encoding="ascii")
     return checksum
+
+
+def create_tar_gz(package: Path, output: Path) -> None:
+    with output.open("xb") as raw:
+        with gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as compressed:
+            with tarfile.open(fileobj=compressed, mode="w") as archive:
+                for path in package_paths(package):
+                    relative = path.relative_to(package).as_posix()
+                    archive.add(
+                        path,
+                        arcname=relative,
+                        recursive=False,
+                        filter=normalized_tar_info,
+                    )
+
+
+def create_zip(package: Path, output: Path) -> None:
+    with zipfile.ZipFile(
+        output,
+        mode="x",
+        compression=zipfile.ZIP_DEFLATED,
+        compresslevel=9,
+    ) as archive:
+        for path in package_paths(package):
+            relative = path.relative_to(package).as_posix()
+            directory = path.is_dir()
+            info = zipfile.ZipInfo(relative + ("/" if directory else ""))
+            info.date_time = (1980, 1, 1, 0, 0, 0)
+            info.create_system = 3
+            mode = (
+                0o40755
+                if directory
+                else 0o100755
+                if path.stat().st_mode & stat.S_IXUSR
+                else 0o100644
+            )
+            info.external_attr = mode << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, b"" if directory else path.read_bytes())
 
 
 def package_paths(package: Path) -> list[Path]:

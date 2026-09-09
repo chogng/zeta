@@ -49,6 +49,7 @@ pub enum UpdateProduct {
 #[serde(rename_all = "camelCase")]
 pub enum PackageFormat {
     TarGz,
+    Zip,
     MacOsPackage,
     LinuxAppImage,
     WindowsMsi,

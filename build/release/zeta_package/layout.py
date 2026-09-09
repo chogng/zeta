@@ -422,6 +422,143 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
                 )
 
 
+def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]:
+    """Return executable package members covered by system signing."""
+    metadata = json.loads((package / METADATA_FILE).read_text(encoding="utf-8"))
+    components = metadata.get("components")
+    if not isinstance(components, dict):
+        raise RuntimeError("Invalid package component metadata")
+    artifacts = {
+        "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
+        "codeModeHost": package / "bin" / spec.code_mode_host_name,
+        "ripgrep": package / "zeta-path" / spec.ripgrep_name,
+        "serverHost": package / "bin" / spec.server_name,
+    }
+    if "cli" in components:
+        artifacts["cli"] = package / "bin" / spec.cli_name
+    if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
+        artifacts["node"] = (
+            package / "zeta-resources" / "node" / "bin" / spec.node_name
+        )
+    if spec.is_windows:
+        artifacts["windowsCommandRunner"] = (
+            package / "zeta-resources" / COMMAND_RUNNER_NAME
+        )
+        artifacts["windowsSandboxSetup"] = (
+            package / "zeta-resources" / SANDBOX_SETUP_NAME
+        )
+    for path in artifacts.values():
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError("Missing package signing artifact: {}".format(path))
+    return artifacts
+
+
+def record_system_signing(
+    package: Path,
+    spec: TargetSpec,
+    signed_artifacts: Dict[str, Dict[str, str]],
+) -> None:
+    """Refresh package identity after embedded signatures change executable bytes."""
+    metadata_path = package / METADATA_FILE
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    components = metadata.get("components")
+    if not isinstance(components, dict):
+        raise RuntimeError("Invalid package component metadata")
+    expected = system_signing_artifacts(package, spec)
+    if set(signed_artifacts) != set(expected):
+        raise RuntimeError("System signing record does not cover every package executable")
+    records = []
+    for name, path in sorted(expected.items()):
+        record = signed_artifacts[name]
+        signed_digest = record.get("signedSha256")
+        unsigned_digest = record.get("unsignedSha256")
+        if (
+            not isinstance(unsigned_digest, str)
+            or not isinstance(signed_digest, str)
+            or file_sha256(path) != signed_digest
+        ):
+            raise RuntimeError("System signing digest does not match {}".format(name))
+        relative = path.relative_to(package).as_posix()
+        records.append(
+            {
+                "name": name,
+                "path": relative,
+                "unsignedSha256": unsigned_digest,
+                "signedSha256": signed_digest,
+            }
+        )
+        if name in {
+            "appServerDaemon",
+            "cli",
+            "codeModeHost",
+            "node",
+            "ripgrep",
+            "serverHost",
+        }:
+            component = components.get(name)
+            if not isinstance(component, dict):
+                raise RuntimeError("Missing package component {}".format(name))
+            component["binarySha256"] = signed_digest
+        elif name == "windowsCommandRunner":
+            helpers = components.get("windowsSandbox")
+            if not isinstance(helpers, dict):
+                raise RuntimeError("Missing Windows sandbox component")
+            helpers["commandRunnerSha256"] = signed_digest
+        elif name == "windowsSandboxSetup":
+            helpers = components.get("windowsSandbox")
+            if not isinstance(helpers, dict):
+                raise RuntimeError("Missing Windows sandbox component")
+            helpers["sandboxSetupSha256"] = signed_digest
+    metadata["systemSigning"] = {
+        "formatVersion": 1,
+        "platform": spec.operating_system.value,
+        "status": "verified",
+        "artifacts": records,
+    }
+    files = package_files(package)
+    identity = {
+        key: value for key, value in metadata.items() if key not in ("buildId", "files")
+    }
+    metadata["files"] = files
+    metadata["buildId"] = package_build_id(identity, files)
+    write_json(metadata_path, metadata)
+    validate_package_directory(package, spec)
+
+
+def require_verified_system_signing(package: Path, spec: TargetSpec) -> None:
+    if spec.is_linux:
+        return
+    metadata = json.loads((package / METADATA_FILE).read_text(encoding="utf-8"))
+    signing = metadata.get("systemSigning")
+    if (
+        not isinstance(signing, dict)
+        or signing.get("platform") != spec.operating_system.value
+        or signing.get("status") != "verified"
+    ):
+        raise RuntimeError(
+            "macOS and Windows release packages require verified system signing"
+        )
+    artifacts = signing.get("artifacts")
+    expected = system_signing_artifacts(package, spec)
+    if not isinstance(artifacts, list) or len(artifacts) != len(expected):
+        raise RuntimeError("System signing record is incomplete")
+    observed = {}
+    for record in artifacts:
+        if not isinstance(record, dict):
+            raise RuntimeError("System signing record is invalid")
+        name = record.get("name")
+        path = record.get("path")
+        digest = record.get("signedSha256")
+        if not isinstance(name, str) or name in observed or name not in expected:
+            raise RuntimeError("System signing record has an invalid artifact name")
+        expected_path = expected[name].relative_to(package).as_posix()
+        if path != expected_path or digest != file_sha256(expected[name]):
+            raise RuntimeError("System signing record does not match {}".format(name))
+        observed[name] = digest
+    if set(observed) != set(expected):
+        raise RuntimeError("System signing record is incomplete")
+
+
 def copy_builtin_skills(source: Path, destination: Path) -> None:
     if source.is_symlink() or not source.is_dir():
         raise RuntimeError(

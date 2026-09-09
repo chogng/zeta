@@ -8,9 +8,9 @@ from pathlib import Path
 
 
 EXPECTED_PLATFORMS = {
-    "darwin": ("codesign", "embedded", "APP_MACOS_SIGNING_IDENTITY"),
+    "darwin": ("codesign", "embedded", "ZETA_MACOS_SIGNING_IDENTITY"),
     "linux": ("cosign", "detached", "APP_COSIGN_IDENTITY"),
-    "windows": ("signtool", "embedded", "APP_WINDOWS_CERTIFICATE"),
+    "windows": ("signtool", "embedded", "ZETA_WINDOWS_SIGNING_THUMBPRINT"),
 }
 
 
@@ -101,6 +101,16 @@ def main() -> int:
             fail(f"{platform} verification must invoke {tool}")
         if mode == "detached" and not config.get("signatureFile"):
             fail(f"{platform} detached signing requires signatureFile")
+    if (
+        platforms["darwin"].get("notarizationProfileEnvironment")
+        != "ZETA_MACOS_NOTARY_PROFILE"
+    ):
+        fail("macOS signing must name the shared notarization profile")
+    if (
+        platforms["windows"].get("timestampUrlEnvironment")
+        != "ZETA_WINDOWS_TIMESTAMP_URL"
+    ):
+        fail("Windows signing must name the shared timestamp service")
 
     print("app release contract OK")
     return 0

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +18,9 @@ from build.lib.zeta_build.targets import TargetSpec
 from build.lib.zeta_build.targets import target_spec
 from remote_runtime_bundle import RemoteRuntimeBundle
 from remote_runtime_bundle import validate_remote_runtime_bundle
+from system_signing import run_command
+from system_signing import sign_command as system_sign_command
+from system_signing import verify_command as system_verify_command
 
 
 CommandRunner = Callable[[Sequence[str]], None]
@@ -251,21 +253,6 @@ def identity_for(config: Dict[str, object]) -> str:
     return identity
 
 
-def run_command(command: Sequence[str], runner: Optional[CommandRunner]) -> None:
-    try:
-        if runner is not None:
-            runner(command)
-        else:
-            subprocess.run(list(command), check=True)
-    except FileNotFoundError as error:
-        raise RuntimeError(f"signing tool is not installed: {command[0]}") from error
-    except subprocess.CalledProcessError as error:
-        rendered = " ".join(command)
-        raise RuntimeError(
-            f"signing command failed with exit code {error.returncode}: {rendered}"
-        ) from error
-
-
 def sign_command(
     context: Dict[str, object],
     config: Dict[str, object],
@@ -276,17 +263,8 @@ def sign_command(
     assert isinstance(tool, str)
     artifact = context["artifact"]
     assert isinstance(artifact, Path)
-    if platform == "darwin":
-        return [
-            tool,
-            "--force",
-            "--sign",
-            identity,
-            "--timestamp",
-            "--options",
-            "runtime",
-            str(artifact),
-        ]
+    if platform in {"darwin", "windows"}:
+        return system_sign_command(artifact, platform)
     if platform == "linux":
         signature = signature_path(context, config)
         assert signature is not None
@@ -301,9 +279,7 @@ def sign_command(
             str(artifact),
         ]
 
-    command = [tool, "sign", "/fd", "SHA256", "/f", identity]
-    command.append(str(artifact))
-    return command
+    raise RuntimeError(f"unsupported app signing platform: {platform}")
 
 
 def verify_command(
@@ -315,8 +291,8 @@ def verify_command(
     assert isinstance(tool, str)
     artifact = context["artifact"]
     assert isinstance(artifact, Path)
-    if platform == "darwin":
-        return [tool, "--verify", "--strict", str(artifact)]
+    if platform in {"darwin", "windows"}:
+        return system_verify_command(artifact, platform)
     if platform == "linux":
         signature = signature_path(context, config)
         assert signature is not None
@@ -329,7 +305,7 @@ def verify_command(
             str(signature),
             str(artifact),
         ]
-    return [tool, "verify", "/pa", str(artifact)]
+    raise RuntimeError(f"unsupported app signing platform: {platform}")
 
 
 def _metadata_digest(context: Dict[str, object]) -> str:
@@ -460,5 +436,56 @@ def verify_package(
     signing["status"] = "verified"
     signing["verifiedSha256"] = digest
     write_json(record_path, record)
+    write_json(context["metadata_path"], metadata)
+    return record
+
+
+def record_verified_package(
+    package_dir: Path,
+    runner: Optional[CommandRunner] = None,
+) -> Dict[str, object]:
+    """Verify a signature applied by a managed service and refresh package metadata."""
+    context = package_context(package_dir)
+    platform = signing_platform(context)
+    if platform not in {"darwin", "windows"}:
+        raise RuntimeError("managed signing is supported only for macOS and Windows")
+    config = platform_config(context)
+    metadata = context["metadata"]
+    assert isinstance(metadata, dict)
+    signing = metadata["signing"]
+    assert isinstance(signing, dict)
+    if signing.get("status") != "unsigned":
+        raise RuntimeError("managed signing requires an unsigned package record")
+    artifact = context["artifact"]
+    assert isinstance(artifact, Path)
+    unsigned_digest = _metadata_digest(context)
+    run_command(verify_command(context, config, platform), runner)
+    signed_digest = sha256(artifact)
+    record = {
+        "formatVersion": 1,
+        "product": "app",
+        "platform": platform,
+        "tool": config["tool"],
+        "artifact": metadata["binary"]["path"],
+        "unsignedSha256": unsigned_digest,
+        "signedSha256": signed_digest,
+        "verifiedSha256": signed_digest,
+        "status": "verified",
+    }
+    remote_runtime_catalog = context["remote_runtime_catalog"]
+    if remote_runtime_catalog is not None:
+        assert isinstance(remote_runtime_catalog, AuthenticatedRemoteRuntimeCatalog)
+        record["remoteRuntimeCatalogSha256"] = remote_runtime_catalog.sha256
+    binary = metadata["binary"]
+    assert isinstance(binary, dict)
+    binary["sha256"] = signed_digest
+    signing["status"] = "verified"
+    signing["unsignedSha256"] = unsigned_digest
+    signing["signedSha256"] = signed_digest
+    signing["verifiedSha256"] = signed_digest
+    signing["signatureRecord"] = str(
+        context["record_path"].relative_to(context["package_dir"])
+    )
+    write_json(context["record_path"], record)
     write_json(context["metadata_path"], metadata)
     return record

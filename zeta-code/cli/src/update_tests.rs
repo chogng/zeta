@@ -132,9 +132,70 @@ fn package_extraction_rejects_links() {
     archive.into_inner().unwrap().finish().unwrap();
 
     assert!(
-        extract_package(&archive_path, &output)
-            .unwrap_err()
-            .contains("unsupported type")
+        extract_package(
+            &archive_path,
+            zeta_product_update::PackageFormat::TarGz,
+            &output,
+        )
+        .unwrap_err()
+        .contains("unsupported type")
+    );
+}
+
+#[test]
+fn zip_package_extraction_preserves_executables_and_rejects_links() {
+    let directory = TempDir::new().unwrap();
+    let archive_path = directory.path().join("package.zip");
+    let file = File::create(&archive_path).unwrap();
+    let mut archive = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default().unix_permissions(0o755);
+    archive.add_directory("bin/", options).unwrap();
+    archive.start_file("bin/zeta", options).unwrap();
+    archive.write_all(b"zeta").unwrap();
+    archive.finish().unwrap();
+    let output = directory.path().join("output");
+    fs::create_dir(&output).unwrap();
+
+    extract_package(
+        &archive_path,
+        zeta_product_update::PackageFormat::Zip,
+        &output,
+    )
+    .unwrap();
+
+    assert_eq!(fs::read(output.join("bin/zeta")).unwrap(), b"zeta");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert!(
+            output
+                .join("bin/zeta")
+                .metadata()
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o111
+                != 0
+        );
+    }
+
+    let linked_archive = directory.path().join("linked.zip");
+    let file = File::create(&linked_archive).unwrap();
+    let mut archive = zip::ZipWriter::new(file);
+    archive
+        .add_symlink("bin/zeta", "../../outside", options)
+        .unwrap();
+    archive.finish().unwrap();
+    let linked_output = directory.path().join("linked-output");
+    fs::create_dir(&linked_output).unwrap();
+    assert!(
+        extract_package(
+            &linked_archive,
+            zeta_product_update::PackageFormat::Zip,
+            &linked_output,
+        )
+        .unwrap_err()
+        .contains("unsupported type")
     );
 }
 

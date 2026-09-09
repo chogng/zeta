@@ -21,7 +21,11 @@ from zeta_package.layout import (
     build_package_directory,
     copy_builtin_extensions,
     copy_builtin_skills,
+    file_sha256,
     load_protocol_metadata,
+    record_system_signing,
+    require_verified_system_signing,
+    system_signing_artifacts,
 )
 from zeta_package.node import (
     NodeResolution,
@@ -357,6 +361,25 @@ class PackageTests(unittest.TestCase):
             self.assertNotIn("node", metadata["components"])
             self.assertFalse((output / "zeta-resources" / "node").exists())
             self.assertFalse((output / "zeta-resources" / "licenses" / "node").exists())
+
+            signed = {}
+            for name, path in system_signing_artifacts(output, spec).items():
+                unsigned_digest = file_sha256(path)
+                path.write_bytes(path.read_bytes() + b"-signed")
+                signed[name] = {
+                    "unsignedSha256": unsigned_digest,
+                    "signedSha256": file_sha256(path),
+                }
+            record_system_signing(output, spec, signed)
+            require_verified_system_signing(output, spec)
+            signed_metadata = json.loads(
+                (output / "zeta-package.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual("verified", signed_metadata["systemSigning"]["status"])
+            self.assertEqual(
+                file_sha256(output / "bin" / spec.server_name),
+                signed_metadata["components"]["serverHost"]["binarySha256"],
+            )
 
     def assert_extension_resources(self, extensions: Path) -> None:
         self.assertEqual(
