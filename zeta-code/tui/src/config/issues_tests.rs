@@ -102,7 +102,7 @@ fn issue_config_model_picker_uses_configured_catalog_and_returns_to_issues() {
 }
 
 #[test]
-fn issue_refresh_choices_cover_all_intervals_and_preserve_other_settings() {
+fn issue_refresh_is_one_horizontal_control_and_preserves_other_settings() {
     let mut config = empty_config_snapshot();
     config.revision = 17;
     config.issues.recommend_merge = false;
@@ -110,21 +110,58 @@ fn issue_refresh_choices_cover_all_intervals_and_preserve_other_settings() {
         provider: "openai".into(),
         model: "small".into(),
     });
-    let choices = config_choices(
-        &config,
-        &ProviderListResult { providers: vec![] },
-        TerminalSettings::default(),
-        StatusLineSettings::default(),
-    );
-    for minutes in [0, 5, 10, 30, 60] {
-        let id = crate::widgets::list_selection::ListSelectionItemId::new(format!(
-            "issue-refresh-{minutes}"
+    let choices = || {
+        config_choices(
+            &config,
+            &ProviderListResult { providers: vec![] },
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        )
+    };
+    let focus_refresh = |editor: &mut ConfigEditor| {
+        for code in [
+            KeyCode::Up,
+            KeyCode::Up,
+            KeyCode::BackTab,
+            KeyCode::Enter,
+            KeyCode::Down,
+        ] {
+            editor.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
+        }
+    };
+    let mut editor = ConfigEditor::new(choices());
+    focus_refresh(&mut editor);
+    let visible = editor.selection().unwrap().visible_items();
+    assert_eq!(visible.len(), 3);
+    assert_eq!(visible[1].label(), "Auto refresh");
+    assert_eq!(visible[1].description(), Some(" 10m"));
+
+    for (current, key, minutes) in [
+        (0, KeyCode::Left, 60),
+        (0, KeyCode::Right, 5),
+        (5, KeyCode::Right, 10),
+        (10, KeyCode::Right, 30),
+        (30, KeyCode::Right, 60),
+        (60, KeyCode::Right, 0),
+        (10, KeyCode::Enter, 30),
+        (10, KeyCode::Char(' '), 30),
+    ] {
+        let mut current_config = config.clone();
+        current_config.issues.auto_refresh_minutes = current;
+        let mut editor = ConfigEditor::new(config_choices(
+            &current_config,
+            &ProviderListResult { providers: vec![] },
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
         ));
-        let ConfigSelectionAction::SetIssues(edit) = choices.actions.get(&id).unwrap() else {
-            panic!();
+        focus_refresh(&mut editor);
+        let ConfigEditorOutcome::Action(ConfigSelectionAction::SetIssues(edit)) =
+            editor.handle_key(KeyEvent::new(key, KeyModifiers::NONE))
+        else {
+            panic!("expected issue refresh edit");
         };
         let mut expected = config.issues.clone();
         expected.auto_refresh_minutes = minutes;
-        assert_eq!((edit.expected_revision, &edit.config), (17, &expected));
+        assert_eq!((edit.expected_revision, edit.config), (17, expected));
     }
 }

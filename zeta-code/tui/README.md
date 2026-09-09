@@ -266,7 +266,7 @@ just test-tui
 | [issues.rs](../cli/tests/tui/issues.rs) | Issue 选择、会话创建与 PR；目前仅 Unix 场景 |
 
 
-渲染测试使用 Ratatui 字符缓冲区与 `insta`；状态、协议和副作用仍需独立断言。固定尺寸，规范化动态路径和身份，逐项审查 `.snap.new` 后再接受，具体操作见[字符快照测试](../../.agents/skills/zeta-code-snapshot-testing/SKILL.md)。
+渲染测试使用 Ratatui 字符缓冲区与 `insta`；状态、协议和副作用仍需独立断言。固定尺寸，规范化动态路径和身份，逐项审查 `.snap.new` 后再接受，具体操作见 [TUI 测试](../../.agents/skills/test-tui/SKILL.md)。
 
 共享完整配置快照使用 `test_support::empty_config_snapshot`，测试只修改自己关心的字段。直接构造 `ThreadItem` 时显式填写各字段，避免测试助手隐藏实际业务要求。
 

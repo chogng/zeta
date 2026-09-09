@@ -1,0 +1,24 @@
+---
+source: zeta-code/tui/src/app/frame_tests.rs
+expression: "render(&app, 100, 20)"
+---
+                                                                                                    
+    ▄  ▄     Zeta Code v0.1.0                                                                       
+  ▗█▛██▜█▖   Automatic model · Access unknown                                                       
+  ▝▜████▛▘   .                                                                                      
+    ▝  ▘                                                                                            
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+─ Config ───────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+   General    Providers    Language servers    Issues                                               
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ Search configuration                                                                         │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+  Analysis model    Use this model to analyse related issues       Not configured - choose a model  
+> Auto refresh                                                     Never                            
+  Repository workflow and assignment                                                                
+                                                                                                    
+  Enter/Space to change  ·  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close

@@ -707,9 +707,10 @@ impl App {
                 }
                 .into(),
             ),
-            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetIssues(edit)) => {
-                Some(ConfigCommand::SetIssues(edit).into())
-            }
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::SetIssues(edit)
+                | ConfigSelectionAction::AdjustIssueRefresh(edit),
+            ) => Some(ConfigCommand::SetIssues(edit).into()),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::OpenIssueModels { .. },
             ) => None,

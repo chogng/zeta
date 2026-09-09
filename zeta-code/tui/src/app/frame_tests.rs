@@ -1689,6 +1689,35 @@ fn config_general_tab_uses_localized_label() {
     assert_snapshot!("config_general_tab", render(&app, 100, 20));
 }
 
+#[test]
+fn config_issues_tab_shows_one_auto_refresh_value() {
+    let mut app = App::new();
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.issues.recommend_merge = false;
+    config.issues.auto_refresh_minutes = 0;
+    app.update(crate::config::Event::EditorOpened(
+        crate::config::config_choices(
+            &config,
+            &zeta_app_server_protocol::protocol::provider::ProviderListResult {
+                providers: Vec::new(),
+            },
+            crate::config::TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+    let selection = app.list_selection().unwrap();
+    assert_eq!(selection.active_tab().label(), "Issues");
+    assert_eq!(selection.selected_item().unwrap().label(), "Auto refresh");
+    assert_snapshot!(
+        "config_issues_tab_shows_one_auto_refresh_value",
+        render(&app, 100, 20)
+    );
+}
+
 fn custom_provider_app() -> App {
     let mut app = App::new();
     app.update(crate::config::Event::EditorOpened(

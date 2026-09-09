@@ -1,11 +1,11 @@
 ---
-name: zeta-code-snapshot-testing
-description: Add, update, review, or diagnose Zeta Code TUI text snapshots with insta. Use for isolated Ratatui renders, event-driven App simulations, full-process PTY smoke states, pending .snap.new files, or intentional terminal UI changes under zeta-code; do not use snapshots as a substitute for state, event, protocol, or side-effect assertions.
+name: test-tui
+description: Test Zeta Code TUI behavior and rendering with owner-level Rust tests, App simulations, insta snapshots, real PTY scenarios, or an interactive run. Use for TUI changes, regressions, snapshots, and terminal verification; do not use for non-TUI Rust or desktop UI.
 ---
 
-# Zeta Code Snapshot Testing
+# Test Zeta Code TUI
 
-Use `insta` assertions for reviewable terminal text baselines. Follow the Codex TUI test shape: simulate most interaction states against the real App or feature owner with typed inputs, and reserve full-process PTY tests for behavior that actually depends on the terminal or process boundary. A generated `.txt` file or an environment-gated export is not a snapshot test because it cannot fail when the UI changes.
+Choose the cheapest owner-level test that proves the behavior, and add an `insta` baseline when visible terminal output changes. Follow the Codex TUI test shape: simulate most interaction states against the real App or feature owner with typed inputs, and reserve full-process PTY tests for behavior that actually depends on the terminal or process boundary. A generated `.txt` file, screenshot, manual run, or environment-gated export is not a snapshot test because it cannot fail when the UI changes.
 
 ## Choose the owning test layer
 
@@ -18,6 +18,12 @@ Use `insta` assertions for reviewable terminal text baselines. Follow the Codex 
 
 Prefer the cheapest layer that includes the behavior owner. Do not move a deterministic renderer or App interaction test into the full-process suite. Do not replace a PTY behavior assertion with a simulation when the real terminal lifecycle is the behavior. Do not duplicate the same screen-state matrix at every layer: simulations own detailed visual states, while PTY tests keep a small representative set of boundary checks.
 
+Snapshot paths follow the owning Rust test module through `insta`; they do not follow a feature name merely because a CLI scenario also exercises that feature. For example, a Config page layout belongs to a `zeta-tui` Config or App-frame snapshot, while a CLI scenario that changes the same setting should assert the persisted value without owning a duplicate screen baseline.
+
+## Run interactively
+
+Use `just zeta` from the repository root when a real interactive terminal materially improves verification. When driving it programmatically, send text first and Enter in a separate write, then wait for a state-specific marker before the next action. Use an isolated profile or fixture for scenarios that write configuration or repository state. Interactive verification supplements the owning automated tests; it does not replace them.
+
 ## Simulate interaction flows
 
 Use the same pattern as Codex TUI widget tests:
@@ -29,6 +35,8 @@ Use the same pattern as Codex TUI widget tests:
 5. Drive asynchronous phases with explicit gates, received events, call counts, or state predicates. A timeout may bound the test, but a sleep must not be the condition that makes a snapshot ready.
 
 For PTY input, wait for terminal output revision to advance and reach a quiet frame before capture. Keep that revision independent of any bounded raw-output diagnostic buffer so truncating diagnostics cannot make a changing screen look stable. A screen marker must distinguish the target state from the state before the action; text already visible in a background list, transcript, or covered screen does not prove that navigation completed.
+
+Run real PTY scenarios through `just test-tui <test-filter>`. This entrypoint builds the matching App Server daemon before the CLI integration test; do not invoke the `zeta-cli` PTY target directly because a stale daemon binary can disagree with the newly built client.
 
 `zeta-code/tui/src/app/conversation_flow_tests.rs` is the in-process scripted-model example. Smaller App and feature scenarios should stay beside their owner and inject typed events directly. A `simulated/` copy of the full `real/` page hierarchy is not required; organize snapshots by the owning Rust test module, as Codex does.
 
@@ -58,7 +66,7 @@ Start with the smallest package and test filter that owns the behavior. Most new
 
 ```bash
 just test zeta-tui <test-filter>
-just test zeta-cli --test tui_real_scenarios <test-filter>
+just test-tui <test-filter>
 ```
 
 An intentional new or changed external snapshot should first fail and leave a `.snap.new` file. Inspect pending snapshots and open each affected file directly:

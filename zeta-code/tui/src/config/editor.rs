@@ -28,6 +28,8 @@ use zeta_app_server_protocol::protocol::provider::{
 };
 
 const ISSUE_MODEL_ROW: &str = "issue-analysis-model";
+const ISSUE_REFRESH_ROW: &str = "issue-refresh";
+const ISSUE_REFRESH_INTERVALS: [u32; 5] = [0, 5, 10, 30, 60];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ConfigEdit {
@@ -41,6 +43,7 @@ pub(crate) struct ConfigEdit {
 pub(crate) enum ConfigSelectionAction {
     OpenIssueWorkflow,
     SetIssues(super::IssueConfigEdit),
+    AdjustIssueRefresh(super::IssueConfigEdit),
     OpenIssueModels {
         expected_revision: u64,
     },
@@ -285,6 +288,9 @@ impl ConfigEditor {
             ListSelectionOutcome::Activate(ConfigSelectionAction::SetLanguage(edit)) => {
                 language_outcome(edit, ListSelectionAdjustment::Next)
             }
+            ListSelectionOutcome::Activate(ConfigSelectionAction::AdjustIssueRefresh(edit)) => {
+                issue_refresh_outcome(edit, ListSelectionAdjustment::Next)
+            }
             ListSelectionOutcome::Activate(ConfigSelectionAction::OpenProvider(settings)) => {
                 self.provider_panel = Some(super::provider::Panel::new(settings));
                 ConfigEditorOutcome::Consumed
@@ -305,6 +311,9 @@ impl ConfigEditor {
                 | ConfigSelectionAction::OpenSubscription
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
                 ConfigSelectionAction::SetLanguage(edit) => language_outcome(edit, adjustment),
+                ConfigSelectionAction::AdjustIssueRefresh(edit) => {
+                    issue_refresh_outcome(edit, adjustment)
+                }
                 action => ConfigEditorOutcome::Action(action),
             },
             ListSelectionOutcome::Consumed | ListSelectionOutcome::FocusPrevious => {
@@ -515,7 +524,8 @@ fn config_revision(choices: &ConfigChoices) -> u64 {
         .values()
         .find_map(|action| match action {
             ConfigSelectionAction::OpenProvider(settings) => Some(settings.revision),
-            ConfigSelectionAction::SetIssues(edit) => Some(edit.expected_revision),
+            ConfigSelectionAction::SetIssues(edit)
+            | ConfigSelectionAction::AdjustIssueRefresh(edit) => Some(edit.expected_revision),
             _ => None,
         })
         .unwrap_or_default()
@@ -666,33 +676,23 @@ pub(crate) fn config_choices(
     } else {
         model_item
     }];
-    for (minutes, label) in [
-        (0, "Never"),
-        (5, "5 minutes"),
-        (10, "10 minutes"),
-        (30, "30 minutes"),
-        (60, "1 hour"),
-    ] {
-        let id = ListSelectionItemId::new(format!("issue-refresh-{minutes}"));
-        let mut next = config.issues.clone();
-        next.auto_refresh_minutes = minutes;
-        actions.insert(
-            id.clone(),
-            ConfigSelectionAction::SetIssues(super::IssueConfigEdit {
-                expected_revision: config.revision,
-                config: next,
-            }),
-        );
-        issue_items.push(
-            ListSelectionItem::new(format!("Auto refresh: {label}"))
-                .with_id(id)
-                .with_columns(
-                    "Auto refresh",
-                    label,
-                    checkbox(config.issues.auto_refresh_minutes == minutes),
-                ),
-        );
-    }
+    let issue_refresh_id = ListSelectionItemId::new(ISSUE_REFRESH_ROW);
+    actions.insert(
+        issue_refresh_id.clone(),
+        ConfigSelectionAction::AdjustIssueRefresh(super::IssueConfigEdit {
+            expected_revision: config.revision,
+            config: config.issues.clone(),
+        }),
+    );
+    issue_items.push(
+        ListSelectionItem::new("Auto refresh")
+            .with_id(issue_refresh_id)
+            .with_columns(
+                "Auto refresh",
+                "",
+                issue_refresh_label(config.issues.auto_refresh_minutes),
+            ),
+    );
     let workflow_id = ListSelectionItemId::new("issue-workflow");
     actions.insert(
         workflow_id.clone(),
@@ -798,6 +798,35 @@ fn language_outcome(
     };
     edit.terminal.set_language(language);
     ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(edit))
+}
+
+fn issue_refresh_outcome(
+    mut edit: super::IssueConfigEdit,
+    adjustment: ListSelectionAdjustment,
+) -> ConfigEditorOutcome {
+    let current = ISSUE_REFRESH_INTERVALS
+        .iter()
+        .position(|minutes| *minutes == edit.config.auto_refresh_minutes)
+        .expect("validated issue refresh interval");
+    let next = match adjustment {
+        ListSelectionAdjustment::Previous => current
+            .checked_sub(1)
+            .unwrap_or(ISSUE_REFRESH_INTERVALS.len() - 1),
+        ListSelectionAdjustment::Next => (current + 1) % ISSUE_REFRESH_INTERVALS.len(),
+    };
+    edit.config.auto_refresh_minutes = ISSUE_REFRESH_INTERVALS[next];
+    ConfigEditorOutcome::Action(ConfigSelectionAction::SetIssues(edit))
+}
+
+fn issue_refresh_label(minutes: u32) -> &'static str {
+    match minutes {
+        0 => "Never",
+        5 => "5m",
+        10 => "10m",
+        30 => "30m",
+        60 => "1h",
+        _ => unreachable!("validated issue refresh interval"),
+    }
 }
 
 const fn checkbox(checked: bool) -> &'static str {
