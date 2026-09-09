@@ -711,7 +711,7 @@ Catalog 不应成为错误的授权替代品：
 
 > 状态：Proposed。当前 `ModelsManager::resolve` 只校验一个准确模型；本节规定 Agent、工作流和其他上层以后共用的模型选择契约。
 
-`zeta-models-manager` 应拥有 provider 无关的候选选择，不能把排序复制到 App Server、Core、Agent 定义或各 provider adapter。`zeta-agents` 声明 Agent 的默认值、覆盖权限、替换范围和模型要求；App Server 将这些值连同 Session 或工作流基线转换成通用选择请求，manager 不依赖 `zeta-agents`。
+`zeta-models-manager` 应拥有 provider 无关的候选选择，不能把排序复制到 App Server、Core、Agent 定义或各 provider adapter。`zeta-agent-roles` 声明 Agent 的默认值、覆盖权限、替换范围和模型要求；App Server 将这些值连同 Session 或工作流基线转换成通用选择请求，manager 不依赖 `zeta-agent-roles`。
 
 计划中的通用输入与结果至少表达：
 
@@ -1048,5 +1048,5 @@ contract test；未文档化 cache header 不成为正确性依赖。
 14. Catalog TTL 是可配置的 Zeta policy；provider cache hint/validator 只有证据充分时才参与计算。
 15. Provider discovery 必须逐家验证；`../pi` 或 OpenAI-compatible 行为不能作为其他厂商的协议
     证明。
-16. 不新增独立模型路由 crate；`zeta-models-manager` 拥有 provider 无关的候选筛选与选择，`zeta-agents` 只声明 Agent 策略，`zeta-model-provider` 只调用已经选定的准确模型。
+16. 不新增独立模型路由 crate；`zeta-models-manager` 拥有 provider 无关的候选筛选与选择，`zeta-agent-roles` 只声明 Agent 策略，`zeta-model-provider` 只调用已经选定的准确模型。
 17. 自动替换顺序固定为准确模型、同 scope 兼容模型、同 provider 的其他允许 scope、其他允许 provider；没有兼容候选才失败，任何 scope 或模型替换都不能静默发生。

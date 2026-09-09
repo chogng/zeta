@@ -1,10 +1,10 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use github::IssueTask;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use std::path::Path;
 use std::sync::Mutex;
-use zeta_github::IssueTask;
 
 /// Profile database owner of durable issue-task associations.
 pub struct SqliteIssueTaskStore {
@@ -15,7 +15,7 @@ impl SqliteIssueTaskStore {
     pub fn record_pull_request(
         &self,
         session_id: &str,
-        pull_request: &zeta_github::PullRequest,
+        pull_request: &github::PullRequest,
     ) -> Result<(), String> {
         let mut connection = self
             .connection

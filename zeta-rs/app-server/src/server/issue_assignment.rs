@@ -3,6 +3,11 @@ use super::RpcError;
 use super::decode;
 use super::issue_operations::issue_error;
 use super::result;
+use github::IssueAssignmentPlan;
+use github::IssueIdentity;
+use github::IssueRepositoryIdentity;
+use github::IssueWorkItem;
+use github::IssueWorkflow;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -14,14 +19,9 @@ use zeta_app_server_protocol::protocol::issue_assignment::IssuePlanParams;
 use zeta_app_server_protocol::protocol::issue_assignment::IssuePlanResult;
 use zeta_app_server_protocol::protocol::issue_assignment::IssueWorkflowConfigureParams;
 use zeta_app_server_protocol::protocol::issue_assignment::IssueWorkflowReadResult;
-use zeta_work_coordination::IssueAssignmentPlan;
-use zeta_work_coordination::IssueIdentity;
-use zeta_work_coordination::IssueRepositoryIdentity;
-use zeta_work_coordination::IssueWorkItem;
-use zeta_work_coordination::IssueWorkflow;
 
 pub(super) struct IssueRepositoryCache {
-    repository: zeta_github::Repository,
+    repository: github::Repository,
     identity: IssueRepositoryIdentity,
     default_branch: String,
     checked_at: std::time::Instant,
@@ -30,15 +30,13 @@ pub(super) struct IssueRepositoryCache {
 impl AppServer {
     pub(super) fn issue_repository_identity(
         &self,
-    ) -> Result<(zeta_github::Repository, IssueRepositoryIdentity, String), RpcError> {
-        let runtime = self.turn_changes_runtime()?;
+    ) -> Result<(github::Repository, IssueRepositoryIdentity, String), RpcError> {
+        let runtime = self.issue_runtime()?;
         let repository = runtime
-            .worktree_runtime
-            .block_on(super::issue_operations::repository(&runtime.dir_root))
+            .block_on(super::issue_operations::repository(runtime.root()))
             .map_err(issue_error)?;
         let info = runtime
-            .worktree_runtime
-            .block_on(zeta_github::GitHub::default().issue_repository(&repository))
+            .block_on(github::GitHub::default().issue_repository(&repository))
             .map_err(issue_error)?;
         if !info
             .full_name
@@ -69,11 +67,10 @@ impl AppServer {
 
     pub(super) fn cached_issue_repository_identity(
         &self,
-    ) -> Result<(zeta_github::Repository, IssueRepositoryIdentity, String), RpcError> {
-        let runtime = self.turn_changes_runtime()?;
+    ) -> Result<(github::Repository, IssueRepositoryIdentity, String), RpcError> {
+        let runtime = self.issue_runtime()?;
         let repository = runtime
-            .worktree_runtime
-            .block_on(super::issue_operations::repository(&runtime.dir_root))
+            .block_on(super::issue_operations::repository(runtime.root()))
             .map_err(issue_error)?;
         if let Some(cached) = self
             .issue_repository_cache
@@ -109,10 +106,9 @@ impl AppServer {
             .get(&identity.key())
             .cloned()
             .unwrap_or_default();
-        let runtime = self.turn_changes_runtime()?;
-        let github = zeta_github::GitHub::default();
+        let runtime = self.issue_runtime()?;
+        let github = github::GitHub::default();
         let (labels, assignees) = runtime
-            .worktree_runtime
             .block_on(async {
                 tokio::try_join!(
                     github.issue_labels(&repository),
@@ -148,10 +144,9 @@ impl AppServer {
         }
         let workflow: IssueWorkflow = convert(&params.workflow)?;
         workflow.validate().map_err(issue_error)?;
-        let runtime = self.turn_changes_runtime()?;
-        let github = zeta_github::GitHub::default();
+        let runtime = self.issue_runtime()?;
+        let github = github::GitHub::default();
         let (labels, assignees) = runtime
-            .worktree_runtime
             .block_on(async {
                 tokio::try_join!(
                     github.issue_labels(&repository),
@@ -214,13 +209,12 @@ impl AppServer {
                     .is_none()
             {
                 self.issue_assignment_store()?
-                    .set_auto_claim(&identity.key(), &runtime.dir_root, Some(&activation))
+                    .set_auto_claim(&identity.key(), runtime.root(), Some(&activation))
                     .map_err(issue_error)?;
             }
-            self.ensure_issue_repository_scheduler(&identity)?;
         } else {
             self.issue_assignment_store()?
-                .set_auto_claim(&identity.key(), &runtime.dir_root, None)
+                .set_auto_claim(&identity.key(), runtime.root(), None)
                 .map_err(issue_error)?;
         }
         result(&super::config_operations::config_command_result(outcome))
@@ -232,10 +226,9 @@ impl AppServer {
         if convert::<_, IssueRepositoryIdentity>(&params.repository)? != identity {
             return Err(issue_error("Issue repository changed".into()));
         }
-        let runtime = self.turn_changes_runtime()?;
-        let github = zeta_github::GitHub::default();
+        let runtime = self.issue_runtime()?;
+        let github = github::GitHub::default();
         let label = runtime
-            .worktree_runtime
             .block_on(async {
                 if let Some(existing) = github
                     .issue_labels(&repository)
@@ -293,13 +286,12 @@ impl AppServer {
             .get(&identity.key())
             .cloned()
             .unwrap_or_default();
-        let runtime = self.turn_changes_runtime()?;
-        let github = zeta_github::GitHub::default();
+        let runtime = self.issue_runtime()?;
+        let github = github::GitHub::default();
         let mut identities = Vec::new();
         let mut context = Vec::new();
         for number in params.numbers {
             let metadata = runtime
-                .worktree_runtime
                 .block_on(github.issue_metadata(&repository, number))
                 .map_err(issue_error)?;
             if metadata.issue.state != "open" {
@@ -326,7 +318,6 @@ impl AppServer {
                 )));
             }
             let snapshot = runtime
-                .worktree_runtime
                 .block_on(github.issue(&repository, number))
                 .map_err(issue_error)?;
             identities.push(IssueIdentity {
@@ -344,10 +335,9 @@ impl AppServer {
             .clone()
             .unwrap_or(default_branch.clone());
         let base_commit = runtime
-            .worktree_runtime
             .block_on(async {
                 let git = zeta_git::GitClient::system();
-                let checkout = git.open_repository(&runtime.dir_root).await?;
+                let checkout = git.open_repository(runtime.root()).await?;
                 if base_branch == "HEAD" {
                     git.resolve_commit(&checkout, "HEAD").await
                 } else {
@@ -399,7 +389,7 @@ impl AppServer {
     fn plan_issue_items(
         &self,
         identities: &[IssueIdentity],
-        context: &[zeta_github::IssueSnapshot],
+        context: &[github::IssueSnapshot],
         workflow: &IssueWorkflow,
     ) -> Result<(Vec<IssueWorkItem>, u64), RpcError> {
         #[derive(serde::Deserialize)]
@@ -411,7 +401,7 @@ impl AppServer {
             numbers: Vec<u64>,
             objective: String,
             acceptance_conditions: Vec<String>,
-            scope: zeta_work_coordination::WorkScopeClaim,
+            scope: github::IssueWorkScope,
             dependencies: BTreeSet<String>,
         }
         let model = self
@@ -566,9 +556,7 @@ pub(super) fn now() -> Result<u64, RpcError> {
         .map_err(|error| issue_error(error.to_string()))
 }
 
-pub(super) fn issue_material_digest(
-    snapshot: &zeta_github::IssueSnapshot,
-) -> Result<String, RpcError> {
+pub(super) fn issue_material_digest(snapshot: &github::IssueSnapshot) -> Result<String, RpcError> {
     Ok(zeta_protocol::ContentDigest::sha256(
         &serde_json::to_vec(&(
             &snapshot.issue.title,

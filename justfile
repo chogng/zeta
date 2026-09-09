@@ -44,10 +44,6 @@ test-tui *args:
 check *args:
     {{ python }} -B scripts/cargo.py check -p {args}
 
-# Run versioned multi-Agent evaluations. Real models require the explicit live subcommand flags.
-multi-agent-eval *args:
-    {{ python }} -B scripts/cargo.py run -p zeta-multi-agent-evals -- {args}
-
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
     {{ python }} -B scripts/cargo.py test -p zeta-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact

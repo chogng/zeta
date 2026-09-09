@@ -185,16 +185,7 @@ impl AppServer {
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        if params
-            .capabilities
-            .work_coordination_host
-            .as_ref()
-            .is_some_and(|capability| capability.version != 1)
-        {
-            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-        }
-        if (params.capabilities.dir_permissions_host.is_some()
-            || params.capabilities.work_coordination_host.is_some())
+        if params.capabilities.dir_permissions_host.is_some()
             && !connection.allows_product_host_capabilities()
         {
             return Err(RpcError::new(
@@ -203,11 +194,6 @@ impl AppServer {
             ));
         }
         connection.set_dir_permissions_host(params.capabilities.dir_permissions_host.is_some());
-        connection.set_work_coordination_host(params.capabilities.work_coordination_host.is_some());
-        self.updates.set_work_coordination_host(
-            connection.connection_id,
-            params.capabilities.work_coordination_host.is_some(),
-        );
         self.updates.set_agent_interaction_capability(
             connection.connection_id,
             params.capabilities.agent_interactions,
@@ -237,7 +223,6 @@ impl AppServer {
             sessions: true,
             threads: true,
             turns: true,
-            work_coordination: self.work_coordination.is_some(),
             projects: self.projects.is_some(),
             resources: true,
             attachments: true,
@@ -828,30 +813,6 @@ impl AppServer {
         requested_tool_mode: Option<zeta_protocol::ToolMode>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
-        if let Some(store) = &self.issue_assignments {
-            if let Some(assignment) = store
-                .for_thread(&thread_id)
-                .map_err(super::issue_operations::issue_error)?
-            {
-                assignment
-                    .check_writer(assignment.epoch, super::issue_assignment::now()?)
-                    .map_err(super::issue_operations::issue_error)?;
-                let running = self
-                    .turn_changes_runtime()?
-                    .active_work_attempts
-                    .read()
-                    .map_err(|_| {
-                        super::issue_operations::issue_error(
-                            "Issue execution scope unavailable".into(),
-                        )
-                    })?
-                    .contains_key(&thread_id);
-                if !running || assignment.ownership != zeta_work_coordination::IssueOwnership::Held
-                {
-                    return Err(super::issue_operations::issue_error("Start or resume this managed Issue from the assignments view before sending implementation work".into()));
-                }
-            }
-        }
         let tool_mode = match requested_tool_mode {
             Some(tool_mode) => TurnToolModeSelection::Explicit(tool_mode),
             None => TurnToolModeSelection::ConfiguredDefault,

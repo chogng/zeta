@@ -3,16 +3,18 @@ use super::ConnectionState;
 use super::RpcError;
 use super::core_error;
 use super::decode;
+use super::git_turn_changes_runtime::GitTurnChangesRuntime;
 use super::issue_operations::issue_error;
 use super::issue_operations::repository;
 use super::issue_operations::summary;
 use super::result;
-use super::turn_changes_runtime::TurnChangesRuntime;
 use serde_json::Value;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use worktree::ManagedDirSource;
+use worktree::ManagedDirTarget;
 use zeta_app_server_protocol::protocol::issues::IssueComment;
 use zeta_app_server_protocol::protocol::issues::IssueReadResult;
 use zeta_app_server_protocol::protocol::issues::IssueRepository;
@@ -26,8 +28,6 @@ use zeta_core::StartThreadRequest;
 use zeta_core::ThreadWorktreeBinder;
 use zeta_core::ThreadWorktreeBindingRequest;
 use zeta_state::SqliteIssueTaskStore;
-use zeta_worktree::ManagedDirSource;
-use zeta_worktree::ManagedDirTarget;
 
 impl AppServer {
     pub(super) fn issue_input(
@@ -43,8 +43,8 @@ impl AppServer {
             .read_session(session_id.as_str())
             .map_err(issue_error)?
             .ok_or_else(|| issue_error("Session has no issue task".into()))?;
-        let runtime = self.turn_changes_runtime()?;
-        if task.source_root != runtime.dir_root {
+        let runtime = self.git_turn_changes_runtime()?;
+        if task.source_root != runtime.dirs.root {
             return Err(issue_error(
                 "Issue task belongs to another directory".into(),
             ));
@@ -87,9 +87,9 @@ impl AppServer {
                 .filter(|assignment| {
                     !matches!(
                         assignment.ownership,
-                        zeta_work_coordination::IssueOwnership::Unclaimed
-                            | zeta_work_coordination::IssueOwnership::Released
-                            | zeta_work_coordination::IssueOwnership::Completed
+                        github::IssueOwnership::Unclaimed
+                            | github::IssueOwnership::Released
+                            | github::IssueOwnership::Completed
                     ) && assignment
                         .repository
                         .host
@@ -114,7 +114,7 @@ impl AppServer {
                 )));
             }
         }
-        let runtime = self.turn_changes_runtime()?;
+        let runtime = self.git_turn_changes_runtime()?;
         let store = self
             .issue_tasks
             .as_ref()
@@ -130,13 +130,14 @@ impl AppServer {
             .map_err(issue_error)?
         {
             Some(task) => {
-                if task.fingerprint != fingerprint || task.source_root != runtime.dir_root {
+                if task.fingerprint != fingerprint || task.source_root != runtime.dirs.root {
                     return Err(core_error(CoreError::CommandConflict));
                 }
                 task
             }
             None => runtime
-                .worktree_runtime
+                .dirs
+                .runtime
                 .block_on(prepare(&runtime, &params, fingerprint))
                 .map_err(issue_error)?,
         };
@@ -182,7 +183,7 @@ impl AppServer {
         let Some(store) = self.issue_tasks.as_ref() else {
             return result(&IssueTaskResult { task: None });
         };
-        let runtime = self.turn_changes_runtime()?;
+        let runtime = self.git_turn_changes_runtime()?;
         let task = store
             .read_session(params.session_id.as_str())
             .map_err(issue_error)?;
@@ -201,7 +202,7 @@ impl AppServer {
                 .is_none();
         }
         let task = task
-            .filter(|task| task.source_root == runtime.dir_root)
+            .filter(|task| task.source_root == runtime.dirs.root)
             .map(|task| IssueTask {
                 pending_input,
                 session_id: params.session_id,
@@ -237,11 +238,11 @@ impl AppServer {
 }
 
 async fn prepare(
-    runtime: &TurnChangesRuntime,
+    runtime: &GitTurnChangesRuntime,
     params: &IssueTaskCreateParams,
     fingerprint: String,
-) -> Result<zeta_github::IssueTask, String> {
-    let repository = repository(&runtime.dir_root).await?;
+) -> Result<github::IssueTask, String> {
+    let repository = repository(&runtime.dirs.root).await?;
     if (
         repository.host.as_str(),
         repository.owner.as_str(),
@@ -255,7 +256,7 @@ async fn prepare(
     }
     let git = zeta_git::GitClient::system();
     let checkout = git
-        .open_repository(&runtime.dir_root)
+        .open_repository(&runtime.dirs.root)
         .await
         .map_err(|error| error.to_string())?;
     let commit = match params.start {
@@ -267,7 +268,7 @@ async fn prepare(
         .resolve_tree(&checkout, &commit)
         .await
         .map_err(|error| error.to_string())?;
-    let github = zeta_github::GitHub::default();
+    let github = github::GitHub::default();
     let mut issues = Vec::new();
     let mut bytes = 0;
     for &number in &params.numbers {
@@ -286,13 +287,13 @@ async fn prepare(
         issues.push(snapshot);
     }
     let branch = format!("issue/{}-{}", params.numbers[0], &fingerprint[..16]);
-    Ok(zeta_github::IssueTask {
+    Ok(github::IssueTask {
         command_id: params.command_id.to_string(),
         fingerprint,
         session_id: String::new(),
         repository,
         issues,
-        source_root: runtime.dir_root.clone(),
+        source_root: runtime.dirs.root.clone(),
         start_commit: commit,
         start_tree: tree.as_str().into(),
         branch,
@@ -306,9 +307,9 @@ async fn prepare(
 }
 
 pub(super) struct IssueBinder<'a> {
-    pub(super) runtime: &'a TurnChangesRuntime,
+    pub(super) runtime: &'a GitTurnChangesRuntime,
     pub(super) store: &'a SqliteIssueTaskStore,
-    pub(super) task: &'a zeta_github::IssueTask,
+    pub(super) task: &'a github::IssueTask,
 }
 
 impl ThreadWorktreeBinder for IssueBinder<'_> {
@@ -333,7 +334,8 @@ impl ThreadWorktreeBinder for IssueBinder<'_> {
         self.store.prepare(&task).map_err(CoreError::Journal)?;
         if self.runtime.binding(&request.thread_id).is_none() {
             self.runtime
-                .worktree_runtime
+                .dirs
+                .runtime
                 .block_on(async {
                     let git = zeta_git::GitClient::system();
                     let repository = git.open_repository(&task.source_root).await?;

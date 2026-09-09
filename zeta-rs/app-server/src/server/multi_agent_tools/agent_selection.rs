@@ -1,11 +1,12 @@
 use std::collections::BTreeSet;
 
-use zeta_agents::AgentDefinition;
-use zeta_agents::AgentDefinitionCatalogSnapshot;
+use agent_roles::AgentRole;
+use agent_roles::AgentRoleCatalogSnapshot;
 use zeta_core::CoreError;
 use zeta_instructions::InstructionCatalogSnapshot;
 use zeta_protocol::AgentDefinitionSelectionReason;
 use zeta_protocol::AgentRoleSnapshot;
+use zeta_protocol::AgentRoleSource;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::DelegatedCapabilityScope;
 use zeta_protocol::FrozenAgentDefinitionRef;
@@ -29,7 +30,7 @@ pub(in crate::server) fn resolve_agent_selection(
     current_model: Option<&ModelRef>,
     available_tools: Vec<ToolName>,
     active_skills: &[FrozenSkillActivation],
-    agents: &[std::sync::Arc<AgentDefinitionCatalogSnapshot>],
+    agents: &[std::sync::Arc<AgentRoleCatalogSnapshot>],
     instructions: &[std::sync::Arc<InstructionCatalogSnapshot>],
 ) -> Result<ResolvedAgentSelection, CoreError> {
     let selected = match requested {
@@ -89,6 +90,13 @@ pub(in crate::server) fn resolve_agent_selection(
         .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
     let frozen = FrozenAgentDefinitionRef {
         name: definition.name().into(),
+        source: match definition.source() {
+            agent_roles::AgentRoleSource::BuiltIn => AgentRoleSource::BuiltIn,
+            agent_roles::AgentRoleSource::Directory { id } => {
+                AgentRoleSource::Directory { id: id.clone() }
+            }
+        },
+        version: definition.version(),
         catalog_generation,
         content_digest,
         selection_reason,
@@ -128,51 +136,95 @@ fn general_selection(
 }
 
 fn resolve_tools(
-    definition: &AgentDefinition,
+    definition: &AgentRole,
     available_tools: Vec<ToolName>,
 ) -> Result<Vec<ToolName>, CoreError> {
-    let available = available_tools.into_iter().collect::<BTreeSet<_>>();
-    definition
-        .tools()
-        .iter()
-        .map(|reference| {
-            let name = ToolName::new(reference.clone())
-                .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
-            available.contains(&name).then_some(name).ok_or_else(|| {
-                CoreError::InvalidInput(format!(
-                    "Agent definition '{}' requires unavailable tool '{reference}'",
-                    definition.name()
-                ))
+    let available = available_tools.iter().cloned().collect::<BTreeSet<_>>();
+    resolve_required_tools(definition, &available)?;
+    let mut resolved = match definition.tools() {
+        Some(tools) => tools
+            .iter()
+            .map(|reference| resolve_available_tool(definition, reference, &available))
+            .collect::<Result<Vec<_>, _>>()?,
+        None => available_tools,
+    };
+    if !definition.disallowed_tools().is_empty() {
+        let disallowed = definition
+            .disallowed_tools()
+            .iter()
+            .map(|reference| {
+                ToolName::new(reference.clone())
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))
             })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        resolved.retain(|tool| !disallowed.contains(tool));
+    }
+    Ok(resolved)
+}
+
+fn resolve_required_tools(
+    definition: &AgentRole,
+    available: &BTreeSet<ToolName>,
+) -> Result<(), CoreError> {
+    definition
+        .required_tools()
+        .iter()
+        .try_for_each(|reference| {
+            resolve_available_tool(definition, reference, available).map(|_| ())
         })
-        .collect()
+}
+
+fn resolve_available_tool(
+    definition: &AgentRole,
+    reference: &str,
+    available: &BTreeSet<ToolName>,
+) -> Result<ToolName, CoreError> {
+    let name = ToolName::new(reference.to_owned())
+        .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+    available.contains(&name).then_some(name).ok_or_else(|| {
+        CoreError::InvalidInput(format!(
+            "Agent definition '{}' requires unavailable tool '{reference}'",
+            definition.name()
+        ))
+    })
 }
 
 fn resolve_skills(
-    definition: &AgentDefinition,
+    definition: &AgentRole,
     active: &[FrozenSkillActivation],
 ) -> Result<Vec<FrozenSkillActivation>, CoreError> {
-    definition
-        .skills()
+    for reference in definition.required_skills() {
+        resolve_active_skill(definition, reference, active)?;
+    }
+    match definition.skills() {
+        Some(skills) => skills
+            .iter()
+            .map(|reference| resolve_active_skill(definition, reference, active))
+            .collect(),
+        None => Ok(active.iter().cloned().map(as_automatic).collect()),
+    }
+}
+
+fn resolve_active_skill(
+    definition: &AgentRole,
+    reference: &str,
+    active: &[FrozenSkillActivation],
+) -> Result<FrozenSkillActivation, CoreError> {
+    let matches = active
         .iter()
-        .map(|reference| {
-            let matches = active
-                .iter()
-                .filter(|activation| skill_matches(reference, activation))
-                .collect::<Vec<_>>();
-            match matches.as_slice() {
-                [matched] => Ok(as_automatic((*matched).clone())),
-                [] => Err(CoreError::InvalidInput(format!(
-                    "Agent definition '{}' requires inactive Skill '{reference}'",
-                    definition.name()
-                ))),
-                _ => Err(CoreError::InvalidInput(format!(
-                    "Agent definition '{}' has ambiguous Skill reference '{reference}'",
-                    definition.name()
-                ))),
-            }
-        })
-        .collect()
+        .filter(|activation| skill_matches(reference, activation))
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [matched] => Ok(as_automatic((*matched).clone())),
+        [] => Err(CoreError::InvalidInput(format!(
+            "Agent definition '{}' requires inactive Skill '{reference}'",
+            definition.name()
+        ))),
+        _ => Err(CoreError::InvalidInput(format!(
+            "Agent definition '{}' has ambiguous Skill reference '{reference}'",
+            definition.name()
+        ))),
+    }
 }
 
 fn skill_matches(reference: &str, activation: &FrozenSkillActivation) -> bool {
@@ -191,7 +243,7 @@ fn as_automatic(mut activation: FrozenSkillActivation) -> FrozenSkillActivation 
 }
 
 fn resolve_role_instructions(
-    definition: &AgentDefinition,
+    definition: &AgentRole,
     instructions: &[std::sync::Arc<InstructionCatalogSnapshot>],
 ) -> Result<String, CoreError> {
     let mut body = definition.role_instructions().to_owned();
@@ -242,9 +294,9 @@ fn parse_model_ref(reference: &str) -> Result<ModelRef, CoreError> {
 }
 
 fn select_automatic<'a>(
-    snapshots: &'a [std::sync::Arc<AgentDefinitionCatalogSnapshot>],
+    snapshots: &'a [std::sync::Arc<AgentRoleCatalogSnapshot>],
     task: &str,
-) -> Option<(&'a AgentDefinition, u64)> {
+) -> Option<(&'a AgentRole, u64)> {
     let task = normalize(task);
     let task_tokens = tokens(&task);
     let mut candidates = snapshots
@@ -271,11 +323,7 @@ fn select_automatic<'a>(
     Some((best, *generation))
 }
 
-fn selection_score(
-    definition: &AgentDefinition,
-    task: &str,
-    task_tokens: &BTreeSet<String>,
-) -> u64 {
+fn selection_score(definition: &AgentRole, task: &str, task_tokens: &BTreeSet<String>) -> u64 {
     let name_phrase = normalize(&definition.name().replace('-', " "));
     let name_tokens = tokens(&name_phrase);
     let description_tokens = tokens(definition.description());

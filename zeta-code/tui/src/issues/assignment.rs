@@ -13,11 +13,11 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use zeta_protocol::CommandId;
-use zeta_work_coordination::IssueAssignment;
-use zeta_work_coordination::IssueAssignmentPlan;
-use zeta_work_coordination::IssueRepositoryIdentity;
-use zeta_work_coordination::IssueStage;
-use zeta_work_coordination::IssueWorkflow;
+use github::IssueAssignment;
+use github::IssueAssignmentPlan;
+use github::IssueRepositoryIdentity;
+use github::IssueStage;
+use github::IssueWorkflow;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PlanMode {
@@ -29,17 +29,11 @@ pub(crate) enum PlanMode {
 pub(crate) enum StartAction {
     CreateBranch,
     Claim,
-    Execute,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Action {
-    Pause,
-    Resume,
     Release,
-    Cancel,
     RetrySync,
-    Verify,
-    Deliver,
     Transfer(String),
 }
 
@@ -398,10 +392,8 @@ impl Panel {
                         plan: plan.clone(),
                         action: if self.mode == PlanMode::Branch {
                             StartAction::CreateBranch
-                        } else if key.code == KeyCode::Char('c') {
-                            StartAction::Claim
                         } else {
-                            StartAction::Execute
+                            StartAction::Claim
                         },
                     })
                 }
@@ -474,35 +466,6 @@ impl Panel {
                     self.search.set_input_active(true);
                     return Outcome::None;
                 }
-                if matches!(key.code, KeyCode::Char('P') | KeyCode::Char('C')) {
-                    if let Some(selected) = self.filtered_assignments().get(self.cursor) {
-                        let batch = selected.assignment.batch_id.clone();
-                        let Screen::Assignments(assignments) = &self.screen else {
-                            unreachable!()
-                        };
-                        let actions = assignments
-                            .iter()
-                            .filter(|view| {
-                                view.assignment.batch_id == batch
-                                    && view.assignment.ownership
-                                        == zeta_work_coordination::IssueOwnership::Held
-                            })
-                            .map(|view| Request::Act {
-                                command_id: crate::client::new_command_id("issue-batch-control"),
-                                id: view.assignment.id.clone(),
-                                revision: view.assignment.revision,
-                                epoch: view.assignment.epoch,
-                                action: if key.code == KeyCode::Char('P') {
-                                    Action::Pause
-                                } else {
-                                    Action::Cancel
-                                },
-                            })
-                            .collect();
-                        self.begin();
-                        return Outcome::Request(Request::Batch { actions });
-                    }
-                }
                 if key.code == KeyCode::Char('r') {
                     Some(Request::List)
                 } else if let Some(view) = self.filtered_assignments().get(self.cursor).copied() {
@@ -515,12 +478,7 @@ impl Panel {
                         return Outcome::None;
                     }
                     let action = match key.code {
-                        KeyCode::Char('p') => Some(Action::Pause),
-                        KeyCode::Char('s') => Some(Action::Resume),
-                        KeyCode::Char('v') => Some(Action::Verify),
-                        KeyCode::Char('d') => Some(Action::Deliver),
                         KeyCode::Char('u') => Some(Action::Release),
-                        KeyCode::Char('c') => Some(Action::Cancel),
                         KeyCode::Char('y') => Some(Action::RetrySync),
                         KeyCode::Char('t') => {
                             self.transfer = Some((
@@ -1012,7 +970,7 @@ fn set_workflow_field(
         }
         17 => {
             candidate.auto_claim = if value.parse::<bool>().map_err(|_| "Enter true or false")? {
-                Some(zeta_work_coordination::IssueAutoClaim {
+                Some(github::IssueAutoClaim {
                     labels: vec![candidate.labels.todo.clone()],
                     assignee: None,
                     max_issues: 1,
@@ -1068,7 +1026,7 @@ fn words(value: &str) -> std::collections::BTreeSet<String> {
         .map(str::to_owned)
         .collect()
 }
-fn item_fields(item: &zeta_work_coordination::IssueWorkItem) -> Vec<(&'static str, String)> {
+fn item_fields(item: &github::IssueWorkItem) -> Vec<(&'static str, String)> {
     vec![
         ("Objective", item.objective.clone()),
         ("Agent", item.agent.clone()),

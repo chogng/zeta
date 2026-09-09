@@ -2,7 +2,7 @@
 
 > 状态：已实现。本文描述 Chat 内 Session Inspector、Thread 目录绑定、Turn ChangeSet 和异步提交的当前契约。
 > Session、Thread、Turn 的基础语义见 [`protocol.md`](protocol.md)，接口见
-> [`zeta-app-server-api.md`](zeta-app-server-api.md)，Git 行为见 [`git.md`](git.md)。跨 Agent 工作契约、冲突、验证、多 ChangeSet 集成的当前后端边界与完成门见 [`multi-agent-development.md`](multi-agent-development.md)。
+> [`zeta-app-server-api.md`](zeta-app-server-api.md)，Git 行为见 [`git.md`](git.md)。
 
 ## 快速理解
 
@@ -30,11 +30,11 @@ Workbench 通用 Agent Sidebar 不受影响。
 | Goal 自动续跑 | 创建新的 Turn |
 | shell Turn | 独立 Turn；读取范围按不透明操作保守处理 |
 | failed / interrupted | 仍封存 ChangeSet，界面显示 terminal 警告 |
-| 子 Agent spawn | 子 Thread 当前从 worktree provision 时捕获的父 Thread 目录 snapshot 创建独立目录；它尚未与 context seed 的 `parentSequence` 绑定为同一个不可变检查点 |
-| Fork | 从 `parentSequence` 对应的最后一个封存检查点创建 |
-| Rewind | 从目标 Turn 的 before 检查点创建 |
+| 子 Agent spawn | Git 子 Thread 从 provision 时捕获的父 worktree tree 创建；非 Git 子 Thread 复制当时的父目录 |
+| Fork | Git Thread 从 `parentSequence` 对应的最后一个封存检查点创建；非 Git Thread 复制当时的父目录 |
+| Rewind | Git Thread 从目标 Turn 的 before 检查点创建；非 Git Thread 没有 ChangeSet，因此不提供 Rewind |
 
-Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写工具；Turn terminal event、Hook 和执行任务
+Git Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写工具；Turn terminal event、Hook 和执行任务
 结束后才封存 after 检查点。封存失败时现场保留，提交不可用。
 
 ## Thread 目录绑定
@@ -42,13 +42,13 @@ Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写工具
 每个 Thread 在允许执行前必须先获得持久化的独立目录绑定：
 
 - Git 目录使用受管 linked worktree，Thread checkout 与提交目标分支分离；创建时绑定的目标分支不会随主界面切换而变化。
-- 非 Git 目录使用受管目录和内容寻址的 manifest/blob 快照；可以查看、读取和丢弃变更，但不能提交，也不会初始化 Git。
+- 非 Git 目录使用一次性隔离目录副本，不初始化 Git，也不创建 ChangeSet；Turn Changes 只对 Git repository 可用。
 - 来源目录创建 Thread 时的已有内容成为不可变初始 baseline，不属于任何 Turn。
-- Session 结束后，只有该 Thread 的 ChangeSet 全部 committed 或 discarded，受管目录才具备清理资格。
+- Session 结束后，Git Thread 只有在 ChangeSet 全部 committed 或 discarded 后才具备清理资格；非 Git Thread 没有 ChangeSet。
 
 界面和协议只暴露 `managedWorktreeId`、`sourceDirId`、仓库/分支和 baseline 摘要，不暴露受管目录内部路径。
 
-普通 Thread 目录绑定仍围绕一个来源根建立，可以包含该根中的多个嵌套 Git 仓库；Session 另外获得的独立目录不会自动进入该 Thread 的 Turn ChangeSet。WorkRun host 已能为一个工作尝试显式选择同一 Environment 的多个根、逐根建立 checkpoint 和受管目录，并给每个 ChangeSet 写入精确来源；Team spawn 的 context seed 与这些代码 baseline 在同一安全点对齐仍是产品缺口，见 [`multi-agent-development.md`](multi-agent-development.md#33-project多根与跨环境)。
+普通 Thread 目录绑定围绕一个来源根建立，可以包含该根中的多个嵌套 Git 仓库；Session 另外获得的独立目录不会自动进入该 Thread 的 Turn ChangeSet。每个子 Agent Thread 使用自己的受管目录绑定和 ChangeSet，不建立额外的工作尝试身份。
 
 ## ChangeSet 状态
 

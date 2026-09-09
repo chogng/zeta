@@ -763,6 +763,14 @@ impl ToolExecutionFacts {
             .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
         let mut calls = std::collections::BTreeMap::new();
         let mut available_tools = available_tools.into_iter().collect::<BTreeSet<_>>();
+        if turn.tool_mode.requires_code_mode() {
+            available_tools.insert(
+                zeta_protocol::ToolName::new("exec").expect("Code Mode Tool name is valid"),
+            );
+            available_tools.insert(
+                zeta_protocol::ToolName::new("wait").expect("Code Mode Tool name is valid"),
+            );
+        }
         if let Some(seed) = &snapshot.agent_context_seed {
             let ceiling = seed.capability_scope.tools.iter().collect::<BTreeSet<_>>();
             available_tools.retain(|name| ceiling.contains(name));

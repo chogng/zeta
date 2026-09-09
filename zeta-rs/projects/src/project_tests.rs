@@ -18,7 +18,6 @@ use zeta_file_access::DirId;
 use zeta_protocol::CommandId;
 use zeta_protocol::ProjectId;
 use zeta_protocol::SessionId;
-use zeta_protocol::WorkRunId;
 
 #[derive(Default)]
 struct MemoryStore {
@@ -138,21 +137,9 @@ fn project_roots_and_associations_remain_organizational_facts() {
         ))
         .unwrap()
         .project;
-    project = coordinator
-        .apply(request(
-            "link-project-work-run",
-            project.revision,
-            ProjectCommand::LinkWorkRun {
-                work_run_id: WorkRunId::new("work-run-a").unwrap(),
-            },
-        ))
-        .unwrap()
-        .project;
-
     assert_eq!(project.roots.len(), 1);
     assert_eq!(project.session_ids.len(), 1);
-    assert_eq!(project.work_run_ids.len(), 1);
-    assert_eq!(project.revision, 4);
+    assert_eq!(project.revision, 3);
 }
 
 fn coordinator() -> ProjectCoordinator {

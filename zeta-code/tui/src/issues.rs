@@ -161,10 +161,7 @@ impl Command {
             self,
             Self::Assignment {
                 request: assignment::Request::Act {
-                    action: assignment::Action::Pause
-                        | assignment::Action::Cancel
-                        | assignment::Action::Release
-                        | assignment::Action::Transfer(_),
+                    action: assignment::Action::Release | assignment::Action::Transfer(_),
                     ..
                 },
                 ..
@@ -177,7 +174,7 @@ pub(crate) enum Event {
     Overview {
         generation: u64,
         views: Result<Vec<assignment::View>, String>,
-        labels: Option<Result<zeta_work_coordination::IssueLabels, String>>,
+        labels: Option<Result<github::IssueLabels, String>>,
     },
     Assignment {
         generation: u64,
@@ -303,7 +300,7 @@ impl Manager {
                             .filter(|view| {
                                 view.assignment.batch_id == selected.assignment.batch_id
                                     && view.assignment.ownership
-                                        == zeta_work_coordination::IssueOwnership::Held
+                                        == github::IssueOwnership::Held
                             })
                             .map(|view| assignment::Request::Act {
                                 command_id: new_command_id("issue-batch-control"),

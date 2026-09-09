@@ -27,7 +27,7 @@ use zeta_protocol::TurnId;
 fn broker_fans_out_filesystem_invalidation_without_a_subscription() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
 
     broker.publish_fs_changed(FsChanged::PathsChanged {
         dir_id: None,
@@ -50,8 +50,8 @@ fn profile_broker_shares_thread_updates_but_isolates_env_notifications() {
     let second_connection = second_scope.allocate_connection_id();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
-    first_scope.register(first_connection, &first);
-    second_scope.register(second_connection, &second);
+    first_scope.register(first_connection, false, &first);
+    second_scope.register(second_connection, false, &second);
     first_scope.subscribe_session(first_connection, session_id.clone());
     second_scope.subscribe_session(second_connection, session_id.clone());
     first_scope.subscribe_session_thread(
@@ -85,8 +85,8 @@ fn profile_broker_fans_out_marketplace_generations_across_env_scopes() {
     let second_scope = first_scope.fork_scope();
     let first = NotificationQueue::default();
     let second = NotificationQueue::default();
-    first_scope.register(first_scope.allocate_connection_id(), &first);
-    second_scope.register(second_scope.allocate_connection_id(), &second);
+    first_scope.register(first_scope.allocate_connection_id(), false, &first);
+    second_scope.register(second_scope.allocate_connection_id(), false, &second);
 
     let instance_id = first_scope.marketplace_instance_id().to_owned();
     assert_eq!(second_scope.marketplace_instance_id(), instance_id);
@@ -111,7 +111,7 @@ fn profile_marketplace_broker_deduplicates_one_manager_commit_seen_by_multiple_s
     let first_scope = UpdateBroker::default();
     let second_scope = first_scope.fork_scope();
     let queue = NotificationQueue::default();
-    first_scope.register(first_scope.allocate_connection_id(), &queue);
+    first_scope.register(first_scope.allocate_connection_id(), false, &queue);
 
     assert_eq!(
         first_scope.publish_marketplace_manager_changed("manager-a", 2),
@@ -141,7 +141,7 @@ fn profile_marketplace_broker_deduplicates_one_manager_commit_seen_by_multiple_s
 fn broker_fans_out_language_server_lifecycle_without_a_subscription() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
 
     broker.publish_language_server_state(LanguageServerStateNotification {
         dir_id: None,
@@ -170,7 +170,7 @@ fn session_owned_thread_subscription_follows_session_lifecycle() {
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     broker.subscribe_session(1, session_id.clone());
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
 
@@ -190,7 +190,7 @@ fn session_thread_subscription_can_be_removed_independently() {
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
     broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 1)]);
     assert_eq!(queue.len(), 1);
@@ -207,7 +207,7 @@ fn thread_subscription_observes_session_changes() {
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     broker.subscribe_session_thread(1, session_id.clone(), thread_id, 0);
 
     broker.publish_session_changed(&session_id);
@@ -223,7 +223,7 @@ fn session_delete_notifies_observers_before_forgetting_the_session() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").unwrap();
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     broker.subscribe_session(1, session_id.clone());
 
     broker.publish_session_deleted(&session_id);
@@ -243,7 +243,7 @@ fn subagent_turn_start_invalidates_session_for_the_main_thread_subscriber() {
     let session_id = SessionId::new("session_1").unwrap();
     let main_thread_id = ThreadId::new("main").unwrap();
     let child_thread_id = ThreadId::new("child").unwrap();
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     broker.subscribe_session_thread(1, session_id.clone(), main_thread_id, 0);
 
     broker.publish_thread(
@@ -274,7 +274,7 @@ fn thread_update_publishes_backend_assembled_transcript_entry() {
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
 
     broker.publish_thread_update(ThreadUpdateEnvelope {
@@ -350,7 +350,7 @@ fn transcript_accumulator_survives_turn_boundaries() {
     let queue = NotificationQueue::default();
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
     broker.publish_thread_update(transient_thread_update(
         &session_id,
@@ -418,8 +418,8 @@ fn agent_request_is_delivered_to_exactly_one_capable_thread_subscriber() {
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     broker.bind_session_scope(session_id.clone());
-    broker.register(1, &first);
-    broker.register(2, &second);
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
     broker.set_agent_interaction_capability(1, Some(approval_capability()));
     broker.set_agent_interaction_capability(2, Some(approval_capability()));
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
@@ -443,8 +443,8 @@ fn agent_request_is_reassigned_when_its_connection_closes() {
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     broker.bind_session_scope(session_id.clone());
-    broker.register(1, &first);
-    broker.register(2, &second);
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
     broker.set_agent_interaction_capability(1, Some(approval_capability()));
     broker.set_agent_interaction_capability(2, Some(approval_capability()));
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
@@ -471,8 +471,8 @@ fn delivered_dynamic_tool_is_not_reassigned_when_its_owner_closes() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     broker.bind_session_scope(session_id.clone());
-    broker.register(1, &first);
-    broker.register(2, &second);
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
     broker.set_agent_interaction_capability(1, Some(dynamic_tool_capability()));
     broker.set_agent_interaction_capability(2, Some(dynamic_tool_capability()));
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
@@ -495,8 +495,8 @@ fn dynamic_tool_is_delivered_only_to_a_connection_hosting_that_tool_name() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     broker.bind_session_scope(session_id.clone());
-    broker.register(1, &other);
-    broker.register(2, &owner);
+    broker.register(1, false, &other);
+    broker.register(2, false, &owner);
     broker.set_agent_interaction_capability(1, Some(dynamic_tool_capability_for("other_tool")));
     broker.set_agent_interaction_capability(2, Some(dynamic_tool_capability()));
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
@@ -515,7 +515,7 @@ fn agent_request_waits_until_a_matching_capability_subscribes() {
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     broker.bind_session_scope(session_id.clone());
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
     broker.offer_agent_request(approval_request(&session_id, &thread_id));
     assert_eq!(queue.len(), 0);
@@ -534,7 +534,7 @@ fn agent_request_is_not_assigned_to_a_foreign_env_scope() {
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     let connection_id = foreign_scope.allocate_connection_id();
     owning_scope.bind_session_scope(session_id.clone());
-    foreign_scope.register(connection_id, &queue);
+    foreign_scope.register(connection_id, false, &queue);
     foreign_scope.set_agent_interaction_capability(connection_id, Some(approval_capability()));
     foreign_scope.subscribe_session_thread(connection_id, session_id.clone(), thread_id.clone(), 0);
 

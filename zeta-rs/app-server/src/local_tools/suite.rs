@@ -2,7 +2,6 @@ use super::LocalShellToolService;
 use super::ShellCommandRequest;
 use super::read_only_sandbox;
 use crate::dir_grants::DirGrants;
-use crate::dir_grants::ThreadDirScope;
 use serde_json::Value;
 use serde_json::json;
 use sha2::Digest;
@@ -136,7 +135,6 @@ pub(super) struct ResolvedFilePath {
     pub(super) authorization: Authorization,
     pub(super) relative: PathBuf,
     pub(super) absolute: PathBuf,
-    pub(super) thread_scope: Option<ThreadDirScope>,
 }
 
 impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
@@ -191,19 +189,17 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .as_ref()
             .map(|scope| scope.primary().clone())
             .unwrap_or_else(|| self.authorization.clone());
-        let exact = thread_scope.as_ref().is_some_and(|scope| scope.is_exact());
         let mut authorizations = thread_scope
             .as_ref()
             .map(|scope| scope.authorizations().cloned().collect::<Vec<_>>())
             .unwrap_or_else(|| vec![self.authorization.clone()]);
-        if !exact
-            && !authorizations
-                .iter()
-                .any(|value| value.dir() == self.authorization.dir())
+        if !authorizations
+            .iter()
+            .any(|value| value.dir() == self.authorization.dir())
         {
             authorizations.push(self.authorization.clone());
         }
-        if !exact && let Some(session_id) = session_id {
+        if let Some(session_id) = session_id {
             if let Some(snapshot) = self
                 .dir_grants
                 .snapshot_for(session_id, permission)
@@ -219,25 +215,18 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             }
         }
         let (authorization, relative) = if path.is_absolute() {
-            if let Some((authorization, relative)) = thread_scope
-                .as_ref()
-                .and_then(|scope| scope.resolve_source_alias(&path, self.authorization.dir()))
-            {
-                (authorization, relative)
-            } else {
-                authorizations
-                    .into_iter()
-                    .filter_map(|authorization| {
-                        path.strip_prefix(authorization.dir().canonical_path())
-                            .or_else(|_| path.strip_prefix(authorization.dir().requested_path()))
-                            .ok()
-                            .map(|relative| (authorization, relative.to_path_buf()))
-                    })
-                    .max_by_key(|(authorization, _)| {
-                        authorization.dir().canonical_path().components().count()
-                    })
-                    .ok_or_else(|| format!("path is outside the authorized directories: {value}"))?
-            }
+            authorizations
+                .into_iter()
+                .filter_map(|authorization| {
+                    path.strip_prefix(authorization.dir().canonical_path())
+                        .or_else(|_| path.strip_prefix(authorization.dir().requested_path()))
+                        .ok()
+                        .map(|relative| (authorization, relative.to_path_buf()))
+                })
+                .max_by_key(|(authorization, _)| {
+                    authorization.dir().canonical_path().components().count()
+                })
+                .ok_or_else(|| format!("path is outside the authorized directories: {value}"))?
         } else {
             (primary, path)
         };
@@ -255,7 +244,6 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             authorization,
             relative,
             absolute,
-            thread_scope,
         })
     }
 
@@ -749,12 +737,9 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
                     DirPermission::ExecuteCommands,
                 )
                 .map_err(CoreError::Policy)?;
-            return self.shell.prepare_at(
-                call,
-                &resolved.authorization,
-                resolved.relative,
-                resolved.thread_scope.as_ref(),
-            );
+            return self
+                .shell
+                .prepare_at(call, &resolved.authorization, resolved.relative);
         }
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Policy("local tools require durable caller identity".into())
@@ -891,7 +876,6 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 cancellation,
                 &resolved.authorization,
                 resolved.relative,
-                resolved.thread_scope.as_ref(),
             );
         }
         cancellation

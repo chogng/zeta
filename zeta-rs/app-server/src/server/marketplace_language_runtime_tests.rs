@@ -67,7 +67,7 @@ fn marketplace_manager_commit_watcher_broadcasts_the_authoritative_change() {
     );
     let updates = Arc::new(UpdateBroker::default());
     let queue = NotificationQueue::default();
-    updates.register(updates.allocate_connection_id(), &queue);
+    updates.register(updates.allocate_connection_id(), false, &queue);
     let _watcher = MarketplaceChangeWatcher::start(&manager, Arc::clone(&updates)).unwrap();
 
     manager

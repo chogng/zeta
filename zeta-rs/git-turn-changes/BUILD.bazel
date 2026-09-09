@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "git-turn-changes",
+    crate_name = "git_turn_changes",
+)

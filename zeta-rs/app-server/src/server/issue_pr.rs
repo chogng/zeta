@@ -2,10 +2,14 @@ use super::AppServer;
 use super::RpcError;
 use super::core_error;
 use super::decode;
+use super::git_turn_changes_runtime::GitTurnChangesRuntime;
 use super::issue_operations::issue_error;
 use super::issue_operations::repository;
 use super::result;
-use super::turn_changes_runtime::TurnChangesRuntime;
+use git_turn_changes::CaptureState;
+use git_turn_changes::CommitState;
+use git_turn_changes::TurnChangeStore;
+use github::GitHub;
 use serde_json::Value;
 use sha2::Digest;
 use sha2::Sha256;
@@ -17,13 +21,9 @@ use zeta_app_server_protocol::protocol::issues::IssuePrMode;
 use zeta_app_server_protocol::protocol::issues::IssuePrPreview;
 use zeta_app_server_protocol::protocol::issues::IssuePrStatus;
 use zeta_app_server_protocol::protocol::issues::IssueTaskReadParams;
-use zeta_github::GitHub;
 use zeta_protocol::CommandId;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
-use zeta_turn_changes::CaptureState;
-use zeta_turn_changes::CommitState;
-use zeta_turn_changes::TurnChangeStore;
 
 impl AppServer {
     pub(super) fn issue_pr_preview(&self, value: &Value) -> Result<Value, RpcError> {
@@ -33,7 +33,8 @@ impl AppServer {
             .binding(&thread_id)
             .ok_or_else(|| issue_error("Task working directory is unavailable".into()))?;
         let preview = runtime
-            .worktree_runtime
+            .dirs
+            .runtime
             .block_on(async {
                 verify_repository(&task).await?;
                 let git = zeta_git::GitClient::system();
@@ -103,7 +104,8 @@ impl AppServer {
             .binding(&thread_id)
             .ok_or_else(|| issue_error("Task working directory is unavailable".into()))?;
         runtime
-            .worktree_runtime
+            .dirs
+            .runtime
             .block_on(async {
                 verify_repository(&task).await?;
                 if !modes(GitHub::default().merge_options(&task.repository).await?)
@@ -133,7 +135,7 @@ impl AppServer {
             .issue_tasks
             .as_ref()
             .ok_or_else(|| issue_error("Issue storage unavailable".into()))?;
-        let response = runtime.worktree_runtime.block_on(async {
+        let response = runtime.dirs.runtime.block_on(async {
             let github = GitHub::default();
             let git = zeta_git::GitClient::system();
             let source = git.open_repository(&task.source_root).await.map_err(|error| error.to_string())?;
@@ -152,7 +154,7 @@ impl AppServer {
                 }
                 None => {
                     git.push_branch_commit(&source, &task.branch, &head).await.map_err(|error| error.to_string())?;
-                    github.create_pull_request(&task.repository, zeta_github::CreatePullRequest {
+                    github.create_pull_request(&task.repository, github::CreatePullRequest {
                         title: &title(&task), body: &body(&task), head: &task.branch, base: &task.target_branch,
                         draft: params.mode == IssuePrMode::Draft,
                     }).await?
@@ -166,9 +168,9 @@ impl AppServer {
                 return Err(format!("Existing PR {} has a different draft state; change its state explicitly on GitHub", pr.html_url));
             }
             let method = match params.mode {
-                IssuePrMode::Merge => Some(zeta_github::MergeMethod::Merge),
-                IssuePrMode::Squash => Some(zeta_github::MergeMethod::Squash),
-                IssuePrMode::Rebase => Some(zeta_github::MergeMethod::Rebase),
+                IssuePrMode::Merge => Some(github::MergeMethod::Merge),
+                IssuePrMode::Squash => Some(github::MergeMethod::Squash),
+                IssuePrMode::Rebase => Some(github::MergeMethod::Rebase),
                 IssuePrMode::Ordinary | IssuePrMode::Draft => None,
             };
             let error = match method { Some(method) => github.enable_auto_merge(&task.repository, &pr, method).await.err(), None => None };
@@ -188,9 +190,9 @@ impl AppServer {
     fn issue_pr_task(
         &self,
         session_id: &SessionId,
-    ) -> Result<(Arc<TurnChangesRuntime>, zeta_github::IssueTask, ThreadId), RpcError> {
+    ) -> Result<(Arc<GitTurnChangesRuntime>, github::IssueTask, ThreadId), RpcError> {
         self.session_view(session_id)?;
-        let runtime = self.turn_changes_runtime()?;
+        let runtime = self.git_turn_changes_runtime()?;
         let task = self
             .issue_tasks
             .as_ref()
@@ -198,7 +200,7 @@ impl AppServer {
             .read_session(session_id.as_str())
             .map_err(issue_error)?
             .ok_or_else(|| issue_error("This Session has no associated issues".into()))?;
-        if task.source_root != runtime.dir_root {
+        if task.source_root != runtime.dirs.root {
             return Err(issue_error(
                 "Issue task belongs to another directory".into(),
             ));
@@ -228,8 +230,8 @@ impl AppServer {
 }
 
 fn commit_changes(
-    runtime: &Arc<TurnChangesRuntime>,
-    task: &zeta_github::IssueTask,
+    runtime: &Arc<GitTurnChangesRuntime>,
+    task: &github::IssueTask,
     thread_id: &ThreadId,
     params: &IssuePrCreateParams,
 ) -> Result<(), String> {
@@ -298,14 +300,14 @@ fn commit_changes(
     Ok(())
 }
 
-async fn verify_repository(task: &zeta_github::IssueTask) -> Result<(), String> {
+async fn verify_repository(task: &github::IssueTask) -> Result<(), String> {
     if repository(&task.source_root).await? != task.repository {
         return Err("Origin repository changed after task creation".into());
     }
     Ok(())
 }
 
-fn modes(options: zeta_github::MergeOptions) -> Vec<IssuePrMode> {
+fn modes(options: github::MergeOptions) -> Vec<IssuePrMode> {
     let mut modes = vec![IssuePrMode::Ordinary, IssuePrMode::Draft];
     if options.allow_auto_merge {
         if options.allow_merge_commit {
@@ -321,7 +323,7 @@ fn modes(options: zeta_github::MergeOptions) -> Vec<IssuePrMode> {
     modes
 }
 
-fn title(task: &zeta_github::IssueTask) -> String {
+fn title(task: &github::IssueTask) -> String {
     if task.issues.len() == 1 {
         return task.issues[0].issue.title.clone();
     }
@@ -335,7 +337,7 @@ fn title(task: &zeta_github::IssueTask) -> String {
     )
 }
 
-fn body(task: &zeta_github::IssueTask) -> String {
+fn body(task: &github::IssueTask) -> String {
     task.issues
         .iter()
         .map(|snapshot| {
@@ -350,8 +352,8 @@ fn body(task: &zeta_github::IssueTask) -> String {
 
 async fn status(
     github: &GitHub,
-    repository: &zeta_github::Repository,
-    pr: zeta_github::PullRequest,
+    repository: &github::Repository,
+    pr: github::PullRequest,
     automatic_merge_error: Option<String>,
 ) -> Result<IssuePrStatus, String> {
     let checks = match github.checks(repository, &pr.head.sha).await {

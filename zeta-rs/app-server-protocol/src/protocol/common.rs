@@ -42,9 +42,6 @@ pub struct ClientCapabilities {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub dir_permissions_host: Option<DirPermissionsHostCapability>,
-    #[serde(default)]
-    #[ts(optional = nullable)]
-    pub work_coordination_host: Option<WorkCoordinationHostCapability>,
 }
 
 /// Agent interaction kinds that one client connection can present and resolve.
@@ -81,13 +78,6 @@ pub struct BrowserCapability {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DirPermissionsHostCapability {
-    pub version: u32,
-}
-
-/// Declares that this trusted product host may read and mutate WorkRun coordination state.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkCoordinationHostCapability {
     pub version: u32,
 }
 

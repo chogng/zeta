@@ -62,8 +62,6 @@ pub(super) struct MultiAgentToolService {
     definitions: Vec<ToolDefinition>,
     action_policy_revision: ActionPolicyRevision,
     customizations: Option<Arc<super::dir_contributions::DirContributions>>,
-    issues: Option<Arc<zeta_state::SqliteIssueAssignmentStore>>,
-    issue_admission: std::sync::Mutex<()>,
 }
 
 impl MultiAgentToolService {
@@ -79,40 +77,7 @@ impl MultiAgentToolService {
             definitions: vec![spawn_definition(), send_definition(), wait_definition()],
             action_policy_revision: local_policy_revision(),
             customizations: None,
-            issues: None,
-            issue_admission: std::sync::Mutex::new(()),
         }
-    }
-
-    pub(super) fn with_issue_assignments(
-        mut self,
-        issues: Arc<zeta_state::SqliteIssueAssignmentStore>,
-    ) -> Self {
-        self.issues = Some(issues);
-        self
-    }
-
-    fn issue_owner(
-        &self,
-        thread_id: &ThreadId,
-    ) -> Result<Option<zeta_work_coordination::IssueAssignment>, CoreError> {
-        let Some(store) = &self.issues else {
-            return Ok(None);
-        };
-        let mut current = thread_id.clone();
-        for _ in 0..64 {
-            if let Some(assignment) = store.for_thread(&current).map_err(CoreError::Journal)? {
-                return Ok(Some(assignment));
-            }
-            let snapshot = self.threads.read_thread(&current)?;
-            let Some(parent) = snapshot.parent_thread_id else {
-                return Ok(None);
-            };
-            current = parent;
-        }
-        Err(CoreError::Policy(
-            "Issue helper nesting exceeded the supported depth".into(),
-        ))
     }
 
     pub(super) fn with_action_policy_revision(mut self, revision: ActionPolicyRevision) -> Self {
@@ -143,59 +108,7 @@ impl MultiAgentToolService {
         match call.name.as_str() {
             SPAWN_AGENT_TOOL_NAME => {
                 let arguments: SpawnArguments = decode_arguments(&call.arguments)?;
-                let _admission = self.issue_admission.lock().map_err(|_| {
-                    CoreError::Execution("Issue helper admission lock poisoned".into())
-                })?;
-                let issue = self.issue_owner(identity.thread_id())?;
-                let mut selection = self.resolve_agent(&arguments, facts)?;
-                let mut helper_budget = None;
-                if let Some(assignment) = &issue {
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map_err(|error| CoreError::Execution(error.to_string()))?
-                        .as_secs();
-                    assignment
-                        .check_writer(assignment.epoch, now)
-                        .map_err(CoreError::Policy)?;
-                    let store = self
-                        .issues
-                        .as_ref()
-                        .expect("Issue owner requires its store");
-                    let units = store
-                        .list(&assignment.repository.key())
-                        .map_err(CoreError::Journal)?
-                        .iter()
-                        .filter(|item| item.batch_id == assignment.batch_id)
-                        .count()
-                        .max(1) as u64;
-                    let slots = (u64::from(assignment.workflow.max_parallel) / units).max(1);
-                    let threads = self.threads.list_session_threads(identity.session_id())?;
-                    let replay = self
-                        .threads
-                        .read_thread(identity.thread_id())?
-                        .delegations
-                        .contains_key(
-                            &DelegationId::new(format!("tool:{}", call.id))
-                                .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
-                        );
-                    if threads.len() as u64 >= slots && !replay {
-                        return Err(CoreError::Policy("This Issue has no remaining helper slot in the accepted batch allocation".into()));
-                    }
-                    helper_budget = Some((assignment.execution_budget() / units / slots).max(1));
-                    selection.capability_scope.tools.retain(|tool| {
-                        matches!(
-                            tool.as_str(),
-                            "read_file"
-                                | "grep"
-                                | "agent_grep"
-                                | "glob"
-                                | "get_goal"
-                                | "update_goal"
-                        )
-                    });
-                    selection.capability_scope.skills.clear();
-                    selection.role.instructions.push_str("\nThis is a read-only Issue investigation. Inspect only the supplied baseline and report evidence. The assigned implementation worker owns code changes.");
-                }
+                let selection = self.resolve_agent(&arguments, facts)?;
                 let delegation_id = DelegationId::new(format!("tool:{}", call.id))
                     .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
                 let spawned = self.coordinator.spawn(SpawnAgentRequest {
@@ -214,27 +127,6 @@ impl MultiAgentToolService {
                     },
                     capability_scope: selection.capability_scope,
                 })?;
-                if let Some(budget) = helper_budget {
-                    if self.threads.get_goal(&spawned.child_thread_id)?.is_none() {
-                        self.threads.create_goal(
-                            &spawned.child_thread_id,
-                            "Investigate the delegated Issue question and return evidence".into(),
-                            Some(budget),
-                        )?;
-                    }
-                    let owner = self.issue_owner(identity.thread_id())?.ok_or_else(|| {
-                        CoreError::Policy("Issue ownership disappeared before helper start".into())
-                    })?;
-                    if owner.epoch != issue.as_ref().expect("helper owner").epoch
-                        || !owner.auto_start
-                    {
-                        self.coordinator
-                            .cancel_delegation(identity.thread_id(), &delegation_id)?;
-                        return Err(CoreError::Policy(
-                            "Issue execution was stopped before helper start".into(),
-                        ));
-                    }
-                }
                 self.turn_backend
                     .start(&spawned.child_thread_id, &spawned.child_turn_id)?;
                 success(json!({
@@ -242,8 +134,7 @@ impl MultiAgentToolService {
                     "child_thread_id": spawned.child_thread_id,
                     "child_turn_id": spawned.child_turn_id,
                     "agent": selection.role.definition,
-                    "status": "running",
-                    "issue_read_only_helper": helper_budget.is_some()
+                    "status": "running"
                 }))
             }
             SEND_AGENT_MESSAGE_TOOL_NAME => {
@@ -264,8 +155,7 @@ impl MultiAgentToolService {
                 success(json!({
                     "message_id": delivered.message.message_id,
                     "receiver_thread_id": delivered.message.receiver_thread_id,
-                    "status": "delivered",
-                    "issue_read_only_helper": self.issue_helpers_are_read_only(identity.thread_id())?
+                    "status": "delivered"
                 }))
             }
             WAIT_AGENT_TOOL_NAME => {
@@ -294,37 +184,6 @@ impl MultiAgentToolService {
         }
     }
 
-    fn issue_helpers_are_read_only(&self, parent: &ThreadId) -> Result<bool, CoreError> {
-        let Some(assignment) = self.issue_owner(parent)? else {
-            return Ok(false);
-        };
-        let root = assignment
-            .thread_id
-            .ok_or_else(|| CoreError::Policy("Issue omitted its worker identity".into()))?;
-        let session = self.threads.read_thread(&root)?.session_id;
-        Ok(self
-            .threads
-            .list_session_threads(&session)?
-            .iter()
-            .filter(|thread| thread.thread_id != root)
-            .all(|thread| {
-                thread.agent_context_seed.as_ref().is_some_and(|seed| {
-                    seed.capability_scope.skills.is_empty()
-                        && seed.capability_scope.tools.iter().all(|tool| {
-                            matches!(
-                                tool.as_str(),
-                                "read_file"
-                                    | "grep"
-                                    | "agent_grep"
-                                    | "glob"
-                                    | "get_goal"
-                                    | "update_goal"
-                            )
-                        })
-                })
-            }))
-    }
-
     fn resolve_agent(
         &self,
         arguments: &SpawnArguments,
@@ -333,11 +192,13 @@ impl MultiAgentToolService {
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Execution("Agent coordination tool requires durable caller identity".into())
         })?;
-        let agent_snapshots = self
-            .customizations
-            .as_ref()
-            .map(|customizations| customizations.agent_snapshots_for(identity.session_id()))
-            .unwrap_or_default();
+        let mut agent_snapshots = vec![agent_roles::built_in_roles()];
+        agent_snapshots.extend(
+            self.customizations
+                .as_ref()
+                .map(|customizations| customizations.agent_snapshots_for(identity.session_id()))
+                .unwrap_or_default(),
+        );
         let instruction_snapshots = self
             .customizations
             .as_ref()
@@ -380,16 +241,14 @@ impl MultiAgentToolService {
                     "join_id": joined.join.join_id,
                     "status": joined.join.status,
                     "satisfied_by": joined.join.satisfied_by,
-                    "results": joined.results,
-                    "issue_read_only_helper": self.issue_helpers_are_read_only(parent_thread_id)?
+                    "results": joined.results
                 }));
             }
             if Instant::now() >= deadline {
                 return success(json!({
                     "join_id": joined.join.join_id,
                     "delegations": joined.join.delegations,
-                    "status": joined.join.status,
-                    "issue_read_only_helper": self.issue_helpers_are_read_only(parent_thread_id)?
+                    "status": joined.join.status
                 }));
             }
             std::thread::sleep(Duration::from_millis(25));
@@ -755,6 +614,15 @@ fn definition(name: &str, description: &str, parameters: Value) -> ToolDefinitio
 }
 
 fn spawn_definition() -> ToolDefinition {
+    let built_in_roles = agent_roles::built_in_roles()
+        .entries()
+        .iter()
+        .map(|role| format!("{}: {}", role.name(), role.description()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let agent_description = format!(
+        "An optional exact Agent role name. null lets the host select one unique metadata match or use the general fallback. Available built-in roles:\n{built_in_roles}"
+    );
     definition(
         SPAWN_AGENT_TOOL_NAME,
         "Creates an independent child Agent Thread for one bounded task and returns immediately. The child has isolated history and receives only its frozen role, delegated task, active Skills, and allowed tool names. Use wait_agent with the returned delegation_id to collect its result.",
@@ -771,7 +639,7 @@ fn spawn_definition() -> ToolDefinition {
                 },
                 "agent": {
                     "type": ["string", "null"],
-                    "description": "An optional exact Agent definition name. null lets the host select one unique metadata match or use the general fallback."
+                    "description": agent_description
                 },
                 "context": {
                     "type": ["object", "null"],

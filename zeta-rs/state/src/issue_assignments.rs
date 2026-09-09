@@ -1,101 +1,23 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use github::IssueAssignment;
+use github::IssueAssignmentCommand;
+use github::IssueAssignmentPlan;
+use github::IssueControl;
+use github::IssueOwnership;
+use github::IssueSyncState;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
-use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Mutex;
-use zeta_work_coordination::IssueAssignment;
-use zeta_work_coordination::IssueAssignmentPlan;
-use zeta_work_coordination::IssueOwnership;
-use zeta_work_coordination::IssueSyncState;
 
-/// Shared coordinator database owner of Issue claims and idempotent operation receipts.
+/// SQLite implementation of GitHub Issue claims and idempotent operation receipts.
 pub struct SqliteIssueAssignmentStore {
     connection: Mutex<Connection>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum IssueControl {
-    Pause,
-    Release,
-    Cancel,
-    Transfer(String),
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum IssueAssignmentCommand {
-    Queue,
-    ExecutionFailed {
-        detail: String,
-    },
-    Control {
-        epoch: u64,
-        action: IssueControl,
-    },
-    FreezeAgent {
-        role: zeta_protocol::AgentRoleSnapshot,
-        tools: Vec<zeta_protocol::ToolName>,
-    },
-    BeginSync {
-        epoch: u64,
-        stage: zeta_work_coordination::IssueStage,
-    },
-    FinishExecution {
-        epoch: u64,
-    },
-    PrepareSync {
-        stage: zeta_work_coordination::IssueStage,
-    },
-    ClaimPrepared {
-        config_revision: u64,
-        workflow: zeta_work_coordination::IssueWorkflow,
-    },
-    RecordDelivery {
-        receipt: zeta_work_coordination::IssueDeliveryReceipt,
-    },
-    RecordThread {
-        thread_id: zeta_protocol::ThreadId,
-    },
-    Acquire {
-        epoch: u64,
-        lease_until: u64,
-    },
-    Renew {
-        epoch: u64,
-        lease_until: u64,
-    },
-    Stop {
-        epoch: u64,
-    },
-    Transfer {
-        owner: String,
-    },
-    Release,
-    Complete,
-    Cancel,
-    RecordWork {
-        thread_id: zeta_protocol::ThreadId,
-        work_run_id: zeta_protocol::WorkRunId,
-        attempt_id: zeta_protocol::WorkAttemptId,
-    },
-    RecordBranch {
-        linked_branch_id: String,
-    },
-    RecordSync {
-        stage: zeta_work_coordination::IssueStage,
-        labels: BTreeMap<String, Vec<String>>,
-    },
-    SyncFailed {
-        state: IssueSyncState,
-        detail: String,
-    },
 }
 
 impl SqliteIssueAssignmentStore {
@@ -316,15 +238,13 @@ impl SqliteIssueAssignmentStore {
                     IssueOwnership::Unclaimed
                 },
                 thread_id: None,
-                work_run_id: None,
-                attempt_id: None,
                 lease_until: None,
                 sync_state: IssueSyncState::Pending,
                 attempted_stages: Vec::new(),
                 desired_stage: if reservation == Reservation::Branch {
-                    zeta_work_coordination::IssueStage::Todo
+                    github::IssueStage::Todo
                 } else {
-                    zeta_work_coordination::IssueStage::Queued
+                    github::IssueStage::Queued
                 },
                 paused: false,
                 execution_error: None,
@@ -448,19 +368,6 @@ impl SqliteIssueAssignmentStore {
             .transpose()
     }
 
-    pub fn for_attempt(
-        &self,
-        run: &zeta_protocol::WorkRunId,
-        attempt: &zeta_protocol::WorkAttemptId,
-    ) -> Result<IssueAssignment, String> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| "Issue assignment store lock poisoned")?;
-        let value: String = connection.query_row("SELECT value FROM issue_assignments WHERE json_extract(value,'$.workRunId')=?1 AND json_extract(value,'$.attemptId')=?2", (run.as_str(), attempt.as_str()), |row| row.get(0)).map_err(|error| error.to_string())?;
-        serde_json::from_str(&value).map_err(|error| error.to_string())
-    }
-
     pub fn list(&self, repository: &str) -> Result<Vec<IssueAssignment>, String> {
         let connection = self
             .connection
@@ -529,7 +436,7 @@ impl SqliteIssueAssignmentStore {
             IssueAssignmentCommand::ExecutionFailed { detail } => {
                 require_stopped(&assignment)?;
                 assignment.execution_error = Some(detail);
-                assignment.desired_stage = zeta_work_coordination::IssueStage::Blocked;
+                assignment.desired_stage = github::IssueStage::Blocked;
                 assignment.sync_state = IssueSyncState::Pending;
             }
             IssueAssignmentCommand::Control { epoch, action } => {
@@ -557,9 +464,9 @@ impl SqliteIssueAssignmentStore {
                 assignment.auto_start = false;
                 assignment.paused = matches!(action, IssueControl::Pause);
                 assignment.desired_stage = match &action {
-                    IssueControl::Release => zeta_work_coordination::IssueStage::Todo,
-                    IssueControl::Transfer(_) => zeta_work_coordination::IssueStage::Queued,
-                    _ => zeta_work_coordination::IssueStage::Blocked,
+                    IssueControl::Release => github::IssueStage::Todo,
+                    IssueControl::Transfer(_) => github::IssueStage::Queued,
+                    _ => github::IssueStage::Blocked,
                 };
                 assignment.ownership = match action {
                     IssueControl::Pause => IssueOwnership::Held,
@@ -607,7 +514,7 @@ impl SqliteIssueAssignmentStore {
                 assignment.lease_until = None;
                 assignment.auto_start = false;
                 assignment.paused = false;
-                assignment.desired_stage = zeta_work_coordination::IssueStage::Review;
+                assignment.desired_stage = github::IssueStage::Review;
                 assignment.sync_state = IssueSyncState::Pending;
             }
             IssueAssignmentCommand::ClaimPrepared {
@@ -682,7 +589,7 @@ impl SqliteIssueAssignmentStore {
                 assignment.execution_error = None;
                 assignment.auto_start = true;
                 assignment.paused = false;
-                assignment.desired_stage = zeta_work_coordination::IssueStage::Queued;
+                assignment.desired_stage = github::IssueStage::Queued;
                 assignment.sync_state = IssueSyncState::Pending;
             }
             IssueAssignmentCommand::Acquire { epoch, lease_until } => {
@@ -723,7 +630,7 @@ impl SqliteIssueAssignmentStore {
                 assignment.lease_until = None;
                 assignment.auto_start = false;
                 assignment.paused = true;
-                assignment.desired_stage = zeta_work_coordination::IssueStage::Blocked;
+                assignment.desired_stage = github::IssueStage::Blocked;
                 assignment.sync_state = IssueSyncState::Pending;
             }
             IssueAssignmentCommand::Transfer { owner } => {
@@ -736,9 +643,8 @@ impl SqliteIssueAssignmentStore {
                 assignment.owner = owner;
                 assignment.pending_owner = None;
                 assignment.ownership = IssueOwnership::Held;
-                assignment.attempt_id = None;
                 assignment.delivery = None;
-                assignment.desired_stage = zeta_work_coordination::IssueStage::Queued;
+                assignment.desired_stage = github::IssueStage::Queued;
                 assignment.paused = true;
                 assignment.epoch = assignment
                     .epoch
@@ -767,24 +673,15 @@ impl SqliteIssueAssignmentStore {
                         .map_err(|error| error.to_string())?;
                 }
                 assignment.desired_stage = match assignment.ownership {
-                    IssueOwnership::Released => zeta_work_coordination::IssueStage::Todo,
-                    IssueOwnership::Completed => zeta_work_coordination::IssueStage::Completed,
-                    _ => zeta_work_coordination::IssueStage::Blocked,
+                    IssueOwnership::Released => github::IssueStage::Todo,
+                    IssueOwnership::Completed => github::IssueStage::Completed,
+                    _ => github::IssueStage::Blocked,
                 };
                 assignment.sync_state = if synchronized {
                     IssueSyncState::Synced
                 } else {
                     IssueSyncState::Pending
                 };
-            }
-            IssueAssignmentCommand::RecordWork {
-                thread_id,
-                work_run_id,
-                attempt_id,
-            } => {
-                assignment.thread_id = Some(thread_id);
-                assignment.work_run_id = Some(work_run_id);
-                assignment.attempt_id = Some(attempt_id);
             }
             IssueAssignmentCommand::RecordBranch { linked_branch_id } => {
                 if assignment

@@ -1,4 +1,3 @@
-use super::work_run_model::WorkScopeClaimDto;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -7,8 +6,6 @@ use std::collections::BTreeSet;
 use ts_rs::TS;
 use zeta_protocol::CommandId;
 use zeta_protocol::ThreadId;
-use zeta_protocol::WorkAttemptId;
-use zeta_protocol::WorkRunId;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -99,6 +96,15 @@ pub struct IssueAutoClaimDto {
     pub max_issues: u32,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct IssueWorkScopeDto {
+    pub components: BTreeSet<String>,
+    pub paths: BTreeSet<String>,
+    pub contracts: BTreeSet<String>,
+    pub resources: BTreeSet<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct IssueWorkItemDto {
@@ -106,7 +112,7 @@ pub struct IssueWorkItemDto {
     pub issues: Vec<IssueIdentityDto>,
     pub objective: String,
     pub acceptance_conditions: Vec<String>,
-    pub scope: WorkScopeClaimDto,
+    pub scope: IssueWorkScopeDto,
     pub dependencies: BTreeSet<String>,
     pub agent: String,
 }
@@ -178,8 +184,6 @@ pub struct IssueAssignmentDto {
     pub epoch: u64,
     pub ownership: IssueOwnershipDto,
     pub thread_id: Option<ThreadId>,
-    pub work_run_id: Option<WorkRunId>,
-    pub attempt_id: Option<WorkAttemptId>,
     #[ts(type = "number | null")]
     pub lease_until: Option<u64>,
     pub sync_state: IssueSyncStateDto,
@@ -255,7 +259,6 @@ pub struct IssuePlanResult {
 pub enum IssueAssignmentStartAction {
     CreateBranch,
     Claim,
-    Execute,
 }
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -281,13 +284,8 @@ pub struct IssueAssignmentsResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub enum IssueAssignmentAction {
-    Pause,
-    Resume,
     Release,
-    Cancel,
     RetrySync,
-    Verify,
-    Deliver,
     Transfer { assignee: String },
 }
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

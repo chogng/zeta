@@ -32,7 +32,7 @@ fn project_rpc_keeps_catalog_associations_separate_from_directory_authority() {
         .revision(&root_thread.session_id);
 
     let mut renderer = fixture.server.connection();
-    initialize(&fixture.server, &mut renderer, false);
+    initialize(&fixture.server, &mut renderer);
     let denied = call(
         &fixture.server,
         &mut renderer,
@@ -43,7 +43,7 @@ fn project_rpc_keeps_catalog_associations_separate_from_directory_authority() {
     assert_eq!(denied["error"]["message"], "PermissionRequired");
 
     let mut host = fixture.server.product_host_connection();
-    initialize(&fixture.server, &mut host, true);
+    initialize(&fixture.server, &mut host);
     let notifications = fixture.server.connection_notifications(&host);
     let created = call(
         &fixture.server,
@@ -164,8 +164,6 @@ impl Fixture {
             Arc::clone(&threads),
             Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
         )
-        .with_local_work_coordination(&path)
-        .unwrap()
         .with_local_projects(&path)
         .unwrap();
         Self {
@@ -206,12 +204,7 @@ impl Fixture {
     }
 }
 
-fn initialize(server: &AppServer, connection: &mut ConnectionState, host: bool) {
-    let capabilities = if host {
-        serde_json::json!({"workCoordinationHost": {"version": 1}})
-    } else {
-        serde_json::json!({})
-    };
+fn initialize(server: &AppServer, connection: &mut ConnectionState) {
     let initialized = call(
         server,
         connection,
@@ -219,7 +212,7 @@ fn initialize(server: &AppServer, connection: &mut ConnectionState, host: bool) 
         "initialize",
         serde_json::json!({
             "clientInfo": {"name": "project-test", "version": "1"},
-            "capabilities": capabilities
+            "capabilities": {}
         }),
     );
     assert!(initialized.get("result").is_some());

@@ -283,7 +283,6 @@ impl EnvRuntimeControl {
             &self.threads,
             &self.turn_backend,
             customizations.as_ref(),
-            self.env_state.runtime(),
         )?;
         let agent_grep = Arc::clone(&local.agent_grep);
         let local_port = local
@@ -460,7 +459,6 @@ impl EnvRuntimeControl {
             &self.threads,
             &turn_backend,
             Some(&customizations),
-            self.env_state.runtime(),
         )?;
         let watcher = FileSystemWatcher::start_with_observers(
             authorization.dir().clone(),
@@ -1987,7 +1985,6 @@ impl AppServer {
             &self.threads,
             &turn_backend,
             Some(&customizations),
-            self.env_state.runtime(),
         )?;
         let local_port = local
             .tool_port()
@@ -2686,7 +2683,6 @@ fn append_multi_agent_tools(
     threads: &Arc<ThreadController>,
     turn_backend: &Arc<dyn zeta_core::TurnExecutionBackend>,
     customizations: Option<&Arc<DirContributions>>,
-    state: Option<Arc<zeta_state::StateRuntime>>,
 ) -> Result<crate::local_tools::LocalToolComposition, EnvRuntimeError> {
     let action_policy_revision = local.action_policy_revision().clone();
     let local = append_local_tool(
@@ -2711,12 +2707,6 @@ fn append_multi_agent_tools(
     .with_action_policy_revision(action_policy_revision);
     if let Some(customizations) = customizations {
         multi_agent = multi_agent.with_dir_contributions(Arc::clone(customizations));
-    }
-    if let Some(state) = state {
-        multi_agent = multi_agent.with_issue_assignments(Arc::new(
-            zeta_state::SqliteIssueAssignmentStore::open(state.database_path())
-                .map_err(EnvRuntimeError::Failed)?,
-        ));
     }
     Ok(append_local_tool(local, Arc::new(multi_agent)))
 }

@@ -15,13 +15,12 @@ use zeta_app_server_protocol::protocol::issues::IssueSummary;
 impl AppServer {
     pub(super) fn issue_list(&self, params: &Value) -> Result<Value, RpcError> {
         let params: IssueListParams = decode(params)?;
-        let runtime = self.turn_changes_runtime()?;
+        let runtime = self.issue_runtime()?;
         let repository = runtime
-            .worktree_runtime
-            .block_on(repository(&runtime.dir_root))
+            .block_on(repository(runtime.root()))
             .map_err(issue_error)?;
         let query = params.query.trim();
-        zeta_github::validate_issue_query(query, params.page).map_err(issue_error)?;
+        github::validate_issue_query(query, params.page).map_err(issue_error)?;
         let state = match params.state {
             zeta_app_server_protocol::protocol::issues::IssueState::Open => "open",
             zeta_app_server_protocol::protocol::issues::IssueState::Closed => "closed",
@@ -72,13 +71,12 @@ impl AppServer {
             (entry.page, entry.fetched_at, true)
         } else {
             let page = runtime
-                .worktree_runtime
-                .block_on(zeta_github::GitHub::default().search_issues(
+                .block_on(github::GitHub::default().search_issues(
                     &repository,
                     if state == "open" {
-                        zeta_github::IssueState::Open
+                        github::IssueState::Open
                     } else {
-                        zeta_github::IssueState::Closed
+                        github::IssueState::Closed
                     },
                     query,
                     params.page,
@@ -109,10 +107,9 @@ impl AppServer {
 
     pub(super) fn issue_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: IssueReadParams = decode(params)?;
-        let runtime = self.turn_changes_runtime()?;
+        let runtime = self.issue_runtime()?;
         let repository = runtime
-            .worktree_runtime
-            .block_on(repository(&runtime.dir_root))
+            .block_on(repository(runtime.root()))
             .map_err(issue_error)?;
         if (
             repository.host.as_str(),
@@ -128,8 +125,7 @@ impl AppServer {
             ));
         }
         let snapshot = runtime
-            .worktree_runtime
-            .block_on(zeta_github::GitHub::default().issue(&repository, params.number))
+            .block_on(github::GitHub::default().issue(&repository, params.number))
             .map_err(issue_error)?;
         result(&IssueReadResult {
             body: snapshot.issue.body.clone().unwrap_or_default(),
@@ -147,7 +143,7 @@ impl AppServer {
     }
 }
 
-pub(super) async fn repository(root: &std::path::Path) -> Result<zeta_github::Repository, String> {
+pub(super) async fn repository(root: &std::path::Path) -> Result<github::Repository, String> {
     let git = zeta_git::GitClient::system();
     let repository = git
         .open_repository(root)
@@ -167,14 +163,14 @@ pub(super) async fn repository(root: &std::path::Path) -> Result<zeta_github::Re
     let identity = remote
         .identity()
         .ok_or("Origin has no supported repository identity")?;
-    zeta_github::Repository::new(
+    github::Repository::new(
         identity.host().into(),
         identity.owner().into(),
         identity.repository().into(),
     )
 }
 
-pub(super) fn summary(issue: zeta_github::Issue) -> IssueSummary {
+pub(super) fn summary(issue: github::Issue) -> IssueSummary {
     IssueSummary {
         labels: issue.labels.into_iter().map(|label| label.name).collect(),
         assignees: issue

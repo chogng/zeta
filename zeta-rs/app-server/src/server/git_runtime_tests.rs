@@ -21,7 +21,7 @@ fn runtime_revisions_and_notifies_only_for_changed_repository_state() {
     repository.git(&["commit", "-m", "initial"]);
     let broker = Arc::new(UpdateBroker::default());
     let queue = NotificationQueue::default();
-    broker.register(1, &queue);
+    broker.register(1, false, &queue);
     let authorization = mutation_authorization(&repository.root().join("repository"));
     let dir_root = authorization.dir().canonical_path().to_path_buf();
     let repository_root = Dir::open_local(repository.root())

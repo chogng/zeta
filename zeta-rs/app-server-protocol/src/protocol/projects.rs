@@ -8,7 +8,6 @@ use ts_rs::TS;
 use zeta_environment::EnvId;
 use zeta_file_access::DirId;
 use zeta_protocol::ProjectId;
-use zeta_protocol::WorkRunId;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -38,7 +37,6 @@ pub struct ProjectDto {
     pub description: String,
     pub roots: Vec<ProjectRootDto>,
     pub session_ids: Vec<SessionId>,
-    pub work_run_ids: Vec<WorkRunId>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -53,8 +51,6 @@ pub struct ProjectSummaryDto {
     pub root_count: u64,
     #[ts(type = "number")]
     pub session_count: u64,
-    #[ts(type = "number")]
-    pub work_run_count: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -143,16 +139,6 @@ pub struct ProjectSessionMutationParams {
     #[ts(type = "number")]
     pub expected_revision: u64,
     pub session_id: SessionId,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ProjectWorkRunMutationParams {
-    pub command_id: CommandId,
-    pub project_id: ProjectId,
-    #[ts(type = "number")]
-    pub expected_revision: u64,
-    pub work_run_id: WorkRunId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

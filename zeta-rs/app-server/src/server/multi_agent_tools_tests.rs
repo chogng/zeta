@@ -44,6 +44,20 @@ fn exposes_only_the_three_agent_coordination_tools() {
 }
 
 #[test]
+fn spawn_agent_describes_the_built_in_issue_role() {
+    let definition = service()
+        .definitions()
+        .into_iter()
+        .find(|definition| definition.name.as_str() == SPAWN_AGENT_TOOL_NAME)
+        .unwrap();
+    let description = definition.parameters["properties"]["agent"]["description"]
+        .as_str()
+        .unwrap();
+
+    assert!(description.contains("issue: Coordinates one or more GitHub issues"));
+}
+
+#[test]
 fn prepares_agent_coordination_as_a_builtin_system_operation() {
     let service = service();
     let call = ToolCall {

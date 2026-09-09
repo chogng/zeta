@@ -28,8 +28,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | 客户端需求 | 使用方式 | 关键保证 |
 | --- | --- | --- |
 | 创建一次工作 | `session/create` 创建根 Thread 并返回按 `session_id` 聚合的 Session 视图，随后在该 Thread 上启动 Turn | 持久化身份与顺序始终属于 Thread |
-| 组织长期多根工作 | 受信产品 host 使用 `project/*` 保存根目录表并弱关联 Session、WorkRun | Project 不授予目录权限，也不改变 Thread 身份 |
-| 协调多个 Agent 结果 | 受信产品 host 使用 `workRun/*` 读取和修改工作图、请求验证与集成 | 客户端不能提交验证结论或根据 Agent 自报推断成功 |
+| 组织长期多根工作 | 受信产品 host 使用 `project/*` 保存根目录表并弱关联 Session | Project 不授予目录权限，也不改变 Thread 身份 |
 | 关闭一个 Session Tab | 前端通过 `session/request` 提交 `request.type = stop` | 枚举同一 `session_id` 的 Thread，持久化各 Thread 的停止事实并中断活动 Turn；不创建 Session 状态 |
 | 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
 | 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
@@ -78,7 +77,7 @@ Session 是按 `sessionId` 聚合 Thread 的只读树视图，不保存独立状
 `parentThreadId + parentSequence`；Core 按这个锚点重放父 Thread，并把锚点内连续、已结束的 Turn
 导入子 Thread，因此未完成的 Turn 和父 Thread 后续提交都不会进入已创建的分支。
 
-Project 与 WorkRun 是独立持久化领域。Project 保存长期根目录表以及对 Session、WorkRun 的弱关联；WorkRun 保存共同目标、参与者、契约、尝试、关系、冲突、验证和集成状态。两者都不复制 Thread 事件，也不改变 Session 只读聚合语义。
+Project 是独立持久化领域，保存长期根目录表以及对 Session 的弱关联；它不复制 Thread 事件，也不改变 Session 只读聚合语义。多 Agent 工作只由同一 Session 的 Agent tree 表达。
 
 ## 2. 一致性模型
 
@@ -123,8 +122,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "clientInfo": { "name": "zeta-desktop", "version": "0.1.0" },
     "capabilities": {
       "notifications": true,
-      "browser": { "version": 1, "observe": true, "input": true },
-      "workCoordinationHost": { "version": 1 }
+      "browser": { "version": 1, "observe": true, "input": true }
     }
   }
 }
@@ -142,7 +140,6 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "sessions": true,
     "threads": true,
     "turns": true,
-    "workCoordination": true,
     "projects": true,
     "resources": true,
     "fileSystem": true,
@@ -158,7 +155,6 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
       "sessions": { "version": 3 },
       "threads": { "version": 3 },
       "turns": { "version": 3 },
-      "workCoordination": { "version": 3 },
       "projects": { "version": 3 }
     }
   },
@@ -267,17 +263,10 @@ Desktop 当前实现和 Playwright 后续边界见
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
 | `session/dirs/list` / `add` / `remove` / `permissions/set` | Session directory access | 管理当前 Session 的目录与完整能力集合；权限替换使用目录访问 revision，不改变 `cwd` |
-| `workRun/list` / `read` / `view/read` | WorkRun + Session Agent tree | 读取持久化工作图；组合视图从 canonical Thread tree 得出 Team 或跨 Session 模式，不复制 Agent 状态 |
-| `workRun/create` / `workRun/participant/add` / `workRun/goal/revise` / `workRun/cancel` | WorkRun | 使用 `commandId + expectedRevision` 修改目标与参与者；同 Session 委托关系和跨 Session 根关系分别校验 |
-| `workRun/relation/create` | WorkRun dependency graph | 创建观察、等待、另开方向、移交或精确结果依赖；循环和错误执行代次被拒绝 |
-| `workRun/decision/record` | WorkRun decision log | 记录受信产品宿主确认的不可变负责人决定；普通 Agent 消息不能调用或替代该方法 |
-| `workRun/attempt/scopeExpansion/request` | WorkRun + exact WorkAttempt | 保存范围不足证据并停止旧尝试；不会修改旧契约或授予新增范围 |
-| `workRun/conflict/record` / `workRun/conflict/resolve` | WorkRun conflict graph | 登记冲突会停止精确尝试；解决必须引用已有决定，并使旧尝试过期而不是恢复 |
-| `workRun/verification/request` / `integration/request` | WorkRun + host evidence | host 从封存结果和当前目标重建验证输入或发布事务；客户端不能提交测试通过、结果摘要或目标 HEAD |
-| `project/list` / `read` | Project | 读取长期多根目录表以及 Session、WorkRun 弱关联 |
+| `project/list` / `read` | Project | 读取长期多根目录表以及 Session 弱关联 |
 | `project/create` / `project/details/update` / `project/archive` / `project/restore` | Project | 使用 Project revision 和命令回执修改元数据与生命周期 |
 | `project/root/add` / `project/root/update` / `project/root/remove` | Project + Session directory access | `add` 只接受 Session 已有的精确 `DirId`，Environment 和路径由 host 重建；操作不创建 Grant |
-| `project/session/link` / `project/session/unlink` / `project/workRun/link` / `project/workRun/unlink` | Project | 只建立或删除组织关系；目标 Session/WorkRun 必须真实存在 |
+| `project/session/link` / `project/session/unlink` | Project | 只建立或删除组织关系；目标 Session 必须真实存在 |
 | `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 新增自定义项分配并持久保存顺序，编辑保持顺序；删除拒绝内置项和仍被配置引用的项，并清理该连接密钥。自定义 API 类型支持 Responses、Chat Completions、Anthropic Messages；`contextWindow` 保存 Provider 的 272000／1000000 档位，`model` 留空时目录使用对应 API 类型的内置模型，填写时使用该 ID。 |
@@ -347,19 +336,15 @@ Plan step，失败态携带稳定错误；这些字段不从 transcript 文案�
 
 Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的 Zeta account/login control plane。
 
-### WorkRun 与 Project
+### Project
 
-`initialize.capabilities.workCoordination` 和 `projects` 表示当前 App Server 已安装对应后端；它们不授权普通客户端调用。读取或修改 WorkRun、Project 必须同时满足两个条件：服务端创建连接时已经授予产品宿主身份，客户端初始化时又协商了 `workCoordinationHost { version: 1 }`。普通连接即使发送同样的能力字段，也会收到 `PermissionRequired`；Renderer、extension 和任意协议对端不能靠自报升级权限。
+`initialize.capabilities.projects` 表示当前 App Server 已安装 Project 后端，但不授权普通客户端调用。读取或修改 Project 要求服务端创建连接时已经授予产品宿主身份；Renderer、extension 和任意协议对端不能靠初始化参数自报升级权限。
 
 当前产品宿主入口包括产品直接启动的 stdio，以及位于当前用户私有目录、套接字权限仅允许当前用户访问的本地和 Remote 后台代理。通用进程内连接和通用 JSONL 入口始终是普通连接。套接字权限只建立当前系统账号内的产品边界，不抵御已控制该账号或未受 SandboxScope 约束的进程；Agent 工具执行必须看不到 profile 状态目录和协调套接字。
 
 所有 mutation 都保存完整命令回执。相同 `commandId + typed payload` 返回原结果且不重复发布 notification；相同 `commandId` 的不同 payload 返回 `CommandConflict`。Project 根新增必须引用真实 Session 的现有 `DirId`，服务端从目录授权权威重建 Environment 与规范路径；Project 记录保留后续组织用途，但不能在 Grant 被删除后恢复访问。
 
-工作协调不会把“steer”压成一个万能消息接口。`workRun/decision/record` 修改有来源的工作决定；`workRun/attempt/scopeExpansion/request` 只停止范围不足的精确尝试；`workRun/conflict/record` 停止冲突参与者；`workRun/conflict/resolve` 只用已有决定关闭冲突并使旧尝试过期。它们都经过产品宿主门禁、WorkRun revision 和命令回执，不能由 Agent summary、聊天消息或 Renderer 自报触发。Thread 消息与 Thread/Attempt 的中断、恢复、取消仍属于各自生命周期接口，不获得修改工作契约或验证结论的权力。
-
-`workRun/verification/request` 和 `workRun/integration/request` 是请求，不是客户端结论。服务端根据封存 ChangeSet、实际影响、当前目标、验证器与环境摘要生成验证身份；目标移动会使旧结论过期。当前生产验收验证器尚未取得资格，结论保持 `indeterminate`，因此成功集成只存在于明确安装独立测试资格记录的测试路径。完整可靠性边界见 [`multi-agent-development.md`](multi-agent-development.md)。
-
-当前外部 API 尚未暴露完整工作契约和工作尝试创建流程；这些状态由进程内 host 路径驱动。Team、跨 Session 移交、决定确认、冲突处理和证据查看的 Desktop、CLI、TUI 流程仍未完成，客户端不得为此绕过 App Server。
+同一 Session 的 Agent 协作只通过 Thread tree、委托消息、等待和取消接口表达；Project 不建立第二套执行状态或跨 Session 工作关系。
 
 ### Connector 外部账号连接
 
@@ -767,8 +752,7 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 - `marketplace/changed`，payload 为 profile Marketplace 安装状态的 `instanceId` 与新 `generation`；
 - `git/statusChanged`，payload 为新的 directory Git status；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint；
-- `workRun/changed`，payload 为已提交的完整 WorkRun 权威视图，只投递受信工作协调 host；
-- `project/changed`，payload 为已提交的完整 Project 视图，只投递受信工作协调 host。
+- `project/changed`，payload 为已提交的完整 Project 视图，只投递产品 host。
 
 durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 可额外携带
 `streamCursor { streamInstanceId, sequence }`，两者不能混为一个计数器：

@@ -5,7 +5,6 @@ use zeta_file_access::DirId;
 use zeta_protocol::CommandId;
 use zeta_protocol::ProjectId;
 use zeta_protocol::SessionId;
-use zeta_protocol::WorkRunId;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -34,12 +33,6 @@ pub enum ProjectCommand {
     },
     UnlinkSession {
         session_id: SessionId,
-    },
-    LinkWorkRun {
-        work_run_id: WorkRunId,
-    },
-    UnlinkWorkRun {
-        work_run_id: WorkRunId,
     },
     Archive,
     Restore,

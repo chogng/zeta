@@ -34,11 +34,26 @@ pub enum AgentDefinitionSelectionReason {
     Automatic,
 }
 
+/// Stable source of an Agent role selected for one run.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentRoleSource {
+    BuiltIn,
+    Directory { id: String },
+}
+
 /// Durable identity of the exact Agent definition consumed by a child seed.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FrozenAgentDefinitionRef {
     pub name: String,
+    pub source: AgentRoleSource,
+    #[ts(type = "number | null")]
+    pub version: Option<u64>,
     #[ts(type = "number")]
     pub catalog_generation: u64,
     pub content_digest: ContentDigest,

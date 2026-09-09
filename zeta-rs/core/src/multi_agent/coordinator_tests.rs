@@ -149,6 +149,88 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
 }
 
 #[test]
+fn code_mode_agent_scope_keeps_controls_and_limits_nested_tools() {
+    let fixture = fixture_with_tool_mode(zeta_protocol::ToolMode::CodeModeOnly);
+    let parent = fixture
+        .threads
+        .read_thread(&fixture.parent_thread_id)
+        .unwrap();
+    let parent_facts = ToolExecutionFacts::for_turn(
+        &parent,
+        &fixture.parent_turn_id,
+        [
+            ToolName::new("allowed").unwrap(),
+            ToolName::new("blocked").unwrap(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        parent_facts
+            .available_tools()
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        vec!["allowed", "blocked", "exec", "wait"]
+    );
+
+    let mut request = spawn_request(&fixture);
+    request.capability_scope.tools.extend([
+        ToolName::new("exec").unwrap(),
+        ToolName::new("wait").unwrap(),
+    ]);
+    let spawned = fixture.coordinator.spawn(request).unwrap();
+    let child = fixture
+        .threads
+        .read_thread(&spawned.child_thread_id)
+        .unwrap();
+    let ModelInvocationPreparation::Ready(invocation) = fixture
+        .threads
+        .prepare_model_invocation(
+            &spawned.child_thread_id,
+            PrepareModelInvocationRequest {
+                turn_id: &spawned.child_turn_id,
+                harness_context: &HarnessContext::default(),
+                extension_fragments: Vec::new(),
+                evidence: Vec::new(),
+                tools: vec![
+                    tool_definition("exec"),
+                    tool_definition("wait"),
+                    tool_definition("blocked"),
+                ],
+                budget: ContextBudget::provider_managed(),
+            },
+        )
+        .unwrap()
+    else {
+        panic!("provider-managed context should be ready")
+    };
+    assert_eq!(
+        invocation
+            .context()
+            .tools()
+            .iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["exec", "wait"]
+    );
+    let child_facts = ToolExecutionFacts::for_turn(
+        &child,
+        &spawned.child_turn_id,
+        [
+            ToolName::new("allowed").unwrap(),
+            ToolName::new("blocked").unwrap(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        child_facts
+            .available_tools()
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        vec!["allowed", "exec", "wait"]
+    );
+}
+
+#[test]
 fn selected_and_forked_context_are_materialized_into_the_immutable_child_seed() {
     let fixture = fixture();
     let parent = fixture
@@ -876,6 +958,10 @@ fn reducers_reject_corrupted_seed_and_result_digests() {
 }
 
 fn fixture() -> Fixture {
+    fixture_with_tool_mode(zeta_protocol::ToolMode::Direct)
+}
+
+fn fixture_with_tool_mode(tool_mode: zeta_protocol::ToolMode) -> Fixture {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
@@ -899,7 +985,7 @@ fn fixture() -> Fixture {
                 model: None,
                 policy_revision: "policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                tool_mode: zeta_protocol::ToolMode::Direct,
+                tool_mode,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

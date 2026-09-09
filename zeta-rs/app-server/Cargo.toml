@@ -10,9 +10,6 @@ doctest = false
 name = "zeta_app_server"
 path = "src/lib.rs"
 
-[features]
-multi-agent-evals = []
-
 [dependencies]
 zeta-memory-diagnostics = { workspace = true }
 zeta-automation = { workspace = true }
@@ -33,7 +30,7 @@ zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
 zeta-agent-environment = { workspace = true }
 zeta-apply-patch = { workspace = true }
-zeta-agents = { workspace = true }
+agent-roles = { workspace = true }
 zeta-async-utils = { workspace = true }
 zeta-attachments = { workspace = true }
 zeta-auto-review = { workspace = true }
@@ -58,7 +55,7 @@ zeta-file-system = { workspace = true }
 zeta-file-watcher = { workspace = true }
 zeta-fast-regex-search = { workspace = true }
 zeta-git = { workspace = true }
-zeta-github = { workspace = true }
+github = { workspace = true }
 zeta-http-client = { workspace = true }
 zeta-hooks = { workspace = true }
 zeta-install-context = { workspace = true }
@@ -93,13 +90,12 @@ zeta-skills-extension = { workspace = true }
 zeta-syntax = { workspace = true }
 zeta-thread-transcript = { workspace = true }
 zeta-thread-store = { workspace = true }
-zeta-turn-changes = { workspace = true }
+git-turn-changes = { workspace = true }
 zeta-tools = { workspace = true }
 zeta-web-search-extension = { workspace = true }
 zeta-typst = { workspace = true }
 zeta-utils-pty = { workspace = true }
-zeta-worktree = { workspace = true }
-zeta-work-coordination = { workspace = true }
+worktree = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }

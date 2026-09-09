@@ -1,5 +1,5 @@
 [package]
-name = "zeta-worktree"
+name = "worktree"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,7 +7,7 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_worktree"
+name = "worktree"
 path = "src/lib.rs"
 
 [dependencies]
@@ -22,7 +22,6 @@ tempfile = { workspace = true }
 zeta-git = { workspace = true }
 zeta-file-access = { workspace = true }
 zeta-protocol = { workspace = true }
-zeta-turn-changes = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

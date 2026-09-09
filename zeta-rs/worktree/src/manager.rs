@@ -13,12 +13,12 @@ use std::collections::BTreeMap;
 use zeta_file_access::Dir;
 use zeta_git::GitClient;
 use zeta_git::GitDetachedWorktreeRequest;
+use zeta_git::GitError;
 use zeta_git::GitHead;
 use zeta_git::GitPrivateRef;
 use zeta_git::GitRepository;
 use zeta_git::GitWorktreeRemovalMode;
 use zeta_protocol::ContentDigest;
-use zeta_turn_changes::DirectorySnapshotStore;
 
 use crate::binding;
 use crate::metadata;
@@ -65,49 +65,14 @@ pub struct Worktree {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum ManagedDirOwner {
-    Thread {
-        thread_id: String,
-    },
-    WorkAttemptRoot {
-        work_run_id: String,
-        attempt_id: String,
-        thread_id: String,
-        source_dir_id: String,
-    },
-    VerificationRoot {
-        work_run_id: String,
-        verification_key: String,
-        source_dir_id: String,
-    },
+    Thread { thread_id: String },
 }
 
 impl ManagedDirOwner {
     pub(crate) fn validate(&self, source_dir_id: &str) -> Result<()> {
-        let valid = match self {
-            Self::Thread { thread_id } => !thread_id.trim().is_empty(),
-            Self::WorkAttemptRoot {
-                work_run_id,
-                attempt_id,
-                thread_id,
-                source_dir_id: owner_source_dir_id,
-            } => {
-                !work_run_id.trim().is_empty()
-                    && !attempt_id.trim().is_empty()
-                    && !thread_id.trim().is_empty()
-                    && !owner_source_dir_id.trim().is_empty()
-                    && owner_source_dir_id == source_dir_id
-            }
-            Self::VerificationRoot {
-                work_run_id,
-                verification_key,
-                source_dir_id: owner_source_dir_id,
-            } => {
-                !work_run_id.trim().is_empty()
-                    && !verification_key.trim().is_empty()
-                    && !owner_source_dir_id.trim().is_empty()
-                    && owner_source_dir_id == source_dir_id
-            }
-        };
+        let _ = source_dir_id;
+        let Self::Thread { thread_id } = self;
+        let valid = !thread_id.trim().is_empty();
         if valid {
             Ok(())
         } else {
@@ -116,49 +81,13 @@ impl ManagedDirOwner {
     }
 
     pub(crate) fn metadata_owner_id(&self) -> String {
-        match self {
-            Self::Thread { thread_id } | Self::WorkAttemptRoot { thread_id, .. } => {
-                thread_id.clone()
-            }
-            Self::VerificationRoot {
-                work_run_id,
-                verification_key,
-                source_dir_id,
-            } => hex_digest_parts(&[
-                "verification-root",
-                work_run_id,
-                verification_key,
-                source_dir_id,
-            ]),
-        }
+        let Self::Thread { thread_id } = self;
+        thread_id.clone()
     }
 
     fn managed_dir_id(&self) -> String {
-        match self {
-            Self::Thread { thread_id } => hex_digest(thread_id),
-            Self::WorkAttemptRoot {
-                work_run_id,
-                attempt_id,
-                thread_id,
-                source_dir_id,
-            } => hex_digest_parts(&[
-                "work-attempt-root",
-                work_run_id,
-                attempt_id,
-                thread_id,
-                source_dir_id,
-            ]),
-            Self::VerificationRoot {
-                work_run_id,
-                verification_key,
-                source_dir_id,
-            } => hex_digest_parts(&[
-                "verification-root",
-                work_run_id,
-                verification_key,
-                source_dir_id,
-            ]),
-        }
+        let Self::Thread { thread_id } = self;
+        hex_digest(thread_id)
     }
 }
 
@@ -174,7 +103,7 @@ pub struct ManagedDirProvisionRequest {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ManagedDirSource {
-    DirSnapshot {
+    CurrentDirectory {
         source_directory: PathBuf,
     },
     ImmutableTree {
@@ -187,7 +116,7 @@ pub enum ManagedDirSource {
 impl ManagedDirSource {
     fn source_directory(&self) -> &Path {
         match self {
-            Self::DirSnapshot { source_directory }
+            Self::CurrentDirectory { source_directory }
             | Self::ImmutableTree {
                 source_directory, ..
             } => source_directory,
@@ -233,7 +162,6 @@ pub struct ManagedDirBinding {
     baseline_tree: String,
     baseline_ref: String,
     kind: ManagedDirKind,
-    snapshot_store: Option<PathBuf>,
     repositories: Vec<ManagedRepositoryBinding>,
 }
 
@@ -308,10 +236,6 @@ impl ManagedDirBinding {
 
     pub const fn kind(&self) -> ManagedDirKind {
         self.kind
-    }
-
-    pub fn snapshot_store(&self) -> Option<&Path> {
-        self.snapshot_store.as_deref()
     }
 
     pub fn repositories(&self) -> &[ManagedRepositoryBinding] {
@@ -469,11 +393,14 @@ impl WorktreeManager {
                 false
             };
             let owner = if entry.availability().is_available() && entry.checkout_root().exists() {
-                let repository = self.git.open_repository(entry.checkout_root()).await?;
-                match metadata::owner(repository.git_dir()) {
-                    Ok(Some(thread_id)) => WorktreeOwner::Thread(thread_id),
-                    Ok(None) => WorktreeOwner::Unbound,
-                    Err(_) => WorktreeOwner::Invalid,
+                match self.git.open_repository(entry.checkout_root()).await {
+                    Ok(repository) => match metadata::owner(repository.git_dir()) {
+                        Ok(Some(thread_id)) => WorktreeOwner::Thread(thread_id),
+                        Ok(None) => WorktreeOwner::Unbound,
+                        Err(_) => WorktreeOwner::Invalid,
+                    },
+                    Err(GitError::NotAWorkingTree { .. }) => WorktreeOwner::Invalid,
+                    Err(error) => return Err(error.into()),
                 }
             } else {
                 WorktreeOwner::Unbound
@@ -594,7 +521,7 @@ impl WorktreeManager {
             .context("source directory is outside its repository root")?
             .to_path_buf();
         let baseline_tree = match &request.source {
-            ManagedDirSource::DirSnapshot { .. } => {
+            ManagedDirSource::CurrentDirectory { .. } => {
                 self.git.capture_worktree_tree(&source_repository).await?
             }
             ManagedDirSource::ImmutableTree { tree_id, .. } => {
@@ -684,7 +611,6 @@ impl WorktreeManager {
                     baseline_tree.as_str().to_string(),
                     baseline_ref.as_str().to_string(),
                     binding::BindingKind::Git,
-                    None,
                 ),
             )?;
             self.git
@@ -778,7 +704,6 @@ impl WorktreeManager {
             baseline_tree: baseline_tree.as_str().to_string(),
             baseline_ref: baseline_ref.as_str().to_string(),
             kind: ManagedDirKind::Git,
-            snapshot_store: None,
             repositories,
         })
     }
@@ -819,7 +744,7 @@ impl WorktreeManager {
                 .to_path_buf();
             let source_repository = self.git.open_repository(&source_root).await?;
             let baseline_tree = match &request.source {
-                ManagedDirSource::DirSnapshot { .. } => {
+                ManagedDirSource::CurrentDirectory { .. } => {
                     self.git.capture_worktree_tree(&source_repository).await?
                 }
                 ManagedDirSource::ImmutableTree {
@@ -937,7 +862,6 @@ impl WorktreeManager {
                         baseline_tree.as_str().to_string(),
                         baseline_ref.as_str().to_string(),
                         binding::BindingKind::Git,
-                        None,
                     ),
                 )?;
                 self.git
@@ -1012,36 +936,14 @@ impl WorktreeManager {
             return self.recover(&checkout_root, &request.owner).await;
         }
         let dir = checkout_root.join("dir");
-        let snapshot_store = self
-            .settings
-            .root
-            .join("directory-objects")
-            .join(hex_digest(&request.source_dir_id));
-        let snapshots = DirectorySnapshotStore::new(&snapshot_store);
-        let baseline_tree = match &request.source {
-            ManagedDirSource::DirSnapshot { .. } => snapshots
-                .capture(source_directory)
-                .map_err(anyhow::Error::msg)?,
-            ManagedDirSource::ImmutableTree { tree_id, .. } => tree_id.clone(),
-        };
+        if matches!(request.source, ManagedDirSource::ImmutableTree { .. }) {
+            bail!("non-Git managed directories cannot be provisioned from a Git tree");
+        }
         std::fs::create_dir_all(&dir)?;
+        let baseline_tree = copy_directory(source_directory, &dir)?;
         let checkout_root = dunce::canonicalize(&checkout_root)?;
         let dir = checkout_root.join("dir");
-        let repository_binding = ManagedRepositoryBinding {
-            repository_id: format!("directory:{}", request.source_dir_id),
-            relative_path: PathBuf::from("."),
-            worktree_root: dir.clone(),
-            source_repository_root: source_directory.to_path_buf(),
-            target_branch: None,
-            target_head: baseline_tree.clone(),
-            target_unborn: false,
-            baseline_tree: baseline_tree.clone(),
-            baseline_ref: String::new(),
-        };
         let result = (|| {
-            snapshots
-                .replace_directory(&dir, &baseline_tree)
-                .map_err(anyhow::Error::msg)?;
             binding::write(
                 &checkout_root,
                 &binding::BindingRecord::new(
@@ -1056,9 +958,8 @@ impl WorktreeManager {
                     baseline_tree.clone(),
                     String::new(),
                     binding::BindingKind::Directory,
-                    Some(snapshot_store.clone()),
                 )
-                .with_repositories(vec![repository_record(&repository_binding)]),
+                .with_repositories(Vec::new()),
             )
         })();
         if let Err(error) = result {
@@ -1078,8 +979,7 @@ impl WorktreeManager {
             baseline_tree,
             baseline_ref: String::new(),
             kind: ManagedDirKind::Directory,
-            snapshot_store: Some(snapshot_store),
-            repositories: vec![repository_binding],
+            repositories: Vec::new(),
         })
     }
 
@@ -1089,13 +989,18 @@ impl WorktreeManager {
         checkout_root: &Path,
         owner: &ManagedDirOwner,
     ) -> Result<ManagedDirBinding> {
-        if let Some(record) = binding::try_read(checkout_root)? {
+        if let Some(mut record) = binding::try_read(checkout_root)? {
             if record.kind != binding::BindingKind::Directory {
                 bail!("managed directory binding has an invalid dir kind");
             }
             if !record.matches_owner(owner) || record.managed_worktree_id != owner.managed_dir_id()
             {
                 bail!("managed directory binding owner does not match its durable owner");
+            }
+            if record.needs_upgrade() {
+                let upgraded = record.clone().upgrade(owner.clone());
+                binding::replace(checkout_root, &upgraded)?;
+                record = upgraded;
             }
             let checkout_root = dunce::canonicalize(checkout_root)?;
             let managed_root = dunce::canonicalize(&self.settings.root)?;
@@ -1120,7 +1025,6 @@ impl WorktreeManager {
                 baseline_tree: record.baseline_tree,
                 baseline_ref: record.baseline_ref,
                 kind: ManagedDirKind::Directory,
-                snapshot_store: record.snapshot_store,
                 repositories,
             });
         }
@@ -1153,7 +1057,6 @@ impl WorktreeManager {
                 binding::BindingKind::Git => ManagedDirKind::Git,
                 binding::BindingKind::Directory => ManagedDirKind::Directory,
             },
-            snapshot_store: record.snapshot_store,
             repositories,
         })
     }
@@ -1172,12 +1075,12 @@ impl WorktreeManager {
         source_dir_id: &str,
     ) -> Result<Vec<(String, ManagedDirBinding)>> {
         let mut bindings = self.recover_directory_threads(source_dir_id).await?;
-        if matches!(
-            self.git.open_repository(source_directory).await,
-            Err(zeta_git::GitError::NotAWorkingTree { .. })
-        ) {
-            return Ok(bindings);
-        }
+        let source_repository = match self.git.open_repository(source_directory).await {
+            Ok(repository) => repository,
+            Err(GitError::NotAWorkingTree { .. }) => return Ok(bindings),
+            Err(error) => return Err(error.into()),
+        };
+        self.repair_managed_worktrees(&source_repository).await?;
         let worktrees = self.list(source_directory).await?;
         let managed_root = match dunce::canonicalize(&self.settings.root) {
             Ok(root) => root,
@@ -1206,12 +1109,128 @@ impl WorktreeManager {
             {
                 continue;
             }
+            if !self
+                .relocate_thread_binding(
+                    worktree.checkout_root(),
+                    &owner,
+                    source_directory,
+                    source_dir_id,
+                    &source_repository,
+                )
+                .await?
+            {
+                continue;
+            }
             bindings.push((
                 thread_id.to_string(),
                 self.recover(worktree.checkout_root(), &owner).await?,
             ));
         }
         Ok(bindings)
+    }
+
+    async fn repair_managed_worktrees(&self, source_repository: &GitRepository) -> Result<()> {
+        let managed_root = match dunce::canonicalize(&self.settings.root) {
+            Ok(root) => root,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
+        for worktree in self.git.worktrees(source_repository).await? {
+            if worktree.checkout_root() == source_repository.worktree_root()
+                || !worktree.availability().is_available()
+                || !worktree.checkout_root().exists()
+                || !has_managed_owner_layout(&managed_root, worktree.checkout_root())
+            {
+                continue;
+            }
+            match self.git.open_repository(worktree.checkout_root()).await {
+                Ok(_) => {}
+                Err(GitError::NotAWorkingTree { .. }) => {
+                    self.git
+                        .repair_linked_worktree(source_repository, worktree.checkout_root())
+                        .await?;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(())
+    }
+
+    async fn relocate_thread_binding(
+        &self,
+        checkout_root: &Path,
+        owner: &ManagedDirOwner,
+        source_directory: &Path,
+        source_dir_id: &str,
+        source_repository: &GitRepository,
+    ) -> Result<bool> {
+        let linked_repository = self.managed_checkout(checkout_root).await?;
+        let mut record = binding::read(linked_repository.git_dir())?;
+        if record.kind != binding::BindingKind::Git
+            || !record.matches_owner(owner)
+            || record.managed_worktree_id != owner.managed_dir_id()
+        {
+            bail!("managed worktree binding does not match its durable owner");
+        }
+        let relative_dir = source_directory
+            .strip_prefix(source_repository.worktree_root())
+            .context("source directory is outside its repository root")?;
+        if record.relative_dir != relative_dir {
+            return Ok(false);
+        }
+
+        let current_source_root = source_repository.worktree_root();
+        // Directory identity follows the current path. Repository identities stay unchanged so
+        // existing ChangeSets continue to address the same entries after the path migration.
+        let mut changed = record.source_dir_id != source_dir_id
+            || record.source_repository_root != current_source_root;
+        record.source_dir_id = source_dir_id.to_string();
+        record.source_repository_root = current_source_root.to_path_buf();
+        let managed_dir = checkout_root.join(relative_dir);
+        for repository in &mut record.repositories {
+            let source_root = if repository.relative_path == Path::new(".") {
+                current_source_root.to_path_buf()
+            } else {
+                source_directory.join(&repository.relative_path)
+            };
+            let opened_source = self.git.open_repository(&source_root).await?;
+            if repository.source_repository_root != opened_source.worktree_root() {
+                repository.source_repository_root = opened_source.worktree_root().to_path_buf();
+                changed = true;
+            }
+            if repository.relative_path == Path::new(".") {
+                continue;
+            }
+            let managed_repository = managed_dir.join(&repository.relative_path);
+            let opened_managed = match self.git.open_repository(&managed_repository).await {
+                Ok(repository) => repository,
+                Err(GitError::NotAWorkingTree { .. }) => {
+                    self.git
+                        .repair_linked_worktree(&opened_source, &managed_repository)
+                        .await?;
+                    self.git.open_repository(&managed_repository).await?
+                }
+                Err(error) => return Err(error.into()),
+            };
+            let mut nested_record = binding::read(opened_managed.git_dir())?;
+            if nested_record.kind != binding::BindingKind::Git
+                || !nested_record.matches_owner(owner)
+                || nested_record.managed_worktree_id != owner.managed_dir_id()
+            {
+                bail!("managed nested worktree binding does not match its durable owner");
+            }
+            let nested_changed = nested_record.source_dir_id != source_dir_id
+                || nested_record.source_repository_root != opened_source.worktree_root();
+            if nested_changed {
+                nested_record.source_dir_id = source_dir_id.to_string();
+                nested_record.source_repository_root = opened_source.worktree_root().to_path_buf();
+                binding::replace(opened_managed.git_dir(), &nested_record)?;
+            }
+        }
+        if changed {
+            binding::replace(linked_repository.git_dir(), &record)?;
+        }
+        Ok(true)
     }
 
     async fn recover_directory_threads(
@@ -1371,6 +1390,74 @@ fn discover_nested_repository_roots(
     roots
 }
 
+fn copy_directory(source: &Path, destination: &Path) -> Result<String> {
+    let mut digest = Sha256::new();
+    copy_directory_entries(source, source, destination, &mut digest)?;
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+fn copy_directory_entries(
+    root: &Path,
+    source: &Path,
+    destination: &Path,
+    digest: &mut Sha256,
+) -> Result<()> {
+    let mut entries = std::fs::read_dir(source)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    for entry in entries {
+        let source_path = entry.path();
+        let relative = source_path
+            .strip_prefix(root)
+            .context("managed directory copy escaped its source root")?;
+        let relative_text = relative
+            .to_str()
+            .context("managed directory path is not UTF-8")?;
+        let destination_path = destination.join(relative);
+        let metadata = std::fs::symlink_metadata(&source_path)?;
+        digest.update(relative_text.as_bytes());
+        digest.update([0]);
+        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            digest.update(b"directory");
+            std::fs::create_dir_all(&destination_path)?;
+            copy_directory_entries(root, &source_path, destination, digest)?;
+        } else if metadata.file_type().is_symlink() {
+            digest.update(b"symlink");
+            let target = std::fs::read_link(&source_path)?;
+            digest.update(target.to_string_lossy().as_bytes());
+            copy_symlink(&source_path, &target, &destination_path)?;
+        } else if metadata.is_file() {
+            digest.update(b"file");
+            let bytes = std::fs::read(&source_path)?;
+            digest.update(&bytes);
+            std::fs::write(&destination_path, bytes)?;
+            std::fs::set_permissions(&destination_path, metadata.permissions())?;
+        } else {
+            bail!(
+                "unsupported managed directory entry: {}",
+                source_path.display()
+            );
+        }
+        digest.update([0]);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn copy_symlink(_: &Path, target: &Path, destination: &Path) -> Result<()> {
+    std::os::unix::fs::symlink(target, destination)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn copy_symlink(source: &Path, target: &Path, destination: &Path) -> Result<()> {
+    if source.is_dir() {
+        std::os::windows::fs::symlink_dir(target, destination)?;
+    } else {
+        std::os::windows::fs::symlink_file(target, destination)?;
+    }
+    Ok(())
+}
+
 fn repository_record(repository: &ManagedRepositoryBinding) -> binding::RepositoryBindingRecord {
     binding::RepositoryBindingRecord {
         repository_id: repository.repository_id.clone(),
@@ -1390,13 +1477,12 @@ fn repositories_from_record(
     primary_worktree_root: &Path,
     directory: bool,
 ) -> Vec<ManagedRepositoryBinding> {
+    if directory {
+        return Vec::new();
+    }
     if record.repositories.is_empty() {
         return vec![ManagedRepositoryBinding {
-            repository_id: format!(
-                "{}:{}",
-                record.managed_worktree_id,
-                if directory { "directory" } else { "repository" }
-            ),
+            repository_id: format!("{}:repository", record.managed_worktree_id),
             relative_path: PathBuf::from("."),
             worktree_root: primary_worktree_root.to_path_buf(),
             source_repository_root: record.source_repository_root.clone(),
@@ -1432,15 +1518,6 @@ fn hex_digest(value: &str) -> String {
     format!("{:x}", Sha256::digest(value.as_bytes()))
 }
 
-fn hex_digest_parts(values: &[&str]) -> String {
-    let mut hasher = Sha256::new();
-    for value in values {
-        hasher.update(value.as_bytes());
-        hasher.update([0]);
-    }
-    format!("{:x}", hasher.finalize())
-}
-
 fn local_repository_id(repository: &GitRepository) -> Result<String> {
     let common_dir = Dir::open_local(repository.common_dir())?;
     Ok(format!("git:{}", common_dir.id()))
@@ -1461,6 +1538,26 @@ fn has_managed_layout(root: &Path, checkout: &Path) -> bool {
         && bucket.bytes().all(|byte| byte.is_ascii_hexdigit())
         && matches!(components.next(), Some(Component::Normal(_)))
         && components.next().is_none()
+}
+
+fn has_managed_owner_layout(root: &Path, checkout: &Path) -> bool {
+    let Ok(relative) = checkout.strip_prefix(root) else {
+        return false;
+    };
+    let mut components = relative.components();
+    let (Some(Component::Normal(bucket)), Some(Component::Normal(owner))) =
+        (components.next(), components.next())
+    else {
+        return false;
+    };
+    let (Some(bucket), Some(owner)) = (bucket.to_str(), owner.to_str()) else {
+        return false;
+    };
+    components.next().is_none()
+        && bucket.len() == 4
+        && owner.len() == 64
+        && owner.starts_with(bucket)
+        && owner.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn existing_paths_match(left: &Path, right: &Path) -> Result<bool> {

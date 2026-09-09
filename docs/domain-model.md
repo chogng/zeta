@@ -2,7 +2,7 @@
 
 > 本文是 Project、Session、Thread、Environment、Workspace、目录与授权概念的长期架构契约。
 >
-> 状态：Session、Thread、Environment、Dir、目录授权以及 Project 的持久实体和长期多根目录表已经进入当前后端协议与实现。Project 的 Desktop/CLI/TUI 产品入口、根选择和跨 Environment 交互仍未完成；跨 Session 工作由独立 WorkRun 表达。可靠性边界见 [`multi-agent-development.md`](multi-agent-development.md)。
+> 状态：Session、Thread、Environment、Dir、目录授权以及 Project 的持久实体和长期多根目录表已经进入当前后端协议与实现。Project 的 Desktop/CLI/TUI 产品入口、根选择和跨 Environment 交互仍未完成；多个 Session 保持独立，不再建立第二套跨 Session 工作状态机。
 
 ## 快速理解
 
@@ -24,7 +24,6 @@
 
 ```text
 Project?  ⋯⋯ associates ⋯⋯> root catalog*
-          ⋯⋯ associates ⋯⋯> WorkRun*
           ⋯⋯ groups     ⋯⋯> Session tree*
 
 session_id = S1
@@ -55,9 +54,7 @@ Project 在后端表示长期多根工作中心，但它不是目录、Workspace
 | --- | --- | --- |
 | 根目录表 | 保存 Environment + Dir 的稳定引用、显示名称、用途和可选仓库摘要 | 授予文件、命令、配置或 Hook 权限 |
 | Session tree | 让用户长期查找和归类独立 Agent 方向 | 改变 Session/Thread 身份、取消或上下文 |
-| WorkRun | 进入一次跨 Session 目标、工作契约、依赖和验证证据 | 把同 Project 自动解释成正在协作 |
-
-Project 可以关联同一 Environment 中的多个根，也可以关联本地和远程等不同 Environment 的根。一个工作尝试只在一个 Environment 中执行；跨 Environment 的目标通过多个 Session 和显式 WorkRun 协作，不能让一次工具调用隐式跨越执行位置。
+Project 可以关联同一 Environment 中的多个根，也可以关联本地和远程等不同 Environment 的根。每个 Session 明确选择自己的 Environment 和目录授权；Project 不会把多个 Session 自动解释成一次协作，也不能让一次工具调用隐式跨越执行位置。
 
 受信 host 只能把 Session 已有目录授权中的精确 `DirId` 加入 Project，路径和 Environment 由 host 重建，客户端不能提交路径冒充根。这个动作只写 Project 目录表，不创建、恢复或修改 Grant。Session 创建或扩大工作范围时仍需选择 Project 根目录表的明确子集并为每个根取得独立 Grant；实际执行绑定选中根的 `DirId`、权限、配置来源和不可变 baseline。Project 后续增加、删除或重新排序根，不会静默改变已运行 Session 或工作尝试。
 

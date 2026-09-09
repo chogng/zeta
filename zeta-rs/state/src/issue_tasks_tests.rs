@@ -1,10 +1,10 @@
 use crate::SqliteIssueTaskStore;
-use zeta_github::Issue;
-use zeta_github::IssueSnapshot;
-use zeta_github::IssueTask;
-use zeta_github::PullRequest;
-use zeta_github::PullRequestBranch;
-use zeta_github::Repository;
+use github::Issue;
+use github::IssueSnapshot;
+use github::IssueTask;
+use github::PullRequest;
+use github::PullRequestBranch;
+use github::Repository;
 
 #[test]
 fn record_pull_request_reports_missing_issue_task() {

@@ -21,7 +21,6 @@
 | [`core.md`](core.md) | 设计 | zeta-core 的 ownership、组件、端口、提交顺序 |
 | [`core-context.md`](core-context.md) | 设计 | ContextPlan / Manager / checkpoint / compaction 机制 |
 | [`core-multi-agent.md`](core-multi-agent.md) | 设计 | 同 Session Agent 的委托、Fresh spawn、消息交付和隔离（部分实现，缺口见状态头） |
-| [`multi-agent-development.md`](multi-agent-development.md) | 设计 | Team、跨 Session 协作、Project 多根、工作契约、冲突、验证证据与集成门禁（计划设计） |
 | [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.zeta` 与外部导入边界 |
 | [`agents.md`](agents.md) | 设计 | 内置与自定义 Agent 的统一定义、专化职责、启动来源和执行约束 |
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |

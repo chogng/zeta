@@ -115,7 +115,6 @@ pub(super) fn execute(
                 action: match action {
                     StartAction::CreateBranch => rpc::IssueAssignmentStartAction::CreateBranch,
                     StartAction::Claim => rpc::IssueAssignmentStartAction::Claim,
-                    StartAction::Execute => rpc::IssueAssignmentStartAction::Execute,
                 },
             })
             .map_err(|error| error.to_string())
@@ -140,13 +139,8 @@ pub(super) fn execute(
                     expected_revision: revision,
                     expected_epoch: epoch,
                     action: match action {
-                        Action::Pause => rpc::IssueAssignmentAction::Pause,
-                        Action::Resume => rpc::IssueAssignmentAction::Resume,
                         Action::Release => rpc::IssueAssignmentAction::Release,
-                        Action::Cancel => rpc::IssueAssignmentAction::Cancel,
                         Action::RetrySync => rpc::IssueAssignmentAction::RetrySync,
-                        Action::Verify => rpc::IssueAssignmentAction::Verify,
-                        Action::Deliver => rpc::IssueAssignmentAction::Deliver,
                         Action::Transfer(assignee) => {
                             rpc::IssueAssignmentAction::Transfer { assignee }
                         }

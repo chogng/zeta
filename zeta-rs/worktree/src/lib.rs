@@ -6,7 +6,6 @@
 mod binding;
 mod manager;
 mod metadata;
-mod output;
 mod settings;
 
 pub use manager::ManagedDirBinding;
@@ -23,8 +22,6 @@ pub use manager::WorktreeKind;
 pub use manager::WorktreeManager;
 pub use manager::WorktreeOwner;
 pub use manager::WorktreeSelector;
-pub use output::ManagedOutputBinding;
-pub use output::ManagedOutputOwner;
 pub use settings::DEFAULT_WORKTREE_KEEP_COUNT;
 pub use settings::WorktreeSettings;
 

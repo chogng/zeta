@@ -30,7 +30,6 @@ pub(crate) fn apply(
                 description: description.clone(),
                 roots: BTreeMap::new(),
                 session_ids: BTreeSet::new(),
-                work_run_ids: BTreeSet::new(),
             }
         }
         (None, _) => return Err(ProjectError::NotFound(request.project_id.to_string())),
@@ -121,16 +120,6 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
         ProjectCommand::UnlinkSession { session_id } => {
             if !project.session_ids.remove(session_id) {
                 return Err(ProjectError::NotFound(session_id.to_string()));
-            }
-        }
-        ProjectCommand::LinkWorkRun { work_run_id } => {
-            if !project.work_run_ids.insert(work_run_id.clone()) {
-                return Err(ProjectError::AlreadyExists(work_run_id.to_string()));
-            }
-        }
-        ProjectCommand::UnlinkWorkRun { work_run_id } => {
-            if !project.work_run_ids.remove(work_run_id) {
-                return Err(ProjectError::NotFound(work_run_id.to_string()));
             }
         }
         ProjectCommand::Archive => project.status = ProjectStatus::Archived,

@@ -24,7 +24,6 @@ pub(super) fn project(project: &Project) -> ProjectDto {
             })
             .collect(),
         session_ids: project.session_ids.iter().cloned().collect(),
-        work_run_ids: project.work_run_ids.iter().cloned().collect(),
     }
 }
 
@@ -36,7 +35,6 @@ pub(super) fn summary(project: &Project) -> ProjectSummaryDto {
         name: project.name.clone(),
         root_count: project.roots.len() as u64,
         session_count: project.session_ids.len() as u64,
-        work_run_count: project.work_run_ids.len() as u64,
     }
 }
 

@@ -2,6 +2,8 @@ use super::agent_environment_source::AgentEnvironmentSource;
 use super::fs_watcher::DirFileChangeSink;
 use super::fs_watcher::SessionDirFileChangeSink;
 use crate::dir_grants::DirGrants;
+use agent_roles::AgentRoleCatalog;
+use agent_roles::AgentRoleCatalogSnapshot;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
@@ -10,8 +12,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
-use zeta_agents::AgentDefinitionCatalog;
-use zeta_agents::AgentDefinitionCatalogSnapshot;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_core::CoreError;
 use zeta_core::HarnessContext;
@@ -26,7 +26,7 @@ use zeta_protocol::SessionId;
 struct DirContributionCatalog {
     authorization: Authorization,
     instructions: InstructionCatalog,
-    agents: AgentDefinitionCatalog,
+    agents: AgentRoleCatalog,
 }
 
 pub(super) struct DirContributions {
@@ -45,10 +45,13 @@ impl DirContributions {
         authorization: Option<Authorization>,
     ) -> Result<Arc<Self>, zeta_agent_environment::AgentEnvironmentError> {
         let dir_root = dir_root.as_ref().to_path_buf();
-        let env_dir = authorization.map(|authorization| DirContributionCatalog {
-            instructions: InstructionCatalog::discover(&dir_root),
-            agents: AgentDefinitionCatalog::discover(&dir_root),
-            authorization,
+        let env_dir = authorization.map(|authorization| {
+            let source_id = authorization.dir().id().to_string();
+            DirContributionCatalog {
+                instructions: InstructionCatalog::discover(&dir_root),
+                agents: AgentRoleCatalog::discover(source_id, &dir_root),
+                authorization,
+            }
         });
         let environment = AgentEnvironmentSource::capture(&dir_root)?;
         let harness_instructions = Arc::new(render_harness_instructions(
@@ -85,7 +88,7 @@ impl DirContributions {
             .unwrap_or_default()
     }
 
-    pub(super) fn agent_snapshot(&self) -> Arc<AgentDefinitionCatalogSnapshot> {
+    pub(super) fn agent_snapshot(&self) -> Arc<AgentRoleCatalogSnapshot> {
         self.env_dir
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -98,7 +101,7 @@ impl DirContributions {
     pub(super) fn agent_snapshots_for(
         &self,
         session_id: &SessionId,
-    ) -> Vec<Arc<AgentDefinitionCatalogSnapshot>> {
+    ) -> Vec<Arc<AgentRoleCatalogSnapshot>> {
         let mut snapshots = Vec::new();
         let env = self.agent_snapshot();
         if !env.entries().is_empty() || !env.diagnostics().is_empty() {
@@ -161,9 +164,10 @@ impl DirContributions {
                     catalog.authorization = authorization;
                     catalog
                 } else {
+                    let source_id = authorization.dir().id().to_string();
                     DirContributionCatalog {
                         instructions: InstructionCatalog::discover(&root),
-                        agents: AgentDefinitionCatalog::discover(&root),
+                        agents: AgentRoleCatalog::discover(source_id, &root),
                         authorization,
                     }
                 };

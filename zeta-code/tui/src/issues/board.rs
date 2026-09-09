@@ -17,9 +17,9 @@ use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use zeta_work_coordination::IssueLabels;
-use zeta_work_coordination::IssueOwnership;
-use zeta_work_coordination::IssueStage;
+use github::IssueLabels;
+use github::IssueOwnership;
+use github::IssueStage;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum Group {

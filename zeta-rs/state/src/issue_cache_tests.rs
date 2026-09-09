@@ -6,7 +6,7 @@ fn repository(name: &str) -> Repository {
 
 fn page(number: u64) -> IssuePage {
     IssuePage {
-        issues: vec![zeta_github::Issue {
+        issues: vec![github::Issue {
             labels: Vec::new(),
             assignees: Vec::new(),
             number,

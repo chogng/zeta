@@ -2,5 +2,5 @@ load("//:defs.bzl", "zeta_rust_crate")
 
 zeta_rust_crate(
     name = "github",
-    crate_name = "zeta_github",
+    crate_name = "github",
 )

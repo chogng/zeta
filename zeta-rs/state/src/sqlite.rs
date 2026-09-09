@@ -4,12 +4,9 @@ mod connection;
 mod projects;
 #[path = "sqlite/thread.rs"]
 mod thread;
-#[path = "sqlite/turn_changes.rs"]
-mod turn_changes;
-#[path = "sqlite/work_coordination.rs"]
-mod work_coordination;
+#[path = "sqlite/git_turn_changes.rs"]
+mod git_turn_changes;
 
 pub use projects::SqliteProjectStore;
 pub use thread::SqliteThreadStore;
-pub use turn_changes::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
-pub use work_coordination::SqliteWorkRunStore;
+pub use git_turn_changes::{SqliteTurnChangeStore, TurnChangeCommandOutcome};

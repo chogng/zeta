@@ -99,7 +99,6 @@ use crate::protocol::common::ThreadId;
 use crate::protocol::common::ToolCallId;
 use crate::protocol::common::ToolName;
 use crate::protocol::common::TurnId;
-use crate::protocol::common::WorkCoordinationHostCapability;
 use crate::protocol::config::AgentGrepBackendDto;
 use crate::protocol::config::ApprovalReviewModelSelectionDto;
 use crate::protocol::config::CodebaseAutomaticContextDto;
@@ -532,7 +531,6 @@ use crate::protocol::projects::ProjectRootUpdateParams;
 use crate::protocol::projects::ProjectSessionMutationParams;
 use crate::protocol::projects::ProjectStatusDto;
 use crate::protocol::projects::ProjectSummaryDto;
-use crate::protocol::projects::ProjectWorkRunMutationParams;
 use crate::protocol::provider::ProviderApiKeyDto;
 use crate::protocol::provider::ProviderApiKeyPolicyDto;
 use crate::protocol::provider::ProviderApiKeySetParams;
@@ -661,82 +659,6 @@ use crate::protocol::turn_changes::TurnChangesReadFileResult;
 use crate::protocol::turn_changes::TurnChangesReadParams;
 use crate::protocol::turn_changes::TurnChangesReadResult;
 use crate::protocol::turn_changes::TurnChangesUpdateDraftParams;
-use crate::protocol::turn_changes::WorkAttemptChangeProvenanceDto;
-use crate::protocol::work_run_model::AuthorizationSnapshotRefDto;
-use crate::protocol::work_run_model::ControlResourceBindingDto;
-use crate::protocol::work_run_model::ControlResourceKindDto;
-use crate::protocol::work_run_model::ExternalEffectsStatusDto;
-use crate::protocol::work_run_model::GitRepositoryCheckpointDto;
-use crate::protocol::work_run_model::GitRootTargetDto;
-use crate::protocol::work_run_model::GitVerificationRepositoryDto;
-use crate::protocol::work_run_model::IntegrationFailureKindDto;
-use crate::protocol::work_run_model::IntegrationIncidentDto;
-use crate::protocol::work_run_model::IntegrationPreparedArtifactDto;
-use crate::protocol::work_run_model::IntegrationRootStatusDto;
-use crate::protocol::work_run_model::IntegrationRootTargetDto;
-use crate::protocol::work_run_model::ManagedRootBindingDto;
-use crate::protocol::work_run_model::RootCheckpointDto;
-use crate::protocol::work_run_model::RootStateDto;
-use crate::protocol::work_run_model::ValidationProfileRefDto;
-use crate::protocol::work_run_model::VerificationChangeSetInputDto;
-use crate::protocol::work_run_model::VerificationCheckEvidenceDto;
-use crate::protocol::work_run_model::VerificationCheckOutcomeDto;
-use crate::protocol::work_run_model::VerificationRootDto;
-use crate::protocol::work_run_model::VerificationRootStateDto;
-use crate::protocol::work_run_model::WorkAttemptChangeEvidenceRefDto;
-use crate::protocol::work_run_model::WorkAttemptCoordinationStatusDto;
-use crate::protocol::work_run_model::WorkAttemptDto;
-use crate::protocol::work_run_model::WorkAttemptExecutionStatusDto;
-use crate::protocol::work_run_model::WorkAttemptIntegrationStatusDto;
-use crate::protocol::work_run_model::WorkAttemptResultDto;
-use crate::protocol::work_run_model::WorkAttemptVerificationStatusDto;
-use crate::protocol::work_run_model::WorkAttemptWorkspaceDto;
-use crate::protocol::work_run_model::WorkConflictDto;
-use crate::protocol::work_run_model::WorkConflictStatusDto;
-use crate::protocol::work_run_model::WorkContractRefDto;
-use crate::protocol::work_run_model::WorkContractVersionDto;
-use crate::protocol::work_run_model::WorkDecisionDto;
-use crate::protocol::work_run_model::WorkGoalDto;
-use crate::protocol::work_run_model::WorkIntegrationDto;
-use crate::protocol::work_run_model::WorkIntegrationRootDto;
-use crate::protocol::work_run_model::WorkIntegrationStatusDto;
-use crate::protocol::work_run_model::WorkParticipantDto;
-use crate::protocol::work_run_model::WorkParticipantRelationDto;
-use crate::protocol::work_run_model::WorkRelationDto;
-use crate::protocol::work_run_model::WorkRelationKindDto;
-use crate::protocol::work_run_model::WorkRelationStatusDto;
-use crate::protocol::work_run_model::WorkResultRefDto;
-use crate::protocol::work_run_model::WorkRunDto;
-use crate::protocol::work_run_model::WorkRunStatusDto;
-use crate::protocol::work_run_model::WorkScopeClaimDto;
-use crate::protocol::work_run_model::WorkSerializabilityEvidenceDto;
-use crate::protocol::work_run_model::WorkSerializabilityStatusDto;
-use crate::protocol::work_run_model::WorkVerificationDto;
-use crate::protocol::work_run_model::WorkVerificationInputDto;
-use crate::protocol::work_run_model::WorkVerificationStatusDto;
-use crate::protocol::work_run_model::WorkWaitConditionDto;
-use crate::protocol::work_runs::WorkRunAttemptScopeExpansionRequestParams;
-use crate::protocol::work_runs::WorkRunCancelParams;
-use crate::protocol::work_runs::WorkRunChanged;
-use crate::protocol::work_runs::WorkRunCollaborationModeDto;
-use crate::protocol::work_runs::WorkRunCommandDispositionDto;
-use crate::protocol::work_runs::WorkRunConflictRecordParams;
-use crate::protocol::work_runs::WorkRunConflictResolveParams;
-use crate::protocol::work_runs::WorkRunCreateParams;
-use crate::protocol::work_runs::WorkRunDecisionRecordParams;
-use crate::protocol::work_runs::WorkRunGoalReviseParams;
-use crate::protocol::work_runs::WorkRunIntegrationRequestParams;
-use crate::protocol::work_runs::WorkRunListParams;
-use crate::protocol::work_runs::WorkRunListResult;
-use crate::protocol::work_runs::WorkRunMutationResult;
-use crate::protocol::work_runs::WorkRunParticipantAddParams;
-use crate::protocol::work_runs::WorkRunReadParams;
-use crate::protocol::work_runs::WorkRunReadResult;
-use crate::protocol::work_runs::WorkRunRelationCreateParams;
-use crate::protocol::work_runs::WorkRunSessionTreeDto;
-use crate::protocol::work_runs::WorkRunSummaryDto;
-use crate::protocol::work_runs::WorkRunVerificationRequestParams;
-use crate::protocol::work_runs::WorkRunViewReadResult;
 use schemars::JsonSchema;
 use ts_rs::Config;
 use ts_rs::TS;
@@ -782,6 +704,7 @@ use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::AgentRoleSnapshot;
+use zeta_protocol::AgentRoleSource;
 use zeta_protocol::AgentTreeExecutionStatus;
 use zeta_protocol::AgentTreeNodeProjection;
 use zeta_protocol::AgentTreeProjection;
@@ -901,13 +824,6 @@ use zeta_protocol::UnixMillis;
 use zeta_protocol::UserInputAnswer;
 use zeta_protocol::UserInputOption;
 use zeta_protocol::UserInputQuestion;
-use zeta_protocol::WorkAttemptId;
-use zeta_protocol::WorkConflictId;
-use zeta_protocol::WorkContractId;
-use zeta_protocol::WorkDecisionId;
-use zeta_protocol::WorkExecutionId;
-use zeta_protocol::WorkRelationId;
-use zeta_protocol::WorkRunId;
 
 /// Selects whether equal scheduling keys exclude or share execution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1425,76 +1341,6 @@ client_methods! {
         response: TurnChangesMutationResult,
         serialization: SessionExclusive,
     },
-    WorkRunList => "workRun/list" {
-        params: WorkRunListParams,
-        response: WorkRunListResult,
-        serialization: GlobalSharedRead,
-    },
-    WorkRunRead => "workRun/read" {
-        params: WorkRunReadParams,
-        response: WorkRunReadResult,
-        serialization: GlobalSharedRead,
-    },
-    WorkRunViewRead => "workRun/view/read" {
-        params: WorkRunReadParams,
-        response: WorkRunViewReadResult,
-        serialization: GlobalSharedRead,
-    },
-    WorkRunCreate => "workRun/create" {
-        params: WorkRunCreateParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunParticipantAdd => "workRun/participant/add" {
-        params: WorkRunParticipantAddParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunRelationCreate => "workRun/relation/create" {
-        params: WorkRunRelationCreateParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunGoalRevise => "workRun/goal/revise" {
-        params: WorkRunGoalReviseParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunDecisionRecord => "workRun/decision/record" {
-        params: WorkRunDecisionRecordParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunAttemptScopeExpansionRequest => "workRun/attempt/scopeExpansion/request" {
-        params: WorkRunAttemptScopeExpansionRequestParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunConflictRecord => "workRun/conflict/record" {
-        params: WorkRunConflictRecordParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunConflictResolve => "workRun/conflict/resolve" {
-        params: WorkRunConflictResolveParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunCancel => "workRun/cancel" {
-        params: WorkRunCancelParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunVerificationRequest => "workRun/verification/request" {
-        params: WorkRunVerificationRequestParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
-    WorkRunIntegrationRequest => "workRun/integration/request" {
-        params: WorkRunIntegrationRequestParams,
-        response: WorkRunMutationResult,
-        serialization: GlobalExclusive,
-    },
     ProjectList => "project/list" {
         params: ProjectListParams,
         response: ProjectListResult,
@@ -1537,16 +1383,6 @@ client_methods! {
     },
     ProjectSessionUnlink => "project/session/unlink" {
         params: ProjectSessionMutationParams,
-        response: ProjectMutationResult,
-        serialization: GlobalExclusive,
-    },
-    ProjectWorkRunLink => "project/workRun/link" {
-        params: ProjectWorkRunMutationParams,
-        response: ProjectMutationResult,
-        serialization: GlobalExclusive,
-    },
-    ProjectWorkRunUnlink => "project/workRun/unlink" {
-        params: ProjectWorkRunMutationParams,
         response: ProjectMutationResult,
         serialization: GlobalExclusive,
     },
@@ -2802,9 +2638,6 @@ server_notifications! {
     IssueAssignmentNotice => "issue/assignment/notice" {
         params: crate::protocol::issue_assignment::IssueAssignmentNotice,
     },
-    WorkRunChanged => "workRun/changed" {
-        params: WorkRunChanged,
-    },
     ProjectChanged => "project/changed" {
         params: ProjectChanged,
     },
@@ -2852,6 +2685,7 @@ typescript_bindings! {
     crate::protocol::issue_assignment::IssueDeliveryReceiptDto,
     crate::protocol::issue_assignment::IssueWorkflowDto,
     crate::protocol::issue_assignment::IssueAutoClaimDto,
+    crate::protocol::issue_assignment::IssueWorkScopeDto,
     crate::protocol::issue_assignment::IssueWorkItemDto,
     crate::protocol::issue_assignment::IssueAssignmentNotice,
     crate::protocol::issue_assignment::IssueAssignmentPlanDto,
@@ -2918,13 +2752,6 @@ typescript_bindings! {
     DirId,
     EnvId,
     ProjectId,
-    WorkRunId,
-    WorkContractId,
-    WorkAttemptId,
-    WorkRelationId,
-    WorkDecisionId,
-    WorkExecutionId,
-    WorkConflictId,
     ConnectorAccountDto,
     ConnectorAvailableActionDto,
     ConnectorOAuthMethodDto,
@@ -3016,7 +2843,6 @@ typescript_bindings! {
     AgentInteractionCapability,
     BrowserCapability,
     DirPermissionsHostCapability,
-    WorkCoordinationHostCapability,
     BrowserBinaryPayload,
     BrowserCloseParams,
     BrowserCreateParams,
@@ -3110,6 +2936,7 @@ typescript_bindings! {
     DelegatedTask,
     AgentDefinitionSelectionReason,
     FrozenAgentDefinitionRef,
+    AgentRoleSource,
     AgentRoleSnapshot,
     AgentTreeExecutionStatus,
     AgentTreeWaitingReason,
@@ -3377,7 +3204,6 @@ typescript_bindings! {
     ThreadDirBinding,
     ThreadWorktreeRepositoryBindingDto,
     TurnChangeSetSummary,
-    WorkAttemptChangeProvenanceDto,
     TurnChangesListParams,
     TurnChangesListResult,
     TurnChangesReadParams,
@@ -3390,81 +3216,6 @@ typescript_bindings! {
     TurnChangesDiscardThreadParams,
     TurnChangesMutationResult,
     TurnChangesChanged,
-    WorkRunStatusDto,
-    WorkGoalDto,
-    WorkParticipantRelationDto,
-    WorkParticipantDto,
-    WorkDecisionDto,
-    GitRootTargetDto,
-    GitRepositoryCheckpointDto,
-    RootStateDto,
-    ControlResourceKindDto,
-    ControlResourceBindingDto,
-    RootCheckpointDto,
-    AuthorizationSnapshotRefDto,
-    ValidationProfileRefDto,
-    WorkScopeClaimDto,
-    WorkContractRefDto,
-    WorkResultRefDto,
-    WorkContractVersionDto,
-    WorkAttemptExecutionStatusDto,
-    WorkAttemptCoordinationStatusDto,
-    WorkAttemptVerificationStatusDto,
-    WorkAttemptIntegrationStatusDto,
-    ExternalEffectsStatusDto,
-    WorkAttemptResultDto,
-    ManagedRootBindingDto,
-    WorkAttemptWorkspaceDto,
-    WorkAttemptDto,
-    WorkWaitConditionDto,
-    WorkRelationKindDto,
-    WorkRelationStatusDto,
-    WorkRelationDto,
-    WorkConflictStatusDto,
-    WorkConflictDto,
-    WorkAttemptChangeEvidenceRefDto,
-    VerificationChangeSetInputDto,
-    GitVerificationRepositoryDto,
-    VerificationRootStateDto,
-    VerificationRootDto,
-    WorkSerializabilityStatusDto,
-    WorkSerializabilityEvidenceDto,
-    WorkVerificationInputDto,
-    VerificationCheckOutcomeDto,
-    VerificationCheckEvidenceDto,
-    WorkVerificationStatusDto,
-    WorkVerificationDto,
-    IntegrationRootTargetDto,
-    IntegrationPreparedArtifactDto,
-    IntegrationRootStatusDto,
-    WorkIntegrationRootDto,
-    WorkIntegrationStatusDto,
-    IntegrationFailureKindDto,
-    IntegrationIncidentDto,
-    WorkIntegrationDto,
-    WorkRunDto,
-    WorkRunSummaryDto,
-    WorkRunListParams,
-    WorkRunListResult,
-    WorkRunReadParams,
-    WorkRunReadResult,
-    WorkRunCollaborationModeDto,
-    WorkRunSessionTreeDto,
-    WorkRunViewReadResult,
-    WorkRunCreateParams,
-    WorkRunParticipantAddParams,
-    WorkRunRelationCreateParams,
-    WorkRunGoalReviseParams,
-    WorkRunDecisionRecordParams,
-    WorkRunAttemptScopeExpansionRequestParams,
-    WorkRunConflictRecordParams,
-    WorkRunConflictResolveParams,
-    WorkRunCancelParams,
-    WorkRunVerificationRequestParams,
-    WorkRunIntegrationRequestParams,
-    WorkRunCommandDispositionDto,
-    WorkRunMutationResult,
-    WorkRunChanged,
     ProjectStatusDto,
     UnixMillis,
     Automation,
@@ -3511,7 +3262,6 @@ typescript_bindings! {
     ProjectRootUpdateParams,
     ProjectRootRemoveParams,
     ProjectSessionMutationParams,
-    ProjectWorkRunMutationParams,
     ProjectLifecycleParams,
     ProjectCommandDispositionDto,
     ProjectMutationResult,

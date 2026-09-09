@@ -299,7 +299,7 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
 }
 
 #[test]
-fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
+fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     let profile = tempfile::tempdir().unwrap();
     let dir = tempfile::tempdir().unwrap();
     run_local_git(dir.path(), &["init", "--quiet", "--initial-branch=main"]);
@@ -501,6 +501,122 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     assert_eq!(
         run_local_git(dir.path(), &["show", "-s", "--format=%s", "HEAD"]),
         "test(turn-changes): commit sealed shell turn"
+    );
+}
+
+#[test]
+fn non_git_turns_keep_their_isolated_dir_without_creating_change_sets() {
+    let profile = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("README.md"), "plain directory\n").unwrap();
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_dir_root(dir.path()),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"non-git-turn-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    let shell_rule = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"execPolicy/rule/upsert",
+            "params":{
+                "commandId":"allow-non-git-shell","expectedRevision":0,
+                "rule":{
+                    "id":"allow-non-git-shell",
+                    "selector":{
+                        "type":"source",
+                        "source":"built_in_tool",
+                        "sourceId":"shell-command"
+                    },
+                    "effect":{"type":"allowUnsandboxed"},
+                    "justification":"test authorizes the isolated temporary directory"
+                }
+            }
+        }),
+    );
+    assert_eq!(shell_rule["result"]["revision"], 1);
+    let session = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"session/create",
+            "params":{"commandId":"create-non-git-session","title":"Plain directory"}
+        }),
+    );
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"create-non-git-thread","sessionId":session_id,"expectedSequence":1,
+                "request":{"type":"createThread","title":"root"}
+            }
+        }),
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let write_command = if cfg!(windows) {
+        "echo plain turn contents>turn.txt"
+    } else {
+        "printf 'plain turn contents\\n' > turn.txt"
+    };
+    local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/request",
+            "params":{
+                "commandId":"write-non-git-turn","sessionId":session_id,
+                "request":{
+                    "type":"startShellTurn","threadId":thread_id,
+                    "expectedSequence":1,"approvalMode":"bypassPermissions",
+                    "command":write_command,"workingDirectory":"."
+                }
+            }
+        }),
+    );
+    let thread_id_typed = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    for _ in 0..200 {
+        if server
+            .threads()
+            .read_thread(&thread_id_typed)
+            .unwrap()
+            .turns
+            .last()
+            .is_some_and(|turn| turn.status == zeta_protocol::TurnStatus::Completed)
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let listed = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"turnChanges/list",
+            "params":{"sessionId":session_id,"threadId":thread_id}
+        }),
+    );
+    assert_eq!(listed["result"]["changeSets"], serde_json::json!([]));
+    assert_eq!(
+        listed["result"]["dir"]["repositories"],
+        serde_json::json!([])
+    );
+    assert_eq!(
+        listed["result"]["dir"]["baselineSummary"],
+        "isolated non-Git directory copy"
     );
 }
 

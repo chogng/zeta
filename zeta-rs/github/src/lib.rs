@@ -2,11 +2,29 @@
 
 mod issues;
 mod process;
+mod workflow;
 pub use issues::IssueAssignee;
 pub use issues::IssueLabel;
 pub use issues::IssueMetadata;
 pub use issues::IssueRepositoryInfo;
 pub use issues::LinkedIssueBranch;
+pub use workflow::IssueAssignment;
+pub use workflow::IssueAssignmentCommand;
+pub use workflow::IssueAssignmentPlan;
+pub use workflow::IssueAutoClaim;
+pub use workflow::IssueBranchPublication;
+pub use workflow::IssueControl;
+pub use workflow::IssueDelivery;
+pub use workflow::IssueDeliveryReceipt;
+pub use workflow::IssueIdentity;
+pub use workflow::IssueLabels;
+pub use workflow::IssueOwnership;
+pub use workflow::IssueRepositoryIdentity;
+pub use workflow::IssueStage;
+pub use workflow::IssueSyncState;
+pub use workflow::IssueWorkItem;
+pub use workflow::IssueWorkScope;
+pub use workflow::IssueWorkflow;
 
 use serde::Deserialize;
 use serde::Serialize;

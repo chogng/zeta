@@ -54,7 +54,6 @@ class FakeHotContext implements AppServerTransport {
 					sessions: true,
 					threads: true,
 					turns: true,
-					workCoordination: true,
 					projects: true,
 					resources: true,
 					attachments: true,

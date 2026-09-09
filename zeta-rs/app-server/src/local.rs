@@ -1223,9 +1223,6 @@ pub fn open_local_app_server_with_codebase_providers(
     )
     .map_err(OpenAppServerError)?;
     server = server
-        .with_local_work_coordination(&database_path)
-        .map_err(OpenAppServerError)?;
-    server = server
         .with_local_projects(&database_path)
         .map_err(OpenAppServerError)?;
     if let Some(profile) = &profile_runtime {
@@ -1304,7 +1301,7 @@ pub fn open_local_app_server_with_codebase_providers(
         ))
         .with_local_env_host(mcp, DirGrantPolicy::UserConfig(Arc::clone(&config)))
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    let turn_changes_dir_root = options.dir_root.clone();
+    let local_dir_root = options.dir_root.clone();
     if let Some(dir_root) = options.dir_root {
         server
             .set_env_cwd(dir_root.clone())
@@ -1318,15 +1315,12 @@ pub fn open_local_app_server_with_codebase_providers(
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         };
     }
-    if let Some(dir_root) = turn_changes_dir_root {
+    if let Some(dir_root) = local_dir_root {
         server = server
-            .with_local_turn_changes(&database_path, &options.profile_root, &dir_root)
+            .with_local_dir_services(&database_path, &options.profile_root, &dir_root)
             .map_err(OpenAppServerError)?;
     }
     server.bind_session_extensions().map_err(open_error)?;
-    server
-        .recover_issue_assignments()
-        .map_err(OpenAppServerError)?;
     server
         .resume_recovered_agent_coordinations()
         .map_err(open_error)?;

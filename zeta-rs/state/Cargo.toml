@@ -11,7 +11,7 @@ name = "zeta_state"
 path = "src/lib.rs"
 
 [dependencies]
-zeta-github = { workspace = true }
+github = { workspace = true }
 fs2 = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
@@ -21,8 +21,7 @@ zeta-history = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-projects = { workspace = true }
 zeta-thread-store = { workspace = true }
-zeta-turn-changes = { workspace = true }
-zeta-work-coordination = { workspace = true }
+git-turn-changes = { workspace = true }
 zeta-utils-path = { workspace = true }
 zeta-file-access = { workspace = true }
 

@@ -2929,6 +2929,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "git-turn-changes"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "zeta-file-watcher",
+ "zeta-git",
+ "zeta-protocol",
+]
+
+[[package]]
 name = "gl_generator"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10413,6 +10430,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "worktree"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dunce",
+ "fs2",
+ "ignore",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "zeta-file-access",
+ "zeta-git",
+ "zeta-protocol",
+]
+
+[[package]]
 name = "write-fonts"
 version = "0.48.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10882,13 +10918,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-agents"
+name = "zeta-agent-roles"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_yaml",
  "sha2 0.10.9",
  "tempfile",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -10917,6 +10954,7 @@ dependencies = [
  "base64 0.22.1",
  "dunce",
  "getrandom 0.2.17",
+ "git-turn-changes",
  "ignore",
  "image",
  "log",
@@ -10928,10 +10966,11 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
+ "worktree",
  "zeroize",
  "zeta-action-policy",
  "zeta-agent-environment",
- "zeta-agents",
+ "zeta-agent-roles",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
  "zeta-apply-patch",
@@ -10997,14 +11036,11 @@ dependencies = [
  "zeta-thread-transcript",
  "zeta-tool-executor",
  "zeta-tools",
- "zeta-turn-changes",
  "zeta-typst",
  "zeta-uds",
  "zeta-utils-pty",
  "zeta-web-search-extension",
  "zeta-windows-sandbox",
- "zeta-work-coordination",
- "zeta-worktree",
 ]
 
 [[package]]
@@ -11333,10 +11369,10 @@ dependencies = [
  "toml 0.9.12+spec-1.1.0",
  "zeta-execpolicy",
  "zeta-file-access",
+ "zeta-github",
  "zeta-model-provider-config",
  "zeta-protocol",
  "zeta-state",
- "zeta-work-coordination",
 ]
 
 [[package]]
@@ -11645,6 +11681,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
+ "zeta-protocol",
 ]
 
 [[package]]
@@ -12005,21 +12042,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-multi-agent-evals"
-version = "0.1.0"
-dependencies = [
- "clap",
- "serde",
- "serde_json",
- "tempfile",
- "zeta-app-server",
- "zeta-async-utils",
- "zeta-core",
- "zeta-protocol",
- "zeta-work-coordination",
-]
-
-[[package]]
 name = "zeta-ollama"
 version = "0.1.0"
 dependencies = [
@@ -12358,6 +12380,7 @@ name = "zeta-state"
 version = "0.1.0"
 dependencies = [
  "fs2",
+ "git-turn-changes",
  "rusqlite",
  "serde",
  "serde_json",
@@ -12370,9 +12393,7 @@ dependencies = [
  "zeta-projects",
  "zeta-protocol",
  "zeta-thread-store",
- "zeta-turn-changes",
  "zeta-utils-path",
- "zeta-work-coordination",
 ]
 
 [[package]]
@@ -12515,6 +12536,7 @@ dependencies = [
  "zeta-client",
  "zeta-diff",
  "zeta-file-search",
+ "zeta-github",
  "zeta-keybinding",
  "zeta-memory-diagnostics",
  "zeta-protocol",
@@ -12524,24 +12546,6 @@ dependencies = [
  "zeta-utils-elapsed",
  "zeta-utils-image",
  "zeta-utils-path",
- "zeta-work-coordination",
-]
-
-[[package]]
-name = "zeta-turn-changes"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "pretty_assertions",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "zeta-file-access",
- "zeta-git",
- "zeta-protocol",
 ]
 
 [[package]]
@@ -12747,21 +12751,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-work-coordination"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.19",
- "zeta-environment",
- "zeta-file-access",
- "zeta-protocol",
- "zeta-turn-changes",
-]
-
-[[package]]
 name = "zeta-workbench"
 version = "0.1.0"
 dependencies = [
@@ -12806,26 +12795,6 @@ dependencies = [
  "zeta-ui-theme",
  "zeta-utils-path",
  "zui",
-]
-
-[[package]]
-name = "zeta-worktree"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dunce",
- "fs2",
- "ignore",
- "pretty_assertions",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "zeta-file-access",
- "zeta-git",
- "zeta-protocol",
- "zeta-turn-changes",
 ]
 
 [[package]]

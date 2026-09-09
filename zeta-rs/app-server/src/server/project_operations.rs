@@ -20,7 +20,6 @@ use zeta_app_server_protocol::protocol::projects::ProjectRootAddParams;
 use zeta_app_server_protocol::protocol::projects::ProjectRootRemoveParams;
 use zeta_app_server_protocol::protocol::projects::ProjectRootUpdateParams;
 use zeta_app_server_protocol::protocol::projects::ProjectSessionMutationParams;
-use zeta_app_server_protocol::protocol::projects::ProjectWorkRunMutationParams;
 use zeta_projects::ProjectCommand;
 use zeta_projects::ProjectCommandDisposition;
 use zeta_projects::ProjectCommandRequest;
@@ -222,49 +221,6 @@ impl AppServer {
         )
     }
 
-    pub(super) fn project_work_run_link(
-        &self,
-        connection: &ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: ProjectWorkRunMutationParams = decode(params)?;
-        self.work_coordination
-            .as_deref()
-            .ok_or_else(projects_unavailable)?
-            .read(&params.work_run_id)
-            .map_err(|_| invalid_project_reference())?;
-        self.apply_project(
-            connection,
-            ProjectCommandRequest {
-                command_id: params.command_id,
-                project_id: params.project_id,
-                expected_revision: params.expected_revision,
-                command: ProjectCommand::LinkWorkRun {
-                    work_run_id: params.work_run_id,
-                },
-            },
-        )
-    }
-
-    pub(super) fn project_work_run_unlink(
-        &self,
-        connection: &ConnectionState,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: ProjectWorkRunMutationParams = decode(params)?;
-        self.apply_project(
-            connection,
-            ProjectCommandRequest {
-                command_id: params.command_id,
-                project_id: params.project_id,
-                expected_revision: params.expected_revision,
-                command: ProjectCommand::UnlinkWorkRun {
-                    work_run_id: params.work_run_id,
-                },
-            },
-        )
-    }
-
     pub(super) fn project_archive(
         &self,
         connection: &ConnectionState,
@@ -321,7 +277,7 @@ impl AppServer {
         &self,
         connection: &ConnectionState,
     ) -> Result<&ProjectCoordinator, RpcError> {
-        if !connection.supports_work_coordination_host() {
+        if !connection.allows_product_host_capabilities() {
             return Err(RpcError::new(
                 -32073,
                 AppServerErrorName::PermissionRequired,

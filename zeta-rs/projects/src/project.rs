@@ -8,7 +8,6 @@ use zeta_environment::EnvId;
 use zeta_file_access::DirId;
 use zeta_protocol::ProjectId;
 use zeta_protocol::SessionId;
-use zeta_protocol::WorkRunId;
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 1;
 
@@ -44,7 +43,6 @@ pub struct Project {
     pub description: String,
     pub roots: BTreeMap<DirId, ProjectRoot>,
     pub session_ids: BTreeSet<SessionId>,
-    pub work_run_ids: BTreeSet<WorkRunId>,
 }
 
 impl Project {

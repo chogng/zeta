@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
 const BINDING_FILENAME: &str = "zeta-thread-dir.json";
-const BINDING_VERSION: u8 = 5;
+const BINDING_VERSION: u8 = 6;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -51,8 +51,6 @@ pub(crate) struct BindingRecord {
     #[serde(default)]
     pub kind: BindingKind,
     #[serde(default)]
-    pub snapshot_store: Option<PathBuf>,
-    #[serde(default)]
     pub repositories: Vec<RepositoryBindingRecord>,
 }
 
@@ -69,7 +67,6 @@ impl BindingRecord {
         baseline_tree: String,
         baseline_ref: String,
         kind: BindingKind,
-        snapshot_store: Option<PathBuf>,
     ) -> Self {
         Self {
             version: BINDING_VERSION,
@@ -85,7 +82,6 @@ impl BindingRecord {
             baseline_tree,
             baseline_ref,
             kind,
-            snapshot_store,
             repositories: Vec::new(),
         }
     }
@@ -104,14 +100,34 @@ impl BindingRecord {
             ),
         }
     }
+
+    pub(crate) fn needs_upgrade(&self) -> bool {
+        self.version < BINDING_VERSION
+    }
+
+    pub(crate) fn upgrade(mut self, owner: ManagedDirOwner) -> Self {
+        self.version = BINDING_VERSION;
+        self.owner_thread_id = owner.metadata_owner_id();
+        self.owner = Some(owner);
+        self
+    }
 }
 
 pub(crate) fn read(git_dir: &Path) -> Result<BindingRecord> {
     let path = git_dir.join(BINDING_FILENAME);
-    let record = serde_json::from_slice::<BindingRecord>(
-        &fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?,
-    )
-    .with_context(|| format!("invalid Thread directory binding at {}", path.display()))?;
+    let bytes = fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?;
+    let mut value = serde_json::from_slice::<serde_json::Value>(&bytes)
+        .with_context(|| format!("invalid Thread directory binding at {}", path.display()))?;
+    if value
+        .get("version")
+        .and_then(serde_json::Value::as_u64)
+        .is_some_and(|version| version < u64::from(BINDING_VERSION))
+        && let Some(fields) = value.as_object_mut()
+    {
+        fields.remove("snapshotStore");
+    }
+    let record = serde_json::from_value::<BindingRecord>(value)
+        .with_context(|| format!("invalid Thread directory binding at {}", path.display()))?;
     if !(1..=BINDING_VERSION).contains(&record.version)
         || record.managed_worktree_id.is_empty()
         || record.owner_thread_id.is_empty()
@@ -123,7 +139,6 @@ pub(crate) fn read(git_dir: &Path) -> Result<BindingRecord> {
         || record.target_head.is_empty()
         || record.baseline_tree.is_empty()
         || (record.kind == BindingKind::Git && record.baseline_ref.is_empty())
-        || (record.kind == BindingKind::Directory && record.snapshot_store.is_none())
     {
         bail!("invalid Thread directory binding at {}", path.display());
     }
@@ -172,7 +187,10 @@ pub(crate) fn write(git_dir: &Path, record: &BindingRecord) -> Result<()> {
 pub(crate) fn replace(git_dir: &Path, record: &BindingRecord) -> Result<()> {
     let current = read(git_dir)?;
     if current.owner_thread_id != record.owner_thread_id
-        || current.owner != record.owner
+        || current
+            .owner
+            .as_ref()
+            .is_some_and(|owner| Some(owner) != record.owner.as_ref())
         || current.managed_worktree_id != record.managed_worktree_id
     {
         bail!("Thread directory binding owner changed during update");

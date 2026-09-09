@@ -20,7 +20,6 @@ fn dir_fixture() -> (tempfile::TempDir, Dir, ResolvedFilePath) {
         authorization,
         relative: PathBuf::new(),
         absolute: root.canonical_path().to_path_buf(),
-        thread_scope: None,
     };
     (directory, root, resolved)
 }

@@ -7,7 +7,6 @@ const serverCapabilityFields = [
 	'sessions',
 	'threads',
 	'turns',
-	'workCoordination',
 	'projects',
 	'resources',
 	'attachments',

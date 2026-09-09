@@ -145,6 +145,40 @@ impl GitClient {
         Ok(())
     }
 
+    /// Repairs the administrative links for one existing linked worktree after a repository move.
+    pub async fn repair_linked_worktree(
+        &self,
+        repository: &GitRepository,
+        checkout_root: &Path,
+    ) -> GitResult<()> {
+        if !checkout_root.is_absolute() || checkout_root == repository.worktree_root() {
+            return Err(GitError::InvalidConfiguration {
+                field: "linked worktree repair path",
+                requirement: "must identify another absolute checkout",
+            });
+        }
+        self.run_mutation(
+            repository.worktree_root(),
+            [
+                OsString::from("worktree"),
+                OsString::from("repair"),
+                checkout_root.as_os_str().to_owned(),
+            ],
+        )
+        .await?
+        .require_success()?;
+        let repaired = self.open_repository(checkout_root).await?;
+        if repaired.kind() != crate::GitRepositoryKind::LinkedWorktree
+            || repaired.common_dir() != repository.common_dir()
+        {
+            return Err(GitError::invalid_output(
+                "git worktree repair",
+                "repaired checkout does not belong to the source repository",
+            ));
+        }
+        Ok(())
+    }
+
     /// Unlocks one managed worktree immediately before an approved removal.
     pub async fn unlock_worktree(
         &self,

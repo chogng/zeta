@@ -33,7 +33,6 @@ use zeta_app_server_client::TakeEventsError;
 use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
-use zeta_app_server_protocol::protocol::common::WorkCoordinationHostCapability;
 use zeta_protocol::AgentInteractionKind;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
@@ -56,7 +55,6 @@ pub fn client_capabilities() -> ClientCapabilities {
         }),
         browser: None,
         dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
-        work_coordination_host: Some(WorkCoordinationHostCapability { version: 1 }),
     }
 }
 

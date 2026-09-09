@@ -57,17 +57,17 @@ fn verify_recovery(relative: &Path) {
         numbers: vec![3, 5],
         start: IssueStartPoint::CurrentBranch,
     };
-    let task = zeta_github::IssueTask {
+    let task = github::IssueTask {
         command_id: params.command_id.to_string(),
         fingerprint: format!("{:x}", Sha256::digest(serde_json::to_vec(&params).unwrap())),
         session_id: "thread:issue-recovery".into(),
-        repository: zeta_github::Repository::new("github.com".into(), "team".into(), "repo".into())
+        repository: github::Repository::new("github.com".into(), "team".into(), "repo".into())
             .unwrap(),
         issues: params
             .numbers
             .iter()
-            .map(|&number| zeta_github::IssueSnapshot {
-                issue: zeta_github::Issue {
+            .map(|&number| github::IssueSnapshot {
+                issue: github::Issue {
                     labels: Vec::new(),
                     assignees: Vec::new(),
                     number,
@@ -113,7 +113,7 @@ fn verify_recovery(relative: &Path) {
     assert_eq!(first["task"]["issues"].as_array().unwrap().len(), 2);
     let thread_id = ThreadId::new(task.session_id.clone()).unwrap();
     let binding = server
-        .turn_changes
+        .git_turn_changes
         .as_ref()
         .unwrap()
         .binding(&thread_id)
@@ -152,7 +152,7 @@ fn verify_recovery(relative: &Path) {
         .unwrap();
     assert_eq!(read, first);
     let recovered = server
-        .turn_changes
+        .git_turn_changes
         .as_ref()
         .unwrap()
         .binding(&thread_id)

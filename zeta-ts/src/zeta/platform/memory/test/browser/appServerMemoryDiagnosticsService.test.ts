@@ -21,7 +21,7 @@ class Transport implements AppServerTransport {
 		this.requests.push(request.method);
 		let result: unknown;
 		if (request.method === 'initialize') {
-			const capabilities = Object.fromEntries(['agentInteractions', 'documentCollaboration', 'sessions', 'threads', 'turns', 'workCoordination', 'projects', 'resources', 'attachments', 'fileSystem', 'git', 'contentSearch', 'codebase', 'cloudCodebase', 'terminal', 'debugAdapter', 'typst', 'updateReplay', 'extensions', 'extensionHost', 'connectors', 'plugins', 'marketplace', 'mcp', 'mcpOAuth'].map(key => [key, true]));
+			const capabilities = Object.fromEntries(['agentInteractions', 'documentCollaboration', 'sessions', 'threads', 'turns', 'projects', 'resources', 'attachments', 'fileSystem', 'git', 'contentSearch', 'codebase', 'cloudCodebase', 'terminal', 'debugAdapter', 'typst', 'updateReplay', 'extensions', 'extensionHost', 'connectors', 'plugins', 'marketplace', 'mcp', 'mcpOAuth'].map(key => [key, true]));
 			result = { serverInfo: { name: 'zeta-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION }, schemaHash: APP_SERVER_SCHEMA_HASH, capabilities: { ...capabilities, contracts: { sessions: { version: APP_SERVER_CAPABILITY_VERSION }, threads: { version: APP_SERVER_CAPABILITY_VERSION }, turns: { version: APP_SERVER_CAPABILITY_VERSION }, memoryDiagnostics: { version: 1 } } }, slashCommands: [] };
 		} else if (request.method === 'memory/submit') { result = null; }
 		else {

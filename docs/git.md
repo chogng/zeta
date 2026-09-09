@@ -60,7 +60,8 @@ VS Code 的 extension-host 进程布局。
 | Desktop `IGitService` 与 Electron bridge | client-safe Git domain、连接事件和 typed `git/*` transport | 已实现 | 保持 Git 专属；不改名为 SCM service |
 | App Server `GitRuntime` / `GitService` | Git operation serialization、`Authorization<InspectRepository>` / `Authorization<MutateRepository>`、repository projection 与通知 | 已实现 | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade |
 | `zeta-git` | Git executable、命令、解析和 failure semantics | 已实现 | 与 SCM UI 无依赖 |
-| `zeta-worktree` | 组合 `zeta-git` inventory、维护 Thread 独占 checkout/目录和持久化绑定 | 已接入 App Server 的 Thread 创建与恢复 | 不拥有 Turn 归属、摘要或提交状态机 |
+| `git-turn-changes` | 按 Session/Thread/Turn 捕获 Git tree、归属 Tool 写入、维护 ChangeSet 与提交状态 | 已实现 | 只接受 Git repository，不拥有 Thread 目录或 GitHub Issue |
+| `worktree` | 组合 `zeta-git` inventory、维护 Thread 独占 checkout/目录和持久化绑定 | 已接入 App Server 的 Thread 创建与恢复 | 不拥有 Turn 归属、摘要或提交状态机 |
 
 前端迁移必须从调用者 contract 开始：先定义通用 `IScmService`、repository/provider 和 history
 provider，再让 Git adapter 注册实现，最后把现有 SCM panes 改为只依赖通用 contract。不能让
@@ -81,9 +82,9 @@ provider，再让 Git adapter 注册实现，最后把现有 SCM panes 改为只
 | App Server `GitService` | 冻结 canonical `Dir` 与 repository projection root、映射目录/仓库路径、持有 Tokio runtime并调用 `zeta-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
 | `zeta-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
 | `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、分页 graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、目录产品边界、Renderer state |
-| `zeta-worktree` | 同仓库 worktree 清单、按 branch/path 解析可用 target、来源目录 nested cwd 映射、Codex Desktop settings 与 `codex-thread.json` 归属 | Git process、Session lifecycle、产品目录切换、选择器 UI |
+| `worktree` | 同仓库 worktree 清单、按 branch/path 解析可用 target、来源目录 nested cwd 映射、Codex Desktop settings 与 `codex-thread.json` 归属 | Git process、Session lifecycle、产品目录切换、选择器 UI |
 
-Thread 提交不走普通 `git/commit`。`zeta-turn-changes` 把每个 Turn 封存为不可变 before/after tree，
+Thread 提交不走普通 `git/commit`。`git-turn-changes` 把每个 Turn 封存为不可变 before/after tree，
 `zeta-git::commit_tree_delta` 将这一个 delta 三方重放到目标分支最新 HEAD。目标 checkout 原有 index、
 未暂存和未跟踪内容先分别捕获并计算重放结果；ref 更新使用 expected HEAD CAS，checkout 安装前再比较
 tree 指纹。事务 journal 位于 Git common directory，进程重启后可以继续安装或确认已回滚状态。
@@ -139,7 +140,7 @@ Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/br
 菜单保留并显示失败；成功后使用新的 typed projection 刷新 Files、HEAD、Changes 和 MultiDiff。
 `app` 不再依赖 `zeta-git`。
 
-`zeta-worktree` 已能从任意 repository nested cwd 列出 primary、linked、locked 与 prunable checkout，并按 branch 或 checkout path 返回可用 worktree target。它还在 Thread 执行前创建持久化的独占受管目录：Git 使用 detached linked worktree；非 Git 使用内容寻址快照支持的受管目录。失败时 Thread 创建失败，不会转回来源目录。
+`worktree` 已能从任意 repository nested cwd 列出 primary、linked、locked 与 prunable checkout，并按 branch 或 checkout path 返回可用 worktree target。它还在 Thread 执行前创建持久化的独占受管目录：Git 使用 detached linked worktree；非 Git 使用一次性隔离目录副本，不创建 ChangeSet。失败时 Thread 创建失败，不会转回来源目录。
 
 稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
 stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
@@ -151,7 +152,7 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
   仍会迫使 UI 分支。这是明确的前端架构债务，不是后端增加 `scm/*` facade 的理由；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
 - App Server 与 Native 已支持切换现有本地分支；系统仍无 branch 新建/删除/重命名、
-  tag/worktree 创建删除 mutation 或 credential prompt；`zeta-worktree` 已解析现有 worktree target，但 App Server 和产品选择器尚未接入 directory retarget；`zeta code` TUI 只消费 branch/dirty 会话上下文，
+  tag/worktree 创建删除 mutation 或 credential prompt；`worktree` 已解析现有 worktree target，但 App Server 和产品选择器尚未接入 directory retarget；`zeta code` TUI 只消费 branch/dirty 会话上下文，
   当前产品定义不包含 SCM 管理 UI；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
 - 当前 registry 来自已授权目录集合，不接受客户端提交任意 repository root；

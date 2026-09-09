@@ -5,6 +5,14 @@ use super::issue_assignment::convert;
 use super::issue_assignment::now;
 use super::issue_operations::issue_error;
 use super::result;
+use github::IssueAssignment;
+use github::IssueAssignmentCommand;
+use github::IssueAssignmentPlan;
+use github::IssueBranchPublication;
+use github::IssueControl;
+use github::IssueOwnership;
+use github::IssueStage;
+use github::IssueSyncState;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentAction;
@@ -13,13 +21,6 @@ use zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentStartAc
 use zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentStartParams;
 use zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentView;
 use zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentsResult;
-use zeta_state::IssueAssignmentCommand;
-use zeta_work_coordination::IssueAssignment;
-use zeta_work_coordination::IssueAssignmentPlan;
-use zeta_work_coordination::IssueBranchPublication;
-use zeta_work_coordination::IssueOwnership;
-use zeta_work_coordination::IssueStage;
-use zeta_work_coordination::IssueSyncState;
 
 impl AppServer {
     pub(super) fn issue_assignment_store(
@@ -74,18 +75,16 @@ impl AppServer {
                 "Issue workflow changed; review a fresh plan".into(),
             ));
         }
-        let runtime = self.turn_changes_runtime()?;
-        let github = zeta_github::GitHub::default();
+        let runtime = self.issue_runtime()?;
+        let github = github::GitHub::default();
         for expected in plan.items.iter().flat_map(|item| &item.issues) {
             if existing.is_some() {
                 break;
             }
             let actual = runtime
-                .worktree_runtime
                 .block_on(github.issue_metadata(&repository, expected.number))
                 .map_err(issue_error)?;
             let snapshot = runtime
-                .worktree_runtime
                 .block_on(github.issue(&repository, expected.number))
                 .map_err(issue_error)?;
             if super::issue_assignment::issue_material_digest(&snapshot)?
@@ -116,10 +115,6 @@ impl AppServer {
             store
                 .prepare_branches(params.command_id.as_str(), &plan, now()?)
                 .map_err(issue_error)?
-        } else if params.action == IssueAssignmentStartAction::Execute {
-            store
-                .start(params.command_id.as_str(), &plan, now()?)
-                .map_err(issue_error)?
         } else {
             store
                 .claim(params.command_id.as_str(), &plan, now()?)
@@ -148,9 +143,6 @@ impl AppServer {
                 }
             }
         }
-        if params.action == IssueAssignmentStartAction::Execute {
-            self.start_issue_batch(&plan, &ready)?;
-        }
         self.issue_assignment_views(
             ready
                 .into_iter()
@@ -163,8 +155,8 @@ impl AppServer {
         &self,
         assignment: &IssueAssignment,
     ) -> Result<IssueAssignment, RpcError> {
-        let runtime = self.turn_changes_runtime()?;
-        let repository = zeta_github::Repository::new(
+        let runtime = self.issue_runtime()?;
+        let repository = github::Repository::new(
             assignment.repository.host.clone(),
             assignment.repository.owner.clone(),
             assignment.repository.name.clone(),
@@ -172,15 +164,14 @@ impl AppServer {
         .map_err(issue_error)?;
         let store = self.issue_assignment_store()?;
         let mut assignment = store.read(&assignment.id).map_err(issue_error)?;
-        let github = zeta_github::GitHub::default();
-        if assignment.ownership == IssueOwnership::Held && assignment.work_run_id.is_none() {
+        let github = github::GitHub::default();
+        if assignment.ownership == IssueOwnership::Held {
             assignment = self.sync_issue_assignment(&assignment, IssueStage::Queued)?;
         }
         if assignment.workflow.publication == IssueBranchPublication::Linked
             && assignment.linked_branch_id.is_none()
         {
             let linked = runtime
-                .worktree_runtime
                 .block_on(github.create_linked_issue_branch(
                     &repository,
                     &assignment.item.issues[0].node_id,
@@ -200,7 +191,6 @@ impl AppServer {
                 )
                 .map_err(issue_error)?;
         }
-        self.prepare_issue_assignment_thread(&assignment)?;
         store.read(&assignment.id).map_err(issue_error)
     }
 
@@ -211,7 +201,7 @@ impl AppServer {
     ) -> Result<IssueAssignment, RpcError> {
         sync_assignment(
             self.issue_assignment_store()?,
-            self.turn_changes_runtime()?.as_ref(),
+            self.issue_runtime()?.as_ref(),
             assignment,
             stage,
             &zeta_async_utils::CancellationSource::new().token(),
@@ -228,13 +218,11 @@ impl AppServer {
             return Ok(receipt);
         }
         let requested_control = match &params.action {
-            IssueAssignmentAction::Pause => Some(zeta_state::IssueControl::Pause),
-            IssueAssignmentAction::Release => Some(zeta_state::IssueControl::Release),
-            IssueAssignmentAction::Cancel => Some(zeta_state::IssueControl::Cancel),
+            IssueAssignmentAction::Release => Some(IssueControl::Release),
             IssueAssignmentAction::Transfer { assignee } => {
-                Some(zeta_state::IssueControl::Transfer(assignee.clone()))
+                Some(IssueControl::Transfer(assignee.clone()))
             }
-            _ => None,
+            IssueAssignmentAction::RetrySync => None,
         };
         if let Some(control) = requested_control {
             if let Some(receipt) = store
@@ -253,10 +241,6 @@ impl AppServer {
                         now()?,
                     )
                     .map_err(issue_error)?;
-                let mut prior = applied.clone();
-                prior.epoch = params.expected_epoch;
-                self.interrupt_issue_assignment(&prior)?;
-                self.ensure_issue_scheduler(&applied)?;
                 let response = self
                     .issue_assignment_views(vec![store.read(&applied.id).map_err(issue_error)?])?;
                 store
@@ -268,18 +252,13 @@ impl AppServer {
         let mut assignment = store.read(&params.assignment_id).map_err(issue_error)?;
         let local_control = matches!(
             params.action,
-            IssueAssignmentAction::Pause
-                | IssueAssignmentAction::Cancel
-                | IssueAssignmentAction::Release
-                | IssueAssignmentAction::RetrySync
+            IssueAssignmentAction::Release | IssueAssignmentAction::RetrySync
         );
         if !local_control && assignment.repository != self.issue_repository_identity()?.1 {
             return Err(issue_error("Issue repository changed".into()));
         }
         if assignment.epoch != params.expected_epoch
-            || !local_control
-                && params.action != IssueAssignmentAction::Verify
-                && assignment.revision != params.expected_revision
+            || !local_control && assignment.revision != params.expected_revision
         {
             return Err(issue_error(
                 "Issue assignment changed; refresh before acting".into(),
@@ -298,31 +277,14 @@ impl AppServer {
                         now()?,
                     )
                     .map_err(issue_error)?;
-                if assignment.work_run_id.is_none() {
-                    assignment = self.prepare_issue_assignment(&assignment)?;
-                    if assignment.auto_start {
-                        self.resume_issue_assignment(&assignment)?;
-                    }
-                }
-                self.ensure_issue_scheduler(&assignment)?;
+                assignment = self.prepare_issue_assignment(&assignment)?;
             }
-            IssueAssignmentAction::Resume => {
-                self.resume_issue_assignment(&assignment)?;
-                assignment = store.read(&assignment.id).map_err(issue_error)?;
-            }
-            IssueAssignmentAction::Verify => {
-                self.verify_issue_assignment(&assignment)?;
-            }
-            IssueAssignmentAction::Deliver => {
-                self.deliver_issue_assignment(&assignment)?;
-            }
-            action => {
+            action @ (IssueAssignmentAction::Release | IssueAssignmentAction::Transfer { .. }) => {
                 if let IssueAssignmentAction::Transfer { assignee } = &action {
                     let (repository, _, _) = self.issue_repository_identity()?;
-                    let runtime = self.turn_changes_runtime()?;
+                    let runtime = self.issue_runtime()?;
                     let allowed = runtime
-                        .worktree_runtime
-                        .block_on(zeta_github::GitHub::default().issue_assignees(&repository))
+                        .block_on(github::GitHub::default().issue_assignees(&repository))
                         .map_err(issue_error)?;
                     if !allowed
                         .iter()
@@ -332,15 +294,12 @@ impl AppServer {
                     }
                 }
                 let control = match action {
-                    IssueAssignmentAction::Pause => zeta_state::IssueControl::Pause,
-                    IssueAssignmentAction::Release => zeta_state::IssueControl::Release,
-                    IssueAssignmentAction::Cancel => zeta_state::IssueControl::Cancel,
+                    IssueAssignmentAction::Release => IssueControl::Release,
                     IssueAssignmentAction::Transfer { assignee } => {
-                        zeta_state::IssueControl::Transfer(assignee)
+                        IssueControl::Transfer(assignee)
                     }
-                    _ => unreachable!(),
+                    IssueAssignmentAction::RetrySync => unreachable!(),
                 };
-                let prior = assignment.clone();
                 assignment = store
                     .apply(
                         params.command_id.as_str(),
@@ -353,10 +312,8 @@ impl AppServer {
                         now()?,
                     )
                     .map_err(issue_error)?;
-                self.interrupt_issue_assignment(&prior)?;
             }
         }
-        self.ensure_issue_scheduler(&assignment)?;
         let response =
             self.issue_assignment_views(vec![store.read(&assignment.id).map_err(issue_error)?])?;
         store
@@ -390,34 +347,6 @@ impl AppServer {
                     "Idle"
                 }
                 .to_string();
-                if let (Some(runtime), Some(run_id), Some(attempt_id)) = (
-                    &self.work_coordination,
-                    &assignment.work_run_id,
-                    &assignment.attempt_id,
-                ) {
-                    let run = runtime
-                        .read(run_id)
-                        .map_err(|error| issue_error(error.to_string()))?;
-                    if let Some(attempt) = run.attempts.get(attempt_id) {
-                        use zeta_work_coordination::WorkAttemptExecutionStatus as Status;
-                        stage = match attempt.execution_status {
-                            Status::Planned | Status::Waiting => IssueStage::Queued,
-                            Status::Exploring | Status::Writing => IssueStage::InProgress,
-                            Status::Sealed => IssueStage::Review,
-                            Status::Failed | Status::Interrupted => IssueStage::Blocked,
-                            Status::Cancelled => IssueStage::Cancelled,
-                        };
-                        if let Some(thread) = &assignment.thread_id {
-                            let snapshot = self
-                                .threads
-                                .read_thread(thread)
-                                .map_err(super::core_error)?;
-                            if let Some(turn) = snapshot.turns.last() {
-                                health = format!("{:?}", turn.status);
-                            }
-                        }
-                    }
-                }
                 if let Some(receipt) = &assignment.delivery {
                     health = if receipt.pull_request_number.is_some() {
                         "PR awaiting merge".into()
@@ -498,7 +427,7 @@ impl AppServer {
 
 pub(super) fn sync_assignment(
     store: &zeta_state::SqliteIssueAssignmentStore,
-    runtime: &super::turn_changes_runtime::TurnChangesRuntime,
+    runtime: &super::issue_runtime::IssueRuntime,
     assignment: &IssueAssignment,
     stage: IssueStage,
     cancellation: &zeta_async_utils::CancellationToken,
@@ -521,13 +450,13 @@ pub(super) fn sync_assignment(
         )
         .map_err(issue_error)?;
     let assignment = &pending;
-    let repository = zeta_github::Repository::new(
+    let repository = github::Repository::new(
         assignment.repository.host.clone(),
         assignment.repository.owner.clone(),
         assignment.repository.name.clone(),
     )
     .map_err(issue_error)?;
-    let github = zeta_github::GitHub::default();
+    let github = github::GitHub::default();
     let managed = assignment
         .workflow
         .labels
@@ -541,7 +470,6 @@ pub(super) fn sync_assignment(
             .as_ref()
             .ok_or_else(|| issue_error("Transfer omitted its new owner".into()))?;
         let allowed = runtime
-            .worktree_runtime
             .block_on(sync_call(github.issue_assignees(&repository), cancellation))
             .map_err(issue_error)?;
         if !allowed
@@ -562,7 +490,6 @@ pub(super) fn sync_assignment(
             return Err(issue_error("Issue synchronization was superseded".into()));
         }
         let before = runtime
-            .worktree_runtime
             .block_on(sync_call(
                 github.issue_metadata(&repository, issue.number),
                 cancellation,
@@ -595,7 +522,6 @@ pub(super) fn sync_assignment(
         }
         if assignment.ownership == IssueOwnership::Held {
             let snapshot = runtime
-                .worktree_runtime
                 .block_on(sync_call(
                     github.issue(&repository, issue.number),
                     cancellation,
@@ -667,7 +593,6 @@ pub(super) fn sync_assignment(
                         .is_some_and(|owner| account.login.eq_ignore_ascii_case(owner))
             });
             runtime
-                .worktree_runtime
                 .block_on(sync_call(
                     github.unassign_issue(&repository, issue.number, &assignment.owner),
                     cancellation,
@@ -675,7 +600,6 @@ pub(super) fn sync_assignment(
                 .map_err(issue_error)?;
             if let Some(owner) = &assignment.pending_owner {
                 runtime
-                    .worktree_runtime
                     .block_on(sync_call(
                         github.unassign_issue(&repository, issue.number, owner),
                         cancellation,
@@ -692,14 +616,12 @@ pub(super) fn sync_assignment(
                 ));
             }
             runtime
-                .worktree_runtime
                 .block_on(sync_call(
                     github.unassign_issue(&repository, issue.number, &assignment.owner),
                     cancellation,
                 ))
                 .map_err(issue_error)?;
             runtime
-                .worktree_runtime
                 .block_on(sync_call(
                     github.assign_issue(&repository, issue.number, owner),
                     cancellation,
@@ -707,7 +629,6 @@ pub(super) fn sync_assignment(
                 .map_err(issue_error)?;
         } else if before.issue.state == "open" {
             runtime
-                .worktree_runtime
                 .block_on(sync_call(
                     github.assign_issue(&repository, issue.number, &assignment.owner),
                     cancellation,
@@ -772,7 +693,6 @@ pub(super) fn sync_assignment(
             return Err(issue_error("Issue synchronization was superseded".into()));
         }
         let labels = runtime
-            .worktree_runtime
             .block_on(sync_call(
                 github.sync_issue_labels(
                     &repository,

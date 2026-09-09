@@ -18,13 +18,13 @@ use zeta_thread_store::ThreadCatalogRecord;
 use zeta_thread_store::ThreadEventBatch;
 use zeta_thread_store::ThreadStore;
 use zeta_thread_store::ThreadStoreError;
-use zeta_turn_changes::ChangeSetId;
-use zeta_turn_changes::MessageState;
-use zeta_turn_changes::TerminalTurnState;
-use zeta_turn_changes::TurnChangeSet;
-use zeta_turn_changes::TurnChangeSetDraft;
-use zeta_turn_changes::TurnChangeStore;
-use zeta_turn_changes::TurnChangeStoreError;
+use git_turn_changes::ChangeSetId;
+use git_turn_changes::MessageState;
+use git_turn_changes::TerminalTurnState;
+use git_turn_changes::TurnChangeSet;
+use git_turn_changes::TurnChangeSetDraft;
+use git_turn_changes::TurnChangeStore;
+use git_turn_changes::TurnChangeStoreError;
 
 fn database_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -48,10 +48,8 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
         target_branch: Some("main".into()),
         base_object_id: Some("head".into()),
         before_tree: "before".into(),
-        snapshot_backend: zeta_turn_changes::SnapshotBackend::Git,
         baseline_dependency_paths: std::collections::BTreeSet::new(),
         message_state: MessageState::Unconfigured,
-        work_attempt: None,
     })
     .unwrap()
 }

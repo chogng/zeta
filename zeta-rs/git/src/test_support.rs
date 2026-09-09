@@ -57,6 +57,13 @@ impl TestRepository {
         &self.root
     }
 
+    pub(crate) fn relocate(&mut self) -> PathBuf {
+        let destination = unique_test_path("moved-repository");
+        std::fs::rename(&self.root, &destination).expect("move test repository");
+        self.root = dunce::canonicalize(destination).expect("canonicalize moved repository");
+        self.root.clone()
+    }
+
     pub(crate) fn path(&self, relative: &str) -> PathBuf {
         self.root.join(relative)
     }

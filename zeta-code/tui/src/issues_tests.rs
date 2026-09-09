@@ -415,12 +415,12 @@ fn issue_manual_clear_is_repository_scoped_and_never_refresh_has_no_timer() {
     assert_eq!(manager.board.loaded(), 2);
 }
 
-fn work(number: u64, stage: zeta_work_coordination::IssueStage) -> assignment::View {
+fn work(number: u64, stage: github::IssueStage) -> assignment::View {
     let value = serde_json::json!({
         "id":format!("work-{number}"), "configRevision":1, "batchId":"batch-one",
         "repository":{"host":"github.com","nodeId":"repo","owner":"team","name":"repo"},
         "item":{"id":"item","issues":[{"nodeId":format!("issue-{number}"),"number":number,"title":format!("Work {number}"),"updatedAt":"now","materialDigest":"digest"}],"objective":"Implement issue","acceptanceConditions":["Tests pass"],"scope":{"components":[],"paths":[],"contracts":[],"resources":[]},"dependencies":[],"agent":"coder"},
-        "workflow":zeta_work_coordination::IssueWorkflow::default(),
+        "workflow":github::IssueWorkflow::default(),
         "baseCommit":"a".repeat(40),"targetBranch":"main","branch":format!("codex/issue-{number}"),
         "owner":"tester","autoStart":false,"revision":1,"epoch":1,"ownership":"held",
         "threadId":format!("thread-{number}"),"syncState":"synced","attemptedStages":[],"desiredStage":stage,"paused":false,"syncedLabels":{},"detail":"","updatedAt":20
@@ -436,7 +436,7 @@ fn work(number: u64, stage: zeta_work_coordination::IssueStage) -> assignment::V
 
 #[test]
 fn raw_and_assigned_issues_merge_by_identity_and_follow_status_without_losing_focus() {
-    use zeta_work_coordination::IssueStage;
+    use github::IssueStage;
     let mut manager = loaded();
     manager.board.views = vec![work(3, IssueStage::Queued), work(18, IssueStage::Review)];
     manager.board.reconcile("", false);
@@ -461,7 +461,7 @@ fn raw_and_assigned_issues_merge_by_identity_and_follow_status_without_losing_fo
 #[test]
 fn configured_labels_group_external_work_and_closed_facts_win_over_running_records() {
     let mut manager = loaded();
-    let mut labels = zeta_work_coordination::IssueLabels::default();
+    let mut labels = github::IssueLabels::default();
     labels.in_progress = "development".into();
     manager.board.labels = Some(labels);
     manager.board.page(
@@ -480,7 +480,7 @@ fn configured_labels_group_external_work_and_closed_facts_win_over_running_recor
         manager.board.entries("", false)[0].group,
         board::Group::InProgress
     );
-    manager.board.views = vec![work(3, zeta_work_coordination::IssueStage::InProgress)];
+    manager.board.views = vec![work(3, github::IssueStage::InProgress)];
     manager.board.page(
         IssueState::Closed,
         1,
@@ -517,7 +517,7 @@ fn configured_labels_group_external_work_and_closed_facts_win_over_running_recor
 
 #[test]
 fn delivered_but_open_issues_and_cancelled_work_do_not_fake_github_closure() {
-    use zeta_work_coordination::IssueStage;
+    use github::IssueStage;
     let mut manager = loaded();
     let mut delivered = work(18, IssueStage::Completed);
     delivered.assignment.workflow.close_on_completion = false;
@@ -550,7 +550,7 @@ fn assignment_completion_returns_to_the_same_grouped_page_and_old_metadata_is_ig
     assert!(!manager.overview_loading);
     manager.update(Event::Overview {
         generation,
-        views: Ok(vec![work(5, zeta_work_coordination::IssueStage::Blocked)]),
+        views: Ok(vec![work(5, github::IssueStage::Blocked)]),
         labels: None,
     });
     assert!(manager.board.views.is_empty());
@@ -558,7 +558,7 @@ fn assignment_completion_returns_to_the_same_grouped_page_and_old_metadata_is_ig
         generation: manager.generation,
         result: Ok(assignment::Reply::Assignments(vec![work(
             3,
-            zeta_work_coordination::IssueStage::Queued,
+            github::IssueStage::Queued,
         )])),
     });
     assert!(!manager.assignment.is_open());
@@ -575,47 +575,22 @@ fn assignment_completion_returns_to_the_same_grouped_page_and_old_metadata_is_ig
 }
 
 #[test]
-fn batch_controls_from_one_issue_detail_include_all_of_its_work_units() {
-    let mut manager = loaded();
-    manager.board.views = vec![
-        work(3, zeta_work_coordination::IssueStage::Queued),
-        work(5, zeta_work_coordination::IssueStage::Queued),
-    ];
-    manager.board.reconcile("", false);
-    let Some(Command::Assignment {
-        request: assignment::Request::Batch { actions },
-        ..
-    }) = key(&mut manager, KeyCode::Char('P'))
-    else {
-        panic!("batch pause");
-    };
-    assert_eq!(actions.len(), 2);
-    assert!(actions.iter().all(|request| matches!(
-        request,
-        assignment::Request::Act {
-            action: assignment::Action::Pause,
-            ..
-        }
-    )));
-}
-
-#[test]
 fn control_c_closes_the_manager_without_cancelling_the_selected_work() {
     let mut manager = loaded();
-    manager.board.views = vec![work(3, zeta_work_coordination::IssueStage::InProgress)];
+    manager.board.views = vec![work(3, github::IssueStage::InProgress)];
     let result = manager.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
     assert!(result.is_none());
     assert!(!manager.is_open());
     assert_eq!(
         manager.board.views[0].assignment.ownership,
-        zeta_work_coordination::IssueOwnership::Held
+        github::IssueOwnership::Held
     );
 }
 
 #[test]
 fn control_u_only_edits_text_and_never_releases_work() {
     let mut manager = loaded();
-    manager.board.views = vec![work(3, zeta_work_coordination::IssueStage::Queued)];
+    manager.board.views = vec![work(3, github::IssueStage::Queued)];
     assert!(
         manager
             .handle_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL))
@@ -664,7 +639,7 @@ fn committing_a_search_selects_the_result_instead_of_a_previously_focused_group(
 #[test]
 fn repeated_action_keys_cannot_reopen_or_modify_an_issue_after_a_transition() {
     let mut manager = loaded();
-    manager.board.views = vec![work(3, zeta_work_coordination::IssueStage::Queued)];
+    manager.board.views = vec![work(3, github::IssueStage::Queued)];
     for code in [
         KeyCode::Enter,
         KeyCode::Char(' '),

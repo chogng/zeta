@@ -58,7 +58,6 @@ mod session_id;
 mod thread_id;
 mod tool_call_id;
 mod turn_id;
-mod work;
 
 pub use agent_join_id::AgentJoinId;
 pub use agent_message_id::AgentMessageId;
@@ -73,13 +72,6 @@ pub use session_id::SessionId;
 pub use thread_id::ThreadId;
 pub use tool_call_id::ToolCallId;
 pub use turn_id::TurnId;
-pub use work::WorkAttemptId;
-pub use work::WorkConflictId;
-pub use work::WorkContractId;
-pub use work::WorkDecisionId;
-pub use work::WorkExecutionId;
-pub use work::WorkRelationId;
-pub use work::WorkRunId;
 
 /// Rejection reason returned when an externally supplied protocol identity is invalid.
 #[derive(Clone, Debug, Eq, PartialEq)]

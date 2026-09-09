@@ -89,14 +89,18 @@ mod fs_operations;
 mod fs_watcher;
 mod git_operations;
 mod git_runtime;
+mod git_turn_changes_commit;
+mod git_turn_changes_message;
+mod git_turn_changes_observer;
+mod git_turn_changes_operations;
+mod git_turn_changes_runtime;
 pub(crate) mod goal_tool;
 mod interaction_runtime;
 mod issue_assignment;
 mod issue_assignment_operations;
-mod issue_delivery;
-mod issue_execution;
 mod issue_operations;
 mod issue_pr;
+mod issue_runtime;
 mod issue_tasks;
 mod language_document_features;
 mod language_operations;
@@ -115,10 +119,6 @@ pub(crate) mod marketplace_runtime;
 mod marketplace_skill_sources;
 mod mcp_operations;
 mod memory_operations;
-#[cfg(feature = "multi-agent-evals")]
-mod multi_agent_evaluation;
-#[cfg(feature = "multi-agent-evals")]
-mod multi_agent_evaluation_loop;
 pub(crate) mod multi_agent_tools;
 pub(crate) mod notification_queue;
 mod operations;
@@ -142,40 +142,11 @@ mod symbol_index_operations;
 mod symbol_index_runtime;
 mod syntax_operations;
 mod terminal_operations;
+mod thread_dir_binding;
+mod thread_dirs;
 mod turn_backend_router;
-mod turn_changes_commit;
-mod turn_changes_message;
-mod turn_changes_observer;
-mod turn_changes_operations;
-mod turn_changes_runtime;
-mod turn_changes_watcher;
-mod turn_changes_worktree;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
-mod work_attempt_effects;
-mod work_attempt_evidence;
-mod work_attempt_execution;
-#[cfg(test)]
-#[path = "server/work_attempt_execution_tests.rs"]
-mod work_attempt_execution_tests;
-mod work_attempt_workspace;
-#[cfg(test)]
-#[path = "server/work_attempt_workspace_tests.rs"]
-mod work_attempt_workspace_tests;
-mod work_coordination_runtime;
-mod work_integration;
-mod work_run_operations;
-#[cfg(test)]
-#[path = "server/work_run_operations_tests.rs"]
-mod work_run_operations_tests;
-mod work_run_projection;
-mod work_run_steering_operations;
-#[cfg(test)]
-#[path = "server/work_run_steering_operations_tests.rs"]
-mod work_run_steering_operations_tests;
-mod work_serializability;
-mod work_verification;
-mod work_wait;
 
 const OUTBOUND_MESSAGE_QUEUE_CAPACITY: usize = 256;
 const INBOUND_REQUEST_QUEUE_CAPACITY: usize = 64;
@@ -193,32 +164,6 @@ use request_serialization::RequestCancellationRegistry;
 use request_serialization::RequestScheduler;
 use update_broker::UpdateBroker;
 
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation::MultiAgentEvaluationHost;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation::MultiSessionEvaluationAgentAttempt;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation::MultiSessionEvaluationAttempts;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation::MultiSessionEvaluationAttemptsRequest;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation::TeamEvaluationAttempt;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation::TeamEvaluationAttemptRequest;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation_loop::DevelopmentEvaluationAttempt;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation_loop::EvaluationExpectedFile;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation_loop::EvaluationVerification;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation_loop::SingleAgentDevelopmentEvaluation;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation_loop::TeamLoopChildRequest;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation_loop::TeamLoopDevelopmentEvaluation;
-#[cfg(feature = "multi-agent-evals")]
-pub use multi_agent_evaluation_loop::TeamLoopEvaluationCoordinator;
 pub use zeta_codebase::CodebaseModels;
 
 pub struct AppServer {
@@ -285,14 +230,12 @@ pub struct AppServer {
     _marketplace_watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
-    turn_changes: Option<Arc<turn_changes_runtime::TurnChangesRuntime>>,
+    git_turn_changes: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
+    issue_runtime: Option<Arc<issue_runtime::IssueRuntime>>,
     issue_tasks: Option<Arc<zeta_state::SqliteIssueTaskStore>>,
     issue_assignments: Option<Arc<zeta_state::SqliteIssueAssignmentStore>>,
-    issue_execution: std::sync::OnceLock<issue_execution::IssueExecutionRuntime>,
-    issue_execution_init: Mutex<()>,
     issue_repository_cache: Mutex<Option<issue_assignment::IssueRepositoryCache>>,
     issue_cache: Option<Arc<Mutex<zeta_state::SqliteIssueCache>>>,
-    work_coordination: Option<Arc<work_coordination_runtime::WorkCoordinationRuntime>>,
     projects: Option<Arc<zeta_projects::ProjectCoordinator>>,
     automation: Option<Arc<zeta_automation::AutomationStore>>,
     updates: Arc<UpdateBroker>,
@@ -337,7 +280,6 @@ struct ConnectionMutableState {
     request_ids: BTreeSet<u64>,
     marketplace_leases: BTreeSet<String>,
     dir_permissions_host: bool,
-    work_coordination_host: bool,
 }
 
 impl ConnectionState {
@@ -374,14 +316,6 @@ impl ConnectionState {
 
     pub(super) fn supports_dir_permissions_host(&self) -> bool {
         connection_state(self).dir_permissions_host
-    }
-
-    fn set_work_coordination_host(&self, supported: bool) {
-        connection_state(self).work_coordination_host = supported;
-    }
-
-    pub(super) fn supports_work_coordination_host(&self) -> bool {
-        connection_state(self).work_coordination_host
     }
 
     fn marketplace_leases(&self) -> Vec<String> {
@@ -612,23 +546,21 @@ impl AppServer {
             _marketplace_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
-            turn_changes: None,
+            git_turn_changes: None,
+            issue_runtime: None,
             issue_tasks: None,
             issue_assignments: None,
-            issue_execution: std::sync::OnceLock::new(),
-            issue_execution_init: Mutex::new(()),
             issue_repository_cache: Mutex::new(None),
             issue_cache: None,
-            work_coordination: None,
             projects: None,
             automation: None,
             updates,
         }
     }
 
-    fn with_turn_changes_runtime(
+    fn with_git_turn_changes_runtime(
         mut self,
-        runtime: Arc<turn_changes_runtime::TurnChangesRuntime>,
+        runtime: Arc<git_turn_changes_runtime::GitTurnChangesRuntime>,
     ) -> Result<Self, String> {
         self.thread_worktree_binder = runtime.clone();
         self.multi_agent
@@ -647,17 +579,12 @@ impl AppServer {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .turn_executor = executor;
-        if let Some(work_coordination) = &self.work_coordination {
-            work_coordination
-                .attach_workspace_host(Arc::clone(&runtime))
-                .map_err(|error| error.to_string())?;
-        }
-        self.turn_changes = Some(runtime);
+        self.git_turn_changes = Some(runtime);
         Ok(self)
     }
 
-    pub(crate) fn with_local_turn_changes(
-        self,
+    pub(crate) fn with_local_dir_services(
+        mut self,
         database_path: &std::path::Path,
         profile_root: &std::path::Path,
         dir_root: &std::path::Path,
@@ -666,7 +593,7 @@ impl AppServer {
             .config
             .as_ref()
             .cloned()
-            .ok_or_else(|| "Turn changes require the ConfigStore".to_string())?;
+            .ok_or_else(|| "local directory services require the ConfigStore".to_string())?;
         let file_access = Arc::clone(
             &self
                 .env_runtime
@@ -676,46 +603,34 @@ impl AppServer {
         );
         let hooks = self
             .local_hook_runtime()
-            .ok_or_else(|| "Turn changes require the local Hook runtime".to_string())?;
-        let runtime = turn_changes_runtime::TurnChangesRuntime::open(
-            database_path,
+            .ok_or_else(|| "local directory services require the Hook runtime".to_string())?;
+        self.issue_runtime = Some(issue_runtime::IssueRuntime::open(dir_root)?);
+        let dirs = thread_dirs::ThreadDirs::open(
             profile_root,
             dir_root,
+            config.as_ref(),
+            file_access,
+            hooks,
+        )?;
+        let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
+            database_path,
             config,
             Arc::clone(&self.threads),
             Arc::clone(&self.model),
-            file_access,
-            hooks,
+            dirs,
             Arc::clone(&self.updates),
-            Arc::clone(&self.local_tool_config),
         )?;
-        let issue_assignments = Arc::clone(&runtime.issue_assignments);
-        let mut server = self.with_turn_changes_runtime(runtime)?;
+        let mut server = self.with_git_turn_changes_runtime(runtime)?;
         server.issue_cache = Some(Arc::new(Mutex::new(zeta_state::SqliteIssueCache::open(
             database_path,
         )?)));
-        server.issue_assignments = Some(issue_assignments);
+        server.issue_assignments = Some(Arc::new(zeta_state::SqliteIssueAssignmentStore::open(
+            database_path,
+        )?));
         server.issue_tasks = Some(Arc::new(zeta_state::SqliteIssueTaskStore::open(
             database_path,
         )?));
         Ok(server)
-    }
-
-    pub(crate) fn with_local_work_coordination(
-        mut self,
-        database_path: &std::path::Path,
-    ) -> Result<Self, String> {
-        let store: Arc<dyn zeta_work_coordination::WorkRunStore> = Arc::new(
-            zeta_state::SqliteWorkRunStore::open(database_path)
-                .map_err(|error| error.to_string())?,
-        );
-        self.work_coordination = Some(Arc::new(
-            work_coordination_runtime::WorkCoordinationRuntime::new(
-                store,
-                Arc::clone(&self.updates),
-            ),
-        ));
-        Ok(self)
     }
 
     pub(crate) fn with_local_projects(
@@ -748,8 +663,11 @@ impl AppServer {
             authority,
             ..ConnectionState::default()
         };
-        self.updates
-            .register(connection.connection_id, &connection.outbound_notifications);
+        self.updates.register(
+            connection.connection_id,
+            authority == ConnectionAuthority::ProductHost,
+            &connection.outbound_notifications,
+        );
         connection
     }
 
@@ -1956,40 +1874,6 @@ impl AppServer {
             Some(ClientMethod::TurnChangesDiscardThread) => {
                 self.turn_changes_discard_thread(&request.params)
             }
-            Some(ClientMethod::WorkRunList) => self.work_run_list(connection, &request.params),
-            Some(ClientMethod::WorkRunRead) => self.work_run_read(connection, &request.params),
-            Some(ClientMethod::WorkRunViewRead) => {
-                self.work_run_view_read(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunCreate) => self.work_run_create(connection, &request.params),
-            Some(ClientMethod::WorkRunParticipantAdd) => {
-                self.work_run_participant_add(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunRelationCreate) => {
-                self.work_run_relation_create(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunGoalRevise) => {
-                self.work_run_goal_revise(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunDecisionRecord) => {
-                self.work_run_decision_record(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunAttemptScopeExpansionRequest) => {
-                self.work_run_attempt_scope_expansion_request(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunConflictRecord) => {
-                self.work_run_conflict_record(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunConflictResolve) => {
-                self.work_run_conflict_resolve(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunCancel) => self.work_run_cancel(connection, &request.params),
-            Some(ClientMethod::WorkRunVerificationRequest) => {
-                self.work_run_verification_request(connection, &request.params)
-            }
-            Some(ClientMethod::WorkRunIntegrationRequest) => {
-                self.work_run_integration_request(connection, &request.params)
-            }
             Some(ClientMethod::ProjectList) => self.project_list(connection, &request.params),
             Some(ClientMethod::MemoryStart) => self.memory_start(connection, &request.params),
             Some(ClientMethod::MemoryRead) => self.memory_read(connection, &request.params),
@@ -2021,12 +1905,6 @@ impl AppServer {
             }
             Some(ClientMethod::ProjectSessionUnlink) => {
                 self.project_session_unlink(connection, &request.params)
-            }
-            Some(ClientMethod::ProjectWorkRunLink) => {
-                self.project_work_run_link(connection, &request.params)
-            }
-            Some(ClientMethod::ProjectWorkRunUnlink) => {
-                self.project_work_run_unlink(connection, &request.params)
             }
             Some(ClientMethod::ProjectArchive) => self.project_archive(connection, &request.params),
             Some(ClientMethod::ProjectRestore) => self.project_restore(connection, &request.params),

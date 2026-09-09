@@ -218,7 +218,7 @@ impl AppServer {
     }
 
     fn enforce_turn_changes_cleanup(&self) {
-        if let Some(runtime) = &self.turn_changes
+        if let Some(runtime) = &self.git_turn_changes
             && let Err(error) = runtime.enforce_cleanup_policy()
         {
             log::warn!("Thread worktree cleanup policy failed: {error}");

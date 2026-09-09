@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 1 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 31 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 3 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:d1d6b87d4c5c65aa77d180f7b78d661dc61bf963b28c2a86a12e816c83bc4182" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:0b33336591e6c65156f5f2755c7fb30aaa70b929dadd394fb77510793d4bb4bc" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -21,12 +21,13 @@ export type IssueDeliveryDto = "branch" | "pullRequest" | "draftPullRequest";
 export type IssueDeliveryReceiptDto = { targetHead: string, tree: string, commit: string, verificationKey: string, pullRequestNumber: number | null, pullRequestUrl: string | null, };
 export type IssueWorkflowDto = { labels: IssueLabelsDto, labelColors: { [key in string]: string }, autoMerge: boolean, assignee: string, baseBranch: string | null, targetBranch: string | null, branchTemplate: string, publication: IssueBranchPublicationDto, coordinatorAgent: string, workerAgent: string, maxParallel: number, maxTokens: number, validationCommands: Array<string>, delivery: IssueDeliveryDto, closeOnCompletion: boolean, autoClaim: IssueAutoClaimDto | null, };
 export type IssueAutoClaimDto = { labels: Array<string>, assignee: string | null, maxIssues: number, };
-export type IssueWorkItemDto = { id: string, issues: Array<IssueIdentityDto>, objective: string, acceptanceConditions: Array<string>, scope: WorkScopeClaimDto, dependencies: Array<string>, agent: string, };
+export type IssueWorkScopeDto = { components: Array<string>, paths: Array<string>, contracts: Array<string>, resources: Array<string>, };
+export type IssueWorkItemDto = { id: string, issues: Array<IssueIdentityDto>, objective: string, acceptanceConditions: Array<string>, scope: IssueWorkScopeDto, dependencies: Array<string>, agent: string, };
 export type IssueAssignmentNotice = { assignmentId: string, message: string, };
 export type IssueAssignmentPlanDto = { repository: IssueRepositoryIdentityDto, workflow: IssueWorkflowDto, configRevision: number, model: ModelRef | null, planningTokens: number, baseCommit: string, targetBranch: string, items: Array<IssueWorkItemDto>, };
 export type IssueOwnershipDto = "unclaimed" | "held" | "releasing" | "transferring" | "released" | "completed" | "cancelled";
 export type IssueSyncStateDto = "pending" | "synced" | "conflict";
-export type IssueAssignmentDto = { id: string, configRevision: number, batchId: string, repository: IssueRepositoryIdentityDto, item: IssueWorkItemDto, workflow: IssueWorkflowDto, agentRole: AgentRoleSnapshot | null, agentTools: Array<ToolName>, model: ModelRef | null, planningTokens: number, baseCommit: string, targetBranch: string, branch: string, delivery: IssueDeliveryReceiptDto | null, owner: string, pendingOwner: string | null, autoStart: boolean, revision: number, epoch: number, ownership: IssueOwnershipDto, threadId: ThreadId | null, workRunId: WorkRunId | null, attemptId: WorkAttemptId | null, leaseUntil: number | null, syncState: IssueSyncStateDto, attemptedStages: Array<IssueStageDto>, desiredStage: IssueStageDto, executionError: string | null, paused: boolean, syncedStage: IssueStageDto | null, syncedLabels: { [key in string]: Array<string> }, linkedBranchId: string | null, detail: string, updatedAt: number, };
+export type IssueAssignmentDto = { id: string, configRevision: number, batchId: string, repository: IssueRepositoryIdentityDto, item: IssueWorkItemDto, workflow: IssueWorkflowDto, agentRole: AgentRoleSnapshot | null, agentTools: Array<ToolName>, model: ModelRef | null, planningTokens: number, baseCommit: string, targetBranch: string, branch: string, delivery: IssueDeliveryReceiptDto | null, owner: string, pendingOwner: string | null, autoStart: boolean, revision: number, epoch: number, ownership: IssueOwnershipDto, threadId: ThreadId | null, leaseUntil: number | null, syncState: IssueSyncStateDto, attemptedStages: Array<IssueStageDto>, desiredStage: IssueStageDto, executionError: string | null, paused: boolean, syncedStage: IssueStageDto | null, syncedLabels: { [key in string]: Array<string> }, linkedBranchId: string | null, detail: string, updatedAt: number, };
 export type IssueWorkflowReadResult = { repository: IssueRepositoryIdentityDto, configRevision: number, workflow: IssueWorkflowDto, defaultBranch: string, labels: Array<IssueLabelDto>, assignees: Array<string>, };
 export type IssueLabelDto = { name: string, color: string, nodeId: string, };
 export type IssueWorkflowConfigureParams = { commandId: CommandId, expectedRevision: number, repository: IssueRepositoryIdentityDto, workflow: IssueWorkflowDto, };
@@ -34,11 +35,11 @@ export type IssueLabelCreateParams = { repository: IssueRepositoryIdentityDto, n
 export type IssuePlanMode = "branch" | "combined" | "distributed";
 export type IssuePlanParams = { numbers: number[], mode: IssuePlanMode, };
 export type IssuePlanResult = { plan: IssueAssignmentPlanDto, };
-export type IssueAssignmentStartAction = "createBranch" | "claim" | "execute";
+export type IssueAssignmentStartAction = "createBranch" | "claim";
 export type IssueAssignmentStartParams = { commandId: CommandId, plan: IssueAssignmentPlanDto, action: IssueAssignmentStartAction, };
 export type IssueAssignmentView = { assignment: IssueAssignmentDto, stage: IssueStageDto, health: string, branchUrl: string | null, pullRequestUrl: string | null, };
 export type IssueAssignmentsResult = { assignments: Array<IssueAssignmentView>, };
-export type IssueAssignmentAction = "pause" | "resume" | "release" | "cancel" | "retrySync" | "verify" | "deliver" | { "transfer": { assignee: string, } };
+export type IssueAssignmentAction = "release" | "retrySync" | { "transfer": { assignee: string, } };
 export type IssueAssignmentActionParams = { commandId: CommandId, assignmentId: string, expectedEpoch: number, expectedRevision: number, action: IssueAssignmentAction, };
 export type IssueConfigDto = { recommendMerge: boolean, autoRefreshMinutes: number, analysisModel: ModelRef | null, };
 export type IssueConfigureParams = { commandId: CommandId, expectedRevision: number, config: IssueConfigDto, };
@@ -87,13 +88,6 @@ export type ToolName = string;
 export type DirId = string;
 export type EnvId = string;
 export type ProjectId = string;
-export type WorkRunId = string;
-export type WorkContractId = string;
-export type WorkAttemptId = string;
-export type WorkRelationId = string;
-export type WorkDecisionId = string;
-export type WorkExecutionId = string;
-export type WorkConflictId = string;
 export type ConnectorAccountDto = { id: string, displayName: string, };
 export type ConnectorAvailableActionDto = "connectApiToken" | "connectOAuth" | "disconnect" | "reauthorizeApiToken" | "reauthorizeOAuth" | "refreshOAuth" | "revokeOAuth";
 export type ConnectorOAuthMethodDto = "browser" | "device";
@@ -192,7 +186,6 @@ export type AgentInteractionCapability = { version: number, kinds: Array<AgentIn
 dynamicTools?: Array<ToolName>, };
 export type BrowserCapability = { version: number, observe: boolean, input: boolean, };
 export type DirPermissionsHostCapability = { version: number, };
-export type WorkCoordinationHostCapability = { version: number, };
 export type BrowserBinaryPayload = { mimeType: string, dataBase64: string, decodedLength: number, };
 export type BrowserCloseParams = { targetId: string, };
 export type BrowserCreateParams = { url: string, };
@@ -204,7 +197,7 @@ export type BrowserPerformActionDto = { "type": "navigate", targetId: string, ur
 export type BrowserPerformParams = { action: BrowserPerformActionDto, };
 export type BrowserPerformResult = { targetId: string, };
 export type BrowserTextInputTargetDto = { "type": "element", target: BrowserElementTargetDto, } | { "type": "focusedElement" };
-export type ClientCapabilities = { notifications?: boolean, agentInteractions?: AgentInteractionCapability | null, browser?: BrowserCapability | null, dirPermissionsHost?: DirPermissionsHostCapability | null, workCoordinationHost?: WorkCoordinationHostCapability | null, };
+export type ClientCapabilities = { notifications?: boolean, agentInteractions?: AgentInteractionCapability | null, browser?: BrowserCapability | null, dirPermissionsHost?: DirPermissionsHostCapability | null, };
 export type ServerInfo = { name: string, version: string, };
 export type DocumentCollaborationOpenParams = { roomId?: string | null, clientId: string, schemaId: string,
 /**
@@ -305,7 +298,8 @@ export type SkillId = { source: SkillSourceId, name: SkillName, };
 export type ContentDigest = string;
 export type DelegatedTask = { title: string, instructions: string, };
 export type AgentDefinitionSelectionReason = "explicit" | "automatic";
-export type FrozenAgentDefinitionRef = { name: string, catalogGeneration: number, contentDigest: ContentDigest, selectionReason: AgentDefinitionSelectionReason, };
+export type FrozenAgentDefinitionRef = { name: string, source: AgentRoleSource, version: number | null, catalogGeneration: number, contentDigest: ContentDigest, selectionReason: AgentDefinitionSelectionReason, };
+export type AgentRoleSource = { "type": "builtIn" } | { "type": "directory", id: string, };
 export type AgentRoleSnapshot = { name: string, instructions: string, model?: ModelRef | null, definition?: FrozenAgentDefinitionRef | null, };
 export type AgentTreeExecutionStatus = "idle" | "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled";
 export type AgentTreeWaitingReason = "approval" | "userInput" | "capability";
@@ -385,7 +379,7 @@ export type SlashCommandArgumentModeDto = "none" | "optional";
 export type SlashCommandDefinition = { name: string, description: string, argumentMode: SlashCommandArgumentModeDto, };
 export type ProtocolVersion = { major: number, revision: number, };
 export type CapabilityContract = { version: number, };
-export type ServerCapabilities = { agentInteractions: boolean, documentCollaboration: boolean, sessions: boolean, threads: boolean, turns: boolean, workCoordination: boolean, projects: boolean, resources: boolean, attachments: boolean, fileSystem: boolean, git: boolean, contentSearch: boolean, codebase: boolean, cloudCodebase: boolean, terminal: boolean, debugAdapter: boolean, typst: boolean, updateReplay: boolean, extensions: boolean, extensionHost: boolean, connectors: boolean, plugins: boolean, marketplace: boolean, mcp: boolean, mcpOAuth: boolean, contracts: { [key in string]: CapabilityContract }, };
+export type ServerCapabilities = { agentInteractions: boolean, documentCollaboration: boolean, sessions: boolean, threads: boolean, turns: boolean, projects: boolean, resources: boolean, attachments: boolean, fileSystem: boolean, git: boolean, contentSearch: boolean, codebase: boolean, cloudCodebase: boolean, terminal: boolean, debugAdapter: boolean, typst: boolean, updateReplay: boolean, extensions: boolean, extensionHost: boolean, connectors: boolean, plugins: boolean, marketplace: boolean, mcp: boolean, mcpOAuth: boolean, contracts: { [key in string]: CapabilityContract }, };
 export type InitializeParams = { clientInfo: ClientInfo, capabilities: ClientCapabilities, };
 export type InitializeResult = { serverInfo: ServerInfo, protocolVersion: ProtocolVersion, schemaHash: SchemaHash, capabilities: ServerCapabilities, slashCommands: Array<SlashCommandDefinition>, };
 export type EnvCwdSetParams = { cwd: string, };
@@ -630,8 +624,7 @@ export type TurnChangeFileDto = { path: string, previousPath?: string, kind: Tur
 export type TurnChangeFileStatisticsDto = { files: number, additions: number, deletions: number, };
 export type ThreadDirBinding = { managedWorktreeId: string, sourceDirId: string, repositories: Array<ThreadWorktreeRepositoryBindingDto>, baselineSummary: string, };
 export type ThreadWorktreeRepositoryBindingDto = { repositoryId: string, targetBranch?: string, baselineObjectId?: string, };
-export type TurnChangeSetSummary = { changeSetId: ChangeSetId, sessionId: SessionId, threadId: ThreadId, turnId: TurnId, repositoryId: string, workAttempt?: WorkAttemptChangeProvenanceDto, targetBranch?: string, statistics: TurnChangeFileStatisticsDto, captureState: TurnChangeCaptureStateDto, messageState: TurnChangeMessageStateDto, commitState: TurnChangeCommitStateDto, terminalState?: TurnChangeTerminalStateDto, dependencies: Array<ChangeSetId>, externalDependencyPaths: Array<string>, warnings: Array<string>, conflictPaths: Array<string>, failureMessage?: string, commitId?: string, revision: number, };
-export type WorkAttemptChangeProvenanceDto = { workRunId: WorkRunId, attemptId: WorkAttemptId, executionId: WorkExecutionId, contractId: WorkContractId, contractRevision: number, sourceRootDirId: DirId, managedRootDirId: DirId, rootCheckpointDigest: ContentDigest, };
+export type TurnChangeSetSummary = { changeSetId: ChangeSetId, sessionId: SessionId, threadId: ThreadId, turnId: TurnId, repositoryId: string, targetBranch?: string, statistics: TurnChangeFileStatisticsDto, captureState: TurnChangeCaptureStateDto, messageState: TurnChangeMessageStateDto, commitState: TurnChangeCommitStateDto, terminalState?: TurnChangeTerminalStateDto, dependencies: Array<ChangeSetId>, externalDependencyPaths: Array<string>, warnings: Array<string>, conflictPaths: Array<string>, failureMessage?: string, commitId?: string, revision: number, };
 export type TurnChangesListParams = { sessionId: SessionId, threadId: ThreadId, };
 export type TurnChangesListResult = { dir?: ThreadDirBinding, changeSets: Array<TurnChangeSetSummary>, };
 export type TurnChangesReadParams = { sessionId: SessionId, threadId: ThreadId, changeSetId: ChangeSetId, };
@@ -644,81 +637,6 @@ export type TurnChangesCommitParams = { commandId: CommandId, sessionId: Session
 export type TurnChangesDiscardThreadParams = { commandId: CommandId, sessionId: SessionId, threadId: ThreadId, expectedRevision: number, confirmed: boolean, };
 export type TurnChangesMutationResult = { changeSets: Array<TurnChangeSetSummary>, };
 export type TurnChangesChanged = { sessionId: SessionId, threadId: ThreadId, changeSets: Array<TurnChangeSetSummary>, };
-export type WorkRunStatusDto = "active" | "completed" | "cancelled";
-export type WorkGoalDto = { revision: number, objective: string, acceptanceConditions: Array<string>, exclusions: Array<string>, };
-export type WorkParticipantRelationDto = { "type": "root" } | { "type": "delegated", parent_thread_id: ThreadId, delegation_id: DelegationId, };
-export type WorkParticipantDto = { sessionId: SessionId, threadId: ThreadId, relation: WorkParticipantRelationDto, };
-export type WorkDecisionDto = { decisionId: WorkDecisionId, authority: string, scope: string, statement: string, contentDigest: ContentDigest, };
-export type GitRootTargetDto = { "type": "branch", name: string, expected_head: string, } | { "type": "unbornBranch", name: string, anchor_object_id: string, } | { "type": "detached", object_id: string, };
-export type GitRepositoryCheckpointDto = { repositoryId: string, relativePath: string, target: GitRootTargetDto, baselineTree: string, };
-export type RootStateDto = { "type": "git", repositories: Array<GitRepositoryCheckpointDto>, } | { "type": "directory", snapshot_id: string, };
-export type ControlResourceKindDto = "projectInstructions" | "agentDefinition" | "skill" | "hook" | "buildEntry" | "validationProfile" | "permissionPolicy" | "coordinationPolicy";
-export type ControlResourceBindingDto = { kind: ControlResourceKindDto, sourceDirId: DirId, relativePath: string, scope: string, precedence: number, contentDigest: ContentDigest, };
-export type RootCheckpointDto = { environmentId: EnvId, dirId: DirId, state: RootStateDto, controlResources: Array<ControlResourceBindingDto>, };
-export type AuthorizationSnapshotRefDto = { authority: string, policyRevision: string, grantSetDigest: ContentDigest, grantedEffectsDigest: ContentDigest, };
-export type ValidationProfileRefDto = { name: string, contentDigest: ContentDigest, };
-export type WorkScopeClaimDto = { components: Array<string>, paths: Array<string>, contracts: Array<string>, resources: Array<string>, };
-export type WorkContractRefDto = { contractId: WorkContractId, revision: number, };
-export type WorkResultRefDto = { attemptId: WorkAttemptId, resultDigest: ContentDigest, };
-export type WorkContractVersionDto = { contractId: WorkContractId, revision: number, goalRevision: number, topologyRevision: number, ownerThreadId: ThreadId, objective: string, acceptanceConditions: Array<string>, exclusions: Array<string>, environmentId: EnvId, roots: Array<RootCheckpointDto>, primaryRootDirId: DirId, authorization: AuthorizationSnapshotRefDto, decisionIds: Array<WorkDecisionId>, upstreamResults: Array<WorkResultRefDto>, expectedScope: WorkScopeClaimDto, validationProfile: ValidationProfileRefDto, };
-export type WorkAttemptExecutionStatusDto = "planned" | "exploring" | "writing" | "waiting" | "sealed" | "failed" | "interrupted" | "cancelled";
-export type WorkAttemptCoordinationStatusDto = "clear" | "expansionRequested" | "conflict" | "stale" | "blocked";
-export type WorkAttemptVerificationStatusDto = "pending" | "verifying" | "verified" | "rejected" | "indeterminate" | "stale";
-export type WorkAttemptIntegrationStatusDto = "idle" | "queued" | "integrating" | "integrated" | "partial" | "conflict" | "failed";
-export type ExternalEffectsStatusDto = "none" | "verified" | "unknown";
-export type WorkAttemptResultDto = { resultDigest: ContentDigest, changeSetIds: Array<ChangeSetId>, privateOutputDigest: ContentDigest, externalEffectsDigest: ContentDigest, externalEffectsStatus: ExternalEffectsStatusDto, };
-export type ManagedRootBindingDto = { sourceDirId: DirId, managedDirId: DirId, rootCheckpointDigest: ContentDigest, bindingManifestDigest: ContentDigest, };
-export type WorkAttemptWorkspaceDto = { "type": "provisioning" } | { "type": "ready", roots: Array<ManagedRootBindingDto>, private_output_dir_id: DirId, } | { "type": "failed", reason: string, };
-export type WorkAttemptDto = { attemptId: WorkAttemptId, contract: WorkContractRefDto, sessionId: SessionId, threadId: ThreadId, environmentId: EnvId, roots: Array<RootCheckpointDto>, primaryRootDirId: DirId, workspace: WorkAttemptWorkspaceDto, executionId?: WorkExecutionId, executionStatus: WorkAttemptExecutionStatusDto, coordinationStatus: WorkAttemptCoordinationStatusDto, verificationStatus: WorkAttemptVerificationStatusDto, integrationStatus: WorkAttemptIntegrationStatusDto, waitingRelationId?: WorkRelationId, scopeExpansionEvidence: Array<string>, result?: WorkAttemptResultDto, failure?: string, };
-export type WorkWaitConditionDto = { "type": "executionFinished" } | { "type": "attemptSealed" } | { "type": "exactResult", result_digest: ContentDigest, };
-export type WorkRelationKindDto = { "type": "observation" } | { "type": "wait", target_execution_id: WorkExecutionId, condition: WorkWaitConditionDto, } | { "type": "alternate" } | { "type": "handoff", target_contract: WorkContractRefDto, } | { "type": "resultDependency", result_digest: ContentDigest, };
-export type WorkRelationStatusDto = { "type": "active" } | { "type": "waiting" } | { "type": "satisfied", evidence_digest: ContentDigest, } | { "type": "failed", reason: string, } | { "type": "cancelled" } | { "type": "stale" };
-export type WorkRelationDto = { relationId: WorkRelationId, sourceAttemptId: WorkAttemptId, targetAttemptId: WorkAttemptId, kind: WorkRelationKindDto, status: WorkRelationStatusDto, resumeExecutionStatus?: WorkAttemptExecutionStatusDto, };
-export type WorkConflictStatusDto = "open" | "resolved";
-export type WorkConflictDto = { conflictId: WorkConflictId, attemptIds: Array<WorkAttemptId>, resource: string, evidence: Array<string>, status: WorkConflictStatusDto, resolutionDecisionId?: WorkDecisionId, };
-export type WorkAttemptChangeEvidenceRefDto = { changeSetId: ChangeSetId, evidenceDigest: ContentDigest, };
-export type VerificationChangeSetInputDto = { attemptId: WorkAttemptId, changeSet: WorkAttemptChangeEvidenceRefDto, };
-export type GitVerificationRepositoryDto = { repositoryId: string, relativePath: string, target: GitRootTargetDto, targetTree: string, finalTree: string, };
-export type VerificationRootStateDto = { "type": "git", repositories: Array<GitVerificationRepositoryDto>, } | { "type": "directory", target_snapshot_id: string, final_snapshot_id: string, };
-export type VerificationRootDto = { sourceDirId: DirId, checkpointDigest: ContentDigest, state: VerificationRootStateDto, };
-export type WorkSerializabilityStatusDto = "proven" | "indeterminate";
-export type WorkSerializabilityEvidenceDto = { status: WorkSerializabilityStatusDto, evidenceDigest: ContentDigest, reason: string, };
-export type WorkVerificationInputDto = { goalRevision: number, topologyRevision: number, coordinationDigest: ContentDigest, orderedResults: Array<WorkResultRefDto>, orderedChangeSets: Array<VerificationChangeSetInputDto>, serializability: WorkSerializabilityEvidenceDto, roots: Array<VerificationRootDto>, authorizationDigests: Array<ContentDigest>, controlResourceDigests: Array<ContentDigest>, validationProfileDigests: Array<ContentDigest>, validatorDigest: ContentDigest, environmentDigest: ContentDigest, };
-export type VerificationCheckOutcomeDto = "passed" | "failed" | "indeterminate";
-export type VerificationCheckEvidenceDto = { checkId: string, commandDigest: ContentDigest, outputDigest: ContentDigest, outcome: VerificationCheckOutcomeDto, };
-export type WorkVerificationStatusDto = "verifying" | "verified" | "rejected" | "indeterminate" | "stale";
-export type WorkVerificationDto = { verificationKey: ContentDigest, input: WorkVerificationInputDto, status: WorkVerificationStatusDto, checks: Array<VerificationCheckEvidenceDto>, evidenceDigest?: ContentDigest, reason?: string, staleReason?: string, };
-export type IntegrationRootTargetDto = { "type": "git", repository_id: string, relative_path: string, target: GitRootTargetDto, target_tree: string, final_tree: string, } | { "type": "directory", target_snapshot_id: string, final_snapshot_id: string, };
-export type IntegrationPreparedArtifactDto = { "type": "gitCommit", object_id: string, } | { "type": "directorySnapshot", snapshot_id: string, };
-export type IntegrationRootStatusDto = "pending" | "prepared" | "published";
-export type WorkIntegrationRootDto = { rootId: ContentDigest, sourceDirId: DirId, target: IntegrationRootTargetDto, status: IntegrationRootStatusDto, preparedArtifact?: IntegrationPreparedArtifactDto, publicationReceiptDigest?: ContentDigest, };
-export type WorkIntegrationStatusDto = "queued" | "integrating" | "integrated" | "partial" | "conflict" | "failed";
-export type IntegrationFailureKindDto = "conflict" | "failure" | "targetMoved";
-export type IntegrationIncidentDto = { generation: number, kind: IntegrationFailureKindDto, reason: string, publishedRootCount: number, };
-export type WorkIntegrationDto = { integrationKey: ContentDigest, verificationKey: ContentDigest, generation: number, status: WorkIntegrationStatusDto, roots: Array<WorkIntegrationRootDto>, incidents: Array<IntegrationIncidentDto>, evidenceDigest?: ContentDigest, };
-export type WorkRunDto = { workRunId: WorkRunId, revision: number, topologyRevision: number, status: WorkRunStatusDto, terminalReason?: string, goals: Array<WorkGoalDto>, participants: Array<WorkParticipantDto>, decisions: Array<WorkDecisionDto>, contracts: Array<WorkContractVersionDto>, attempts: Array<WorkAttemptDto>, relations: Array<WorkRelationDto>, conflicts: Array<WorkConflictDto>, verifications: Array<WorkVerificationDto>, integrations: Array<WorkIntegrationDto>, };
-export type WorkRunSummaryDto = { workRunId: WorkRunId, revision: number, topologyRevision: number, status: WorkRunStatusDto, objective: string, sessionCount: number, participantCount: number, attemptCount: number, openConflictCount: number, };
-export type WorkRunListParams = Record<symbol, never>;
-export type WorkRunListResult = { workRuns: Array<WorkRunSummaryDto>, };
-export type WorkRunReadParams = { workRunId: WorkRunId, };
-export type WorkRunReadResult = { workRun: WorkRunDto, };
-export type WorkRunCollaborationModeDto = "singleAgent" | "team" | "multiSession";
-export type WorkRunSessionTreeDto = { sessionId: SessionId, agentTree: AgentTreeProjection, };
-export type WorkRunViewReadResult = { workRun: WorkRunDto, collaborationMode: WorkRunCollaborationModeDto, sessionTrees: Array<WorkRunSessionTreeDto>, };
-export type WorkRunCreateParams = { commandId: CommandId, workRunId: WorkRunId, rootSessionId: SessionId, rootThreadId: ThreadId, objective: string, acceptanceConditions: Array<string>, exclusions: Array<string>, };
-export type WorkRunParticipantAddParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, sessionId: SessionId, threadId: ThreadId, relation: WorkParticipantRelationDto, };
-export type WorkRunRelationCreateParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, relationId: WorkRelationId, sourceAttemptId: WorkAttemptId, targetAttemptId: WorkAttemptId, kind: WorkRelationKindDto, };
-export type WorkRunGoalReviseParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, objective: string, acceptanceConditions: Array<string>, exclusions: Array<string>, };
-export type WorkRunDecisionRecordParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, decisionId: WorkDecisionId, authority: string, scope: string, statement: string, };
-export type WorkRunAttemptScopeExpansionRequestParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, attemptId: WorkAttemptId, evidence: Array<string>, };
-export type WorkRunConflictRecordParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, conflictId: WorkConflictId, attemptIds: Array<WorkAttemptId>, resource: string, evidence: Array<string>, };
-export type WorkRunConflictResolveParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, conflictId: WorkConflictId, decisionId: WorkDecisionId, };
-export type WorkRunCancelParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, reason: string, };
-export type WorkRunVerificationRequestParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, attemptIds: Array<WorkAttemptId>, };
-export type WorkRunIntegrationRequestParams = { commandId: CommandId, workRunId: WorkRunId, expectedRevision: number, verificationKey: ContentDigest, };
-export type WorkRunCommandDispositionDto = "committed" | "replayed";
-export type WorkRunMutationResult = { disposition: WorkRunCommandDispositionDto, workRun: WorkRunDto, };
-export type WorkRunChanged = { workRun: WorkRunDto, };
 export type ProjectStatusDto = "active" | "archived";
 export type UnixMillis = number;
 export type Automation = { id: string, revision: number, definition: AutomationDefinition, status: AutomationStatus, createdAt: UnixMillis, updatedAt: UnixMillis, nextRunAt: UnixMillis | null, };
@@ -761,8 +679,8 @@ export type AutomationRunsParams = { id: string, limit: number, };
 export type AutomationRunsResult = { runs: Array<AutomationRun>, };
 export type AutomationStopParams = { runId: string, };
 export type ProjectRootDto = { environmentId: EnvId, dirId: DirId, path: string, name: string, purpose: string, };
-export type ProjectDto = { projectId: ProjectId, revision: number, status: ProjectStatusDto, name: string, description: string, roots: Array<ProjectRootDto>, sessionIds: Array<SessionId>, workRunIds: Array<WorkRunId>, };
-export type ProjectSummaryDto = { projectId: ProjectId, revision: number, status: ProjectStatusDto, name: string, rootCount: number, sessionCount: number, workRunCount: number, };
+export type ProjectDto = { projectId: ProjectId, revision: number, status: ProjectStatusDto, name: string, description: string, roots: Array<ProjectRootDto>, sessionIds: Array<SessionId>, };
+export type ProjectSummaryDto = { projectId: ProjectId, revision: number, status: ProjectStatusDto, name: string, rootCount: number, sessionCount: number, };
 export type ProjectListParams = Record<symbol, never>;
 export type ProjectListResult = { projects: Array<ProjectSummaryDto>, };
 export type ProjectReadParams = { projectId: ProjectId, };
@@ -773,7 +691,6 @@ export type ProjectRootAddParams = { commandId: CommandId, projectId: ProjectId,
 export type ProjectRootUpdateParams = { commandId: CommandId, projectId: ProjectId, expectedRevision: number, dirId: DirId, name: string, purpose: string, };
 export type ProjectRootRemoveParams = { commandId: CommandId, projectId: ProjectId, expectedRevision: number, dirId: DirId, };
 export type ProjectSessionMutationParams = { commandId: CommandId, projectId: ProjectId, expectedRevision: number, sessionId: SessionId, };
-export type ProjectWorkRunMutationParams = { commandId: CommandId, projectId: ProjectId, expectedRevision: number, workRunId: WorkRunId, };
 export type ProjectLifecycleParams = { commandId: CommandId, projectId: ProjectId, expectedRevision: number, };
 export type ProjectCommandDispositionDto = "committed" | "replayed";
 export type ProjectMutationResult = { disposition: ProjectCommandDispositionDto, project: ProjectDto, };
@@ -1088,7 +1005,6 @@ export interface AppServerNotificationMap {
   "git/statusChanged": GitStatusChanged;
   "turnChanges/changed": TurnChangesChanged;
   "issue/assignment/notice": IssueAssignmentNotice;
-  "workRun/changed": WorkRunChanged;
   "project/changed": ProjectChanged;
   "automation/changed": Record<string, never>;
   "fs/changed": FsChanged;
@@ -1149,20 +1065,6 @@ export interface AppServerRequestMap {
   "turnChanges/updateDraft": { params: TurnChangesUpdateDraftParams; response: TurnChangesMutationResult };
   "turnChanges/commit": { params: TurnChangesCommitParams; response: TurnChangesMutationResult };
   "turnChanges/discardThread": { params: TurnChangesDiscardThreadParams; response: TurnChangesMutationResult };
-  "workRun/list": { params: WorkRunListParams; response: WorkRunListResult };
-  "workRun/read": { params: WorkRunReadParams; response: WorkRunReadResult };
-  "workRun/view/read": { params: WorkRunReadParams; response: WorkRunViewReadResult };
-  "workRun/create": { params: WorkRunCreateParams; response: WorkRunMutationResult };
-  "workRun/participant/add": { params: WorkRunParticipantAddParams; response: WorkRunMutationResult };
-  "workRun/relation/create": { params: WorkRunRelationCreateParams; response: WorkRunMutationResult };
-  "workRun/goal/revise": { params: WorkRunGoalReviseParams; response: WorkRunMutationResult };
-  "workRun/decision/record": { params: WorkRunDecisionRecordParams; response: WorkRunMutationResult };
-  "workRun/attempt/scopeExpansion/request": { params: WorkRunAttemptScopeExpansionRequestParams; response: WorkRunMutationResult };
-  "workRun/conflict/record": { params: WorkRunConflictRecordParams; response: WorkRunMutationResult };
-  "workRun/conflict/resolve": { params: WorkRunConflictResolveParams; response: WorkRunMutationResult };
-  "workRun/cancel": { params: WorkRunCancelParams; response: WorkRunMutationResult };
-  "workRun/verification/request": { params: WorkRunVerificationRequestParams; response: WorkRunMutationResult };
-  "workRun/integration/request": { params: WorkRunIntegrationRequestParams; response: WorkRunMutationResult };
   "project/list": { params: ProjectListParams; response: ProjectListResult };
   "project/read": { params: ProjectReadParams; response: ProjectReadResult };
   "project/create": { params: ProjectCreateParams; response: ProjectMutationResult };
@@ -1172,8 +1074,6 @@ export interface AppServerRequestMap {
   "project/root/remove": { params: ProjectRootRemoveParams; response: ProjectMutationResult };
   "project/session/link": { params: ProjectSessionMutationParams; response: ProjectMutationResult };
   "project/session/unlink": { params: ProjectSessionMutationParams; response: ProjectMutationResult };
-  "project/workRun/link": { params: ProjectWorkRunMutationParams; response: ProjectMutationResult };
-  "project/workRun/unlink": { params: ProjectWorkRunMutationParams; response: ProjectMutationResult };
   "project/archive": { params: ProjectLifecycleParams; response: ProjectMutationResult };
   "project/restore": { params: ProjectLifecycleParams; response: ProjectMutationResult };
   "session/thread/subscribe": { params: SessionThreadSubscribeParams; response: SessionThreadSubscribeResult };
@@ -1423,20 +1323,6 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "turnChanges/updateDraft": { method: "turnChanges/updateDraft" },
   "turnChanges/commit": { method: "turnChanges/commit" },
   "turnChanges/discardThread": { method: "turnChanges/discardThread" },
-  "workRun/list": { method: "workRun/list" },
-  "workRun/read": { method: "workRun/read" },
-  "workRun/view/read": { method: "workRun/view/read" },
-  "workRun/create": { method: "workRun/create" },
-  "workRun/participant/add": { method: "workRun/participant/add" },
-  "workRun/relation/create": { method: "workRun/relation/create" },
-  "workRun/goal/revise": { method: "workRun/goal/revise" },
-  "workRun/decision/record": { method: "workRun/decision/record" },
-  "workRun/attempt/scopeExpansion/request": { method: "workRun/attempt/scopeExpansion/request" },
-  "workRun/conflict/record": { method: "workRun/conflict/record" },
-  "workRun/conflict/resolve": { method: "workRun/conflict/resolve" },
-  "workRun/cancel": { method: "workRun/cancel" },
-  "workRun/verification/request": { method: "workRun/verification/request" },
-  "workRun/integration/request": { method: "workRun/integration/request" },
   "project/list": { method: "project/list" },
   "project/read": { method: "project/read" },
   "project/create": { method: "project/create" },
@@ -1446,8 +1332,6 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "project/root/remove": { method: "project/root/remove" },
   "project/session/link": { method: "project/session/link" },
   "project/session/unlink": { method: "project/session/unlink" },
-  "project/workRun/link": { method: "project/workRun/link" },
-  "project/workRun/unlink": { method: "project/workRun/unlink" },
   "project/archive": { method: "project/archive" },
   "project/restore": { method: "project/restore" },
   "session/thread/subscribe": { method: "session/thread/subscribe" },
@@ -1670,7 +1554,6 @@ export const APP_SERVER_NOTIFICATIONS: {
   "git/statusChanged": { method: "git/statusChanged" },
   "turnChanges/changed": { method: "turnChanges/changed" },
   "issue/assignment/notice": { method: "issue/assignment/notice" },
-  "workRun/changed": { method: "workRun/changed" },
   "project/changed": { method: "project/changed" },
   "automation/changed": { method: "automation/changed" },
   "fs/changed": { method: "fs/changed" },

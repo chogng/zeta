@@ -1,8 +1,8 @@
 use super::*;
-use zeta_work_coordination::IssueIdentity;
-use zeta_work_coordination::IssueRepositoryIdentity;
-use zeta_work_coordination::IssueWorkItem;
-use zeta_work_coordination::IssueWorkflow;
+use github::IssueIdentity;
+use github::IssueRepositoryIdentity;
+use github::IssueWorkItem;
+use github::IssueWorkflow;
 
 fn plan() -> IssueAssignmentPlan {
     let mut workflow = IssueWorkflow::default();
@@ -227,7 +227,7 @@ fn control_fences_the_writer_atomically_and_retains_claim_until_remote_release()
             &initial.id,
             releasing.revision,
             IssueAssignmentCommand::RecordSync {
-                stage: zeta_work_coordination::IssueStage::Todo,
+                stage: github::IssueStage::Todo,
                 labels: BTreeMap::new(),
             },
             103,
@@ -271,7 +271,7 @@ fn transfer_retains_exclusive_claim_and_does_not_restart_implementation() {
             &initial.id,
             transferring.revision,
             IssueAssignmentCommand::RecordSync {
-                stage: zeta_work_coordination::IssueStage::Queued,
+                stage: github::IssueStage::Queued,
                 labels: BTreeMap::new(),
             },
             103,
@@ -329,7 +329,7 @@ fn only_one_scheduler_can_reserve_a_queued_execution() {
             &initial.id,
             initial.revision,
             IssueAssignmentCommand::RecordSync {
-                stage: zeta_work_coordination::IssueStage::Queued,
+                stage: github::IssueStage::Queued,
                 labels: BTreeMap::new(),
             },
             100,

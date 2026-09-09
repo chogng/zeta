@@ -1,11 +1,11 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use github::IssuePage;
+use github::Repository;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use std::path::Path;
 use std::sync::Mutex;
-use zeta_github::IssuePage;
-use zeta_github::Repository;
 
 const RETENTION_SECONDS: u64 = 7 * 24 * 60 * 60;
 const MAX_PAGES: usize = 256;

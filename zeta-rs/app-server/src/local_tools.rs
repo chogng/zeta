@@ -78,7 +78,6 @@ use zeta_tools::ToolPayload;
 use zeta_tools::to_protocol_tool_definition;
 
 use crate::dir_grants::DirGrants;
-use crate::dir_grants::ThreadDirScope;
 use crate::tool_composition::ToolCompositionError;
 use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
@@ -624,19 +623,13 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         call: &ToolCall,
         authorization: &Authorization,
         relative: PathBuf,
-        thread_scope: Option<&ThreadDirScope>,
     ) -> Result<ActionReviewRequest, CoreError> {
         let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let request = self.materialize_at(request, authorization.dir(), relative)?;
-        let sandbox_scope = thread_scope
-            .map(|scope| scope.sandbox_scope(authorization))
-            .transpose()
-            .map_err(CoreError::Policy)?
-            .flatten();
-        self.review_request_scoped(&request, sandbox_scope.as_ref())
+        self.review_request_scoped(&request, None)
     }
 
     fn execute_at(
@@ -646,19 +639,13 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         cancellation: &CancellationToken,
         dir_authorization: &Authorization,
         relative: PathBuf,
-        thread_scope: Option<&ThreadDirScope>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Execution(error.to_string()))?;
         let request = self.materialize_at(request, dir_authorization.dir(), relative)?;
-        let sandbox_scope = thread_scope
-            .map(|scope| scope.sandbox_scope(dir_authorization))
-            .transpose()
-            .map_err(CoreError::Execution)?
-            .flatten();
-        self.execute_request_scoped(request, authorization, cancellation, sandbox_scope.as_ref())
+        self.execute_request_scoped(request, authorization, cancellation, None)
     }
 
     fn review_request(
@@ -873,7 +860,7 @@ impl LocalExecutorReviewer {
             .ensure_active()
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         if call.name.as_str() == "shell-command" {
-            let (review, request, authorizations, sandbox_scope) =
+            let (review, request, authorizations) =
                 self.prepare_shell(call, session_id, thread_id)?;
             let mut prepared = PreparedToolExecution::new(
                 review,
@@ -886,9 +873,6 @@ impl LocalExecutorReviewer {
             );
             for authorization in authorizations {
                 prepared = prepared.with_dir_authorization(authorization);
-            }
-            if let Some(scope) = sandbox_scope {
-                prepared = prepared.with_sandbox_scope(scope);
             }
             return Ok(prepared);
         }
@@ -921,15 +905,7 @@ impl LocalExecutorReviewer {
         call: &ToolCall,
         session_id: Option<&zeta_protocol::SessionId>,
         thread_id: Option<&zeta_protocol::ThreadId>,
-    ) -> Result<
-        (
-            ActionReviewRequest,
-            ShellCommandRequest,
-            Vec<Authorization>,
-            Option<SandboxScope>,
-        ),
-        CoreError,
-    > {
+    ) -> Result<(ActionReviewRequest, ShellCommandRequest, Vec<Authorization>), CoreError> {
         if call.arguments.get("dir_root").is_some() {
             return Err(CoreError::Policy(
                 "shell-command dir_root is host-owned".into(),
@@ -939,7 +915,7 @@ impl LocalExecutorReviewer {
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        let (authorization, relative_working_directory, working_directory, thread_scope) =
+        let (authorization, relative_working_directory, working_directory) =
             self.resolve_execution_dir(request.working_directory(), session_id, thread_id)?;
         request = request
             .with_working_directory(relative_working_directory)
@@ -969,27 +945,10 @@ impl LocalExecutorReviewer {
         } else {
             shell_sandbox()
         };
-        let sandbox_scope = thread_scope
-            .as_ref()
-            .map(|scope| scope.sandbox_scope(&authorization))
-            .transpose()
-            .map_err(CoreError::Policy)?
-            .flatten();
-        let sandbox_scope_identity = sandbox_scope.as_ref().map(|scope| {
-            json!({
-                "commandDir": scope.command_dir().id(),
-                "grants": scope.grants().iter().map(|grant| json!({
-                    "dirId": grant.dir().id(),
-                    "access": format!("{:?}", grant.access()),
-                })).collect::<Vec<_>>(),
-                "hiddenDirs": scope.hidden_dirs().iter().map(Dir::id).collect::<Vec<_>>(),
-            })
-        });
         let canonical = serde_json::to_vec(&json!({
             "program": request.program(),
             "arguments": request.arguments(),
             "working_directory": working_directory,
-            "sandboxScope": sandbox_scope_identity,
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let review = ActionReviewRequest::new(
@@ -1012,11 +971,7 @@ impl LocalExecutorReviewer {
             SandboxCompatibility::Supported(sandbox),
             self.action_policy_revision.clone(),
         );
-        let authorizations = thread_scope
-            .filter(ThreadDirScope::is_exact)
-            .map(|scope| scope.authorizations().cloned().collect())
-            .unwrap_or_else(|| vec![authorization]);
-        Ok((review, request, authorizations, sandbox_scope))
+        Ok((review, request, vec![authorization]))
     }
 
     fn resolve_execution_dir(
@@ -1024,15 +979,7 @@ impl LocalExecutorReviewer {
         requested: &Path,
         session_id: Option<&zeta_protocol::SessionId>,
         thread_id: Option<&zeta_protocol::ThreadId>,
-    ) -> Result<
-        (
-            Authorization,
-            std::path::PathBuf,
-            std::path::PathBuf,
-            Option<ThreadDirScope>,
-        ),
-        CoreError,
-    > {
+    ) -> Result<(Authorization, std::path::PathBuf, std::path::PathBuf), CoreError> {
         let thread_scope = thread_id
             .map(|thread_id| {
                 self.dir_grants
@@ -1050,42 +997,19 @@ impl LocalExecutorReviewer {
                 .dir()
                 .resolve_existing(requested)
                 .map_err(|error| CoreError::Policy(error.to_string()))?;
-            return Ok((
-                authorization,
-                requested.to_path_buf(),
-                absolute,
-                thread_scope,
-            ));
+            return Ok((authorization, requested.to_path_buf(), absolute));
         }
-        if let Some((authorization, relative)) = thread_scope
-            .as_ref()
-            .and_then(|scope| scope.resolve_source_alias(requested, self.authorization.dir()))
-        {
-            let relative = if relative.as_os_str().is_empty() {
-                PathBuf::from(".")
-            } else {
-                relative.to_path_buf()
-            };
-            let absolute = authorization
-                .dir()
-                .resolve_existing(&relative)
-                .map_err(|error| CoreError::Policy(error.to_string()))?;
-            return Ok((authorization, relative, absolute, thread_scope));
-        }
-        let exact = thread_scope.as_ref().is_some_and(ThreadDirScope::is_exact);
         let mut authorizations = thread_scope
             .as_ref()
             .map(|scope| scope.authorizations().cloned().collect::<Vec<_>>())
             .unwrap_or_else(|| vec![self.authorization.clone()]);
-        if !exact
-            && !authorizations
-                .iter()
-                .any(|value| value.dir() == self.authorization.dir())
+        if !authorizations
+            .iter()
+            .any(|value| value.dir() == self.authorization.dir())
         {
             authorizations.push(self.authorization.clone());
         }
-        if !exact
-            && let Some(session_id) = session_id
+        if let Some(session_id) = session_id
             && let Some(snapshot) = self
                 .dir_grants
                 .snapshot_for(session_id, DirPermission::ExecuteCommands)
@@ -1120,7 +1044,7 @@ impl LocalExecutorReviewer {
             .dir()
             .resolve_existing(&relative)
             .map_err(|error| CoreError::Policy(error.to_string()))?;
-        Ok((authorization, relative, absolute, thread_scope))
+        Ok((authorization, relative, absolute))
     }
 
     fn prepare_apply_patch(
@@ -1147,20 +1071,17 @@ impl LocalExecutorReviewer {
             })
             .transpose()?
             .flatten();
-        let exact = thread_scope.as_ref().is_some_and(ThreadDirScope::is_exact);
         let mut authorizations = thread_scope
             .as_ref()
             .map(|scope| scope.authorizations().cloned().collect::<Vec<_>>())
             .unwrap_or_else(|| vec![self.authorization.clone()]);
-        if !exact
-            && !authorizations
-                .iter()
-                .any(|value| value.dir() == self.authorization.dir())
+        if !authorizations
+            .iter()
+            .any(|value| value.dir() == self.authorization.dir())
         {
             authorizations.push(self.authorization.clone());
         }
-        if !exact
-            && let Some(session_id) = session_id
+        if let Some(session_id) = session_id
             && let Some(snapshot) = self
                 .dir_grants
                 .snapshot_for(session_id, DirPermission::MutateRepository)
@@ -1168,25 +1089,8 @@ impl LocalExecutorReviewer {
         {
             authorizations.extend(snapshot.authorizations().iter().cloned());
         }
-        let source_aliases = thread_scope
-            .as_ref()
-            .map(|scope| {
-                scope
-                    .roots()
-                    .iter()
-                    .map(|root| {
-                        (
-                            root.source()
-                                .cloned()
-                                .unwrap_or_else(|| self.authorization.dir().clone()),
-                            root.authorization().clone(),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
         let (authorization, rewritten_patch, targets) =
-            materialize_patch_targets(&authorizations, patch, &source_aliases)?;
+            materialize_patch_targets(&authorizations, patch, &[])?;
         let capabilities = targets.iter().flat_map(|target| {
             [
                 Capability::new(CapabilityKind::FileRead, target.clone()),
@@ -1674,90 +1578,3 @@ impl std::error::Error for LocalToolError {}
 #[cfg(test)]
 #[path = "local_tools_tests.rs"]
 mod tests;
-
-/// Executes an explicitly requested verification command inside a rebuilt candidate directory.
-/// It cannot acquire network access or write to the user's checkout or other Agent directories.
-pub(crate) fn execute_verification_command(
-    authorization: &Authorization,
-    config: &LocalToolConfig,
-    directory: Dir,
-    hidden: Vec<Dir>,
-    command: &str,
-    cancellation: &CancellationToken,
-) -> Result<zeta_tool_executor::CommandOutput, String> {
-    authorization
-        .ensure_active()
-        .map_err(|error| error.to_string())?;
-    if authorization.permission() != DirPermission::ExecuteCommands {
-        return Err("Independent verification requires execute-command authorization".into());
-    }
-    let scope = zeta_sandboxing::SandboxScope::new(
-        directory.clone(),
-        vec![zeta_sandboxing::SandboxDirGrant::new(
-            directory.clone(),
-            zeta_sandboxing::SandboxDirAccess::ReadWrite,
-        )],
-        hidden,
-    )
-    .map_err(|error| error.to_string())?;
-    let shell = ShellCommandTool::new(
-        zeta_tools::EnvId::local(),
-        directory.clone(),
-        native_sandbox(&InstallContext::current()).map_err(|error| error.to_string())?,
-        CoreAuthorized,
-        ShellCommandLimits {
-            timeout: std::time::Duration::from_secs(600),
-            max_output_bytes: 1024 * 1024,
-        },
-    )
-    .map_err(|error| error.to_string())?;
-    #[cfg(unix)]
-    let (program, arguments) = ("/bin/sh", vec!["-c".to_string(), command.to_owned()]);
-    #[cfg(windows)]
-    let (program, arguments) = (
-        "powershell.exe",
-        vec![
-            "-NoProfile".to_string(),
-            "-NonInteractive".to_string(),
-            "-Command".to_string(),
-            command.to_owned(),
-        ],
-    );
-    let policy = config.snapshot().map_err(|error| error.to_string())?;
-    let invocation = zeta_execpolicy::ExecPolicyCommand::new(program, arguments.clone());
-    let digest = zeta_protocol::ContentDigest::sha256(command.as_bytes()).to_string();
-    let subject = zeta_execpolicy::ExecPolicySubject::new(
-        &digest,
-        zeta_execpolicy::ExecPolicyActionKind::LocalProcess,
-        "built_in_tool",
-        "shell-command",
-        [],
-        Some(&invocation),
-        None,
-    );
-    if let zeta_execpolicy::ExecPolicyEffect::Deny(reason) = policy.evaluate(&subject).effect() {
-        return Err(format!(
-            "Verification command prohibited by execution policy: {reason}"
-        ));
-    }
-    let request = zeta_shell_command::ShellCommandRequest::new(program, arguments, ".")
-        .map_err(|error| error.to_string())?
-        .with_dir_root(directory.canonical_path());
-    match shell
-        .execute_authorized_scoped(
-            request,
-            CommandExecutionAuthority::Sandboxed(zeta_sandboxing::SandboxPolicy::new(
-                zeta_sandboxing::FileSystemAccess::DirectoryWrite,
-                zeta_sandboxing::NetworkAccess::Denied,
-            )),
-            cancellation,
-            Some(&scope),
-        )
-        .map_err(|error| format!("{error:?}"))?
-    {
-        CommandExecutionOutcome::Completed(output) => Ok(output),
-        CommandExecutionOutcome::SandboxDenied(denial) => {
-            Err(format!("Verification command denied: {denial:?}"))
-        }
-    }
-}

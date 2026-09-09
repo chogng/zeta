@@ -1,5 +1,5 @@
 # GitHub
 
-- Reads repository issues and comments through authenticated GitHub CLI requests.
-- Creates pull requests and enables the explicitly selected merge method.
-- Bounds subprocess lifetime and output; keeps Git operations and Session ownership with their existing modules.
+- Reads repository Issues, labels, assignees and comments through bounded authenticated GitHub CLI requests.
+- Owns GitHub Issue workflow, planning, claims, leases, stage synchronization and delivery receipts.
+- Creates pull requests and enables the selected merge method; Git operations and Agent lifecycle stay with their existing owners.

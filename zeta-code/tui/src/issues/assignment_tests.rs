@@ -1,8 +1,8 @@
 use super::*;
 use crossterm::event::KeyModifiers;
 use std::collections::BTreeSet;
-use zeta_work_coordination::IssueIdentity;
-use zeta_work_coordination::IssueWorkItem;
+use github::IssueIdentity;
+use github::IssueWorkItem;
 
 fn key(panel: &mut Panel, code: KeyCode) -> Outcome {
     panel.handle_key(KeyEvent::new(code, KeyModifiers::NONE))
