@@ -297,7 +297,7 @@ Manifest 必须 strict-parse：
 - `schemaVersion` 是 manifest format version，不是 Plugin version；
 - Plugin version 使用一个已选择并统一实现的 version scheme；
 - 同一 Plugin version 的内容 digest 必须唯一；registry 不得让相同
-  `(PluginId, version)` 指向不同内容；
+  `(PluginPackageId, version)` 指向不同内容；
 - manifest 只声明 credential slot，不包含 secret value；
 - permission 使用 tagged enum，不使用 `network: true`、`directory: "all"` 一类含糊开关。
 
@@ -318,16 +318,17 @@ artifact fail closed。
 
 ### 5.3 身份
 
-推荐 Plugin ID 为 `publisher/name`，两段都使用 lowercase ASCII、数字和单连字符，并限制总长度。
+通用插件标识采用 `name@marketplace`，规则见 [Core Plugins](../zeta-rs/docs/core-plugins.md#插件标识与-provider)。
+本节的 `PluginPackageId` 专指现有 `.zeta-plugin` manifest 中的 `publisher/name`，两段使用 lowercase ASCII、数字和单连字符，并限制总长度。
 display name 可本地化且可变化，不能充当 identity。
 
 ```rust
-pub struct PluginId(String);
+pub struct PluginPackageId(String);
 pub struct PluginVersion(String);
 pub struct PluginPackageDigest(String);
 
 pub struct InstalledPluginRef {
-    pub id: PluginId,
+    pub id: PluginPackageId,
     pub version: PluginVersion,
     pub digest: PluginPackageDigest,
 }
@@ -336,7 +337,7 @@ pub struct InstalledPluginRef {
 Plugin contribution identity 是：
 
 ```text
-(PluginId, contribution kind, manifest-local contribution ID)
+(PluginPackageId, contribution kind, manifest-local contribution ID)
 ```
 
 升级时即使 path 改变，只要 manifest-local ID 不变，用户 grant 和配置才能被有控制地重新评估。
@@ -468,7 +469,7 @@ Directory 声明可以请求某 Plugin/version，但不能静默下载、启用�
 
 解析规则：
 
-- exact `PluginId` 在一个 profile resolution 中只能有一个 active version；
+- exact `PluginPackageId` 在一个 profile resolution 中只能有一个 active version；
 - directory pin 可以覆盖 user 的版本选择，但必须产生可见的 `VersionPinOverride`；
 - 两个不同 Plugin 的 contribution 同名不能按 source priority 静默覆盖；
 - Skill/Connector/MCP consumer 使用 namespaced identity；

@@ -2,7 +2,7 @@ use crate::manifest::PluginManifest;
 use crate::package::digest::ScannedEntryKind;
 use crate::package::digest::scan_and_digest;
 use crate::{
-    PluginError, PluginErrorKind, PluginId, PluginPackageDigest, PluginPath, PluginVersion,
+    PluginError, PluginErrorKind, PluginPackageDigest, PluginPackageId, PluginPath, PluginVersion,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -151,7 +151,11 @@ impl LocalPluginCatalog {
         &self.packages
     }
 
-    pub fn read(&self, id: &PluginId, version: &PluginVersion) -> Option<&LocalPluginPackage> {
+    pub fn read(
+        &self,
+        id: &PluginPackageId,
+        version: &PluginVersion,
+    ) -> Option<&LocalPluginPackage> {
         self.packages
             .iter()
             .find(|package| &package.manifest.id == id && &package.manifest.version == version)

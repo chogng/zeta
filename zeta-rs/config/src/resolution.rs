@@ -1,7 +1,7 @@
 use crate::{
     ConfigError, ConfigGeneration, ConfigRevision, DirConfigDocument, DirConfigIntent,
-    DirConfigRevision, DirConfigScope, DirId, HookId, LanguageServerId, McpServerId, PluginId,
-    ResolvedConfig, ResolvedConfigSnapshot, SkillSourceId, UserConfigDocument,
+    DirConfigRevision, DirConfigScope, DirId, HookId, LanguageServerId, McpServerId,
+    PluginPackageId, ResolvedConfig, ResolvedConfigSnapshot, SkillSourceId, UserConfigDocument,
 };
 use std::collections::BTreeMap;
 use zeta_protocol::{ModelRef, ProviderId};
@@ -24,7 +24,7 @@ pub struct ConfigProvenance {
     pub providers: BTreeMap<ProviderId, ConfigValueSource>,
     pub mcp_servers: BTreeMap<McpServerId, ConfigValueSource>,
     pub skill_sources: BTreeMap<SkillSourceId, ConfigValueSource>,
-    pub plugin_requests: BTreeMap<PluginId, ConfigValueSource>,
+    pub plugin_requests: BTreeMap<PluginPackageId, ConfigValueSource>,
     pub hooks: BTreeMap<HookId, ConfigValueSource>,
     pub language_servers: BTreeMap<LanguageServerId, ConfigValueSource>,
     pub tool_search: ConfigValueSource,

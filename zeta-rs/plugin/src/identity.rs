@@ -1,93 +1,10 @@
+use crate::PluginPackageId;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::fmt;
 
-const MAX_PLUGIN_ID_BYTES: usize = 128;
 const SHA256_PREFIX: &str = "sha256:";
 const SHA256_HEX_BYTES: usize = 64;
-
-/// Stable identity of one Plugin across versions.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct PluginId(String);
-
-impl PluginId {
-    pub fn new(value: impl Into<String>) -> Result<Self, InvalidPluginId> {
-        let value = value.into();
-        if value.len() > MAX_PLUGIN_ID_BYTES {
-            return Err(InvalidPluginId::TooLong);
-        }
-        let Some((publisher, name)) = value.split_once('/') else {
-            return Err(InvalidPluginId::InvalidShape);
-        };
-        if value.matches('/').count() != 1
-            || !is_plugin_id_segment(publisher)
-            || !is_plugin_id_segment(name)
-        {
-            return Err(InvalidPluginId::InvalidShape);
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// Returns the publisher namespace carried by this validated Plugin identity.
-    pub fn publisher(&self) -> &str {
-        self.0
-            .split_once('/')
-            .expect("validated Plugin identity contains one separator")
-            .0
-    }
-}
-
-impl fmt::Display for PluginId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl Serialize for PluginId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for PluginId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
-    }
-}
-
-/// Reason a Plugin ID was rejected.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InvalidPluginId {
-    TooLong,
-    InvalidShape,
-}
-
-impl fmt::Display for InvalidPluginId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::TooLong => write!(
-                formatter,
-                "plugin id exceeds the {MAX_PLUGIN_ID_BYTES}-byte limit"
-            ),
-            Self::InvalidShape => formatter.write_str(
-                "plugin id must use '<publisher>/<name>' with lowercase ASCII letters, digits, \
-                 and single hyphens",
-            ),
-        }
-    }
-}
-
-impl std::error::Error for InvalidPluginId {}
 
 /// Exact SemVer release of one Plugin.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -229,19 +146,9 @@ impl std::error::Error for InvalidPluginPackageDigest {}
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstalledPluginRef {
-    pub id: PluginId,
+    pub id: PluginPackageId,
     pub version: PluginVersion,
     pub digest: PluginPackageDigest,
-}
-
-fn is_plugin_id_segment(value: &str) -> bool {
-    !value.is_empty()
-        && !value.starts_with('-')
-        && !value.ends_with('-')
-        && !value.contains("--")
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 #[cfg(test)]

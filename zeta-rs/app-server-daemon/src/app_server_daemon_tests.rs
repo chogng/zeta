@@ -66,7 +66,7 @@ fn endpoint_identity_is_shared_across_product_service_adapters() {
     let dir = tempfile::tempdir().unwrap();
     let first_install = tempfile::tempdir().unwrap();
     let first_manifest = first_install.path().join("product-services.json");
-    std::fs::write(&first_manifest, r#"{"schemaVersion":1}"#).unwrap();
+    std::fs::write(&first_manifest, r#"{"schemaVersion":2,"marketplaces":[]}"#).unwrap();
     let first = ConnectionOptions::new(
         profile.path(),
         Some(dir.path().to_path_buf()),

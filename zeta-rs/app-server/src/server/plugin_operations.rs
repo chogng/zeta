@@ -17,8 +17,8 @@ use zeta_core_plugins::PluginAuthorityDisposition;
 use zeta_plugin::InstalledPluginRef;
 use zeta_plugin::PluginError;
 use zeta_plugin::PluginErrorKind;
-use zeta_plugin::PluginId;
 use zeta_plugin::PluginPackageDigest;
+use zeta_plugin::PluginPackageId;
 use zeta_plugin::PluginVersion;
 
 impl AppServer {
@@ -106,7 +106,7 @@ fn package_ref(
     digest: String,
 ) -> Result<InstalledPluginRef, RpcError> {
     Ok(InstalledPluginRef {
-        id: PluginId::new(id).map_err(|_| invalid_params())?,
+        id: PluginPackageId::new(id).map_err(|_| invalid_params())?,
         version: PluginVersion::new(version).map_err(|_| invalid_params())?,
         digest: PluginPackageDigest::new(digest).map_err(|_| invalid_params())?,
     })

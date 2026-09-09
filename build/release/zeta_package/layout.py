@@ -697,11 +697,55 @@ def validate_product_services(product_services_directory: Path) -> None:
             raise RuntimeError(
                 "Package is missing product service file: {}".format(path)
             )
+    if not 0 < config_path.stat().st_size <= 1024 * 1024:
+        raise RuntimeError(
+            "Package product services configuration exceeds its file contract"
+        )
     document = json.loads(config_path.read_text(encoding="utf-8"))
-    marketplace_manager = document.get("marketplaceManager")
-    if document.get("schemaVersion") != 1 or not isinstance(marketplace_manager, dict):
+    if not isinstance(document, dict):
         raise RuntimeError("Package product services configuration is invalid")
-    if marketplace_manager.get("trustedRoot") != "marketplace-root.json":
+    marketplaces = document.get("marketplaces")
+    if document.get("schemaVersion") != 2 or not isinstance(marketplaces, list):
+        raise RuntimeError("Package product services configuration is invalid")
+    names = set()
+    for source in marketplaces:
+        if not isinstance(source, dict):
+            raise RuntimeError("Package product services configuration is invalid")
+        name = source.get("name")
+        if (
+            not isinstance(name, str)
+            or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", name) is None
+            or name in names
+        ):
+            raise RuntimeError("Package Marketplace names must be valid and unique")
+        names.add(name)
+        relative = source.get("trustedRoot")
+        if name == "zeta" and relative != "marketplace-root.json":
+            raise RuntimeError(
+                "Package product services does not pin the Zeta Marketplace root"
+            )
+        if not isinstance(relative, str) or "\\" in relative or ":" in relative:
+            raise RuntimeError("Package trust root must be a contained relative file")
+        segments = relative.split("/")
+        if any(segment in ("", ".", "..") for segment in segments):
+            raise RuntimeError("Package trust root must be a contained relative file")
+        path = product_services_directory
+        for index, segment in enumerate(segments):
+            path = path / segment
+            metadata = path.lstat()
+            last = index == len(segments) - 1
+            if stat.S_ISLNK(metadata.st_mode) or (
+                (
+                    not stat.S_ISREG(metadata.st_mode)
+                    or not 0 < metadata.st_size <= 1024 * 1024
+                )
+                if last
+                else not stat.S_ISDIR(metadata.st_mode)
+            ):
+                raise RuntimeError(
+                    "Package trust root must be a bounded regular file inside product services"
+                )
+    if "zeta" not in names:
         raise RuntimeError(
             "Package product services does not pin the Zeta Marketplace root"
         )

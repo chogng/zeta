@@ -14,15 +14,15 @@ use zeta_core_plugins::DownloadPackageRequest;
 use zeta_core_plugins::GetPackageRequest;
 use zeta_core_plugins::InstallPackageRequest;
 use zeta_core_plugins::MarketplaceClientError;
-use zeta_core_plugins::MarketplaceInstallCapability;
-use zeta_core_plugins::MarketplacePackagePayload;
-use zeta_core_plugins::MarketplaceRegistryClient;
 use zeta_core_plugins::OpenResourceRequest;
 use zeta_core_plugins::PackageDetails;
 use zeta_core_plugins::PackageRef;
 use zeta_core_plugins::PackageSource;
 use zeta_core_plugins::PackageSummary;
+use zeta_core_plugins::PluginPackageCapability;
+use zeta_core_plugins::PluginPackagePayload;
 use zeta_core_plugins::PluginPackageService;
+use zeta_core_plugins::PluginProvider;
 use zeta_core_plugins::PluginsManager;
 use zeta_core_plugins::SearchPackagesRequest;
 use zeta_core_plugins::SearchPackagesResult;
@@ -63,7 +63,11 @@ const THEME_DOCUMENT: &[u8] = br#"{"type":"dark","colors":{},"tokenColors":[]}"#
 fn marketplace_manager_commit_watcher_broadcasts_the_authoritative_change() {
     let root = tempfile::tempdir().unwrap();
     let manager = Arc::new(
-        PluginsManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
+        PluginsManager::open(
+            root.path().join("manager"),
+            providers(Arc::new(LanguageRegistry)),
+        )
+        .unwrap(),
     );
     let updates = Arc::new(UpdateBroker::default());
     let queue = NotificationQueue::default();
@@ -72,7 +76,7 @@ fn marketplace_manager_commit_watcher_broadcasts_the_authoritative_change() {
 
     manager
         .install(InstallPackageRequest {
-            package_id: "example/demo-language".into(),
+            package_id: "example.demo-language@test".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -96,11 +100,15 @@ fn installed_language_package_projects_assets_and_packaged_server() {
     fs::write(&node, b"#!/bin/sh\n").unwrap();
     make_executable(&node);
     let manager = Arc::new(
-        PluginsManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
+        PluginsManager::open(
+            root.path().join("manager"),
+            providers(Arc::new(LanguageRegistry)),
+        )
+        .unwrap(),
     );
     let installed = manager
         .install(InstallPackageRequest {
-            package_id: "example/demo-language".into(),
+            package_id: "example.demo-language@test".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -195,12 +203,17 @@ fn installed_language_package_projects_assets_and_packaged_server() {
 #[test]
 fn installed_theme_enters_the_shared_declarative_extension_catalog() {
     let root = tempfile::tempdir().unwrap();
-    let manager = Arc::new(
-        PluginsManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
-    );
+    let sources = zeta_core_plugins::PluginProviders::new(["test", "vendor"].map(|name| {
+        (
+            zeta_plugin::MarketplaceName::new(name).unwrap(),
+            Arc::new(LanguageRegistry) as Arc<dyn PluginProvider>,
+        )
+    }))
+    .unwrap();
+    let manager = Arc::new(PluginsManager::open(root.path().join("manager"), sources).unwrap());
     let installed = manager
         .install(InstallPackageRequest {
-            package_id: "example/demo-theme".into(),
+            package_id: "example.demo-theme@test".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -210,7 +223,7 @@ fn installed_theme_enters_the_shared_declarative_extension_catalog() {
     let mut catalog = ExtensionCatalog::new(Vec::new()).with_dynamic_sources(provider);
     let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
     assert_eq!(snapshot.extensions.len(), 1);
-    assert_eq!(snapshot.extensions[0].id, "example.demo-theme");
+    assert_eq!(snapshot.extensions[0].id, "test.example.demo-theme");
     assert_eq!(
         snapshot.extensions[0].source_kind,
         ExtensionSourceKind::Marketplace
@@ -220,6 +233,21 @@ fn installed_theme_enters_the_shared_declarative_extension_catalog() {
     assert_eq!(
         normalized_manifest["contributes"]["themes"][0]["uiTheme"],
         "vs-dark"
+    );
+    manager
+        .install(InstallPackageRequest {
+            package_id: "example.demo-theme@vendor".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    assert_eq!(
+        snapshot
+            .extensions
+            .iter()
+            .map(|extension| extension.id.as_str())
+            .collect::<Vec<_>>(),
+        ["test.example.demo-theme", "vendor.example.demo-theme"]
     );
 
     let theme = installed
@@ -250,14 +278,14 @@ fn installed_theme_enters_the_shared_declarative_extension_catalog() {
 
 struct LanguageRegistry;
 
-impl MarketplaceRegistryClient for LanguageRegistry {
+impl PluginProvider for LanguageRegistry {
     fn search(
         &self,
         _: SearchPackagesRequest,
     ) -> Result<SearchPackagesResult, MarketplaceClientError> {
         Ok(SearchPackagesResult {
             packages: vec![PackageSummary {
-                id: "example/demo-language".into(),
+                id: "example.demo-language".into(),
                 version: "1.0.0".into(),
                 package_type: "language".into(),
                 display_name: "Demo Language".into(),
@@ -293,10 +321,10 @@ impl MarketplaceRegistryClient for LanguageRegistry {
     fn download(
         &self,
         request: DownloadPackageRequest,
-    ) -> Result<Box<dyn MarketplacePackagePayload>, MarketplaceClientError> {
+    ) -> Result<Box<dyn PluginPackagePayload>, MarketplaceClientError> {
         match request.package_id.as_str() {
-            "example/demo-language" => Ok(Box::new(LanguagePayload::new())),
-            "example/demo-theme" => Ok(Box::new(ThemePayload::new())),
+            "example.demo-language" => Ok(Box::new(LanguagePayload::new())),
+            "example.demo-theme" => Ok(Box::new(ThemePayload::new())),
             _ => Err(MarketplaceClientError::storage()),
         }
     }
@@ -304,21 +332,21 @@ impl MarketplaceRegistryClient for LanguageRegistry {
 
 struct ThemePayload {
     package: PackageRef,
-    capabilities: Vec<MarketplaceInstallCapability>,
+    capabilities: Vec<PluginPackageCapability>,
 }
 
 impl ThemePayload {
     fn new() -> Self {
         Self {
             package: PackageRef {
-                id: "example/demo-theme".into(),
+                id: "example.demo-theme".into(),
                 version: "1.0.0".into(),
                 digest: package_digest(&[
                     ("theme/package.json", THEME_MANIFEST),
                     ("theme/themes/demo.json", THEME_DOCUMENT),
                 ]),
             },
-            capabilities: vec![MarketplaceInstallCapability {
+            capabilities: vec![PluginPackageCapability {
                 kind: CapabilityKind::Theme,
                 id: "theme-assets".into(),
                 path: "theme".into(),
@@ -329,16 +357,12 @@ impl ThemePayload {
     }
 }
 
-impl MarketplacePackagePayload for ThemePayload {
+impl PluginPackagePayload for ThemePayload {
     fn package(&self) -> &PackageRef {
         &self.package
     }
 
-    fn package_type(&self) -> &str {
-        "theme"
-    }
-
-    fn capabilities(&self) -> &[MarketplaceInstallCapability] {
+    fn capabilities(&self) -> &[PluginPackageCapability] {
         &self.capabilities
     }
 
@@ -363,14 +387,14 @@ impl MarketplacePackagePayload for ThemePayload {
 
 struct LanguagePayload {
     package: PackageRef,
-    capabilities: Vec<MarketplaceInstallCapability>,
+    capabilities: Vec<PluginPackageCapability>,
 }
 
 impl LanguagePayload {
     fn new() -> Self {
         Self {
             package: PackageRef {
-                id: "example/demo-language".into(),
+                id: "example.demo-language".into(),
                 version: "1.0.0".into(),
                 digest: package_digest(&[
                     ("language/package.json", LANGUAGE_MANIFEST),
@@ -378,14 +402,14 @@ impl LanguagePayload {
                 ]),
             },
             capabilities: vec![
-                MarketplaceInstallCapability {
+                PluginPackageCapability {
                     kind: CapabilityKind::Language,
                     id: "language-assets".into(),
                     path: "language".into(),
                     runtime: None,
                     language_ids: Vec::new(),
                 },
-                MarketplaceInstallCapability {
+                PluginPackageCapability {
                     kind: CapabilityKind::Executable,
                     id: "demo-language-server".into(),
                     path: "server/demo.js".into(),
@@ -397,16 +421,12 @@ impl LanguagePayload {
     }
 }
 
-impl MarketplacePackagePayload for LanguagePayload {
+impl PluginPackagePayload for LanguagePayload {
     fn package(&self) -> &PackageRef {
         &self.package
     }
 
-    fn package_type(&self) -> &str {
-        "language"
-    }
-
-    fn capabilities(&self) -> &[MarketplaceInstallCapability] {
+    fn capabilities(&self) -> &[PluginPackageCapability] {
         &self.capabilities
     }
 
@@ -457,3 +477,11 @@ fn make_executable(path: &Path) {
 
 #[cfg(not(unix))]
 fn make_executable(_: &Path) {}
+
+fn providers(provider: Arc<dyn PluginProvider>) -> zeta_core_plugins::PluginProviders {
+    zeta_core_plugins::PluginProviders::new([(
+        zeta_plugin::MarketplaceName::new("test").unwrap(),
+        provider,
+    )])
+    .unwrap()
+}

@@ -119,11 +119,10 @@ fn normalized_theme_manifest(source: &LocalCapabilitySource) -> Result<String, S
     {
         return Err("Marketplace Theme manifest version is unsupported".into());
     }
-    let (publisher, name) = source
-        .package()
-        .id
-        .split_once('/')
-        .ok_or_else(|| "Marketplace Theme package identity is invalid".to_string())?;
+    let plugin = zeta_plugin::PluginId::parse(&source.package().id)
+        .map_err(|_| "Marketplace Theme package identity is invalid".to_string())?;
+    let publisher = plugin.marketplace().as_str();
+    let name = plugin.plugin_name();
     let mut ids = BTreeSet::new();
     let mut paths = BTreeSet::new();
     let mut themes = Vec::new();

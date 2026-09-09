@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
 import { developmentHostTarget, zetaPackageBuildPath } from "../lib/paths.ts";
+import { validateProductServices } from "./productServices.ts";
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../zeta-ts/generated/app-server/types.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
@@ -893,8 +894,7 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "LICENSE-MIT"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "UNLICENSE"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "vscode", "LICENSE.txt"));
-  await requireFile(join(packageRoot, "zeta-resources", "product-services", "product-services.json"));
-  await requireFile(join(packageRoot, "zeta-resources", "product-services", "marketplace-root.json"));
+  await validateProductServices(join(packageRoot, "zeta-resources", "product-services"));
   if (isWindows) {
     const windowsSandbox = metadata.components.windowsSandbox;
     if (typeof windowsSandbox !== "object" || windowsSandbox === null) throw new Error("Windows sandbox component metadata is missing");

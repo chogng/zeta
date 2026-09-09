@@ -8,8 +8,8 @@ use std::path::PathBuf;
 
 use crate::ArtifactHandle;
 use crate::MarketplaceClientError;
-use crate::MarketplacePackagePayload;
 use crate::PackageRef;
+use crate::PluginPackagePayload;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sha2::Digest;
@@ -43,11 +43,12 @@ impl Store {
 
     pub(crate) fn materialize(
         &self,
-        downloaded: &dyn MarketplacePackagePayload,
+        downloaded: &dyn PluginPackagePayload,
     ) -> Result<ArtifactHandle, MarketplaceClientError> {
         let package = downloaded.package().clone();
-        if let Some(artifact) = self.existing_artifact(&package)? {
-            return Ok(artifact);
+        if let Some(inspected) = self.inspect_artifact(&package)? {
+            validate_statistics(&inspected, downloaded)?;
+            return Ok(artifact_handle(package));
         }
         let digest = digest_component(&package.digest)?;
         let destination = self.artifacts.join(digest);
@@ -57,36 +58,41 @@ impl Store {
             .map_err(|_| MarketplaceClientError::storage())?;
         downloaded.copy_to(staging.path())?;
         let inspected = inspect_tree(staging.path())?;
-        if inspected.digest != package.digest
-            || inspected.file_count != downloaded.expected_file_count()
-            || inspected.total_bytes != downloaded.expected_size_bytes()
-        {
+        if inspected.digest != package.digest {
             return Err(MarketplaceClientError::package_untrusted());
         }
-        let staging = staging.keep();
-        fs::rename(staging, &destination).map_err(|_| MarketplaceClientError::storage())?;
-        Ok(ArtifactHandle {
-            id: opaque_id("art", &[&package.digest]),
-            package,
-        })
+        validate_statistics(&inspected, downloaded)?;
+        if let Err(error) = fs::rename(staging.path(), &destination) {
+            if !matches!(
+                error.kind(),
+                std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::DirectoryNotEmpty
+            ) {
+                return Err(MarketplaceClientError::storage());
+            }
+            // Concurrent installs of the same digest share one immutable artifact. The winner
+            // must satisfy this provider's exact payload contract before it can be reused.
+            let existing = self
+                .inspect_artifact(&package)?
+                .ok_or_else(MarketplaceClientError::storage)?;
+            validate_statistics(&existing, downloaded)?;
+        }
+        Ok(artifact_handle(package))
     }
 
-    pub(crate) fn existing_artifact(
+    fn inspect_artifact(
         &self,
         package: &PackageRef,
-    ) -> Result<Option<ArtifactHandle>, MarketplaceClientError> {
+    ) -> Result<Option<TreeInspection>, MarketplaceClientError> {
         let digest = digest_component(&package.digest)?;
         let destination = self.artifacts.join(digest);
         if !destination.exists() {
             return Ok(None);
         }
-        if inspect_tree(&destination)?.digest != package.digest {
+        let inspected = inspect_tree(&destination)?;
+        if inspected.digest != package.digest {
             return Err(MarketplaceClientError::storage());
         }
-        Ok(Some(ArtifactHandle {
-            id: opaque_id("art", &[&package.digest]),
-            package: package.clone(),
-        }))
+        Ok(Some(inspected))
     }
 
     pub(crate) fn read_package_file(
@@ -113,7 +119,7 @@ impl Store {
         package: &PackageRef,
         relative: &str,
     ) -> Result<PathBuf, MarketplaceClientError> {
-        self.existing_artifact(package)?
+        self.inspect_artifact(package)?
             .ok_or_else(MarketplaceClientError::storage)?;
         let relative = safe_relative_path(relative)?;
         let artifact = self.artifacts.join(digest_component(&package.digest)?);
@@ -136,7 +142,7 @@ impl Store {
         &self,
         package: &PackageRef,
     ) -> Result<PathBuf, MarketplaceClientError> {
-        self.existing_artifact(package)?
+        self.inspect_artifact(package)?
             .ok_or_else(MarketplaceClientError::storage)?;
         self.artifacts
             .join(digest_component(&package.digest)?)
@@ -195,6 +201,25 @@ struct TreeInspection {
     digest: String,
     file_count: u64,
     total_bytes: u64,
+}
+
+fn artifact_handle(package: PackageRef) -> ArtifactHandle {
+    ArtifactHandle {
+        id: opaque_id("art", &[&package.digest]),
+        package,
+    }
+}
+
+fn validate_statistics(
+    inspected: &TreeInspection,
+    payload: &dyn PluginPackagePayload,
+) -> Result<(), MarketplaceClientError> {
+    if inspected.file_count != payload.expected_file_count()
+        || inspected.total_bytes != payload.expected_size_bytes()
+    {
+        return Err(MarketplaceClientError::package_untrusted());
+    }
+    Ok(())
 }
 
 fn inspect_tree(root: &Path) -> Result<TreeInspection, MarketplaceClientError> {

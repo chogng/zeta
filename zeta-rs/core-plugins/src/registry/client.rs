@@ -1,50 +1,19 @@
-use std::path::Path;
 use std::sync::Mutex;
 
 use crate::DownloadPackageRequest;
+use crate::PluginPackagePayload;
+use crate::PluginProvider;
+
 use crate::GetPackageRequest;
 use crate::MarketplaceClientError;
 use crate::PackageDetails;
 use crate::SearchPackagesRequest;
 use crate::SearchPackagesResult;
 use crate::registry::catalog::Catalog;
-use crate::registry::catalog::MarketplaceInstallCapability;
 use crate::registry::remote::RemoteMarketplaceConfig;
-
-/// Opaque verified package payload handed from the remote client to the local Manager.
-///
-/// Implementations must keep remote cache paths private and may only copy into an empty
-/// Manager-owned staging directory.
-pub trait MarketplacePackagePayload: Send {
-    fn package(&self) -> &crate::PackageRef;
-    fn package_type(&self) -> &str;
-    fn capabilities(&self) -> &[MarketplaceInstallCapability];
-    fn expected_file_count(&self) -> u64;
-    fn expected_size_bytes(&self) -> u64;
-    fn copy_to(&self, destination: &Path) -> Result<(), MarketplaceClientError>;
-}
 
 const DEFAULT_SEARCH_LIMIT: usize = 50;
 const MAX_SEARCH_LIMIT: usize = 200;
-
-/// Remote Marketplace registry port consumed by the product-local package manager.
-///
-/// Implementations own discovery, TUF verification, download, and remote cache behavior. They
-/// return normalized DTOs and verified payloads; local installation, update, uninstall, leases,
-/// and activation remain the Manager's responsibility.
-pub trait MarketplaceRegistryClient: Send + Sync {
-    fn search(
-        &self,
-        request: SearchPackagesRequest,
-    ) -> Result<SearchPackagesResult, MarketplaceClientError>;
-
-    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, MarketplaceClientError>;
-
-    fn download(
-        &self,
-        request: DownloadPackageRequest,
-    ) -> Result<Box<dyn MarketplacePackagePayload>, MarketplaceClientError>;
-}
 
 /// HTTPS/TUF client for one product-pinned remote Marketplace distribution.
 pub struct MarketplaceRemoteClient {
@@ -54,11 +23,11 @@ pub struct MarketplaceRemoteClient {
 
 impl MarketplaceRemoteClient {
     /// Creates a lazy remote client without making App Server startup depend on network access.
-    pub fn open(config: RemoteMarketplaceConfig) -> Result<Self, MarketplaceClientError> {
-        Ok(Self {
+    pub fn new(config: RemoteMarketplaceConfig) -> Self {
+        Self {
             config,
             catalog: Mutex::new(None),
-        })
+        }
     }
 
     fn with_catalog<T>(
@@ -76,7 +45,7 @@ impl MarketplaceRemoteClient {
     }
 }
 
-impl MarketplaceRegistryClient for MarketplaceRemoteClient {
+impl PluginProvider for MarketplaceRemoteClient {
     fn search(
         &self,
         request: SearchPackagesRequest,
@@ -87,28 +56,54 @@ impl MarketplaceRegistryClient for MarketplaceRemoteClient {
             .clamp(1, MAX_SEARCH_LIMIT);
         self.with_catalog(|catalog| {
             Ok(SearchPackagesResult {
-                packages: catalog.search(&request.query, request.package_type.as_deref(), limit)?,
+                packages: catalog
+                    .search(&request.query, request.package_type.as_deref(), limit)?
+                    .into_iter()
+                    .map(|mut package| {
+                        package.id = plugin_name(&package.id);
+                        package
+                    })
+                    .collect(),
             })
         })
     }
 
     fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, MarketplaceClientError> {
+        let package_id = package_id(&request.package_id)?;
         self.with_catalog(|catalog| {
-            Ok(catalog
-                .resolve(&request.package_id, request.version.as_deref())?
-                .details())
+            let mut details = catalog
+                .resolve(&package_id, request.version.as_deref())?
+                .details();
+            details.package.id = plugin_name(&details.package.id);
+            Ok(details)
         })
     }
 
     fn download(
         &self,
         request: DownloadPackageRequest,
-    ) -> Result<Box<dyn MarketplacePackagePayload>, MarketplaceClientError> {
+    ) -> Result<Box<dyn PluginPackagePayload>, MarketplaceClientError> {
+        let package_id = package_id(&request.package_id)?;
         self.with_catalog(|catalog| {
-            let release = catalog.resolve_fresh(&request.package_id, request.version.as_deref())?;
-            Ok(Box::new(catalog.materialize(&release)?) as Box<dyn MarketplacePackagePayload>)
+            let release = catalog.resolve_fresh(&package_id, request.version.as_deref())?;
+            Ok(Box::new(catalog.materialize(&release)?) as Box<dyn PluginPackagePayload>)
         })
     }
+}
+
+pub(super) fn plugin_name(package_id: &str) -> String {
+    package_id.replace('/', ".")
+}
+
+fn package_id(plugin_name: &str) -> Result<String, MarketplaceClientError> {
+    let (publisher, name) = plugin_name.split_once('.').ok_or_else(|| {
+        MarketplaceClientError::invalid_request(
+            "this registry requires a publisher-qualified plugin name",
+        )
+    })?;
+    zeta_plugin::PluginPackageId::new(format!("{publisher}/{name}"))
+        .map(|id| id.to_string())
+        .map_err(|_| MarketplaceClientError::invalid_request("invalid registry plugin name"))
 }
 
 #[cfg(test)]

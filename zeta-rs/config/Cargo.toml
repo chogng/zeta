@@ -12,7 +12,6 @@ path = "src/lib.rs"
 
 [dependencies]
 rusqlite = { workspace = true }
-semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -21,6 +20,7 @@ zeta-model-provider-config = { workspace = true }
 github = { workspace = true }
 zeta-execpolicy = { workspace = true }
 zeta-protocol = { workspace = true }
+plugin = { package = "zeta-plugin", path = "../plugin" }
 zeta-state = { workspace = true }
 zeta-file-access = { workspace = true }
 

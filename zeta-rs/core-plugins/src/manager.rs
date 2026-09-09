@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -23,12 +22,12 @@ use crate::InstalledPackage;
 use crate::ListInstalledRequest;
 use crate::MarketplaceClientError;
 use crate::MarketplaceErrorCode;
-use crate::MarketplacePackagePayload;
-use crate::MarketplaceRegistryClient;
 use crate::OpenResourceRequest;
 use crate::PackageDetails;
 use crate::PackageRef;
+use crate::PluginPackagePayload;
 use crate::PluginPackageService;
+use crate::PluginProviders;
 use crate::ReleaseCapabilityRequest;
 use crate::ResourceContent;
 use crate::SearchPackagesRequest;
@@ -45,11 +44,11 @@ use crate::marketplace_store::opaque_id;
 
 /// Zeta's local owner for installed Plugin packages and capability leases.
 ///
-/// The manager receives a registry source for signed discovery and downloads. All
+/// The manager receives named providers for source discovery and verified packages. All
 /// artifact storage, installation state, update/uninstall behavior, resource access, and leases
 /// remain local to the Zeta profile.
 pub struct PluginsManager {
-    registry: Arc<dyn MarketplaceRegistryClient>,
+    providers: PluginProviders,
     store: Store,
     runtime: Mutex<RuntimeState>,
     lease_sequence: AtomicU64,
@@ -152,16 +151,41 @@ struct LeaseRecord {
 }
 
 impl PluginsManager {
-    /// Opens a local Manager over one profile-owned state root and remote registry port.
+    /// Opens one profile-owned installation store over its explicitly registered sources.
     pub fn open(
         state_root: impl Into<PathBuf>,
-        registry: Arc<dyn MarketplaceRegistryClient>,
+        providers: PluginProviders,
     ) -> Result<Self, MarketplaceClientError> {
         let store = Store::open(state_root.into())?;
         let mut durable: DurableState = store.read_state()?;
         durable
             .installations
             .retain(|_, installation| installation.state == InstallationState::Installed);
+        let mut installations = BTreeMap::new();
+        for (key, mut installation) in durable.installations {
+            if key != installation.installation_id
+                || key != installation_id(&installation.package)
+                || crate::PluginVersion::new(&installation.package.version).is_err()
+                || crate::PluginPackageDigest::new(&installation.package.digest).is_err()
+            {
+                return Err(MarketplaceClientError::storage());
+            }
+            if !installation.package.id.contains('@') {
+                installation.package.id =
+                    providers.legacy_id(&installation.package.id)?.to_string();
+                installation.installation_id = installation_id(&installation.package);
+            } else {
+                zeta_plugin::PluginId::parse(&installation.package.id)
+                    .map_err(|_| MarketplaceClientError::storage())?;
+            }
+            if installations
+                .insert(installation.installation_id.clone(), installation)
+                .is_some()
+            {
+                return Err(MarketplaceClientError::storage());
+            }
+        }
+        durable.installations = installations;
         for installation in durable.installations.values_mut() {
             for capability in &mut installation.capabilities {
                 capability.descriptor.reference = capability_reference(
@@ -178,7 +202,7 @@ impl PluginsManager {
             .as_nanos()
             .to_string();
         Ok(Self {
-            registry,
+            providers,
             store,
             runtime: Mutex::new(RuntimeState {
                 durable,
@@ -268,17 +292,10 @@ impl PluginsManager {
 
     fn install_downloaded(
         &self,
-        downloaded: &dyn MarketplacePackagePayload,
+        downloaded: &dyn PluginPackagePayload,
     ) -> Result<InstalledPackage, MarketplaceClientError> {
         let artifact = self.store.materialize(downloaded)?;
-        let installation_id = opaque_id(
-            "ins",
-            &[
-                &artifact.package.id,
-                &artifact.package.version,
-                &artifact.package.digest,
-            ],
-        );
+        let installation_id = installation_id(&artifact.package);
         let capabilities = downloaded
             .capabilities()
             .iter()
@@ -340,18 +357,18 @@ impl PluginPackageService for PluginsManager {
         &self,
         request: SearchPackagesRequest,
     ) -> Result<SearchPackagesResult, MarketplaceClientError> {
-        self.registry.search(request)
+        self.providers.search(request)
     }
 
     fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, MarketplaceClientError> {
-        self.registry.get(request)
+        self.providers.get(request)
     }
 
     fn download(
         &self,
         request: DownloadPackageRequest,
     ) -> Result<ArtifactHandle, MarketplaceClientError> {
-        let downloaded = self.registry.download(request)?;
+        let downloaded = self.providers.download(request)?;
         self.store.materialize(downloaded.as_ref())
     }
 
@@ -359,7 +376,7 @@ impl PluginPackageService for PluginsManager {
         &self,
         request: InstallPackageRequest,
     ) -> Result<InstalledPackage, MarketplaceClientError> {
-        let downloaded = self.registry.download(DownloadPackageRequest {
+        let downloaded = self.providers.download(DownloadPackageRequest {
             package_id: request.package_id,
             version: request.version,
         })?;
@@ -381,7 +398,7 @@ impl PluginPackageService for PluginsManager {
                 .id
                 .clone()
         };
-        let downloaded = self.registry.download(DownloadPackageRequest {
+        let downloaded = self.providers.download(DownloadPackageRequest {
             package_id,
             version: request.version,
         })?;
@@ -560,6 +577,10 @@ fn find_capability<'a>(
                 .map(|capability| (installation, capability))
         })
         .ok_or_else(capability_not_found)
+}
+
+fn installation_id(package: &PackageRef) -> String {
+    opaque_id("ins", &[&package.id, &package.version, &package.digest])
 }
 
 fn capability_reference(

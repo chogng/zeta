@@ -225,8 +225,9 @@ test("assembles and validates the canonical Windows development layout", async (
     assert.equal(await readFile(join(staging, "zeta-resources", "zeta-windows-sandbox-worker.exe"), "utf8"), "worker");
     assert.equal(await readFile(join(staging, "zeta-resources", "zeta-windows-sandbox-worker.exe"), "utf8"), "worker");
     const productServices = JSON.parse(await readFile(join(staging, "zeta-resources", "product-services", "product-services.json"), "utf8"));
-    assert.equal(productServices.marketplaceManager.metadataBaseUrl, "https://chogng.github.io/marketplace/metadata/");
-    assert.equal(productServices.marketplaceManager.catalogRefreshIntervalSeconds, 300);
+    const marketplace = productServices.marketplaces.find((source: { name: string }) => source.name === "zeta");
+    assert.equal(marketplace.metadataBaseUrl, "https://chogng.github.io/marketplace/metadata/");
+    assert.equal(marketplace.catalogRefreshIntervalSeconds, 300);
     assert.equal(
       await readFile(join(staging, "zeta-resources", "product-services", "marketplace-root.json"), "utf8"),
       await readFile(new URL("../../resources/product-services/marketplace-root.json", import.meta.url), "utf8"),

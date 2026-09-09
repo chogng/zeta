@@ -1,9 +1,12 @@
 {
-  "schemaVersion": 1,
-  "marketplaceManager": {
-    "metadataBaseUrl": "https://chogng.github.io/marketplace/metadata/",
-    "targetsBaseUrl": "https://chogng.github.io/marketplace/targets/",
-    "trustedRoot": "marketplace-root.json",
-    "catalogRefreshIntervalSeconds": 300
-  }
+  "schemaVersion": 2,
+  "marketplaces": [
+    {
+      "name": "zeta",
+      "metadataBaseUrl": "https://chogng.github.io/marketplace/metadata/",
+      "targetsBaseUrl": "https://chogng.github.io/marketplace/targets/",
+      "trustedRoot": "marketplace-root.json",
+      "catalogRefreshIntervalSeconds": 300
+    }
+  ]
 }

@@ -12,8 +12,8 @@ use zeta_connectors::ConnectorSnapshot;
 use zeta_connectors::ConnectorSnapshotGeneration;
 use zeta_core_plugins::PluginActivationSnapshot;
 use zeta_plugin::LocalPluginPackage;
-use zeta_plugin::PluginId;
 use zeta_plugin::PluginManifest;
+use zeta_plugin::PluginPackageId;
 use zeta_tools::CapabilityDiscoveryId;
 use zeta_tools::CapabilityDiscoverySnapshot;
 use zeta_tools::DiscoverableCapability;
@@ -25,7 +25,7 @@ use zeta_tools::DiscoveryValueError;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConnectorCatalog {
     snapshot: ConnectorSnapshot,
-    provider_plugins: BTreeMap<ConnectorId, PluginId>,
+    provider_plugins: BTreeMap<ConnectorId, PluginPackageId>,
 }
 
 impl ConnectorCatalog {
@@ -112,7 +112,7 @@ impl ConnectorCatalog {
         &self.snapshot
     }
 
-    pub fn provider_plugin(&self, id: &ConnectorId) -> Option<&PluginId> {
+    pub fn provider_plugin(&self, id: &ConnectorId) -> Option<&PluginPackageId> {
         self.provider_plugins.get(id)
     }
 

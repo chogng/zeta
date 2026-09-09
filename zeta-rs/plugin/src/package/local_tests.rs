@@ -284,7 +284,7 @@ fn local_catalog_lists_and_reads_exact_versions_in_stable_order() {
     assert!(
         catalog
             .read(
-                &PluginId::new("acme/review").unwrap(),
+                &PluginPackageId::new("acme/review").unwrap(),
                 &PluginVersion::new("2.0.0").unwrap()
             )
             .is_some()

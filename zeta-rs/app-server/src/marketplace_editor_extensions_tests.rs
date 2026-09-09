@@ -11,14 +11,14 @@ use zeta_core_plugins::GetPackageRequest;
 use zeta_core_plugins::InstallPackageRequest;
 use zeta_core_plugins::ListInstalledRequest;
 use zeta_core_plugins::MarketplaceClientError;
-use zeta_core_plugins::MarketplaceInstallCapability;
-use zeta_core_plugins::MarketplacePackagePayload;
-use zeta_core_plugins::MarketplaceRegistryClient;
 use zeta_core_plugins::PackageDetails;
 use zeta_core_plugins::PackageRef;
 use zeta_core_plugins::PackageSource;
 use zeta_core_plugins::PackageSummary;
+use zeta_core_plugins::PluginPackageCapability;
+use zeta_core_plugins::PluginPackagePayload;
 use zeta_core_plugins::PluginPackageService;
+use zeta_core_plugins::PluginProvider;
 use zeta_core_plugins::PluginsManager;
 use zeta_core_plugins::SearchPackagesRequest;
 use zeta_core_plugins::SearchPackagesResult;
@@ -62,11 +62,12 @@ fn product_adapter_uses_manifest_local_identifiers() {
 #[test]
 fn signed_product_sidecar_requires_independent_admission_and_manager_lease() {
     let root = tempfile::tempdir().unwrap();
-    let manager =
-        Arc::new(PluginsManager::open(root.path().join("manager"), Arc::new(Registry)).unwrap());
+    let manager = Arc::new(
+        PluginsManager::open(root.path().join("manager"), providers(Arc::new(Registry))).unwrap(),
+    );
     let installed = manager
         .install(InstallPackageRequest {
-            package_id: "marketplace/demo-plugin".into(),
+            package_id: "marketplace.demo-plugin@test".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -76,7 +77,7 @@ fn signed_product_sidecar_requires_independent_admission_and_manager_lease() {
     let deployment = &projected[0];
     assert_eq!(
         deployment.id,
-        "marketplace:marketplace/demo-plugin:editor-extension:demo"
+        "marketplace:marketplace.demo-plugin@test:editor-extension:demo"
     );
     assert_eq!(deployment.params.activation_events, ["onCommand:demo.run"]);
     assert!(deployment.authority.authorizes());
@@ -129,14 +130,14 @@ impl MarketplaceEditorExtensionAdmissionLease for AdmissionLease {}
 
 struct Registry;
 
-impl MarketplaceRegistryClient for Registry {
+impl PluginProvider for Registry {
     fn search(
         &self,
         _: SearchPackagesRequest,
     ) -> Result<SearchPackagesResult, MarketplaceClientError> {
         Ok(SearchPackagesResult {
             packages: vec![PackageSummary {
-                id: "marketplace/demo-plugin".into(),
+                id: "marketplace.demo-plugin".into(),
                 version: "1.0.0".into(),
                 package_type: "plugin".into(),
                 display_name: "Demo".into(),
@@ -172,21 +173,21 @@ impl MarketplaceRegistryClient for Registry {
     fn download(
         &self,
         _: DownloadPackageRequest,
-    ) -> Result<Box<dyn MarketplacePackagePayload>, MarketplaceClientError> {
+    ) -> Result<Box<dyn PluginPackagePayload>, MarketplaceClientError> {
         Ok(Box::new(Payload::new()))
     }
 }
 
 struct Payload {
     package: PackageRef,
-    capabilities: Vec<MarketplaceInstallCapability>,
+    capabilities: Vec<PluginPackageCapability>,
 }
 
 impl Payload {
     fn new() -> Self {
         Self {
             package: PackageRef {
-                id: "marketplace/demo-plugin".into(),
+                id: "marketplace.demo-plugin".into(),
                 version: "1.0.0".into(),
                 digest: package_digest(&[
                     ("bin/demo", EXECUTABLE),
@@ -195,14 +196,14 @@ impl Payload {
                 ]),
             },
             capabilities: vec![
-                MarketplaceInstallCapability {
+                PluginPackageCapability {
                     kind: CapabilityKind::Mcp,
                     id: "demo".into(),
                     path: "mcp/package.json".into(),
                     runtime: None,
                     language_ids: Vec::new(),
                 },
-                MarketplaceInstallCapability {
+                PluginPackageCapability {
                     kind: CapabilityKind::Executable,
                     id: "editor-runtime".into(),
                     path: "bin/demo".into(),
@@ -214,16 +215,12 @@ impl Payload {
     }
 }
 
-impl MarketplacePackagePayload for Payload {
+impl PluginPackagePayload for Payload {
     fn package(&self) -> &PackageRef {
         &self.package
     }
 
-    fn package_type(&self) -> &str {
-        "plugin"
-    }
-
-    fn capabilities(&self) -> &[MarketplaceInstallCapability] {
+    fn capabilities(&self) -> &[PluginPackageCapability] {
         &self.capabilities
     }
 
@@ -274,4 +271,12 @@ fn package_digest(files: &[(&str, &[u8])]) -> String {
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn providers(provider: Arc<dyn PluginProvider>) -> zeta_core_plugins::PluginProviders {
+    zeta_core_plugins::PluginProviders::new([(
+        zeta_plugin::MarketplaceName::new("test").unwrap(),
+        provider,
+    )])
+    .unwrap()
 }

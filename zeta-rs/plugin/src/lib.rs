@@ -4,12 +4,14 @@ mod error;
 mod identity;
 mod manifest;
 mod package;
+mod package_id;
 mod path;
+mod plugin_id;
 
 pub use error::{PluginError, PluginErrorKind};
 pub use identity::{
-    InstalledPluginRef, InvalidPluginId, InvalidPluginPackageDigest, InvalidPluginVersion,
-    PluginId, PluginPackageDigest, PluginVersion,
+    InstalledPluginRef, InvalidPluginPackageDigest, InvalidPluginVersion, PluginPackageDigest,
+    PluginVersion,
 };
 pub use manifest::{
     AssetContribution, ConnectorContribution, ContributionKind, ContributionReference,
@@ -25,3 +27,9 @@ pub use package::{
     PluginPackageSource,
 };
 pub use path::{InvalidPluginPath, PluginPath};
+
+pub use package_id::InvalidPluginPackageId;
+pub use package_id::PluginPackageId;
+pub use plugin_id::InvalidPluginId;
+pub use plugin_id::MarketplaceName;
+pub use plugin_id::PluginId;

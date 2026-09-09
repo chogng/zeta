@@ -54,10 +54,10 @@ pub(super) struct AuthorityStateRef<'a> {
     pub revision: u64,
     pub activation_generation: u64,
     pub installed: &'a BTreeMap<InstalledKey, InstalledPluginRef>,
-    pub enabled: &'a BTreeMap<crate::PluginId, InstalledPluginRef>,
+    pub enabled: &'a BTreeMap<crate::PluginPackageId, InstalledPluginRef>,
     pub granted: &'a BTreeMap<InstalledKey, InstalledPluginRef>,
     pub revoked: &'a BTreeMap<InstalledKey, InstalledPluginRef>,
-    pub active: &'a BTreeMap<crate::PluginId, ActivePlugin>,
+    pub active: &'a BTreeMap<crate::PluginPackageId, ActivePlugin>,
     pub receipts: &'a BTreeMap<String, PersistedCommandReceipt>,
 }
 

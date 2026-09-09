@@ -12,11 +12,12 @@ use tempfile::TempDir;
 use crate::AvailableCapability;
 use crate::CapabilityKind;
 use crate::MarketplaceClientError;
-use crate::MarketplacePackagePayload;
 use crate::PackageDetails;
 use crate::PackageRef;
 use crate::PackageSource;
 use crate::PackageSummary;
+use crate::PluginPackageCapability;
+use crate::PluginPackagePayload;
 use crate::registry::catalog_provenance::CatalogUpstreamReference;
 use crate::registry::remote::RemoteMarketplaceConfig;
 use crate::registry::remote::RemotePackageTarget;
@@ -142,24 +143,13 @@ impl CatalogCapability {
     }
 }
 
-/// Manager-only normalized capability layout carried with one verified download.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MarketplaceInstallCapability {
-    pub kind: CapabilityKind,
-    pub id: String,
-    pub path: String,
-    pub runtime: Option<String>,
-    pub language_ids: Vec<String>,
-}
-
 /// Exact verified package payload downloaded from the remote Marketplace.
 ///
 /// The extracted source directory remains private. The local Manager can copy the payload into its
 /// own staging directory but cannot obtain the remote cache path.
 pub(crate) struct MarketplaceDownloadedPackage {
     package: PackageRef,
-    package_type: String,
-    capabilities: Vec<MarketplaceInstallCapability>,
+    capabilities: Vec<PluginPackageCapability>,
     contents: TempDir,
     expected_file_count: u64,
     expected_size_bytes: u64,
@@ -168,8 +158,11 @@ pub(crate) struct MarketplaceDownloadedPackage {
 impl MarketplaceDownloadedPackage {
     pub(crate) fn new(release: &Release, contents: TempDir) -> Self {
         Self {
-            package: release.target.package().clone(),
-            package_type: release.manifest.package_type.as_str().to_owned(),
+            package: {
+                let mut package = release.target.package().clone();
+                package.id = crate::registry::client::plugin_name(&package.id);
+                package
+            },
             capabilities: release.install_capabilities(),
             contents,
             expected_file_count: release.target.package_file_count(),
@@ -178,16 +171,12 @@ impl MarketplaceDownloadedPackage {
     }
 }
 
-impl MarketplacePackagePayload for MarketplaceDownloadedPackage {
+impl PluginPackagePayload for MarketplaceDownloadedPackage {
     fn package(&self) -> &PackageRef {
         &self.package
     }
 
-    fn package_type(&self) -> &str {
-        &self.package_type
-    }
-
-    fn capabilities(&self) -> &[MarketplaceInstallCapability] {
+    fn capabilities(&self) -> &[PluginPackageCapability] {
         &self.capabilities
     }
 
@@ -399,11 +388,11 @@ impl Release {
             .collect()
     }
 
-    fn install_capabilities(&self) -> Vec<MarketplaceInstallCapability> {
+    fn install_capabilities(&self) -> Vec<PluginPackageCapability> {
         self.manifest
             .capabilities
             .iter()
-            .map(|capability| MarketplaceInstallCapability {
+            .map(|capability| PluginPackageCapability {
                 kind: capability.public_kind(self.manifest.package_type),
                 id: capability.id.clone(),
                 path: capability.path.clone(),

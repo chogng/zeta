@@ -12,9 +12,6 @@ mod model;
 mod remote;
 mod service;
 
-pub use catalog::MarketplaceInstallCapability;
-pub use client::MarketplacePackagePayload;
-pub use client::MarketplaceRegistryClient;
 pub use client::MarketplaceRemoteClient;
 pub use error::MarketplaceClientError;
 pub use error::MarketplaceClientErrorKind;

@@ -185,14 +185,15 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
 
 ```json
 {
-  "schemaVersion": 1,
-  "marketplaceManager": {
+  "schemaVersion": 2,
+  "marketplaces": [{
+    "name": "zeta",
     "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
     "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
     "trustedRoot": "marketplace-root.json",
     "catalogRefreshIntervalSeconds": 300,
     "allowedPublishers": ["example"]
-  },
+  }],
   "connectorOauth": [{
     "type": "githubDevice",
     "connectorId": "openai/github:connector:account",
@@ -202,8 +203,8 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
 }
 ```
 
-当前产品文件只选择一个远端 registry；新增独立源需要先扩展产品级 trust-root 配置，不得由 package
-或用户设置注入。可选 `allowedPublishers` 是 host-approved publisher namespace allowlist，必须非空、
+产品文件通过 `marketplaces` 列表选择多个具名 registry，每个来源分别配置 endpoint、trust root 和
+发布者策略；名称必须唯一，不得由 package 或普通用户设置注入。可选 `allowedPublishers` 必须非空、
 无重复且格式合法；签名 catalog 出现范围外 publisher 时刷新失败关闭。
 
 使用 broker 时把 `type` 改为 `githubBrokered`，并增加 `brokerBaseUrl`；broker API 固定为

@@ -7,8 +7,10 @@ need a renderer-independent source of truth.
 
 `product-services/` is the release-owned trust bundle copied to
 `zeta-resources/product-services/` by both package assemblers. Its
-`product-services.json` registers the product-selected HTTPS Marketplace registry and references the sibling
-`marketplace-root.json`; the root is public verification material, never a signing key.
+`product-services.json` uses schema version 2 and lists named HTTPS Marketplace sources under
+`marketplaces`. Each source references its own contained `trustedRoot` file; the product's `zeta`
+source pins `marketplace-root.json`. Roots are public verification material, never signing keys.
+Both package assemblers require unique source names and every referenced regular, unlinked root file.
 
 Packaged Desktop/server hosts, `zeta code`/TUI, and app discover this file through the shared
 App Server client + `zeta-install-context` boundary. Each host explicitly injects the typed result;

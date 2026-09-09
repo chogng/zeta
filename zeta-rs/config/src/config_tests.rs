@@ -858,7 +858,7 @@ fn skill_source() -> SkillSourceConfig {
 
 fn plugin_request() -> PluginRequest {
     PluginRequest {
-        plugin_id: PluginId::new("acme/code-review").unwrap(),
+        plugin_id: PluginPackageId::new("acme/code-review").unwrap(),
         version: PluginVersion::new("1.2.3").unwrap(),
         enablement: PluginRequestEnablement::Disabled,
     }
@@ -909,7 +909,7 @@ fn dir_document(preferred_model: Option<ModelRef>) -> DirConfigDocument {
         root_reference: "dir:skill-root:review".into(),
         enablement: SkillSourceEnablement::Enabled,
     };
-    let plugin_id = PluginId::new("acme/code-review").unwrap();
+    let plugin_id = PluginPackageId::new("acme/code-review").unwrap();
     DirConfigDocument {
         agent: DirAgentConfig { preferred_model },
         mcp: DirMcpConfig {
@@ -1727,7 +1727,7 @@ fn plugin_and_hook_commands_reject_missing_targets_and_unsafe_shapes() {
             command_id: CommandId::new("enable-missing-plugin").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::SetPluginRequestEnablement {
-                plugin_id: PluginId::new("acme/review").unwrap(),
+                plugin_id: PluginPackageId::new("acme/review").unwrap(),
                 enablement: PluginRequestEnablement::Enabled,
             },
         })
@@ -1855,7 +1855,7 @@ fn dir_document_is_namespaced_and_cannot_bind_credentials() {
             .next()
             .unwrap()
             .version
-            .as_str(),
+            .to_string(),
         "1.2.3"
     );
     remove_config_files(&path);

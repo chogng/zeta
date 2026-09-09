@@ -23,6 +23,7 @@ from zeta_package.layout import (
     copy_builtin_skills,
     file_sha256,
     load_protocol_metadata,
+    validate_product_services,
     record_system_signing,
     require_verified_system_signing,
     system_signing_artifacts,
@@ -44,6 +45,63 @@ PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "zeta-rs" / "vendor" / "bubblew
 
 
 class PackageTests(unittest.TestCase):
+    def test_product_services_requires_every_sources_regular_trust_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            official = {"name": "zeta", "trustedRoot": "marketplace-root.json"}
+            vendor = {"name": "vendor", "trustedRoot": "vendor/root.json"}
+            (root / "marketplace-root.json").write_text("official root")
+            (root / "vendor").mkdir()
+            (root / "vendor/root.json").write_text("vendor root")
+            config = root / "product-services.json"
+            config.write_text(
+                json.dumps({"schemaVersion": 2, "marketplaces": [official, vendor]})
+            )
+            validate_product_services(root)
+            (root / "vendor/root.json").unlink()
+            with self.assertRaises(FileNotFoundError):
+                validate_product_services(root)
+            (root / "empty.json").write_text("")
+            for source in [
+                official,
+                {"name": "vendor\n", "trustedRoot": "marketplace-root.json"},
+                {"name": "vendor", "trustedRoot": "../root.json"},
+                {"name": "vendor", "trustedRoot": "/root.json"},
+                {"name": "vendor", "trustedRoot": "C:\\root.json"},
+                {"name": "vendor", "trustedRoot": "empty.json"},
+            ]:
+                with self.subTest(source=source):
+                    config.write_text(
+                        json.dumps(
+                            {"schemaVersion": 2, "marketplaces": [official, source]}
+                        )
+                    )
+                    with self.assertRaises(RuntimeError):
+                        validate_product_services(root)
+
+    @unittest.skipIf(os.name == "nt", "symbolic links require Windows privileges")
+    def test_product_services_rejects_a_symbolic_trust_root_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            root = parent / "product"
+            root.mkdir()
+            (root / "marketplace-root.json").write_text("official root")
+            (parent / "root.json").write_text("outside root")
+            (root / "linked").symlink_to(parent, target_is_directory=True)
+            (root / "product-services.json").write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 2,
+                        "marketplaces": [
+                            {"name": "zeta", "trustedRoot": "marketplace-root.json"},
+                            {"name": "vendor", "trustedRoot": "linked/root.json"},
+                        ],
+                    }
+                )
+            )
+            with self.assertRaises(RuntimeError):
+                validate_product_services(root)
+
     BUILT_IN_EXTENSIONS = [
         "css",
         "html",
@@ -224,7 +282,11 @@ class PackageTests(unittest.TestCase):
             )
             self.assertEqual(
                 "marketplace-root.json",
-                product_services["marketplaceManager"]["trustedRoot"],
+                next(
+                    source
+                    for source in product_services["marketplaces"]
+                    if source["name"] == "zeta"
+                )["trustedRoot"],
             )
             self.assertEqual(
                 (

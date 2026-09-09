@@ -1,7 +1,7 @@
 # Core Plugins 架构
 
 > 类型：canonical 跨仓架构文档。
-> 当前状态：`zeta-core-plugins` 内置 Zeta Marketplace 来源，并通过私有 registry adapter 消费
+> 当前状态：`zeta-core-plugins` 通过具名 provider 聚合来源，现有 registry adapter 消费
 > HTTPS/TUF 静态分发；旧 JSONL compatibility adapter、独立 Core Plugins 进程和 Desktop packaging 已删除。
 > App Server package RPC 与 Settings service 已接通。Skill、MCP、Connector、Theme、Language、
 > Localization
@@ -36,7 +36,8 @@ flowchart LR
 
     subgraph Zeta["Zeta process"]
         RPC --> Manager["Core Plugins"]
-        Manager --> Client["MarketplaceRemoteClient"]
+        Manager --> Providers["PluginProviders：按来源精确路由"]
+        Providers --> Client["MarketplaceRemoteClient / 自有 provider"]
         Manager --> Store["profile-local artifacts + installations"]
         Manager --> Lease["capability leases + opaque resources"]
         RPC --> Runtime["Skill / MCP / Connector / Extension / Language runtimes"]
@@ -88,13 +89,13 @@ acquireCapability / releaseCapability / openResource
 
 ### 远端注册表接口
 
-`MarketplaceRegistryClient` 只供 `PluginsManager` 使用：
+`PluginProvider` 由来源实现，`PluginProviders` 负责注册、聚合发现和精确路由：
 
 ```text
 search / get / download
 ```
 
-`download` 返回 `MarketplacePackagePayload`。该对象只允许 `PluginsManager` 把已经验证的内容复制到一个空的
+`download` 返回 `PluginPackagePayload`。该对象只允许 `PluginsManager` 把已经验证的内容复制到一个空的
 staging directory；没有 source-path getter。远端 Marketplace 不拥有 install、update、
 uninstall、lease 或 activation API，因为这些都是本地状态。
 
@@ -162,33 +163,66 @@ Registry record 转换成固定版本 package，经审核后写入 signed catalo
 digest 验证的 Marketplace target。catalog 中可选的 `upstream` 字段保留精确 Registry record 和
 repository 链接用于展示与审计，但不会让 Renderer 绕过 Core Plugins 直接下载或执行上游内容。
 
+## 插件标识与 provider
+
+| 值 | 格式与用途 |
+| --- | --- |
+| `PluginId` | `name@marketplace`，用于发现、查询、安装和更新；名称不要求发布者前缀 |
+| `MarketplaceName` | host 配置中的唯一来源名，绑定一个 provider |
+| `PluginPackageId` | 现有 `.zeta-plugin` 包格式中的 `publisher/name`；仅该包格式和对应消费方使用 |
+| `PackageRef.id` | 对外返回完整 `PluginId`；客户端原样传回，版本和摘要使用独立字段 |
+
+通用 ID 校验只约束非空、长度和安全字符。插件名允许 ASCII 字母、数字、`_`、`-` 与分隔非空名称段的
+`.`；来源名不允许 `.`。禁止路径分隔符、空白和额外的 `@`。字段私有，构造和反序列化使用同一校验。
+每段最多 128 字节，完整 ID 最多 160 字节，为各领域的贡献标识留出空间。
+
+现有 TUF registry 在 provider 内将 `publisher/name` 映射为 `publisher.name`，因此完整 ID 可以是
+`marketplace.commit@zeta`。转换不修改已签名 manifest、包内容或摘要，也不要求其他 provider 使用
+发布者前缀。发布者白名单、签名、撤销和内容校验仍由对应来源负责。
+
+`PluginProvider` 只提供发现、详情和经过来源校验的 `PluginPackagePayload`。payload 保留私有来源资源，
+只能复制到 Manager 提供的空 staging 目录。Manager 重新核验摘要和文件统计，统一拥有安装、lease 和
+资源读取；接入 provider 不等于安装、授权或执行插件。宿主通过 `LocalAppServerOptions::with_plugin_providers`
+注入自有实现，产品配置中的 `marketplaces` 列表则创建多个独立的 HTTPS/TUF provider。
+
+注册时拒绝重复来源名。聚合搜索按完整 ID、版本排序，再应用全局数量限制；任一来源失败时返回错误。
+get/install/update 只访问 ID 指定的来源，并核对返回的名称和精确版本。未配置来源、缺少来源名或返回身份
+不匹配时直接失败。同名、同版本、同摘要在两个来源中仍有不同的 installation 和 capability identity。
+移除来源后，已安装包仍可列出、读取和卸载；更新需要重新配置对应来源。
+
+旧安装状态没有来源名。首次打开时仅在配置了原来的单个来源时写入完整 ID，并重新生成安装和 capability
+引用；包内容继续复用。存在旧记录且同时配置多个来源时，打开失败并要求先用原来源完成一次迁移；不会猜测
+来源或改写文件。完成迁移后可以添加来源。现有独立 `.zeta-plugin` 配置请求仍使用 `PluginPackageId`。
+
 ## 配置与启动
 
-产品资源 `resources/product-services/product-services.json` 只 pin 远端 registry：
+产品资源 `resources/product-services/product-services.json` 按名称分别 pin 远端 registry：
+文档版本为 2，`marketplaces` 替代单一 `marketplaceManager` 对象。
 
 ```json
 {
-  "schemaVersion": 1,
-  "marketplaceManager": {
+  "schemaVersion": 2,
+  "marketplaces": [{
+    "name": "zeta",
     "metadataBaseUrl": "https://chogng.github.io/marketplace/metadata/",
     "targetsBaseUrl": "https://chogng.github.io/marketplace/targets/",
     "trustedRoot": "marketplace-root.json",
     "catalogRefreshIntervalSeconds": 300
-  }
+  }]
 }
 ```
 
 App Server 启动时：
 
 1. `LocalProductServicesConfig` 读取 HTTPS endpoints 和 product-pinned trusted root；
-2. `MarketplaceRemoteClient::open` 以 network-free 方式创建 lazy remote registry adapter；
-3. `PluginsManager::open(<profile>/marketplace-manager, registry)` 打开本地状态；
+2. 为每个名称调用 `MarketplaceRemoteClient::new`，延迟访问网络，并注册到 `PluginProviders`；
+3. `PluginsManager::open(<profile>/marketplace-manager, providers)` 打开唯一的本地安装状态；
 4. App Server 注入 `Arc<dyn PluginPackageService>`；首次 Marketplace 请求才刷新 TUF/catalog。
 
 `catalogRefreshIntervalSeconds` 是产品选择的进程内已验签 catalog snapshot 复用时间，允许范围为
 60–86400 秒，默认 300 秒。它只控制何时再次尝试远端刷新，不改变 TUF expiry、rollback、revocation
 或签名校验；磁盘 cache 继续由 `MarketplaceRemoteClient` 私有持有，并统一位于
-`<profile>/cache/marketplace`（默认即 `<home>/.zeta/cache/marketplace`）。Renderer 的 Marketplace service
+`<profile>/cache/marketplace/<SHA-256(marketplace name)>`，避免不同来源共用目录。Renderer 的 Marketplace service
 只保留 path-free、Renderer-ready 的内存展示快照，因此 Settings 重开可以同步绘制；它不保存 catalog
 manifest、TUF metadata 或 package bytes。用户显式 Browse/Search 时才要求 service 重新读取目录。
 
@@ -228,7 +262,8 @@ generation；同一 profile 也会拒绝绑定第二个 Marketplace authority。
 | remote 网络不可用 | `serviceUnavailable` | Marketplace 功能不可用，其他 App Server 能力继续工作 |
 
 PluginsManager 在复制远端 verified payload 后再次计算 `marketplace-package-v1` normalized digest，并核对
-签名的 file count/total bytes。所有 package resource 读取都受 lease、capability identity、safe
+签名的 file count/total bytes；复用已有 artifact 时也核对当前 provider 的统计。并发安装相同 digest 时
+复用校验通过的同一份内容，并清理未采用的 staging 目录。所有 package resource 读取都受 lease、capability identity、safe
 relative path 和 size limits 约束。
 
 ## 当前实现与后续迁移
@@ -254,7 +289,7 @@ relative path 和 size limits 约束。
 | 旧 Language distribution consumer 迁移 | ✅ 专用 crate、RPC、Desktop service 与 duplicate storage 已删除 |
 
 如果未来 Marketplace 从静态 TUF 分发改成真正的 HTTPS business API，替换
-`MarketplaceRegistryClient` 的实现即可；PluginsManager、App Server RPC、Renderer service 和 capability
+`PluginProvider` 的实现即可；PluginsManager、App Server RPC、Renderer service 和 capability
 runtime contract 不应改变。
 
 ## 修改影响与验证
@@ -270,12 +305,11 @@ runtime contract 不应改变。
 最低验证集：
 
 ```bash
-cargo test -p zeta-core-plugins -p zeta-app-server
-cargo clippy -p zeta-core-plugins --all-targets -- -D warnings
+just test zeta-plugin
+just test zeta-core-plugins
+just test zeta-app-server marketplace
+just check zeta-app-server
 node --test build/zeta-package/prepareDevPackage.test.ts
-
-cd ../marketplace
-cargo test --locked --workspace
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo run --locked -p marketplace-tool -- validate .
+node --test build/zeta-package/productServices.test.ts
+just test-python release
 ```

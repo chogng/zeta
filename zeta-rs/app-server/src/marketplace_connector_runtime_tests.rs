@@ -12,14 +12,14 @@ use zeta_core_plugins::GetPackageRequest;
 use zeta_core_plugins::InstallPackageRequest;
 use zeta_core_plugins::ListInstalledRequest;
 use zeta_core_plugins::MarketplaceClientError;
-use zeta_core_plugins::MarketplaceInstallCapability;
-use zeta_core_plugins::MarketplacePackagePayload;
-use zeta_core_plugins::MarketplaceRegistryClient;
 use zeta_core_plugins::PackageDetails;
 use zeta_core_plugins::PackageRef;
 use zeta_core_plugins::PackageSource;
 use zeta_core_plugins::PackageSummary;
+use zeta_core_plugins::PluginPackageCapability;
+use zeta_core_plugins::PluginPackagePayload;
 use zeta_core_plugins::PluginPackageService;
+use zeta_core_plugins::PluginProvider;
 use zeta_core_plugins::PluginsManager;
 use zeta_core_plugins::ReleaseCapabilityRequest;
 use zeta_core_plugins::SearchPackagesRequest;
@@ -47,11 +47,12 @@ const MCP: &[u8] = br#"{
 #[test]
 fn installed_marketplace_plugin_projects_connector_and_mcp_with_live_lease() {
     let root = tempfile::tempdir().unwrap();
-    let manager =
-        Arc::new(PluginsManager::open(root.path().join("manager"), Arc::new(Registry)).unwrap());
+    let manager = Arc::new(
+        PluginsManager::open(root.path().join("manager"), providers(Arc::new(Registry))).unwrap(),
+    );
     let installed = manager
         .install(InstallPackageRequest {
-            package_id: "marketplace/github".into(),
+            package_id: "marketplace.github@test".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -75,7 +76,7 @@ fn installed_marketplace_plugin_projects_connector_and_mcp_with_live_lease() {
     let connector = &projection.definitions()[0];
     assert_eq!(
         connector.id().as_str(),
-        "marketplace:marketplace/github:connector:github"
+        "marketplace:marketplace.github@test:connector:github"
     );
     let provider = projection.provider();
     assert!(provider.standalone_servers().unwrap().is_empty());
@@ -115,14 +116,14 @@ fn installed_marketplace_plugin_projects_connector_and_mcp_with_live_lease() {
 
 struct Registry;
 
-impl MarketplaceRegistryClient for Registry {
+impl PluginProvider for Registry {
     fn search(
         &self,
         _: SearchPackagesRequest,
     ) -> Result<SearchPackagesResult, MarketplaceClientError> {
         Ok(SearchPackagesResult {
             packages: vec![PackageSummary {
-                id: "marketplace/github".into(),
+                id: "marketplace.github".into(),
                 version: "1.0.0".into(),
                 package_type: "plugin".into(),
                 display_name: "GitHub".into(),
@@ -158,21 +159,21 @@ impl MarketplaceRegistryClient for Registry {
     fn download(
         &self,
         _: DownloadPackageRequest,
-    ) -> Result<Box<dyn MarketplacePackagePayload>, MarketplaceClientError> {
+    ) -> Result<Box<dyn PluginPackagePayload>, MarketplaceClientError> {
         Ok(Box::new(Payload::new()))
     }
 }
 
 struct Payload {
     package: PackageRef,
-    capabilities: Vec<MarketplaceInstallCapability>,
+    capabilities: Vec<PluginPackageCapability>,
 }
 
 impl Payload {
     fn new() -> Self {
         Self {
             package: PackageRef {
-                id: "marketplace/github".into(),
+                id: "marketplace.github".into(),
                 version: "1.0.0".into(),
                 digest: package_digest(&[
                     ("connectors/github.json", CONNECTOR),
@@ -180,14 +181,14 @@ impl Payload {
                 ]),
             },
             capabilities: vec![
-                MarketplaceInstallCapability {
+                PluginPackageCapability {
                     kind: CapabilityKind::Connector,
                     id: "github".into(),
                     path: "connectors/github.json".into(),
                     runtime: None,
                     language_ids: Vec::new(),
                 },
-                MarketplaceInstallCapability {
+                PluginPackageCapability {
                     kind: CapabilityKind::Mcp,
                     id: "github".into(),
                     path: "mcp/github.json".into(),
@@ -199,16 +200,12 @@ impl Payload {
     }
 }
 
-impl MarketplacePackagePayload for Payload {
+impl PluginPackagePayload for Payload {
     fn package(&self) -> &PackageRef {
         &self.package
     }
 
-    fn package_type(&self) -> &str {
-        "plugin"
-    }
-
-    fn capabilities(&self) -> &[MarketplaceInstallCapability] {
+    fn capabilities(&self) -> &[PluginPackageCapability] {
         &self.capabilities
     }
 
@@ -245,4 +242,12 @@ fn package_digest(files: &[(&str, &[u8])]) -> String {
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn providers(provider: Arc<dyn PluginProvider>) -> zeta_core_plugins::PluginProviders {
+    zeta_core_plugins::PluginProviders::new([(
+        zeta_plugin::MarketplaceName::new("test").unwrap(),
+        provider,
+    )])
+    .unwrap()
 }

@@ -812,9 +812,24 @@ fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
         profile.path().join("cache-a"),
     )
     .unwrap();
+    let vendor = zeta_core_plugins::RemoteMarketplaceConfig::new(
+        "https://vendor.example/metadata/".parse().unwrap(),
+        "https://vendor.example/targets/".parse().unwrap(),
+        vec![3],
+        profile.path().join("vendor-cache"),
+    )
+    .unwrap();
+    let first_config = BTreeMap::from([
+        (
+            zeta_plugin::MarketplaceName::new("zeta").unwrap(),
+            first_config,
+        ),
+        (zeta_plugin::MarketplaceName::new("vendor").unwrap(), vendor),
+    ]);
     let first = runtime.plugins_manager(first_config.clone()).unwrap();
     let reused = runtime.plugins_manager(first_config).unwrap();
     assert!(Arc::ptr_eq(&first, &reused));
+    assert!(!profile.path().join("vendor-cache").exists());
 
     let second_config = zeta_core_plugins::RemoteMarketplaceConfig::new(
         "https://other.example/metadata/".parse().unwrap(),
@@ -823,6 +838,10 @@ fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
         profile.path().join("cache-b"),
     )
     .unwrap();
+    let second_config = BTreeMap::from([(
+        zeta_plugin::MarketplaceName::new("zeta").unwrap(),
+        second_config,
+    )]);
     let error = match runtime.plugins_manager(second_config) {
         Ok(_) => panic!("a second Marketplace authority must be rejected"),
         Err(error) => error,

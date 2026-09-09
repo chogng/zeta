@@ -29,8 +29,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         std::fs::read(trusted_root)?,
         state_root.join("remote-cache"),
     )?;
-    let registry = Arc::new(MarketplaceRemoteClient::open(config)?);
-    let manager = PluginsManager::open(state_root.join("manager"), registry)?;
+    let registry = Arc::new(MarketplaceRemoteClient::new(config));
+    let providers = zeta_core_plugins::PluginProviders::new([(
+        zeta_plugin::MarketplaceName::new("local")?,
+        registry as Arc<dyn zeta_core_plugins::PluginProvider>,
+    )])?;
+    let manager = PluginsManager::open(state_root.join("manager"), providers)?;
     for (package_type, package_id) in [
         ("plugin", "marketplace/github"),
         ("skill", "marketplace/commit"),
@@ -38,6 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("mcp", "marketplace/playwright-mcp"),
         ("theme", "marketplace/aurora-theme"),
     ] {
+        let source_id = format!("{}@local", package_id.replace('/', "."));
         let search = manager.search(SearchPackagesRequest {
             query: package_id.rsplit('/').next().unwrap_or_default().to_owned(),
             package_type: Some(package_type.to_owned()),
@@ -46,7 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let package = search
             .packages
             .iter()
-            .find(|package| package.id == package_id)
+            .find(|package| package.id == source_id)
             .ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
@@ -84,7 +89,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let css_server = executable_sources
         .iter()
-        .find(|source| source.package().id == "marketplace/css")
+        .find(|source| source.package().id == "marketplace.css@local")
         .ok_or_else(|| io::Error::other("CSS executable capability was not projected"))?;
     if css_server.language_ids() != ["css", "less", "scss"] {
         return Err(io::Error::other("CSS executable lost its signed language route").into());

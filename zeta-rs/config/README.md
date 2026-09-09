@@ -6,6 +6,8 @@
 2. `DirConfigStore` 严格读取目录提供的 `.zeta/config.toml`；目录文档只能表达待处理的配置意图，不能给自身增加 capability。
 3. `DirPermissionsConfig` 按 `DirId` 保存用户明确授予的 capability 集合；缺失条目表示没有持久授权，不使用 Trusted、Restricted 或目录级 Trust 状态。
 
+Plugin 包标识与版本直接复用 `zeta-plugin` 的类型和校验，配置层只保存请求及其作用域。
+
 配置合并、来源边界和运行时生效点见 [`docs/config.md`](../../docs/config.md)，环境与目录授权语义见
 [`docs/environment-access.md`](../../docs/environment-access.md)。
 

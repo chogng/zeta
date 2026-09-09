@@ -27,7 +27,7 @@ use zeta_config::HookEnablement;
 use zeta_config::HookEvent;
 use zeta_config::HookId;
 use zeta_config::HookMatcher;
-use zeta_config::PluginId;
+use zeta_config::PluginPackageId;
 use zeta_config::PluginRequest;
 use zeta_config::PluginRequestEnablement;
 use zeta_config::PluginVersion;
@@ -50,7 +50,7 @@ impl AppServer {
 
     pub(super) fn plugin_request_remove(&self, params: &Value) -> Result<Value, RpcError> {
         let params: PluginRequestRemoveParams = decode(params)?;
-        let plugin_id = PluginId::new(params.plugin_id).map_err(invalid_params)?;
+        let plugin_id = PluginPackageId::new(params.plugin_id).map_err(invalid_params)?;
         let outcome = self
             .config_store()?
             .apply(ConfigCommandRequest {
@@ -64,7 +64,7 @@ impl AppServer {
 
     pub(super) fn plugin_request_set_enablement(&self, params: &Value) -> Result<Value, RpcError> {
         let params: PluginRequestSetEnablementParams = decode(params)?;
-        let plugin_id = PluginId::new(params.plugin_id).map_err(invalid_params)?;
+        let plugin_id = PluginPackageId::new(params.plugin_id).map_err(invalid_params)?;
         let outcome = self
             .config_store()?
             .apply(ConfigCommandRequest {
@@ -141,7 +141,7 @@ pub(super) fn plugin_request_dto(request: PluginRequest) -> PluginRequestDto {
 
 fn plugin_request_from_dto(request: PluginRequestDto) -> Result<PluginRequest, RpcError> {
     Ok(PluginRequest {
-        plugin_id: PluginId::new(request.plugin_id).map_err(invalid_params)?,
+        plugin_id: PluginPackageId::new(request.plugin_id).map_err(invalid_params)?,
         version: PluginVersion::new(request.version).map_err(invalid_params)?,
         enablement: plugin_enablement_from_dto(request.enablement),
     })

@@ -1,4 +1,4 @@
-use crate::{PluginError, PluginErrorKind, PluginId, PluginPath, PluginVersion};
+use crate::{PluginError, PluginErrorKind, PluginPackageId, PluginPath, PluginVersion};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -15,7 +15,7 @@ const MAX_LOCAL_ID_BYTES: usize = 64;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginManifest {
     pub schema_version: u32,
-    pub id: PluginId,
+    pub id: PluginPackageId,
     pub version: PluginVersion,
     pub display_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -79,7 +79,7 @@ impl PluginManifest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct UncheckedPluginManifest {
     schema_version: u32,
-    id: PluginId,
+    id: PluginPackageId,
     version: PluginVersion,
     display_name: String,
     #[serde(default)]

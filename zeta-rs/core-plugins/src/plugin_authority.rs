@@ -18,8 +18,8 @@ use crate::LocalPluginPackage;
 use crate::PluginActivationSnapshot;
 use crate::PluginError;
 use crate::PluginErrorKind;
-use crate::PluginId;
 use crate::PluginPackageDigest;
+use crate::PluginPackageId;
 use crate::PluginPackageStore;
 
 mod persistence;
@@ -143,7 +143,7 @@ impl PluginAuthoritySnapshot {
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct InstalledKey {
-    id: PluginId,
+    id: PluginPackageId,
     version: crate::PluginVersion,
 }
 
@@ -164,7 +164,7 @@ struct ActivePlugin {
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct InvocationKey {
-    plugin_id: PluginId,
+    plugin_id: PluginPackageId,
     package_digest: PluginPackageDigest,
     activation_revision: u64,
 }
@@ -173,10 +173,10 @@ struct AuthorityState {
     revision: u64,
     activation_generation: u64,
     installed: BTreeMap<InstalledKey, InstalledPluginRef>,
-    enabled: BTreeMap<PluginId, InstalledPluginRef>,
+    enabled: BTreeMap<PluginPackageId, InstalledPluginRef>,
     granted: BTreeMap<InstalledKey, InstalledPluginRef>,
     revoked: BTreeMap<InstalledKey, InstalledPluginRef>,
-    active: BTreeMap<PluginId, ActivePlugin>,
+    active: BTreeMap<PluginPackageId, ActivePlugin>,
     activation: PluginActivationSnapshot,
     receipts: BTreeMap<String, PersistedCommandReceipt>,
     in_flight: BTreeMap<InvocationKey, usize>,
@@ -664,7 +664,7 @@ impl PluginAuthoritySubscription {
 fn apply_command(
     store: &PluginPackageStore,
     installed: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
-    enabled: &mut BTreeMap<PluginId, InstalledPluginRef>,
+    enabled: &mut BTreeMap<PluginPackageId, InstalledPluginRef>,
     granted: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
     revoked: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
     command: &PluginAuthorityCommand,
@@ -785,10 +785,10 @@ fn apply_command(
 }
 
 fn effective_active(
-    enabled: &BTreeMap<PluginId, InstalledPluginRef>,
+    enabled: &BTreeMap<PluginPackageId, InstalledPluginRef>,
     granted: &BTreeMap<InstalledKey, InstalledPluginRef>,
     revoked: &BTreeMap<InstalledKey, InstalledPluginRef>,
-) -> BTreeMap<PluginId, ActivePlugin> {
+) -> BTreeMap<PluginPackageId, ActivePlugin> {
     enabled
         .iter()
         .filter(|(_, package)| {
@@ -808,8 +808,8 @@ fn effective_active(
 }
 
 fn same_active_packages(
-    left: &BTreeMap<PluginId, ActivePlugin>,
-    right: &BTreeMap<PluginId, ActivePlugin>,
+    left: &BTreeMap<PluginPackageId, ActivePlugin>,
+    right: &BTreeMap<PluginPackageId, ActivePlugin>,
 ) -> bool {
     left.len() == right.len()
         && left.iter().all(|(id, active)| {
@@ -823,7 +823,7 @@ fn package_map_by_plugin(
     installed: &BTreeMap<InstalledKey, InstalledPluginRef>,
     packages: Vec<InstalledPluginRef>,
     label: &str,
-) -> Result<BTreeMap<PluginId, InstalledPluginRef>, PluginError> {
+) -> Result<BTreeMap<PluginPackageId, InstalledPluginRef>, PluginError> {
     let mut result = BTreeMap::new();
     for package in packages {
         if installed.get(&InstalledKey::from_package(&package)) != Some(&package)
@@ -876,8 +876,8 @@ fn package_tombstones(
 }
 
 fn same_active_set(
-    left: &BTreeMap<PluginId, ActivePlugin>,
-    right: &BTreeMap<PluginId, ActivePlugin>,
+    left: &BTreeMap<PluginPackageId, ActivePlugin>,
+    right: &BTreeMap<PluginPackageId, ActivePlugin>,
 ) -> bool {
     left.len() == right.len()
         && left.iter().all(|(id, package)| {
@@ -888,8 +888,8 @@ fn same_active_set(
 }
 
 fn stamp_changed_activations(
-    previous: &BTreeMap<PluginId, ActivePlugin>,
-    next: &mut BTreeMap<PluginId, ActivePlugin>,
+    previous: &BTreeMap<PluginPackageId, ActivePlugin>,
+    next: &mut BTreeMap<PluginPackageId, ActivePlugin>,
     activation_generation: u64,
 ) {
     for (id, active) in next {
@@ -902,8 +902,8 @@ fn stamp_changed_activations(
 }
 
 fn revoked_invocations(
-    previous: &BTreeMap<PluginId, ActivePlugin>,
-    next: &BTreeMap<PluginId, ActivePlugin>,
+    previous: &BTreeMap<PluginPackageId, ActivePlugin>,
+    next: &BTreeMap<PluginPackageId, ActivePlugin>,
 ) -> Vec<InvocationKey> {
     previous
         .iter()
@@ -919,7 +919,7 @@ fn revoked_invocations(
         .collect()
 }
 
-fn active_matches(active: &BTreeMap<PluginId, ActivePlugin>, key: &InvocationKey) -> bool {
+fn active_matches(active: &BTreeMap<PluginPackageId, ActivePlugin>, key: &InvocationKey) -> bool {
     active.get(&key.plugin_id).is_some_and(|active| {
         active.package.digest == key.package_digest
             && active.activation_revision == key.activation_revision
@@ -929,7 +929,7 @@ fn active_matches(active: &BTreeMap<PluginId, ActivePlugin>, key: &InvocationKey
 fn resolve_activation(
     generation: u64,
     store: &PluginPackageStore,
-    active: &BTreeMap<PluginId, ActivePlugin>,
+    active: &BTreeMap<PluginPackageId, ActivePlugin>,
 ) -> Result<PluginActivationSnapshot, PluginError> {
     PluginActivationSnapshot::resolve(
         generation,

@@ -12,7 +12,7 @@ use crate::PluginAuthorityCommandId;
 use crate::PluginAuthorityCommandRequest;
 use crate::PluginAuthorityDisposition;
 use crate::PluginErrorKind;
-use crate::PluginId;
+use crate::PluginPackageId;
 use crate::PluginPackageStore;
 
 fn package(root: &std::path::Path, id: &str, version: &str) -> LocalPluginPackage {
@@ -161,7 +161,7 @@ fn failed_enable_does_not_change_the_published_generation() {
     let store = PluginPackageStore::open(root.path()).unwrap();
     let authority = PluginActivationAuthority::in_memory(store).unwrap();
     let missing = crate::InstalledPluginRef {
-        id: PluginId::new("acme/missing").unwrap(),
+        id: PluginPackageId::new("acme/missing").unwrap(),
         version: crate::PluginVersion::new("1.0.0").unwrap(),
         digest: crate::PluginPackageDigest::new(format!("sha256:{}", "0".repeat(64))).unwrap(),
     };

@@ -48,7 +48,7 @@ member, and rejects non-regular archive members. `node.py` applies the same
 locked size/SHA-256 gate to the shared Node.js runtime, extracts only `node[.exe]`
 and its license, and never resolves Node from the host `PATH`. Official Node.js
 releases do not contain musl builds, so musl release jobs must supply an exact
-`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`zeta-rs/vendor/bubblewrap`](../../zeta-rs/vendor/bubblewrap/README.md), then builds the `zeta-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. For Windows, `windows_helpers.py` builds the
+`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`zeta-rs/vendor/bubblewrap`](../../../zeta-rs/vendor/bubblewrap/README.md), then builds the `zeta-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. For Windows, `windows_helpers.py` builds the
 AppContainer command runner and provisioning worker from `zeta-windows-sandbox`, plus the machine
 service from `zeta-windows-sandbox-service`, or validates the three explicit executable overrides.
 Repository-owned built-in Skills come from
@@ -60,12 +60,12 @@ existing output directory. Repository-owned declarative Editor Extensions come f
 unlinked-tree restriction. Their canonical upstream license copy is
 `third_party/vscode/LICENSE.txt` (mirrored from the sibling VS Code source checkout) and is copied
 once to `zeta-resources/licenses/vscode/LICENSE.txt`. Runtime discovery and contribution semantics remain owned by
-[`zeta-extensions`](../../zeta-rs/extensions/README.md) and
-[`docs/editor-extensions.md`](../../docs/editor-extensions.md), not by the package builder.
+[`zeta-extensions`](../../../zeta-rs/extensions/README.md) and
+[`docs/editor-extensions.md`](../../../docs/editor-extensions.md), not by the package builder.
 Product service inputs come from `resources/product-services/`; both assemblers copy the regular
-tree and require the official Marketplace config and pinned root before completing a package. The
-runtime parser remains the trust authority for URLs, relative root containment, schema, and TUF
-verification.
+tree and validate the schema-v2 source list, unique names, the official pin, and every source's
+bounded, contained, regular trust-root file before completing a package. The runtime parser owns
+endpoint and publisher policy validation and TUF verification.
 
 `--javascript-runtime packaged-node` is the default and retains standalone Node
 for CLI, browser-bridge, remote, and headless App Server hosts.

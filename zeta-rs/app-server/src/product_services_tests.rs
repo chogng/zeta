@@ -10,13 +10,14 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     fs::write(
         root.path().join("product-services.json"),
         r#"{
-          "schemaVersion": 1,
-          "marketplaceManager": {
+          "schemaVersion": 2,
+          "marketplaces": [{
+            "name": "zeta",
             "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
             "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
             "trustedRoot": "root.json",
             "catalogRefreshIntervalSeconds": 900
-          },
+          }],
           "connectorOauth": [{
             "type": "githubDevice",
             "connectorId": "openai/github:connector:account",
@@ -33,10 +34,12 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
     )
     .unwrap();
 
-    assert!(config.marketplace_registry().is_some());
+    assert_eq!(config.marketplaces().len(), 1);
     assert_eq!(
         config
-            .marketplace_registry()
+            .marketplaces()
+            .values()
+            .next()
             .unwrap()
             .catalog_refresh_interval(),
         Duration::from_secs(900)
@@ -57,7 +60,7 @@ fn production_product_services_delegates_to_the_plugins_manager() {
 
     let config = LocalProductServicesConfig::load(product_services, profile.path()).unwrap();
 
-    let registry = config.marketplace_registry().unwrap();
+    let registry = config.marketplaces().values().next().unwrap();
     assert_eq!(
         registry.metadata_base_url().as_str(),
         "https://chogng.github.io/marketplace/metadata/"
@@ -79,13 +82,14 @@ fn product_services_rejects_out_of_range_marketplace_refresh_intervals() {
     fs::write(
         root.path().join("product-services.json"),
         r#"{
-          "schemaVersion": 1,
-          "marketplaceManager": {
+          "schemaVersion": 2,
+          "marketplaces": [{
+            "name": "zeta",
             "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
             "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
             "trustedRoot": "root.json",
             "catalogRefreshIntervalSeconds": 30
-          }
+          }]
         }"#,
     )
     .unwrap();
@@ -105,7 +109,13 @@ fn product_services_rejects_symlinked_trust_inputs() {
     use std::os::unix::fs::symlink;
 
     let root = TempDir::new().unwrap();
-    fs::write(root.path().join("actual.json"), br#"{"schemaVersion":1}"#).unwrap();
+    fs::write(
+        root.path().join("actual.json"),
+        br#"{"schemaVersion":2,"marketplaces":[]}"#,
+    )
+    .unwrap();
+    LocalProductServicesConfig::load(root.path().join("actual.json"), root.path().join("profile"))
+        .unwrap();
     symlink(
         root.path().join("actual.json"),
         root.path().join("product-services.json"),
@@ -130,12 +140,13 @@ fn product_services_rejects_trust_roots_outside_its_directory() {
     fs::write(
         product.join("product-services.json"),
         r#"{
-          "schemaVersion": 1,
-          "marketplaceManager": {
+          "schemaVersion": 2,
+          "marketplaces": [{
+            "name": "zeta",
             "metadataBaseUrl": "https://marketplace.zeta.example/metadata/",
             "targetsBaseUrl": "https://marketplace.zeta.example/targets/",
             "trustedRoot": "../root.json"
-          }
+          }]
         }"#,
     )
     .unwrap();
@@ -147,4 +158,77 @@ fn product_services_rejects_trust_roots_outside_its_directory() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn marketplace_sources_keep_independent_roots_and_reject_duplicate_or_unsafe_names() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("team.json"), b"team trust root").unwrap();
+    fs::write(root.path().join("vendor.json"), b"vendor trust root").unwrap();
+    let path = root.path().join("product-services.json");
+    let mut document = serde_json::json!({
+        "schemaVersion": 2,
+        "marketplaces": [
+            {"name": "team", "metadataBaseUrl": "https://team.example/metadata/", "targetsBaseUrl": "https://team.example/targets/", "trustedRoot": "team.json"},
+            {"name": "vendor", "metadataBaseUrl": "https://vendor.example/metadata/", "targetsBaseUrl": "https://vendor.example/targets/", "trustedRoot": "vendor.json", "allowedPublishers": ["vendor"]}
+        ]
+    });
+    fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+    let config = LocalProductServicesConfig::load(&path, root.path().join("profile")).unwrap();
+    assert_eq!(
+        config
+            .marketplaces()
+            .keys()
+            .map(MarketplaceName::as_str)
+            .collect::<Vec<_>>(),
+        ["team", "vendor"]
+    );
+    assert_eq!(
+        config.marketplaces()[&MarketplaceName::new("vendor").unwrap()]
+            .metadata_base_url()
+            .as_str(),
+        "https://vendor.example/metadata/"
+    );
+    fs::write(
+        root.path().join("vendor.json"),
+        b"changed vendor trust root",
+    )
+    .unwrap();
+    let changed = LocalProductServicesConfig::load(&path, root.path().join("profile")).unwrap();
+    assert_ne!(changed.authority_identity(), config.authority_identity());
+    for name in ["team", "../vendor", "vendor.name", ""] {
+        document["marketplaces"][1]["name"] = name.into();
+        fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        assert!(
+            LocalProductServicesConfig::load(&path, root.path().join("profile")).is_err(),
+            "{name}"
+        );
+    }
+    document["marketplaces"][1] = document["marketplaces"][0].clone();
+    document["marketplaces"][1]["name"] = "TEAM".into();
+    fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+    let config = LocalProductServicesConfig::load(&path, root.path().join("profile")).unwrap();
+    assert_ne!(
+        config.marketplaces()[&MarketplaceName::new("team").unwrap()],
+        config.marketplaces()[&MarketplaceName::new("TEAM").unwrap()],
+        "separate source names must never share a cache, including on case-insensitive filesystems"
+    );
+}
+
+#[test]
+fn marketplace_publisher_policy_rejects_explicitly_empty_duplicate_or_invalid_lists() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("root.json"), b"pinned trust root").unwrap();
+    let path = root.path().join("product-services.json");
+    let mut document = serde_json::json!({
+        "schemaVersion": 2,
+        "marketplaces": [{"name": "team", "metadataBaseUrl": "https://team.example/metadata/", "targetsBaseUrl": "https://team.example/targets/", "trustedRoot": "root.json"}]
+    });
+    fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+    LocalProductServicesConfig::load(&path, root.path().join("profile")).unwrap();
+    for publishers in [vec![], vec!["team", "team"], vec!["../team"]] {
+        document["marketplaces"][0]["allowedPublishers"] = serde_json::json!(publishers);
+        fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        assert!(LocalProductServicesConfig::load(&path, root.path().join("profile")).is_err());
+    }
 }

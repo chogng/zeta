@@ -84,6 +84,21 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
     let response: Value = serde_json::from_str(&response).unwrap();
     assert_eq!(response["id"], 2);
     assert!(response["result"].is_object());
+
+    writeln!(
+        stream,
+        "{}",
+        json!({
+            "jsonrpc": "2.0", "id": 3, "method": "marketplace/search", "params": {"query": ""}
+        })
+    )
+    .unwrap();
+    stream.flush().unwrap();
+    let mut response = String::new();
+    reader.read_line(&mut response).unwrap();
+    let response: Value = serde_json::from_str(&response).unwrap();
+    assert_eq!(response["id"], 3);
+    assert_eq!(response["result"]["packages"], json!([]));
 }
 
 fn connect_when_ready(endpoint: &std::path::Path) -> UnixStream {

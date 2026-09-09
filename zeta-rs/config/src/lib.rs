@@ -53,7 +53,7 @@ pub use mcp::{
     McpTransportConfig,
 };
 pub use plugins::{
-    DirPluginRequest, DirPluginRequestScope, DirPluginRequests, PluginId, PluginRequest,
+    DirPluginRequest, DirPluginRequestScope, DirPluginRequests, PluginPackageId, PluginRequest,
     PluginRequestEnablement, PluginVersion, PluginsConfig,
 };
 pub use resolution::{

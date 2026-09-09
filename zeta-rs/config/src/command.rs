@@ -4,8 +4,9 @@ use crate::ToolSearchConfig;
 use crate::{
     AgentGrepBackend, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig,
     HookEnablement, HookId, LanguageServerConfig, LanguageServerId, McpServerConfig,
-    McpServerEnablement, McpServerId, ModelRef, PluginId, PluginRequest, PluginRequestEnablement,
-    SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement, SkillSourceId,
+    McpServerEnablement, McpServerId, ModelRef, PluginPackageId, PluginRequest,
+    PluginRequestEnablement, SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement,
+    SkillSourceId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -81,10 +82,10 @@ pub enum UserConfigCommand {
         request: PluginRequest,
     },
     RemovePluginRequest {
-        plugin_id: PluginId,
+        plugin_id: PluginPackageId,
     },
     SetPluginRequestEnablement {
-        plugin_id: PluginId,
+        plugin_id: PluginPackageId,
         enablement: PluginRequestEnablement,
     },
     UpsertHook {

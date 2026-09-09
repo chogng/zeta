@@ -289,17 +289,15 @@ impl LocalAppServerOptions {
         self
     }
 
-    /// Composes Zeta's Plugins Manager with its product-pinned registry source.
-    pub fn with_marketplace_registry(
+    /// Composes one profile-owned manager with explicitly named source providers.
+    pub fn with_plugin_providers(
         self,
-        config: zeta_core_plugins::RemoteMarketplaceConfig,
+        providers: zeta_core_plugins::PluginProviders,
     ) -> Result<Self, OpenAppServerError> {
-        let registry = zeta_core_plugins::MarketplaceRemoteClient::open(config)
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
         let manager = Arc::new(
             zeta_core_plugins::PluginsManager::open(
                 self.profile_root.join("marketplace-manager"),
-                Arc::new(registry),
+                providers,
             )
             .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
@@ -709,7 +707,7 @@ pub struct LocalProfileRuntime {
 }
 
 struct ProfileMarketplaceAuthority {
-    config: zeta_core_plugins::RemoteMarketplaceConfig,
+    config: BTreeMap<zeta_plugin::MarketplaceName, zeta_core_plugins::RemoteMarketplaceConfig>,
     manager: Arc<zeta_core_plugins::PluginsManager>,
     _watcher: Option<crate::server::marketplace_runtime::MarketplaceChangeWatcher>,
 }
@@ -821,7 +819,7 @@ impl LocalProfileRuntime {
 
     fn plugins_manager(
         &self,
-        config: zeta_core_plugins::RemoteMarketplaceConfig,
+        config: BTreeMap<zeta_plugin::MarketplaceName, zeta_core_plugins::RemoteMarketplaceConfig>,
     ) -> Result<Arc<zeta_core_plugins::PluginsManager>, OpenAppServerError> {
         let mut marketplace = self
             .marketplace
@@ -835,12 +833,11 @@ impl LocalProfileRuntime {
                 "one profile runtime cannot use multiple Marketplace authorities".into(),
             ));
         }
-        let registry = zeta_core_plugins::MarketplaceRemoteClient::open(config.clone())
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let providers = marketplace_providers(&config)?;
         let manager = Arc::new(
             zeta_core_plugins::PluginsManager::open(
                 self.profile_root.join("marketplace-manager"),
-                Arc::new(registry),
+                providers,
             )
             .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
@@ -908,18 +905,18 @@ pub fn open_local_app_server_with_codebase_providers(
     let product_services = options.product_services.take();
     let fast_regex_worker_command = options.fast_regex_worker_command.take();
     if options.plugin_package_service.is_none()
-        && let Some(registry) = product_services
+        && let Some(sources) = product_services
             .as_ref()
-            .and_then(crate::LocalProductServicesConfig::marketplace_registry)
+            .map(crate::LocalProductServicesConfig::marketplaces)
             .cloned()
     {
         if let Some(runtime) = &options.profile_runtime {
-            let manager = runtime.plugins_manager(registry)?;
+            let manager = runtime.plugins_manager(sources)?;
             let client: Arc<dyn zeta_core_plugins::PluginPackageService> = manager.clone();
             options.plugin_package_service = Some(client);
             options.plugins_manager = Some(manager);
         } else {
-            options = options.with_marketplace_registry(registry)?;
+            options = options.with_plugin_providers(marketplace_providers(&sources)?)?;
         }
     }
     let plugin_package_service = options.plugin_package_service.take();
@@ -2412,6 +2409,20 @@ fn configure_product_connector_oauth(
 
 fn open_error(error: impl fmt::Display) -> OpenAppServerError {
     OpenAppServerError(error.to_string())
+}
+
+fn marketplace_providers(
+    sources: &BTreeMap<zeta_plugin::MarketplaceName, zeta_core_plugins::RemoteMarketplaceConfig>,
+) -> Result<zeta_core_plugins::PluginProviders, OpenAppServerError> {
+    let providers = sources.iter().map(|(name, config)| {
+        let provider = zeta_core_plugins::MarketplaceRemoteClient::new(config.clone());
+        (
+            name.clone(),
+            Arc::new(provider) as Arc<dyn zeta_core_plugins::PluginProvider>,
+        )
+    });
+    zeta_core_plugins::PluginProviders::new(providers)
+        .map_err(|error| OpenAppServerError(error.to_string()))
 }
 
 #[cfg(test)]
