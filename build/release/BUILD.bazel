@@ -7,6 +7,7 @@ filegroup(
 
 exports_files([
     "build_remote_runtime_bundle.py",
+    "build_zeta_code_archive.py",
     "build_app_package.py",
     "check_app_boundary.py",
     "check_app_release_contract.py",
@@ -16,6 +17,7 @@ exports_files([
     "sign_app_package.py",
     "test_app_signing.py",
     "test_remote_runtime_bundle.py",
+    "test_zeta_code_archive.py",
     "verify_app_package.py",
     "app_signing.py",
 ])

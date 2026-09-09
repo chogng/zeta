@@ -70,6 +70,29 @@ cargo test --manifest-path Cargo.toml -p zeta-tui
 bazel test //zeta-code/tui:tui-unit-tests
 ```
 
+Zeta-managed installations keep immutable complete packages below a version store and switch a
+stable launcher to the selected package. `[tui].autoUpdate` is one of `latest`, `stable`, or
+`never`; the first two check at local TUI startup and hourly while it remains open, with network
+checks limited to once per six hours per channel. `latest` follows each GitHub Release, while
+`stable` follows only versions explicitly promoted by `.github/workflows/zeta-code-promote.yml`.
+Each update requires an Ed25519 descriptor signed by the release key stored outside the repository,
+then verifies the archive SHA-256 and every file digest in `zeta-package.json`. Source builds and
+packages outside this layout are never rewritten, and changing streams never downgrades an installed
+version. A completed background install uses the existing TUI notice row and takes effect after
+restart; failures are retained for `zeta update --status`. Run `zeta update` or
+`zeta update --channel stable` for an immediate check. Install the latest managed package directly
+with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chogng/zeta/main/scripts/zeta-code/install.sh | sh
+```
+
+Windows PowerShell uses:
+
+```powershell
+irm https://raw.githubusercontent.com/chogng/zeta/main/scripts/zeta-code/install.ps1 | iex
+```
+
 `zeta-code/cli/tests/remote_connect.rs` exercises target resolution, the real local Remote Server
 broker, trusted runtime preparation, and `--check` through a fake OpenSSH executable.
 `zeta-code/cli/tests/remote_connect_interactive.rs` runs the real CLI/TUI in a PTY, cuts the first

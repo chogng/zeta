@@ -11,15 +11,17 @@ pub(crate) struct TerminalSettings {
     copy_on_select: bool,
     input_mode: ChatInputMode,
     memory_diagnostics: bool,
+    auto_update: crate::UpdatePolicy,
     language: Language,
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 5] = [
+    const KEYS: [&'static str; 6] = [
         "mouseInteractions",
         "copyOnSelect",
         "inputMode",
         "memoryDiagnostics",
+        "autoUpdate",
         "language",
     ];
 
@@ -92,6 +94,14 @@ impl TerminalSettings {
         self.memory_diagnostics = enabled;
     }
 
+    pub(crate) const fn auto_update(self) -> crate::UpdatePolicy {
+        self.auto_update
+    }
+
+    pub(crate) fn set_auto_update(&mut self, policy: crate::UpdatePolicy) {
+        self.auto_update = policy;
+    }
+
     pub(crate) const fn language(self) -> Language {
         self.language
     }
@@ -108,6 +118,7 @@ impl Default for TerminalSettings {
             copy_on_select: false,
             input_mode: ChatInputMode::Standard,
             memory_diagnostics: false,
+            auto_update: crate::UpdatePolicy::Latest,
             language: Language::English,
         }
     }

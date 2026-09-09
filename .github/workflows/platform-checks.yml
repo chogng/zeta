@@ -11,6 +11,8 @@ permissions:
 jobs:
   check:
     name: ${{ matrix.target }}
+    permissions:
+      contents: write
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -84,3 +86,56 @@ jobs:
       - name: Test release tooling
         shell: bash
         run: ${{ matrix.python }} -B scripts/test-python.py release
+
+      - name: Build Zeta Code release package
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          ZETA_UPDATE_PUBLIC_KEY: ${{ vars.ZETA_UPDATE_PUBLIC_KEY }}
+        run: |
+          version="$(${{ matrix.python }} -c 'from build.release.zeta_package.version import read_workspace_version; from pathlib import Path; print(read_workspace_version(Path("Cargo.toml")))')"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          test "${#ZETA_UPDATE_PUBLIC_KEY}" = 64
+          ${{ matrix.python }} -B scripts/cargo.py build --package zeta-cli --bin zeta --profile release --target "${{ matrix.target }}"
+          cli=".build/cargo/${{ matrix.target }}/release/zeta${{ runner.os == 'Windows' && '.exe' || '' }}"
+          package=".build/releases/zeta-code-${{ matrix.target }}"
+          ${{ matrix.python }} -B build/release/build_zeta_package.py \
+            --target "${{ matrix.target }}" \
+            --cli-bin "$cli" \
+            --update-public-key "$ZETA_UPDATE_PUBLIC_KEY" \
+            --package-dir "$package"
+          ${{ matrix.python }} -B build/release/build_zeta_code_archive.py \
+            --package-dir "$package" \
+            --output ".build/releases/zeta-code-${{ matrix.target }}.tar.gz"
+          ${{ matrix.python }} -B scripts/cargo.py build --package zeta-update-sign --bin zeta-update-sign
+
+      - name: Sign Zeta Code update
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          ZETA_UPDATE_PUBLIC_KEY: ${{ vars.ZETA_UPDATE_PUBLIC_KEY }}
+          ZETA_UPDATE_SIGNING_KEY: ${{ secrets.ZETA_UPDATE_SIGNING_KEY }}
+        run: |
+          signer=".build/cargo/debug/zeta-update-sign${{ runner.os == 'Windows' && '.exe' || '' }}"
+          "$signer" \
+            --repository chogng/zeta \
+            --product zeta-code \
+            --channel latest \
+            --version "${GITHUB_REF_NAME#v}" \
+            --release-tag "$GITHUB_REF_NAME" \
+            --target "${{ matrix.target }}" \
+            --format tar-gz \
+            --archive ".build/releases/zeta-code-${{ matrix.target }}.tar.gz" \
+            --output ".build/releases/zeta-code-${{ matrix.target }}.update.json" \
+            --public-key "$ZETA_UPDATE_PUBLIC_KEY"
+
+      - name: Publish Zeta Code release package
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            ".build/releases/zeta-code-${{ matrix.target }}.tar.gz" \
+            ".build/releases/zeta-code-${{ matrix.target }}.tar.gz.sha256" \
+            ".build/releases/zeta-code-${{ matrix.target }}.update.json"

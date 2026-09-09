@@ -40,6 +40,8 @@ def build_package_directory(
     windows_helpers: Optional[WindowsSandboxHelpers] = None,
     protocol_metadata: Optional[Dict[str, object]] = None,
     build_profile: str = "release",
+    cli_binary: Optional[Path] = None,
+    update_public_key: Optional[str] = None,
 ) -> None:
     output = output.expanduser().resolve()
     if output.exists():
@@ -81,6 +83,12 @@ def build_package_directory(
             binary_directory / spec.server_name,
             is_windows=spec.is_windows,
         )
+        if cli_binary is not None:
+            copy_executable(
+                cli_binary,
+                binary_directory / spec.cli_name,
+                is_windows=spec.is_windows,
+            )
         copy_executable(
             app_server_daemon_binary,
             binary_directory / spec.app_server_daemon_name,
@@ -188,6 +196,21 @@ def build_package_directory(
                 "binarySha256": file_sha256(binary_directory / spec.server_name),
             },
         }
+        if cli_binary is not None:
+            if (
+                not isinstance(update_public_key, str)
+                or re.fullmatch(r"[a-f0-9]{64}", update_public_key) is None
+            ):
+                raise RuntimeError(
+                    "Zeta Code packages require a 32-byte hexadecimal update public key"
+                )
+            components["cli"] = {
+                "source": "cargo-build",
+                "binarySha256": file_sha256(binary_directory / spec.cli_name),
+                "updatePublicKey": update_public_key,
+            }
+        elif update_public_key is not None:
+            raise RuntimeError("--update-public-key requires --cli-bin")
         if node is not None:
             components["node"] = {
                 "version": node.version,
@@ -277,6 +300,16 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
         "serverHost": package / "bin" / spec.server_name,
     }
+    if "cli" in components:
+        cli = components["cli"]
+        if (
+            not isinstance(cli, dict)
+            or not isinstance(cli.get("updatePublicKey"), str)
+            or re.fullmatch(r"[a-f0-9]{64}", cli["updatePublicKey"]) is None
+        ):
+            raise RuntimeError("Package CLI update public key is invalid")
+        first_party_artifacts["cli"] = package / "bin" / spec.cli_name
+        executables.append(package / "bin" / spec.cli_name)
     for component_name, artifact in first_party_artifacts.items():
         component = components.get(component_name)
         expected_digest = (

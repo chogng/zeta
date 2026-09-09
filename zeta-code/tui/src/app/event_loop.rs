@@ -89,6 +89,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Tick)
                 | RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(_))
                 | RuntimeEvent::ProcessResources(_)
+                | RuntimeEvent::HostNotice(_)
                 | RuntimeEvent::TerminationRequested => {}
             }
             runtime_event = match runtime_event {
@@ -158,6 +159,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     if !matches!(process_resource_demand, ProcessResourceDemand::Disabled) {
                         redraw.request(Instant::now(), RedrawPriority::Batched);
                     }
+                    None
+                }
+                RuntimeEvent::HostNotice(notice) => {
+                    driver
+                        .app_mut()
+                        .update(HostEvent::TopTipNoticeShown(notice));
+                    redraw.request(Instant::now(), RedrawPriority::Immediate);
                     None
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(error)) => {

@@ -84,6 +84,11 @@ pub(crate) enum Message {
     ConfigVimModeDescription,
     ConfigMemoryDiagnostics,
     ConfigMemoryDiagnosticsDescription,
+    ConfigAutoUpdate,
+    ConfigAutoUpdateDescription,
+    ConfigUpdateLatest,
+    ConfigUpdateStable,
+    ConfigUpdateNever,
     ConfigGitChangesAsDiff,
     ConfigGitChangesAsDiffDescription,
     ConfigStatusLineStyle,
@@ -125,6 +130,11 @@ const fn english(message: Message) -> &'static str {
         Message::ConfigMemoryDiagnosticsDescription => {
             "Continuously collect bounded memory evidence"
         }
+        Message::ConfigAutoUpdate => "Automatic updates",
+        Message::ConfigAutoUpdateDescription => "Choose release cadence",
+        Message::ConfigUpdateLatest => "Latest",
+        Message::ConfigUpdateStable => "Stable",
+        Message::ConfigUpdateNever => "Never",
         Message::ConfigGitChangesAsDiff => "Show Git changes as diff",
         Message::ConfigGitChangesAsDiffDescription => {
             "Show added and deleted lines instead of changed files"
@@ -169,6 +179,11 @@ const fn japanese(message: Message) -> &'static str {
         Message::ConfigMemoryDiagnosticsDescription => {
             "上限付きのメモリ診断データを継続的に収集する"
         }
+        Message::ConfigAutoUpdate => "自動更新",
+        Message::ConfigAutoUpdateDescription => "リリース頻度を選択する",
+        Message::ConfigUpdateLatest => "最新",
+        Message::ConfigUpdateStable => "安定版",
+        Message::ConfigUpdateNever => "なし",
         Message::ConfigGitChangesAsDiff => "Git の変更を差分で表示",
         Message::ConfigGitChangesAsDiffDescription => {
             "変更されたファイルではなく、追加・削除された行を表示する"
@@ -211,6 +226,11 @@ const fn chinese(message: Message) -> &'static str {
         Message::ConfigVimModeDescription => "在 ChatInput 中使用 Vim 编辑",
         Message::ConfigMemoryDiagnostics => "内存诊断",
         Message::ConfigMemoryDiagnosticsDescription => "持续收集有界的内存诊断数据",
+        Message::ConfigAutoUpdate => "自动更新",
+        Message::ConfigAutoUpdateDescription => "选择版本更新节奏",
+        Message::ConfigUpdateLatest => "最新",
+        Message::ConfigUpdateStable => "稳定",
+        Message::ConfigUpdateNever => "从不",
         Message::ConfigGitChangesAsDiff => "以差异显示 Git 更改",
         Message::ConfigGitChangesAsDiffDescription => "显示新增和删除的行，而不是已更改的文件",
         Message::ConfigStatusLineStyle => "状态栏风格",
@@ -253,6 +273,11 @@ const fn french(message: Message) -> &'static str {
         Message::ConfigMemoryDiagnosticsDescription => {
             "Collecter en continu des données de diagnostic mémoire limitées"
         }
+        Message::ConfigAutoUpdate => "Mises à jour automatiques",
+        Message::ConfigAutoUpdateDescription => "Choisir le rythme des versions",
+        Message::ConfigUpdateLatest => "Dernière",
+        Message::ConfigUpdateStable => "Stable",
+        Message::ConfigUpdateNever => "Jamais",
         Message::ConfigGitChangesAsDiff => "Afficher les modifications Git sous forme de diff",
         Message::ConfigGitChangesAsDiffDescription => {
             "Afficher les lignes ajoutées et supprimées au lieu des fichiers modifiés"

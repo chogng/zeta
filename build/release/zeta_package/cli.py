@@ -10,6 +10,7 @@ from build.lib.zeta_build.targets import TARGETS, default_target
 
 from .bubblewrap import resolve_bubblewrap
 from .cargo import (
+    resolve_cli_binary,
     resolve_app_server_daemon_binary,
     resolve_code_mode_host_binary,
     resolve_server_binary,
@@ -76,6 +77,15 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         type=Path,
         required=True,
         help="New directory to create as the package root.",
+    )
+    parser.add_argument(
+        "--cli-bin",
+        type=Path,
+        help="Prebuilt Zeta Code CLI executable to include in a managed CLI package.",
+    )
+    parser.add_argument(
+        "--update-public-key",
+        help="Ed25519 public key as 64 hexadecimal characters for a managed CLI package.",
     )
     parser.add_argument(
         "--server-bin",
@@ -174,6 +184,10 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     target = args.target or default_target()
     spec = TARGETS[target]
     protocol_metadata = generate_protocol_metadata(REPOSITORY_ROOT, args.cargo)
+    cli_binary = resolve_cli_binary(
+        spec,
+        args.cli_bin,
+    )
     server_binary = resolve_server_binary(
         REPOSITORY_ROOT,
         spec,
@@ -246,6 +260,8 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         windows_helpers,
         protocol_metadata=protocol_metadata,
         build_profile=args.cargo_profile,
+        cli_binary=cli_binary,
+        update_public_key=args.update_public_key,
     )
     print("Built Zeta {} package at {}".format(target, output))
     return 0

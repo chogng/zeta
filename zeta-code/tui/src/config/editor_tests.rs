@@ -124,7 +124,18 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetTerminalSettings(edit)
             if edit.terminal.memory_diagnostics()
     ));
-    let git_changes = &state.visible_items()[4];
+    let auto_update = &state.visible_items()[4];
+    assert_eq!(auto_update.label(), "Automatic updates");
+    assert_eq!(
+        auto_update.description(),
+        Some("Choose release cadence Latest")
+    );
+    assert!(matches!(
+        view.actions.get(auto_update.id().unwrap()).unwrap(),
+        ConfigSelectionAction::SetUpdatePolicy(edit)
+            if edit.terminal.auto_update() == crate::UpdatePolicy::Latest
+    ));
+    let git_changes = &state.visible_items()[5];
     assert_eq!(git_changes.label(), "Show Git changes as diff");
     assert_eq!(
         git_changes.description(),
@@ -135,7 +146,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
             if edit.status_line.show_git_changes_as_diff()
     ));
-    let language = &state.visible_items()[5];
+    let language = &state.visible_items()[6];
     assert_eq!(language.label(), "Language");
     assert_eq!(
         language.description(),
@@ -302,7 +313,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
         )
     };
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..5 {
+    for _ in 0..6 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -313,7 +324,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     ));
 
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..5 {
+    for _ in 0..6 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     assert!(matches!(
@@ -323,7 +334,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     ));
 
     let mut editor = super::ConfigEditor::new(choices());
-    for _ in 0..5 {
+    for _ in 0..6 {
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     assert!(matches!(
@@ -357,11 +368,45 @@ fn config_root_uses_the_selected_language_through_nls() {
     assert_eq!(state.visible_items()[0].label(), "增强 TUI");
     assert_eq!(state.visible_items()[1].label(), "选中后复制");
     assert_eq!(state.visible_items()[3].label(), "内存诊断");
-    assert_eq!(state.visible_items()[5].label(), "语言");
+    assert_eq!(state.visible_items()[4].label(), "自动更新");
     assert_eq!(
-        state.visible_items()[5].description(),
+        state.visible_items()[4].description(),
+        Some("选择版本更新节奏 最新")
+    );
+    assert_eq!(state.visible_items()[6].label(), "语言");
+    assert_eq!(
+        state.visible_items()[6].description(),
         Some("切换界面语言 中文")
     );
+}
+
+#[test]
+fn automatic_update_policy_cycles_with_activation_and_arrow_keys() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    for (key, expected) in [
+        (KeyCode::Enter, crate::UpdatePolicy::Stable),
+        (KeyCode::Char(' '), crate::UpdatePolicy::Stable),
+        (KeyCode::Right, crate::UpdatePolicy::Stable),
+        (KeyCode::Left, crate::UpdatePolicy::Never),
+    ] {
+        let mut editor = super::ConfigEditor::new(config_choices(
+            &empty_config_snapshot(),
+            &providers(),
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ));
+        assert!(
+            editor
+                .selection
+                .state_mut()
+                .focus_item(&ListSelectionItemId::new("auto-update"))
+        );
+        assert!(matches!(
+            editor.handle_key(KeyEvent::new(key, KeyModifiers::NONE)),
+            super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetUpdatePolicy(edit))
+                if edit.terminal.auto_update() == expected
+        ));
+    }
 }
 
 #[test]

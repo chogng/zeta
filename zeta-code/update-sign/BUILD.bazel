@@ -1,0 +1,8 @@
+load("//:defs.bzl", "zeta_rust_binary")
+
+zeta_rust_binary(
+    name = "zeta-update-sign",
+    crate_name = "zeta_update_sign",
+    crate_root = "src/main.rs",
+    deps = ["//zeta-rs/product-update:product-update"],
+)

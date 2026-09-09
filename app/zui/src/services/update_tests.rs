@@ -1,5 +1,3 @@
-use base64::Engine;
-use ed25519_dalek::Signer;
 use ed25519_dalek::SigningKey;
 use futures::executor::block_on;
 
@@ -39,22 +37,23 @@ impl UpdateInstaller for NoopInstaller {
 }
 
 fn signed_manifest(signing_key: &SigningKey, version: &str) -> Vec<u8> {
-    let payload = serde_json::json!({
-        "version": version,
-        "notes": "verified release",
-        "artifacts": [{
-            "target": "aarch64-apple-darwin",
-            "url": "https://example.com/demo.pkg",
-            "file_name": "demo.pkg",
-            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
-        }]
-    })
-    .to_string();
-    let signature = signing_key.sign(payload.as_bytes());
-    serde_json::to_vec(&serde_json::json!({
-        "payload": payload,
-        "signature": base64::engine::general_purpose::STANDARD.encode(signature.to_bytes())
-    }))
+    zeta_product_update::sign_release(
+        zeta_product_update::ReleaseInput {
+            product: zeta_product_update::UpdateProduct::RustDesktop,
+            policy: zeta_product_update::UpdatePolicy::Latest,
+            version: semver::Version::parse(version).unwrap(),
+            release_identity: format!("v{version}"),
+            target: "aarch64-apple-darwin".into(),
+            package: zeta_product_update::ReleasePackageInput {
+                url: "https://example.com/demo.pkg".into(),
+                file_name: "demo.pkg".into(),
+                format: zeta_product_update::PackageFormat::MacOsPackage,
+                size: 7,
+                sha256: "00".repeat(32),
+            },
+        },
+        signing_key,
+    )
     .unwrap()
 }
 
@@ -66,6 +65,9 @@ fn updater(bytes: Vec<u8>, signing_key: &SigningKey) -> SignedHttpUpdater {
             "aarch64-apple-darwin",
             UpdatePublicKey::from_bytes(signing_key.verifying_key().to_bytes()),
             "/tmp/zui-update-tests",
+            zeta_product_update::UpdateProduct::RustDesktop,
+            zeta_product_update::UpdatePolicy::Latest,
+            zeta_product_update::PackageFormat::MacOsPackage,
         ),
         StaticTransport(bytes),
         NoopInstaller,

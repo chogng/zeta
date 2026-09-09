@@ -77,6 +77,17 @@ fn profile_root_selects_product_scoped_theme_documents() {
 }
 
 #[test]
+fn local_host_notices_remain_available_across_tui_option_clones() {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let notices = crate::TuiNotices::new(receiver);
+    let options = crate::TuiOptions::new("Notices").with_notices(notices.clone());
+    sender.send("Update ready".into()).unwrap();
+
+    assert_eq!(notices.try_recv().unwrap(), "Update ready");
+    assert!(options.notices.is_some());
+}
+
+#[test]
 fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     let turn_id = turn_id();
     let mut app = working_app();

@@ -3,16 +3,11 @@ use std::fmt;
 use std::future::Future;
 use std::io::Read;
 use std::io::Write;
-use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use base64::Engine;
-use ed25519_dalek::Signature;
-use ed25519_dalek::VerifyingKey;
-use serde::Deserialize;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -80,6 +75,9 @@ pub struct UpdateConfig {
     pub target: String,
     pub public_key: UpdatePublicKey,
     pub staging_directory: PathBuf,
+    pub product: zeta_product_update::UpdateProduct,
+    pub policy: zeta_product_update::UpdatePolicy,
+    pub package_format: zeta_product_update::PackageFormat,
 }
 
 impl UpdateConfig {
@@ -90,6 +88,9 @@ impl UpdateConfig {
         target: impl Into<String>,
         public_key: UpdatePublicKey,
         staging_directory: impl Into<PathBuf>,
+        product: zeta_product_update::UpdateProduct,
+        policy: zeta_product_update::UpdatePolicy,
+        package_format: zeta_product_update::PackageFormat,
     ) -> Self {
         Self {
             manifest_url,
@@ -97,6 +98,9 @@ impl UpdateConfig {
             target: target.into(),
             public_key,
             staging_directory: staging_directory.into(),
+            product,
+            policy,
+            package_format,
         }
     }
 }
@@ -107,13 +111,13 @@ pub struct UpdateArtifact {
     pub url: ExternalUrl,
     pub file_name: String,
     sha256: [u8; 32],
+    size: u64,
 }
 
 /// Verified update newer than the configured application version.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdateRelease {
     pub version: AppVersion,
-    pub notes: Option<String>,
     pub artifact: UpdateArtifact,
 }
 
@@ -257,33 +261,34 @@ impl SignedHttpUpdater {
     }
 
     fn parse_manifest(&self, bytes: &[u8]) -> Result<Option<UpdateRelease>, SystemServiceError> {
-        let envelope: SignedManifest = serde_json::from_slice(bytes)
-            .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?;
-        let signature_bytes = base64::engine::general_purpose::STANDARD
-            .decode(envelope.signature)
-            .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?;
-        let signature = Signature::try_from(signature_bytes.as_slice())
-            .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?;
-        let key = VerifyingKey::from_bytes(&self.config.public_key.0)
-            .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?;
-        key.verify_strict(envelope.payload.as_bytes(), &signature)
-            .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?;
-        let payload: ManifestPayload = serde_json::from_str(&envelope.payload)
-            .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?;
-        let version = AppVersion::parse(payload.version)
-            .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?;
+        let release = zeta_product_update::verify_release(
+            bytes,
+            zeta_product_update::UpdatePublicKey::from_bytes(self.config.public_key.0),
+            &zeta_product_update::ExpectedRelease {
+                product: self.config.product,
+                policy: self.config.policy,
+                target: self.config.target.clone(),
+            },
+        )
+        .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?;
+        if release.package.format != self.config.package_format {
+            return Err(invalid_update(
+                "signed update package format does not match this product",
+            ));
+        }
+        let version = AppVersion(release.version);
         if version <= self.config.current_version {
             return Ok(None);
         }
-        let artifact = payload
-            .artifacts
-            .into_iter()
-            .find(|artifact| artifact.target == self.config.target)
-            .ok_or_else(|| invalid_update("signed manifest has no artifact for this target"))?;
         Ok(Some(UpdateRelease {
             version,
-            notes: payload.notes,
-            artifact: artifact.try_into()?,
+            artifact: UpdateArtifact {
+                url: ExternalUrl::parse(release.package.url)
+                    .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?,
+                file_name: release.package.file_name,
+                sha256: release.package.sha256,
+                size: release.package.size,
+            },
         }))
     }
 }
@@ -296,6 +301,11 @@ impl UpdateService for SignedHttpUpdater {
 
     fn download(&self, release: UpdateRelease) -> Result<StagedUpdate, SystemServiceError> {
         let bytes = self.transport.get(&release.artifact.url)?;
+        if bytes.len() as u64 != release.artifact.size {
+            return Err(invalid_update(
+                "downloaded artifact size does not match signed release",
+            ));
+        }
         let digest: [u8; 32] = Sha256::digest(&bytes).into();
         if digest != release.artifact.sha256 {
             return Err(invalid_update(
@@ -335,66 +345,6 @@ impl UpdateService for SignedHttpUpdater {
     fn install(&self, update: &StagedUpdate) -> Result<(), SystemServiceError> {
         self.installer.launch(&update.path)
     }
-}
-
-#[derive(Deserialize)]
-struct SignedManifest {
-    payload: String,
-    signature: String,
-}
-
-#[derive(Deserialize)]
-struct ManifestPayload {
-    version: String,
-    notes: Option<String>,
-    artifacts: Vec<ManifestArtifact>,
-}
-
-#[derive(Deserialize)]
-struct ManifestArtifact {
-    target: String,
-    url: String,
-    file_name: String,
-    sha256: String,
-}
-
-impl TryFrom<ManifestArtifact> for UpdateArtifact {
-    type Error = SystemServiceError;
-
-    fn try_from(value: ManifestArtifact) -> Result<Self, Self::Error> {
-        if Path::new(&value.file_name).components().count() != 1
-            || !matches!(
-                Path::new(&value.file_name).components().next(),
-                Some(Component::Normal(_))
-            )
-        {
-            return Err(invalid_update(
-                "artifact file name must be one normal path component",
-            ));
-        }
-        Ok(Self {
-            url: ExternalUrl::parse(value.url)
-                .map_err(|source| SystemServiceError::backend(UPDATE_SERVICE, source))?,
-            file_name: value.file_name,
-            sha256: decode_sha256(&value.sha256)?,
-        })
-    }
-}
-
-fn decode_sha256(value: &str) -> Result<[u8; 32], SystemServiceError> {
-    if value.len() != 64 {
-        return Err(invalid_update(
-            "artifact SHA-256 must contain 64 hexadecimal digits",
-        ));
-    }
-    let mut output = [0_u8; 32];
-    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
-        let pair = std::str::from_utf8(pair)
-            .map_err(|_| invalid_update("artifact SHA-256 is not valid UTF-8"))?;
-        output[index] = u8::from_str_radix(pair, 16)
-            .map_err(|_| invalid_update("artifact SHA-256 contains non-hexadecimal digits"))?;
-    }
-    Ok(output)
 }
 
 fn invalid_update(message: &'static str) -> SystemServiceError {

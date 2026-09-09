@@ -26,6 +26,9 @@ mod widgets;
 
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::mpsc;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::ShutdownError;
@@ -36,6 +39,8 @@ use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
 use zeta_protocol::AgentInteractionKind;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
+
+pub use zeta_product_update::UpdatePolicy;
 
 /// Declares the connection-local App Server capabilities required by the TUI.
 ///
@@ -58,6 +63,48 @@ pub fn client_capabilities() -> ClientCapabilities {
     }
 }
 
+/// Reads the profile-wide automatic-update preference owned by the terminal product.
+///
+/// The CLI host uses this narrow view of `[tui]` so the setting has one decoder and one default.
+pub fn update_policy(
+    section: &zeta_app_server_protocol::protocol::config::FrontendConfigDto,
+) -> Result<UpdatePolicy, String> {
+    config::TerminalSettings::from_tui(section).map(config::TerminalSettings::auto_update)
+}
+
+/// Cloneable receiver for short notices emitted by the local CLI host.
+#[derive(Clone)]
+pub struct TuiNotices {
+    receiver: Arc<Mutex<mpsc::Receiver<String>>>,
+}
+
+impl fmt::Debug for TuiNotices {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("TuiNotices")
+    }
+}
+
+impl PartialEq for TuiNotices {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.receiver, &other.receiver)
+    }
+}
+
+impl Eq for TuiNotices {}
+
+impl TuiNotices {
+    /// Wraps the receiving half of a host-owned notice channel.
+    pub fn new(receiver: mpsc::Receiver<String>) -> Self {
+        Self {
+            receiver: Arc::new(Mutex::new(receiver)),
+        }
+    }
+
+    pub(crate) fn try_recv(&self) -> Result<String, mpsc::TryRecvError> {
+        self.receiver.lock().unwrap().try_recv()
+    }
+}
+
 /// Startup values owned by the CLI host rather than by the terminal UI.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TuiOptions {
@@ -70,6 +117,7 @@ pub struct TuiOptions {
     connection: TuiConnectionKind,
     app_server_process: AppServerProcess,
     recovery: Option<TuiRecoveryState>,
+    notices: Option<TuiNotices>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -129,6 +177,7 @@ impl TuiOptions {
             connection: TuiConnectionKind::Local,
             app_server_process: AppServerProcess::IncludedInTui,
             recovery: None,
+            notices: None,
         }
     }
 
@@ -175,6 +224,12 @@ impl TuiOptions {
     /// Restores the durable Session and Thread selected before a transport loss.
     pub fn with_recovery(mut self, recovery: TuiRecoveryState) -> Self {
         self.recovery = Some(recovery);
+        self
+    }
+
+    /// Delivers short local-host notices into the normal TUI notice row.
+    pub fn with_notices(mut self, notices: TuiNotices) -> Self {
+        self.notices = Some(notices);
         self
     }
 

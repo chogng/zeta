@@ -15,6 +15,7 @@ fn tui_table_defaults_missing_terminal_fields() {
     assert!(settings.mouse_interactions());
     assert!(!settings.copy_on_select());
     assert!(!settings.memory_diagnostics());
+    assert_eq!(settings.auto_update(), crate::UpdatePolicy::Latest);
     assert_eq!(settings.language(), Language::English);
 }
 
@@ -58,6 +59,31 @@ fn copy_on_select_round_trips_and_rejects_non_boolean_values() {
 }
 
 #[test]
+fn automatic_update_policy_round_trips_and_rejects_unknown_values() {
+    for (value, expected) in [
+        ("latest", crate::UpdatePolicy::Latest),
+        ("stable", crate::UpdatePolicy::Stable),
+        ("never", crate::UpdatePolicy::Never),
+    ] {
+        let section = FrontendConfigDto(BTreeMap::from([(
+            "autoUpdate".into(),
+            serde_json::json!(value),
+        )]));
+        let settings = TerminalSettings::from_tui(&section).unwrap();
+        assert_eq!(settings.auto_update(), expected);
+        assert_eq!(
+            settings.write_to_tui(&section).unwrap().0["autoUpdate"],
+            serde_json::json!(value)
+        );
+    }
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "autoUpdate".into(),
+        serde_json::json!(true),
+    )]));
+    assert!(TerminalSettings::from_tui(&section).is_err());
+}
+
+#[test]
 fn terminal_settings_update_preserves_other_tui_fields() {
     let section = FrontendConfigDto(BTreeMap::from([
         ("theme".into(), serde_json::json!("zeta-code-light")),
@@ -66,6 +92,7 @@ fn terminal_settings_update_preserves_other_tui_fields() {
     let mut settings = TerminalSettings::default();
     settings.set_mouse_interactions(false);
     settings.set_memory_diagnostics(true);
+    settings.set_auto_update(crate::UpdatePolicy::Never);
     settings.set_language(Language::French);
 
     let updated = settings.write_to_tui(&section).unwrap();
@@ -78,6 +105,7 @@ fn terminal_settings_update_preserves_other_tui_fields() {
     assert_eq!(updated.0["mouseInteractions"], serde_json::json!(false));
     assert_eq!(updated.0["copyOnSelect"], serde_json::json!(false));
     assert_eq!(updated.0["memoryDiagnostics"], serde_json::json!(true));
+    assert_eq!(updated.0["autoUpdate"], serde_json::json!("never"));
     assert_eq!(updated.0["language"], serde_json::json!("fr"));
 }
 

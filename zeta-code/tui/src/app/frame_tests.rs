@@ -114,6 +114,16 @@ fn top_tip_notice_uses_the_fixed_row_above_chat_input_without_changing_layout() 
 }
 
 #[test]
+fn completed_update_uses_the_existing_top_tip_notice_row() {
+    let mut app = App::new();
+    app.update(HostEvent::TopTipNoticeShown(
+        "Zeta 1.2.3 is ready · restart to use the update".into(),
+    ));
+
+    assert_snapshot!("completed_update_notice", render(&app, 80, 20));
+}
+
+#[test]
 fn clipboard_image_paste_moves_from_top_tip_into_chat_input() {
     let mut app = App::new();
     let terminal_area = Rect::new(0, 0, 80, 20);
@@ -1686,7 +1696,7 @@ fn config_general_tab_uses_localized_label() {
             StatusLineSettings::default(),
         ),
     ));
-    assert_snapshot!("config_general_tab", render(&app, 100, 20));
+    assert_snapshot!("config_general_tab", render(&app, 100, 21));
 }
 
 #[test]

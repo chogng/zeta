@@ -10,27 +10,33 @@ name = "zeta"
 path = "src/main.rs"
 
 [dependencies]
+flate2 = { workspace = true }
+fs2 = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 signal-hook = { workspace = true }
+tar = { workspace = true }
+ureq = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-exec = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-product-update = { workspace = true }
 zeta-remote = { workspace = true }
 zeta-remote-connections = { workspace = true }
 zeta-server-host = { workspace = true }
 zeta-tui = { workspace = true }
 
 [dev-dependencies]
-flate2 = { workspace = true }
+ed25519-dalek = { workspace = true }
 insta = { workspace = true }
 portable-pty = { workspace = true }
-sha2 = { workspace = true }
-tar = { workspace = true }
 tempfile = { workspace = true }
 zeta-terminal = { workspace = true }
+zeta-product-update = { workspace = true, features = ["signing"] }
 
 [lints]
 workspace = true

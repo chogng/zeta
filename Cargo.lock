@@ -11215,19 +11215,24 @@ dependencies = [
 name = "zeta-cli"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "flate2",
+ "fs2",
  "insta",
  "portable-pty",
+ "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "signal-hook",
  "tar",
  "tempfile",
+ "ureq",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
  "zeta-exec",
  "zeta-install-context",
+ "zeta-product-update",
  "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
@@ -12101,6 +12106,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-product-update"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "semver",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "zeta-projects"
 version = "0.1.0"
 dependencies = [
@@ -12539,6 +12556,7 @@ dependencies = [
  "zeta-github",
  "zeta-keybinding",
  "zeta-memory-diagnostics",
+ "zeta-product-update",
  "zeta-protocol",
  "zeta-slash-commands",
  "zeta-sprite",
@@ -12581,6 +12599,21 @@ dependencies = [
  "zeta-theme",
  "zeta-ui-components",
  "zui",
+]
+
+[[package]]
+name = "zeta-update-sign"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "zeroize",
+ "zeta-product-update",
 ]
 
 [[package]]
@@ -12855,7 +12888,6 @@ dependencies = [
  "accesskit_winit",
  "arboard",
  "ashpd",
- "base64 0.22.1",
  "block2 0.5.1",
  "bytemuck",
  "core-graphics",
@@ -12898,6 +12930,7 @@ dependencies = [
  "winit",
  "x11rb",
  "zbus 5.19.0",
+ "zeta-product-update",
 ]
 
 [[package]]

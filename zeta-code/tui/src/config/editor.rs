@@ -52,6 +52,7 @@ pub(crate) enum ConfigSelectionAction {
     OpenSubscription,
     Subscription(super::SubscriptionCommand),
     SetTerminalSettings(ConfigEdit),
+    SetUpdatePolicy(ConfigEdit),
     SetVimMode(ConfigEdit),
     SetShowGitChangesAsDiff(ConfigEdit),
     SetStatusLineStyle(ConfigEdit),
@@ -288,6 +289,9 @@ impl ConfigEditor {
             ListSelectionOutcome::Activate(ConfigSelectionAction::SetLanguage(edit)) => {
                 language_outcome(edit, ListSelectionAdjustment::Next)
             }
+            ListSelectionOutcome::Activate(ConfigSelectionAction::SetUpdatePolicy(edit)) => {
+                update_policy_outcome(edit, ListSelectionAdjustment::Next)
+            }
             ListSelectionOutcome::Activate(ConfigSelectionAction::AdjustIssueRefresh(edit)) => {
                 issue_refresh_outcome(edit, ListSelectionAdjustment::Next)
             }
@@ -311,6 +315,9 @@ impl ConfigEditor {
                 | ConfigSelectionAction::OpenSubscription
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
                 ConfigSelectionAction::SetLanguage(edit) => language_outcome(edit, adjustment),
+                ConfigSelectionAction::SetUpdatePolicy(edit) => {
+                    update_policy_outcome(edit, adjustment)
+                }
                 ConfigSelectionAction::AdjustIssueRefresh(edit) => {
                     issue_refresh_outcome(edit, adjustment)
                 }
@@ -605,6 +612,17 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
+    let auto_update_id = ListSelectionItemId::new("auto-update");
+    let auto_update = terminal.auto_update();
+    actions.insert(
+        auto_update_id.clone(),
+        ConfigSelectionAction::SetUpdatePolicy(ConfigEdit {
+            terminal,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
     let git_changes_id = ListSelectionItemId::new("show-git-changes-as-diff");
     let show_git_changes_as_diff = status_line.show_git_changes_as_diff();
     let mut toggled_status_line = status_line.clone();
@@ -731,6 +749,13 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigMemoryDiagnosticsDescription),
                 checkbox(memory_diagnostics),
             ),
+        ListSelectionItem::new(nls::text(language, Message::ConfigAutoUpdate))
+            .with_id(auto_update_id)
+            .with_columns(
+                nls::text(language, Message::ConfigAutoUpdate),
+                nls::text(language, Message::ConfigAutoUpdateDescription),
+                update_policy_label(language, auto_update),
+            ),
         ListSelectionItem::new(nls::text(language, Message::ConfigGitChangesAsDiff))
             .with_id(git_changes_id)
             .with_columns(
@@ -798,6 +823,42 @@ fn language_outcome(
     };
     edit.terminal.set_language(language);
     ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(edit))
+}
+
+fn update_policy_outcome(
+    mut edit: ConfigEdit,
+    adjustment: ListSelectionAdjustment,
+) -> ConfigEditorOutcome {
+    let policy = match adjustment {
+        ListSelectionAdjustment::Previous => previous_update_policy(edit.terminal.auto_update()),
+        ListSelectionAdjustment::Next => next_update_policy(edit.terminal.auto_update()),
+    };
+    edit.terminal.set_auto_update(policy);
+    ConfigEditorOutcome::Action(ConfigSelectionAction::SetUpdatePolicy(edit))
+}
+
+const fn next_update_policy(policy: crate::UpdatePolicy) -> crate::UpdatePolicy {
+    match policy {
+        crate::UpdatePolicy::Latest => crate::UpdatePolicy::Stable,
+        crate::UpdatePolicy::Stable => crate::UpdatePolicy::Never,
+        crate::UpdatePolicy::Never => crate::UpdatePolicy::Latest,
+    }
+}
+
+const fn previous_update_policy(policy: crate::UpdatePolicy) -> crate::UpdatePolicy {
+    match policy {
+        crate::UpdatePolicy::Latest => crate::UpdatePolicy::Never,
+        crate::UpdatePolicy::Stable => crate::UpdatePolicy::Latest,
+        crate::UpdatePolicy::Never => crate::UpdatePolicy::Stable,
+    }
+}
+
+fn update_policy_label(language: Language, policy: crate::UpdatePolicy) -> &'static str {
+    match policy {
+        crate::UpdatePolicy::Latest => nls::text(language, Message::ConfigUpdateLatest),
+        crate::UpdatePolicy::Stable => nls::text(language, Message::ConfigUpdateStable),
+        crate::UpdatePolicy::Never => nls::text(language, Message::ConfigUpdateNever),
+    }
 }
 
 fn issue_refresh_outcome(

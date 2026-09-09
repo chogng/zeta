@@ -61,6 +61,17 @@ def resolve_server_binary(
     )
 
 
+def resolve_cli_binary(
+    spec: TargetSpec,
+    explicit_binary: Optional[Path],
+) -> Optional[Path]:
+    if explicit_binary is None:
+        return None
+    return validate_input_binary(
+        explicit_binary, "Zeta CLI executable", "--cli-bin", spec.is_windows
+    )
+
+
 def resolve_app_server_daemon_binary(
     repository_root: Path,
     spec: TargetSpec,

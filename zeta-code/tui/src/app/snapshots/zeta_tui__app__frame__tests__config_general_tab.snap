@@ -1,7 +1,6 @@
 ---
 source: zeta-code/tui/src/app/frame_tests.rs
-assertion_line: 1689
-expression: "render(&app, 100, 20)"
+expression: "render(&app, 100, 21)"
 ---
                                                                                                     
   Zeta Code v0.1.0                                                                                  
@@ -17,6 +16,7 @@ expression: "render(&app, 100, 20)"
   选 中 后 复 制              选 中 文 字 后 自 动 复 制                                                   [   ]  
   Vim 模 式                在  ChatInput 中 使 用  Vim 编 辑                                         [   ]  
   内 存 诊 断                持 续 收 集 有 界 的 内 存 诊 断 数 据                                           [   ]  
+  自 动 更 新                选 择 版 本 更 新 节 奏                                                     最 新    
   以 差 异 显 示  Git 更 改     显 示 新 增 和 删 除 的 行 ， 而 不 是 已 更 改 的 文 件                               [   ]  
   语 言                    切 换 界 面 语 言                                                         中 文    
   推 荐 合 并 处 理            推 荐 适 合 一 起 解 决 的  issue                                            [ ✔ ]  

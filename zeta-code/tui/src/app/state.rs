@@ -730,7 +730,8 @@ impl App {
                 command,
             )) => self.begin_subscription_command(command),
             crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::SetTerminalSettings(edit),
+                ConfigSelectionAction::SetTerminalSettings(edit)
+                | ConfigSelectionAction::SetUpdatePolicy(edit),
             ) => Some(ConfigCommand::Edit(edit).into()),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetVimMode(edit)) => {
                 Some(ConfigCommand::Edit(edit).into())

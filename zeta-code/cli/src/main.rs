@@ -24,12 +24,17 @@ use zeta_protocol::ThreadId;
 mod local_tui;
 mod reconnect;
 mod remote;
+mod update;
 
 fn main() {
     let mut arguments = env::args().skip(1);
     let outcome = match arguments.next() {
         None => interactive().map_err(CliError::failure),
         Some(command) => match command.as_str() {
+            "--version" | "-V" => {
+                println!("zeta {}", env!("CARGO_PKG_VERSION"));
+                Ok(())
+            }
             "ask" => ask(arguments.collect::<Vec<_>>().join(" ")),
             "exec" => execute(arguments.collect()),
             "resume" => resume(arguments.collect()),
@@ -39,6 +44,7 @@ fn main() {
                 zeta_server_host::run(std::iter::once("remote-server".to_owned()).chain(arguments))
                     .map_err(CliError::failure)
             }
+            "update" => update::run_manual(arguments.collect()).map_err(CliError::failure),
             _ => Err(CliError::usage(format!("unknown command: {command}"))),
         },
     };

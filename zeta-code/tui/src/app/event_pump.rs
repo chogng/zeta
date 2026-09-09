@@ -27,6 +27,7 @@ pub(super) enum RuntimeEvent {
     Terminal(TerminalEvent),
     Client(ClientEvent),
     ProcessResources(ProcessResourcesReading),
+    HostNotice(String),
     TerminationRequested,
 }
 
@@ -37,6 +38,7 @@ pub(super) struct EventPump {
     client: ClientEventSource,
     process_resources: ProcessResourcesRuntime,
     process_resource_request: ProcessResourceRequest,
+    notices: Option<crate::TuiNotices>,
     _termination: TerminationSource,
 }
 
@@ -52,6 +54,7 @@ impl EventPump {
     pub(super) fn start(
         events: AppServerEvents,
         resource_targets: ProcessResourceTargets,
+        notices: Option<crate::TuiNotices>,
     ) -> Result<Self, io::Error> {
         let queue = Arc::new(RuntimeQueue::default());
         let stop = Arc::new(AtomicBool::new(false));
@@ -107,6 +110,7 @@ impl EventPump {
             client,
             process_resources,
             process_resource_request: ProcessResourceRequest::default(),
+            notices,
             _termination: termination,
         })
     }
@@ -140,6 +144,9 @@ impl EventPump {
     }
 
     pub(super) fn recv(&self) -> Result<RuntimeEvent, io::Error> {
+        if let Some(notice) = self.notice() {
+            return Ok(notice);
+        }
         self.queue.recv(None)?.ok_or_else(queue_closed)
     }
 
@@ -147,7 +154,17 @@ impl EventPump {
         &self,
         timeout: Duration,
     ) -> Result<Option<RuntimeEvent>, io::Error> {
+        if let Some(notice) = self.notice() {
+            return Ok(Some(notice));
+        }
         self.queue.recv(Some(timeout))
+    }
+
+    fn notice(&self) -> Option<RuntimeEvent> {
+        self.notices
+            .as_ref()
+            .and_then(|notices| notices.try_recv().ok())
+            .map(RuntimeEvent::HostNotice)
     }
 
     pub(super) fn shutdown(mut self) -> Result<(), io::Error> {
@@ -365,6 +382,7 @@ fn mouse_kind(event: &RuntimeEvent) -> Option<MouseEventKind> {
         RuntimeEvent::Terminal(_)
         | RuntimeEvent::Client(_)
         | RuntimeEvent::ProcessResources(_)
+        | RuntimeEvent::HostNotice(_)
         | RuntimeEvent::TerminationRequested => None,
     }
 }

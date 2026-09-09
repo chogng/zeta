@@ -70,6 +70,10 @@ class TargetSpec:
         return "app" + self.executable_suffix
 
     @property
+    def cli_name(self) -> str:
+        return "zeta" + self.executable_suffix
+
+    @property
     def server_name(self) -> str:
         return "zeta-server" + self.executable_suffix
 

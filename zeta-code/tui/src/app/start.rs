@@ -48,6 +48,7 @@ pub(super) fn start(
         theme_root,
         app_server_process,
         recovery,
+        notices,
         ..
     } = options;
     let initialization = client.initialization()?;
@@ -151,7 +152,7 @@ pub(super) fn start(
             plugins_enabled,
         },
     );
-    let pump = EventPump::start(events, resource_targets)?;
+    let pump = EventPump::start(events, resource_targets, notices)?;
     Ok(StartedSession {
         driver,
         pump,

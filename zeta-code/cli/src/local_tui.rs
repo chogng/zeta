@@ -39,6 +39,10 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
         .map_err(|error| format!("could not resolve zeta executable: {error}"))?;
     let mut session =
         connect(&executable, &dir_root, &profile_root).map_err(|error| error.to_string())?;
+    let (updater, notices) = match crate::update::AutomaticUpdater::start(session.client()) {
+        Some((updater, notices)) => (Some(updater), Some(notices)),
+        None => (None, None),
+    };
     let mut recovery = match entry {
         Entry::New => None,
         Entry::Resume(recovery) => Some(recovery),
@@ -49,6 +53,9 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
             .with_profile_root(&profile_root);
         if let Some(process_id) = session.process_id() {
             options = options.with_app_server_process_id(process_id);
+        }
+        if let Some(notices) = &notices {
+            options = options.with_notices(notices.clone());
         }
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
@@ -67,6 +74,9 @@ fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(
                     reconnect(&executable, &dir_root, &profile_root, &reason).map_err(|error| {
                         reconnect::recovery_error(error, &recovery_command(&next_recovery))
                     })?;
+                if let Some(updater) = &updater {
+                    updater.replace_client(session.client());
+                }
                 recovery = Some(next_recovery);
             }
             zeta_tui::TuiExit::ConnectionLost {

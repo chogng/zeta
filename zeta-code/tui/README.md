@@ -188,12 +188,15 @@ mouseInteractions = true
 copyOnSelect = false
 inputMode = "standard"
 memoryDiagnostics = false
+autoUpdate = "latest"
 showGitChangesAsDiff = false
 statusLineStyle = "compact"
 language = "en"
 ```
 
 `mouseInteractions` 控制增强 TUI，缺省为 `true`；`copyOnSelect` 是独立布尔开关，缺省为 `false`。两项都在“通用”页签中编辑，修改其中一项不会改变另一项。
+
+`autoUpdate` 在“通用”页签中以单行选项切换：`latest` 跟随每次发布，`stable` 只跟随显式晋升的版本，`never` 不自动检查；缺省为 `latest`。CLI 在本地 TUI 启动时和运行期间读取这个 profile 设置，源码构建和其他安装方式不会被改写。下载、签名校验、诊断和版本切换契约见 [Zeta Code README](../README.md)。
 
 `language` 只接受 `en`、`ja`、`zh-CN`、`fr`，缺省为 `en`。当前实现会立即切换 Config 根页面；供应商名、语言服务器标识、模型回复、代码和用户内容保持原文。编辑任一设置时都会保留未知的 `[tui]` 同级字段，无效语言值会报告配置错误。
 

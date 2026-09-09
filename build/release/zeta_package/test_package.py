@@ -138,6 +138,7 @@ class PackageTests(unittest.TestCase):
             code_mode_host_binary = executable_file(
                 root / "code-mode-host-source", b"zeta-code-mode-host"
             )
+            cli_binary = executable_file(root / "cli-source", b"zeta-cli")
             rg_binary = executable_file(root / "rg-source", b"ripgrep")
             output = root / "package"
             spec = TARGETS["aarch64-apple-darwin"]
@@ -159,6 +160,8 @@ class PackageTests(unittest.TestCase):
                 code_mode_host_binary,
                 ripgrep,
                 node,
+                cli_binary=cli_binary,
+                update_public_key="11" * 32,
             )
 
             self.assertEqual(
@@ -172,6 +175,7 @@ class PackageTests(unittest.TestCase):
                 b"zeta-code-mode-host",
                 (output / "bin" / "zeta-code-mode-host").read_bytes(),
             )
+            self.assertEqual(b"zeta-cli", (output / "bin" / "zeta").read_bytes())
             self.assertEqual(b"ripgrep", (output / "zeta-path" / "rg").read_bytes())
             self.assertEqual(
                 b"node",
@@ -279,6 +283,14 @@ class PackageTests(unittest.TestCase):
                 metadata["components"]["appServerDaemon"]["binarySha256"],
             )
             self.assertEqual(
+                hashlib.sha256(b"zeta-cli").hexdigest(),
+                metadata["components"]["cli"]["binarySha256"],
+            )
+            self.assertEqual(
+                "11" * 32,
+                metadata["components"]["cli"]["updatePublicKey"],
+            )
+            self.assertEqual(
                 hashlib.sha256(b"ripgrep").hexdigest(),
                 metadata["components"]["ripgrep"]["binarySha256"],
             )
@@ -286,6 +298,20 @@ class PackageTests(unittest.TestCase):
                 hashlib.sha256(b"node").hexdigest(),
                 metadata["components"]["node"]["binarySha256"],
             )
+
+            with self.assertRaisesRegex(RuntimeError, "update public key"):
+                build_package_directory(
+                    root / "missing-update-key",
+                    REPOSITORY_ROOT,
+                    "0.1.0",
+                    spec,
+                    server_binary,
+                    daemon_binary,
+                    code_mode_host_binary,
+                    ripgrep,
+                    node,
+                    cli_binary=cli_binary,
+                )
 
             with self.assertRaisesRegex(RuntimeError, "Refusing to replace"):
                 build_package_directory(
