@@ -485,12 +485,20 @@ impl TuiProcess {
     }
 
     pub fn resize(&mut self, size: PtySize) {
-        self.capture.lock().unwrap().resize(size);
+        let revision = {
+            let mut capture = self.capture.lock().unwrap();
+            if capture.size.rows == size.rows && capture.size.cols == size.cols {
+                return;
+            }
+            capture.resize(size);
+            capture.revision()
+        };
         self.master
             .as_ref()
             .expect("running PTY")
             .resize(size)
             .unwrap();
+        self.wait_for_redraw_after(revision);
     }
 
     pub fn wait_for_screen(&mut self, expected: &str) {

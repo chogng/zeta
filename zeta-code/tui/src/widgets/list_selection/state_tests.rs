@@ -517,7 +517,7 @@ fn navigation_clamps_at_list_boundaries_and_only_press_activates() {
 }
 
 #[test]
-fn tab_from_items_skips_disabled_pages_and_repeat_does_not_switch() {
+fn tab_from_items_focuses_empty_pages_and_repeat_does_not_switch() {
     use crossterm::event::KeyEventKind;
     let mut state = ListSelectionState::new(ListSelectionModel::new(
         "Config",
@@ -526,7 +526,6 @@ fn tab_from_items_skips_disabled_pages_and_repeat_does_not_switch() {
                 "First",
                 vec![ListSelectionItem::new("Toggle").with_id(ListSelectionItemId::new("toggle"))],
             ),
-            ListSelectionGroup::new("Disabled", vec![]).disabled(),
             ListSelectionGroup::new("Empty", vec![]),
         ],
     ));
@@ -593,8 +592,18 @@ fn tab_from_items_focuses_tabs_and_arrows_follow_the_visual_regions() {
 
 #[test]
 fn repeated_tab_does_not_move_focus_and_a_single_tab_still_receives_focus() {
-    let mut view = ListSelectionState::new(ListSelectionModel::new("One", vec![ListSelectionGroup::new("Only", vec![ListSelectionItem::new("Item")])]));
-    view.handle_key(KeyEvent::new_with_kind(KeyCode::Tab, KeyModifiers::NONE, crossterm::event::KeyEventKind::Repeat));
+    let mut view = ListSelectionState::new(ListSelectionModel::new(
+        "One",
+        vec![ListSelectionGroup::new(
+            "Only",
+            vec![ListSelectionItem::new("Item")],
+        )],
+    ));
+    view.handle_key(KeyEvent::new_with_kind(
+        KeyCode::Tab,
+        KeyModifiers::NONE,
+        crossterm::event::KeyEventKind::Repeat,
+    ));
     assert!(view.items_focused());
     view.handle_key(key(KeyCode::Tab));
     assert!(view.tabs_focused());

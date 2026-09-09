@@ -126,7 +126,6 @@ impl TurnExecutor {
         crate::tool_profile::snapshot_tool_profile(catalog.definitions())
     }
 
-    /// Freezes the exact durable binding for a host-created Tool Call.
     /// Freezes an explicitly selected subset of the current tool definitions for a worker.
     pub fn tool_profile_for_names(
         &self,
@@ -149,6 +148,7 @@ impl TurnExecutor {
         Ok(profile)
     }
 
+    /// Freezes the exact durable binding for a host-created Tool Call.
     pub fn bind_tool_call(
         &self,
         call: &ToolCall,

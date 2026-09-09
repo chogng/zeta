@@ -88,7 +88,10 @@ fn actual_tui_input_keeps_hint_bar_without_blank_line_growth() {
                 {
                     break;
                 }
-                assert!(std::time::Instant::now() < deadline, "temporary input tips did not expire");
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "temporary input tips did not expire"
+                );
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
             process.wait_for_stable_screen("ask permissions on");
@@ -130,6 +133,7 @@ fn actual_tui_pty_streams_utf8_resizes_exits_and_resumes() {
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Zeta Code v");
+    process.resize(LARGE_SIZE);
     process.submit("PTY 中文输入 🚀");
     process.wait_for_screen("PTY lifecycle reply");
     assert_eq!(server.request_count(), 1);

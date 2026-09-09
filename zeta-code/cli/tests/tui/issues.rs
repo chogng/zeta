@@ -33,7 +33,8 @@ fn actual_tui_issue_config_refresh_remains_available_when_grouping_is_disabled()
     wait_for_config(&fixture, "autoRefreshMinutes = 0");
     assert!(fixture.config_source().contains("recommendMerge = false"));
     process.resize(SMALL_SIZE);
-    process.wait_for_screen("Auto refresh");
+    process.wait_for_stable_screen("Auto refresh");
+    process.assert_snapshot("issues/refresh_without_recommendations");
     process.escape();
     process.quit();
     assert!(server.request_bodies().is_empty());
@@ -117,7 +118,9 @@ fn actual_tui_issue_selection_creates_one_draft_without_touching_source_changes(
     process.resize(SMALL_SIZE);
     process.wait_for_screen("Closed (1)");
     process.resize(LARGE_SIZE);
+    process.wait_for_stable_screen(&format!("─ Issues {}", "─".repeat(80)));
     process.left();
+    process.wait_for_stable_screen("▸ Closed (1)");
     assert!(!process.screen().contains("Previously resolved issue"));
     process.send(b"\x1b[H");
     process.down();

@@ -701,7 +701,7 @@ fn automatic_refresh_does_not_fetch_an_unexpanded_closed_group() {
 #[test]
 fn tab_does_not_repeat_or_leave_issue_detail_and_pending_creation() {
     let mut manager = loaded();
-    let selected = manager.board.selected;
+    let selected = manager.board.selected.clone();
     for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
         assert!(
             manager
