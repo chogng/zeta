@@ -2,7 +2,7 @@
 
 > 领域实现：[`zeta-rs/connectors/`](../zeta-rs/connectors/README.md)，Rust crate：
 > `zeta_connectors`。
-> Package 入口：[`marketplace-integration.md`](marketplace-integration.md)。
+> Package 入口：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)。
 > Legacy Plugin/discovery 集成：[`zeta-rs/ext/connectors/`](../zeta-rs/ext/connectors/README.md) 与
 > [`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
@@ -14,7 +14,7 @@
 
 ## 快速理解
 
-Connector 管理“外部服务是否已经连接以及连接对应哪个账号”。在 Marketplace integration bundle
+Connector 管理“外部服务是否已经连接以及连接对应哪个账号”。在 Core Plugins bundle
 提供外部服务的常见路径中，同一 package 的 Connector capability 引用 MCP capability，Connector
 在认证成功后发布就绪的 MCP 绑定。Legacy Plugin declaration 仍作为本地兼容来源。
 这是 declaration 和 runtime 之间的数据流，不是 Plugin 在运行时包含 Connector、MCP session 或 Tool。
@@ -83,8 +83,8 @@ Connector；Plugin 或 User/Directory 也可以独立声明 MCP server。只有�
 
 | Owner | 拥有 | 明确不拥有 |
 | --- | --- | --- |
-| `zeta-marketplace-manager` | remote package 的 artifact/install/update/uninstall、exact capability 与 lease | Connector enable/grant、外部账号、OAuth、MCP session |
-| `zeta-plugins` | legacy local package、manifest、enable/grant provenance 与 `ConnectorContribution` | 远端 Marketplace 安装、外部账号、OAuth、MCP session |
+| `zeta-plugin` | Plugin manifest 与 `ConnectorContribution` 定义 | 安装、启用、外部账号、OAuth、MCP session |
+| `zeta-core-plugins` | package artifact/install/update/uninstall、enable/grant provenance、exact capability 与 lease | 外部账号、OAuth、MCP session |
 | `zeta-connectors` | identity、definition、account projection、状态机、generation-bound snapshot | Plugin、secret storage、I/O runtime |
 | `zeta-connectors-extension` | Plugin 转换、Plugin provenance、discovery 与 ready-binding projection | 领域状态机、live authentication/MCP |
 | Connector auth adapter | connect/revoke、OAuth callback、credential refresh/materialization | Plugin package、Tool execution |

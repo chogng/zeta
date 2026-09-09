@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use url::Url;
-use zeta_marketplace_manager::LocalCapabilitySource;
+use zeta_core_plugins::LocalCapabilitySource;
 use zeta_mcp::McpServerTransport;
 use zeta_mcp_extension::ConnectorMcpRuntimeError;
 use zeta_rmcp_client::BearerToken;

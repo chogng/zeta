@@ -187,11 +187,10 @@ pub struct AppServer {
     pub(super) connector_device_oauth:
         Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
     pub(super) mcp_oauth: Option<Arc<zeta_mcp_extension::McpOAuthService>>,
-    pub(super) plugins: Option<zeta_plugins::PluginActivationAuthority>,
+    pub(super) plugins: Option<zeta_core_plugins::PluginActivationAuthority>,
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
-    pub(super) marketplace_manager_client:
-        Option<Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>>,
-    local_marketplace_manager: Option<Arc<zeta_marketplace_manager::MarketplaceManager>>,
+    pub(super) plugin_package_service: Option<Arc<dyn zeta_core_plugins::PluginPackageService>>,
+    plugins_manager: Option<Arc<zeta_core_plugins::PluginsManager>>,
     marketplace_editor_extension_admission:
         Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
     marketplace_language_runtime: Option<marketplace_language_runtime::MarketplaceLanguageRuntime>,
@@ -503,8 +502,8 @@ impl AppServer {
             mcp_oauth: None,
             plugins: None,
             extension_hosts: None,
-            marketplace_manager_client: None,
-            local_marketplace_manager: None,
+            plugin_package_service: None,
+            plugins_manager: None,
             marketplace_editor_extension_admission: None,
             marketplace_language_runtime: None,
             plugin_skill_sources: None,
@@ -696,39 +695,36 @@ impl AppServer {
         Ok(self)
     }
 
-    /// Installs the client used to call the product-local Marketplace Manager.
-    pub fn with_marketplace_manager_client(
+    /// Installs a Plugin package service when no local Plugins Manager is available.
+    pub fn with_plugin_package_service(
         mut self,
-        client: Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>,
+        service: Arc<dyn zeta_core_plugins::PluginPackageService>,
     ) -> Self {
         self._marketplace_watcher = None;
-        self.local_marketplace_manager = None;
-        self.marketplace_manager_client = Some(client);
+        self.plugins_manager = None;
+        self.plugin_package_service = Some(service);
         self
     }
 
-    /// Installs the concrete local Marketplace Manager and its trusted Skill projection.
-    pub fn with_local_marketplace_manager(
-        self,
-        manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
-    ) -> Self {
+    /// Installs the local Plugins Manager and its trusted capability sources.
+    pub fn with_plugins_manager(self, manager: Arc<zeta_core_plugins::PluginsManager>) -> Self {
         let watcher = marketplace_runtime::MarketplaceChangeWatcher::start(
             &manager,
             Arc::clone(&self.updates),
         );
-        self.bind_local_marketplace_manager(manager, watcher)
+        self.bind_plugins_manager(manager, watcher)
     }
 
-    pub(crate) fn with_profile_marketplace_manager(
+    pub(crate) fn with_profile_plugins_manager(
         self,
-        manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+        manager: Arc<zeta_core_plugins::PluginsManager>,
     ) -> Self {
-        self.bind_local_marketplace_manager(manager, None)
+        self.bind_plugins_manager(manager, None)
     }
 
-    fn bind_local_marketplace_manager(
+    fn bind_plugins_manager(
         mut self,
-        manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+        manager: Arc<zeta_core_plugins::PluginsManager>,
         watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
     ) -> Self {
         self._marketplace_watcher = watcher;
@@ -742,8 +738,8 @@ impl AppServer {
             )),
         );
         self.marketplace_extension_sources = Some(extension_source);
-        self.marketplace_manager_client = Some(manager.clone());
-        self.local_marketplace_manager = Some(manager);
+        self.plugin_package_service = Some(manager.clone());
+        self.plugins_manager = Some(manager);
         self.rebind_dynamic_skill_sources();
         self.rebind_dynamic_extension_sources();
         self
@@ -772,12 +768,12 @@ impl AppServer {
         if let Ok(git) = self.git_runtime_service() {
             git.close_connection(connection.connection_id);
         }
-        if let Some(marketplace) = &self.marketplace_manager_client {
+        if let Some(marketplace) = &self.plugin_package_service {
             let _change = self.updates.lock_marketplace_change();
             for lease_id in connection.marketplace_leases() {
-                match marketplace.release_capability(
-                    zeta_marketplace_client::ReleaseCapabilityRequest { lease_id },
-                ) {
+                match marketplace
+                    .release_capability(zeta_core_plugins::ReleaseCapabilityRequest { lease_id })
+                {
                     Ok(outcome) => {
                         self.reconcile_released_marketplace_capability(outcome.installation_changed)
                     }
@@ -940,7 +936,7 @@ impl AppServer {
     /// Installs live Plugin lifecycle authority and product notifications.
     pub fn with_plugin_authority(
         mut self,
-        plugins: zeta_plugins::PluginActivationAuthority,
+        plugins: zeta_core_plugins::PluginActivationAuthority,
     ) -> Self {
         self._plugin_watcher = Some(plugin_runtime::PluginWatcher::start(
             &plugins,
@@ -1024,8 +1020,8 @@ impl AppServer {
         limits: zeta_editor_extension_host::ExtensionHostLimits,
         restart_policy: zeta_editor_extension_host::RestartPolicy,
     ) -> Result<Self, String> {
-        let marketplace_source = self.local_marketplace_manager.is_some()
-            && self.marketplace_editor_extension_admission.is_some();
+        let marketplace_source =
+            self.plugins_manager.is_some() && self.marketplace_editor_extension_admission.is_some();
         if self.plugins.is_none() && !marketplace_source {
             return Err(
                 "Plugin authority or Marketplace Editor Extension admission must be installed before Extension Host runtime"
@@ -1034,7 +1030,7 @@ impl AppServer {
         }
         let runtime = extension_host_runtime::ExtensionHostRuntime::start(
             self.plugins.clone(),
-            self.local_marketplace_manager.clone(),
+            self.plugins_manager.clone(),
             self.marketplace_editor_extension_admission.clone(),
             launcher,
             limits,

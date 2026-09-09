@@ -11,7 +11,7 @@
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
-> Marketplace package 入口：[`marketplace-integration.md`](marketplace-integration.md)
+> Marketplace package 入口：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > Connector account 与 ready binding：[`connectors.md`](connectors.md)
 > Skill 指令边界：[`skills.md`](skills.md)
@@ -60,7 +60,7 @@ prompts、reconnect/health 和更完整的 interaction surface 仍是 Proposed�
 - MCP server 输出、tool annotation 或 prompt 内容的信任背书；
 - Zeta Session、Thread、Turn 或 App Server connection 的替代品。
 
-Marketplace、Plugin、Connector 与 MCP 的 canonical 关系由 [`marketplace-integration.md`](marketplace-integration.md)
+Marketplace、Plugin、Connector 与 MCP 的 canonical 关系由 [`core-plugins.md`](../zeta-rs/docs/core-plugins.md)
 和 [`connectors.md`](connectors.md) 共同维护。从 MCP runtime 视角看，
 边界可压缩为：
 
@@ -198,7 +198,7 @@ Agent runtime 决定何时调用工具，Core 负责 durable commit，App Server
 ```mermaid
 flowchart TD
     P["Marketplace Manager：verified MCP/Connector capabilities"] --> A["App Server composition"]
-    L["legacy zeta-plugins：validated MCP declarations"] --> A
+    L["zeta-plugin definitions + zeta-core-plugins activation"] --> A
     C["zeta-connectors：ready runtime bindings"] --> A
     U["User / Directory MCP configuration"] --> A
     H["Credential materializer + process/HTTP host adapters"] --> A

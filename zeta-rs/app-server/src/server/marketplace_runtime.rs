@@ -3,7 +3,7 @@ use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use zeta_marketplace_manager::MarketplaceManager;
+use zeta_core_plugins::PluginsManager;
 
 use super::UpdateBroker;
 
@@ -13,10 +13,7 @@ pub(crate) struct MarketplaceChangeWatcher {
 }
 
 impl MarketplaceChangeWatcher {
-    pub(crate) fn start(
-        manager: &Arc<MarketplaceManager>,
-        updates: Arc<UpdateBroker>,
-    ) -> Option<Self> {
+    pub(crate) fn start(manager: &Arc<PluginsManager>, updates: Arc<UpdateBroker>) -> Option<Self> {
         let changes = match manager.subscribe() {
             Ok(changes) => changes,
             Err(error) => {

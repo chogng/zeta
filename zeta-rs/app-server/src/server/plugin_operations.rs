@@ -9,17 +9,17 @@ use zeta_app_server_protocol::protocol::plugins::PluginCommandResultDto;
 use zeta_app_server_protocol::protocol::plugins::PluginListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginPackageCommandParams;
 use zeta_app_server_protocol::protocol::plugins::PluginPackageDto;
-use zeta_plugins::InstalledPluginRef;
-use zeta_plugins::PluginAuthorityCommand;
-use zeta_plugins::PluginAuthorityCommandId;
-use zeta_plugins::PluginAuthorityCommandRequest;
-use zeta_plugins::PluginAuthorityCommandResult;
-use zeta_plugins::PluginAuthorityDisposition;
-use zeta_plugins::PluginError;
-use zeta_plugins::PluginErrorKind;
-use zeta_plugins::PluginId;
-use zeta_plugins::PluginPackageDigest;
-use zeta_plugins::PluginVersion;
+use zeta_core_plugins::PluginAuthorityCommand;
+use zeta_core_plugins::PluginAuthorityCommandId;
+use zeta_core_plugins::PluginAuthorityCommandRequest;
+use zeta_core_plugins::PluginAuthorityCommandResult;
+use zeta_core_plugins::PluginAuthorityDisposition;
+use zeta_plugin::InstalledPluginRef;
+use zeta_plugin::PluginError;
+use zeta_plugin::PluginErrorKind;
+use zeta_plugin::PluginId;
+use zeta_plugin::PluginPackageDigest;
+use zeta_plugin::PluginVersion;
 
 impl AppServer {
     pub(super) fn plugin_list(&self) -> Result<Value, RpcError> {
@@ -93,7 +93,7 @@ impl AppServer {
         result(&plugin_command_result(outcome))
     }
 
-    fn plugin_authority(&self) -> Result<&zeta_plugins::PluginActivationAuthority, RpcError> {
+    fn plugin_authority(&self) -> Result<&zeta_core_plugins::PluginActivationAuthority, RpcError> {
         self.plugins
             .as_ref()
             .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))

@@ -6,6 +6,26 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use sha2::Digest;
 use sha2::Sha256;
+use zeta_core_plugins::AcquireCapabilityRequest;
+use zeta_core_plugins::ActivationSpec;
+use zeta_core_plugins::AvailableCapability;
+use zeta_core_plugins::CapabilityKind;
+use zeta_core_plugins::DownloadPackageRequest;
+use zeta_core_plugins::GetPackageRequest;
+use zeta_core_plugins::InstallPackageRequest;
+use zeta_core_plugins::MarketplaceClientError;
+use zeta_core_plugins::MarketplaceInstallCapability;
+use zeta_core_plugins::MarketplacePackagePayload;
+use zeta_core_plugins::MarketplaceRegistryClient;
+use zeta_core_plugins::OpenResourceRequest;
+use zeta_core_plugins::PackageDetails;
+use zeta_core_plugins::PackageRef;
+use zeta_core_plugins::PackageSource;
+use zeta_core_plugins::PackageSummary;
+use zeta_core_plugins::PluginPackageService;
+use zeta_core_plugins::PluginsManager;
+use zeta_core_plugins::SearchPackagesRequest;
+use zeta_core_plugins::SearchPackagesResult;
 use zeta_extensions::DynamicExtensionSourceProvider;
 use zeta_extensions::ExtensionCatalog;
 use zeta_extensions::ExtensionCatalogReload;
@@ -14,26 +34,6 @@ use zeta_extensions::ExtensionSourceKind;
 use zeta_lsp_server_provider::LspServerLaunch;
 use zeta_lsp_server_provider::LspServerProviders;
 use zeta_lsp_server_provider::ManagedNodeRuntime;
-use zeta_marketplace_client::AcquireCapabilityRequest;
-use zeta_marketplace_client::ActivationSpec;
-use zeta_marketplace_client::AvailableCapability;
-use zeta_marketplace_client::CapabilityKind;
-use zeta_marketplace_client::DownloadPackageRequest;
-use zeta_marketplace_client::GetPackageRequest;
-use zeta_marketplace_client::InstallPackageRequest;
-use zeta_marketplace_client::MarketplaceClientError;
-use zeta_marketplace_client::MarketplaceInstallCapability;
-use zeta_marketplace_client::MarketplacePackagePayload;
-use zeta_marketplace_client::MarketplaceRegistryClient;
-use zeta_marketplace_client::MarketplaceServiceClient;
-use zeta_marketplace_client::OpenResourceRequest;
-use zeta_marketplace_client::PackageDetails;
-use zeta_marketplace_client::PackageRef;
-use zeta_marketplace_client::PackageSource;
-use zeta_marketplace_client::PackageSummary;
-use zeta_marketplace_client::SearchPackagesRequest;
-use zeta_marketplace_client::SearchPackagesResult;
-use zeta_marketplace_manager::MarketplaceManager;
 
 use super::UpdateBroker;
 use super::marketplace_extension_sources::MarketplaceExtensionSourceProvider;
@@ -63,7 +63,7 @@ const THEME_DOCUMENT: &[u8] = br#"{"type":"dark","colors":{},"tokenColors":[]}"#
 fn marketplace_manager_commit_watcher_broadcasts_the_authoritative_change() {
     let root = tempfile::tempdir().unwrap();
     let manager = Arc::new(
-        MarketplaceManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
+        PluginsManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
     );
     let updates = Arc::new(UpdateBroker::default());
     let queue = NotificationQueue::default();
@@ -96,7 +96,7 @@ fn installed_language_package_projects_assets_and_packaged_server() {
     fs::write(&node, b"#!/bin/sh\n").unwrap();
     make_executable(&node);
     let manager = Arc::new(
-        MarketplaceManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
+        PluginsManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
     );
     let installed = manager
         .install(InstallPackageRequest {
@@ -196,7 +196,7 @@ fn installed_language_package_projects_assets_and_packaged_server() {
 fn installed_theme_enters_the_shared_declarative_extension_catalog() {
     let root = tempfile::tempdir().unwrap();
     let manager = Arc::new(
-        MarketplaceManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
+        PluginsManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
     );
     let installed = manager
         .install(InstallPackageRequest {

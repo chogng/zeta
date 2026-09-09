@@ -193,8 +193,9 @@ server 保留独立 draft，并只提交 revision-safe typed command，
 读取编辑器文档。crate contract 见
 [`lsp-server-provider/README.md`](../zeta-rs/lsp-server-provider/README.md)。
 
-`zeta-marketplace-manager` 统一拥有 Marketplace package 的本地 staging、整包 digest 复核、immutable
-artifact、安装/update/uninstall 状态、lease 与 opaque resource。Language 不再拥有第二套 distribution
+`zeta-plugin` 拥有 Plugin identity、manifest、path 与 package observation；`zeta-core-plugins` 统一拥有
+来源聚合、本地 staging、整包 digest 复核、immutable artifact、安装/update/uninstall、authority、lease
+与 opaque resource。Language 不再拥有第二套 distribution
 storage；App Server 的本地 Language adapter 只把 Manager-verified capability handle 组合进 Extension
 catalog 和 `LspServerProviders` provider collection，下载、安装与激活所有权仍然分离。
 

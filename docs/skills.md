@@ -11,7 +11,7 @@
 > Agent runtime：[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Instructions/Skills/Agents 领域划分与外部导入：[`agent-customizations.md`](agent-customizations.md)
-> Marketplace package 入口：[`marketplace-integration.md`](marketplace-integration.md)
+> Marketplace package 入口：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 

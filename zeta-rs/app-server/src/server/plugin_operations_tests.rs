@@ -5,10 +5,10 @@ use std::sync::Arc;
 use tempfile::tempdir;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::ThreadController;
+use zeta_core_plugins::PluginActivationAuthority;
+use zeta_core_plugins::PluginAuthorityCommandId;
 use zeta_model_provider::EchoModel;
-use zeta_plugins::LocalPluginPackage;
-use zeta_plugins::PluginActivationAuthority;
-use zeta_plugins::PluginAuthorityCommandId;
+use zeta_plugin::LocalPluginPackage;
 
 #[test]
 fn app_server_projects_and_mutates_distinct_plugin_authority_layers() {

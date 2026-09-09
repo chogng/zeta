@@ -25,7 +25,7 @@
 | [`agents.md`](agents.md) | 设计 | 内置与自定义 Agent 的统一定义、专化职责、启动来源和执行约束 |
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |
-| [`marketplace-integration.md`](marketplace-integration.md) | 设计 | 远端签名 registry、Zeta 本地 Manager、opaque capability handoff 与旧消费链迁移 |
+| [`core-plugins.md`](../zeta-rs/docs/core-plugins.md) | 设计 | Plugin 来源、PluginsManager、包存储、activation 与 capability 接线 |
 | [`localization.md`](localization.md) | 设计 | 内置 locale catalog、Marketplace localization 包与 UI fallback |
 | [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界 |
 | [`editor-extensions.md`](editor-extensions.md) | 设计 | 声明式扩展与 Zeta 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态 |

@@ -70,7 +70,7 @@ ConnectorSnapshot::with_connection_update
 | `ConnectorConnection::apply` | connection transition 与 generation ordering | 执行 OAuth、读取 secrets、启动 MCP |
 | `ConnectorSnapshot::with_connection_update` | immutable atomic projection | 持久化 authority 或 App Server event delivery |
 
-如果本 crate 开始依赖 `zeta-plugins`、`zeta-mcp`、`zeta-secrets`、App Server 或产品 UI，即表示依赖
+如果本 crate 开始依赖 `zeta-plugin`、`zeta-core-plugins`、`zeta-mcp`、`zeta-secrets`、App Server 或产品 UI，即表示依赖
 方向发生漂移。对应适配应进入 `zeta-rs/ext/connectors` 或 authentication/runtime owner。
 
 ## 集成义务

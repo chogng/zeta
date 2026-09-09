@@ -4,28 +4,28 @@ use std::sync::Arc;
 
 use sha2::Digest;
 use sha2::Sha256;
-use zeta_marketplace_client::AcquireCapabilityRequest;
-use zeta_marketplace_client::AvailableCapability;
-use zeta_marketplace_client::CapabilityKind;
-use zeta_marketplace_client::DownloadPackageRequest;
-use zeta_marketplace_client::GetPackageRequest;
-use zeta_marketplace_client::InstallPackageRequest;
-use zeta_marketplace_client::ListInstalledRequest;
-use zeta_marketplace_client::MarketplaceClientError;
-use zeta_marketplace_client::MarketplaceInstallCapability;
-use zeta_marketplace_client::MarketplacePackagePayload;
-use zeta_marketplace_client::MarketplaceRegistryClient;
-use zeta_marketplace_client::MarketplaceServiceClient;
-use zeta_marketplace_client::PackageDetails;
-use zeta_marketplace_client::PackageRef;
-use zeta_marketplace_client::PackageSource;
-use zeta_marketplace_client::PackageSummary;
-use zeta_marketplace_client::ReleaseCapabilityRequest;
-use zeta_marketplace_client::SearchPackagesRequest;
-use zeta_marketplace_client::SearchPackagesResult;
-use zeta_marketplace_client::UninstallMode;
-use zeta_marketplace_client::UninstallPackageRequest;
-use zeta_marketplace_manager::MarketplaceManager;
+use zeta_core_plugins::AcquireCapabilityRequest;
+use zeta_core_plugins::AvailableCapability;
+use zeta_core_plugins::CapabilityKind;
+use zeta_core_plugins::DownloadPackageRequest;
+use zeta_core_plugins::GetPackageRequest;
+use zeta_core_plugins::InstallPackageRequest;
+use zeta_core_plugins::ListInstalledRequest;
+use zeta_core_plugins::MarketplaceClientError;
+use zeta_core_plugins::MarketplaceInstallCapability;
+use zeta_core_plugins::MarketplacePackagePayload;
+use zeta_core_plugins::MarketplaceRegistryClient;
+use zeta_core_plugins::PackageDetails;
+use zeta_core_plugins::PackageRef;
+use zeta_core_plugins::PackageSource;
+use zeta_core_plugins::PackageSummary;
+use zeta_core_plugins::PluginPackageService;
+use zeta_core_plugins::PluginsManager;
+use zeta_core_plugins::ReleaseCapabilityRequest;
+use zeta_core_plugins::SearchPackagesRequest;
+use zeta_core_plugins::SearchPackagesResult;
+use zeta_core_plugins::UninstallMode;
+use zeta_core_plugins::UninstallPackageRequest;
 use zeta_mcp::McpServerTransport;
 use zeta_secrets::SecretValue;
 
@@ -47,9 +47,8 @@ const MCP: &[u8] = br#"{
 #[test]
 fn installed_marketplace_plugin_projects_connector_and_mcp_with_live_lease() {
     let root = tempfile::tempdir().unwrap();
-    let manager = Arc::new(
-        MarketplaceManager::open(root.path().join("manager"), Arc::new(Registry)).unwrap(),
-    );
+    let manager =
+        Arc::new(PluginsManager::open(root.path().join("manager"), Arc::new(Registry)).unwrap());
     let installed = manager
         .install(InstallPackageRequest {
             package_id: "marketplace/github".into(),

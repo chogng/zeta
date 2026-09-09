@@ -6,7 +6,7 @@
 > [`zeta-ts/src/zeta/workbench/services/extensions/README.md`](../zeta-ts/src/zeta/workbench/services/extensions/README.md)，
 > 可执行进程与 RPC 实现见
 > [`zeta-rs/editor-extension-host/README.md`](../zeta-rs/editor-extension-host/README.md)。统一 Marketplace
-> artifact/capability 入口由 [`marketplace-integration.md`](marketplace-integration.md) 维护；legacy
+> artifact/capability 入口由 [`core-plugins.md`](../zeta-rs/docs/core-plugins.md) 维护；legacy
 > Plugin 本地来源 authority 由 [`plugins.md`](plugins.md) 维护。
 
 ## 快速理解
@@ -114,13 +114,13 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`z
 | 内置静态资源源码与上游 provenance | 根目录 `extensions/` | 运行时扫描、Extension API |
 | 静态包扫描、路径/文件类型校验、快照、摘要与目录代次 | `zeta-extensions` | Editor 贡献语义、任意代码执行 |
 | 静态可信根选择和顺序 | App Server 产品组合根 | 由 Renderer 提交任意主机路径 |
-| Plugin 静态目录选择 | `zeta-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行 |
-| Marketplace Theme/Language 静态目录选择 | `MarketplaceManager` + App Server provider | 解析 Workbench 贡献、主题选择或 LSP lifecycle |
+| Plugin 静态目录选择 | `zeta-core-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行 |
+| Marketplace Theme/Language 静态目录选择 | `PluginsManager` + App Server provider | 解析 Workbench 贡献、主题选择或 LSP lifecycle |
 | 静态 DTO、connection resource 与错误映射 | App Server / `platform/extensions` adapter | Workbench 领域注册 |
 | 声明式 catalog 与生命周期 | `IExtensionService` / `AppServerExtensionService` | transport DTO、Plugin enable/grant |
-| Marketplace package artifact/install/update/uninstall 与 capability lease | `zeta-marketplace-manager` | Editor Extension enable/grant、启动进程 |
+| Marketplace package artifact/install/update/uninstall 与 capability lease | `zeta-core-plugins` | Editor Extension enable/grant、启动进程 |
 | Marketplace Editor Extension enable/grant generation、通知与 lease | 产品注入的 `MarketplaceEditorExtensionAdmission` | package 安装、目录权限、进程隔离 |
-| Legacy Plugin 本地 package 与 enable/grant generation | `zeta-plugins` compatibility authority | 远端 Marketplace 安装、启动进程 |
+| Legacy Plugin 本地 package 与 enable/grant generation | `zeta-core-plugins` compatibility authority | 远端 Marketplace 安装、启动进程 |
 | 可执行进程、Host RPC、incarnation、取消和 crash recovery | `zeta-editor-extension-host` | package discovery、目录权限决定、领域 payload |
 | source normalization + Dir Authorization adapter、Host fleet 与客户端 RPC | App Server composition | OS sandbox implementation、Workbench UI |
 | 生产 sandbox、hard resources 与 killable process tree | 注入的 platform `ExtensionHostLauncher` | package enable/grant 或 provider semantics |
@@ -285,7 +285,8 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | 静态 package discovery、snapshot、digest、资源读取 | 已实现 | `zeta-extensions` + App Server extension operations |
 | Plugin 声明式 Extension 分发与 live activation | 已实现 | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh |
 | 声明式语言、grammar、snippet、theme、debugger 投影 | 已实现 | `AppServerExtensionService` 与领域 registry tests |
-| Plugin executable declaration、exact process permission、authority | 已实现 | `zeta-plugins` manifest/package/authority tests |
+| Plugin executable declaration 与 exact process permission | 已实现 | `zeta-plugin` manifest/package tests |
+| Plugin executable authority | 已实现 | `zeta-core-plugins` authority tests |
 | Marketplace executable consumer adapter 与独立 admission | 已实现 | exact sidecar/executable binding、双 lease 与 deferred uninstall tests |
 | Host RPC v1、独立进程监管、取消、配额、restart | 已实现 | `zeta-editor-extension-host` standalone tests |
 | 扩展命名 Output event stream | 已实现 | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests |
@@ -344,7 +345,8 @@ Node/VS Code compatibility 若未来立项，仍是独立产品项目：需要 N
 
 ```text
 cargo test --manifest-path Cargo.toml -p zeta-extensions
-cargo test --manifest-path Cargo.toml -p zeta-plugins
+cargo test --manifest-path Cargo.toml -p zeta-plugin
+cargo test --manifest-path Cargo.toml -p zeta-core-plugins
 powershell -NoProfile -ExecutionPolicy Bypass -File zeta-rs/editor-extension-host/check-standalone.ps1
 corepack pnpm --dir zeta-ts test:extensions
 corepack pnpm --dir zeta-ts typecheck:extensions

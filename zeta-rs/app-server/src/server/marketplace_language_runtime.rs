@@ -2,24 +2,24 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde::Deserialize;
+use zeta_core_plugins::CapabilityKind;
+use zeta_core_plugins::LocalCapabilitySource;
+use zeta_core_plugins::PluginsManager;
 use zeta_lsp_server_provider::DirectPackageLanguageServerProvider;
 use zeta_lsp_server_provider::LspServerProviders;
 use zeta_lsp_server_provider::ManagedNodeRuntime;
 use zeta_lsp_server_provider::NodePackageLanguageServerProvider;
-use zeta_marketplace_client::CapabilityKind;
-use zeta_marketplace_manager::LocalCapabilitySource;
-use zeta_marketplace_manager::MarketplaceManager;
 
 /// Composes installed Marketplace executable capabilities into language-server providers.
 pub(crate) struct MarketplaceLanguageRuntime {
-    manager: Arc<MarketplaceManager>,
+    manager: Arc<PluginsManager>,
     node: Option<ManagedNodeRuntime>,
     base: LspServerProviders,
 }
 
 impl MarketplaceLanguageRuntime {
     pub(crate) fn new(
-        manager: Arc<MarketplaceManager>,
+        manager: Arc<PluginsManager>,
         node: Option<ManagedNodeRuntime>,
         base: LspServerProviders,
     ) -> Self {

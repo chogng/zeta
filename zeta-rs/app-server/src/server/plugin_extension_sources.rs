@@ -1,7 +1,7 @@
+use zeta_core_plugins::PluginActivationAuthority;
 use zeta_extensions::DynamicExtensionPackageSource;
 use zeta_extensions::DynamicExtensionSourceProvider;
 use zeta_extensions::DynamicExtensionSourceSnapshot;
-use zeta_plugins::PluginActivationAuthority;
 
 /// Projects exact effective Plugin declarative Extension packages into the static catalog.
 pub(super) struct PluginExtensionSourceProvider {

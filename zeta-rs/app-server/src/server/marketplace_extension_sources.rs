@@ -5,19 +5,19 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use serde::Deserialize;
+use zeta_core_plugins::CapabilityKind;
+use zeta_core_plugins::LocalCapabilitySource;
+use zeta_core_plugins::PluginsManager;
 use zeta_extensions::DynamicExtensionPackageSource;
 use zeta_extensions::DynamicExtensionSourceProvider;
 use zeta_extensions::DynamicExtensionSourceSnapshot;
-use zeta_marketplace_client::CapabilityKind;
-use zeta_marketplace_manager::LocalCapabilitySource;
-use zeta_marketplace_manager::MarketplaceManager;
 
 const MAXIMUM_PORTABLE_THEME_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAXIMUM_PORTABLE_THEMES: usize = 128;
 
 /// Projects installed Marketplace declarative editor assets into the Extension catalog.
 pub(super) struct MarketplaceExtensionSourceProvider {
-    manager: Arc<MarketplaceManager>,
+    manager: Arc<PluginsManager>,
     state: Mutex<ProjectionState>,
 }
 
@@ -28,7 +28,7 @@ struct ProjectionState {
 }
 
 impl MarketplaceExtensionSourceProvider {
-    pub(super) fn new(manager: Arc<MarketplaceManager>) -> Self {
+    pub(super) fn new(manager: Arc<PluginsManager>) -> Self {
         Self {
             manager,
             state: Mutex::new(ProjectionState::default()),

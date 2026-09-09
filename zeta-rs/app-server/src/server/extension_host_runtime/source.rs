@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use zeta_core_plugins::PluginActivationAuthority;
+use zeta_core_plugins::PluginInvocationFence;
+use zeta_core_plugins::PluginInvocationLease;
+use zeta_core_plugins::PluginsManager;
 use zeta_editor_extension_host::ActivateParams;
 use zeta_editor_extension_host::ActivationAuthority;
 use zeta_editor_extension_host::ActivationLease;
@@ -8,12 +12,8 @@ use zeta_editor_extension_host::ExtensionCapability;
 use zeta_editor_extension_host::ExtensionHostError;
 use zeta_editor_extension_host::ExtensionLaunchCommand;
 use zeta_editor_extension_host::PackageBinding;
-use zeta_marketplace_manager::MarketplaceManager;
-use zeta_plugins::EditorExtensionActivationEvent;
-use zeta_plugins::EditorExtensionCapability;
-use zeta_plugins::PluginActivationAuthority;
-use zeta_plugins::PluginInvocationFence;
-use zeta_plugins::PluginInvocationLease;
+use zeta_plugin::EditorExtensionActivationEvent;
+use zeta_plugin::EditorExtensionCapability;
 
 use super::ExtensionHostRuntimeError;
 use crate::MarketplaceEditorExtensionAdmission;
@@ -111,7 +111,7 @@ pub(super) fn plugin_deployments(
 
 pub(super) fn combined_deployments(
     plugin: Option<&PluginActivationAuthority>,
-    marketplace: Option<&Arc<MarketplaceManager>>,
+    marketplace: Option<&Arc<PluginsManager>>,
     marketplace_admission: Option<&Arc<dyn MarketplaceEditorExtensionAdmission>>,
 ) -> Result<EditorExtensionSourceSnapshot, ExtensionHostRuntimeError> {
     let mut snapshot = match plugin {

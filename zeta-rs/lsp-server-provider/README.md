@@ -4,7 +4,7 @@
 > lifecycle 见 [`zeta-lsp-manager`](../lsp-manager/README.md)，协议 contract 见
 > [`zeta-lsp`](../lsp/README.md)，跨 crate 语义见 [`docs/lsp.md`](../../docs/lsp.md)。
 > TUF catalog、package materialization 与安装状态见
-> [`zeta-marketplace-manager`](../marketplace-manager/README.md)。
+> [`zeta-core-plugins`](../core-plugins/README.md)。
 
 `zeta-lsp-server-provider` 拥有内置 server identity、用户启用意图、execution policy gate、
 冻结候选的校验与 canonicalization，以及已验证 package 到 resolved definition 的 provider
@@ -49,7 +49,7 @@ Product composition
       → zeta-lsp-manager
 
 verified Marketplace package composition
-├─ MarketplaceManager::local_capability_sources
+├─ PluginsManager::local_capability_sources
 ├─ signed executable runtime + language route
 ├─ Desktop: ZETA_ELECTRON_RUN_AS_NODE_PATH → exact Electron executable
 ├─ other packaged hosts: InstallContext::bundled_resource("node/bin/node[.exe]")
@@ -97,7 +97,7 @@ environment、host override 和 duplicate provider gate。
 - ✅ Rust server 的 frozen PATH 发现、canonical executable 和 product-neutral availability；
 - ✅ `zeta-config` 持久化 mode/path、App Server typed mutation 与 Desktop 三项 server Settings selector；
 - ✅ JSON/JSONC、Shell server definitions 与持久化 mode/path 映射；
-- ✅ 通用 `zeta-marketplace-manager` 提供整包 digest 复核、immutable artifact、安装/update/uninstall 和 lease；
+- ✅ 通用 `zeta-core-plugins` 提供整包 digest 复核、immutable artifact、安装/update/uninstall 和 lease；
 - ✅ verified CSS package provider、managed Node-compatible runtime 启动命令、App Server provider 组合点与 host override；
 - ✅ Marketplace Language target 的通用 TUF 下载/解压 adapter、Settings 安装 UI，以及从 verified
   Language/Executable capability 自动构建 `node`/`direct` provider collection；

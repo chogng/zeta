@@ -1,12 +1,12 @@
 use super::PluginExtensionSourceProvider;
 use std::fs;
+use zeta_core_plugins::PluginActivationAuthority;
+use zeta_core_plugins::PluginAuthorityCommand;
+use zeta_core_plugins::PluginAuthorityCommandId;
+use zeta_core_plugins::PluginAuthorityCommandRequest;
+use zeta_core_plugins::PluginPackageStore;
 use zeta_extensions::DynamicExtensionSourceProvider;
-use zeta_plugins::LocalPluginPackage;
-use zeta_plugins::PluginActivationAuthority;
-use zeta_plugins::PluginAuthorityCommand;
-use zeta_plugins::PluginAuthorityCommandId;
-use zeta_plugins::PluginAuthorityCommandRequest;
-use zeta_plugins::PluginPackageStore;
+use zeta_plugin::LocalPluginPackage;
 
 #[test]
 fn projects_only_effective_declarative_extension_packages() {

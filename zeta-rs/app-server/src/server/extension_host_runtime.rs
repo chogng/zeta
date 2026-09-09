@@ -9,6 +9,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use serde_json::Value;
+use zeta_core_plugins::PluginActivationAuthority;
+use zeta_core_plugins::PluginsManager;
 use zeta_editor_extension_host::CancelReason;
 use zeta_editor_extension_host::ExtensionHostError;
 use zeta_editor_extension_host::ExtensionHostLauncher;
@@ -22,8 +24,6 @@ use zeta_editor_extension_host::RegistrationKind;
 use zeta_editor_extension_host::RestartPolicy;
 use zeta_file_access::Authorization;
 use zeta_file_access::Permission;
-use zeta_marketplace_manager::MarketplaceManager;
-use zeta_plugins::PluginActivationAuthority;
 
 use super::update_broker::UpdateBroker;
 
@@ -52,7 +52,7 @@ pub(super) struct ExtensionHostRuntime {
 
 struct RuntimeInner {
     plugin_authority: Option<PluginActivationAuthority>,
-    marketplace_manager: Option<Arc<MarketplaceManager>>,
+    plugins_manager: Option<Arc<PluginsManager>>,
     marketplace_admission: Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
     launcher: Arc<dyn ExtensionHostLauncher>,
     limits: ExtensionHostLimits,
@@ -122,7 +122,7 @@ pub(super) enum ExtensionHostRuntimeError {
 impl ExtensionHostRuntime {
     pub(super) fn start(
         plugin_authority: Option<PluginActivationAuthority>,
-        marketplace_manager: Option<Arc<MarketplaceManager>>,
+        plugins_manager: Option<Arc<PluginsManager>>,
         marketplace_admission: Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
         launcher: Arc<dyn ExtensionHostLauncher>,
         limits: ExtensionHostLimits,
@@ -134,7 +134,7 @@ impl ExtensionHostRuntime {
         let plugin_changes = plugin_authority
             .as_ref()
             .map(PluginActivationAuthority::subscribe);
-        let marketplace_changes = marketplace_manager
+        let marketplace_changes = plugins_manager
             .as_ref()
             .and_then(|manager| manager.subscribe().ok());
         let marketplace_admission_changes = marketplace_admission
@@ -143,7 +143,7 @@ impl ExtensionHostRuntime {
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let inner = Arc::new(RuntimeInner {
             plugin_authority,
-            marketplace_manager,
+            plugins_manager,
             marketplace_admission,
             launcher,
             limits,
@@ -491,7 +491,7 @@ fn language_operation_name(operation: LanguageProviderOperation) -> &'static str
 
 fn runtime_worker(
     runtime: Weak<RuntimeInner>,
-    plugin_changes: Option<zeta_plugins::PluginAuthoritySubscription>,
+    plugin_changes: Option<zeta_core_plugins::PluginAuthoritySubscription>,
     marketplace_changes: Option<std::sync::mpsc::Receiver<u64>>,
     marketplace_admission_changes: Option<std::sync::mpsc::Receiver<u64>>,
     shutdown: std::sync::mpsc::Receiver<()>,

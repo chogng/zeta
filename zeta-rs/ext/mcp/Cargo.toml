@@ -26,7 +26,8 @@ zeta-connectors-extension = { workspace = true }
 zeta-core = { workspace = true }
 zeta-mcp = { workspace = true }
 zeta-action-policy = { workspace = true }
-zeta-plugins = { workspace = true }
+zeta-core-plugins = { workspace = true }
+zeta-plugin = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rmcp-client = { workspace = true }
 zeta-secrets = { workspace = true }

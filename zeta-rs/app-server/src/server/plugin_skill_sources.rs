@@ -1,4 +1,4 @@
-use zeta_plugins::PluginActivationAuthority;
+use zeta_core_plugins::PluginActivationAuthority;
 use zeta_protocol::SkillName;
 use zeta_protocol::SkillSourceId;
 use zeta_skills::SkillSourceRoot;

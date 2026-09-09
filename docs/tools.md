@@ -105,9 +105,9 @@ Core durable Tool Call / Tool Result lifecycle
   exact owner 与 unknown-outcome 链；
 - `zeta-extension-api::ReadOnlyToolContributor` 和显式声明 network/credential scope 的
   `CapabilityToolContributor` 已进入同一 registry/policy/runtime；当前 `skills-read` 走前者，
-  `web_search` 走后者并要求 exact one-time approval。`zeta-plugins` 已把验证后的本地 catalog 投影为不可执行的 discovery
-  snapshot，`zeta-tools` 已定义 generation-bound install/enable/connect request；`zeta-plugins` 已能把
-  local package stage、复验并原子 promote 到 content-addressed store，实际安装 authority 仍处于 Proposed；
+  `web_search` 走后者并要求 exact one-time approval。`zeta-core-plugins` 已把验证后的本地 catalog 投影为不可执行的 discovery
+  snapshot，`zeta-tools` 已定义 generation-bound install/enable/connect request；`zeta-core-plugins` 已能把
+  local package stage、复验并原子 promote 到 content-addressed store，安装 authority 位于同一 crate；
 - App Server 以 frozen `ToolBinding` 的 runtime key 执行，不再在执行阶段按 live tool name 猜 source
   service；model invocation 会同时冻结 definitions 与 generation-bound binder，hot reload 只影响后续
   model safe point，已绑定调用保留原 generation 和 policy 直到排空。
@@ -248,7 +248,7 @@ Action classifier、exact grant 与最终 execution decision 见
 ```text
 zeta-tools → zeta-core
 zeta-tools → zeta-mcp live runtime
-zeta-tools → zeta-plugins authority
+zeta-tools → zeta-core-plugins authority
 zeta-tools → zeta-app-server
 zeta-tools → provider HTTP client
 zeta-tools → credential or secret store
@@ -1605,7 +1605,7 @@ ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge �
 - definition、binding、registry snapshot 在 model safe point 冻结；
 - in-flight call 永远按原 binding 执行，不按 name 重查 live registry；
 - MCP wire/lifecycle 属于 `zeta-mcp`，MCP-to-tool pure conversion 属于 `zeta-tools`；
-- Plugin authority/install/grant 属于 `zeta-plugins`，discovery DTO 不拥有 mutation；
+- Plugin authority/install/grant 属于 `zeta-core-plugins`，discovery DTO 不拥有 mutation；
 - tool search 只搜索已安装、已授权、当前可用的 deferred tools；
 - Plugin discovery 不能直接产生 executable ToolDefinition；
 - dynamic tool 不绕过 schema、registry、approval 或 durable interaction；

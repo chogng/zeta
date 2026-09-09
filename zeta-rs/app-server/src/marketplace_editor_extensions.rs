@@ -3,23 +3,23 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde::Deserialize;
+use zeta_core_plugins::AcquireCapabilityRequest;
+use zeta_core_plugins::ActivationSpec;
+use zeta_core_plugins::CapabilityKind;
+use zeta_core_plugins::CapabilityRef;
+use zeta_core_plugins::InstallationState;
+use zeta_core_plugins::ListInstalledRequest;
+use zeta_core_plugins::LocalCapabilitySource;
+use zeta_core_plugins::PackageRef;
+use zeta_core_plugins::PluginPackageService;
+use zeta_core_plugins::PluginsManager;
+use zeta_core_plugins::ReleaseCapabilityRequest;
 use zeta_editor_extension_host::ActivateParams;
 use zeta_editor_extension_host::ActivationAuthority;
 use zeta_editor_extension_host::ActivationLease;
 use zeta_editor_extension_host::ExtensionCapability;
 use zeta_editor_extension_host::ExtensionLaunchCommand;
 use zeta_editor_extension_host::PackageBinding;
-use zeta_marketplace_client::AcquireCapabilityRequest;
-use zeta_marketplace_client::ActivationSpec;
-use zeta_marketplace_client::CapabilityKind;
-use zeta_marketplace_client::CapabilityRef;
-use zeta_marketplace_client::InstallationState;
-use zeta_marketplace_client::ListInstalledRequest;
-use zeta_marketplace_client::MarketplaceServiceClient;
-use zeta_marketplace_client::PackageRef;
-use zeta_marketplace_client::ReleaseCapabilityRequest;
-use zeta_marketplace_manager::LocalCapabilitySource;
-use zeta_marketplace_manager::MarketplaceManager;
 
 use crate::server::extension_host_runtime::source::EditorExtensionDeployment;
 
@@ -90,7 +90,7 @@ pub trait MarketplaceEditorExtensionAdmission: Send + Sync {
 }
 
 pub(crate) fn deployments(
-    manager: &Arc<MarketplaceManager>,
+    manager: &Arc<PluginsManager>,
     admission: &Arc<dyn MarketplaceEditorExtensionAdmission>,
 ) -> Result<Vec<EditorExtensionDeployment>, String> {
     let executable_sources = manager
@@ -129,7 +129,7 @@ pub(crate) fn deployments(
 }
 
 fn deployment(
-    manager: &Arc<MarketplaceManager>,
+    manager: &Arc<PluginsManager>,
     admission: &Arc<dyn MarketplaceEditorExtensionAdmission>,
     source: &LocalCapabilitySource,
     declaration: &MarketplaceEditorExtensionDeclaration,
@@ -296,7 +296,7 @@ fn valid_local_id(value: &str) -> bool {
 }
 
 struct MarketplaceExecutableAuthority {
-    manager: Arc<MarketplaceManager>,
+    manager: Arc<PluginsManager>,
     admission: Arc<dyn MarketplaceEditorExtensionAdmission>,
     binding: MarketplaceEditorExtensionBinding,
 }
@@ -342,7 +342,7 @@ impl ActivationAuthority for MarketplaceExecutableAuthority {
 }
 
 struct MarketplaceExecutableLease {
-    manager: Arc<MarketplaceManager>,
+    manager: Arc<PluginsManager>,
     manager_lease_id: String,
     _admission: Box<dyn MarketplaceEditorExtensionAdmissionLease>,
 }

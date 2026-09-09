@@ -24,7 +24,7 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 /// by the product file, while broker URLs and public client IDs are explicit host inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalProductServicesConfig {
-    pub(crate) marketplace_registry: Option<zeta_marketplace_client::RemoteMarketplaceConfig>,
+    pub(crate) marketplace_registry: Option<zeta_core_plugins::RemoteMarketplaceConfig>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
     authority_identity: [u8; 32],
 }
@@ -57,7 +57,7 @@ impl LocalProductServicesConfig {
                 let trusted_root = read_trusted_root(source_root, &manager.trusted_root)?;
                 authority_identity.update((trusted_root.len() as u64).to_le_bytes());
                 authority_identity.update(&trusted_root);
-                let config = zeta_marketplace_client::RemoteMarketplaceConfig::new(
+                let config = zeta_core_plugins::RemoteMarketplaceConfig::new(
                     Url::parse(&manager.metadata_base_url).map_err(product_config_error)?,
                     Url::parse(&manager.targets_base_url).map_err(product_config_error)?,
                     trusted_root,
@@ -93,9 +93,7 @@ impl LocalProductServicesConfig {
     }
 
     /// Returns the product-pinned remote registry configuration used by Marketplace Manager.
-    pub fn marketplace_registry(
-        &self,
-    ) -> Option<&zeta_marketplace_client::RemoteMarketplaceConfig> {
+    pub fn marketplace_registry(&self) -> Option<&zeta_core_plugins::RemoteMarketplaceConfig> {
         self.marketplace_registry.as_ref()
     }
 
@@ -142,14 +140,14 @@ pub(crate) enum ProductConnectorOAuthConfig {
 struct ProductServicesDocument {
     schema_version: u32,
     #[serde(default)]
-    marketplace_manager: Option<ProductMarketplaceManagerDocument>,
+    marketplace_manager: Option<ProductPluginsManagerDocument>,
     #[serde(default)]
     connector_oauth: Vec<ProductConnectorOAuthDocument>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ProductMarketplaceManagerDocument {
+struct ProductPluginsManagerDocument {
     metadata_base_url: String,
     targets_base_url: String,
     trusted_root: PathBuf,

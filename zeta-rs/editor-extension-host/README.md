@@ -3,7 +3,7 @@
 > 本 README 是 Zeta 原生可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复
 > 实现权威文档。跨 Marketplace/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
 > [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；统一远端 package 身份由
-> [`zeta-rs/marketplace-manager/README.md`](../marketplace-manager/README.md) 维护。
+> [`zeta-rs/core-plugins/README.md`](../core-plugins/README.md) 维护。
 
 `zeta-editor-extension-host` 监管一个已经由上层解析和授权的扩展程序。每个
 `ExtensionHostSupervisor` 最多拥有一个扩展的一个活动进程 incarnation，通过有界 JSONL Host RPC v1

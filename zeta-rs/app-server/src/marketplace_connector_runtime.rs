@@ -6,16 +6,16 @@ use zeta_config::McpServerId;
 use zeta_connectors::ConnectorDefinition;
 use zeta_connectors::ConnectorId;
 use zeta_connectors::ConnectorRuntimeBinding;
-use zeta_marketplace_client::AcquireCapabilityRequest;
-use zeta_marketplace_client::ActivationSpec;
-use zeta_marketplace_client::CapabilityKind;
-use zeta_marketplace_client::CapabilityRef;
-use zeta_marketplace_client::InstallationState;
-use zeta_marketplace_client::ListInstalledRequest;
-use zeta_marketplace_client::MarketplaceServiceClient;
-use zeta_marketplace_client::ReleaseCapabilityRequest;
-use zeta_marketplace_manager::LocalCapabilitySource;
-use zeta_marketplace_manager::MarketplaceManager;
+use zeta_core_plugins::AcquireCapabilityRequest;
+use zeta_core_plugins::ActivationSpec;
+use zeta_core_plugins::CapabilityKind;
+use zeta_core_plugins::CapabilityRef;
+use zeta_core_plugins::InstallationState;
+use zeta_core_plugins::ListInstalledRequest;
+use zeta_core_plugins::LocalCapabilitySource;
+use zeta_core_plugins::PluginPackageService;
+use zeta_core_plugins::PluginsManager;
+use zeta_core_plugins::ReleaseCapabilityRequest;
 use zeta_mcp::McpServerDefinition;
 use zeta_mcp::McpServerTransport;
 use zeta_mcp_extension::ConnectorMcpRuntimeError;
@@ -80,7 +80,7 @@ impl ConnectorMcpRuntimeProvider for CombinedConnectorMcpRuntimeProvider {
 }
 
 impl MarketplaceConnectorProjection {
-    pub(crate) fn from_manager(manager: Arc<MarketplaceManager>) -> Result<Self, String> {
+    pub(crate) fn from_manager(manager: Arc<PluginsManager>) -> Result<Self, String> {
         let mcp_sources = manager
             .local_capability_sources(CapabilityKind::Mcp)
             .map_err(|error| error.to_string())?;
@@ -187,7 +187,7 @@ impl MarketplaceConnectorProjection {
 }
 
 struct MarketplaceConnectorMcpRuntimeProvider {
-    manager: Arc<MarketplaceManager>,
+    manager: Arc<PluginsManager>,
     servers: BTreeMap<McpServerId, MarketplaceMcpServer>,
     connector_servers: BTreeMap<ConnectorId, McpServerId>,
     referenced_servers: BTreeSet<McpServerId>,
@@ -256,7 +256,7 @@ struct MarketplaceMcpServer {
 }
 
 struct MarketplaceInvocationFence {
-    manager: Arc<MarketplaceManager>,
+    manager: Arc<PluginsManager>,
     capability: CapabilityRef,
 }
 
@@ -296,7 +296,7 @@ impl RuntimeInvocationFence for MarketplaceInvocationFence {
 }
 
 struct MarketplaceInvocationLease {
-    manager: Arc<MarketplaceManager>,
+    manager: Arc<PluginsManager>,
     lease_id: String,
 }
 

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use zeta_marketplace_client::CapabilityKind;
-use zeta_marketplace_manager::MarketplaceManager;
+use zeta_core_plugins::CapabilityKind;
+use zeta_core_plugins::PluginsManager;
 use zeta_protocol::SkillName;
 use zeta_protocol::SkillSourceId;
 use zeta_skills::SkillSourceRoot;
@@ -11,7 +11,7 @@ use zeta_skills_extension::DynamicSkillSourceSnapshot;
 
 /// Projects installed Marketplace Skill capabilities into the shared Skill runtime.
 pub(super) struct MarketplaceSkillSourceProvider {
-    manager: Arc<MarketplaceManager>,
+    manager: Arc<PluginsManager>,
     state: Mutex<ProjectionState>,
 }
 
@@ -22,7 +22,7 @@ struct ProjectionState {
 }
 
 impl MarketplaceSkillSourceProvider {
-    pub(super) fn new(manager: Arc<MarketplaceManager>) -> Self {
+    pub(super) fn new(manager: Arc<PluginsManager>) -> Self {
         Self {
             manager,
             state: Mutex::new(ProjectionState::default()),

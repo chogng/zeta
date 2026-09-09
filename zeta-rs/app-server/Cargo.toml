@@ -65,15 +65,14 @@ zeta-kimi = { workspace = true }
 zeta-lsp-server-provider = { workspace = true }
 zeta-lsp-manager = { workspace = true }
 zeta-login = { workspace = true }
-zeta-marketplace-client = { workspace = true }
-zeta-marketplace-manager = { workspace = true }
+zeta-core-plugins = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-models-manager = { workspace = true }
 zeta-prompts = { workspace = true }
 zeta-action-policy = { workspace = true }
 zeta-execpolicy = { workspace = true }
-zeta-plugins = { workspace = true }
+zeta-plugin = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-projects = { workspace = true }
 zeta-rollout = { workspace = true }

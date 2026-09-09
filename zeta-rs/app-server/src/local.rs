@@ -44,6 +44,8 @@ use zeta_core::ModelService;
 use zeta_core::ModelStreamSink as CoreModelStreamSink;
 use zeta_core::ResolvedContextBudget;
 use zeta_core::ThreadController;
+use zeta_core_plugins::PluginActivationAuthority;
+use zeta_core_plugins::PluginActivationSnapshot;
 use zeta_extensions::ExtensionRoot;
 use zeta_file_access::Dir;
 use zeta_file_access::Permission as DirPermission;
@@ -80,8 +82,6 @@ use zeta_models_manager::CatalogQuery;
 use zeta_models_manager::CatalogScopeKey;
 use zeta_models_manager::ModelRequirements;
 use zeta_models_manager::ModelsManager;
-use zeta_plugins::PluginActivationAuthority;
-use zeta_plugins::PluginActivationSnapshot;
 use zeta_protocol::ContextWindow;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelBillingScope;
@@ -110,8 +110,8 @@ pub struct LocalAppServerOptions {
     web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
     connector_runtime: Option<LocalConnectorRuntime>,
     mcp_oauth_providers: Vec<(McpServerId, Arc<dyn McpOAuthProvider>)>,
-    marketplace_manager_client: Option<Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>>,
-    local_marketplace_manager: Option<Arc<zeta_marketplace_manager::MarketplaceManager>>,
+    plugin_package_service: Option<Arc<dyn zeta_core_plugins::PluginPackageService>>,
+    plugins_manager: Option<Arc<zeta_core_plugins::PluginsManager>>,
     language_server_providers: zeta_lsp_server_provider::LspServerProviders,
     product_services: Option<crate::LocalProductServicesConfig>,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
@@ -141,8 +141,8 @@ impl LocalAppServerOptions {
             web_search_backend: None,
             connector_runtime: None,
             mcp_oauth_providers: Vec::new(),
-            marketplace_manager_client: None,
-            local_marketplace_manager: None,
+            plugin_package_service: None,
+            plugins_manager: None,
             language_server_providers: zeta_lsp_server_provider::LspServerProviders::new(),
             product_services: None,
             profile_runtime: None,
@@ -279,34 +279,34 @@ impl LocalAppServerOptions {
         Ok(self.with_connector_runtime(runtime))
     }
 
-    /// Installs the product-facing client for the local Marketplace Manager.
-    pub fn with_marketplace_manager_client(
+    /// Installs a Plugin package service when no local Plugins Manager is available.
+    pub fn with_plugin_package_service(
         mut self,
-        client: Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>,
+        service: Arc<dyn zeta_core_plugins::PluginPackageService>,
     ) -> Self {
-        self.local_marketplace_manager = None;
-        self.marketplace_manager_client = Some(client);
+        self.plugins_manager = None;
+        self.plugin_package_service = Some(service);
         self
     }
 
-    /// Composes Zeta's local Marketplace Manager with one product-pinned remote registry.
+    /// Composes Zeta's Plugins Manager with its product-pinned registry source.
     pub fn with_marketplace_registry(
         self,
-        config: zeta_marketplace_client::RemoteMarketplaceConfig,
+        config: zeta_core_plugins::RemoteMarketplaceConfig,
     ) -> Result<Self, OpenAppServerError> {
-        let registry = zeta_marketplace_client::MarketplaceRemoteClient::open(config)
+        let registry = zeta_core_plugins::MarketplaceRemoteClient::open(config)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
         let manager = Arc::new(
-            zeta_marketplace_manager::MarketplaceManager::open(
+            zeta_core_plugins::PluginsManager::open(
                 self.profile_root.join("marketplace-manager"),
                 Arc::new(registry),
             )
             .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
-        let client: Arc<dyn zeta_marketplace_client::MarketplaceServiceClient> = manager.clone();
+        let client: Arc<dyn zeta_core_plugins::PluginPackageService> = manager.clone();
         Ok(Self {
-            marketplace_manager_client: Some(client),
-            local_marketplace_manager: Some(manager),
+            plugin_package_service: Some(client),
+            plugins_manager: Some(manager),
             ..self
         })
     }
@@ -357,13 +357,10 @@ impl fmt::Debug for LocalAppServerOptions {
             )
             .field("mcp_oauth_provider_count", &self.mcp_oauth_providers.len())
             .field(
-                "marketplace_manager_client_injected",
-                &self.marketplace_manager_client.is_some(),
+                "plugin_package_service_injected",
+                &self.plugin_package_service.is_some(),
             )
-            .field(
-                "local_marketplace_manager_injected",
-                &self.local_marketplace_manager.is_some(),
-            )
+            .field("plugins_manager_injected", &self.plugins_manager.is_some())
             .field(
                 "language_server_provider_count",
                 &self.language_server_providers.len(),
@@ -418,18 +415,12 @@ impl PartialEq for LocalAppServerOptions {
                 .all(|((left_id, left), (right_id, right))| {
                     left_id == right_id && Arc::ptr_eq(left, right)
                 })
-            && match (
-                &self.marketplace_manager_client,
-                &other.marketplace_manager_client,
-            ) {
+            && match (&self.plugin_package_service, &other.plugin_package_service) {
                 (Some(left), Some(right)) => Arc::ptr_eq(left, right),
                 (None, None) => true,
                 _ => false,
             }
-            && match (
-                &self.local_marketplace_manager,
-                &other.local_marketplace_manager,
-            ) {
+            && match (&self.plugins_manager, &other.plugins_manager) {
                 (Some(left), Some(right)) => Arc::ptr_eq(left, right),
                 (None, None) => true,
                 _ => false,
@@ -453,7 +444,7 @@ pub struct LocalConnectorRuntime {
     base_definitions: Vec<zeta_connectors::ConnectorDefinition>,
     base_mcp: Arc<dyn ConnectorMcpRuntimeProvider>,
     plugin_authority: Option<PluginActivationAuthority>,
-    marketplace_manager: Option<Arc<zeta_marketplace_manager::MarketplaceManager>>,
+    plugins_manager: Option<Arc<zeta_core_plugins::PluginsManager>>,
     oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
     device_oauth: Option<Arc<zeta_connectors_extension::ConnectorDeviceOAuthService>>,
 }
@@ -478,7 +469,7 @@ impl LocalConnectorRuntime {
             base_definitions,
             base_mcp: mcp,
             plugin_authority: None,
-            marketplace_manager: None,
+            plugins_manager: None,
             oauth: None,
             device_oauth: None,
         }
@@ -587,17 +578,17 @@ impl LocalConnectorRuntime {
                 .collect(),
             base_mcp: mcp,
             plugin_authority: Some(plugin_authority),
-            marketplace_manager: None,
+            plugins_manager: None,
             oauth: None,
             device_oauth: None,
         })
     }
 
-    fn bind_marketplace_manager(
+    fn bind_plugins_manager(
         &mut self,
-        manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+        manager: Arc<zeta_core_plugins::PluginsManager>,
     ) -> Result<(), OpenAppServerError> {
-        self.marketplace_manager = Some(manager);
+        self.plugins_manager = Some(manager);
         self.reconcile_sources()
     }
 
@@ -628,7 +619,7 @@ impl LocalConnectorRuntime {
     fn reconcile_sources(&mut self) -> Result<(), OpenAppServerError> {
         let mut definitions = self.base_definitions.clone();
         self.mcp = Arc::clone(&self.base_mcp);
-        if let Some(manager) = &self.marketplace_manager {
+        if let Some(manager) = &self.plugins_manager {
             let projection =
                 crate::marketplace_connector_runtime::MarketplaceConnectorProjection::from_manager(
                     Arc::clone(manager),
@@ -718,8 +709,8 @@ pub struct LocalProfileRuntime {
 }
 
 struct ProfileMarketplaceAuthority {
-    config: zeta_marketplace_client::RemoteMarketplaceConfig,
-    manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+    config: zeta_core_plugins::RemoteMarketplaceConfig,
+    manager: Arc<zeta_core_plugins::PluginsManager>,
     _watcher: Option<crate::server::marketplace_runtime::MarketplaceChangeWatcher>,
 }
 
@@ -828,10 +819,10 @@ impl LocalProfileRuntime {
         ))
     }
 
-    fn marketplace_manager(
+    fn plugins_manager(
         &self,
-        config: zeta_marketplace_client::RemoteMarketplaceConfig,
-    ) -> Result<Arc<zeta_marketplace_manager::MarketplaceManager>, OpenAppServerError> {
+        config: zeta_core_plugins::RemoteMarketplaceConfig,
+    ) -> Result<Arc<zeta_core_plugins::PluginsManager>, OpenAppServerError> {
         let mut marketplace = self
             .marketplace
             .lock()
@@ -844,10 +835,10 @@ impl LocalProfileRuntime {
                 "one profile runtime cannot use multiple Marketplace authorities".into(),
             ));
         }
-        let registry = zeta_marketplace_client::MarketplaceRemoteClient::open(config.clone())
+        let registry = zeta_core_plugins::MarketplaceRemoteClient::open(config.clone())
             .map_err(|error| OpenAppServerError(error.to_string()))?;
         let manager = Arc::new(
-            zeta_marketplace_manager::MarketplaceManager::open(
+            zeta_core_plugins::PluginsManager::open(
                 self.profile_root.join("marketplace-manager"),
                 Arc::new(registry),
             )
@@ -916,24 +907,23 @@ pub fn open_local_app_server_with_codebase_providers(
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
     let fast_regex_worker_command = options.fast_regex_worker_command.take();
-    if options.marketplace_manager_client.is_none()
+    if options.plugin_package_service.is_none()
         && let Some(registry) = product_services
             .as_ref()
             .and_then(crate::LocalProductServicesConfig::marketplace_registry)
             .cloned()
     {
         if let Some(runtime) = &options.profile_runtime {
-            let manager = runtime.marketplace_manager(registry)?;
-            let client: Arc<dyn zeta_marketplace_client::MarketplaceServiceClient> =
-                manager.clone();
-            options.marketplace_manager_client = Some(client);
-            options.local_marketplace_manager = Some(manager);
+            let manager = runtime.plugins_manager(registry)?;
+            let client: Arc<dyn zeta_core_plugins::PluginPackageService> = manager.clone();
+            options.plugin_package_service = Some(client);
+            options.plugins_manager = Some(manager);
         } else {
             options = options.with_marketplace_registry(registry)?;
         }
     }
-    let marketplace_manager_client = options.marketplace_manager_client.take();
-    let local_marketplace_manager = options.local_marketplace_manager.take();
+    let plugin_package_service = options.plugin_package_service.take();
+    let plugins_manager = options.plugins_manager.take();
     let mcp_oauth_providers = std::mem::take(&mut options.mcp_oauth_providers);
     let profile_runtime = options.profile_runtime.take();
     if profile_runtime.is_some() && options.session_state_mode != SessionStateMode::Durable {
@@ -1046,11 +1036,11 @@ pub fn open_local_app_server_with_codebase_providers(
             )?)
         }
     };
-    if let (Some(runtime), Some(manager)) = (&mut connector_runtime, &local_marketplace_manager) {
-        runtime.bind_marketplace_manager(Arc::clone(manager))?;
+    if let (Some(runtime), Some(manager)) = (&mut connector_runtime, &plugins_manager) {
+        runtime.bind_plugins_manager(Arc::clone(manager))?;
     }
     let managed_node = ManagedNodeRuntime::from_install_context(&InstallContext::current()).ok();
-    let marketplace_language_runtime = local_marketplace_manager.as_ref().map(|manager| {
+    let marketplace_language_runtime = plugins_manager.as_ref().map(|manager| {
         crate::server::marketplace_language_runtime::MarketplaceLanguageRuntime::new(
             Arc::clone(manager),
             managed_node,
@@ -1239,14 +1229,14 @@ pub fn open_local_app_server_with_codebase_providers(
             .with_marketplace_language_runtime(runtime)
             .map_err(OpenAppServerError)?;
     }
-    if let Some(manager) = local_marketplace_manager {
+    if let Some(manager) = plugins_manager {
         server = if profile_runtime.is_some() {
-            server.with_profile_marketplace_manager(manager)
+            server.with_profile_plugins_manager(manager)
         } else {
-            server.with_local_marketplace_manager(manager)
+            server.with_plugins_manager(manager)
         };
-    } else if let Some(client) = marketplace_manager_client {
-        server = server.with_marketplace_manager_client(client);
+    } else if let Some(client) = plugin_package_service {
+        server = server.with_plugin_package_service(client);
     }
     let mcp_updates = McpCatalogUpdates::default();
     let mcp_changes = mcp_updates.subscribe();
@@ -1418,7 +1408,7 @@ impl ToolConfigWatcher {
             .map(PluginActivationAuthority::subscribe);
         let marketplace_changes = connector_runtime
             .as_ref()
-            .and_then(|runtime| runtime.marketplace_manager.as_ref())
+            .and_then(|runtime| runtime.plugins_manager.as_ref())
             .and_then(|manager| manager.subscribe().ok());
         let mut plugin_activation_generation = connector_runtime
             .as_ref()

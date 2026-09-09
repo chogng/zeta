@@ -2,7 +2,7 @@ use super::update_broker::UpdateBroker;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use zeta_plugins::PluginActivationAuthority;
+use zeta_core_plugins::PluginActivationAuthority;
 use zeta_skills_extension::SkillCatalogReload;
 use zeta_skills_extension::SkillRuntime;
 

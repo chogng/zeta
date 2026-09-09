@@ -10989,6 +10989,7 @@ dependencies = [
  "zeta-connectors-extension",
  "zeta-content-search",
  "zeta-core",
+ "zeta-core-plugins",
  "zeta-debug-adapter",
  "zeta-diff",
  "zeta-editor-extension-host",
@@ -11010,15 +11011,13 @@ dependencies = [
  "zeta-login",
  "zeta-lsp-manager",
  "zeta-lsp-server-provider",
- "zeta-marketplace-client",
- "zeta-marketplace-manager",
  "zeta-mcp",
  "zeta-mcp-extension",
  "zeta-memory-diagnostics",
  "zeta-model-provider",
  "zeta-model-provider-config",
  "zeta-models-manager",
- "zeta-plugins",
+ "zeta-plugin",
  "zeta-projects",
  "zeta-prompts",
  "zeta-protocol",
@@ -11401,8 +11400,9 @@ dependencies = [
  "url",
  "zeroize",
  "zeta-connectors",
+ "zeta-core-plugins",
  "zeta-http-client",
- "zeta-plugins",
+ "zeta-plugin",
  "zeta-secrets",
  "zeta-state",
  "zeta-tools",
@@ -11448,6 +11448,28 @@ dependencies = [
  "zeta-utils-image",
  "zeta-utils-stream-parser",
  "zeta-utils-template",
+]
+
+[[package]]
+name = "zeta-core-plugins"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "flate2",
+ "getrandom 0.2.17",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tough",
+ "url",
+ "zeta-file-identity",
+ "zeta-plugin",
+ "zeta-tools",
+ "zeta-utils-path",
+ "zip 4.6.1",
 ]
 
 [[package]]
@@ -11893,34 +11915,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-marketplace-client"
-version = "0.1.0"
-dependencies = [
- "flate2",
- "semver",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tough",
- "url",
- "zip 4.6.1",
-]
-
-[[package]]
-name = "zeta-marketplace-manager"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "url",
- "zeta-marketplace-client",
-]
-
-[[package]]
 name = "zeta-mcp"
 version = "0.1.0"
 dependencies = [
@@ -11954,8 +11948,9 @@ dependencies = [
  "zeta-connectors",
  "zeta-connectors-extension",
  "zeta-core",
+ "zeta-core-plugins",
  "zeta-mcp",
- "zeta-plugins",
+ "zeta-plugin",
  "zeta-protocol",
  "zeta-rmcp-client",
  "zeta-secrets",
@@ -12091,18 +12086,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-plugins"
+name = "zeta-plugin"
 version = "0.1.0"
 dependencies = [
- "getrandom 0.2.17",
  "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
- "zeta-file-identity",
- "zeta-tools",
- "zeta-utils-path",
 ]
 
 [[package]]

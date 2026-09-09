@@ -50,7 +50,7 @@ fn product_services_loads_public_oauth_and_pins_marketplace_root() {
 }
 
 #[test]
-fn production_product_services_delegates_to_the_marketplace_manager() {
+fn production_product_services_delegates_to_the_plugins_manager() {
     let product_services = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../resources/product-services/product-services.json");
     let profile = TempDir::new().unwrap();

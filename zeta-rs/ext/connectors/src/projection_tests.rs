@@ -4,7 +4,7 @@ use zeta_connectors::ConnectorConnectionGeneration;
 use zeta_connectors::ConnectorConnectionUpdate;
 use zeta_connectors::ConnectorCredentialRef;
 use zeta_connectors::ConnectorSnapshotGeneration;
-use zeta_plugins::PluginManifest;
+use zeta_plugin::PluginManifest;
 use zeta_tools::DiscoverableCapability;
 use zeta_tools::DiscoveryAction;
 

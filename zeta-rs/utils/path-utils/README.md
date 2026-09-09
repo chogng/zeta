@@ -75,7 +75,7 @@ bazel test //zeta-rs/utils/path-utils:path-utils-unit-tests
 ```
 
 修改 WSL、containment、symlink 或 atomic-write failure semantics 时必须同步更新
-`path_utils_tests.rs` 和本 README。`zeta-agent-import` 消费 canonical containment；`zeta-state`、`zeta-secrets`、`zeta-attachments` 与 `zeta-plugins` 消费 no-follow inspection，并分别拥有索引、secret、attachment 与 package store 的操作策略。
+`path_utils_tests.rs` 和本 README。`zeta-agent-import` 消费 canonical containment；`zeta-state`、`zeta-secrets`、`zeta-attachments` 与 `zeta-core-plugins` 消费 no-follow inspection，并分别拥有索引、secret、attachment 与 package store 的操作策略。
 
 ## 当前限制与扩展点
 

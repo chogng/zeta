@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use serde_json::json;
-use zeta_marketplace_client::MarketplaceServiceClient;
+use zeta_core_plugins::PluginPackageService;
 
 use super::AppServer;
 use crate::local::ProviderModelService;
@@ -20,7 +20,7 @@ fn app_server_exposes_only_the_manager_business_contract() {
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
-    .with_marketplace_manager_client(Arc::new(FakeMarketplaceManager));
+    .with_plugin_package_service(Arc::new(FakePluginsManager));
     let mut connection = server.connection();
     let initialized = call(
         &server,
@@ -173,18 +173,16 @@ fn app_server_exposes_only_the_manager_business_contract() {
     assert_eq!(changed_after_disconnect["params"]["generation"], 4);
 }
 
-struct FakeMarketplaceManager;
+struct FakePluginsManager;
 
-impl MarketplaceServiceClient for FakeMarketplaceManager {
+impl PluginPackageService for FakePluginsManager {
     fn search(
         &self,
-        _: zeta_marketplace_client::SearchPackagesRequest,
-    ) -> Result<
-        zeta_marketplace_client::SearchPackagesResult,
-        zeta_marketplace_client::MarketplaceClientError,
-    > {
-        Ok(zeta_marketplace_client::SearchPackagesResult {
-            packages: vec![zeta_marketplace_client::PackageSummary {
+        _: zeta_core_plugins::SearchPackagesRequest,
+    ) -> Result<zeta_core_plugins::SearchPackagesResult, zeta_core_plugins::MarketplaceClientError>
+    {
+        Ok(zeta_core_plugins::SearchPackagesResult {
+            packages: vec![zeta_core_plugins::PackageSummary {
                 id: "marketplace/github".to_owned(),
                 version: "1.1.0".to_owned(),
                 package_type: "plugin".to_owned(),
@@ -196,13 +194,10 @@ impl MarketplaceServiceClient for FakeMarketplaceManager {
 
     fn get(
         &self,
-        _: zeta_marketplace_client::GetPackageRequest,
-    ) -> Result<
-        zeta_marketplace_client::PackageDetails,
-        zeta_marketplace_client::MarketplaceClientError,
-    > {
-        Ok(zeta_marketplace_client::PackageDetails {
-            package: zeta_marketplace_client::PackageRef {
+        _: zeta_core_plugins::GetPackageRequest,
+    ) -> Result<zeta_core_plugins::PackageDetails, zeta_core_plugins::MarketplaceClientError> {
+        Ok(zeta_core_plugins::PackageDetails {
+            package: zeta_core_plugins::PackageRef {
                 id: "marketplace/docs-mcp".to_owned(),
                 version: "1.2.3".to_owned(),
                 digest: format!("sha256:{}", "b".repeat(64)),
@@ -211,9 +206,9 @@ impl MarketplaceServiceClient for FakeMarketplaceManager {
             display_name: "Docs MCP".to_owned(),
             description: "Search documentation".to_owned(),
             license: "MIT".to_owned(),
-            source: zeta_marketplace_client::PackageSource::ThirdParty,
-            upstream: Some(zeta_marketplace_client::UpstreamReference {
-                registry: zeta_marketplace_client::UpstreamRegistry::OfficialMcp,
+            source: zeta_core_plugins::PackageSource::ThirdParty,
+            upstream: Some(zeta_core_plugins::UpstreamReference {
+                registry: zeta_core_plugins::UpstreamRegistry::OfficialMcp,
                 name: "ac.example/docs-mcp".to_owned(),
                 version: "1.2.3".to_owned(),
                 record_url: "https://registry.modelcontextprotocol.io/v0.1/servers/ac.example%2Fdocs-mcp/versions/1.2.3".to_owned(),
@@ -225,34 +220,29 @@ impl MarketplaceServiceClient for FakeMarketplaceManager {
 
     fn download(
         &self,
-        _: zeta_marketplace_client::DownloadPackageRequest,
-    ) -> Result<
-        zeta_marketplace_client::ArtifactHandle,
-        zeta_marketplace_client::MarketplaceClientError,
-    > {
+        _: zeta_core_plugins::DownloadPackageRequest,
+    ) -> Result<zeta_core_plugins::ArtifactHandle, zeta_core_plugins::MarketplaceClientError> {
         unimplemented!()
     }
 
     fn install(
         &self,
-        _: zeta_marketplace_client::InstallPackageRequest,
-    ) -> Result<
-        zeta_marketplace_client::InstalledPackage,
-        zeta_marketplace_client::MarketplaceClientError,
-    > {
-        Ok(zeta_marketplace_client::InstalledPackage {
+        _: zeta_core_plugins::InstallPackageRequest,
+    ) -> Result<zeta_core_plugins::InstalledPackage, zeta_core_plugins::MarketplaceClientError>
+    {
+        Ok(zeta_core_plugins::InstalledPackage {
             installation_id: "ins_opaque".to_owned(),
-            package: zeta_marketplace_client::PackageRef {
+            package: zeta_core_plugins::PackageRef {
                 id: "marketplace/github".to_owned(),
                 version: "1.1.0".to_owned(),
                 digest: format!("sha256:{}", "a".repeat(64)),
             },
-            state: zeta_marketplace_client::InstallationState::Installed,
-            capabilities: vec![zeta_marketplace_client::CapabilityDescriptor {
-                reference: zeta_marketplace_client::CapabilityRef {
+            state: zeta_core_plugins::InstallationState::Installed,
+            capabilities: vec![zeta_core_plugins::CapabilityDescriptor {
+                reference: zeta_core_plugins::CapabilityRef {
                     id: "cap_opaque".to_owned(),
                 },
-                kind: zeta_marketplace_client::CapabilityKind::Skill,
+                kind: zeta_core_plugins::CapabilityKind::Skill,
                 id: "github".to_owned(),
                 contract_version: "1".to_owned(),
                 permissions: Vec::new(),
@@ -263,59 +253,53 @@ impl MarketplaceServiceClient for FakeMarketplaceManager {
 
     fn update(
         &self,
-        _: zeta_marketplace_client::UpdatePackageRequest,
-    ) -> Result<
-        zeta_marketplace_client::InstalledPackage,
-        zeta_marketplace_client::MarketplaceClientError,
-    > {
+        _: zeta_core_plugins::UpdatePackageRequest,
+    ) -> Result<zeta_core_plugins::InstalledPackage, zeta_core_plugins::MarketplaceClientError>
+    {
         unimplemented!()
     }
 
     fn uninstall(
         &self,
-        _: zeta_marketplace_client::UninstallPackageRequest,
-    ) -> Result<(), zeta_marketplace_client::MarketplaceClientError> {
+        _: zeta_core_plugins::UninstallPackageRequest,
+    ) -> Result<(), zeta_core_plugins::MarketplaceClientError> {
         unimplemented!()
     }
 
     fn list_installed(
         &self,
-        _: zeta_marketplace_client::ListInstalledRequest,
-    ) -> Result<
-        Vec<zeta_marketplace_client::InstalledPackage>,
-        zeta_marketplace_client::MarketplaceClientError,
-    > {
-        Ok(vec![zeta_marketplace_client::InstalledPackage {
+        _: zeta_core_plugins::ListInstalledRequest,
+    ) -> Result<Vec<zeta_core_plugins::InstalledPackage>, zeta_core_plugins::MarketplaceClientError>
+    {
+        Ok(vec![zeta_core_plugins::InstalledPackage {
             installation_id: "ins_opaque".to_owned(),
-            package: zeta_marketplace_client::PackageRef {
+            package: zeta_core_plugins::PackageRef {
                 id: "marketplace/github".to_owned(),
                 version: "1.1.0".to_owned(),
                 digest: format!("sha256:{}", "a".repeat(64)),
             },
-            state: zeta_marketplace_client::InstallationState::Installed,
+            state: zeta_core_plugins::InstallationState::Installed,
             capabilities: Vec::new(),
         }])
     }
 
     fn acquire_capability(
         &self,
-        _: zeta_marketplace_client::AcquireCapabilityRequest,
-    ) -> Result<
-        zeta_marketplace_client::AcquiredCapability,
-        zeta_marketplace_client::MarketplaceClientError,
-    > {
-        Ok(zeta_marketplace_client::AcquiredCapability {
-            lease: zeta_marketplace_client::CapabilityLease {
+        _: zeta_core_plugins::AcquireCapabilityRequest,
+    ) -> Result<zeta_core_plugins::AcquiredCapability, zeta_core_plugins::MarketplaceClientError>
+    {
+        Ok(zeta_core_plugins::AcquiredCapability {
+            lease: zeta_core_plugins::CapabilityLease {
                 id: "lease_opaque".to_owned(),
-                capability: zeta_marketplace_client::CapabilityRef {
+                capability: zeta_core_plugins::CapabilityRef {
                     id: "cap_opaque".to_owned(),
                 },
                 installation_id: "ins_opaque".to_owned(),
             },
-            spec: zeta_marketplace_client::ActivationSpec::Skill(
-                zeta_marketplace_client::SkillActivationSpec {
+            spec: zeta_core_plugins::ActivationSpec::Skill(
+                zeta_core_plugins::SkillActivationSpec {
                     contract_version: "1".to_owned(),
-                    resource: zeta_marketplace_client::ResourceRef {
+                    resource: zeta_core_plugins::ResourceRef {
                         id: "res_opaque".to_owned(),
                     },
                 },
@@ -325,23 +309,20 @@ impl MarketplaceServiceClient for FakeMarketplaceManager {
 
     fn release_capability(
         &self,
-        _: zeta_marketplace_client::ReleaseCapabilityRequest,
+        _: zeta_core_plugins::ReleaseCapabilityRequest,
     ) -> Result<
-        zeta_marketplace_client::ReleaseCapabilityOutcome,
-        zeta_marketplace_client::MarketplaceClientError,
+        zeta_core_plugins::ReleaseCapabilityOutcome,
+        zeta_core_plugins::MarketplaceClientError,
     > {
-        Ok(zeta_marketplace_client::ReleaseCapabilityOutcome {
+        Ok(zeta_core_plugins::ReleaseCapabilityOutcome {
             installation_changed: true,
         })
     }
 
     fn open_resource(
         &self,
-        _: zeta_marketplace_client::OpenResourceRequest,
-    ) -> Result<
-        zeta_marketplace_client::ResourceContent,
-        zeta_marketplace_client::MarketplaceClientError,
-    > {
+        _: zeta_core_plugins::OpenResourceRequest,
+    ) -> Result<zeta_core_plugins::ResourceContent, zeta_core_plugins::MarketplaceClientError> {
         unimplemented!()
     }
 }

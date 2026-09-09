@@ -1,10 +1,10 @@
 use std::fs;
 use tempfile::tempdir;
-use zeta_plugins::LocalPluginPackage;
-use zeta_plugins::PluginActivationAuthority;
-use zeta_plugins::PluginAuthorityCommand;
-use zeta_plugins::PluginAuthorityCommandId;
-use zeta_plugins::PluginAuthorityCommandRequest;
+use zeta_core_plugins::PluginActivationAuthority;
+use zeta_core_plugins::PluginAuthorityCommand;
+use zeta_core_plugins::PluginAuthorityCommandId;
+use zeta_core_plugins::PluginAuthorityCommandRequest;
+use zeta_plugin::LocalPluginPackage;
 use zeta_skills_extension::DynamicSkillSourceProvider;
 
 use super::PluginSkillSourceProvider;

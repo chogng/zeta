@@ -133,7 +133,7 @@ normalization seam、built-in → dynamic → user
 precedence、不可变单代 snapshot、完整 package digest、typed diagnostic/error 与有代次约束的 bounded
 resource read 已实现。当前不持久化 catalog，不保留旧 generation，也不自行提供远端 registry、下载、
 enable/disable、signature/revocation、permission grant 或任意代码执行；这些 lifecycle decisions 由
-provider 上游的 Marketplace Manager 或 legacy `zeta-plugins` authority 完成。Executable Editor Extension 由独立的
+provider 上游的 `zeta-core-plugins` authority 完成。Executable Editor Extension 由独立的
 [`zeta-editor-extension-host`](../editor-extension-host/README.md) 监管；静态 catalog 不会隐式进入该
 执行边界。
 

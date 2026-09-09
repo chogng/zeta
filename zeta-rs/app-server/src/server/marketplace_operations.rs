@@ -12,23 +12,23 @@ use zeta_app_server_protocol::protocol::marketplace::MarketplaceSearchParams;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceUninstallModeDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceUninstallParams;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceUpdateParams;
+use zeta_core_plugins::AcquireCapabilityRequest;
+use zeta_core_plugins::CapabilityRef;
+use zeta_core_plugins::DownloadPackageRequest;
+use zeta_core_plugins::GetPackageRequest;
+use zeta_core_plugins::InstallPackageRequest;
+use zeta_core_plugins::ListInstalledRequest;
+use zeta_core_plugins::MarketplaceClientError;
+use zeta_core_plugins::MarketplaceClientErrorKind;
+use zeta_core_plugins::MarketplaceErrorCode;
+use zeta_core_plugins::OpenResourceRequest;
+use zeta_core_plugins::ReleaseCapabilityRequest;
+use zeta_core_plugins::ResourceRef;
+use zeta_core_plugins::SearchPackagesRequest;
+use zeta_core_plugins::UninstallMode;
+use zeta_core_plugins::UninstallPackageRequest;
+use zeta_core_plugins::UpdatePackageRequest;
 use zeta_extensions::ExtensionCatalogReload;
-use zeta_marketplace_client::AcquireCapabilityRequest;
-use zeta_marketplace_client::CapabilityRef;
-use zeta_marketplace_client::DownloadPackageRequest;
-use zeta_marketplace_client::GetPackageRequest;
-use zeta_marketplace_client::InstallPackageRequest;
-use zeta_marketplace_client::ListInstalledRequest;
-use zeta_marketplace_client::MarketplaceClientError;
-use zeta_marketplace_client::MarketplaceClientErrorKind;
-use zeta_marketplace_client::MarketplaceErrorCode;
-use zeta_marketplace_client::OpenResourceRequest;
-use zeta_marketplace_client::ReleaseCapabilityRequest;
-use zeta_marketplace_client::ResourceRef;
-use zeta_marketplace_client::SearchPackagesRequest;
-use zeta_marketplace_client::UninstallMode;
-use zeta_marketplace_client::UninstallPackageRequest;
-use zeta_marketplace_client::UpdatePackageRequest;
 use zeta_skills_extension::SkillCatalogReload;
 
 use super::AppServer;
@@ -42,7 +42,7 @@ impl AppServer {
     pub(super) fn marketplace_search(&self, params: &Value) -> Result<Value, RpcError> {
         let params: MarketplaceSearchParams = decode(params)?;
         let found = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .search(SearchPackagesRequest {
                 query: params.query,
                 package_type: params.package_type,
@@ -55,7 +55,7 @@ impl AppServer {
     pub(super) fn marketplace_get(&self, params: &Value) -> Result<Value, RpcError> {
         let params: MarketplaceGetParams = decode(params)?;
         let details = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .get(GetPackageRequest {
                 package_id: params.package_id,
                 version: params.version,
@@ -67,7 +67,7 @@ impl AppServer {
     pub(super) fn marketplace_download(&self, params: &Value) -> Result<Value, RpcError> {
         let params: MarketplaceDownloadParams = decode(params)?;
         let artifact = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .download(DownloadPackageRequest {
                 package_id: params.package_id,
                 version: params.version,
@@ -80,7 +80,7 @@ impl AppServer {
         let params: MarketplaceInstallParams = decode(params)?;
         let _change = self.updates.lock_marketplace_change();
         let installed = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .install(InstallPackageRequest {
                 package_id: params.package_id,
                 version: params.version,
@@ -95,7 +95,7 @@ impl AppServer {
         let params: MarketplaceUpdateParams = decode(params)?;
         let _change = self.updates.lock_marketplace_change();
         let installed = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .update(UpdatePackageRequest {
                 installation_id: params.installation_id,
                 version: params.version,
@@ -109,7 +109,7 @@ impl AppServer {
     pub(super) fn marketplace_uninstall(&self, params: &Value) -> Result<Value, RpcError> {
         let params: MarketplaceUninstallParams = decode(params)?;
         let _change = self.updates.lock_marketplace_change();
-        self.marketplace_manager()?
+        self.plugin_packages()?
             .uninstall(UninstallPackageRequest {
                 installation_id: params.installation_id,
                 mode: match params.mode {
@@ -126,7 +126,7 @@ impl AppServer {
     pub(super) fn marketplace_list_installed(&self, params: &Value) -> Result<Value, RpcError> {
         let _: EmptyParams = decode(params)?;
         let packages = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .list_installed(ListInstalledRequest {})
             .map_err(marketplace_error)?
             .into_iter()
@@ -146,7 +146,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: MarketplaceAcquireCapabilityParams = decode(params)?;
         let acquired = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .acquire_capability(AcquireCapabilityRequest {
                 capability: CapabilityRef {
                     id: params.capability.id,
@@ -166,7 +166,7 @@ impl AppServer {
         require_owned_lease(connection, &params.lease_id)?;
         let _change = self.updates.lock_marketplace_change();
         let outcome = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .release_capability(ReleaseCapabilityRequest {
                 lease_id: params.lease_id.clone(),
             })
@@ -184,7 +184,7 @@ impl AppServer {
         let params: MarketplaceOpenResourceParams = decode(params)?;
         require_owned_lease(connection, &params.lease_id)?;
         let content = self
-            .marketplace_manager()?
+            .plugin_packages()?
             .open_resource(OpenResourceRequest {
                 lease_id: params.lease_id,
                 resource: ResourceRef {
@@ -195,10 +195,8 @@ impl AppServer {
         result(&marketplace_projection::resource_content(content))
     }
 
-    fn marketplace_manager(
-        &self,
-    ) -> Result<&dyn zeta_marketplace_client::MarketplaceServiceClient, RpcError> {
-        self.marketplace_manager_client
+    fn plugin_packages(&self) -> Result<&dyn zeta_core_plugins::PluginPackageService, RpcError> {
+        self.plugin_package_service
             .as_deref()
             .ok_or_else(|| RpcError::new(-32100, AppServerErrorName::MarketplaceUnavailable))
     }
@@ -211,7 +209,7 @@ impl AppServer {
     }
 
     fn publish_committed_marketplace_change(&self) {
-        if let Some(manager) = &self.local_marketplace_manager {
+        if let Some(manager) = &self.plugins_manager {
             match manager.generation() {
                 Ok(generation) => {
                     self.updates.publish_marketplace_manager_changed(

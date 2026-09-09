@@ -1,15 +1,15 @@
 # 插件系统
 
-> 物理位置：`zeta-rs/plugins/`
-> Rust crate：`zeta_plugins`
-> 当前状态：PL0 已实现并支持 `ConnectorContribution` 引用 `McpServerContribution` 的声明校验；PL1 的
-> legacy local content store、durable installed/enabled/granted/effective authority、exact `PluginActivationSnapshot`、live generation publish 与 invocation drain 已实现；远端 Marketplace 分发和安装已统一迁到 `zeta-marketplace-manager`；Connector domain 已提取到
+> 物理位置：`zeta-rs/plugin/`、`zeta-rs/core-plugins/`
+> Rust crate：`zeta_plugin`、`zeta_core_plugins`
+> 当前状态：`zeta-plugin` 已拥有 Plugin identity、manifest、path 与 package observation；
+> `zeta-core-plugins` 已拥有 local/Marketplace package store、durable authority、activation、lease 与远端 registry 接入；Connector domain 已提取到
 > `zeta-rs/connectors`，Plugin projection、durable authority 与 API-token connect/revoke 位于
 > `zeta-rs/ext/connectors`；App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
 > PL4 的可执行 Editor Extension 本地安装/授权声明已实现，Host runtime 不由本 crate 拥有
-> 当前 crate 实现契约：[`zeta-rs/plugins/README.md`](../zeta-rs/plugins/README.md)
-> 跨 package family 的 Marketplace source、共享验证与领域投影：[`marketplace-integration.md`](marketplace-integration.md)
+> crate 实现契约：[`zeta-plugin`](../zeta-rs/plugin/README.md)、[`zeta-core-plugins`](../zeta-rs/core-plugins/README.md)
+> 跨 package family 的 Marketplace source、共享验证与领域投影：[`core-plugins.md`](../zeta-rs/docs/core-plugins.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
@@ -19,15 +19,15 @@
 
 ## 快速理解
 
-Plugin 是可同时携带多种 capability 的集成 bundle，不是第二个 Marketplace、安装器或常驻 runtime。
-远端 Plugin 统一由 Marketplace Manager 安装，再按 capability 交给各领域 consumer；`zeta-plugins`
-只保留 legacy local package 的兼容 authority。安装、启用、授权和实际调用仍是独立阶段。
+Plugin 是可同时携带多种 capability 的集成 bundle。`zeta-plugin` 定义并校验这个 bundle；
+`zeta-core-plugins` 聚合内置 Zeta catalog 与其他来源，统一拥有安装、更新、启用、授权和 activation。
+Marketplace 只是 Plugin 来源，Skill、MCP、Connector 等运行方不解释 Marketplace。
 
 | 用户动作 | 系统发生什么 | 不会自动发生什么 |
 | --- | --- | --- |
-| 安装 Marketplace Plugin bundle | Manager 校验不可变 package、签名和摘要后只写入一次 | 不进入 `zeta-plugins`，不启用或授权任一 capability |
+| 安装 Marketplace Plugin bundle | `zeta-core-plugins` 校验不可变 package、签名和摘要后只写入一次 | 不自动启用或授权任一 capability |
 | 各领域启用 capability | Skill/MCP/Connector/Editor Extension consumer 分别应用自己的 policy | 不存在 bundle 级隐式全开 |
-| 启用 legacy local Plugin | 允许兼容 contribution 参与解析 | 不连接 Connector、不启动 MCP、不执行脚本 |
+| 启用 local Plugin | 允许 contribution 参与解析 | 不连接 Connector、不启动 MCP、不执行脚本 |
 | 批准请求的能力 | 记录精确的进程、网络、目录或凭据授权 | 不批准未来每一次工具调用 |
 | 激活贡献 | 生成带来源和 generation 的不可变快照 | 不把 live manager 注入 Agent |
 | 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
@@ -38,16 +38,15 @@ Plugin 是可同时携带多种 capability 的集成 bundle，不是第二个 Ma
 
 ## 1. 结论
 
-Plugin 是 package composition 语义，不是生命周期 owner。当前有两条明确分开的来源：
+Plugin 的定义与产品生命周期分别由两个 crate 拥有，来源不会建立第二套生命周期：
 
 | 来源 | Package lifecycle owner | Capability activation owner |
 | --- | --- | --- |
-| Remote Marketplace Plugin bundle | `zeta-marketplace-manager` | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域 |
-| Legacy local Plugin v1 | `zeta-plugins` compatibility authority | App Server 投影后的各领域；legacy enable/grant 先形成 activation snapshot |
+| Built-in / remote Marketplace Plugin bundle | `zeta-core-plugins` | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域 |
+| Local Plugin v1 | `zeta-core-plugins` | App Server 交给各领域；enable/grant 后形成 activation snapshot |
 
-两条来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源，但不会先汇入一个
-统一 Plugin runtime。Marketplace bundle 由 Manager 安装一次后直接按 capability 分流；legacy
-`PluginActivationSnapshot` 只是兼容 adapter 的 normalized source。
+所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。
+`zeta-core-plugins` 先形成统一 installed Plugin 与 activation，再按 capability 交给各领域。
 
 Plugin 不是：
 
@@ -62,11 +61,9 @@ Plugin 不是：
 
 ```mermaid
 flowchart TD
-    M["Marketplace installation"] --> S["Skill capability → Skill runtime"]
-    M --> C["Connector capability → Connector runtime"]
-    M --> R["MCP capability → MCP runtime"]
-    M --> E["Executable + product admission → Editor Extension Host"]
-    P["Legacy Plugin activation snapshot"] --> S
+    D["zeta-plugin definitions"] --> P["zeta-core-plugins installed and active set"]
+    M["Built-in / Marketplace / local sources"] --> P
+    P --> S["Skill capability → Skill runtime"]
     P --> C
     P --> R
     P --> E
@@ -80,8 +77,8 @@ flowchart TD
     B --> R
 ```
 
-Plugin bundle 只表达组合；Marketplace package lifecycle 属于 Manager，legacy local lifecycle 属于
-compatibility authority。Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时语义；
+`zeta-plugin` 只表达 bundle；来源聚合、package lifecycle 与 activation 属于 `zeta-core-plugins`。
+Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时语义；
 它们不是 bundle/compatibility authority 内部的 live 子对象。Plugin、Connector 与 MCP 的 canonical 关系由
 [`connectors.md`](connectors.md) 维护。
 
@@ -116,15 +113,15 @@ Host。
 
 ## 2. 当前仓库审计
 
-当前 `zeta-plugins` 实现 legacy strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验、确定性 digest、只读 local-development discovery，以及“稳定 staging snapshot—内容寻址 object—原子 activation generation”的 local store。实现细节、limits 与 failure semantics 由 crate [`README`](../zeta-rs/plugins/README.md) 维护。
+当前 `zeta-plugin` 实现 strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验和确定性 digest。`zeta-core-plugins` 实现 discovery、稳定 staging snapshot、内容寻址 object、durable authority、原子 activation generation 与 Marketplace package lifecycle。
 
 User/Directory TOML 与 App Server 已能表达 exact legacy Plugin request 和 desired enablement。
 Package store 安全保存既有 local-development immutable object，
 并把 exact installed package 解析为 generation-bound activation snapshot；App Server 可据此自动构造
 Skill source、Connector catalog、durable authority 和 package-rooted MCP provider。Plugin authority
 分别持久化 installed/enabled/granted/effective refs 和 command receipts，并驱动 live activation 切换；
-App Server 只为该 legacy authority 暴露 list/enable/disable/grant/revokeGrant/uninstall；浏览和安装统一走
-通用 `marketplace/*` API。
+App Server 当前暴露 Plugin authority 与 Marketplace package API；后续产品接口应以 `plugin/*` 为主，
+只在来源管理时暴露 `marketplace/*`。
 TUI 只有在 Plugin domain 进入 App Server API 后才能增加管理能力。TUI 已有可复用的 tabs/search/selection 组件，但当前没有 Plugin view model 或 `/plugins` command；
 这些 UI 基础设施不改变本节的 backend gate。
 
@@ -150,22 +147,24 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 
 ## 3. 职责与非职责
 
-### 3.1 Legacy Plugin compatibility 权威拥有
+### 3.1 `zeta-plugin` 拥有
 
 - Plugin package layout 和 manifest schema；
 - stable Plugin identity、version、digest 和 origin；
-- package staging、validation、atomic install、side-by-side update 和 recoverable remove；
-- user/directory enablement 和 version pin；
 - contribution discovery、path containment、compatibility 和 conflict validation；
-- requested permissions、credential slots 与 user grants 的差异计算；
-- immutable `PluginActivationSnapshot` 和 generation；
-- local package provenance、validation/trust result 与 blocked diagnostics；
-- enabled Plugin 向 Skill/Connector/MCP runtime 的 normalized contribution projection；
 - executable Editor Extension 的 exact program、Host RPC v1、activation trigger 与 capability ceiling 声明；
-- install/update/enable/disable/uninstall 的 typed command replay；
-- 不含秘密的 audit record 和 health projection。
+- local package provenance、content validation 与 digest。
 
-### 3.2 Legacy Plugin compatibility 权威不拥有
+### 3.2 `zeta-core-plugins` 拥有
+
+- built-in、Marketplace 与 local Plugin 来源聚合；
+- package staging、atomic install、side-by-side update 和 remove；
+- installed/enabled/granted/effective authority 与 typed command replay；
+- immutable `PluginActivationSnapshot`、generation 与 invocation lease；
+- enabled Plugin 向 Skill/Connector/MCP runtime 的 normalized contribution；
+- 不含秘密的 audit record 和 health state。
+
+### 3.3 两个 Plugin crate 都不拥有
 
 - Skill 的自动选择、prompt layering 或 context budget；
 - MCP JSON-RPC、process supervision、Connector connection/OAuth 或 tools/resources/prompts catalog；
@@ -174,26 +173,26 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 - API token、OAuth token、cookie 或 private key；
 - OS sandbox、network enforcement 或 per-call approval 的最终实现；
 - Thread reducer、Tool Call/Result commit 或 Agent retry；
-- Marketplace 搜索、TUF、remote download、artifact/install/update/uninstall；
+- Marketplace publisher、签名发布和远端 catalog 存储；
 - 第三方 UI iframe、Renderer code execution 或 Electron preload extension；
 - 任意 native ABI、WASM ABI 或 provider adapter ABI。
 
 ## 4. 目标依赖与组合
 
 ```text
-                         zeta-protocol
+                         zeta-plugin
+               identity / manifest / package observation
                               ▲
-                              │ shared IDs only when accepted
                               │
-                         zeta-plugins
-        manifest / package store / resolver / authority / snapshot
-                    ▲                         ▲
-                    │ package source          │ trust verifier
-                    │                         │
-             filesystem/registry        signature service
-                    \                         /
-                     \                       /
-                      App Server composition
+                     zeta-core-plugins
+       sources / store / resolver / authority / activation
+                 ▲                         ▲
+                 │ package source          │ trust verifier
+                 │                         │
+          filesystem/registry        signature service
+                 \                         /
+                  \                       /
+                   App Server composition
                          │          │          │
              SkillContribution  ConnectorContribution  McpServerContribution
                          │          │          │
@@ -203,8 +202,9 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 
 具体规则：
 
-- `zeta-plugins` 不依赖 `zeta-skills`、`zeta-connectors` 或 `zeta-mcp` live runtime；
-- legacy Plugin authority 只输出 normalized descriptor 和 immutable root handle；
+- `zeta-plugin` 不依赖 store、Marketplace、Skill、Connector 或 MCP runtime；
+- `zeta-core-plugins` 依赖 `zeta-plugin`，不反向依赖；
+- `zeta-core-plugins` 只输出 normalized descriptor 和 immutable root handle；
 - App Server 将 Skill contribution 注册到 Skill source，将 Connector contribution 交给 Connector adapter，
   并将独立或 ready-bound MCP contribution 解析为 `McpServerDefinition`；
 - contribution consumer 必须再次执行自己领域的校验，不能因为 package 已验证就跳过 schema、
@@ -661,7 +661,7 @@ Manager 撤销 installation，并等待 capability lease 排空。两者都不�
 
 已实现 Plugin mutation 使用 `CommandId + expectedRevision + exact package payload`。这些 mutation 不读取
 Marketplace catalog，也不接受 Renderer 提交宿主文件路径。远端信任、TUF、revocation、下载、artifact
-和安装状态由 [`marketplace-integration.md`](marketplace-integration.md) 定义的 Manager 链路统一拥有。
+和安装状态由 [`core-plugins.md`](../zeta-rs/docs/core-plugins.md) 定义的 PluginsManager 链路统一拥有。
 
 正式 package 把只读配置和公开信任根放在
 `zeta-resources/product-services/{product-services.json,marketplace-root.json}`。Desktop/server、
@@ -689,7 +689,7 @@ CLI/TUI/Desktop 不直接扫描 Plugin 目录，不解析 manifest，也不自�
 ## 15. 安全
 
 Legacy local package ingestion 必须防御以下问题；remote Marketplace ingestion 的 TUF/archive 契约由
-[`marketplace-integration.md`](marketplace-integration.md) 单独拥有：
+[`core-plugins.md`](../zeta-rs/docs/core-plugins.md) 单独拥有：
 
 - archive path traversal、absolute path 和 drive/device path；
 - symlink/hardlink escape；
@@ -735,42 +735,39 @@ CommandConflict
 - 当前 active generation 与上一个 rollback generation；
 - 哪个 MCP/Skill consumer 拒绝了 contribution。
 
-## 17. PL1+目标目录
+## 17. 目标目录
 
-PL1+ 继续保持单 crate，目标扩展为：
+Plugin 定义与产品生命周期保持两个 crate：
 
 ```text
-zeta-rs/plugins/src/
+zeta-rs/plugin/src/
 ├── lib.rs
 ├── identity.rs
-├── manifest/
-│   ├── mod.rs
-│   ├── model.rs
-│   └── validation.rs
-├── package/
-│   ├── mod.rs
-│   ├── source.rs
-│   ├── staging.rs
-│   ├── store.rs
-│   └── trust.rs
-├── authority/
-│   ├── mod.rs
-│   ├── command.rs
-│   ├── record.rs
-│   └── recovery.rs
-├── resolution/
-│   ├── mod.rs
-│   ├── grant.rs
-│   ├── conflict.rs
-│   └── snapshot.rs
-├── contribution.rs
-├── diagnostic.rs
+├── path.rs
 ├── error.rs
-└── *_tests.rs
-```
+├── manifest/
+│   ├── model.rs
+│   ├── validation.rs
+│   └── editor_extension.rs
+├── package.rs
+└── package/
+    ├── local.rs
+    └── digest.rs
 
-不建立通用 `extension host`、`plugin service` 或 `dynamic loader`。如果 manifest 纯值层后来确有
-三个以上独立消费者，再提取 `zeta-plugin-manifest`；第一版不要先拆空 crate。
+zeta-rs/core-plugins/src/
+├── lib.rs
+├── plugin_activation.rs
+├── plugin_authority.rs
+├── plugin_authority/persistence.rs
+├── plugin_discovery.rs
+├── plugin_package.rs
+├── plugin_package/
+│   ├── snapshot.rs
+│   └── store.rs
+├── manager.rs
+├── marketplace_store.rs
+└── marketplace_activation.rs
+```
 
 ## 18. 分阶段实施
 
@@ -810,10 +807,10 @@ zeta-rs/plugins/src/
 
 ### 阶段 PL3：远端分发迁移（已完成）
 
-- ✅ 远端 catalog/TUF/download、artifact、install/update/uninstall 与 lease 全部迁到
-  `zeta-marketplace-client` + `zeta-marketplace-manager`；
-- ✅ `zeta-plugins` 不再消费远端 catalog，也不作为 Marketplace package 的中转 store；
-- ✅ Marketplace Plugin bundle 直接按 capability 投影给领域 consumer；
+- ✅ `zeta-core-plugins::registry` 隔离远端 catalog/TUF/download；
+- ✅ `zeta-core-plugins` 统一拥有 local/Marketplace artifact、install/update/uninstall、authority 与 lease；
+- ✅ `zeta-plugin` 只拥有共享 Plugin 定义与 package observation；
+- ✅ Plugin bundle 经统一 installed/activation state 后按 capability 交给领域 consumer；
 - 尚未完成：统一 UI 中跨 capability 的 permission/contribution diff。
 
 完成条件：相同 ID/version 不可换内容，grant expansion 必须重新 consent。
