@@ -23,6 +23,10 @@ just zeta
 | 批准或回答问题 | [interaction](src/thread/interaction) |
 | 正文、执行输出、缓存与滚动 | [transcript](src/thread/transcript) |
 | Issue 分组、搜索、分页与工作详情 | [issues.rs](src/issues.rs)、[board.rs](src/issues/board.rs)、[assignment.rs](src/issues/assignment.rs) |
+| Markdown 排版与表格 | [markdown.rs](src/render/markdown.rs)、[table.rs](src/render/markdown/table.rs) |
+| 流式显示进度与提交队列 | [streaming.rs](src/thread/transcript/streaming.rs) |
+| 流式块复用与节奏策略 | [render.rs](src/thread/transcript/streaming/render.rs)、[chunking.rs](src/thread/transcript/streaming/chunking.rs) |
+| 链接范围、换行与 OSC 8 输出 | [hyperlinks.rs](src/terminal/hyperlinks.rs) |
 | 会话列表、预览、切换和详情 | [sessions](src/sessions) |
 | 设置、主题、快捷键 | [config](src/config)、[theme](src/theme)、[keymap](src/keymap) |
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
@@ -150,6 +154,12 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 | 跨 Thread 界面状态 | 最近 32 条 Thread；切走时释放重型绘制缓存 |
 | 进程资源历史 | 最多 301 个本机内存合计读数 |
 | 连续更新重绘 | 首次请求后 16 ms 内；新请求不延后期限，输入可立即绘制 |
+| 流式显示提交 | 正常每 40 ms 提交一个源码行范围；积压 8 行或最旧内容等待 120 ms 时追赶 |
+| 显示队列 | 达到 1024 行立即显示积压；范围使用源码偏移，独立于终端宽度 |
+
+Markdown 按完整消息解析，以顶层块复用排版结果；新增表格行和代码行会更新所属块，引用定义变化会重新排版整篇。宽度、主题和消息替换参与缓存校验，删除消息同步移除缓存。链接范围与文字分别保存，终端写出时才附加控制序列，复制与导出保持干净文字。
+
+Thread 保存真实消息和独立的显示进度。流式队列保留源码范围与到达时间，末尾未换行内容更新时替换原范围，不延后提交期限。事件循环同时等待提交和重绘截止时间，持续输入也推进显示；没有积压就停止提交唤醒。追赶退出需持续低压力 250 ms，退出后冷却 250 ms，严重积压可立即再次追赶。完成、失败和中断立即显示已保留正文；快照、历史加载和切换对话直接展示已有内容。缩放按已显示源码重新排版，手动滚动继续保持单元锚点。复制和导出读取完整消息，不受显示进度限制。
 
 只有同一会话、对话、持久化序号和流身份，且游标、正文版本连续的完整更新可以合并。提交、删除、清空、输入和控制事件结束当前批次。重复更新忽略；缺口或流切换则丢弃不可信的临时正文并重读快照。
 
@@ -159,7 +169,7 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 ## 产品支持边界
 
-正文支持普通折行和 fenced code block 高亮，尚未实现完整 Markdown、可点击 Markdown 链接或任意 HTML 展示。内容区与详情滚动始终由 TUI 处理；增强鼠标另外提供点击、悬停、按下、拖选和自动复制，补全处理自己的事件。Vim 只改变输入框编辑。
+Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码块、表格和链接；窄屏表格按字段逐项展示。HTTP(S) 链接通过 OSC 8 交给终端打开，本地路径保留可复制目标。用户输入和命令保持字面显示，HTML 标签作为文字显示。内容区与详情滚动始终由 TUI 处理；增强鼠标另外提供点击、悬停、按下、拖选和自动复制，补全处理自己的事件。Vim 只改变输入框编辑。
 
 `/export [relative-path]` 导出当前已加载正文，路径限制在本机工作目录内，不能覆盖已有文件。Ctrl+O 复制最后一条 Agent 回复。
 

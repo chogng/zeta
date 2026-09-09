@@ -1227,8 +1227,19 @@ impl App {
         )
     }
 
+    pub(crate) fn stream_deadline(&self) -> Option<Instant> {
+        self.thread.stream_deadline()
+    }
+
+    pub(crate) fn advance_stream(&mut self, now: Instant) -> bool {
+        self.thread.advance_stream(now)
+    }
+
     pub(crate) fn visible_transcript_views(&self) -> Vec<CellView<'_>> {
-        self.transcript_views()
+        self.thread.visible_views(
+            &self.thread_presentations.active().expanded_cells,
+            self.thread_presentations.active().selected_cell.as_ref(),
+        )
     }
 
     pub(crate) fn latest_agent_response(&self) -> Option<&str> {
@@ -1249,7 +1260,7 @@ impl App {
         terminal_area: Rect,
     ) -> bool {
         let transcript_area = frame::layout(self, terminal_area).session.transcript;
-        let messages = self.transcript_views();
+        let messages = self.visible_transcript_views();
         let target = scroll_target(
             transcript_area,
             usize::from(welcome::history_height(transcript_area.height)),
@@ -1276,7 +1287,7 @@ impl App {
         {
             return None;
         }
-        let messages = self.transcript_views();
+        let messages = self.visible_transcript_views();
         if let Some(target) = first_scroll_target(true, &messages) {
             self.thread_presentations.active_mut().scroll.apply(target);
         }
@@ -1860,7 +1871,7 @@ impl App {
                         transcript,
                     ));
                 if reveal_older_history {
-                    let messages = self.transcript_views();
+                    let messages = self.visible_transcript_views();
                     if let Some(target) = first_scroll_target(true, &messages) {
                         self.thread_presentations.active_mut().scroll.apply(target);
                     }
@@ -1905,12 +1916,14 @@ impl App {
                 self.chat_panel.reconcile_request(pending.as_ref());
             }
             ThreadEvent::TurnFailed => {
+                self.thread.finish_stream();
                 self.set_status(Status::Error);
                 self.chat_panel.start_input();
                 self.chat_panel.clear_steers();
                 self.thread_presentations.active_mut().plan.replace(None);
             }
             ThreadEvent::TurnCompleted => {
+                self.thread.finish_stream();
                 self.set_status(Status::Ready);
                 self.chat_panel.start_input();
                 self.chat_panel.clear_steers();
@@ -2318,7 +2331,7 @@ impl App {
                 Some(self.navigate_transcript(TranscriptScrollDirection::Down, terminal_area))
             }
             (KeyModifiers::CONTROL, KeyCode::Home) => {
-                let messages = self.transcript_views();
+                let messages = self.visible_transcript_views();
                 if let Some(target) = first_scroll_target(true, &messages) {
                     self.thread_presentations.active_mut().scroll.apply(target);
                 }

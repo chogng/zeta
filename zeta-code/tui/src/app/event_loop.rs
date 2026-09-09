@@ -27,6 +27,7 @@ use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
 use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
+use std::time::Duration;
 use std::time::Instant;
 use zeta_app_server_client::AppServerSession;
 use zeta_memory_diagnostics::ProcessResourceDemand;
@@ -57,6 +58,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     }
     let result = (|| {
         loop {
+            advance_stream(driver.app_mut(), &mut redraw, Instant::now());
+            if redraw.take_due(Instant::now()) {
+                draw_terminal(&mut terminal, driver.app_mut())?;
+            }
             sync_process_resource_demand(
                 &mut pump,
                 driver.app_mut(),
@@ -66,15 +71,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             let had_active_turn = driver.app().active_turn().is_some();
             let mut runtime_event = match pending_runtime_event.take() {
                 Some(event) => event,
-                None => match redraw.wait_timeout(Instant::now()) {
+                None => match next_wait(driver.app(), &redraw, Instant::now()) {
                     Some(timeout) => match pump.recv_timeout(timeout)? {
                         Some(event) => event,
-                        None => {
-                            if redraw.take_due(Instant::now()) {
-                                draw_terminal(&mut terminal, driver.app_mut())?;
-                            }
-                            continue;
-                        }
+                        None => continue,
                     },
                     None => pump.recv()?,
                 },
@@ -95,7 +95,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 RuntimeEvent::Client(client::ClientEvent::ThreadTranscriptUpdated(update)) => {
                     match TranscriptBatch::start(*update) {
                         Ok(mut batch) => {
-                            while let Some(timeout) = redraw.wait_timeout(Instant::now()) {
+                            while let Some(timeout) =
+                                next_wait(driver.app(), &redraw, Instant::now())
+                            {
                                 if timeout.is_zero() {
                                     break;
                                 }
@@ -217,6 +219,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 terminal.area()?,
                 &mut process_resource_demand,
             );
+            advance_stream(driver.app_mut(), &mut redraw, Instant::now());
             if redraw.take_due(Instant::now()) {
                 draw_terminal(&mut terminal, driver.app_mut())?;
             }
@@ -227,6 +230,23 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         (Err(error), _) => Err(error),
         (Ok(_), Err(error)) => Err(error.into()),
         (Ok(exit), Ok(())) => Ok(exit),
+    }
+}
+
+/// Commit deadlines are checked on every loop pass, even when input never becomes idle.
+fn advance_stream(app: &mut App, redraw: &mut RedrawScheduler, now: Instant) {
+    if app.advance_stream(now) {
+        redraw.request(now, RedrawPriority::Immediate);
+    }
+}
+
+fn next_wait(app: &App, redraw: &RedrawScheduler, now: Instant) -> Option<Duration> {
+    let stream = app
+        .stream_deadline()
+        .map(|at| at.saturating_duration_since(now));
+    match (redraw.wait_timeout(now), stream) {
+        (Some(frame), Some(commit)) => Some(frame.min(commit)),
+        (frame, commit) => frame.or(commit),
     }
 }
 
@@ -416,7 +436,7 @@ fn draw_terminal(
     }
     terminal.set_mouse_mode(app.mouse_mode())?;
     terminal.set_cursor_color(app.render_context().cursor_color())?;
-    terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
+    terminal.draw(|terminal_frame, links| frame::draw_with_links(terminal_frame, app, links))
 }
 
 #[cfg(test)]

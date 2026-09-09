@@ -41,8 +41,17 @@ enum HitBarStyle {
 
 const BOTTOM_ROWS: u16 = 2;
 
+#[cfg(test)]
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
-    let context = app.render_context();
+    draw_with_links(frame, app, &std::cell::RefCell::default());
+}
+
+pub(crate) fn draw_with_links(
+    frame: &mut Frame<'_>,
+    app: &App,
+    links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+) {
+    let context = app.render_context().with_hyperlinks(links);
     frame.render_widget(
         Block::default().style(
             Style::default()
@@ -81,6 +90,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         }
         draw_bottom(frame, areas.session.bottom, app, context);
         if let Some(overlay) = app.overlay() {
+            context.clear_hyperlinks(overlay.surface(transient_area_from_layout(&areas)));
             crate::widgets::overlay::draw(
                 frame,
                 transient_area_from_layout(&areas),
@@ -167,8 +177,10 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     }
     draw_top_tip(frame, areas.session.top_tip, app, context);
     if let Some(overlay) = app.overlay() {
+        context.clear_hyperlinks(overlay.surface(transient_area_from_layout(&areas)));
         crate::widgets::overlay::draw(frame, transient_area_from_layout(&areas), overlay, context);
     } else if completion_visible(app) {
+        context.clear_hyperlinks(completion_area(&areas));
         let hovered_composer = match hovered {
             Some(InputPointerTarget::Composer(target)) => Some(*target),
             _ => None,

@@ -2,6 +2,7 @@ use super::ThreadPresentationEvent;
 use super::presentation::ActiveTurnUpdate;
 use super::presentation::evaluate_active_turn;
 use super::presentation::recover_active_turn;
+use super::transcript::StreamDisplay;
 use super::transcript::TranscriptCell;
 use super::transcript::TranscriptCellId;
 use super::transcript::TranscriptModel;
@@ -9,6 +10,7 @@ use crate::thread::transcript::CellView;
 use crate::thread::transcript::MessageRole;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::time::Instant;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ThreadId;
 use zeta_protocol::Turn;
@@ -44,6 +46,7 @@ pub(crate) struct ThreadState {
     active_turn: Option<TurnId>,
     approval_modes: TurnApprovalModes,
     transcript: TranscriptModel,
+    stream: StreamDisplay,
     inactive_transcripts: BTreeMap<ThreadId, TranscriptModel>,
 }
 
@@ -55,6 +58,7 @@ impl ThreadState {
         let outgoing = std::mem::take(&mut self.transcript);
         self.inactive_transcripts.insert(previous.clone(), outgoing);
         self.transcript = self.inactive_transcripts.remove(next).unwrap_or_default();
+        self.stream.install(self.transcript.cells());
     }
 
     pub(crate) fn active_turn(&self) -> Option<&TurnId> {
@@ -72,6 +76,7 @@ impl ThreadState {
     }
 
     pub(crate) fn clear_active_turn(&mut self) {
+        self.finish_stream();
         self.active_turn = None;
     }
 
@@ -79,7 +84,13 @@ impl ThreadState {
         if self.active_turn.is_none() {
             self.active_turn = recover_active_turn(turns);
         }
+        let prior_turn = self.active_turn.clone();
         let mut updates = vec![evaluate_active_turn(&mut self.active_turn, turns)];
+        if self.active_turn.is_none()
+            && let Some(prior_turn) = prior_turn.as_ref()
+        {
+            self.stream.finish_turn(prior_turn);
+        }
         if self.active_turn.is_none() {
             self.active_turn = recover_active_turn(turns);
             if self.active_turn.is_some() {
@@ -135,6 +146,29 @@ impl ThreadState {
         self.transcript.views(expanded, selected)
     }
 
+    pub(crate) fn visible_views(
+        &self,
+        expanded: &BTreeSet<TranscriptCellId>,
+        selected: Option<&TranscriptCellId>,
+    ) -> Vec<CellView<'_>> {
+        self.stream
+            .visible(self.transcript.views(expanded, selected))
+    }
+
+    pub(crate) fn stream_deadline(&self) -> Option<Instant> {
+        self.stream.deadline()
+    }
+    pub(crate) fn advance_stream(&mut self, now: Instant) -> bool {
+        self.stream.advance(now)
+    }
+    pub(crate) fn finish_stream(&mut self) {
+        if let Some(turn_id) = self.active_turn.as_ref() {
+            self.stream.finish_turn(turn_id);
+        } else {
+            self.stream.finish_all();
+        }
+    }
+
     pub(crate) fn cells(&self) -> &[TranscriptCell] {
         self.transcript.cells()
     }
@@ -144,15 +178,22 @@ impl ThreadState {
     }
 
     pub(crate) fn update(&mut self, event: ThreadPresentationEvent) {
+        self.update_at(event, Instant::now());
+    }
+
+    fn update_at(&mut self, event: ThreadPresentationEvent, now: Instant) {
         match event {
             ThreadPresentationEvent::TranscriptSnapshotReceived(snapshot) => {
                 self.transcript.replace(snapshot);
+                self.stream.install(self.transcript.cells());
             }
             ThreadPresentationEvent::TranscriptHistoryPageReceived(page) => {
                 self.transcript.prepend_history(page);
+                self.stream.install(self.transcript.cells());
             }
             ThreadPresentationEvent::TranscriptUpdateReceived(update) => {
                 self.transcript.apply(*update);
+                self.stream.update(self.transcript.cells(), now);
             }
             ThreadPresentationEvent::UserSubmitted(text) => {
                 self.transcript.push_message(MessageRole::User, text);
@@ -183,10 +224,12 @@ impl ThreadState {
                 self.transcript.push_error(text);
             }
             ThreadPresentationEvent::Interrupted => {
+                self.finish_stream();
                 self.transcript.push_notice("turn interrupted".into());
             }
             ThreadPresentationEvent::Cleared => {
                 self.transcript.clear();
+                self.stream.install(&[]);
             }
         }
     }

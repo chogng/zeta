@@ -35,6 +35,7 @@ pub(crate) struct TerminalSession {
     terminal: Terminal<CrosstermBackend<Stdout>>,
     modes: TerminalModeGuard<CrosstermModeOperations>,
     rendered_frame: Option<Buffer>,
+    hyperlinks: super::hyperlinks::FrameLinks,
     cursor_color: CursorColor,
 }
 
@@ -49,6 +50,7 @@ impl TerminalSession {
             terminal,
             modes,
             rendered_frame: None,
+            hyperlinks: Default::default(),
             cursor_color: CursorColor::default(),
         };
         session.terminal.clear()?;
@@ -61,10 +63,20 @@ impl TerminalSession {
 
     pub(crate) fn draw<F>(&mut self, render: F) -> io::Result<()>
     where
-        F: FnOnce(&mut ratatui::Frame<'_>),
+        F: FnOnce(&mut ratatui::Frame<'_>, &std::cell::RefCell<super::hyperlinks::FrameLinks>),
     {
-        let completed = self.terminal.draw(render)?;
-        self.rendered_frame = Some(completed.buffer.clone());
+        let links = std::cell::RefCell::default();
+        let completed = self.terminal.draw(|frame| render(frame, &links))?;
+        let buffer = completed.buffer.clone();
+        let links = links.into_inner();
+        links.write(
+            &self.hyperlinks,
+            &buffer,
+            self.rendered_frame.as_ref(),
+            self.terminal.backend_mut(),
+        )?;
+        self.hyperlinks = links;
+        self.rendered_frame = Some(buffer);
         Ok(())
     }
 
@@ -115,6 +127,8 @@ impl TerminalSession {
         let reacquire_result = self.modes.reacquire();
         suspend_result?;
         reacquire_result?;
+        self.hyperlinks = Default::default();
+        self.rendered_frame = None;
         self.terminal.clear()
     }
 }

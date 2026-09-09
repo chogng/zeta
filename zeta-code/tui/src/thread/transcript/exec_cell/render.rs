@@ -9,7 +9,6 @@ use crate::thread::transcript::history_cell::ChatHistoryRenderCache;
 use crate::thread::transcript::history_cell::DetailFormat;
 use crate::thread::transcript::history_cell::HistoryCell;
 use crate::thread::transcript::history_cell::MessageRole;
-use crate::thread::transcript::history_cell::SyntaxHighlighting;
 use crate::thread::transcript::history_cell::finish_lines;
 use crate::thread::transcript::history_cell::prefixed_body;
 use crate::thread::transcript::history_cell::push_detail_lines;
@@ -47,8 +46,8 @@ impl HistoryCell for ExecCell {
         &self,
         view: &CellView<'_>,
         context: RenderContext<'_>,
-        cache: Option<&ChatHistoryRenderCache>,
-        highlighting: SyntaxHighlighting,
+        _cache: Option<&ChatHistoryRenderCache>,
+        _width: u16,
     ) -> CellLines {
         let color = match self.status() {
             CommandStatus::Submitted | CommandStatus::Running => context.warning(),
@@ -59,20 +58,14 @@ impl HistoryCell for ExecCell {
                 _ => context.muted(),
             },
         };
-        let mut lines = prefixed_body(
-            &self.summary(),
-            "●",
-            color,
-            view,
-            context,
-            cache,
-            highlighting,
-        );
+        let mut lines = prefixed_body(&self.summary(), "●", color, view, context);
         if let Some(detail) = self.detail(view.mode) {
             push_detail_lines(&mut lines, DetailFormat::Ansi, &detail, context);
         }
         let details_line = finish_lines(&mut lines, view, context);
         CellLines {
+            wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
+            hyperlinks: Vec::new(),
             lines,
             user_input_lines: 0,
             details_line,

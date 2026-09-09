@@ -2,6 +2,7 @@ mod highlight;
 mod highlight_streaming;
 mod interaction;
 mod layout;
+pub(crate) mod markdown;
 mod palette;
 mod text;
 

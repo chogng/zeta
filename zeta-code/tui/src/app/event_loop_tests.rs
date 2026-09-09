@@ -651,3 +651,69 @@ fn real_terminal_mouse_handoff() {
     assert_scroll_only_mouse(&mut app);
     assert_eq!(app.input(), "/q");
 }
+
+#[test]
+fn streaming_commit_deadlines_are_serviced_during_continuous_input_and_completion() {
+    use super::RedrawPriority;
+    use super::RedrawScheduler;
+    use super::advance_stream;
+    use super::next_wait;
+    use std::time::Duration;
+    use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
+    use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
+    use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+    use zeta_protocol::ItemId;
+    use zeta_protocol::ThreadItem;
+    use zeta_protocol::TurnId;
+
+    let mut app = App::new();
+    let turn_id = TurnId::new("stream").unwrap();
+    app.set_active_turn(turn_id.clone());
+    app.update(ThreadEvent::TranscriptUpdateReceived(Box::new(
+        ThreadTranscriptUpdateEnvelope {
+            session_id: SessionId::new("session").unwrap(),
+            thread_id: ThreadId::new("thread").unwrap(),
+            durable_sequence: 1,
+            revision: 1,
+            stream_cursor: None,
+            changes: vec![ThreadTranscriptChange::Upsert {
+                entry: ThreadTranscriptEntry::Item {
+                    entry_id: "stream-item".into(),
+                    turn_id: turn_id.clone(),
+                    transient: true,
+                    item: ThreadItem::AgentMessage {
+                        item_id: ItemId::new("item").unwrap(),
+                        turn_id,
+                        text: "one\ntwo\nthree\nfour".into(),
+                    },
+                },
+            }],
+        },
+    )));
+    let mut redraw = RedrawScheduler::default();
+    let start = app.stream_deadline().unwrap();
+    assert_eq!(next_wait(&app, &redraw, start), Some(Duration::ZERO));
+    advance_stream(&mut app, &mut redraw, start);
+    assert_eq!(app.visible_transcript_views()[0].text(), "one\n");
+    assert!(redraw.take_due(start));
+    assert_eq!(
+        next_wait(&app, &redraw, start),
+        Some(Duration::from_millis(40))
+    );
+    for elapsed in 1..=40 {
+        let now = start + Duration::from_millis(elapsed);
+        app.insert_text("x");
+        redraw.request(now, RedrawPriority::Immediate);
+        advance_stream(&mut app, &mut redraw, now);
+        assert!(redraw.take_due(now));
+    }
+    assert_eq!(app.visible_transcript_views()[0].text(), "one\ntwo\n");
+    assert_eq!(app.latest_agent_response(), Some("one\ntwo\nthree\nfour"));
+    app.update(ThreadEvent::TurnCompleted);
+    assert!(matches!(app.status(), crate::app::Status::Ready));
+    assert!(app.stream_deadline().is_none());
+    assert_eq!(
+        app.visible_transcript_views()[0].text(),
+        "one\ntwo\nthree\nfour"
+    );
+}

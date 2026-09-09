@@ -81,6 +81,10 @@ impl TranscriptCell {
         &self.cell_id
     }
 
+    pub(super) fn turn_id(&self) -> Option<&TurnId> {
+        self.turn_id.as_ref()
+    }
+
     pub(crate) fn lifecycle(&self) -> CellLifecycle {
         match &self.body {
             TranscriptCellBody::Exec(exec) if exec.is_live() => CellLifecycle::Live,
@@ -112,6 +116,7 @@ impl TranscriptCell {
             cell: Cow::Borrowed(self),
             cell_id: Some(self.cell_id.as_str().to_owned()),
             render_revision: self.render_revision,
+            visible_source_end: None,
             can_expand: self.can_expand(),
             expanded,
             has_details: self.has_details(),
@@ -764,12 +769,9 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
         ThreadTranscriptEntry::TurnPlan { plan, .. } => {
             TranscriptCellBody::Content(ContentCell::new(MessageRole::Plan, present_plan(plan)))
         }
-        ThreadTranscriptEntry::TurnError { error, .. } => {
-            TranscriptCellBody::Content(ContentCell::new(
-                MessageRole::Error,
-                present_turn_error(error),
-            ))
-        }
+        ThreadTranscriptEntry::TurnError { error, .. } => TranscriptCellBody::Content(
+            ContentCell::new(MessageRole::Error, present_turn_error(error)),
+        ),
         ThreadTranscriptEntry::ToolOutput { .. } => {
             unreachable!("Tool output is routed into ExecCell")
         }

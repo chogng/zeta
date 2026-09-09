@@ -458,16 +458,38 @@ impl RenderTheme {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct RenderContext<'a> {
     theme: &'a RenderTheme,
+    hyperlinks: Option<&'a std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>>,
     theme_revision: u64,
 }
 
 impl<'a> RenderContext<'a> {
+    pub(crate) fn with_hyperlinks(
+        mut self,
+        links: &'a std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+    ) -> Self {
+        self.hyperlinks = Some(links);
+        self
+    }
+
+    pub(crate) fn hyperlinks(
+        self,
+    ) -> Option<&'a std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>> {
+        self.hyperlinks
+    }
+
+    pub(crate) fn clear_hyperlinks(self, area: ratatui::layout::Rect) {
+        if let Some(links) = self.hyperlinks {
+            links.borrow_mut().clear(area);
+        }
+    }
+
     pub(crate) const fn cursor_color(self) -> Option<[u8; 3]> {
         self.theme.cursor_color
     }
     pub(crate) const fn new(theme: &'a RenderTheme, theme_revision: u64) -> Self {
         Self {
             theme,
+            hyperlinks: None,
             theme_revision,
         }
     }

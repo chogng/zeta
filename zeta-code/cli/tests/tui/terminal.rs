@@ -349,3 +349,71 @@ fn actual_tui_process_renders_an_http_failure_and_remains_usable() {
     process.assert_snapshot("real/07-lifecycle/04-error-recovered");
     process.quit();
 }
+
+#[test]
+fn actual_tui_markdown_links_survive_terminal_output_and_resize() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([HttpResponse::streaming(
+        [
+            "# LINK-RESULT\n\n",
+            "[Linked documentation](https://example.com/zeta-terminal-link)\n\n",
+            "| Item | State |\n| --- | --- |\n| LINK-CHECK | complete |",
+        ],
+        None,
+    )]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("ask permissions on");
+    process.submit("show links");
+    process.wait_for_screen("LINK-CHECK");
+    process.wait_for_stable_screen("ask permissions on");
+    // ConPTY supplies its own OSC 8 id parameter; assert the destination, not its generated id.
+    let raw = process.raw_text();
+    let destinations = raw
+        .split("\x1b]8;")
+        .skip(1)
+        .filter_map(|sequence| {
+            let payload = sequence.split(['\x1b', '\x07']).next()?;
+            payload.split_once(';').map(|(_, destination)| destination)
+        })
+        .collect::<Vec<_>>();
+    assert!(destinations.contains(&"https://example.com/zeta-terminal-link"));
+    assert!(destinations.contains(&""), "terminal link must be closed");
+    assert!(process.screen().contains("Linked documentation"));
+    assert!(!process.screen().contains("]8;;"));
+    process.resize(SMALL_SIZE);
+    process.wait_for_stable_screen("LINK-CHECK");
+    assert!(process.screen().contains("Linked documentation"));
+    assert_eq!(server.request_count(), 1);
+    process.quit();
+}
+
+#[test]
+fn actual_tui_streaming_queue_drains_while_provider_waits_and_input_continues() {
+    let fixture = Fixture::new();
+    let gate = Gate::new();
+    let server = ScenarioServer::start([HttpResponse::streaming(
+        [
+            "COMMIT-ONE\nCOMMIT-TWO\nCOMMIT-THREE\nCOMMIT-FOUR\nCOMMIT-LAST",
+            "\nCOMMIT-DONE",
+        ],
+        Some(gate.clone()),
+    )]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("ask permissions on");
+    process.submit("show the queued lines");
+    gate.wait_until_reached();
+    process.wait_for_screen("COMMIT-ONE");
+    process.type_text("draft stays responsive");
+    process.wait_for_screen("COMMIT-LAST");
+    assert!(process.screen().contains("draft stays responsive"));
+    process.resize(SMALL_SIZE);
+    // The provider is still running, so its activity indicator continues to animate.
+    process.wait_for_screen("COMMIT-LAST");
+    gate.release();
+    process.wait_for_stable_screen("COMMIT-DONE");
+    assert!(process.screen().contains("draft stays responsive"));
+    assert_eq!(server.request_count(), 1);
+    process.quit();
+}

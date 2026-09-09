@@ -1,6 +1,7 @@
 use super::CellLayout;
 use super::CellLines;
 use super::CellView;
+use super::LineWrapping;
 use crate::render::RenderContext;
 use crate::render::StreamingCodeHighlighter;
 use crate::render::code_within_limits;
@@ -12,7 +13,6 @@ use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::text::Line;
-use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
 use ratatui::widgets::Wrap;
@@ -40,6 +40,7 @@ enum CellRenderMode {
 struct CacheKey {
     cell_id: String,
     render_revision: u64,
+    visible_source_end: Option<usize>,
     width: u16,
     theme_revision: u64,
     mode: CellRenderMode,
@@ -60,6 +61,7 @@ impl CacheKey {
         Some(Self {
             cell_id,
             render_revision: cell.render_revision,
+            visible_source_end: cell.visible_source_end,
             width,
             theme_revision: context.theme_revision(),
             mode,
@@ -91,6 +93,7 @@ pub(crate) struct ChatHistoryRenderCache {
     entries: RefCell<CacheEntries>,
     layouts: RefCell<HashMap<String, LayoutEntry>>,
     code_blocks: RefCell<CodeBlockEntries>,
+    markdown: RefCell<super::super::streaming::StreamingRender>,
 }
 
 #[derive(Debug, Default)]
@@ -129,6 +132,7 @@ impl ChatHistoryRenderCache {
             .retain(|entry| ids.contains(&entry.key.cell_id));
         entries.cells = entries.entries.iter().map(|entry| entry.cost).sum();
         self.code_blocks.borrow_mut().retain(&ids);
+        self.markdown.borrow_mut().retain(&ids);
     }
 
     pub(in crate::thread::transcript) fn measure(
@@ -169,8 +173,10 @@ impl ChatHistoryRenderCache {
         let layout = rendered.layout(width);
         let height = layout.height;
         let CellLines {
+            wrapping,
             lines,
             user_input_lines,
+            hyperlinks,
             ..
         } = rendered;
         let user_input_rows = wrapped_height(&lines[..user_input_lines.min(lines.len())], width);
@@ -179,6 +185,8 @@ impl ChatHistoryRenderCache {
         }
         let Some(cost) = usize::from(width).checked_mul(height) else {
             return PreparedCell::Lines {
+                wrapping,
+                hyperlinks,
                 lines,
                 background: context.background(),
                 user_input_background: context.user_message_background(),
@@ -187,6 +195,8 @@ impl ChatHistoryRenderCache {
         };
         let Some(buffer_height) = u16::try_from(height).ok() else {
             return PreparedCell::Lines {
+                wrapping,
+                hyperlinks,
                 lines,
                 background: context.background(),
                 user_input_background: context.user_message_background(),
@@ -195,6 +205,8 @@ impl ChatHistoryRenderCache {
         };
         if key.is_none() || cost > MAX_CELL_CELLS {
             return PreparedCell::Lines {
+                wrapping,
+                hyperlinks,
                 lines,
                 background: context.background(),
                 user_input_background: context.user_message_background(),
@@ -217,10 +229,13 @@ impl ChatHistoryRenderCache {
             user_input_rows,
             context.user_message_background(),
         );
-        Paragraph::new(lines)
-            .wrap(Wrap { trim: false })
-            .render(area, &mut buffer);
-        let cell = Arc::new(RenderedCell { buffer });
+        let paragraph = Paragraph::new(lines);
+        let paragraph = match wrapping {
+            LineWrapping::Words => paragraph.wrap(Wrap { trim: false }),
+            LineWrapping::Prewrapped => paragraph,
+        };
+        paragraph.render(area, &mut buffer);
+        let cell = Arc::new(RenderedCell { buffer, hyperlinks });
         self.insert(
             key.expect("cacheable messages have a key"),
             Arc::clone(&cell),
@@ -259,6 +274,25 @@ impl ChatHistoryRenderCache {
         *self.entries.borrow_mut() = CacheEntries::default();
         self.layouts.borrow_mut().clear();
         *self.code_blocks.borrow_mut() = CodeBlockEntries::default();
+        *self.markdown.borrow_mut() = Default::default();
+    }
+
+    pub(crate) fn markdown(
+        &self,
+        id: Option<&str>,
+        source: &str,
+        width: usize,
+        context: RenderContext<'_>,
+        highlight: &mut impl FnMut(usize, &str, &str) -> Vec<Line<'static>>,
+    ) -> Vec<crate::terminal::hyperlinks::HyperlinkLine> {
+        if let Some(id) = id {
+            self.markdown
+                .borrow_mut()
+                .render(id, source, width, context, highlight)
+        } else {
+            super::super::streaming::StreamingRender::default()
+                .render("", source, width, context, highlight)
+        }
     }
 
     pub(crate) fn highlight_code_block(
@@ -416,13 +450,10 @@ impl CodeBlockRender {
             self.replace(language, complete, context, replacement);
         }
 
-        let mut lines = self.complete_lines.clone();
         if !partial.is_empty() {
-            lines.push(Line::from(Span::styled(
-                partial.to_owned(),
-                Style::default().fg(context.foreground()),
-            )));
+            return highlight_code(source, language, context.into());
         }
+        let mut lines = self.complete_lines.clone();
         if lines.is_empty() {
             lines.push(Line::default());
         }
@@ -452,6 +483,8 @@ fn complete_source(source: &str) -> (&str, &str) {
 pub(crate) enum PreparedCell {
     Buffered(Arc<RenderedCell>),
     Lines {
+        wrapping: LineWrapping,
+        hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
         lines: Vec<Line<'static>>,
         background: Color,
         user_input_background: Color,
@@ -460,10 +493,24 @@ pub(crate) enum PreparedCell {
 }
 
 impl PreparedCell {
+    pub(crate) fn place_links(
+        &self,
+        links: &mut crate::terminal::hyperlinks::FrameLinks,
+        area: Rect,
+        source_row: usize,
+    ) {
+        let rows = match self {
+            Self::Buffered(cell) => &cell.hyperlinks,
+            Self::Lines { hyperlinks, .. } => hyperlinks,
+        };
+        links.place(rows, area, source_row);
+    }
+
     pub(crate) fn render(&self, target: &mut Buffer, area: Rect, source_row: usize) {
         match self {
             Self::Buffered(cell) => cell.render(target, area, source_row),
             Self::Lines {
+                wrapping,
                 lines,
                 background,
                 user_input_background,
@@ -478,12 +525,17 @@ impl PreparedCell {
                     *user_input_rows,
                     *user_input_background,
                 );
-                let (lines, source_row) = visible_lines(lines, area.width, source_row);
+                let (lines, source_row) = match wrapping {
+                    LineWrapping::Words => visible_lines(lines, area.width, source_row),
+                    LineWrapping::Prewrapped => (&lines[source_row.min(lines.len())..], 0),
+                };
                 let lines = lines.iter().map(line_to_borrowed).collect::<Vec<_>>();
-                Paragraph::new(lines)
-                    .wrap(Wrap { trim: false })
-                    .scroll((source_row, 0))
-                    .render(area, target);
+                let paragraph = Paragraph::new(lines).scroll((source_row, 0));
+                let paragraph = match wrapping {
+                    LineWrapping::Words => paragraph.wrap(Wrap { trim: false }),
+                    LineWrapping::Prewrapped => paragraph,
+                };
+                paragraph.render(area, target);
             }
         }
     }
@@ -513,6 +565,7 @@ fn fill_user_input_background(
 #[derive(Debug)]
 pub(crate) struct RenderedCell {
     buffer: Buffer,
+    hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
 }
 
 impl RenderedCell {

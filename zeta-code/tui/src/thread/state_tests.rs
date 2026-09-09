@@ -276,3 +276,186 @@ fn session_id() -> SessionId {
 fn thread_id() -> ThreadId {
     ThreadId::new("thread_1").unwrap()
 }
+
+#[test]
+fn markdown_updates_render_links_and_tables_without_changing_canonical_messages() {
+    use crate::render::Renderable;
+    use crate::render::test_context;
+    use crate::terminal::hyperlinks::FrameLinks;
+    use crate::thread::transcript::ChatHistoryPointerState;
+    use crate::thread::transcript::ChatHistoryRenderCache;
+    use crate::thread::transcript::ChatHistoryScroll;
+    use crate::thread::transcript::ChatHistoryView;
+    use ratatui::Terminal;
+    use ratatui::backend::CrosstermBackend;
+    use ratatui::backend::TestBackend;
+    use ratatui::style::Modifier;
+    use std::cell::RefCell;
+
+    let mut state = ThreadState::default();
+    state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
+        empty_snapshot(),
+    ));
+    let cache = ChatHistoryRenderCache::default();
+    let scroll = ChatHistoryScroll::default();
+    let partial = "# Result\n\n[文档](https://example.com)\n\n| Name | State |\n| --- | --- |\n| alpha | pending |";
+    let complete = format!("{partial}\n| beta | complete |\n\n```rust\nfn main() {{}}\n```\n");
+    let mut terminal = Terminal::new(TestBackend::new(38, 18)).unwrap();
+    for (index, source) in [partial, complete.as_str(), "replacement"]
+        .into_iter()
+        .enumerate()
+    {
+        state.update(ThreadPresentationEvent::TranscriptUpdateReceived(Box::new(
+            update(vec![upsert_agent(source, index == 0)]),
+        )));
+        let messages = state.messages();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].text(), source);
+        let links = RefCell::new(FrameLinks::default());
+        terminal
+            .draw(|frame| {
+                ChatHistoryView {
+                    header: None,
+                    messages: &messages,
+                    scroll: &scroll,
+                    render_cache: &cache,
+                    pointer: ChatHistoryPointerState::default(),
+                }
+                .render(
+                    frame,
+                    frame.area(),
+                    test_context().with_hyperlinks(&links),
+                )
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let mut output = CrosstermBackend::new(Vec::new());
+        links
+            .borrow()
+            .write(&FrameLinks::default(), buffer, None, &mut output)
+            .unwrap();
+        let output = String::from_utf8(output.writer_mut().clone()).unwrap();
+        if index < 2 {
+            assert!(output.contains("https://example.com/"));
+            assert_eq!(buffer[(0, 0)].symbol(), "●");
+            assert_eq!(buffer[(1, 0)].symbol(), " ");
+            assert!(
+                buffer[(2, 2)].modifier.contains(Modifier::UNDERLINED),
+                "{:?}\n{}",
+                buffer,
+                terminal.backend()
+            );
+            assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
+        } else {
+            assert!(!output.contains("https://"));
+            assert!(!terminal.backend().to_string().contains("alpha"));
+        }
+        if index == 1 {
+            insta::assert_snapshot!(
+                "markdown_transcript_completed",
+                terminal.backend().to_string()
+            );
+        }
+    }
+}
+
+#[test]
+fn streaming_deadlines_change_the_visible_panel_without_changing_message_text() {
+    use crate::render::Renderable;
+    use crate::render::test_context;
+    use crate::thread::transcript::ChatHistoryPointerState;
+    use crate::thread::transcript::ChatHistoryRenderCache;
+    use crate::thread::transcript::ChatHistoryScroll;
+    use crate::thread::transcript::ChatHistoryView;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use std::collections::BTreeSet;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    let now = Instant::now();
+    let mut state = ThreadState::default();
+    state.update_at(
+        ThreadPresentationEvent::TranscriptSnapshotReceived(empty_snapshot()),
+        now,
+    );
+    let text = "first line\nsecond line\nthird line";
+    state.update_at(
+        ThreadPresentationEvent::TranscriptUpdateReceived(Box::new(update(vec![upsert_agent(
+            text, true,
+        )]))),
+        now,
+    );
+    let cache = ChatHistoryRenderCache::default();
+    let scroll = ChatHistoryScroll::default();
+    let mut terminal = Terminal::new(TestBackend::new(24, 5)).unwrap();
+    let mut phases = Vec::new();
+    let revision = state.messages()[0].render_revision;
+    for elapsed in [0, 40, 80] {
+        assert!(state.advance_stream(now + Duration::from_millis(elapsed)));
+        assert_eq!(state.messages()[0].text(), text);
+        assert_eq!(state.messages()[0].render_revision, revision);
+        let messages = state.visible_views(&BTreeSet::new(), None);
+        terminal
+            .draw(|frame| {
+                ChatHistoryView {
+                    header: None,
+                    messages: &messages,
+                    scroll: &scroll,
+                    render_cache: &cache,
+                    pointer: ChatHistoryPointerState::default(),
+                }
+                .render(frame, frame.area(), test_context())
+            })
+            .unwrap();
+        assert_eq!(terminal.backend().buffer()[(0, 0)].symbol(), "●");
+        assert_eq!(terminal.backend().buffer()[(1, 0)].symbol(), " ");
+        phases.push(format!("{elapsed} ms\n{}", terminal.backend()));
+    }
+    assert!(state.stream_deadline().is_none());
+    assert_eq!(cache.entry_count(), 1);
+    insta::assert_snapshot!("streaming_commit_phases", phases.join("\n"));
+}
+
+#[test]
+fn switching_threads_and_interrupting_stop_pending_stream_animation() {
+    use std::collections::BTreeSet;
+    use std::time::Instant;
+    let now = Instant::now();
+    let mut state = ThreadState::default();
+    let source = "one\ntwo\nthree";
+    state.update_at(
+        ThreadPresentationEvent::TranscriptUpdateReceived(Box::new(update(vec![upsert_agent(
+            source, true,
+        )]))),
+        now,
+    );
+    state.advance_stream(now);
+    assert_eq!(
+        state.visible_views(&BTreeSet::new(), None)[0].text(),
+        "one\n"
+    );
+    let other = ThreadId::new("other").unwrap();
+    state.switch_transcript(&thread_id(), &other);
+    assert!(state.stream_deadline().is_none());
+    state.switch_transcript(&other, &thread_id());
+    assert_eq!(
+        state.visible_views(&BTreeSet::new(), None)[0].text(),
+        source
+    );
+    assert!(state.stream_deadline().is_none());
+    state.update_at(
+        ThreadPresentationEvent::TranscriptUpdateReceived(Box::new(update(vec![upsert_agent(
+            "one\ntwo\nthree\nlast",
+            true,
+        )]))),
+        now,
+    );
+    assert!(state.stream_deadline().is_some());
+    state.update_at(ThreadPresentationEvent::Interrupted, now);
+    assert!(state.stream_deadline().is_none());
+    assert_eq!(
+        state.visible_views(&BTreeSet::new(), None)[0].text(),
+        "one\ntwo\nthree\nlast"
+    );
+}

@@ -27,6 +27,7 @@ impl CellView<'static> {
             has_details: cell.has_details(),
             cell: Cow::Owned(cell),
             cell_id: None,
+            visible_source_end: None,
             render_revision: 0,
             expanded: false,
             selected: false,

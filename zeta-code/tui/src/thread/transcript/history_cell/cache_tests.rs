@@ -23,6 +23,8 @@ fn unchanged_cell_reuses_the_rendered_buffer() {
     let render = || {
         renders.set(renders.get() + 1);
         CellLines {
+            wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
+            hyperlinks: Vec::new(),
             lines: styled_text_lines("cached text", Style::default()),
             user_input_lines: 0,
             details_line: None,
@@ -53,6 +55,8 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
             || {
                 renders.set(renders.get() + 1);
                 CellLines {
+                    wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
+                    hyperlinks: Vec::new(),
                     lines: styled_text_lines("cached text", Style::default()),
                     user_input_lines: 0,
                     details_line: None,
@@ -81,6 +85,8 @@ fn messages_without_a_content_revision_are_not_cached() {
         cache.prepare(&message, 20, test_context(), || {
             renders.set(renders.get() + 1);
             CellLines {
+                wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
+                hyperlinks: Vec::new(),
                 lines: styled_text_lines("temporary", Style::default()),
                 user_input_lines: 0,
                 details_line: None,
@@ -101,6 +107,8 @@ fn oversized_cells_are_rendered_without_entering_the_cache() {
         .with_render_revision(1);
 
     let prepared = cache.prepare(&message, 20, test_context(), || CellLines {
+        wrapping: crate::thread::transcript::history_cell::LineWrapping::Words,
+        hyperlinks: Vec::new(),
         lines: text
             .lines()
             .map(|line| ratatui::text::Line::from(line.to_owned()))

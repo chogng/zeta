@@ -602,7 +602,7 @@ impl TuiProcess {
         self.capture.lock().unwrap().screen()
     }
 
-    fn raw_text(&self) -> String {
+    pub fn raw_text(&self) -> String {
         self.capture.lock().unwrap().raw_text()
     }
 

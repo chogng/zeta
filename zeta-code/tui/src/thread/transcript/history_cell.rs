@@ -50,27 +50,36 @@ pub(super) struct CellLayout {
     pub(super) details_row: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(super) enum LineWrapping {
+    Words,
+    Prewrapped,
+}
+
 pub(super) struct CellLines {
+    pub(super) wrapping: LineWrapping,
     pub(super) lines: Vec<Line<'static>>,
+    pub(super) hyperlinks: Vec<Vec<crate::terminal::hyperlinks::Hyperlink>>,
     pub(super) user_input_lines: usize,
     pub(super) details_line: Option<usize>,
 }
 
 impl CellLines {
-    pub(super) fn layout(&self, width: u16) -> CellLayout {
-        CellLayout {
-            height: crate::render::wrapped_height(&self.lines, width),
-            details_row: self
-                .details_line
-                .map(|line| crate::render::wrapped_height(&self.lines[..line], width)),
+    fn line_height(&self, lines: &[Line<'_>], width: u16) -> usize {
+        match self.wrapping {
+            LineWrapping::Words => crate::render::wrapped_height(lines, width),
+            LineWrapping::Prewrapped => lines.len(),
         }
     }
-}
 
-#[derive(Clone, Copy)]
-pub(super) enum SyntaxHighlighting {
-    Enabled,
-    Disabled,
+    pub(super) fn layout(&self, width: u16) -> CellLayout {
+        CellLayout {
+            height: self.line_height(&self.lines, width),
+            details_row: self
+                .details_line
+                .map(|line| self.line_height(&self.lines[..line], width)),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -99,7 +108,7 @@ pub(super) trait HistoryCell: std::fmt::Debug {
         view: &CellView<'_>,
         context: RenderContext<'_>,
         cache: Option<&ChatHistoryRenderCache>,
-        highlighting: SyntaxHighlighting,
+        width: u16,
     ) -> CellLines;
 }
 
@@ -108,6 +117,7 @@ pub(crate) struct CellView<'a> {
     pub(super) cell: Cow<'a, TranscriptCell>,
     pub(crate) cell_id: Option<String>,
     pub(crate) render_revision: u64,
+    pub(super) visible_source_end: Option<usize>,
     pub(crate) can_expand: bool,
     pub(crate) expanded: bool,
     pub(crate) has_details: bool,
@@ -120,7 +130,15 @@ impl CellView<'_> {
         self.cell.history_cell()
     }
     pub(crate) fn text(&self) -> Cow<'_, str> {
-        self.owner().summary(self.mode)
+        let text = self.owner().summary(self.mode);
+        match (text, self.visible_source_end) {
+            (Cow::Borrowed(text), Some(end)) => Cow::Borrowed(&text[..end]),
+            (Cow::Owned(mut text), Some(end)) => {
+                text.truncate(end);
+                Cow::Owned(text)
+            }
+            (text, None) => text,
+        }
     }
     pub(crate) fn detail(&self) -> Option<Cow<'_, str>> {
         self.owner().detail(self.mode)
@@ -132,9 +150,9 @@ impl CellView<'_> {
         &self,
         context: RenderContext<'_>,
         cache: Option<&ChatHistoryRenderCache>,
-        highlighting: SyntaxHighlighting,
+        width: u16,
     ) -> CellLines {
-        self.owner().lines(self, context, cache, highlighting)
+        self.owner().lines(self, context, cache, width)
     }
 }
 

@@ -7,8 +7,6 @@ pub(crate) use scroll::TranscriptScrollTarget;
 
 use super::CellView;
 use super::ChatHistoryRenderCache;
-use super::history_cell::CellLines;
-use super::history_cell::SyntaxHighlighting;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -305,30 +303,10 @@ fn render_jump_to_bottom(
 
 #[cfg(test)]
 fn message_lines<'a>(messages: &'a [CellView<'_>], context: RenderContext<'_>) -> Vec<Line<'a>> {
-    message_lines_with_code(messages, context, None, SyntaxHighlighting::Enabled)
-}
-
-#[cfg(test)]
-fn message_lines_with_code<'a>(
-    messages: &'a [CellView<'_>],
-    context: RenderContext<'_>,
-    cache: Option<&ChatHistoryRenderCache>,
-    syntax_highlighting: SyntaxHighlighting,
-) -> Vec<Line<'a>> {
-    let mut lines = Vec::new();
-    for cell in messages {
-        lines.extend(cell_lines_with_code(cell, context, cache, syntax_highlighting).lines);
-    }
-    lines
-}
-
-fn cell_lines_with_code(
-    cell: &CellView<'_>,
-    context: RenderContext<'_>,
-    cache: Option<&ChatHistoryRenderCache>,
-    syntax_highlighting: SyntaxHighlighting,
-) -> CellLines {
-    cell.lines(context, cache, syntax_highlighting)
+    messages
+        .iter()
+        .flat_map(|cell| cell.lines(context, None, 80).lines)
+        .collect()
 }
 
 fn measured_heights(
@@ -343,7 +321,7 @@ fn measured_heights(
         .map(|cell| {
             cache
                 .measure(cell, width, context, || {
-                    cell_lines_with_code(cell, context, None, SyntaxHighlighting::Disabled)
+                    cell.lines(context, Some(cache), width)
                 })
                 .height
         })
@@ -405,13 +383,20 @@ fn render_cells(
             let target_height = (visible_end - visible_start) as u16;
             let source_row = visible_start - cell_start;
             let prepared = cache.prepare(cell, area.width, context, || {
-                cell_lines_with_code(cell, context, Some(cache), SyntaxHighlighting::Enabled)
+                cell.lines(context, Some(cache), area.width)
             });
             prepared.render(
                 frame.buffer_mut(),
                 Rect::new(area.x, target_y, area.width, target_height),
                 source_row,
             );
+            if let Some(links) = context.hyperlinks() {
+                prepared.place_links(
+                    &mut links.borrow_mut(),
+                    Rect::new(area.x, target_y, area.width, target_height),
+                    source_row,
+                );
+            }
             render_pointer_feedback(
                 frame,
                 area,
@@ -419,7 +404,7 @@ fn render_cells(
                 cell_start,
                 cache
                     .measure(cell, area.width, context, || {
-                        cell.lines(context, None, SyntaxHighlighting::Disabled)
+                        cell.lines(context, Some(cache), area.width)
                     })
                     .details_row,
                 viewport_start,
