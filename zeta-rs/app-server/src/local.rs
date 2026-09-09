@@ -1325,6 +1325,9 @@ pub fn open_local_app_server_with_codebase_providers(
     }
     server.bind_session_extensions().map_err(open_error)?;
     server
+        .recover_issue_assignments()
+        .map_err(OpenAppServerError)?;
+    server
         .resume_recovered_agent_coordinations()
         .map_err(open_error)?;
     server
@@ -1900,7 +1903,11 @@ impl ModelCatalog for ConfigBackedModelService {
             .providers()
             .map(|provider| CatalogScopeKey::provider_seed(provider.id.clone()))
             .collect::<Vec<_>>();
-        for provider in config.providers.values().filter(|provider| provider.custom.is_none()) {
+        for provider in config
+            .providers
+            .values()
+            .filter(|provider| provider.custom.is_none())
+        {
             let binding = match self.catalog_provider.catalog_binding(provider) {
                 Ok(Some(binding)) => binding,
                 Ok(None) => continue,
@@ -1959,7 +1966,11 @@ impl ModelCatalog for ConfigBackedModelService {
             .values()
             .filter(|provider| provider.custom.is_some())
         {
-            if let Some(id) = provider.custom.as_ref().and_then(|custom| custom.model.as_ref()) {
+            if let Some(id) = provider
+                .custom
+                .as_ref()
+                .and_then(|custom| custom.model.as_ref())
+            {
                 let model = zeta_protocol::ModelRef::new(provider.provider.clone(), id.clone());
                 if models.iter().any(|entry| entry.model == model) {
                     continue;
@@ -1982,7 +1993,10 @@ impl ModelCatalog for ConfigBackedModelService {
             }
         }
         if let Some(preferred) = config.preferred_model.clone()
-            && config.providers.get(&preferred.provider).is_none_or(|provider| provider.custom.is_none())
+            && config
+                .providers
+                .get(&preferred.provider)
+                .is_none_or(|provider| provider.custom.is_none())
             && !models.iter().any(|entry| entry.model == preferred)
         {
             let output_transport = registry
@@ -2086,10 +2100,15 @@ fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, C
         .models
         .iter()
         .find(|model| model.id == model_ref.model);
-    let custom_context = provider_config.custom.as_ref().map(|custom| zeta_model_provider_config::ModelContextConfig {
-        context_window: custom.context_window, auto_compact_token_limit: None,
+    let custom_context = provider_config.custom.as_ref().map(|custom| {
+        zeta_model_provider_config::ModelContextConfig {
+            context_window: custom.context_window,
+            auto_compact_token_limit: None,
+        }
     });
-    let configured_context = custom_context.as_ref().or_else(|| provider_config.model_context.get(&model_ref.model));
+    let configured_context = custom_context
+        .as_ref()
+        .or_else(|| provider_config.model_context.get(&model_ref.model));
     let (context_window, auto_compact_token_limit) = match configured_context {
         Some(context) => {
             let window = match catalog_model.map(|model| model.context_window) {

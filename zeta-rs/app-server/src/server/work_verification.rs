@@ -280,6 +280,34 @@ impl TurnChangesRuntime {
                 outcome: VerificationCheckOutcome::Indeterminate,
             });
         }
+        let issue_profiles = verification.input.ordered_results.iter().all(|result| {
+            let attempt = &run.attempts[&result.attempt_id];
+            run.contract(&attempt.contract.contract_id, attempt.contract.revision)
+                .is_some_and(|contract| {
+                    contract.validation_profile.name == "issue-command-verifier-v1"
+                })
+        });
+        if issue_profiles && serializable && !unknown_effects {
+            match self.execute_issue_validation_guarded(run, verification, &sources) {
+                Ok(evidence) => {
+                    checks.extend(evidence);
+                    return WorkVerificationExecution { conclusion: VerificationConclusion::Verified, checks, reason: "Configured Issue validation commands passed on the independently rebuilt candidate; source tree and execution scope were preserved".into() };
+                }
+                Err(error) => {
+                    checks.push(VerificationCheckEvidence {
+                        check_id: "issue-validation".into(),
+                        command_digest: digest_set(&verification.input.validation_profile_digests),
+                        output_digest: digest_text(&error),
+                        outcome: VerificationCheckOutcome::Failed,
+                    });
+                    return WorkVerificationExecution {
+                        conclusion: VerificationConclusion::Rejected,
+                        checks,
+                        reason: error,
+                    };
+                }
+            }
+        }
         checks.push(VerificationCheckEvidence {
             check_id: "acceptance-profile".into(),
             command_digest: digest_set(&verification.input.validation_profile_digests),
@@ -304,6 +332,154 @@ impl TurnChangesRuntime {
                     .into()
             },
         }
+    }
+
+    fn execute_issue_validation_guarded(
+        &self,
+        run: &WorkRun,
+        verification: &WorkVerification,
+        sources: &BTreeMap<DirId, VerificationSourceRoot>,
+    ) -> Result<Vec<VerificationCheckEvidence>, String> {
+        let assignments = verification
+            .input
+            .ordered_results
+            .iter()
+            .map(|result| {
+                self.issue_assignments
+                    .for_attempt(&run.work_run_id, &result.attempt_id)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let watch = self.watch_issue_validation(&assignments)?;
+        self.execute_issue_validation(run, verification, sources, &watch.token())
+    }
+
+    fn execute_issue_validation(
+        &self,
+        run: &WorkRun,
+        verification: &WorkVerification,
+        sources: &BTreeMap<DirId, VerificationSourceRoot>,
+        cancellation: &zeta_async_utils::CancellationToken,
+    ) -> Result<Vec<VerificationCheckEvidence>, String> {
+        let mut individual = Vec::new();
+        if verification.input.ordered_results.len() > 1 {
+            for result in &verification.input.ordered_results {
+                let input = self
+                    .prepare_work_verification(run, &BTreeSet::from([result.attempt_id.clone()]))?;
+                let key = verification_key(&run.work_run_id, &input)
+                    .map_err(|error| error.to_string())?;
+                let single = zeta_work_coordination::WorkVerification {
+                    verification_key: key,
+                    input,
+                    status: zeta_work_coordination::WorkVerificationStatus::Verifying,
+                    checks: Vec::new(),
+                    evidence_digest: None,
+                    reason: None,
+                    stale_reason: None,
+                };
+                let single_sources =
+                    self.verification_source_roots(run, &single.input.ordered_results)?;
+                for mut evidence in
+                    self.execute_issue_validation(run, &single, &single_sources, cancellation)?
+                {
+                    evidence.check_id = format!("{}-{}", result.attempt_id, evidence.check_id);
+                    individual.push(evidence);
+                }
+            }
+        }
+        let (_, bindings) =
+            self.materialize_work_verification(run, &verification.input, sources)?;
+        let mut commands = BTreeSet::new();
+        for result in &verification.input.ordered_results {
+            let assignment = self
+                .issue_assignments
+                .for_attempt(&run.work_run_id, &result.attempt_id)?;
+            if assignment.ownership != zeta_work_coordination::IssueOwnership::Held {
+                return Err("Issue ownership changed before verification".into());
+            }
+            if assignment.workflow.validation_commands.is_empty() {
+                return Err(
+                    "Configure validation commands before assigning implementation work".into(),
+                );
+            }
+            let digest = zeta_protocol::ContentDigest::sha256(
+                &serde_json::to_vec(&assignment.workflow.validation_commands)
+                    .map_err(|error| error.to_string())?,
+            );
+            let attempt = &run.attempts[&result.attempt_id];
+            let contract = run
+                .contract(&attempt.contract.contract_id, attempt.contract.revision)
+                .ok_or("Verification contract missing")?;
+            if contract.validation_profile.content_digest != digest {
+                return Err(
+                    "Issue validation configuration differs from the frozen work contract".into(),
+                );
+            }
+            commands.extend(assignment.workflow.validation_commands);
+        }
+        let attempt = &run.attempts[&verification.input.ordered_results[0].attempt_id];
+        let scope = self
+            .file_access
+            .thread_scope(
+                &attempt.thread_id,
+                zeta_file_access::Permission::ExecuteCommands,
+            )
+            .map_err(|error| error.to_string())?
+            .ok_or("Verification requires command execution permission")?;
+        let authorization = scope.primary();
+        let mut evidence = individual;
+        for (index, binding) in bindings.iter().enumerate() {
+            let directory = Dir::open_local(binding.dir()).map_err(|error| error.to_string())?;
+            let hidden = [
+                &self.profile_root,
+                &self.dir_root,
+                &self.worktrees.settings().root,
+            ]
+            .into_iter()
+            .map(Dir::open_local)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
+            let hidden = hidden
+                .into_iter()
+                .map(|dir| (dir.id(), dir))
+                .collect::<BTreeMap<_, _>>()
+                .into_values()
+                .collect::<Vec<_>>();
+            for (command_index, command) in commands.iter().enumerate() {
+                let policy = self
+                    .verification_tool_config
+                    .read()
+                    .map_err(|_| "Verification policy lock poisoned")?
+                    .clone();
+                let output = crate::local_tools::execute_verification_command(
+                    authorization,
+                    &policy,
+                    directory.clone(),
+                    hidden.clone(),
+                    command,
+                    cancellation,
+                )?;
+                if output.exit_code != Some(0) {
+                    return Err(format!(
+                        "Validation failed: {command}\n{}\n{}",
+                        output.stdout, output.stderr
+                    ));
+                }
+                verify_materialized_final_state(
+                    &self.worktree_runtime,
+                    &verification.input.roots[index],
+                    binding,
+                )?;
+                evidence.push(VerificationCheckEvidence {
+                    check_id: format!("issue-command-{index}-{command_index}"),
+                    command_digest: ContentDigest::sha256(command.as_bytes()),
+                    output_digest: ContentDigest::sha256(
+                        format!("{}\n{}", output.stdout, output.stderr).as_bytes(),
+                    ),
+                    outcome: VerificationCheckOutcome::Passed,
+                });
+            }
+        }
+        Ok(evidence)
     }
 
     /// Executes the feature-gated exact-file acceptance profile against the independently

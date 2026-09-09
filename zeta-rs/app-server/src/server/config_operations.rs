@@ -102,17 +102,34 @@ use zeta_execpolicy::ScopeMatcher;
 
 impl AppServer {
     pub(super) fn issue_configure(&self, value: &Value) -> Result<Value, RpcError> {
-        let params: zeta_app_server_protocol::protocol::issues::IssueConfigureParams = decode(value)?;
-        let store = self.config.as_ref().ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let params: zeta_app_server_protocol::protocol::issues::IssueConfigureParams =
+            decode(value)?;
+        let store = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
         let config = zeta_config::IssueConfig {
+            repositories: store
+                .read_snapshot()
+                .map_err(config_error)?
+                .values
+                .issues
+                .repositories,
             recommend_merge: params.config.recommend_merge,
-            analysis_model: params.config.analysis_model.map(model_ref_from_dto).transpose()?,
+            auto_refresh_minutes: params.config.auto_refresh_minutes,
+            analysis_model: params
+                .config
+                .analysis_model
+                .map(model_ref_from_dto)
+                .transpose()?,
         };
-        let outcome = store.apply(ConfigCommandRequest {
-            command_id: params.command_id,
-            expected_revision: ConfigRevision::new(params.expected_revision),
-            command: UserConfigCommand::ConfigureIssues { config },
-        }).map_err(config_operation_error)?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::ConfigureIssues { config },
+            })
+            .map_err(config_operation_error)?;
         result(&config_command_result(outcome))
     }
 
@@ -610,6 +627,7 @@ fn config_read_result(
     ConfigReadResult {
         issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
             recommend_merge: snapshot.values.issues.recommend_merge,
+            auto_refresh_minutes: snapshot.values.issues.auto_refresh_minutes,
             analysis_model: snapshot.values.issues.analysis_model.map(model_ref_dto),
         },
         revision: snapshot.revision.get(),

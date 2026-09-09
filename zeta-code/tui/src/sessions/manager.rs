@@ -4,6 +4,12 @@ use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::interaction_style;
 use crate::render::selection_marker;
+#[cfg(test)]
+use crate::widgets::grouped_list::Viewport as ManagerViewport;
+use crate::widgets::grouped_list::more_line;
+use crate::widgets::grouped_list::pad_to_width;
+use crate::widgets::grouped_list::truncate_to_width;
+use crate::widgets::grouped_list::viewport as manager_viewport;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -396,52 +402,6 @@ pub(crate) fn draw_manager(
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ManagerViewport {
-    start: usize,
-    end: usize,
-}
-
-fn manager_viewport(
-    row_count: usize,
-    selected_row: Option<usize>,
-    visible_rows: usize,
-) -> ManagerViewport {
-    if row_count <= visible_rows {
-        return ManagerViewport {
-            start: 0,
-            end: row_count,
-        };
-    }
-    if visible_rows <= 1 {
-        let start = selected_row
-            .unwrap_or_default()
-            .min(row_count.saturating_sub(1));
-        return ManagerViewport {
-            start,
-            end: (start + 1).min(row_count),
-        };
-    }
-    let selected = selected_row
-        .unwrap_or_default()
-        .min(row_count.saturating_sub(1));
-    for start in 0..=selected {
-        let top_notice = usize::from(start > 0);
-        let mut capacity = visible_rows.saturating_sub(top_notice).max(1);
-        if row_count.saturating_sub(start) > capacity && capacity > 1 {
-            capacity -= 1;
-        }
-        let end = start.saturating_add(capacity).min(row_count);
-        if selected < end {
-            return ManagerViewport { start, end };
-        }
-    }
-    ManagerViewport {
-        start: selected,
-        end: (selected + 1).min(row_count),
-    }
-}
-
 #[derive(Clone, Copy)]
 enum ManagerRow<'a> {
     Heading { group: SessionGroup, count: usize },
@@ -607,22 +567,6 @@ fn group_line(
     Line::styled(pad_to_width(&truncate_to_width(&text, width), width), style)
 }
 
-fn more_line(
-    direction: char,
-    count: usize,
-    width: usize,
-    context: RenderContext<'_>,
-) -> Line<'static> {
-    let position = if direction == '↑' { "above" } else { "below" };
-    let text = format!("{direction} {count} more {position}");
-    Line::styled(
-        pad_to_width(&truncate_to_width(&text, width), width),
-        Style::default()
-            .fg(context.muted())
-            .add_modifier(Modifier::ITALIC),
-    )
-}
-
 fn manager_state(
     target: &SessionManagerPointerTarget,
     selected: Option<&SessionManagerPointerTarget>,
@@ -697,22 +641,6 @@ fn status_icon(status: SessionManagerStatus, animation_frame: usize) -> char {
         SessionManagerStatus::Completed | SessionManagerStatus::Failed => '●',
         SessionManagerStatus::Stopped => '■',
     }
-}
-
-fn truncate_to_width(text: &str, width: usize) -> String {
-    text.chars()
-        .scan(0, |used, character| {
-            let character_width = character.width().unwrap_or(0);
-            (*used + character_width <= width).then(|| {
-                *used += character_width;
-                character
-            })
-        })
-        .collect()
-}
-
-fn pad_to_width(text: &str, width: usize) -> String {
-    format!("{text}{}", " ".repeat(width.saturating_sub(text.width())))
 }
 
 fn current_unix_millis() -> u64 {

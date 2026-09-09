@@ -11337,6 +11337,7 @@ dependencies = [
  "zeta-model-provider-config",
  "zeta-protocol",
  "zeta-state",
+ "zeta-work-coordination",
 ]
 
 [[package]]
@@ -12379,6 +12380,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "zeta-environment",
  "zeta-file-access",
@@ -12540,6 +12542,7 @@ dependencies = [
  "zeta-utils-elapsed",
  "zeta-utils-image",
  "zeta-utils-path",
+ "zeta-work-coordination",
 ]
 
 [[package]]

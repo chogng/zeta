@@ -223,12 +223,22 @@ fn configuring_provider_without_builtin_models_does_not_invent_a_model() {
 fn issue_config_defaults_on_and_preserves_its_model_across_disable_and_restart() {
     let path = config_path("issues");
     let store = ConfigStore::open(&path).unwrap();
-    assert_eq!(store.read_snapshot().unwrap().values.issues, IssueConfig { recommend_merge: true, analysis_model: None });
+    assert_eq!(
+        store.read_snapshot().unwrap().values.issues,
+        IssueConfig {
+            repositories: Default::default(),
+            auto_refresh_minutes: 10,
+            recommend_merge: true,
+            analysis_model: None
+        }
+    );
     let invalid = store.apply(ConfigCommandRequest {
         command_id: CommandId::new("unknown-issue-model").unwrap(),
         expected_revision: ConfigRevision::INITIAL,
         command: UserConfigCommand::ConfigureIssues {
             config: IssueConfig {
+                repositories: Default::default(),
+                auto_refresh_minutes: 10,
                 recommend_merge: true,
                 analysis_model: Some(model_ref("missing", "small")),
             },
@@ -237,12 +247,20 @@ fn issue_config_defaults_on_and_preserves_its_model_across_disable_and_restart()
     assert!(matches!(invalid, Err(ConfigCommandError::Config(_))));
     let configured = configure_provider(&store, 0, "ollama");
     let chat = model_ref("ollama", "chat-model");
-    let preferred = store.apply(ConfigCommandRequest {
-        command_id: CommandId::new("chat-model").unwrap(), expected_revision: configured.revision,
-        command: UserConfigCommand::UpdatePreferences(PreferencesUpdate { preferred_model: Patch::Value(chat.clone()), ..Default::default() }),
-    }).unwrap();
+    let preferred = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("chat-model").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                preferred_model: Patch::Value(chat.clone()),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
     let analysis = model_ref("ollama", "issue-model");
     let disabled = IssueConfig {
+        repositories: Default::default(),
+        auto_refresh_minutes: 10,
         recommend_merge: false,
         analysis_model: Some(analysis.clone()),
     };
@@ -268,6 +286,8 @@ fn issue_config_defaults_on_and_preserves_its_model_across_disable_and_restart()
             .is_err()
     );
     let enabled = IssueConfig {
+        repositories: Default::default(),
+        auto_refresh_minutes: 10,
         recommend_merge: true,
         analysis_model: Some(analysis),
     };
@@ -364,11 +384,17 @@ fn unversioned_config_is_migrated_and_rewritten_once() {
     let document_path = database_path.with_extension("toml");
     let trusted_dir = database_path.with_extension("trusted-dir");
     std::fs::create_dir(&trusted_dir).unwrap();
-    let trusted_path = zeta_file_access::Dir::open_local(&trusted_dir).unwrap().canonical_path().to_path_buf();
+    let trusted_path = zeta_file_access::Dir::open_local(&trusted_dir)
+        .unwrap()
+        .canonical_path()
+        .to_path_buf();
     let trusted = crate::document_migration::legacy_id_for_path(&trusted_path);
     let mismatched_dir = database_path.with_extension("mismatched-dir");
     std::fs::create_dir(&mismatched_dir).unwrap();
-    let mismatched_path = zeta_file_access::Dir::open_local(&mismatched_dir).unwrap().canonical_path().to_path_buf();
+    let mismatched_path = zeta_file_access::Dir::open_local(&mismatched_dir)
+        .unwrap()
+        .canonical_path()
+        .to_path_buf();
     let mismatched = format!("sha256:{}", "56".repeat(32));
     let restricted = format!("sha256:{}", "34".repeat(32));
     std::fs::write(
@@ -2045,4 +2071,61 @@ fn language_server_mode_accepts_only_enabled_or_disabled() {
     assert!(
         serde_json::from_value::<LanguageServerModeConfig>(serde_json::json!("automatic")).is_err()
     );
+}
+
+#[test]
+fn issue_refresh_settings_validate_persist_and_reject_stale_writes() {
+    let path = config_path("issue-refresh");
+    let store = ConfigStore::open(&path).unwrap();
+    for minutes in [1, 6, 120, u32::MAX] {
+        let mut config = IssueConfig::default();
+        config.auto_refresh_minutes = minutes;
+        assert!(
+            store
+                .apply(ConfigCommandRequest {
+                    command_id: CommandId::new(format!("bad-{minutes}")).unwrap(),
+                    expected_revision: ConfigRevision::INITIAL,
+                    command: UserConfigCommand::ConfigureIssues { config }
+                })
+                .is_err()
+        );
+    }
+    for (index, minutes) in [0, 5, 10, 30, 60].into_iter().enumerate() {
+        let revision = store.read_snapshot().unwrap().revision;
+        let mut config = IssueConfig::default();
+        config.auto_refresh_minutes = minutes;
+        config.recommend_merge = false;
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new(format!("refresh-{index}")).unwrap(),
+                expected_revision: revision,
+                command: UserConfigCommand::ConfigureIssues {
+                    config: config.clone(),
+                },
+            })
+            .unwrap();
+        assert_eq!(
+            ConfigStore::open(&path)
+                .unwrap()
+                .read_snapshot()
+                .unwrap()
+                .values
+                .issues,
+            config
+        );
+        assert!(
+            store
+                .apply(ConfigCommandRequest {
+                    command_id: CommandId::new(format!("stale-{index}")).unwrap(),
+                    expected_revision: revision,
+                    command: UserConfigCommand::ConfigureIssues {
+                        config: IssueConfig::default()
+                    }
+                })
+                .is_err()
+        );
+    }
+    assert!(persisted_config_document(&path).contains("autoRefreshMinutes = 60"));
+    drop(store);
+    remove_config_files(&path);
 }

@@ -20,21 +20,77 @@ impl AppServer {
             .worktree_runtime
             .block_on(repository(&runtime.dir_root))
             .map_err(issue_error)?;
-        let page = runtime
-            .worktree_runtime
-            .block_on(zeta_github::GitHub::default().issues(
-                &repository,
-                match params.state {
-                    zeta_app_server_protocol::protocol::issues::IssueState::Open => {
+        let query = params.query.trim();
+        zeta_github::validate_issue_query(query, params.page).map_err(issue_error)?;
+        let state = match params.state {
+            zeta_app_server_protocol::protocol::issues::IssueState::Open => "open",
+            zeta_app_server_protocol::protocol::issues::IssueState::Closed => "closed",
+        };
+        let cache = self
+            .issue_cache
+            .as_ref()
+            .ok_or_else(|| issue_error("Issue cache is unavailable".into()))?
+            .lock()
+            .map_err(|_| issue_error("Issue cache operation lock poisoned".into()))?;
+        let settings = self
+            .config
+            .as_ref()
+            .ok_or_else(|| issue_error("Issue configuration is unavailable".into()))?
+            .read_snapshot()
+            .map_err(|error| issue_error(error.to_string()))?
+            .values
+            .issues;
+        let interval = settings.auto_refresh_minutes * 60;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| issue_error(error.to_string()))?
+            .as_secs();
+        let key = zeta_state::IssueCacheKey {
+            repository: &repository,
+            state,
+            query,
+            page: params.page,
+        };
+        use zeta_app_server_protocol::protocol::issues::IssueListMode;
+        if params.mode == IssueListMode::ClearCache {
+            if params.page != 1 {
+                return Err(issue_error("Clear cache must start at page 1".into()));
+            }
+            cache.clear(&repository).map_err(issue_error)?;
+        }
+        let stored = if matches!(params.mode, IssueListMode::Cached | IssueListMode::Auto) {
+            cache.read(&key, now).map_err(issue_error)?
+        } else {
+            None
+        };
+        let fresh = stored.filter(|entry| {
+            params.mode == IssueListMode::Cached
+                || interval == 0
+                || now.saturating_sub(entry.fetched_at) < u64::from(interval)
+        });
+        let (page, fetched_at, cached) = if let Some(entry) = fresh {
+            (entry.page, entry.fetched_at, true)
+        } else {
+            let page = runtime
+                .worktree_runtime
+                .block_on(zeta_github::GitHub::default().search_issues(
+                    &repository,
+                    if state == "open" {
                         zeta_github::IssueState::Open
-                    }
-                    zeta_app_server_protocol::protocol::issues::IssueState::Closed => {
+                    } else {
                         zeta_github::IssueState::Closed
-                    }
-                },
-                params.page,
-            ))
-            .map_err(issue_error)?;
+                    },
+                    query,
+                    params.page,
+                ))
+                .map_err(issue_error)?;
+            let fetched_at = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| issue_error(error.to_string()))?
+                .as_secs();
+            cache.write(&key, &page, fetched_at).map_err(issue_error)?;
+            (page, fetched_at, false)
+        };
         result(&IssueListResult {
             repository: IssueRepository {
                 host: repository.host,
@@ -43,6 +99,11 @@ impl AppServer {
             },
             issues: page.issues.into_iter().map(summary).collect(),
             next_page: page.next_page,
+            cached,
+            fetched_at,
+            refresh_after_seconds: (interval != 0)
+                .then(|| interval.saturating_sub(now.saturating_sub(fetched_at) as u32)),
+            notice: page.notice,
         })
     }
 
@@ -115,6 +176,12 @@ pub(super) async fn repository(root: &std::path::Path) -> Result<zeta_github::Re
 
 pub(super) fn summary(issue: zeta_github::Issue) -> IssueSummary {
     IssueSummary {
+        labels: issue.labels.into_iter().map(|label| label.name).collect(),
+        assignees: issue
+            .assignees
+            .into_iter()
+            .map(|assignee| assignee.login)
+            .collect(),
         number: issue.number,
         title: issue.title,
         url: issue.html_url,

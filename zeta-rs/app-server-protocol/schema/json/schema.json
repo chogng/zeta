@@ -5849,6 +5849,118 @@
         {
           "properties": {
             "method": {
+              "const": "issue/workflow/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/workflow/configure",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueWorkflowConfigureParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/label/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueLabelCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/plan",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssuePlanParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/assignment/start",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueAssignmentStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/assignments/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/assignment/action",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueAssignmentActionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "issue/configure",
               "type": "string"
             },
@@ -9922,6 +10034,118 @@
             },
             "result": {
               "$ref": "#/$defs/IssueTaskResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/workflow/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueWorkflowReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/workflow/configure",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/label/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueLabelDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/plan",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssuePlanResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/assignment/start",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueAssignmentsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/assignments/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueAssignmentsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/assignment/action",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/IssueAssignmentsResult"
             }
           },
           "required": [
@@ -17771,6 +17995,473 @@
       ],
       "type": "object"
     },
+    "IssueAssignmentAction": {
+      "oneOf": [
+        {
+          "enum": [
+            "pause",
+            "resume",
+            "release",
+            "cancel",
+            "retrySync",
+            "verify",
+            "deliver"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "transfer": {
+              "additionalProperties": false,
+              "properties": {
+                "assignee": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "assignee"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "transfer"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "IssueAssignmentActionParams": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/IssueAssignmentAction"
+        },
+        "assignmentId": {
+          "type": "string"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedEpoch": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "assignmentId",
+        "expectedEpoch",
+        "expectedRevision",
+        "action"
+      ],
+      "type": "object"
+    },
+    "IssueAssignmentDto": {
+      "additionalProperties": false,
+      "properties": {
+        "agentRole": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentRoleSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "agentTools": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "type": "array"
+        },
+        "attemptId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkAttemptId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attemptedStages": {
+          "items": {
+            "$ref": "#/$defs/IssueStageDto"
+          },
+          "type": "array"
+        },
+        "autoStart": {
+          "type": "boolean"
+        },
+        "baseCommit": {
+          "type": "string"
+        },
+        "batchId": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "configRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "delivery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IssueDeliveryReceiptDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "desiredStage": {
+          "$ref": "#/$defs/IssueStageDto"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "epoch": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "executionError": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "item": {
+          "$ref": "#/$defs/IssueWorkItemDto"
+        },
+        "leaseUntil": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "linkedBranchId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "owner": {
+          "type": "string"
+        },
+        "ownership": {
+          "$ref": "#/$defs/IssueOwnershipDto"
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "pendingOwner": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "planningTokens": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepositoryIdentityDto"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "syncState": {
+          "$ref": "#/$defs/IssueSyncStateDto"
+        },
+        "syncedLabels": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "syncedStage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IssueStageDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targetBranch": {
+          "type": "string"
+        },
+        "threadId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workRunId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkRunId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workflow": {
+          "$ref": "#/$defs/IssueWorkflowDto"
+        }
+      },
+      "required": [
+        "id",
+        "configRevision",
+        "batchId",
+        "repository",
+        "item",
+        "workflow",
+        "baseCommit",
+        "targetBranch",
+        "branch",
+        "owner",
+        "autoStart",
+        "revision",
+        "epoch",
+        "ownership",
+        "syncState",
+        "attemptedStages",
+        "desiredStage",
+        "paused",
+        "syncedLabels",
+        "detail",
+        "updatedAt"
+      ],
+      "type": "object"
+    },
+    "IssueAssignmentNotice": {
+      "additionalProperties": false,
+      "properties": {
+        "assignmentId": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assignmentId",
+        "message"
+      ],
+      "type": "object"
+    },
+    "IssueAssignmentPlanDto": {
+      "additionalProperties": false,
+      "properties": {
+        "baseCommit": {
+          "type": "string"
+        },
+        "configRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/IssueWorkItemDto"
+          },
+          "type": "array"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "planningTokens": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepositoryIdentityDto"
+        },
+        "targetBranch": {
+          "type": "string"
+        },
+        "workflow": {
+          "$ref": "#/$defs/IssueWorkflowDto"
+        }
+      },
+      "required": [
+        "repository",
+        "workflow",
+        "configRevision",
+        "baseCommit",
+        "targetBranch",
+        "items"
+      ],
+      "type": "object"
+    },
+    "IssueAssignmentStartAction": {
+      "enum": [
+        "createBranch",
+        "claim",
+        "execute"
+      ],
+      "type": "string"
+    },
+    "IssueAssignmentStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/IssueAssignmentStartAction"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "plan": {
+          "$ref": "#/$defs/IssueAssignmentPlanDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "plan",
+        "action"
+      ],
+      "type": "object"
+    },
+    "IssueAssignmentView": {
+      "additionalProperties": false,
+      "properties": {
+        "assignment": {
+          "$ref": "#/$defs/IssueAssignmentDto"
+        },
+        "branchUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "health": {
+          "type": "string"
+        },
+        "pullRequestUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stage": {
+          "$ref": "#/$defs/IssueStageDto"
+        }
+      },
+      "required": [
+        "assignment",
+        "stage",
+        "health"
+      ],
+      "type": "object"
+    },
+    "IssueAssignmentsResult": {
+      "additionalProperties": false,
+      "properties": {
+        "assignments": {
+          "items": {
+            "$ref": "#/$defs/IssueAssignmentView"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "assignments"
+      ],
+      "type": "object"
+    },
+    "IssueAutoClaimDto": {
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "maxIssues": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "labels",
+        "maxIssues"
+      ],
+      "type": "object"
+    },
+    "IssueBranchPublicationDto": {
+      "enum": [
+        "local",
+        "linked"
+      ],
+      "type": "string"
+    },
     "IssueComment": {
       "properties": {
         "body": {
@@ -17803,12 +18494,18 @@
             }
           ]
         },
+        "autoRefreshMinutes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
         "recommendMerge": {
           "type": "boolean"
         }
       },
       "required": [
-        "recommendMerge"
+        "recommendMerge",
+        "autoRefreshMinutes"
       ],
       "type": "object"
     },
@@ -17834,12 +18531,177 @@
       ],
       "type": "object"
     },
+    "IssueDeliveryDto": {
+      "enum": [
+        "branch",
+        "pullRequest",
+        "draftPullRequest"
+      ],
+      "type": "string"
+    },
+    "IssueDeliveryReceiptDto": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": "string"
+        },
+        "pullRequestNumber": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pullRequestUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetHead": {
+          "type": "string"
+        },
+        "tree": {
+          "type": "string"
+        },
+        "verificationKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "targetHead",
+        "tree",
+        "commit",
+        "verificationKey"
+      ],
+      "type": "object"
+    },
+    "IssueIdentityDto": {
+      "additionalProperties": false,
+      "properties": {
+        "materialDigest": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "nodeId",
+        "number",
+        "title",
+        "updatedAt",
+        "materialDigest"
+      ],
+      "type": "object"
+    },
+    "IssueLabelCreateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "string"
+        },
+        "expectedColor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepositoryIdentityDto"
+        }
+      },
+      "required": [
+        "repository",
+        "name",
+        "color"
+      ],
+      "type": "object"
+    },
+    "IssueLabelDto": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "color",
+        "nodeId"
+      ],
+      "type": "object"
+    },
+    "IssueLabelsDto": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked": {
+          "type": "string"
+        },
+        "inProgress": {
+          "type": "string"
+        },
+        "queued": {
+          "type": "string"
+        },
+        "review": {
+          "type": "string"
+        },
+        "todo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "todo",
+        "queued",
+        "inProgress",
+        "review",
+        "blocked"
+      ],
+      "type": "object"
+    },
+    "IssueListMode": {
+      "enum": [
+        "cached",
+        "auto",
+        "refresh",
+        "clearCache"
+      ],
+      "type": "string"
+    },
     "IssueListParams": {
       "properties": {
+        "mode": {
+          "$ref": "#/$defs/IssueListMode"
+        },
         "page": {
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "query": {
+          "type": "string"
         },
         "state": {
           "$ref": "#/$defs/IssueState"
@@ -17847,12 +18709,22 @@
       },
       "required": [
         "state",
-        "page"
+        "page",
+        "query",
+        "mode"
       ],
       "type": "object"
     },
     "IssueListResult": {
       "properties": {
+        "cached": {
+          "type": "boolean"
+        },
+        "fetchedAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "issues": {
           "items": {
             "$ref": "#/$defs/IssueSummary"
@@ -17867,13 +18739,80 @@
             "null"
           ]
         },
+        "notice": {
+          "type": "string"
+        },
+        "refreshAfterSeconds": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repository": {
           "$ref": "#/$defs/IssueRepository"
         }
       },
       "required": [
         "repository",
-        "issues"
+        "issues",
+        "cached",
+        "fetchedAt",
+        "notice"
+      ],
+      "type": "object"
+    },
+    "IssueOwnershipDto": {
+      "enum": [
+        "unclaimed",
+        "held",
+        "releasing",
+        "transferring",
+        "released",
+        "completed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "IssuePlanMode": {
+      "enum": [
+        "branch",
+        "combined",
+        "distributed"
+      ],
+      "type": "string"
+    },
+    "IssuePlanParams": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/IssuePlanMode"
+        },
+        "numbers": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "numbers",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "IssuePlanResult": {
+      "additionalProperties": false,
+      "properties": {
+        "plan": {
+          "$ref": "#/$defs/IssueAssignmentPlanDto"
+        }
+      },
+      "required": [
+        "plan"
       ],
       "type": "object"
     },
@@ -18076,6 +19015,42 @@
       ],
       "type": "object"
     },
+    "IssueRepositoryIdentityDto": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "host",
+        "nodeId",
+        "owner",
+        "name"
+      ],
+      "type": "object"
+    },
+    "IssueStageDto": {
+      "enum": [
+        "todo",
+        "queued",
+        "inProgress",
+        "review",
+        "blocked",
+        "completed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
     "IssueStartPoint": {
       "enum": [
         "currentBranch",
@@ -18092,6 +19067,18 @@
     },
     "IssueSummary": {
       "properties": {
+        "assignees": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "number": {
           "format": "uint64",
           "minimum": 0,
@@ -18111,6 +19098,8 @@
         }
       },
       "required": [
+        "labels",
+        "assignees",
         "number",
         "title",
         "url",
@@ -18118,6 +19107,14 @@
         "state"
       ],
       "type": "object"
+    },
+    "IssueSyncStateDto": {
+      "enum": [
+        "pending",
+        "synced",
+        "conflict"
+      ],
+      "type": "string"
     },
     "IssueTask": {
       "properties": {
@@ -18215,6 +19212,210 @@
           ]
         }
       },
+      "type": "object"
+    },
+    "IssueWorkItemDto": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptanceConditions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueIdentityDto"
+          },
+          "type": "array"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/WorkScopeClaimDto"
+        }
+      },
+      "required": [
+        "id",
+        "issues",
+        "objective",
+        "acceptanceConditions",
+        "scope",
+        "dependencies",
+        "agent"
+      ],
+      "type": "object"
+    },
+    "IssueWorkflowConfigureParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepositoryIdentityDto"
+        },
+        "workflow": {
+          "$ref": "#/$defs/IssueWorkflowDto"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "repository",
+        "workflow"
+      ],
+      "type": "object"
+    },
+    "IssueWorkflowDto": {
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "type": "string"
+        },
+        "autoClaim": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IssueAutoClaimDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "autoMerge": {
+          "default": false,
+          "type": "boolean"
+        },
+        "baseBranch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branchTemplate": {
+          "type": "string"
+        },
+        "closeOnCompletion": {
+          "type": "boolean"
+        },
+        "coordinatorAgent": {
+          "type": "string"
+        },
+        "delivery": {
+          "$ref": "#/$defs/IssueDeliveryDto"
+        },
+        "labelColors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "labels": {
+          "$ref": "#/$defs/IssueLabelsDto"
+        },
+        "maxParallel": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxTokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "publication": {
+          "$ref": "#/$defs/IssueBranchPublicationDto"
+        },
+        "targetBranch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "validationCommands": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "workerAgent": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "labels",
+        "assignee",
+        "branchTemplate",
+        "publication",
+        "coordinatorAgent",
+        "workerAgent",
+        "maxParallel",
+        "maxTokens",
+        "validationCommands",
+        "delivery",
+        "closeOnCompletion"
+      ],
+      "type": "object"
+    },
+    "IssueWorkflowReadResult": {
+      "additionalProperties": false,
+      "properties": {
+        "assignees": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "configRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "defaultBranch": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/IssueLabelDto"
+          },
+          "type": "array"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepositoryIdentityDto"
+        },
+        "workflow": {
+          "$ref": "#/$defs/IssueWorkflowDto"
+        }
+      },
+      "required": [
+        "repository",
+        "configRevision",
+        "workflow",
+        "defaultBranch",
+        "labels",
+        "assignees"
+      ],
       "type": "object"
     },
     "ItemDelta": {
@@ -25593,6 +26794,22 @@
             },
             "params": {
               "$ref": "#/$defs/TurnChangesChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "issue/assignment/notice",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/IssueAssignmentNotice"
             }
           },
           "required": [

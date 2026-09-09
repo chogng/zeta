@@ -1,6 +1,12 @@
 //! GitHub repository operations using the host's authenticated GitHub CLI.
 
+mod issues;
 mod process;
+pub use issues::IssueAssignee;
+pub use issues::IssueLabel;
+pub use issues::IssueMetadata;
+pub use issues::IssueRepositoryInfo;
+pub use issues::LinkedIssueBranch;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -38,8 +44,38 @@ fn valid_component(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
 }
 
+/// Validates an issue-list boundary before cache reads, deletion, or GitHub IO.
+pub fn validate_issue_query(query: &str, page: u32) -> Result<()> {
+    let query = query.trim();
+    if query.len() > 256
+        || query
+            .chars()
+            .any(|c| c.is_control() || c == '"' || c == '\\')
+    {
+        return Err("Search accepts up to 256 bytes of keywords or #number; quotes and control characters are not supported".into());
+    }
+    let maximum = if query.is_empty() { 10_000 } else { 10 };
+    if page == 0 || page > maximum {
+        return Err(format!("Issue page must be between 1 and {maximum}"));
+    }
+    if !query.is_empty() {
+        let number = query.strip_prefix('#').unwrap_or(query);
+        if query.starts_with('#') || number.bytes().all(|c| c.is_ascii_digit()) {
+            let number: u64 = number.parse().map_err(|_| "Use a positive issue number")?;
+            if number == 0 || page != 1 {
+                return Err("Exact issue lookup requires a positive number and page 1".into());
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Issue {
+    #[serde(default)]
+    pub labels: Vec<IssueLabel>,
+    #[serde(default)]
+    pub assignees: Vec<IssueAssignee>,
     pub number: u64,
     pub title: String,
     pub body: Option<String>,
@@ -99,6 +135,8 @@ impl IssueState {
 pub struct IssuePage {
     pub issues: Vec<Issue>,
     pub next_page: Option<u32>,
+    #[serde(default)]
+    pub notice: String,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -301,19 +339,118 @@ impl GitHub {
                 repository,
                 "GET",
                 &repository.endpoint(&format!(
-                    "issues?state={}&sort=updated&direction=desc&per_page=50&page={page}",
+                    "issues?state={}&sort=updated&direction=desc&per_page=100&page={page}",
                     state.as_str()
                 )),
                 None,
             )
             .await?;
-        let next_page = (rows.len() == 50).then_some(page + 1);
+        let next_page = (rows.len() == 100 && page < 10_000).then_some(page + 1);
         Ok(IssuePage {
             issues: rows
                 .into_iter()
                 .filter(|issue| issue.pull_request.is_none())
                 .collect(),
             next_page,
+            notice: String::new(),
+        })
+    }
+
+    /// Searches only the supplied repository and issue state. Numeric input is an exact lookup.
+    pub async fn search_issues(
+        &self,
+        repository: &Repository,
+        state: IssueState,
+        query: &str,
+        page: u32,
+    ) -> Result<IssuePage> {
+        let query = query.trim();
+        validate_issue_query(query, page)?;
+        if query.is_empty() {
+            return self.issues(repository, state, page).await;
+        }
+        if page == 0 || page > 10 {
+            return Err("Search supports pages 1–10; narrow the query beyond 1000 matches".into());
+        }
+        let number = query.strip_prefix('#').unwrap_or(query);
+        if query.starts_with('#') || number.bytes().all(|c| c.is_ascii_digit()) {
+            let number: u64 = number.parse().map_err(|_| "Use a positive issue number")?;
+            if number == 0 || page != 1 {
+                return Err("Exact issue lookup requires a positive number and page 1".into());
+            }
+            let issue: Issue = self
+                .api(
+                    repository,
+                    "GET",
+                    &repository.endpoint(&format!("issues/{number}")),
+                    None,
+                )
+                .await?;
+            if issue.number != number || issue.pull_request.is_some() {
+                return Err("Selected item is not the requested issue".into());
+            }
+            return Ok(IssuePage {
+                issues: if issue.state == state.as_str() {
+                    vec![issue]
+                } else {
+                    vec![]
+                },
+                next_page: None,
+                notice: String::new(),
+            });
+        }
+        #[derive(Deserialize)]
+        struct SearchResult {
+            items: Vec<Issue>,
+            total_count: u64,
+            incomplete_results: bool,
+        }
+        let terms = query
+            .split_whitespace()
+            .map(|term| format!("\"{term}\""))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let search = format!(
+            "repo:{}/{} is:issue state:{} in:title,body {terms}",
+            repository.owner,
+            repository.name,
+            state.as_str()
+        );
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("q", &search)
+            .append_pair("sort", "updated")
+            .append_pair("order", "desc")
+            .append_pair("per_page", "100")
+            .append_pair("page", &page.to_string())
+            .finish();
+        let result: SearchResult = self
+            .api(repository, "GET", &format!("search/issues?{query}"), None)
+            .await?;
+        let prefix = format!(
+            "https://{}/{}/{}/issues/",
+            repository.host, repository.owner, repository.name
+        );
+        if result.items.iter().any(|issue| {
+            !issue
+                .html_url
+                .to_lowercase()
+                .starts_with(&prefix.to_lowercase())
+                || issue.state != state.as_str()
+                || issue.pull_request.is_some()
+        }) {
+            return Err("Search returned items outside the requested repository or state".into());
+        }
+        let notice = match (result.incomplete_results, result.total_count > 1000) {
+            (true, _) => "GitHub returned incomplete search results; refine the query or refresh",
+            (_, true) => "GitHub search exposes the first 1000 matches; refine the query",
+            _ => "",
+        }
+        .into();
+        Ok(IssuePage {
+            next_page: (page < 10 && u64::from(page) * 100 < result.total_count)
+                .then_some(page + 1),
+            issues: result.items,
+            notice,
         })
     }
 

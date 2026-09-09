@@ -79,6 +79,41 @@ impl AppServer {
         if unique.len() != params.numbers.len() {
             return Err(issue_error("Issue selection contains duplicates".into()));
         }
+        if let Some(assignments) = &self.issue_assignments {
+            let conflicts = assignments
+                .list_all()
+                .map_err(issue_error)?
+                .into_iter()
+                .filter(|assignment| {
+                    !matches!(
+                        assignment.ownership,
+                        zeta_work_coordination::IssueOwnership::Unclaimed
+                            | zeta_work_coordination::IssueOwnership::Released
+                            | zeta_work_coordination::IssueOwnership::Completed
+                    ) && assignment
+                        .repository
+                        .host
+                        .eq_ignore_ascii_case(&params.repository.host)
+                        && assignment
+                            .repository
+                            .owner
+                            .eq_ignore_ascii_case(&params.repository.owner)
+                        && assignment
+                            .repository
+                            .name
+                            .eq_ignore_ascii_case(&params.repository.name)
+                })
+                .flat_map(|assignment| assignment.item.issues)
+                .filter(|issue| params.numbers.contains(&issue.number))
+                .map(|issue| format!("#{}", issue.number))
+                .collect::<Vec<_>>();
+            if !conflicts.is_empty() {
+                return Err(issue_error(format!(
+                    "{} already belong to managed assignments; open those assignments",
+                    conflicts.join(", ")
+                )));
+            }
+        }
         let runtime = self.turn_changes_runtime()?;
         let store = self
             .issue_tasks
@@ -153,12 +188,18 @@ impl AppServer {
             .map_err(issue_error)?;
         let thread_id = zeta_protocol::ThreadId::new(params.session_id.to_string())
             .map_err(|error| issue_error(error.to_string()))?;
-        let pending_input = self
+        let mut pending_input = self
             .threads
             .read_thread(&thread_id)
             .map_err(core_error)?
             .turns
             .is_empty();
+        if let Some(assignments) = &self.issue_assignments {
+            pending_input &= assignments
+                .for_thread(&thread_id)
+                .map_err(issue_error)?
+                .is_none();
+        }
         let task = task
             .filter(|task| task.source_root == runtime.dir_root)
             .map(|task| IssueTask {
@@ -264,10 +305,10 @@ async fn prepare(
     })
 }
 
-struct IssueBinder<'a> {
-    runtime: &'a TurnChangesRuntime,
-    store: &'a SqliteIssueTaskStore,
-    task: &'a zeta_github::IssueTask,
+pub(super) struct IssueBinder<'a> {
+    pub(super) runtime: &'a TurnChangesRuntime,
+    pub(super) store: &'a SqliteIssueTaskStore,
+    pub(super) task: &'a zeta_github::IssueTask,
 }
 
 impl ThreadWorktreeBinder for IssueBinder<'_> {

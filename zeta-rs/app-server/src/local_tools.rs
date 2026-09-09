@@ -745,27 +745,37 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         cancellation: &CancellationToken,
         sandbox_scope: Option<&SandboxScope>,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let authority = match authorization {
-            ToolAuthorization::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(*policy),
-            ToolAuthorization::UnsandboxedGrant { .. }
-            | ToolAuthorization::ExecPolicyGranted(_)
-            | ToolAuthorization::AutoReviewed(_)
-            | ToolAuthorization::PermissionBypassed(_)
-            | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
+        let authority = if sandbox_scope.is_some() {
+            CommandExecutionAuthority::Sandboxed(shell_sandbox())
+        } else {
+            match authorization {
+                ToolAuthorization::Sandboxed(policy) => {
+                    CommandExecutionAuthority::Sandboxed(*policy)
+                }
+                ToolAuthorization::UnsandboxedGrant { .. }
+                | ToolAuthorization::ExecPolicyGranted(_)
+                | ToolAuthorization::AutoReviewed(_)
+                | ToolAuthorization::PermissionBypassed(_)
+                | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
+            }
         };
         match self
             .shell
             .execute_authorized_scoped(request, authority, cancellation, sandbox_scope)
         {
             Ok(CommandExecutionOutcome::Completed(output)) => {
-                let text = serde_json::to_string_pretty(&json!({
+                let mut value = json!({
                     "exit_code": output.exit_code,
                     "stdout": output.stdout,
                     "stderr": output.stderr,
                     "stdout_truncated": output.stdout_truncated,
                     "stderr_truncated": output.stderr_truncated,
-                }))
-                .map_err(|error| CoreError::Execution(error.to_string()))?;
+                });
+                if sandbox_scope.is_some() {
+                    value["managed_scope"] = true.into();
+                }
+                let text = serde_json::to_string_pretty(&value)
+                    .map_err(|error| CoreError::Execution(error.to_string()))?;
                 Ok(ToolExecutionOutput::Success(text))
             }
             Ok(CommandExecutionOutcome::SandboxDenied(denial)) => {
@@ -1664,3 +1674,90 @@ impl std::error::Error for LocalToolError {}
 #[cfg(test)]
 #[path = "local_tools_tests.rs"]
 mod tests;
+
+/// Executes an explicitly requested verification command inside a rebuilt candidate directory.
+/// It cannot acquire network access or write to the user's checkout or other Agent directories.
+pub(crate) fn execute_verification_command(
+    authorization: &Authorization,
+    config: &LocalToolConfig,
+    directory: Dir,
+    hidden: Vec<Dir>,
+    command: &str,
+    cancellation: &CancellationToken,
+) -> Result<zeta_tool_executor::CommandOutput, String> {
+    authorization
+        .ensure_active()
+        .map_err(|error| error.to_string())?;
+    if authorization.permission() != DirPermission::ExecuteCommands {
+        return Err("Independent verification requires execute-command authorization".into());
+    }
+    let scope = zeta_sandboxing::SandboxScope::new(
+        directory.clone(),
+        vec![zeta_sandboxing::SandboxDirGrant::new(
+            directory.clone(),
+            zeta_sandboxing::SandboxDirAccess::ReadWrite,
+        )],
+        hidden,
+    )
+    .map_err(|error| error.to_string())?;
+    let shell = ShellCommandTool::new(
+        zeta_tools::EnvId::local(),
+        directory.clone(),
+        native_sandbox(&InstallContext::current()).map_err(|error| error.to_string())?,
+        CoreAuthorized,
+        ShellCommandLimits {
+            timeout: std::time::Duration::from_secs(600),
+            max_output_bytes: 1024 * 1024,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    #[cfg(unix)]
+    let (program, arguments) = ("/bin/sh", vec!["-c".to_string(), command.to_owned()]);
+    #[cfg(windows)]
+    let (program, arguments) = (
+        "powershell.exe",
+        vec![
+            "-NoProfile".to_string(),
+            "-NonInteractive".to_string(),
+            "-Command".to_string(),
+            command.to_owned(),
+        ],
+    );
+    let policy = config.snapshot().map_err(|error| error.to_string())?;
+    let invocation = zeta_execpolicy::ExecPolicyCommand::new(program, arguments.clone());
+    let digest = zeta_protocol::ContentDigest::sha256(command.as_bytes()).to_string();
+    let subject = zeta_execpolicy::ExecPolicySubject::new(
+        &digest,
+        zeta_execpolicy::ExecPolicyActionKind::LocalProcess,
+        "built_in_tool",
+        "shell-command",
+        [],
+        Some(&invocation),
+        None,
+    );
+    if let zeta_execpolicy::ExecPolicyEffect::Deny(reason) = policy.evaluate(&subject).effect() {
+        return Err(format!(
+            "Verification command prohibited by execution policy: {reason}"
+        ));
+    }
+    let request = zeta_shell_command::ShellCommandRequest::new(program, arguments, ".")
+        .map_err(|error| error.to_string())?
+        .with_dir_root(directory.canonical_path());
+    match shell
+        .execute_authorized_scoped(
+            request,
+            CommandExecutionAuthority::Sandboxed(zeta_sandboxing::SandboxPolicy::new(
+                zeta_sandboxing::FileSystemAccess::DirectoryWrite,
+                zeta_sandboxing::NetworkAccess::Denied,
+            )),
+            cancellation,
+            Some(&scope),
+        )
+        .map_err(|error| format!("{error:?}"))?
+    {
+        CommandExecutionOutcome::Completed(output) => Ok(output),
+        CommandExecutionOutcome::SandboxDenied(denial) => {
+            Err(format!("Verification command denied: {denial:?}"))
+        }
+    }
+}

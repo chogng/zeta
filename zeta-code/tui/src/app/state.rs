@@ -314,7 +314,15 @@ impl App {
             self.pointer.clear();
         }
         if self.issues.is_open() {
-            return self.issues.handle_key(key).map(Into::into);
+            return self.issues.handle_key(key).map(|command| match command {
+                crate::issues::Command::OpenWork { session_id } => {
+                    AppCommand::Sessions(crate::sessions::Command::Resume {
+                        session_id: session_id.to_string(),
+                        preferred_thread_id: None,
+                    })
+                }
+                command => command.into(),
+            });
         }
         let overlay_area = frame::transient_area(self, terminal_area);
         if let Some(overlay) = self.overlay_mut() {
@@ -683,6 +691,12 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::OpenIssueWorkflow,
+            ) => {
+                self.close_command_panel();
+                Some(self.issues.open_workflow().into())
+            }
             crate::config::ConfigEditorOutcome::LoadIssueModels {
                 request_id,
                 expected_revision,
@@ -812,6 +826,7 @@ impl App {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         if self.issues.is_open() {
+            self.issues.handle_paste(pasted);
             return;
         }
         self.pointer.clear();
@@ -2196,10 +2211,12 @@ impl App {
         if !key.modifiers.is_empty() || !self.chat_input_focused() || !self.input().is_empty() {
             return None;
         }
-        if key.code == KeyCode::Right
-            && self.session_manager_view().is_none()
-            && self.visible_transcript_views().is_empty()
-        {
+        if key.code == KeyCode::Left && self.session_manager_view().is_none() {
+            self.close_transient_surfaces();
+            self.sessions.show_manager();
+            return Some(None);
+        }
+        if key.code == KeyCode::Right && self.session_manager_view().is_none() {
             return Some(self.issues.open().map(Into::into));
         }
         let target = match empty_input_navigation(self.sessions.screen(), key.code)? {
@@ -2443,6 +2460,10 @@ impl App {
             AppKeymapAction::CopyLastResponse => Some(HostCommand::CopyLastResponse.into()),
             AppKeymapAction::Suspend => Some(AppCommand::Suspend),
         }
+    }
+
+    pub(crate) fn poll_issue_refresh(&mut self, now: Instant) -> Option<AppCommand> {
+        self.issues.poll_refresh(now).map(Into::into)
     }
 
     pub(crate) fn handle_tick(&mut self, now: Instant) -> bool {

@@ -127,6 +127,28 @@ impl TurnExecutor {
     }
 
     /// Freezes the exact durable binding for a host-created Tool Call.
+    /// Freezes an explicitly selected subset of the current tool definitions for a worker.
+    pub fn tool_profile_for_names(
+        &self,
+        names: &[zeta_protocol::ToolName],
+    ) -> Result<zeta_protocol::ToolProfileSnapshot, CoreError> {
+        let catalog = self.tools.model_catalog_snapshot(&BTreeSet::new())?;
+        let selected = catalog
+            .definitions()
+            .iter()
+            .filter(|definition| names.contains(&definition.name))
+            .cloned()
+            .collect::<Vec<_>>();
+        if selected.len() != names.iter().collect::<BTreeSet<_>>().len() {
+            return Err(CoreError::InvalidInput(
+                "Requested worker tools are no longer available".into(),
+            ));
+        }
+        let mut profile = crate::tool_profile::snapshot_tool_profile(&selected)?;
+        profile.id = crate::tool_profile::SELECTED_CODING_TOOL_PROFILE_ID.into();
+        Ok(profile)
+    }
+
     pub fn bind_tool_call(
         &self,
         call: &ToolCall,
@@ -693,6 +715,15 @@ impl TurnExecutor {
                 .iter()
                 .find(|turn| &turn.turn_id == turn_id)
                 .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
+            let ordinary_tool_catalog = if let Some(profile) = &turn.tool_profile {
+                if profile.id == crate::tool_profile::SELECTED_CODING_TOOL_PROFILE_ID {
+                    ordinary_tool_catalog.restrict_to_names(&profile.tool_names)
+                } else {
+                    ordinary_tool_catalog
+                }
+            } else {
+                ordinary_tool_catalog
+            };
             if let Some(profile) = &turn.tool_profile {
                 let frozen_definitions = ordinary_tool_catalog
                     .definitions()
@@ -903,7 +934,9 @@ impl TurnExecutor {
                         }
                         break (response, stream);
                     }
-                    Err(CoreError::ModelTransient { retry_after_ms, .. }) if transient_attempt < 3 => {
+                    Err(CoreError::ModelTransient { retry_after_ms, .. })
+                        if transient_attempt < 3 =>
+                    {
                         wait_for_model_retry(cancellation, transient_attempt, retry_after_ms)?;
                         transient_attempt += 1;
                     }

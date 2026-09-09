@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolProfileSnapshot;
 
+pub(crate) const SELECTED_CODING_TOOL_PROFILE_ID: &str = "selected-coding";
+
 pub(crate) const DEFAULT_CODING_TOOL_PROFILE_ID: &str = "coding";
 pub(crate) const DEFAULT_CODING_TOOL_PROFILE_REVISION: &str = "coding-v1";
 

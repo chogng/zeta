@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 1 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 31 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 3 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:755510d66aea7cc05f33dfc3cc3fa210e6e3c57da1256b15518981b907df5060" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:d1d6b87d4c5c65aa77d180f7b78d661dc61bf963b28c2a86a12e816c83bc4182" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -12,7 +12,35 @@ export type JsonRpcFailure<E> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; error:
 export type JsonRpcResponse<R, E> = JsonRpcSuccess<R> | JsonRpcFailure<E>;
 export type JsonRpcError = { code: number; message: string; data: unknown };
 export type AppServerListenInfo = { kind: "app-server-listen-info", version: 1, endpoint: string, };
-export type IssueConfigDto = { recommendMerge: boolean, analysisModel: ModelRef | null, };
+export type IssueRepositoryIdentityDto = { host: string, nodeId: string, owner: string, name: string, };
+export type IssueIdentityDto = { nodeId: string, number: number, title: string, updatedAt: string, materialDigest: string, };
+export type IssueStageDto = "todo" | "queued" | "inProgress" | "review" | "blocked" | "completed" | "cancelled";
+export type IssueLabelsDto = { todo: string, queued: string, inProgress: string, review: string, blocked: string, };
+export type IssueBranchPublicationDto = "local" | "linked";
+export type IssueDeliveryDto = "branch" | "pullRequest" | "draftPullRequest";
+export type IssueDeliveryReceiptDto = { targetHead: string, tree: string, commit: string, verificationKey: string, pullRequestNumber: number | null, pullRequestUrl: string | null, };
+export type IssueWorkflowDto = { labels: IssueLabelsDto, labelColors: { [key in string]: string }, autoMerge: boolean, assignee: string, baseBranch: string | null, targetBranch: string | null, branchTemplate: string, publication: IssueBranchPublicationDto, coordinatorAgent: string, workerAgent: string, maxParallel: number, maxTokens: number, validationCommands: Array<string>, delivery: IssueDeliveryDto, closeOnCompletion: boolean, autoClaim: IssueAutoClaimDto | null, };
+export type IssueAutoClaimDto = { labels: Array<string>, assignee: string | null, maxIssues: number, };
+export type IssueWorkItemDto = { id: string, issues: Array<IssueIdentityDto>, objective: string, acceptanceConditions: Array<string>, scope: WorkScopeClaimDto, dependencies: Array<string>, agent: string, };
+export type IssueAssignmentNotice = { assignmentId: string, message: string, };
+export type IssueAssignmentPlanDto = { repository: IssueRepositoryIdentityDto, workflow: IssueWorkflowDto, configRevision: number, model: ModelRef | null, planningTokens: number, baseCommit: string, targetBranch: string, items: Array<IssueWorkItemDto>, };
+export type IssueOwnershipDto = "unclaimed" | "held" | "releasing" | "transferring" | "released" | "completed" | "cancelled";
+export type IssueSyncStateDto = "pending" | "synced" | "conflict";
+export type IssueAssignmentDto = { id: string, configRevision: number, batchId: string, repository: IssueRepositoryIdentityDto, item: IssueWorkItemDto, workflow: IssueWorkflowDto, agentRole: AgentRoleSnapshot | null, agentTools: Array<ToolName>, model: ModelRef | null, planningTokens: number, baseCommit: string, targetBranch: string, branch: string, delivery: IssueDeliveryReceiptDto | null, owner: string, pendingOwner: string | null, autoStart: boolean, revision: number, epoch: number, ownership: IssueOwnershipDto, threadId: ThreadId | null, workRunId: WorkRunId | null, attemptId: WorkAttemptId | null, leaseUntil: number | null, syncState: IssueSyncStateDto, attemptedStages: Array<IssueStageDto>, desiredStage: IssueStageDto, executionError: string | null, paused: boolean, syncedStage: IssueStageDto | null, syncedLabels: { [key in string]: Array<string> }, linkedBranchId: string | null, detail: string, updatedAt: number, };
+export type IssueWorkflowReadResult = { repository: IssueRepositoryIdentityDto, configRevision: number, workflow: IssueWorkflowDto, defaultBranch: string, labels: Array<IssueLabelDto>, assignees: Array<string>, };
+export type IssueLabelDto = { name: string, color: string, nodeId: string, };
+export type IssueWorkflowConfigureParams = { commandId: CommandId, expectedRevision: number, repository: IssueRepositoryIdentityDto, workflow: IssueWorkflowDto, };
+export type IssueLabelCreateParams = { repository: IssueRepositoryIdentityDto, name: string, color: string, expectedColor: string | null, };
+export type IssuePlanMode = "branch" | "combined" | "distributed";
+export type IssuePlanParams = { numbers: number[], mode: IssuePlanMode, };
+export type IssuePlanResult = { plan: IssueAssignmentPlanDto, };
+export type IssueAssignmentStartAction = "createBranch" | "claim" | "execute";
+export type IssueAssignmentStartParams = { commandId: CommandId, plan: IssueAssignmentPlanDto, action: IssueAssignmentStartAction, };
+export type IssueAssignmentView = { assignment: IssueAssignmentDto, stage: IssueStageDto, health: string, branchUrl: string | null, pullRequestUrl: string | null, };
+export type IssueAssignmentsResult = { assignments: Array<IssueAssignmentView>, };
+export type IssueAssignmentAction = "pause" | "resume" | "release" | "cancel" | "retrySync" | "verify" | "deliver" | { "transfer": { assignee: string, } };
+export type IssueAssignmentActionParams = { commandId: CommandId, assignmentId: string, expectedEpoch: number, expectedRevision: number, action: IssueAssignmentAction, };
+export type IssueConfigDto = { recommendMerge: boolean, autoRefreshMinutes: number, analysisModel: ModelRef | null, };
 export type IssueConfigureParams = { commandId: CommandId, expectedRevision: number, config: IssueConfigDto, };
 export type IssueStartPoint = "currentBranch" | "main";
 export type IssueTaskCreateParams = { commandId: CommandId, repository: IssueRepository, numbers: number[], start: IssueStartPoint, };
@@ -20,10 +48,11 @@ export type IssueTaskReadParams = { sessionId: SessionId, };
 export type IssueTaskResult = { task: IssueTask | null, };
 export type IssueTask = { pendingInput: boolean, sessionId: SessionId, repository: IssueRepository, issues: Array<IssueReadResult>, startCommit: string, branch: string, targetBranch: string, readAt: number, };
 export type IssueRepository = { host: string, owner: string, name: string, };
-export type IssueSummary = { number: number, title: string, url: string, updatedAt: string, state: string, };
+export type IssueSummary = { labels: Array<string>, assignees: Array<string>, number: number, title: string, url: string, updatedAt: string, state: string, };
 export type IssueState = "open" | "closed";
-export type IssueListParams = { state: IssueState, page: number, };
-export type IssueListResult = { repository: IssueRepository, issues: Array<IssueSummary>, nextPage: number | null, };
+export type IssueListMode = "cached" | "auto" | "refresh" | "clearCache";
+export type IssueListParams = { state: IssueState, page: number, query: string, mode: IssueListMode, };
+export type IssueListResult = { repository: IssueRepository, issues: Array<IssueSummary>, nextPage: number | null, cached: boolean, fetchedAt: number, refreshAfterSeconds: number | null, notice: string, };
 export type IssueReadParams = { repository: IssueRepository, number: number, };
 export type IssueReadResult = { issue: IssueSummary, body: string, comments: Array<IssueComment>, };
 export type IssueComment = { body: string, url: string, updatedAt: string, };
@@ -1058,6 +1087,7 @@ export interface AppServerNotificationMap {
   "extensionHost/changed": ExtensionHostChanged;
   "git/statusChanged": GitStatusChanged;
   "turnChanges/changed": TurnChangesChanged;
+  "issue/assignment/notice": IssueAssignmentNotice;
   "workRun/changed": WorkRunChanged;
   "project/changed": ProjectChanged;
   "automation/changed": Record<string, never>;
@@ -1280,6 +1310,13 @@ export interface AppServerRequestMap {
   "issue/pr/create": { params: IssuePrCreateParams; response: IssuePrStatus };
   "issue/task/create": { params: IssueTaskCreateParams; response: IssueTaskResult };
   "issue/task/read": { params: IssueTaskReadParams; response: IssueTaskResult };
+  "issue/workflow/read": { params: Record<string, never>; response: IssueWorkflowReadResult };
+  "issue/workflow/configure": { params: IssueWorkflowConfigureParams; response: ConfigCommandResult };
+  "issue/label/create": { params: IssueLabelCreateParams; response: IssueLabelDto };
+  "issue/plan": { params: IssuePlanParams; response: IssuePlanResult };
+  "issue/assignment/start": { params: IssueAssignmentStartParams; response: IssueAssignmentsResult };
+  "issue/assignments/list": { params: Record<string, never>; response: IssueAssignmentsResult };
+  "issue/assignment/action": { params: IssueAssignmentActionParams; response: IssueAssignmentsResult };
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
@@ -1547,6 +1584,13 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/pr/create": { method: "issue/pr/create" },
   "issue/task/create": { method: "issue/task/create" },
   "issue/task/read": { method: "issue/task/read" },
+  "issue/workflow/read": { method: "issue/workflow/read" },
+  "issue/workflow/configure": { method: "issue/workflow/configure" },
+  "issue/label/create": { method: "issue/label/create" },
+  "issue/plan": { method: "issue/plan" },
+  "issue/assignment/start": { method: "issue/assignment/start" },
+  "issue/assignments/list": { method: "issue/assignments/list" },
+  "issue/assignment/action": { method: "issue/assignment/action" },
   "issue/configure": { method: "issue/configure" },
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
@@ -1625,6 +1669,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "extensionHost/changed": { method: "extensionHost/changed" },
   "git/statusChanged": { method: "git/statusChanged" },
   "turnChanges/changed": { method: "turnChanges/changed" },
+  "issue/assignment/notice": { method: "issue/assignment/notice" },
   "workRun/changed": { method: "workRun/changed" },
   "project/changed": { method: "project/changed" },
   "automation/changed": { method: "automation/changed" },

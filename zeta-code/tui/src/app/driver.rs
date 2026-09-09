@@ -546,6 +546,10 @@ fn refresh_server_event(
     app: &mut App,
 ) -> ServerRefresh {
     match event {
+        client::ClientEvent::IssueNotice(message) => {
+            app.update(crate::thread::Event::ProductNotice(message));
+            ServerRefresh::default()
+        }
         client::ClientEvent::Account(event) => {
             app.update(crate::config::Event::Subscription(event));
             ServerRefresh::default()

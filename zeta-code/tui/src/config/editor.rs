@@ -39,6 +39,7 @@ pub(crate) struct ConfigEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
+    OpenIssueWorkflow,
     SetIssues(super::IssueConfigEdit),
     OpenIssueModels {
         expected_revision: u64,
@@ -391,8 +392,13 @@ impl ConfigEditor {
             return;
         }
         self.issue_model_request = None;
-        if self.selection.state().selected_item().and_then(ListSelectionItem::id)
-            != Some(&ListSelectionItemId::new(ISSUE_MODEL_ROW)) {
+        if self
+            .selection
+            .state()
+            .selected_item()
+            .and_then(ListSelectionItem::id)
+            != Some(&ListSelectionItemId::new(ISSUE_MODEL_ROW))
+        {
             return;
         }
         match result {
@@ -449,9 +455,11 @@ impl ConfigEditor {
                 Ok((choices, _)) if config_revision(choices) >= self.revision => {
                     self.revision = config_revision(choices);
                     if saving {
-                        self.selection = ListSelection::new(choices.model.clone(), choices.actions.clone());
+                        self.selection =
+                            ListSelection::new(choices.model.clone(), choices.actions.clone());
                     } else {
-                        self.selection.replace(choices.model.clone(), choices.actions.clone());
+                        self.selection
+                            .replace(choices.model.clone(), choices.actions.clone());
                     }
                     if let Some(id) = focus {
                         self.selection.state_mut().focus_item(&id);
@@ -464,7 +472,9 @@ impl ConfigEditor {
                 _ => {}
             }
         }
-        if let Some(panel) = self.provider_panel.as_mut() { panel.complete(reply); }
+        if let Some(panel) = self.provider_panel.as_mut() {
+            panel.complete(reply);
+        }
     }
 
     pub(crate) fn update_subscription(&mut self, spec: ConfigChoices) {
@@ -632,22 +642,53 @@ pub(crate) fn config_choices(
         .as_ref()
         .map(|model| format!("{}/{}", model.provider, model.model))
         .unwrap_or_else(|| nls::text(language, Message::ConfigIssueModelMissing).into());
-    let issue_items = vec![
-        ListSelectionItem::new(nls::text(language, Message::ConfigIssueModel))
-            .with_id(issue_model_id)
-            .with_columns(
-                nls::text(language, Message::ConfigIssueModel),
-                nls::text(language, Message::ConfigIssueModelDescription),
-                model_label,
-            ),
-    ];
+    let model_item = ListSelectionItem::new(nls::text(language, Message::ConfigIssueModel))
+        .with_columns(
+            nls::text(language, Message::ConfigIssueModel),
+            nls::text(language, Message::ConfigIssueModelDescription),
+            model_label,
+        );
+    let mut issue_items = vec![if config.issues.recommend_merge {
+        model_item.with_id(issue_model_id)
+    } else {
+        model_item
+    }];
+    for (minutes, label) in [
+        (0, "Never"),
+        (5, "5 minutes"),
+        (10, "10 minutes"),
+        (30, "30 minutes"),
+        (60, "1 hour"),
+    ] {
+        let id = ListSelectionItemId::new(format!("issue-refresh-{minutes}"));
+        let mut next = config.issues.clone();
+        next.auto_refresh_minutes = minutes;
+        actions.insert(
+            id.clone(),
+            ConfigSelectionAction::SetIssues(super::IssueConfigEdit {
+                expected_revision: config.revision,
+                config: next,
+            }),
+        );
+        issue_items.push(
+            ListSelectionItem::new(format!("Auto refresh: {label}"))
+                .with_id(id)
+                .with_columns(
+                    "Auto refresh",
+                    label,
+                    checkbox(config.issues.auto_refresh_minutes == minutes),
+                ),
+        );
+    }
+    let workflow_id = ListSelectionItemId::new("issue-workflow");
+    actions.insert(
+        workflow_id.clone(),
+        ConfigSelectionAction::OpenIssueWorkflow,
+    );
+    issue_items
+        .push(ListSelectionItem::new("Repository workflow and assignment").with_id(workflow_id));
     let issue_tab =
         ListSelectionGroup::new(nls::text(language, Message::ConfigIssues), issue_items);
-    let issue_tab = if config.issues.recommend_merge {
-        issue_tab
-    } else {
-        issue_tab.disabled()
-    };
     let config_items = vec![
         ListSelectionItem::new(nls::text(language, Message::ConfigEnhancedTui))
             .with_id(mouse_id)

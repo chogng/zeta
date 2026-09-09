@@ -50,19 +50,28 @@ impl GitClient {
 
     /// Fetches origin/main into its tracking ref without touching the current checkout.
     pub async fn fetch_main(&self, repository: &GitRepository) -> GitResult<String> {
+        self.fetch_branch(repository, "main").await
+    }
+
+    /// Fetches an explicitly selected origin branch without changing the working directory.
+    pub async fn fetch_branch(&self, repository: &GitRepository, name: &str) -> GitResult<String> {
+        let source = format!("refs/heads/{name}");
+        self.run_query(repository.worktree_root(), ["check-ref-format", &source])
+            .await?
+            .require_success()?;
+        let target = format!("refs/remotes/origin/{name}");
         self.run_mutation(
             repository.worktree_root(),
             [
                 "fetch",
                 "--no-tags",
                 "origin",
-                "+refs/heads/main:refs/remotes/origin/main",
+                &format!("+{source}:{target}"),
             ],
         )
         .await?
         .require_success()?;
-        self.resolve_commit(repository, "refs/remotes/origin/main")
-            .await
+        self.resolve_commit(repository, &target).await
     }
 
     /// Creates an unoccupied branch at a fixed commit; an existing identical branch is a retry.

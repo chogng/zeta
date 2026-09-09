@@ -12,7 +12,7 @@
 just zeta
 ```
 
-Zeta Code 的跨客户端契约从 [API 入口](../docs/README.md)查找；下面用于定位实现和运行验证。
+跨客户端契约见 [App Server API](../../docs/zeta-app-server-api.md)，连接与请求见 [App Server Client](../../docs/app-server-client.md)；下面用于定位实现和运行验证。
 
 ## 文件与职责
 
@@ -22,6 +22,7 @@ Zeta Code 的跨客户端契约从 [API 入口](../docs/README.md)查找；下�
 | 输入、附件、补全和排队发送 | [composer](src/thread/composer)、[submission.rs](src/thread/composer/submission.rs) |
 | 批准或回答问题 | [interaction](src/thread/interaction) |
 | 正文、执行输出、缓存与滚动 | [transcript](src/thread/transcript) |
+| Issue 分组、搜索、分页与工作详情 | [issues.rs](src/issues.rs)、[board.rs](src/issues/board.rs)、[assignment.rs](src/issues/assignment.rs) |
 | 会话列表、预览、切换和详情 | [sessions](src/sessions) |
 | 设置、主题、快捷键 | [config](src/config)、[theme](src/theme)、[keymap](src/keymap) |
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
@@ -129,6 +130,14 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 `/config` 的 Providers 页提供独立的 `ChatGPT subscription` 入口，可查看 Zeta 账户和方案、启动设备码登录、取消登录或退出。验证地址与一次性代码显示在账户页；Esc 返回 Providers，待完成登录仍可重新进入查看和取消。TUI 使用共享账户接口，后端有 Codex 时只读复用，无 Codex 时负责续期和重新登录；缺失时生成兼容的 auth.json。复用模式断开不会退出 Codex；自管模式登出清除认证。重新连接仍有效的已有凭据无需浏览器。[认证存储与验收](../../zeta-rs/docs/changes/chatgpt-auth/verification.md)。
 
 资源采样由可见状态行项目和 Processes 页共同决定；没有需求时停止采样。关闭 Git 显示只停止状态行专属工作，不能停止 ChangeTurn 的目录跟随。
+
+## Issue 工作流接入
+
+`issues::Manager` 管理页面、搜索和请求代次，`board` 合并 GitHub 页面与后端工作记录并维护分组、折叠和稳定选择；`assignment` 承载分配预览、仓库设置和工作详情。Sessions 与 Issues 共用 `widgets::grouped_list` 的可见范围与排版。
+
+列表刷新、工作概览与停止控制使用独立请求通道。关闭页面停止界面轮询，后端工作继续；迟到结果不能重开页面。缓存、领取、执行阶段、工作区、验收及 GitHub 同步由后端拥有，协议见 [Issue API](../../docs/zeta-app-server-api.md#issue-任务与-pr)。
+
+定向验证使用 `just test zeta-tui issues`、`just test zeta-tui session_manager` 和 `just test-tui issues:: -- --test-threads=1`。真实场景使用临时 Git 仓库与离线 GitHub fixture，覆盖分页、搜索、缓存、分配、暂停、组合验收和 PR 交付；不表示真实 GitHub 写入已联调。
 
 ## 正文更新与容量
 

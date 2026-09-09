@@ -46,6 +46,33 @@ pub(crate) fn begin(
     Ok(())
 }
 
+/// Restarts a terminal verification of identical inputs; command receipts retain earlier evidence.
+pub(crate) fn restart(run: &mut WorkRun, key: &ContentDigest) -> Result<(), WorkCoordinationError> {
+    let previous = run
+        .verifications
+        .get(key)
+        .cloned()
+        .ok_or_else(|| WorkCoordinationError::NotFound(key.to_string()))?;
+    if previous.status == WorkVerificationStatus::Verifying
+        || previous.input.ordered_results.iter().any(|result| {
+            run.attempts[&result.attempt_id].integration_status
+                == WorkAttemptIntegrationStatus::Integrated
+        })
+    {
+        return Err(WorkCoordinationError::InvalidTransition(
+            "Active or integrated verification cannot restart".into(),
+        ));
+    }
+    run.verifications.remove(key);
+    for result in &previous.input.ordered_results {
+        run.attempts
+            .get_mut(&result.attempt_id)
+            .expect("validated verification member")
+            .verification_status = WorkAttemptVerificationStatus::Pending;
+    }
+    begin(run, &previous.input)
+}
+
 pub(crate) fn finish(
     run: &mut WorkRun,
     key: &ContentDigest,

@@ -9,6 +9,7 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct IssueConfigDto {
     pub recommend_merge: bool,
+    pub auto_refresh_minutes: u32,
     pub analysis_model: Option<crate::protocol::config::ModelRefDto>,
 }
 
@@ -75,6 +76,8 @@ pub struct IssueRepository {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueSummary {
+    pub labels: Vec<String>,
+    pub assignees: Vec<String>,
     #[ts(type = "number")]
     pub number: u64,
     pub title: String,
@@ -92,9 +95,20 @@ pub enum IssueState {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub enum IssueListMode {
+    Cached,
+    Auto,
+    Refresh,
+    ClearCache,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct IssueListParams {
     pub state: IssueState,
     pub page: u32,
+    pub query: String,
+    pub mode: IssueListMode,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -103,6 +117,11 @@ pub struct IssueListResult {
     pub repository: IssueRepository,
     pub issues: Vec<IssueSummary>,
     pub next_page: Option<u32>,
+    pub cached: bool,
+    #[ts(type = "number")]
+    pub fetched_at: u64,
+    pub refresh_after_seconds: Option<u32>,
+    pub notice: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

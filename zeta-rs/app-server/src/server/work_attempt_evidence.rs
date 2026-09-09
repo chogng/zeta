@@ -13,7 +13,6 @@ use zeta_turn_changes::TurnChangeSet;
 use zeta_turn_changes::TurnChangeStore;
 use zeta_work_coordination::RootState;
 use zeta_work_coordination::WorkAttemptChangeEvidenceRef;
-#[cfg(feature = "multi-agent-evals")]
 use zeta_work_coordination::WorkAttemptResult;
 use zeta_work_coordination::WorkRun;
 use zeta_work_coordination::work_attempt_result_digest;
@@ -25,7 +24,6 @@ impl TurnChangesRuntime {
     /// The returned value is still revalidated by [`Self::validate_attempt_result`] when the
     /// `SealAttempt` command is applied. This helper gives trusted hosts a canonical way to request
     /// sealing without accepting result identities invented by an Agent.
-    #[cfg(feature = "multi-agent-evals")]
     pub(super) fn derive_attempt_result(
         &self,
         run: &WorkRun,

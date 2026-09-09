@@ -166,7 +166,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     if driver.app_mut().handle_tick(now) {
                         redraw.request(now, RedrawPriority::Batched);
                     }
-                    None
+                    driver.app_mut().poll_issue_refresh(now)
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
                     Event::FocusGained => {

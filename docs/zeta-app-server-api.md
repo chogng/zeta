@@ -1022,18 +1022,35 @@ CLI/TUI 的 Issue 功能使用以下类型化接口。业务数据与协议源�
 
 | 方法 | 契约 |
 | --- | --- |
-| `issue/list` | 从当前环境的 origin 按必填 `state: open | closed` 和 `page` 读取一页 issue，返回仓库身份、摘要和下一页；排除 PR |
-| `issue/configure` | 按 commandId 和 expectedRevision 保存合并推荐开关与独立分析模型；ConfigReadResult.issues 返回同一份后端配置 |
+| `issue/list` | 从当前环境的 origin 按必填 `state: open | closed`、`page`、`query`、`mode` 读取最多 100 条上游记录并排除 PR；返回仓库、摘要、nextPage、cached、fetchedAt（Unix 秒）、refreshAfterSeconds（null 表示关闭）和 notice |
+| `issue/configure` | 按 commandId 和 expectedRevision 保存合并推荐开关、独立分析模型和 autoRefreshMinutes（0/5/10/30/60，默认 10）；ConfigReadResult.issues 返回同一份后端配置 |
 | `issue/read` | 校验调用方仓库仍匹配环境，读取所选 issue 的正文与评论 |
 | `issue/task/create` | 以 commandId 去重，固定提交与材料快照，通过现有 ThreadWorktreeBinder 创建一个 Session |
 | `issue/task/read` | 按 Session 返回持久关联；pendingInput 表示根 Thread 尚未发送 Turn |
 | `issue/pr/preview` | 返回发布标题、正文、分支、提交身份、文件范围、预期文件树及允许的方式 |
 | `issue/pr/create` | 核对预期文件树，复用 ChangeSet 提交流程、推送并创建 PR，按用户选择请求自动合并 |
 
+工作分配接口由 [`issue_assignment.rs`](../zeta-rs/app-server-protocol/src/protocol/issue_assignment.rs) 定义：
+
+| 方法 | 契约 |
+| --- | --- |
+| `issue/workflow/read` | 当前稳定仓库身份、Config revision、工作流、默认分支、标签和可分配账号 |
+| `issue/workflow/configure` | 按 commandId/expectedRevision 保存该仓库工作流，验证标签/负责人及显式自动领取范围 |
+| `issue/label/create` | 显式创建标签；同名同色重放，修改现有颜色需要 expectedColor 匹配 |
+| `issue/plan` | numbers 与 branch/combined/distributed；固定材料和提交，返回可审阅的完整工作项分区 |
+| `issue/assignment/start` | commandId、完整 plan 和 createBranch/claim/execute；按整组原子领取和稳定资源回执准备 |
+| `issue/assignments/list` | 当前仓库归属及执行阶段、同步、分支、PR 和精确结果 |
+| `issue/assignment/action` | commandId、assignmentId、expectedRevision、expectedEpoch；pause/resume/release/cancel/transfer/retrySync/verify/deliver |
+| `issue/assignment/notice` | 重要变化通知：assignmentId、message；普通心跳不发通知 |
+
+暂停、取消和释放使用独立客户端请求通道，不等待长时间验证；本地停止按执行 epoch 校验；verify 以当前封存结果重新准备，仅要求 epoch 一致，避免普通状态同步打断验收；交付及其他变更同时核对 revision。归属与步骤回执由协调服务的 SQLite 保存，GitHub 不是原子锁。单项/批次的规则、Agent 定义及规划额度固定，外部变更不能被页面缓存隐藏。协议 DTO 与共享领域类型在边界做机械转换。
+
+`issue/list.mode` 为 `cached`（优先返回已存页面）、`auto`（按当前配置决定是否重取）、`refresh`（强制重取）或 `clearCache`（清除当前仓库全部列表缓存并读取第一页）。空 query 普通分页；编号精确查询；关键词搜索最多 10 页，上限或不完整结果通过 notice 明示。成功刷新第一页使该查询的旧后续页失效；失败不覆盖已有缓存。
+
 `InputItem.type = issue` 携带编号；后端只从接收 Session 的已存关联中解析材料，转换为现有
 Context 输入。界面标签不是身份来源。Issue 查询不占用全局写锁，PR 操作按 Session 串行；
 任务创建沿用根 Thread 的全局创建顺序。
 
-`zeta-github` 隔离 GitHub CLI 的外部依赖；`zeta-state` 保存 issue_tasks 关联；Git/worktree
+`zeta-github` 隔离 GitHub CLI 的外部依赖；`zeta-state` 分别保存 issue_tasks 关联和有界 issue_pages 缓存；Git/worktree
 继续拥有代码与工作目录，app-server 负责跨能力协调。创建 PR 与自动合并分别记录结果，
 自动合并失败仍返回已创建的 PR；状态刷新失败显式标注不可用。

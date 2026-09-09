@@ -1,6 +1,14 @@
 //! Profile-local database runtime, durable state adapters, and rebuildable index leases.
 
 mod dir_index;
+mod issue_cache;
+pub use issue_cache::CachedIssuePage;
+pub use issue_cache::IssueCacheKey;
+pub use issue_cache::SqliteIssueCache;
+mod issue_assignments;
+pub use issue_assignments::IssueAssignmentCommand;
+pub use issue_assignments::IssueControl;
+pub use issue_assignments::SqliteIssueAssignmentStore;
 mod issue_tasks;
 pub use issue_tasks::SqliteIssueTaskStore;
 mod sqlite;

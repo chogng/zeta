@@ -156,7 +156,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
 }
 
 #[test]
-fn issue_config_switch_disables_the_tab_without_clearing_the_model() {
+fn issue_config_switch_keeps_refresh_settings_available_without_clearing_the_model() {
     use crate::widgets::list_selection::ListSelectionItemId;
     use crate::widgets::tab_list::TabListItem;
     let mut config = empty_config_snapshot();
@@ -175,7 +175,9 @@ fn issue_config_switch_disables_the_tab_without_clearing_the_model() {
     let spec = choices(&config);
     let switch = ListSelectionItemId::new("issue-merge-recommendations");
     let model_row = ListSelectionItemId::new("issue-analysis-model");
-    let Some(ConfigSelectionAction::SetIssues(off)) = spec.actions.get(&switch) else { panic!("root switch must update Issue settings"); };
+    let Some(ConfigSelectionAction::SetIssues(off)) = spec.actions.get(&switch) else {
+        panic!("root switch must update Issue settings");
+    };
     assert!(!off.config.recommend_merge);
     assert_eq!(off.config.analysis_model, config.issues.analysis_model);
     let mut editor = super::ConfigEditor::new(spec);
@@ -186,14 +188,19 @@ fn issue_config_switch_disables_the_tab_without_clearing_the_model() {
     config.issues.recommend_merge = false;
     editor.replace(choices(&config));
     assert_eq!(editor.selection.state().tabs()[3].label(), "Issues");
-    assert!(!editor.selection.state().tabs()[3].tab_enabled());
-    assert_eq!(editor.selection.state().active_tab().label(), "Config");
+    assert!(editor.selection.state().tabs()[3].tab_enabled());
+    assert_eq!(editor.selection.state().active_tab().label(), "Issues");
     assert!(!editor.selection.state_mut().focus_item(&model_row));
     config.revision += 1;
     config.issues.recommend_merge = true;
     editor.replace(choices(&config));
     assert!(editor.selection.state_mut().focus_item(&model_row));
-    assert!(editor.selection.state().visible_items()[0].description().unwrap().contains("ollama/small"));
+    assert!(
+        editor.selection.state().visible_items()[0]
+            .description()
+            .unwrap()
+            .contains("ollama/small")
+    );
 }
 
 #[test]
@@ -213,16 +220,30 @@ fn issue_config_has_no_implicit_model_and_ignores_a_disabled_tabs_pending_picker
         )
     };
     let mut editor = super::ConfigEditor::new(choices(&config));
-    assert!(editor.selection.state_mut().focus_item(&ListSelectionItemId::new("issue-analysis-model")));
-    assert!(editor.selection.state().visible_items()[0].description().unwrap().contains("Not configured"));
-    let super::ConfigEditorOutcome::LoadIssueModels { request_id, .. } = editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)) else { panic!("model chooser must load its own catalog"); };
+    assert!(
+        editor
+            .selection
+            .state_mut()
+            .focus_item(&ListSelectionItemId::new("issue-analysis-model"))
+    );
+    assert!(
+        editor.selection.state().visible_items()[0]
+            .description()
+            .unwrap()
+            .contains("Not configured")
+    );
+    let super::ConfigEditorOutcome::LoadIssueModels { request_id, .. } =
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("model chooser must load its own catalog");
+    };
     config.revision += 1;
     config.issues.recommend_merge = false;
     editor.replace(choices(&config));
     editor.finish_issue_models(request_id, Err("late result".into()));
     assert!(editor.issue_models.is_none());
     assert!(editor.selection.state().message().is_none());
-    assert_eq!(editor.selection.state().active_tab().label(), "Config");
+    assert_eq!(editor.selection.state().active_tab().label(), "Issues");
 }
 
 #[test]
@@ -518,20 +539,47 @@ fn created_provider_autosaves_without_leaving_form_and_next_edit_uses_new_revisi
     let mut editor = custom_editor();
     editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     editor.handle_paste("Example".into());
-    assert!(matches!(editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), super::ConfigEditorOutcome::Consumed));
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Consumed
+    ));
     editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     editor.handle_paste("https://example.test/v1".into());
-    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) = editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)) else { panic!("expected autosave") };
+    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) =
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected autosave")
+    };
     let mut config = empty_config_snapshot();
     config.revision = 1;
-    config.providers.insert(request.config.provider.clone(), request.config.clone());
-    editor.complete_connection(crate::config::provider::Reply { id: request.id, result: Ok((config_choices(&config, &providers(), TerminalSettings::default(), StatusLineSettings::default()), None)) });
-    assert!(matches!(editor.page(), super::ConfigEditorPage::Provider(_)));
+    config
+        .providers
+        .insert(request.config.provider.clone(), request.config.clone());
+    editor.complete_connection(crate::config::provider::Reply {
+        id: request.id,
+        result: Ok((
+            config_choices(
+                &config,
+                &providers(),
+                TerminalSettings::default(),
+                StatusLineSettings::default(),
+            ),
+            None,
+        )),
+    });
+    assert!(matches!(
+        editor.page(),
+        super::ConfigEditorPage::Provider(_)
+    ));
     editor.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     editor.handle_paste(" renamed".into());
-    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(renamed)) = editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)) else { panic!("expected autosave") };
+    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(renamed)) =
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected autosave")
+    };
     assert_eq!(renamed.config.provider, request.config.provider);
     assert_eq!(renamed.revision, 1);
 }
