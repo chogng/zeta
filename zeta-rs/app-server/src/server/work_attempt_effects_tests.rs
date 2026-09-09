@@ -39,3 +39,61 @@ fn binding(source: ToolSourceProvenance) -> ToolCallBinding {
         caller: ToolCallCaller::Direct,
     }
 }
+
+#[test]
+fn scoped_process_and_read_only_helper_receipts_require_trusted_host_provenance() {
+    let product = binding(ToolSourceProvenance::Product {
+        component: "zeta-app-server".into(),
+    });
+    let remote = binding(ToolSourceProvenance::Mcp {
+        server_id: "remote".into(),
+        remote_name: "shell-command".into(),
+        catalog_generation: 1,
+        connection_generation: 1,
+    });
+    let result = |text: &str| zeta_protocol::ThreadItem::ToolResult {
+        item_id: zeta_protocol::ItemId::new("item").unwrap(),
+        turn_id: zeta_protocol::TurnId::new("turn").unwrap(),
+        tool_call_id: zeta_protocol::ToolCallId::new("call").unwrap(),
+        text: text.into(),
+        content: None,
+        is_error: false,
+    };
+    let confined = result(r#"{"result":{"managed_scope":true,"stdout":"ok"}}"#);
+    assert!(super::is_confined_process(
+        "shell-command",
+        Some(&product),
+        &confined
+    ));
+    assert!(!super::is_confined_process(
+        "shell-command",
+        Some(&remote),
+        &confined
+    ));
+    assert!(!super::is_confined_process(
+        "shell-command",
+        None,
+        &confined
+    ));
+    assert!(!super::is_confined_process(
+        "shell-command",
+        Some(&product),
+        &result(r#"{"result":{"stdout":"{\"managed_scope\":true}"}}"#)
+    ));
+    let helper = result(r#"{"issue_read_only_helper":true}"#);
+    assert!(super::is_issue_investigation(
+        "spawn_agent",
+        Some(&product),
+        &helper
+    ));
+    assert!(!super::is_issue_investigation(
+        "spawn_agent",
+        Some(&remote),
+        &helper
+    ));
+    assert!(!super::is_issue_investigation(
+        "shell-command",
+        Some(&product),
+        &helper
+    ));
+}

@@ -283,7 +283,8 @@ impl EnvRuntimeControl {
             &self.threads,
             &self.turn_backend,
             customizations.as_ref(),
-        );
+            self.env_state.runtime(),
+        )?;
         let agent_grep = Arc::clone(&local.agent_grep);
         let local_port = local
             .tool_port()
@@ -459,7 +460,8 @@ impl EnvRuntimeControl {
             &self.threads,
             &turn_backend,
             Some(&customizations),
-        );
+            self.env_state.runtime(),
+        )?;
         let watcher = FileSystemWatcher::start_with_observers(
             authorization.dir().clone(),
             Arc::clone(&self.updates),
@@ -1985,7 +1987,8 @@ impl AppServer {
             &self.threads,
             &turn_backend,
             Some(&customizations),
-        );
+            self.env_state.runtime(),
+        )?;
         let local_port = local
             .tool_port()
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
@@ -2683,7 +2686,8 @@ fn append_multi_agent_tools(
     threads: &Arc<ThreadController>,
     turn_backend: &Arc<dyn zeta_core::TurnExecutionBackend>,
     customizations: Option<&Arc<DirContributions>>,
-) -> crate::local_tools::LocalToolComposition {
+    state: Option<Arc<zeta_state::StateRuntime>>,
+) -> Result<crate::local_tools::LocalToolComposition, EnvRuntimeError> {
     let action_policy_revision = local.action_policy_revision().clone();
     let local = append_local_tool(
         local,
@@ -2708,7 +2712,13 @@ fn append_multi_agent_tools(
     if let Some(customizations) = customizations {
         multi_agent = multi_agent.with_dir_contributions(Arc::clone(customizations));
     }
-    append_local_tool(local, Arc::new(multi_agent))
+    if let Some(state) = state {
+        multi_agent = multi_agent.with_issue_assignments(Arc::new(
+            zeta_state::SqliteIssueAssignmentStore::open(state.database_path())
+                .map_err(EnvRuntimeError::Failed)?,
+        ));
+    }
+    Ok(append_local_tool(local, Arc::new(multi_agent)))
 }
 
 fn open_codebase_semantic_runtime(

@@ -174,8 +174,24 @@ impl UserConfigDocument {
                 .validate_static()
                 .map_err(|error| ConfigError(error.to_string()))?;
         }
+        for (repository, workflow) in &self.issues.repositories {
+            if repository.trim().is_empty() {
+                return Err(ConfigError("Issue repository identity is required".into()));
+            }
+            workflow.validate().map_err(ConfigError)?;
+        }
+        if ![0, 5, 10, 30, 60].contains(&self.issues.auto_refresh_minutes) {
+            return Err(ConfigError(
+                "issues.autoRefreshMinutes must be 0, 5, 10, 30 or 60".into(),
+            ));
+        }
         if let Some(model) = &self.issues.analysis_model {
-            if !self.providers.contains_key(&model.provider) { return Err(ConfigError(format!("issue analysis provider '{}' is not configured", model.provider))); }
+            if !self.providers.contains_key(&model.provider) {
+                return Err(ConfigError(format!(
+                    "issue analysis provider '{}' is not configured",
+                    model.provider
+                )));
+            }
         }
         if let Some(model) = &self.agent.preferred_model
             && !self.providers.contains_key(&model.provider)

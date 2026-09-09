@@ -1838,3 +1838,102 @@ fn begin_attempt(
 fn digest(value: &str) -> ContentDigest {
     ContentDigest::sha256(value.as_bytes())
 }
+
+#[test]
+fn verification_retry_preserves_old_receipts_and_rejects_late_completion() {
+    let coordinator = coordinator();
+    create_run_contract_attempt(&coordinator, "retry-verification", "worker", "attempt");
+    begin_attempt(
+        &coordinator,
+        "retry-verification",
+        4,
+        "attempt",
+        "execution",
+    );
+    let sealed = coordinator
+        .apply(request(
+            "seal-retry",
+            "retry-verification",
+            5,
+            WorkRunCommand::SealAttempt {
+                attempt_id: WorkAttemptId::new("attempt").unwrap(),
+                result_digest: digest("result"),
+                change_set_ids: Vec::new(),
+                private_output_digest: digest("output"),
+                external_effects_digest: digest("effects"),
+                external_effects_status: ExternalEffectsStatus::None,
+            },
+        ))
+        .unwrap()
+        .work_run;
+    let run_id = sealed.work_run_id.clone();
+    let input = verification_input(&sealed, "target", "candidate");
+    let key = super::verification_key(&run_id, &input).unwrap();
+    let verifying = coordinator
+        .apply(request(
+            "verify-once",
+            "retry-verification",
+            sealed.revision,
+            WorkRunCommand::BeginVerification { input },
+        ))
+        .unwrap()
+        .work_run;
+    let finish = request(
+        "rejected-once",
+        "retry-verification",
+        verifying.revision,
+        WorkRunCommand::FinishVerification {
+            verification_key: key.clone(),
+            conclusion: VerificationConclusion::Rejected,
+            checks: vec![VerificationCheckEvidence {
+                check_id: "test".into(),
+                command_digest: digest("command"),
+                output_digest: digest("failed"),
+                outcome: VerificationCheckOutcome::Failed,
+            }],
+            reason: "test failed".into(),
+        },
+    );
+    let rejected = coordinator.apply(finish.clone()).unwrap().work_run;
+    let retried = coordinator
+        .apply(request(
+            "retry",
+            "retry-verification",
+            rejected.revision,
+            WorkRunCommand::RestartVerification {
+                verification_key: key.clone(),
+            },
+        ))
+        .unwrap()
+        .work_run;
+    assert_eq!(
+        retried.verifications[&key].status,
+        super::WorkVerificationStatus::Verifying
+    );
+    assert!(retried.verifications[&key].checks.is_empty());
+    assert!(
+        coordinator
+            .apply(request(
+                "late-completion",
+                "retry-verification",
+                verifying.revision,
+                WorkRunCommand::FinishVerification {
+                    verification_key: key.clone(),
+                    conclusion: VerificationConclusion::Verified,
+                    checks: vec![VerificationCheckEvidence {
+                        check_id: "test".into(),
+                        command_digest: digest("command"),
+                        output_digest: digest("passed"),
+                        outcome: VerificationCheckOutcome::Passed
+                    }],
+                    reason: "old result".into()
+                }
+            ))
+            .is_err()
+    );
+    coordinator.apply(finish).unwrap();
+    assert_eq!(
+        coordinator.read(&run_id).unwrap().verifications[&key].status,
+        super::WorkVerificationStatus::Verifying
+    );
+}

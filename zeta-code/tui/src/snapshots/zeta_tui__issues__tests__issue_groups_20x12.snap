@@ -1,0 +1,15 @@
+---
+source: zeta-code/tui/src/issues_tests.rs
+assertion_line: 244
+expression: text
+---
+─ Issues ───────────
+                    
+  ╭──────────────╮  
+  │ Search keywor│  
+  ╰──────────────╯  
+  team/repo · 0 se  
+    ▾ Todo (2)      
+  >   [ ] #3 firs   
+      [ ] #5 seco   
+    ▸ Closed (0) ·

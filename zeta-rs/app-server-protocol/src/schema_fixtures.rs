@@ -127,10 +127,35 @@ fn registry_method_and_notification_names_are_unique() {
 #[test]
 fn issue_config_and_workflow_method_types_are_declared_in_typescript() {
     let output = typescript();
-    for name in ["IssueConfigDto", "IssueConfigureParams", "IssueStartPoint", "IssueTaskCreateParams", "IssueTaskReadParams", "IssueTaskResult", "IssueTask", "IssueRepository", "IssueSummary", "IssueState", "IssueListParams", "IssueListResult", "IssueReadParams", "IssueReadResult", "IssueComment", "IssuePrMode", "IssuePrPreview", "IssuePrCreateParams", "IssuePrStatus"] {
-        assert!(output.contains(&format!("export type {name} =")), "missing {name}");
+    for name in [
+        "IssueConfigDto",
+        "IssueConfigureParams",
+        "IssueStartPoint",
+        "IssueTaskCreateParams",
+        "IssueTaskReadParams",
+        "IssueTaskResult",
+        "IssueTask",
+        "IssueRepository",
+        "IssueSummary",
+        "IssueState",
+        "IssueListParams",
+        "IssueListResult",
+        "IssueReadParams",
+        "IssueReadResult",
+        "IssueComment",
+        "IssuePrMode",
+        "IssuePrPreview",
+        "IssuePrCreateParams",
+        "IssuePrStatus",
+    ] {
+        assert!(
+            output.contains(&format!("export type {name} =")),
+            "missing {name}"
+        );
     }
-    assert!(output.contains("\"issue/configure\": { params: IssueConfigureParams; response: ConfigCommandResult }"));
+    assert!(output.contains(
+        "\"issue/configure\": { params: IssueConfigureParams; response: ConfigCommandResult }"
+    ));
 }
 
 #[test]
@@ -752,10 +777,16 @@ fn issue_list_requires_an_explicit_supported_state() {
     use crate::protocol::issues::IssueListParams;
     use crate::protocol::issues::IssueState;
     for (name, state) in [("open", IssueState::Open), ("closed", IssueState::Closed)] {
-        let params: IssueListParams = serde_json::from_value(serde_json::json!({"page": 2, "state": name})).unwrap();
+        let params: IssueListParams = serde_json::from_value(
+            serde_json::json!({"page": 2, "state": name, "query": "", "mode": "cached"}),
+        )
+        .unwrap();
         assert_eq!((params.state, params.page), (state, 2));
     }
-    for value in [serde_json::json!({"page": 1}), serde_json::json!({"page": 1, "state": "all"})] {
+    for value in [
+        serde_json::json!({"page": 1}),
+        serde_json::json!({"page": 1, "state": "all"}),
+    ] {
         assert!(serde_json::from_value::<IssueListParams>(value).is_err());
     }
 }

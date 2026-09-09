@@ -18,12 +18,12 @@ use zeta_protocol::ToolName;
 
 const MIN_AUTOMATIC_SCORE: u64 = 60;
 
-pub(super) struct ResolvedAgentSelection {
-    pub(super) role: AgentRoleSnapshot,
-    pub(super) capability_scope: DelegatedCapabilityScope,
+pub(in crate::server) struct ResolvedAgentSelection {
+    pub(in crate::server) role: AgentRoleSnapshot,
+    pub(in crate::server) capability_scope: DelegatedCapabilityScope,
 }
 
-pub(super) fn resolve_agent_selection(
+pub(in crate::server) fn resolve_agent_selection(
     requested: Option<&str>,
     task: &str,
     current_model: Option<&ModelRef>,

@@ -61,9 +61,18 @@ fn issue_config_write_uses_its_backend_contract_without_changing_tui_preferences
     )
     .unwrap();
     let requests = requests.lock().unwrap();
-    assert_eq!(requests.iter().map(|request| request["method"].as_str().unwrap()).collect::<Vec<_>>(), ["issue/configure", "config/read", "provider/list"]);
+    assert_eq!(
+        requests
+            .iter()
+            .map(|request| request["method"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["issue/configure", "config/read", "provider/list"]
+    );
     assert_eq!(requests[0]["params"]["expectedRevision"], 1);
-    assert_eq!(requests[0]["params"]["config"], serde_json::json!({"recommendMerge":false,"analysisModel":null}));
+    assert_eq!(
+        requests[0]["params"]["config"],
+        serde_json::json!({"recommendMerge":false,"autoRefreshMinutes":10,"analysisModel":null})
+    );
     assert!(requests[0]["params"].get("tui").is_none());
     assert!(requests[0]["params"].get("preferredModel").is_none());
 }
@@ -96,9 +105,7 @@ fn issue_config_disabled_does_not_load_a_model_catalog() {
 
 #[test]
 fn probing_unsaved_values_does_not_write_configuration_or_credentials() {
-    for operation in [
-        crate::config::provider::Operation::Test,
-    ] {
+    for operation in [crate::config::provider::Operation::Test] {
         let current = empty_config_snapshot();
         let requests = Arc::new(Mutex::new(Vec::new()));
         let mut client = AppServerClient::new(RecordingTransport {
@@ -115,7 +122,7 @@ fn probing_unsaved_values_does_not_write_configuration_or_credentials() {
         let (_, result) = super::execute_connection(
             &mut client,
             crate::config::provider::Request {
-            model: Some("alias".into()),
+                model: Some("alias".into()),
                 id: crate::client::new_command_id("probe"),
                 revision: 7,
                 config: zeta_app_server_protocol::protocol::config::ProviderConfigDto {
@@ -278,7 +285,7 @@ fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
         custom: Some(
             zeta_app_server_protocol::protocol::config::CustomProviderConfigDto {
                 context_window: 272_000,
-        order: 0,
+                order: 0,
                 model: None,
                 name: "Example".into(),
                 protocol:

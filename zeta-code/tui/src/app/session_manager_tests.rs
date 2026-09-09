@@ -447,3 +447,32 @@ fn manager_navigation_stays_focused_and_repeated_keys_cannot_open_or_modify_sess
     assert!(app.session_manager_focused());
     assert_eq!(app.input(), "");
 }
+
+#[test]
+fn empty_input_opens_agents_on_the_left_and_issues_on_the_right() {
+    let mut app = active_session_app();
+    app.handle_key(key(KeyCode::Left));
+    assert!(app.session_manager_view().is_some());
+    app.handle_key(key(KeyCode::Right));
+    assert!(app.session_manager_view().is_none());
+    let mut transcript = preview_result(0..1, false).transcript;
+    if let zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry::Item {
+        transient,
+        ..
+    } = &mut transcript.entries[0]
+    {
+        *transient = true;
+    }
+    app.update(ThreadEvent::TranscriptSnapshotReceived(transcript));
+    assert!(!app.visible_transcript_views().is_empty());
+    assert!(matches!(
+        app.handle_key(key(KeyCode::Right)),
+        Some(AppCommand::Issues(crate::issues::Command::List { .. }))
+    ));
+    assert!(app.issue_manager().is_some());
+    app.handle_key(key(KeyCode::Esc));
+    assert!(app.issue_manager().is_none());
+    app.handle_key(key(KeyCode::Char('x')));
+    app.handle_key(key(KeyCode::Right));
+    assert!(app.issue_manager().is_none());
+}

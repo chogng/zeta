@@ -91,6 +91,10 @@ mod git_operations;
 mod git_runtime;
 pub(crate) mod goal_tool;
 mod interaction_runtime;
+mod issue_assignment;
+mod issue_assignment_operations;
+mod issue_delivery;
+mod issue_execution;
 mod issue_operations;
 mod issue_pr;
 mod issue_tasks;
@@ -283,6 +287,11 @@ pub struct AppServer {
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     turn_changes: Option<Arc<turn_changes_runtime::TurnChangesRuntime>>,
     issue_tasks: Option<Arc<zeta_state::SqliteIssueTaskStore>>,
+    issue_assignments: Option<Arc<zeta_state::SqliteIssueAssignmentStore>>,
+    issue_execution: std::sync::OnceLock<issue_execution::IssueExecutionRuntime>,
+    issue_execution_init: Mutex<()>,
+    issue_repository_cache: Mutex<Option<issue_assignment::IssueRepositoryCache>>,
+    issue_cache: Option<Arc<Mutex<zeta_state::SqliteIssueCache>>>,
     work_coordination: Option<Arc<work_coordination_runtime::WorkCoordinationRuntime>>,
     projects: Option<Arc<zeta_projects::ProjectCoordinator>>,
     automation: Option<Arc<zeta_automation::AutomationStore>>,
@@ -605,6 +614,11 @@ impl AppServer {
             _interaction_deadline_watcher: interaction_deadline_watcher,
             turn_changes: None,
             issue_tasks: None,
+            issue_assignments: None,
+            issue_execution: std::sync::OnceLock::new(),
+            issue_execution_init: Mutex::new(()),
+            issue_repository_cache: Mutex::new(None),
+            issue_cache: None,
             work_coordination: None,
             projects: None,
             automation: None,
@@ -673,8 +687,14 @@ impl AppServer {
             file_access,
             hooks,
             Arc::clone(&self.updates),
+            Arc::clone(&self.local_tool_config),
         )?;
+        let issue_assignments = Arc::clone(&runtime.issue_assignments);
         let mut server = self.with_turn_changes_runtime(runtime)?;
+        server.issue_cache = Some(Arc::new(Mutex::new(zeta_state::SqliteIssueCache::open(
+            database_path,
+        )?)));
+        server.issue_assignments = Some(issue_assignments);
         server.issue_tasks = Some(Arc::new(zeta_state::SqliteIssueTaskStore::open(
             database_path,
         )?));
@@ -1887,6 +1907,19 @@ impl AppServer {
                 self.issue_task_create(connection, &request.params)
             }
             Some(ClientMethod::IssueTaskRead) => self.issue_task_read(&request.params),
+            Some(ClientMethod::IssueWorkflowRead) => self.issue_workflow_read(),
+            Some(ClientMethod::IssueWorkflowConfigure) => {
+                self.issue_workflow_configure(&request.params)
+            }
+            Some(ClientMethod::IssueLabelCreate) => self.issue_label_create(&request.params),
+            Some(ClientMethod::IssueAssignmentStart) => {
+                self.issue_assignment_start(&request.params)
+            }
+            Some(ClientMethod::IssueAssignmentsList) => self.issue_assignments_list(),
+            Some(ClientMethod::IssueAssignmentAction) => {
+                self.issue_assignment_action(&request.params)
+            }
+            Some(ClientMethod::IssuePlan) => self.issue_plan(&request.params),
             Some(ClientMethod::IssueConfigure) => self.issue_configure(&request.params),
             Some(ClientMethod::IssueList) => self.issue_list(&request.params),
             Some(ClientMethod::IssueRead) => self.issue_read(&request.params),
@@ -2406,10 +2439,20 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
     }
 }
 
+#[derive(Debug)]
 pub(super) struct RpcError {
     code: i64,
     message: AppServerErrorName,
     detail: Option<String>,
+}
+
+impl std::fmt::Display for RpcError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.detail {
+            Some(detail) => formatter.write_str(detail),
+            None => write!(formatter, "{:?}", self.message),
+        }
+    }
 }
 
 impl RpcError {

@@ -167,6 +167,9 @@ pub(crate) fn apply(
             external_effects_digest,
             *external_effects_status,
         )?,
+        WorkRunCommand::RestartVerification { verification_key } => {
+            crate::verification_reducer::restart(&mut run, verification_key)?
+        }
         WorkRunCommand::BeginVerification { input } => {
             crate::verification_reducer::begin(&mut run, input)?
         }

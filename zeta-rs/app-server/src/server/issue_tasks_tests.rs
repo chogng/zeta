@@ -68,6 +68,8 @@ fn verify_recovery(relative: &Path) {
             .iter()
             .map(|&number| zeta_github::IssueSnapshot {
                 issue: zeta_github::Issue {
+                    labels: Vec::new(),
+                    assignees: Vec::new(),
                     number,
                     title: format!("Fix {number}"),
                     body: Some("exact saved requirement".into()),

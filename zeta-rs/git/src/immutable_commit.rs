@@ -337,6 +337,24 @@ impl GitClient {
 
     /// Creates a deterministic commit object for an exact verified final tree without changing a
     /// branch, index, or working tree.
+    /// Creates a deterministic commit object without changing a branch, index or working tree.
+    pub async fn prepare_commit_object(
+        &self,
+        repository: &GitRepository,
+        parent: &str,
+        tree: &GitTreeId,
+        message: &str,
+    ) -> GitResult<String> {
+        let parent = self.resolve_commit(repository, parent).await?;
+        self.create_deterministic_commit(
+            repository,
+            tree,
+            Some(&parent),
+            &GitCommitRequest::new(message.to_owned())?,
+        )
+        .await
+    }
+
     pub async fn prepare_tree_commit(
         &self,
         repository: &GitRepository,

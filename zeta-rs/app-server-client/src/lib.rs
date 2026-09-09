@@ -564,6 +564,69 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::IssuePrCreate, params)
     }
 
+    pub fn issue_workflow_read(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::common::EmptyParams,
+    ) -> Result<
+        zeta_app_server_protocol::protocol::issue_assignment::IssueWorkflowReadResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::IssueWorkflowRead, params)
+    }
+
+    pub fn issue_workflow_configure(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issue_assignment::IssueWorkflowConfigureParams,
+    ) -> Result<zeta_app_server_protocol::protocol::config::ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::IssueWorkflowConfigure, params)
+    }
+
+    pub fn issue_label_create(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issue_assignment::IssueLabelCreateParams,
+    ) -> Result<zeta_app_server_protocol::protocol::issue_assignment::IssueLabelDto, ClientError>
+    {
+        self.call(ClientMethod::IssueLabelCreate, params)
+    }
+
+    pub fn issue_plan(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issue_assignment::IssuePlanParams,
+    ) -> Result<zeta_app_server_protocol::protocol::issue_assignment::IssuePlanResult, ClientError>
+    {
+        self.call(ClientMethod::IssuePlan, params)
+    }
+
+    pub fn issue_assignment_start(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentStartParams,
+    ) -> Result<
+        zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentsResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::IssueAssignmentStart, params)
+    }
+
+    pub fn issue_assignments_list(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::common::EmptyParams,
+    ) -> Result<
+        zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentsResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::IssueAssignmentsList, params)
+    }
+
+    pub fn issue_assignment_action(
+        &mut self,
+        params: zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentActionParams,
+    ) -> Result<
+        zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentsResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::IssueAssignmentAction, params)
+    }
+
     pub fn configure_issues(
         &mut self,
         params: zeta_app_server_protocol::protocol::issues::IssueConfigureParams,

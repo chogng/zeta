@@ -816,6 +816,13 @@ impl UpdateBroker {
         self.broadcast_notification(ServerNotificationMethod::TurnChangesChanged, &changed);
     }
 
+    pub(super) fn publish_issue_notice(
+        &self,
+        notice: zeta_app_server_protocol::protocol::issue_assignment::IssueAssignmentNotice,
+    ) {
+        self.broadcast_notification(ServerNotificationMethod::IssueAssignmentNotice, &notice);
+    }
+
     pub(super) fn publish_work_run_changed(&self, changed: WorkRunChanged) {
         let Ok(mut state) = self.state.lock() else {
             return;
@@ -835,7 +842,10 @@ impl UpdateBroker {
     }
 
     pub(crate) fn publish_automation_changed(&self) {
-        self.broadcast_notification(ServerNotificationMethod::AutomationChanged, &serde_json::json!({}));
+        self.broadcast_notification(
+            ServerNotificationMethod::AutomationChanged,
+            &serde_json::json!({}),
+        );
     }
 
     pub(super) fn publish_project_changed(&self, changed: ProjectChanged) {

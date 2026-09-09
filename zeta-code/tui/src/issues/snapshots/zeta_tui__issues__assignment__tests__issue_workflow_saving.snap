@@ -1,0 +1,32 @@
+---
+source: zeta-code/tui/src/issues/assignment_tests.rs
+assertion_line: 76
+expression: text
+---
+─ Issue workflow · current repository ──────────────────────────────────────────────────────────────
+                                                                                                    
+  team/project · config 7 · default develop · 0 labels                                              
+  Loading...                                                                                        
+    Todo label: status:todo                                                                         
+    Queued label: status:queued                                                                     
+    In progress label: status:in-progress                                                           
+    Review label: status:review                                                                     
+    Blocked label: status:blocked                                                                   
+  > GitHub assignee: tester                                                                         
+    Base branch (empty = default, HEAD = checkout):                                                 
+    Target branch (empty = default):                                                                
+    Branch template: codex/issue-{number}-{slug}-{attempt}                                          
+    Branch publication (local/linked): linked                                                       
+    Coordinator Agent:                                                                              
+    Worker Agent:                                                                                   
+    Parallel workers: 3                                                                             
+    Batch token budget: 100000                                                                      
+    Delivery (branch/pullRequest/draftPullRequest): pullRequest                                     
+    Close when complete (true/false): true                                                          
+    Validation commands (paste one per line):                                                       
+    Automatic claiming (true/false): false                                                          
+    Auto-claim labels (comma separated):                                                            
+    Auto-claim assignee (empty = unassigned):                                                       
+    Auto-claim issue limit:                                                                         
+    Automatic PR merge (true/false): false                                                          
+    Todo color: cfd3d7

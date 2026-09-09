@@ -145,6 +145,9 @@ pub enum WorkRunCommand {
         #[serde(default)]
         external_effects_status: ExternalEffectsStatus,
     },
+    RestartVerification {
+        verification_key: ContentDigest,
+    },
     BeginVerification {
         input: WorkVerificationInput,
     },

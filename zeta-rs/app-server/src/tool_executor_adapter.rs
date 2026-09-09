@@ -266,13 +266,20 @@ impl ToolExecutorRuntime {
                 "sandbox scope belongs to a different execution environment".into(),
             ));
         }
-        let authority = match authorization {
-            ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
-            ToolAuthorization::UnsandboxedGrant { .. }
-            | ToolAuthorization::ExecPolicyGranted(_)
-            | ToolAuthorization::AutoReviewed(_)
-            | ToolAuthorization::PermissionBypassed(_)
-            | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,
+        let authority = if sandbox_scope.is_some() {
+            ToolRuntimeAuthority::Sandboxed(zeta_sandboxing::SandboxPolicy::new(
+                zeta_sandboxing::FileSystemAccess::DirectoryWrite,
+                zeta_sandboxing::NetworkAccess::Denied,
+            ))
+        } else {
+            match authorization {
+                ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
+                ToolAuthorization::UnsandboxedGrant { .. }
+                | ToolAuthorization::ExecPolicyGranted(_)
+                | ToolAuthorization::AutoReviewed(_)
+                | ToolAuthorization::PermissionBypassed(_)
+                | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,
+            }
         };
         let mut context =
             ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority)

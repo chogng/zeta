@@ -78,7 +78,9 @@ pub(super) fn work_attempt_effects(
             .ok_or_else(|| format!("Tool Call {tool_call_id} has no durable result"))?;
         let start = thread.tool_execution_starts.get(tool_call_id);
         let outside_managed_effect_boundary =
-            has_unknown_external_effect(name.as_str(), binding.as_ref(), start.is_some());
+            has_unknown_external_effect(name.as_str(), binding.as_ref(), start.is_some())
+                && !is_issue_investigation(name.as_str(), binding.as_ref(), result)
+                && !is_confined_process(name.as_str(), binding.as_ref(), result);
         unknown |= outside_managed_effect_boundary;
         records.push(ToolEffectRecord {
             turn_id: turn_id.clone(),
@@ -136,9 +138,56 @@ fn is_confined_tool(name: &str, binding: Option<&ToolCallBinding>) -> bool {
             | "apply_patch"
             | "agent_grep"
             | "update_plan"
+            | "get_goal"
+            | "create_goal"
+            | "update_goal"
     )
 }
 
 #[cfg(test)]
 #[path = "work_attempt_effects_tests.rs"]
 mod tests;
+
+fn is_issue_investigation(
+    name: &str,
+    binding: Option<&ToolCallBinding>,
+    result: &ThreadItem,
+) -> bool {
+    if !matches!(name, "spawn_agent" | "send_agent_message" | "wait_agent") || !binding.is_some_and(|binding| matches!(binding.source_chain.as_slice(), [ToolSourceProvenance::Product { component }] if component == "zeta-app-server")) { return false; }
+    let ThreadItem::ToolResult {
+        text,
+        is_error: false,
+        ..
+    } = result
+    else {
+        return false;
+    };
+    serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("issue_read_only_helper")
+                .and_then(serde_json::Value::as_bool)
+        })
+        == Some(true)
+}
+
+fn is_confined_process(name: &str, binding: Option<&ToolCallBinding>, result: &ThreadItem) -> bool {
+    if name != "shell-command" || !binding.is_some_and(|binding| matches!(binding.source_chain.as_slice(), [ToolSourceProvenance::Product { component }] if component == "zeta-app-server")) { return false; }
+    let ThreadItem::ToolResult {
+        text,
+        is_error: false,
+        ..
+    } = result
+    else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return false;
+    };
+    value
+        .get("managed_scope")
+        .or_else(|| value.pointer("/result/managed_scope"))
+        .and_then(serde_json::Value::as_bool)
+        == Some(true)
+}

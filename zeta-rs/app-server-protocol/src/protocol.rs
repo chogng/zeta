@@ -1,8 +1,8 @@
 //! Transport-independent App Server business contract.
 
 pub mod account;
-pub mod automation;
 pub mod attachments;
+pub mod automation;
 pub mod browser;
 pub mod codebase;
 pub mod codebase_symbols;
@@ -21,12 +21,13 @@ pub mod fs;
 pub mod git;
 pub mod goal;
 pub mod initialize;
+pub mod issue_assignment;
 pub mod issues;
 pub mod language;
 pub mod marketplace;
 pub mod mcp;
-pub mod model;
 pub mod memory;
+pub mod model;
 pub mod notification;
 pub mod plugins;
 pub mod projects;

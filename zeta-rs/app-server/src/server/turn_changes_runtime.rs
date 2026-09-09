@@ -39,6 +39,9 @@ use zeta_worktree::{ManagedDirBinding, WorktreeManager, WorktreeSettings};
 /// App Server owner of Thread dir bindings, Turn checkpoints, and ledger notifications.
 pub(super) struct TurnChangesRuntime {
     pub(super) dir_root: PathBuf,
+    pub(super) profile_root: PathBuf,
+    pub(super) verification_tool_config: Arc<RwLock<crate::local_tools::LocalToolConfig>>,
+    pub(super) issue_assignments: Arc<zeta_state::SqliteIssueAssignmentStore>,
     pub(super) dir_id: DirId,
     pub(super) worktrees: WorktreeManager,
     pub(super) worktree_runtime: tokio::runtime::Runtime,
@@ -73,6 +76,7 @@ impl TurnChangesRuntime {
         file_access: Arc<DirGrants>,
         hooks: Arc<DeclarativeHookRuntime>,
         updates: Arc<UpdateBroker>,
+        verification_tool_config: Arc<RwLock<crate::local_tools::LocalToolConfig>>,
     ) -> Result<Arc<Self>, String> {
         let dir = Dir::open_local(dir_root).map_err(|error| error.to_string())?;
         let store = Arc::new(
@@ -114,6 +118,11 @@ impl TurnChangesRuntime {
             file_access.bind_thread_dir(thread_id.clone(), root);
         }
         let runtime = Arc::new(Self {
+            issue_assignments: Arc::new(zeta_state::SqliteIssueAssignmentStore::open(
+                database_path,
+            )?),
+            profile_root: profile_root.to_path_buf(),
+            verification_tool_config,
             dir_root: dir.canonical_path().to_path_buf(),
             dir_id: dir.id(),
             worktrees,

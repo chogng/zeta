@@ -211,3 +211,121 @@ async fn automatic_merge_uses_the_selected_method_and_exact_reviewed_head() {
         );
     }
 }
+
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn issue_search_encodes_keywords_handles_numbers_and_reports_limits() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let issue = serde_json::json!({"number":5001,"title":"Title without search words","body":"memory leak","html_url":"https://github.com/team/repo/issues/5001","updated_at":"now","state":"open"});
+    std::fs::write(
+        dir.path().join("issue"),
+        serde_json::to_vec(&issue).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("search"),
+        serde_json::to_vec(
+            &serde_json::json!({"items":[issue], "total_count":1250, "incomplete_results":false}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let script = dir.path().join("gh");
+    std::fs::write(&script, format!("#!/bin/sh\nprintf '%s' \"$6\" > '{0}/endpoint'\ncase \"$6\" in\nsearch/issues*) cat '{0}/search';;\nrepos/team/repo/issues/5001) cat '{0}/issue';;\n*) exit 9;;\nesac\n", dir.path().display())).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let github = GitHub { executable: script };
+    let repo = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    let result = github
+        .search_issues(&repo, IssueState::Open, "memory leak &", 1)
+        .await
+        .unwrap();
+    assert_eq!(result.issues[0].number, 5001);
+    assert_eq!(result.next_page, Some(2));
+    assert!(result.notice.contains("1000"));
+    let endpoint = std::fs::read_to_string(dir.path().join("endpoint")).unwrap();
+    let pairs = url::form_urlencoded::parse(endpoint.split_once('?').unwrap().1.as_bytes())
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(
+        pairs["q"],
+        "repo:team/repo is:issue state:open in:title,body \"memory\" \"leak\" \"&\""
+    );
+    assert_eq!(pairs["per_page"], "100");
+    assert_eq!(
+        github
+            .search_issues(&repo, IssueState::Open, "memory", 10)
+            .await
+            .unwrap()
+            .next_page,
+        None
+    );
+    for query in ["#5001", "5001"] {
+        assert_eq!(
+            github
+                .search_issues(&repo, IssueState::Open, query, 1)
+                .await
+                .unwrap()
+                .issues[0]
+                .number,
+            5001
+        );
+    }
+    assert!(
+        github
+            .search_issues(&repo, IssueState::Closed, "#5001", 1)
+            .await
+            .unwrap()
+            .issues
+            .is_empty()
+    );
+    for query in ["#0", "#abc", "x\" repo:elsewhere", "x\nrepo:elsewhere"] {
+        assert!(
+            github
+                .search_issues(&repo, IssueState::Open, query, 1)
+                .await
+                .is_err()
+        );
+    }
+    let mut foreign = serde_json::from_slice::<serde_json::Value>(
+        &std::fs::read(dir.path().join("search")).unwrap(),
+    )
+    .unwrap();
+    foreign["items"][0]["html_url"] = "https://github.com/other/repo/issues/5001".into();
+    std::fs::write(
+        dir.path().join("search"),
+        serde_json::to_vec(&foreign).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        github
+            .search_issues(&repo, IssueState::Open, "memory", 1)
+            .await
+            .unwrap_err()
+            .contains("outside")
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn issue_pagination_continues_past_a_full_page_of_pull_requests() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let issue = serde_json::json!({"number":1,"title":"PR","body":null,"html_url":"url","updated_at":"now","state":"open","pull_request":{}});
+    std::fs::write(
+        dir.path().join("rows"),
+        serde_json::to_vec(&vec![issue; 100]).unwrap(),
+    )
+    .unwrap();
+    let script = dir.path().join("gh");
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\ncat '{}/rows'\n", dir.path().display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let github = GitHub { executable: script };
+    let repo = Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    let result = github.issues(&repo, IssueState::Open, 25).await.unwrap();
+    assert!(result.issues.is_empty());
+    assert_eq!(result.next_page, Some(26));
+}

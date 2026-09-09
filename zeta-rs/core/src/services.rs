@@ -388,6 +388,13 @@ impl ModelToolCatalogSnapshot {
         &self.definitions
     }
 
+    /// Restricts a host-selected invocation while preserving its exact catalog binder.
+    pub(crate) fn restrict_to_names(mut self, names: &[zeta_protocol::ToolName]) -> Self {
+        self.definitions
+            .retain(|definition| names.contains(&definition.name));
+        self
+    }
+
     /// Appends definitions owned by Core while preserving the frozen binder for ordinary tools.
     #[cfg(feature = "code-mode")]
     pub(crate) fn with_additional_definitions(
@@ -406,6 +413,16 @@ impl ModelToolCatalogSnapshot {
         call: &ToolCall,
         caller: ToolCallCaller,
     ) -> Option<Result<Option<ToolCallBinding>, CoreError>> {
+        if !self
+            .definitions
+            .iter()
+            .any(|definition| definition.name == call.name)
+        {
+            return Some(Err(CoreError::Policy(format!(
+                "Tool '{}' is not available in this frozen invocation",
+                call.name
+            ))));
+        }
         self.binder.as_ref().map(|binder| binder(call, caller))
     }
 }

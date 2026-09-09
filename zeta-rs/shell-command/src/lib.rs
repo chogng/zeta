@@ -155,16 +155,24 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             invocation.context().cancellation(),
             invocation.context().sandbox_scope(),
         ) {
-            Ok(CommandExecutionOutcome::Completed(output)) => returned_json(json!({
-                "tool": "shell-command",
-                "result": {
-                    "exit_code": output.exit_code,
-                    "stdout": output.stdout,
-                    "stderr": output.stderr,
-                    "stdout_truncated": output.stdout_truncated,
-                    "stderr_truncated": output.stderr_truncated,
+            Ok(CommandExecutionOutcome::Completed(output)) => {
+                let mut value = json!({
+                    "tool": "shell-command",
+                    "result": {
+                        "exit_code": output.exit_code,
+                        "stdout": output.stdout,
+                        "stderr": output.stderr,
+                        "stdout_truncated": output.stdout_truncated,
+                        "stderr_truncated": output.stderr_truncated,
+                    }
+                });
+                if invocation.context().sandbox_scope().is_some()
+                    && matches!(authority, CommandExecutionAuthority::Sandboxed(policy) if policy.file_system() == zeta_sandboxing::FileSystemAccess::DirectoryWrite && policy.network() == zeta_sandboxing::NetworkAccess::Denied)
+                {
+                    value["result"]["managed_scope"] = true.into();
                 }
-            })),
+                returned_json(value)
+            }
             Ok(CommandExecutionOutcome::SandboxDenied(denial)) => {
                 ToolExecutionOutcome::SandboxDenied(denial)
             }

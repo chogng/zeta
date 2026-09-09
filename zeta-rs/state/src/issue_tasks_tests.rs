@@ -47,6 +47,8 @@ fn combined_issue_preparation_survives_reopen_and_rejects_changed_retries() {
             .into_iter()
             .map(|number| IssueSnapshot {
                 issue: Issue {
+                    labels: Vec::new(),
+                    assignees: Vec::new(),
                     number,
                     title: format!("Issue {number}"),
                     body: Some("requirements".into()),
