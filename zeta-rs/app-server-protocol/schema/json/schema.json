@@ -420,6 +420,45 @@
       ],
       "type": "object"
     },
+    "Activity": {
+      "enum": [
+        "rpc",
+        "model",
+        "http"
+      ],
+      "type": "string"
+    },
+    "ActivitySummary": {
+      "properties": {
+        "cancelled": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "elapsedMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "count",
+        "failed",
+        "cancelled",
+        "elapsedMs"
+      ],
+      "type": "object"
+    },
     "AgentCapabilityScope": {
       "description": "Frozen upper bounds on tools used by this Agent, tools it may delegate, and Skill instructions.",
       "properties": {
@@ -1531,6 +1570,13 @@
         "MethodNotFound",
         "InvalidParams",
         "InternalError",
+        "QueueUnavailable",
+        "QueueNotFound",
+        "QueueConflict",
+        "QueueBusy",
+        "QueueOperationFailed",
+        "FeatureDisabled",
+        "FeedbackOperationFailed",
         "MemoryUnavailable",
         "MemoryNotFound",
         "MemoryConflict",
@@ -2610,6 +2656,33 @@
         }
       ]
     },
+    "BuildInfo": {
+      "properties": {
+        "buildId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "target"
+      ],
+      "type": "object"
+    },
     "CapabilityContract": {
       "properties": {
         "version": {
@@ -2699,6 +2772,134 @@
     },
     "ClientRequestSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "queue/edit",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/QueueEditParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "extension/items/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionItemsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "queue/enqueue",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/QueueEnqueueParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "queue/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/QueueListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "queue/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/QueueCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "diagnostics/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "feedback/prepare",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FeedbackPrepareParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "feedback/upload",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FeedbackUploadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -6463,6 +6664,134 @@
     },
     "ClientResultSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "queue/edit",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/QueuedMessage"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "extension/items/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionItemsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "queue/enqueue",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/QueuedMessage"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "queue/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/QueueListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "queue/cancel",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/QueuedMessage"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "diagnostics/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/DiagnosticSnapshot"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "feedback/prepare",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/PreparedFeedback"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "feedback/upload",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -11159,6 +11488,12 @@
           },
           "type": "array"
         },
+        "features": {
+          "items": {
+            "$ref": "#/$defs/FeatureState"
+          },
+          "type": "array"
+        },
         "generation": {
           "format": "uint64",
           "minimum": 0,
@@ -11232,6 +11567,7 @@
         }
       },
       "required": [
+        "features",
         "issues",
         "revision",
         "generation",
@@ -11293,6 +11629,24 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "features": {
+          "additionalProperties": false,
+          "properties": {
+            "analytics": {
+              "type": "boolean"
+            },
+            "codeMode": {
+              "type": "boolean"
+            },
+            "queue": {
+              "type": "boolean"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
         },
         "gui": {
           "anyOf": [
@@ -12620,6 +12974,44 @@
         "unknownOutcome"
       ],
       "type": "string"
+    },
+    "DiagnosticSnapshot": {
+      "properties": {
+        "activities": {
+          "additionalProperties": false,
+          "properties": {
+            "http": {
+              "$ref": "#/$defs/ActivitySummary"
+            },
+            "model": {
+              "$ref": "#/$defs/ActivitySummary"
+            },
+            "rpc": {
+              "$ref": "#/$defs/ActivitySummary"
+            }
+          },
+          "type": "object"
+        },
+        "build": {
+          "$ref": "#/$defs/BuildInfo"
+        },
+        "recent": {
+          "items": {
+            "$ref": "#/$defs/Observation"
+          },
+          "type": "array"
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageSnapshot"
+        }
+      },
+      "required": [
+        "build",
+        "activities",
+        "recent",
+        "usage"
+      ],
+      "type": "object"
     },
     "DiffComputeParams": {
       "description": "Inputs for one presentation-independent comparison of two text snapshots.",
@@ -14824,6 +15216,81 @@
       ],
       "type": "object"
     },
+    "ExtensionItem": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 131072,
+          "type": "string"
+        },
+        "extension": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ExtensionItemStatus"
+        },
+        "title": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "extension",
+        "id",
+        "title",
+        "body",
+        "status"
+      ],
+      "type": "object"
+    },
+    "ExtensionItemStatus": {
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "ExtensionItemsParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ExtensionItemsResult": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ExtensionItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
     "ExtensionListParams": {
       "properties": {
         "reload": {
@@ -14968,6 +15435,85 @@
         "active",
         "indexedFileCount",
         "indexedSourceBytes"
+      ],
+      "type": "object"
+    },
+    "Feature": {
+      "enum": [
+        "codeMode",
+        "queue",
+        "analytics"
+      ],
+      "type": "string"
+    },
+    "FeatureSource": {
+      "enum": [
+        "default",
+        "user"
+      ],
+      "type": "string"
+    },
+    "FeatureStage": {
+      "enum": [
+        "experimental",
+        "stable",
+        "deprecated",
+        "removed"
+      ],
+      "type": "string"
+    },
+    "FeatureState": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "feature": {
+          "$ref": "#/$defs/Feature"
+        },
+        "source": {
+          "$ref": "#/$defs/FeatureSource"
+        },
+        "stage": {
+          "$ref": "#/$defs/FeatureStage"
+        }
+      },
+      "required": [
+        "feature",
+        "stage",
+        "enabled",
+        "source"
+      ],
+      "type": "object"
+    },
+    "FeedbackPrepareParams": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpoint"
+      ],
+      "type": "object"
+    },
+    "FeedbackUploadParams": {
+      "additionalProperties": false,
+      "description": "Invoked only after the user reviews and authorizes the prepared content and destination.",
+      "properties": {
+        "digest": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        "operationId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "digest"
       ],
       "type": "object"
     },
@@ -22650,6 +23196,35 @@
       ],
       "type": "object"
     },
+    "Observation": {
+      "properties": {
+        "activity": {
+          "$ref": "#/$defs/Activity"
+        },
+        "elapsedMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "outcome": {
+          "$ref": "#/$defs/Outcome"
+        }
+      },
+      "required": [
+        "activity",
+        "outcome",
+        "elapsedMs"
+      ],
+      "type": "object"
+    },
+    "Outcome": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
     "PendingInteraction": {
       "description": "Redaction-safe metadata for a Turn that is waiting on an interaction.\n\nThe full request payload stays in the durable interaction fact so an App Server can redeliver\nit to its selected owner after recovery. Readable Thread snapshots expose only this metadata,\npreventing a broad subscription from becoming an implicit interaction-delivery channel.",
       "properties": {
@@ -23001,6 +23576,26 @@
       "required": [
         "revision",
         "activationGeneration"
+      ],
+      "type": "object"
+    },
+    "PreparedFeedback": {
+      "properties": {
+        "content": {
+          "description": "Exact JSON bytes the user reviews and authorizes for this destination.",
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "digest",
+        "endpoint",
+        "content"
       ],
       "type": "object"
     },
@@ -23813,6 +24408,299 @@
       ],
       "type": "object"
     },
+    "QueueCancelParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "commandId"
+      ],
+      "type": "object"
+    },
+    "QueueEditAction": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "pause",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "input": {
+              "items": {
+                "$ref": "#/$defs/InputItem"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "replace",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "input"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "direction": {
+              "$ref": "#/$defs/QueueMove"
+            },
+            "type": {
+              "const": "move",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "direction"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "turnId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TurnId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "const": "send",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "QueueEditParams": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/QueueEditAction"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "commandId",
+        "expectedRevision",
+        "action"
+      ],
+      "type": "object"
+    },
+    "QueueEnqueueParams": {
+      "additionalProperties": false,
+      "properties": {
+        "approvalMode": {
+          "$ref": "#/$defs/ApprovalMode"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "input": {
+          "items": {
+            "$ref": "#/$defs/InputItem"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "toolMode": {
+          "$ref": "#/$defs/ToolMode"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "input",
+        "toolMode",
+        "approvalMode"
+      ],
+      "type": "object"
+    },
+    "QueueInput": {
+      "additionalProperties": false,
+      "properties": {
+        "approvalMode": {
+          "$ref": "#/$defs/ApprovalMode"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "directory": {
+          "description": "Execution directory selected by the host when accepting the message.",
+          "type": "string"
+        },
+        "input": {
+          "items": {
+            "$ref": "#/$defs/UserInput"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "steerTurn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "toolMode": {
+          "$ref": "#/$defs/ToolMode"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "directory",
+        "input",
+        "toolMode",
+        "approvalMode"
+      ],
+      "type": "object"
+    },
+    "QueueListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "QueueListResult": {
+      "properties": {
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/QueuedMessage"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "messages"
+      ],
+      "type": "object"
+    },
+    "QueueMove": {
+      "enum": [
+        "up",
+        "down"
+      ],
+      "type": "string"
+    },
+    "QueueStatus": {
+      "enum": [
+        "pending",
+        "paused",
+        "delivering",
+        "started",
+        "rejected",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "QueuedMessage": {
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request": {
+          "$ref": "#/$defs/QueueInput"
+        },
+        "revision": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/QueueStatus"
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "request",
+        "status",
+        "revision"
+      ],
+      "type": "object"
+    },
     "RatedModelCost": {
       "description": "A complete or known-minimum reference cost from one immutable rate card.",
       "properties": {
@@ -24524,6 +25412,22 @@
             },
             "params": {
               "$ref": "#/$defs/ProjectChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "queue/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
             }
           },
           "required": [
@@ -30950,6 +31854,165 @@
       "maximum": 253402300799999,
       "minimum": 0,
       "type": "integer"
+    },
+    "UsageSnapshot": {
+      "properties": {
+        "counts": {
+          "additionalProperties": false,
+          "properties": {
+            "feedbackSubmitted": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "messageQueued": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "turnStarted": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled",
+        "counts"
+      ],
+      "type": "object"
+    },
+    "UserInput": {
+      "description": "A provider-independent input supplied by the user for one turn.",
+      "oneOf": [
+        {
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "context",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "content"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "attachment": {
+              "$ref": "#/$defs/ImageAttachmentRef"
+            },
+            "type": {
+              "const": "imageAttachment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "attachment"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Legacy inline/remote image input. New clients should materialize an attachment first.",
+          "properties": {
+            "type": {
+              "const": "image",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "const": "localImage",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "skill": {
+              "$ref": "#/$defs/SkillRef"
+            },
+            "type": {
+              "const": "skill",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "skill"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "const": "mention",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "path"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "UserInputAnswer": {
       "properties": {

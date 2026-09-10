@@ -121,3 +121,19 @@ test('App Server params decoding rejects integers that JSON cannot preserve exac
 		AppServerProtocolDecodeError,
 	);
 });
+
+
+test('Feature map keys and queue edits are validated from the generated schema', () => {
+	const params = { commandId: 'config', expectedRevision: 0, features: { codeMode: false } };
+	assert.deepEqual(decodeAppServerRequestParams('config/update', params), params);
+	assert.throws(() => decodeAppServerRequestParams('config/update', {
+		...params, features: { code_mode: true },
+	}), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('queue/edit', {
+		sessionId: 'session', threadId: 'thread', commandId: 'message', expectedRevision: -1,
+		action: { type: 'pause' },
+	}), AppServerProtocolDecodeError);
+	assert.deepEqual(decodeAppServerNotification({ jsonrpc: '2.0', method: 'queue/changed', params: {} }), {
+		jsonrpc: '2.0', method: 'queue/changed', params: {},
+	});
+});

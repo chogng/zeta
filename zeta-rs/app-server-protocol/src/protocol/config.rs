@@ -414,6 +414,7 @@ pub struct FrontendConfigDto(
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigReadResult {
+    pub features: Vec<features::FeatureState>,
     pub issues: crate::protocol::issues::IssueConfigDto,
     #[ts(type = "number")]
     pub revision: u64,
@@ -544,6 +545,10 @@ pub enum ConfigCommandDispositionDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigUpdateParams {
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<features::FeatureOverrides>")]
+    #[ts(as = "Option<features::FeatureOverrides>", optional = nullable)]
+    pub features: Patch<features::FeatureOverrides>,
     pub command_id: CommandId,
     #[schemars(range(min = 0))]
     #[ts(type = "number")]
@@ -770,4 +775,6 @@ pub struct HookSetEnablementParams {
     pub enablement: HookEnablementDto,
 }
 
-fn default_custom_context_window() -> u32 { 272_000 }
+fn default_custom_context_window() -> u32 {
+    272_000
+}

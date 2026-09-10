@@ -193,6 +193,8 @@ use crate::protocol::debug::DebugAdapterReadResult;
 use crate::protocol::debug::DebugAdapterSendParams;
 use crate::protocol::debug::DebugAdapterStartParams;
 use crate::protocol::debug::DebugAdapterStartResult;
+use crate::protocol::diagnostics::FeedbackPrepareParams;
+use crate::protocol::diagnostics::FeedbackUploadParams;
 use crate::protocol::diff::DiffComputeParams;
 use crate::protocol::diff::DiffComputeResult;
 use crate::protocol::diff::DiffComputeRowDto;
@@ -255,6 +257,8 @@ use crate::protocol::extension_host::ExtensionHostReconcileParams;
 use crate::protocol::extension_host::ExtensionHostRegistrationDescriptorDto;
 use crate::protocol::extension_host::ExtensionHostRegistrationKindDto;
 use crate::protocol::extension_host::ExtensionHostSnapshotDto;
+use crate::protocol::extension_items::ExtensionItemsParams;
+use crate::protocol::extension_items::ExtensionItemsResult;
 use crate::protocol::extensions::ExtensionCatalogReloadDto;
 use crate::protocol::extensions::ExtensionDiagnosticCodeDto;
 use crate::protocol::extensions::ExtensionDiagnosticDto;
@@ -528,6 +532,12 @@ use crate::protocol::provider::ProviderModelsListParams;
 use crate::protocol::provider::ProviderModelsListResult;
 use crate::protocol::provider::ProviderProbeParams;
 use crate::protocol::provider::ProviderProbeResult;
+use crate::protocol::queue::QueueCancelParams;
+use crate::protocol::queue::QueueEditAction;
+use crate::protocol::queue::QueueEditParams;
+use crate::protocol::queue::QueueEnqueueParams;
+use crate::protocol::queue::QueueListParams;
+use crate::protocol::queue::QueueListResult;
 use crate::protocol::resources::ResourceMetadataParams;
 use crate::protocol::resources::ResourceMetadataResult;
 use crate::protocol::resources::ResourceReadParams;
@@ -644,6 +654,25 @@ use crate::protocol::turn_changes::TurnChangesReadFileResult;
 use crate::protocol::turn_changes::TurnChangesReadParams;
 use crate::protocol::turn_changes::TurnChangesReadResult;
 use crate::protocol::turn_changes::TurnChangesUpdateDraftParams;
+use analytics::UsageEvent;
+use analytics::UsageSnapshot;
+use build_info::BuildInfo;
+use diagnostics::Activity;
+use diagnostics::ActivitySummary;
+use diagnostics::DiagnosticSnapshot;
+use diagnostics::Observation;
+use diagnostics::Outcome;
+use extension_items::ExtensionItem;
+use extension_items::ExtensionItemStatus;
+use features::Feature;
+use features::FeatureSource;
+use features::FeatureStage;
+use features::FeatureState;
+use feedback::PreparedFeedback;
+use queue::QueueInput;
+use queue::QueueMove;
+use queue::QueueStatus;
+use queue::QueuedMessage;
 use schemars::JsonSchema;
 use ts_rs::Config;
 use ts_rs::TS;
@@ -806,6 +835,7 @@ use zeta_protocol::TurnInteraction;
 use zeta_protocol::TurnKind;
 use zeta_protocol::TurnStatus;
 use zeta_protocol::UnixMillis;
+use zeta_protocol::UserInput;
 use zeta_protocol::UserInputAnswer;
 use zeta_protocol::UserInputOption;
 use zeta_protocol::UserInputQuestion;
@@ -1132,6 +1162,26 @@ macro_rules! cancellation_definition {
 }
 
 client_methods! {
+    QueueEdit => "queue/edit" { params: QueueEditParams, response: QueuedMessage, serialization: None, },
+    ExtensionItems => "extension/items/list" { params: ExtensionItemsParams, response: ExtensionItemsResult, serialization: None, },
+    QueueEnqueue => "queue/enqueue" {
+        params: QueueEnqueueParams, response: QueuedMessage, serialization: None,
+    },
+    QueueList => "queue/list" {
+        params: QueueListParams, response: QueueListResult, serialization: None,
+    },
+    QueueCancel => "queue/cancel" {
+        params: QueueCancelParams, response: QueuedMessage, serialization: None,
+    },
+    DiagnosticsRead => "diagnostics/read" {
+        params: EmptyParams, response: DiagnosticSnapshot, serialization: None,
+    },
+    FeedbackPrepare => "feedback/prepare" {
+        params: FeedbackPrepareParams, response: PreparedFeedback, serialization: ConnectionExclusive("feedback"),
+    },
+    FeedbackUpload => "feedback/upload" {
+        params: FeedbackUploadParams, response: (), serialization: ConnectionExclusive("feedback"), cancellation: "operationId",
+    },
     MemoryStart => "memory/start" {
         params: MemoryStart, response: MemoryReport, serialization: ConnectionExclusive("memory"),
     },
@@ -2568,6 +2618,7 @@ server_notifications! {
     ProjectChanged => "project/changed" {
         params: ProjectChanged,
     },
+    QueueChanged => "queue/changed" { params: EmptyParams, },
     AutomationChanged => "automation/changed" {
         params: EmptyParams,
     },
@@ -3118,6 +3169,36 @@ typescript_bindings! {
     AutomationStatus,
     AutomationRun,
     AutomationRunStatus,
+    ExtensionItemsParams,
+    ExtensionItemsResult,
+    ExtensionItem,
+    ExtensionItemStatus,
+    QueueEditParams,
+    QueueEditAction,
+    QueueMove,
+    QueueEnqueueParams,
+    QueueListParams,
+    QueueCancelParams,
+    QueueListResult,
+    QueueInput,
+    UserInput,
+    QueuedMessage,
+    QueueStatus,
+    FeedbackPrepareParams,
+    FeedbackUploadParams,
+    DiagnosticSnapshot,
+    Activity,
+    ActivitySummary,
+    Observation,
+    Outcome,
+    UsageSnapshot,
+    UsageEvent,
+    PreparedFeedback,
+    BuildInfo,
+    Feature,
+    FeatureState,
+    FeatureStage,
+    FeatureSource,
     MemorySessionParams,
     MemoryProduct,
     MemoryStart,

@@ -11,6 +11,13 @@ name = "zeta_app_server_protocol"
 path = "src/lib.rs"
 
 [dependencies]
+extension-items = { workspace = true }
+queue = { workspace = true }
+build-info = { workspace = true }
+analytics = { workspace = true }
+diagnostics = { workspace = true }
+feedback = { workspace = true }
+features = { workspace = true }
 zeta-memory-diagnostics = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }

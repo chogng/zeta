@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 2 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 1 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 4 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:0f5204b790e9d740a88f858502de0f1de962ebfc91d46c74650e134e6375af12" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:022aa0a91c94aa114223185e5c8190db61f58ec38f1dc1b49d5681b26d605ec8" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };
@@ -249,11 +249,11 @@ export type HookConfigDto = { id: string, event: HookEventDto, matcher: HookMatc
 export type LanguageServerModeDto = "disabled" | "enabled";
 export type LanguageServerConfigDto = { mode: LanguageServerModeDto, executable?: string | null, };
 export type FrontendConfigDto = Record<string, unknown>;
-export type ConfigReadResult = { issues: IssueConfigDto, revision: number, generation: number, preferredModel: ModelRef | null, approvalReviewModel: ApprovalReviewModelSelection, commitMessageModel?: ModelRef | null, commitMessageActiveDirAuthorized: boolean, toolMode: ToolMode, agentGrepBackend: AgentGrepBackendDto, gui: FrontendConfigDto, providers: { [key in string]: ProviderConfigDto }, mcpServers: { [key in string]: McpServerConfigDto }, skillSources: { [key in string]: SkillSourceConfigDto }, pluginRequests: { [key in string]: PluginRequestDto }, hooks: { [key in string]: HookConfigDto }, languageServers: { [key in string]: LanguageServerConfigDto }, toolSearch: ToolSearchConfigDto, codebase: CodebaseConfigDto, execPolicyRules: Array<ExecPolicyRuleDto>, tui: FrontendConfigDto, };
+export type ConfigReadResult = { features: Array<FeatureState>, issues: IssueConfigDto, revision: number, generation: number, preferredModel: ModelRef | null, approvalReviewModel: ApprovalReviewModelSelection, commitMessageModel?: ModelRef | null, commitMessageActiveDirAuthorized: boolean, toolMode: ToolMode, agentGrepBackend: AgentGrepBackendDto, gui: FrontendConfigDto, providers: { [key in string]: ProviderConfigDto }, mcpServers: { [key in string]: McpServerConfigDto }, skillSources: { [key in string]: SkillSourceConfigDto }, pluginRequests: { [key in string]: PluginRequestDto }, hooks: { [key in string]: HookConfigDto }, languageServers: { [key in string]: LanguageServerConfigDto }, toolSearch: ToolSearchConfigDto, codebase: CodebaseConfigDto, execPolicyRules: Array<ExecPolicyRuleDto>, tui: FrontendConfigDto, };
 export type ConfigChanged = { revision: number, generation: number, };
 export type ConfigCommandDispositionDto = "updated" | "replayed";
 export type ConfigCommandResult = { revision: number, generation: number, disposition: ConfigCommandDispositionDto, };
-export type ConfigUpdateParams = { commandId: CommandId, expectedRevision: number, preferredModel?: ModelRef | null, approvalReviewModel?: ApprovalReviewModelSelection | null, commitMessageModel?: ModelRef | null, toolMode?: ToolMode | null, agentGrepBackend?: AgentGrepBackendDto | null, gui?: FrontendConfigDto | null, tui?: FrontendConfigDto | null, };
+export type ConfigUpdateParams = { features?: { [key in Feature]?: boolean } | null, commandId: CommandId, expectedRevision: number, preferredModel?: ModelRef | null, approvalReviewModel?: ApprovalReviewModelSelection | null, commitMessageModel?: ModelRef | null, toolMode?: ToolMode | null, agentGrepBackend?: AgentGrepBackendDto | null, gui?: FrontendConfigDto | null, tui?: FrontendConfigDto | null, };
 export type ExecPolicyActionKindDto = "localProcess" | "fileSystemMutation" | "networkRequest" | "browserInteraction" | "externalServiceMutation" | "credentialUse" | "systemOperation";
 export type ExecPolicyTokenDto = { "type": "literal", "value": string } | { "type": "oneOf", "value": Array<string> };
 export type ExecPolicyHostMatcherDto = { "type": "exact", "value": string } | { "type": "domainSuffix", "value": string };
@@ -662,6 +662,44 @@ export type AutomationSession = { "type": "new" } | { "type": "continue", sessio
 export type AutomationStatus = "enabled" | "paused";
 export type AutomationRun = { id: string, automationId: string, revision: number, definition: AutomationDefinition, scheduledAt: UnixMillis, createdAt: UnixMillis, startedAt: UnixMillis | null, finishedAt: UnixMillis | null, status: AutomationRunStatus, sessionId: SessionId | null, threadId: ThreadId | null, turnId: TurnId | null, message: string | null, };
 export type AutomationRunStatus = "pending" | "running" | "needsInput" | "stopping" | "completed" | "failed" | "stopped" | "skipped";
+export type ExtensionItemsParams = { sessionId: SessionId, threadId: ThreadId, };
+export type ExtensionItemsResult = { items: Array<ExtensionItem>, };
+export type ExtensionItem = { extension: string, id: string, title: string, body: string, status: ExtensionItemStatus, };
+export type ExtensionItemStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export type QueueEditParams = { sessionId: SessionId, threadId: ThreadId, commandId: CommandId, expectedRevision: number, action: QueueEditAction, };
+export type QueueEditAction = { "type": "pause" } | { "type": "replace", input: Array<InputItem>, } | { "type": "move", direction: QueueMove, } | { "type": "send", turnId: TurnId | null, };
+export type QueueMove = "up" | "down";
+export type QueueEnqueueParams = { commandId: CommandId, sessionId: SessionId, threadId: ThreadId, input: Array<InputItem>, toolMode: ToolMode, approvalMode: ApprovalMode, };
+export type QueueListParams = { sessionId: SessionId, threadId: ThreadId, };
+export type QueueCancelParams = { sessionId: SessionId, threadId: ThreadId, commandId: CommandId, };
+export type QueueListResult = { messages: Array<QueuedMessage>, };
+export type QueueInput = { commandId: CommandId, sessionId: SessionId, threadId: ThreadId,
+/**
+ * Execution directory selected by the host when accepting the message.
+ */
+directory: string, input: Array<UserInput>, toolMode: ToolMode, approvalMode: ApprovalMode, steerTurn: TurnId | null, };
+export type UserInput = { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "localImage", path: string, } | { "type": "skill", skill: SkillRef, } | { "type": "mention", name: string, path: string, };
+export type QueuedMessage = { request: QueueInput, status: QueueStatus, turnId: TurnId | null, error: string | null, revision: number, };
+export type QueueStatus = "pending" | "paused" | "delivering" | "started" | "rejected" | "cancelled";
+export type FeedbackPrepareParams = { endpoint: string, };
+export type FeedbackUploadParams = { operationId: string, digest: string, };
+export type DiagnosticSnapshot = { build: BuildInfo, activities: { [key in Activity]?: ActivitySummary }, recent: Array<Observation>, usage: UsageSnapshot, };
+export type Activity = "rpc" | "model" | "http";
+export type ActivitySummary = { count: number, failed: number, cancelled: number, elapsedMs: number, };
+export type Observation = { activity: Activity, outcome: Outcome, elapsedMs: number, };
+export type Outcome = "succeeded" | "failed" | "cancelled";
+export type UsageSnapshot = { enabled: boolean, counts: { [key in UsageEvent]?: number }, };
+export type UsageEvent = "turnStarted" | "messageQueued" | "feedbackSubmitted";
+export type PreparedFeedback = { digest: string, endpoint: string,
+/**
+ * Exact JSON bytes the user reviews and authorizes for this destination.
+ */
+content: string, };
+export type BuildInfo = { version: string, commit: string | null, target: string, buildId: string | null, };
+export type Feature = "codeMode" | "queue" | "analytics";
+export type FeatureState = { feature: Feature, stage: FeatureStage, enabled: boolean, source: FeatureSource, };
+export type FeatureStage = "experimental" | "stable" | "deprecated" | "removed";
+export type FeatureSource = "default" | "user";
 export type MemorySessionParams = { sessionId: string, };
 export type MemoryProduct = "tui" | "rustGui" | "electron" | "browser";
 export type MemoryStart = { requestId: string, product: MemoryProduct, durationSecs: number, };
@@ -989,7 +1027,7 @@ export type DebugAdapterReadParams = { dirId?: string, sessionId: string, afterS
 export type DebugAdapterMessageDto = { sequence: number, message: unknown, };
 export type DebugAdapterReadResult = { messages: Array<DebugAdapterMessageDto>, nextSequence: number, outputGap: boolean, stderr: string, exited: boolean, exitCode: number | null, protocolError: string | null, };
 export type DebugAdapterCloseParams = { dirId?: string, sessionId: string, };
-export type AppServerErrorName = "ParseError" | "InvalidRequest" | "MethodNotFound" | "InvalidParams" | "InternalError" | "MemoryUnavailable" | "MemoryNotFound" | "MemoryConflict" | "MemoryCapacity" | "MemoryStopped" | "MemoryStale" | "AutomationUnavailable" | "AutomationNotFound" | "AutomationConflict" | "AutomationBusy" | "AutomationOperationFailed" | "ServerOverloaded" | "RequestCancelled" | "NotInitialized" | "AlreadyInitialized" | "CommandConflict" | "CoreOperationFailed" | "AgentInteractionNotOwner" | "AgentInteractionExpired" | "ResourceNotFound" | "ResourceNotOwner" | "ResourceTooLarge" | "InvalidResourceChunkSize" | "InvalidResourceOffset" | "FileSystemUnavailable" | "FileSystemOperationFailed" | "FileSystemNotFound" | "FileSystemRevisionConflict" | "IssueOperationFailed" | "GitUnavailable" | "GitNotRepository" | "GitOperationFailed" | "TurnChangesUnavailable" | "TurnChangesRevisionConflict" | "TurnChangesOperationFailed" | "WorkCoordinationUnavailable" | "WorkCoordinationNotFound" | "WorkCoordinationRevisionConflict" | "WorkCoordinationOperationFailed" | "ProjectsUnavailable" | "ProjectNotFound" | "ProjectRevisionConflict" | "ProjectOperationFailed" | "DiffOperationFailed" | "SyntaxAnalysisFailed" | "CodebaseUnavailable" | "CodebaseNotReady" | "CodebaseOperationFailed" | "CodebaseSymbolsUnavailable" | "CodebaseSymbolsNotReady" | "CodebaseSymbolsOperationFailed" | "CodebaseRetrievalOperationFailed" | "CloudCodebaseUnavailable" | "CloudCodebaseInvalidGrant" | "CloudCodebaseConsentConflict" | "CloudCodebaseEgressLimitExceeded" | "CloudCodebaseProviderUnavailable" | "CloudCodebaseOperationFailed" | "LanguageServiceUnavailable" | "LanguageRequestFailed" | "MarketplaceUnavailable" | "MarketplaceNotFound" | "MarketplaceUntrusted" | "MarketplaceIncompatible" | "MarketplaceInstallationInUse" | "MarketplaceOperationFailed" | "SearchUnavailable" | "SearchNotFound" | "SearchNotOwner" | "SearchBusy" | "TerminalUnavailable" | "TerminalNotFound" | "TerminalNotOwner" | "TerminalAttachRejected" | "TerminalBusy" | "TerminalOperationFailed" | "DebugAdapterUnavailable" | "DebugAdapterNotFound" | "DebugAdapterNotOwner" | "DebugAdapterBusy" | "DebugAdapterOperationFailed" | "ConfigUnavailable" | "ConfigRevisionConflict" | "ProviderCredentialsUnavailable" | "ProviderCredentialOperationFailed" | "McpRuntimeUnavailable" | "McpServerNotFound" | "McpOAuthUnavailable" | "McpOAuthInvalidCallback" | "McpOAuthExpired" | "McpOAuthOperationFailed" | "AccountUnavailable" | "AccountLoginNotFound" | "AccountLoginConflict" | "AccountOperationFailed" | "ConnectorsUnavailable" | "ConnectorGenerationConflict" | "ConnectorOperationFailed" | "ConnectorOAuthUnavailable" | "ConnectorOAuthInvalidCallback" | "ConnectorOAuthExpired" | "PluginsUnavailable" | "PluginRevisionConflict" | "PluginOperationFailed" | "ToolSearchUnavailable" | "SkillsUnavailable" | "SkillOperationFailed" | "SkillNotFound" | "EnvCwdSetUnavailable" | "EnvCwdSetBusy" | "EnvCwdSetFailed" | "RevisionConflict" | "PermissionRequired" | "ExtensionsUnavailable" | "ExtensionGenerationConflict" | "ExtensionNotFound" | "ExtensionResourceNotFound" | "ExtensionResourceInvalidPath" | "ExtensionOperationFailed" | "ExtensionHostUnavailable" | "ExtensionHostStale" | "ExtensionHostInvocationNotFound" | "ExtensionHostQuotaExceeded";
+export type AppServerErrorName = "ParseError" | "InvalidRequest" | "MethodNotFound" | "InvalidParams" | "InternalError" | "QueueUnavailable" | "QueueNotFound" | "QueueConflict" | "QueueBusy" | "QueueOperationFailed" | "FeatureDisabled" | "FeedbackOperationFailed" | "MemoryUnavailable" | "MemoryNotFound" | "MemoryConflict" | "MemoryCapacity" | "MemoryStopped" | "MemoryStale" | "AutomationUnavailable" | "AutomationNotFound" | "AutomationConflict" | "AutomationBusy" | "AutomationOperationFailed" | "ServerOverloaded" | "RequestCancelled" | "NotInitialized" | "AlreadyInitialized" | "CommandConflict" | "CoreOperationFailed" | "AgentInteractionNotOwner" | "AgentInteractionExpired" | "ResourceNotFound" | "ResourceNotOwner" | "ResourceTooLarge" | "InvalidResourceChunkSize" | "InvalidResourceOffset" | "FileSystemUnavailable" | "FileSystemOperationFailed" | "FileSystemNotFound" | "FileSystemRevisionConflict" | "IssueOperationFailed" | "GitUnavailable" | "GitNotRepository" | "GitOperationFailed" | "TurnChangesUnavailable" | "TurnChangesRevisionConflict" | "TurnChangesOperationFailed" | "WorkCoordinationUnavailable" | "WorkCoordinationNotFound" | "WorkCoordinationRevisionConflict" | "WorkCoordinationOperationFailed" | "ProjectsUnavailable" | "ProjectNotFound" | "ProjectRevisionConflict" | "ProjectOperationFailed" | "DiffOperationFailed" | "SyntaxAnalysisFailed" | "CodebaseUnavailable" | "CodebaseNotReady" | "CodebaseOperationFailed" | "CodebaseSymbolsUnavailable" | "CodebaseSymbolsNotReady" | "CodebaseSymbolsOperationFailed" | "CodebaseRetrievalOperationFailed" | "CloudCodebaseUnavailable" | "CloudCodebaseInvalidGrant" | "CloudCodebaseConsentConflict" | "CloudCodebaseEgressLimitExceeded" | "CloudCodebaseProviderUnavailable" | "CloudCodebaseOperationFailed" | "LanguageServiceUnavailable" | "LanguageRequestFailed" | "MarketplaceUnavailable" | "MarketplaceNotFound" | "MarketplaceUntrusted" | "MarketplaceIncompatible" | "MarketplaceInstallationInUse" | "MarketplaceOperationFailed" | "SearchUnavailable" | "SearchNotFound" | "SearchNotOwner" | "SearchBusy" | "TerminalUnavailable" | "TerminalNotFound" | "TerminalNotOwner" | "TerminalAttachRejected" | "TerminalBusy" | "TerminalOperationFailed" | "DebugAdapterUnavailable" | "DebugAdapterNotFound" | "DebugAdapterNotOwner" | "DebugAdapterBusy" | "DebugAdapterOperationFailed" | "ConfigUnavailable" | "ConfigRevisionConflict" | "ProviderCredentialsUnavailable" | "ProviderCredentialOperationFailed" | "McpRuntimeUnavailable" | "McpServerNotFound" | "McpOAuthUnavailable" | "McpOAuthInvalidCallback" | "McpOAuthExpired" | "McpOAuthOperationFailed" | "AccountUnavailable" | "AccountLoginNotFound" | "AccountLoginConflict" | "AccountOperationFailed" | "ConnectorsUnavailable" | "ConnectorGenerationConflict" | "ConnectorOperationFailed" | "ConnectorOAuthUnavailable" | "ConnectorOAuthInvalidCallback" | "ConnectorOAuthExpired" | "PluginsUnavailable" | "PluginRevisionConflict" | "PluginOperationFailed" | "ToolSearchUnavailable" | "SkillsUnavailable" | "SkillOperationFailed" | "SkillNotFound" | "EnvCwdSetUnavailable" | "EnvCwdSetBusy" | "EnvCwdSetFailed" | "RevisionConflict" | "PermissionRequired" | "ExtensionsUnavailable" | "ExtensionGenerationConflict" | "ExtensionNotFound" | "ExtensionResourceNotFound" | "ExtensionResourceInvalidPath" | "ExtensionOperationFailed" | "ExtensionHostUnavailable" | "ExtensionHostStale" | "ExtensionHostInvocationNotFound" | "ExtensionHostQuotaExceeded";
 export type AppServerErrorData = { kind: AppServerErrorName, };
 export type AppServerError = { code: number, message: string, data: AppServerErrorData, };
 export interface AppServerNotificationMap {
@@ -1013,6 +1051,7 @@ export interface AppServerNotificationMap {
   "git/statusChanged": GitStatusChanged;
   "turnChanges/changed": TurnChangesChanged;
   "project/changed": ProjectChanged;
+  "queue/changed": Record<string, never>;
   "automation/changed": Record<string, never>;
   "fs/changed": FsChanged;
   "language/diagnostics": LanguageDiagnosticsNotification;
@@ -1029,6 +1068,14 @@ export type AppServerWireNotification = {
 [M in AppServerNotificationMethod]: { jsonrpc: JsonRpcVersion; method: M; params: NotificationParams<M> }
 }[AppServerNotificationMethod];
 export interface AppServerRequestMap {
+  "queue/edit": { params: QueueEditParams; response: QueuedMessage };
+  "extension/items/list": { params: ExtensionItemsParams; response: ExtensionItemsResult };
+  "queue/enqueue": { params: QueueEnqueueParams; response: QueuedMessage };
+  "queue/list": { params: QueueListParams; response: QueueListResult };
+  "queue/cancel": { params: QueueCancelParams; response: QueuedMessage };
+  "diagnostics/read": { params: Record<string, never>; response: DiagnosticSnapshot };
+  "feedback/prepare": { params: FeedbackPrepareParams; response: PreparedFeedback };
+  "feedback/upload": { params: FeedbackUploadParams; response: null };
   "memory/start": { params: MemoryStart; response: MemoryReport };
   "memory/read": { params: MemorySessionParams; response: MemoryReport };
   "memory/stop": { params: MemorySessionParams; response: MemoryReport };
@@ -1276,6 +1323,14 @@ readonly __params?: MethodParams<M>;
 readonly __result?: MethodResult<M>;
 };
 export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefinition<M> } = {
+  "queue/edit": { method: "queue/edit" },
+  "extension/items/list": { method: "extension/items/list" },
+  "queue/enqueue": { method: "queue/enqueue" },
+  "queue/list": { method: "queue/list" },
+  "queue/cancel": { method: "queue/cancel" },
+  "diagnostics/read": { method: "diagnostics/read" },
+  "feedback/prepare": { method: "feedback/prepare" },
+  "feedback/upload": { method: "feedback/upload" },
   "memory/start": { method: "memory/start" },
   "memory/read": { method: "memory/read" },
   "memory/stop": { method: "memory/stop" },
@@ -1539,6 +1594,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "git/statusChanged": { method: "git/statusChanged" },
   "turnChanges/changed": { method: "turnChanges/changed" },
   "project/changed": { method: "project/changed" },
+  "queue/changed": { method: "queue/changed" },
   "automation/changed": { method: "automation/changed" },
   "fs/changed": { method: "fs/changed" },
   "language/diagnostics": { method: "language/diagnostics" },
