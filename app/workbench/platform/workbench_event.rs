@@ -9,6 +9,7 @@ use zeta_terminal_runtime::TerminalRuntimeEvent;
 
 pub(crate) enum WorkbenchEvent {
     InputHistoryReady,
+    InputClassified(zeta_session::ComposerClassificationResult),
     Memory(crate::memory::MemoryCompletion),
     Session(SessionRuntimeEvent),
     Terminal(TerminalSessionEventEnvelope),

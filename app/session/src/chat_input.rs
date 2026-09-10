@@ -1,4 +1,5 @@
 mod catalog;
+mod classification;
 mod editor;
 mod interaction;
 mod interaction_view;
@@ -12,6 +13,10 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub use catalog::composer_model_options;
+use classification::ClassificationState;
+pub use classification::ComposerClassificationResult;
+pub use classification::ComposerClassificationTask;
+pub use classification::ComposerClassificationUpdate;
 use editor::ChatInputEditor;
 pub use interaction::ChatInputInteractionItem;
 use interaction::ChatInputInteractionState;
@@ -37,11 +42,9 @@ use zeta_editor::CodeEditorCommand;
 use zeta_editor::CodeEditorLanguage;
 use zeta_editor::CodeEditorSelectionMode;
 use zeta_editor::CodeEditorStyle;
-use zeta_input_classifier::InputClassificationContext;
 use zeta_input_classifier::InputClassifier;
 use zeta_input_classifier::InputConversation;
 use zeta_input_classifier::InputHistoryEntry;
-use zeta_input_classifier::InputRoute;
 use zeta_input_classifier::ShellCompletionSnapshot;
 use zeta_slash_commands::SlashCommandCatalogError;
 use zeta_slash_commands::SlashCommandDefinition;
@@ -81,14 +84,21 @@ pub struct ChatInput {
     interaction_scroll: ScrollState,
     route: ComposerRoute,
     classifier: InputClassifier,
+    classification: ClassificationState,
     conversation: InputConversation,
     agent_response: AgentResponseState,
     history: HistoryRecall,
-    history_draft: Option<(ChatInputEditor, ComposerRoute)>,
+    history_draft: Option<HistoryDraft>,
     history_composition: Option<String>,
     recalled_route: Option<ComposerRoute>,
     shell_suggestion: Option<ShellGhostSuggestion>,
     dismissed_shell_suggestion_input: Option<String>,
+}
+
+struct HistoryDraft {
+    input: ChatInputEditor,
+    route: ComposerRoute,
+    needs_classification: bool,
 }
 
 impl Default for ChatInput {
@@ -106,6 +116,7 @@ impl ChatInput {
             interaction_scroll: ScrollState::default(),
             route: ComposerRoute::Agent,
             classifier: InputClassifier::for_working_directory(working_directory),
+            classification: ClassificationState::default(),
             conversation: InputConversation::Standalone,
             agent_response: AgentResponseState::None,
             history: HistoryRecall::default(),
@@ -180,6 +191,9 @@ impl ChatInput {
     }
 
     pub fn submission(&self) -> Option<ComposerSubmission> {
+        if self.classification.is_pending() || self.input.has_active_composition() {
+            return None;
+        }
         (!self.input.text().trim().is_empty()).then(|| match self.route {
             ComposerRoute::Agent => ComposerSubmission::AgentMessage(self.input.text().to_owned()),
             ComposerRoute::Shell => ComposerSubmission::ShellCommand(self.input.text().to_owned()),
@@ -194,12 +208,12 @@ impl ChatInput {
 
     pub fn set_working_directory(&mut self, working_directory: &Path) {
         self.classifier.set_working_directory(working_directory);
-        self.refresh_classification();
+        self.reclassify();
     }
 
     pub fn refresh_dir_catalog(&mut self) {
         self.classifier.refresh_dir_catalog();
-        self.refresh_classification();
+        self.reclassify();
     }
 
     pub fn has_shell_suggestion(&self) -> bool {
@@ -250,6 +264,7 @@ impl ChatInput {
             .record_submission(InputHistoryEntry::agent(text));
         self.conversation = InputConversation::Standalone;
         self.agent_response = AgentResponseState::Pending;
+        self.reclassify();
     }
 
     pub fn mark_shell_command_submitted(&mut self, command: &str) {
@@ -257,19 +272,25 @@ impl ChatInput {
             .record_submission(InputHistoryEntry::shell(command));
         self.conversation = InputConversation::Standalone;
         self.agent_response = AgentResponseState::None;
+        self.reclassify();
     }
 
     pub fn replace_classification_history(
         &mut self,
         entries: impl IntoIterator<Item = InputHistoryEntry>,
     ) {
-        self.classifier.replace_history(entries);
+        if self.classifier.replace_history(entries) {
+            self.reclassify();
+        }
     }
 
     pub fn mark_agent_response_started(&mut self) {
+        let changed = self.conversation != InputConversation::Standalone;
         self.conversation = InputConversation::Standalone;
         self.agent_response = AgentResponseState::Pending;
-        self.refresh_classification();
+        if changed {
+            self.reclassify();
+        }
     }
 
     #[cfg(test)]
@@ -277,14 +298,17 @@ impl ChatInput {
         if self.agent_response == AgentResponseState::Pending {
             self.conversation = InputConversation::AgentFollowUp;
             self.agent_response = AgentResponseState::None;
-            self.refresh_classification();
+            self.reclassify();
         }
     }
 
     pub fn synchronize_conversation(&mut self, conversation: InputConversation) {
+        let changed = self.conversation != conversation;
         self.conversation = conversation;
         self.agent_response = AgentResponseState::None;
-        self.refresh_classification();
+        if changed {
+            self.reclassify();
+        }
     }
 
     pub fn set_input_style(&mut self, style: CodeEditorStyle) {
@@ -324,6 +348,7 @@ impl ChatInput {
             _ => None,
         };
         if let Some(effect) = effect {
+            self.classification.cancel_submission();
             self.apply_history_effect(effect);
             return;
         }
@@ -333,6 +358,7 @@ impl ChatInput {
     }
 
     pub fn apply_composition(&mut self, event: TextInputCompositionEvent) {
+        self.classification.cancel_submission();
         if let Some(query) = self.history.query() {
             match event {
                 TextInputCompositionEvent::Preedit { text, .. } => {
@@ -353,6 +379,7 @@ impl ChatInput {
     }
 
     pub fn cancel_composition(&mut self) {
+        self.classification.cancel_submission();
         self.history_composition = None;
         self.input.cancel_composition();
         self.refresh_shell_suggestion();
@@ -370,6 +397,7 @@ impl ChatInput {
             self.history.record(self.input.text().to_owned(), kind);
         }
         self.input.clear();
+        self.classification.reset("");
         self.route = ComposerRoute::Agent;
         self.refresh_editor_language();
         self.leave_history();
@@ -416,6 +444,7 @@ impl ChatInput {
     }
 
     pub fn start_history_search(&mut self) {
+        self.classification.cancel_submission();
         let effect = if self.searching_history() {
             self.history.older()
         } else {
@@ -439,6 +468,7 @@ impl ChatInput {
         self.history_composition = None;
         self.history.reset();
         self.apply_history_effect(RecallEffect::Restore);
+        self.reclassify();
     }
 
     pub fn history_status(&self) -> Option<String> {
@@ -469,19 +499,23 @@ impl ChatInput {
         match effect {
             RecallEffect::Keep => {}
             RecallEffect::Restore => {
-                if let Some((input, route)) = self.history_draft.take() {
-                    self.input = input;
-                    self.route = route;
-                    self.recalled_route = Some(route);
-                    self.refresh_shell_suggestion();
-                    self.refresh_interaction();
+                if let Some(draft) = self.history_draft.take() {
+                    self.input = draft.input;
+                    self.route = draft.route;
+                    self.recalled_route = (!draft.needs_classification).then_some(draft.route);
+                    self.reclassify();
                 }
             }
             RecallEffect::Recall(submission) => {
                 if self.history_draft.is_none() {
-                    self.history_draft = Some((self.input.take_draft(), self.route));
+                    self.history_draft = Some(HistoryDraft {
+                        input: self.input.take_draft(),
+                        route: self.route,
+                        needs_classification: self.classification.is_pending(),
+                    });
                 }
                 self.input.set_text(submission.text);
+                self.classification.reset(self.input.text());
                 self.route = match submission.kind {
                     InputKind::Shell => ComposerRoute::Shell,
                     InputKind::Agent | InputKind::Command => ComposerRoute::Agent,
@@ -493,28 +527,6 @@ impl ChatInput {
                 self.refresh_interaction();
             }
         }
-    }
-
-    fn refresh_classification(&mut self) {
-        let text = self.input.text();
-        self.route = if let Some(route) = self.recalled_route {
-            route
-        } else if text.trim_start().starts_with('/') {
-            ComposerRoute::Agent
-        } else {
-            let current_route = match self.route {
-                ComposerRoute::Agent => InputRoute::Agent,
-                ComposerRoute::Shell => InputRoute::Shell,
-            };
-            let context = InputClassificationContext::new(current_route, self.conversation);
-            match self.classifier.classify(text, context).route {
-                InputRoute::Agent => ComposerRoute::Agent,
-                InputRoute::Shell => ComposerRoute::Shell,
-            }
-        };
-        self.refresh_editor_language();
-        self.refresh_shell_suggestion();
-        self.refresh_interaction();
     }
 
     fn refresh_editor_language(&mut self) {

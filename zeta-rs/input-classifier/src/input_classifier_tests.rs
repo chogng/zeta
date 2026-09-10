@@ -86,6 +86,29 @@ fn deterministic_allowlists_run_before_the_model() {
 }
 
 #[test]
+fn prepared_decisions_keep_the_rule_order_and_captured_context() {
+    let mut classifier = InputClassifier::default();
+    let context = standalone(InputRoute::Shell);
+    let immediate = classifier.prepare("git status", context);
+    assert_eq!(
+        immediate.classification().unwrap(),
+        classifier.classify("git status", context)
+    );
+
+    let request = "git status 是做什么的";
+    let deferred = classifier.prepare(request, context);
+    assert!(deferred.classification().is_none());
+    classifier.replace_history([InputHistoryEntry::shell(request)]);
+    assert_eq!(
+        classifier.classify(request, context).route,
+        InputRoute::Shell
+    );
+    let resolved = std::thread::spawn(move || deferred.run()).join().unwrap();
+    assert_eq!(resolved.route, InputRoute::Agent);
+    assert_eq!(resolved.source, InputClassificationSource::Model);
+}
+
+#[test]
 fn empty_input_preserves_the_current_route() {
     let classifier = InputClassifier::default();
 

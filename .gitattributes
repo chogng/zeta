@@ -5,6 +5,11 @@
 /zeta-rs/prompts/templates/** text eol=lf
 /zeta-rs/models-manager/templates/instructions/** text eol=lf
 
+# Keep embedded classifier assets identical to their pinned release hashes.
+/zeta-rs/input-classifier/models/*.json text eol=lf
+/zeta-rs/input-classifier/models/*.onnx -text
+/zeta-rs/input-classifier/dictionaries/*.txt text eol=lf
+
 # Keep generated design-token artifacts byte-stable across platforms.
 /resources/design-tokens/* text eol=lf
 

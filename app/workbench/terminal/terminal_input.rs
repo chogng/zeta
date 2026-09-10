@@ -434,8 +434,8 @@ impl WorkbenchApplication {
         self.send_terminal_input(input, "could not send terminal input");
     }
 
-    fn submit_composer(&mut self) {
-        let Some(submission) = self.session_pane.composer_submission() else {
+    pub(super) fn submit_composer(&mut self) {
+        let Some(submission) = self.session_pane.request_composer_submission() else {
             return;
         };
         match submission {

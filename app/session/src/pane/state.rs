@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use serde_json::Value;
 use zeta_editor::CodeEditorCommand;
@@ -24,6 +25,9 @@ use zui::ui::TextInputCompositionEvent;
 
 use crate::ChatInput;
 use crate::ChatInputInteractionView;
+use crate::ComposerClassificationResult;
+use crate::ComposerClassificationTask;
+use crate::ComposerClassificationUpdate;
 use crate::ComposerInteractionActivation;
 use crate::ComposerModelOption;
 use crate::ComposerRoute;
@@ -94,8 +98,30 @@ impl SessionPaneState {
         self.chat_input().route()
     }
 
-    pub fn composer_submission(&self) -> Option<ComposerSubmission> {
-        self.chat_input().submission()
+    /// Requests submission; pending inference resumes it only for the same input revision.
+    pub fn request_composer_submission(&mut self) -> Option<ComposerSubmission> {
+        self.update_chat_input(ChatInput::request_submission)
+    }
+
+    /// Next input deadline to include in the window event loop when its worker is available.
+    pub fn composer_classification_deadline(&self) -> Option<Instant> {
+        self.chat_input().classification_deadline()
+    }
+
+    /// Takes the latest due inference task. The host runs at most one task at a time.
+    pub fn take_composer_classification_task(
+        &mut self,
+        now: Instant,
+    ) -> Option<ComposerClassificationTask> {
+        self.update_chat_input(|input| input.take_classification_task(now))
+    }
+
+    /// Applies a matching result and tells the host whether to redraw or complete submission.
+    pub fn finish_composer_classification(
+        &mut self,
+        result: ComposerClassificationResult,
+    ) -> ComposerClassificationUpdate {
+        self.update_chat_input(|input| input.finish_classification(result))
     }
 
     pub fn set_composer_text(&mut self, text: impl Into<String>) {

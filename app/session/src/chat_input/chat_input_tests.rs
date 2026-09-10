@@ -3,6 +3,8 @@ use super::ComposerRoute;
 use super::ComposerSubmission;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 use zeta_editor::CodeEditorCommand;
 use zeta_editor::CodeEditorLanguage;
 use zeta_editor::CodeEditorSelectionMode;
@@ -17,10 +19,20 @@ use zui::ui::TextInputCompositionEvent;
 
 static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
+fn finish_classification(input: &mut ChatInput) {
+    if let Some(task) = input.take_classification_task(Instant::now() + Duration::from_secs(1)) {
+        assert_eq!(
+            input.finish_classification(task.run()),
+            super::ComposerClassificationUpdate::Updated,
+        );
+    }
+}
+
 #[test]
 fn chat_input_defaults_to_agent_submission() {
     let mut chat_input = ChatInput::default();
     chat_input.apply(CodeEditorCommand::Insert("fix the tests".to_owned()));
+    finish_classification(&mut chat_input);
 
     assert!(matches!(
         chat_input.submission(),
@@ -68,6 +80,7 @@ fn classifier_uses_the_model_for_command_prefix_questions() {
     chat_input.apply(CodeEditorCommand::Insert(
         "git status 是做什么的".to_owned(),
     ));
+    finish_classification(&mut chat_input);
 
     assert_eq!(chat_input.route(), ComposerRoute::Agent);
     assert_eq!(chat_input.input().language(), CodeEditorLanguage::PlainText);
@@ -85,6 +98,7 @@ fn only_a_whole_shell_submission_uses_shell_highlighting() {
     assert_eq!(chat_input.input().language(), CodeEditorLanguage::Shell);
 
     chat_input.set_text("git status 是做什么的");
+    finish_classification(&mut chat_input);
 
     assert_eq!(chat_input.route(), ComposerRoute::Agent);
     assert_eq!(chat_input.input().language(), CodeEditorLanguage::PlainText);
@@ -135,11 +149,12 @@ fn shell_ghost_text_accepts_only_the_common_prefix_of_multiple_paths() {
     std::fs::write(root.join("alpha-one"), "").unwrap();
     std::fs::write(root.join("alpha-two"), "").unwrap();
     let mut chat_input = ChatInput::for_working_directory(&root);
-    chat_input.set_text("cat al");
+    // Use a Shell builtin so the fixture does not require a Unix `cat` executable on PATH.
+    chat_input.set_text("echo al");
 
     assert_eq!(chat_input.input().ghost_text(), Some("pha-"));
     assert!(chat_input.accept_shell_suggestion());
-    assert_eq!(chat_input.input().text(), "cat alpha-");
+    assert_eq!(chat_input.input().text(), "echo alpha-");
 
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -174,6 +189,7 @@ fn classification_is_recomputed_when_the_input_changes() {
     assert_eq!(chat_input.route(), ComposerRoute::Shell);
 
     chat_input.set_text("git status 是做什么的");
+    finish_classification(&mut chat_input);
 
     assert_eq!(chat_input.route(), ComposerRoute::Agent);
     assert!(matches!(
@@ -204,6 +220,7 @@ fn chat_input_preserves_explicit_newlines_for_multiline_prompts() {
     chat_input.apply(CodeEditorCommand::Insert("explain this".to_owned()));
     chat_input.apply(CodeEditorCommand::Newline);
     chat_input.apply(CodeEditorCommand::Insert("src/main.rs".to_owned()));
+    finish_classification(&mut chat_input);
 
     assert!(matches!(
         chat_input.submission(),

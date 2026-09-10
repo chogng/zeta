@@ -15,6 +15,7 @@ use candle_core::Device;
 use candle_core::IndexOp;
 use candle_core::Tensor;
 use candle_nn::ops::softmax_last_dim;
+use candle_onnx::eval::get_tensor;
 use candle_onnx::onnx::ModelProto;
 use prost::Message;
 use tokenizers::Tokenizer;
@@ -73,6 +74,7 @@ fn embedded_classifier() -> Result<&'static EmbeddedClassifier> {
 
 struct EmbeddedClassifier {
     model: ModelProto,
+    weights: HashMap<String, Tensor>,
     tokenizer: Tokenizer,
     device: Device,
     has_panicked: AtomicBool,
@@ -80,13 +82,28 @@ struct EmbeddedClassifier {
 
 impl EmbeddedClassifier {
     fn load() -> Result<Self> {
-        let model =
+        let mut model =
             ModelProto::decode(MODEL_BYTES).context("failed to decode embedded ONNX model")?;
+        let graph = model
+            .graph
+            .as_mut()
+            .context("classifier model has no graph")?;
+        // simple_eval accepts preloaded values. Remove the protobuf initializers after decoding
+        // them once so each inference clones tensor handles instead of rebuilding the weights.
+        let weights = std::mem::take(&mut graph.initializer)
+            .into_iter()
+            .map(|initializer| {
+                let tensor = get_tensor(&initializer, &initializer.name)?;
+                Ok((initializer.name, tensor))
+            })
+            .collect::<Result<HashMap<_, _>>>()
+            .context("failed to prepare classifier weights")?;
         let tokenizer = Tokenizer::from_bytes(TOKENIZER_BYTES)
             .map_err(|error| anyhow!(error))
             .context("failed to decode embedded tokenizer")?;
         Ok(Self {
             model,
+            weights,
             tokenizer,
             device: Device::Cpu,
             has_panicked: AtomicBool::new(false),
@@ -129,14 +146,11 @@ impl EmbeddedClassifier {
         let attention_mask = Tensor::new(attention_mask.as_slice(), &self.device)
             .context("failed to build attention_mask tensor")?
             .unsqueeze(0)?;
-        let outputs = candle_onnx::simple_eval(
-            &self.model,
-            HashMap::from([
-                ("input_ids".to_owned(), input_ids),
-                ("attention_mask".to_owned(), attention_mask),
-            ]),
-        )
-        .context("failed to evaluate embedded ONNX model")?;
+        let mut inputs = self.weights.clone();
+        inputs.insert("input_ids".to_owned(), input_ids);
+        inputs.insert("attention_mask".to_owned(), attention_mask);
+        let outputs = candle_onnx::simple_eval(&self.model, inputs)
+            .context("failed to evaluate embedded ONNX model")?;
         let logits = outputs
             .get("logits")
             .context("classifier model did not return logits")?;
@@ -169,3 +183,7 @@ impl EmbeddedClassifier {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "model_tests.rs"]
+mod tests;

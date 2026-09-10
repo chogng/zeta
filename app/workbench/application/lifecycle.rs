@@ -206,6 +206,20 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
                 }
                 return;
             }
+            WorkbenchEvent::InputClassified(result) => {
+                self.classification_task = None;
+                match self.session_pane.finish_composer_classification(result) {
+                    zeta_session::ComposerClassificationUpdate::Stale => {}
+                    zeta_session::ComposerClassificationUpdate::Updated => {
+                        self.rebuild_presentation_on_next_redraw();
+                    }
+                    zeta_session::ComposerClassificationUpdate::Submit => {
+                        self.submit_composer();
+                        self.rebuild_presentation_on_next_redraw();
+                    }
+                }
+                return;
+            }
             WorkbenchEvent::Session(event) => {
                 self.handle_session_runtime_event(event);
                 return;
@@ -287,6 +301,18 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
 
     fn about_to_wait(&mut self, context: &mut AppContext<'_, WorkbenchEvent>) {
         let now = Instant::now();
+        if self.classification_task.is_none()
+            && let Some(window) = self.window.as_ref()
+            && let Some(task) = self.session_pane.take_composer_classification_task(now)
+        {
+            self.classification_task = Some(
+                context
+                    .background_executor()
+                    .spawn(zui::runtime::TaskScope::Window(window.id()), async move {
+                        WorkbenchEvent::InputClassified(task.run())
+                    }),
+            );
+        }
         self.keybindings.advance_chord(now);
         if let Some(commit) = self.settings.advance_keyboard_shortcuts(now) {
             match self.save_keybinding(commit.command, &commit.keybinding) {
@@ -327,6 +353,11 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
             self.request_redraw();
         }
         let mut deadlines = FrameDeadlineSet::default();
+        if self.classification_task.is_none()
+            && let Some(deadline) = self.session_pane.composer_classification_deadline()
+        {
+            deadlines.include(deadline);
+        }
         for deadline in [
             self.caret_blink.next_deadline(),
             self.scm.editor().scrollbar_deadline(),

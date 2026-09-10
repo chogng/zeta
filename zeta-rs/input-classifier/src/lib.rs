@@ -11,6 +11,7 @@ mod shell;
 pub use classifier::InputClassification;
 pub use classifier::InputClassificationContext;
 pub use classifier::InputClassificationSource;
+pub use classifier::InputClassificationTask;
 pub use classifier::InputClassifier;
 pub use classifier::InputConversation;
 pub use classifier::InputRoute;

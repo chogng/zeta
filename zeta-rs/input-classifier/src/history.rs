@@ -37,11 +37,16 @@ pub(super) struct InputHistory {
 }
 
 impl InputHistory {
-    pub(super) fn replace(&mut self, entries: impl IntoIterator<Item = InputHistoryEntry>) {
-        self.entries = entries
+    pub(super) fn replace(&mut self, entries: impl IntoIterator<Item = InputHistoryEntry>) -> bool {
+        let entries: Vec<_> = entries
             .into_iter()
             .filter(|entry| !entry.text.trim().is_empty())
             .collect();
+        if self.entries == entries {
+            return false;
+        }
+        self.entries = entries;
+        true
     }
 
     pub(super) fn record(&mut self, entry: InputHistoryEntry) {

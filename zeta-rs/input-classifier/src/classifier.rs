@@ -14,6 +14,7 @@ use crate::rules::classify_allowlisted_input;
 use crate::rules::classify_contextual_input;
 use crate::rules::classify_current_route_input;
 use crate::shell::ShellContext;
+use crate::shell::ShellTokenSnapshot;
 
 /// Product-neutral destination selected for a piece of terminal input.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -142,9 +143,12 @@ impl InputClassifier {
         self.shell_context.complete_snapshot(input, cursor)
     }
 
-    /// Replaces chronological Shell and Agent submissions used for close-match routing.
-    pub fn replace_history(&mut self, entries: impl IntoIterator<Item = InputHistoryEntry>) {
-        self.history.replace(entries);
+    /// Replaces chronological submissions and reports whether their routing evidence changed.
+    pub fn replace_history(
+        &mut self,
+        entries: impl IntoIterator<Item = InputHistoryEntry>,
+    ) -> bool {
+        self.history.replace(entries)
     }
 
     /// Records one successful submission as the newest history candidate.
@@ -158,54 +162,114 @@ impl InputClassifier {
         input: &str,
         context: InputClassificationContext,
     ) -> InputClassification {
-        classify_with_model(
-            input,
-            context,
-            &self.shell_context,
-            &self.history,
-            classify_with_embedded_model,
-        )
+        self.prepare(input, context).run()
+    }
+
+    /// Runs deterministic routing and captures any remaining inference as owned background work.
+    /// The task keeps the exact input and Shell evidence from this call, without retaining a UI.
+    pub fn prepare(
+        &self,
+        input: &str,
+        context: InputClassificationContext,
+    ) -> InputClassificationTask {
+        prepare_classification(input, context, &self.shell_context, &self.history)
     }
 }
 
-fn classify_with_model(
+/// One classification decision, ready immediately or resolvable on a worker thread.
+pub struct InputClassificationTask {
+    decision: ClassificationDecision,
+}
+
+enum ClassificationDecision {
+    Ready(InputClassification),
+    Model {
+        input: String,
+        word_tokens: Vec<String>,
+        shell_snapshot: ShellTokenSnapshot,
+        current_route: InputRoute,
+    },
+}
+
+impl InputClassificationTask {
+    fn ready(classification: InputClassification) -> Self {
+        Self {
+            decision: ClassificationDecision::Ready(classification),
+        }
+    }
+
+    /// Returns a deterministic result without loading or running the model.
+    pub fn classification(&self) -> Option<InputClassification> {
+        match &self.decision {
+            ClassificationDecision::Ready(classification) => Some(*classification),
+            ClassificationDecision::Model { .. } => None,
+        }
+    }
+
+    /// Completes the captured decision with the embedded model and the existing failure policy.
+    pub fn run(self) -> InputClassification {
+        self.run_with_model(classify_with_embedded_model)
+    }
+
+    fn run_with_model(self, model: impl FnOnce(&str) -> ModelAttempt) -> InputClassification {
+        match self.decision {
+            ClassificationDecision::Ready(classification) => classification,
+            ClassificationDecision::Model {
+                input,
+                word_tokens,
+                shell_snapshot,
+                current_route,
+            } => match model(input.trim()) {
+                ModelAttempt::Classified(classification) => classification,
+                ModelAttempt::Failed => InputClassification::fallback(current_route),
+                ModelAttempt::Unavailable | ModelAttempt::Panicked => {
+                    classify_with_fallback_heuristic(
+                        &input,
+                        word_tokens,
+                        &shell_snapshot,
+                        current_route,
+                    )
+                }
+            },
+        }
+    }
+}
+
+fn prepare_classification(
     input: &str,
     context: InputClassificationContext,
     shell_context: &ShellContext,
     history: &InputHistory,
-    model: impl FnOnce(&str) -> ModelAttempt,
-) -> InputClassification {
+) -> InputClassificationTask {
     let word_tokens = parse_query_into_tokens(input);
     if let Some(classification) = classify_contextual_input(input, context) {
-        return classification;
+        return InputClassificationTask::ready(classification);
     }
     if let Some(classification) = history.classify(input) {
-        return classification;
+        return InputClassificationTask::ready(classification);
     }
     if let Some(classification) = classify_current_route_input(&word_tokens, context) {
-        return classification;
+        return InputClassificationTask::ready(classification);
     }
     if let Some(classification) = classify_allowlisted_input(&word_tokens) {
-        return classification;
+        return InputClassificationTask::ready(classification);
     }
 
     let shell_snapshot = shell_context.analyze(input);
     if shell_snapshot.is_likely_shell_command(word_tokens.len()) {
-        return InputClassification::deterministic(
+        return InputClassificationTask::ready(InputClassification::deterministic(
             InputRoute::Shell,
             InputClassificationSource::ShellTokenHeuristic,
-        );
+        ));
     }
 
-    match model(input.trim()) {
-        ModelAttempt::Classified(classification) => classification,
-        ModelAttempt::Failed => InputClassification::fallback(context.current_route),
-        ModelAttempt::Unavailable | ModelAttempt::Panicked => classify_with_fallback_heuristic(
-            input,
+    InputClassificationTask {
+        decision: ClassificationDecision::Model {
+            input: input.to_owned(),
             word_tokens,
-            &shell_snapshot,
-            context.current_route,
-        ),
+            shell_snapshot,
+            current_route: context.current_route,
+        },
     }
 }
 
@@ -216,11 +280,7 @@ pub(crate) fn classify_with_model_attempt(
     context: InputClassificationContext,
     attempt: ModelAttempt,
 ) -> InputClassification {
-    classify_with_model(
-        input,
-        context,
-        &classifier.shell_context,
-        &classifier.history,
-        |_| attempt,
-    )
+    classifier
+        .prepare(input, context)
+        .run_with_model(|_| attempt)
 }
