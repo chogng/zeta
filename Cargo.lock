@@ -260,7 +260,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -271,7 +271,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -285,6 +285,26 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "zeta-workbench",
+]
+
+[[package]]
+name = "appcontainer_common"
+version = "0.8.0"
+dependencies = [
+ "flatbuffers",
+ "getrandom 0.2.17",
+ "learning_mode_core",
+ "learning_mode_windows",
+ "process_security_environment_spec",
+ "sandbox_spec",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "widestring",
+ "windows",
+ "windows-core",
+ "winreg 0.55.0",
+ "wxc_common",
 ]
 
 [[package]]
@@ -809,6 +829,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "bwrap_common"
+version = "0.8.0"
+dependencies = [
+ "lxc_common",
+ "nix 0.29.0",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "url",
+ "wxc_common",
+]
+
+[[package]]
 name = "by_address"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1148,6 +1183,12 @@ dependencies = [
  "ciborium-io",
  "half",
 ]
+
+[[package]]
+name = "cidr"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "579504560394e388085d0c080ea587dfa5c15f7e251b4d5247d1e1a61d1d6928"
 
 [[package]]
 name = "cipher"
@@ -1980,7 +2021,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2194,7 +2235,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2367,6 +2408,16 @@ name = "fixedbitset"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
+
+[[package]]
+name = "flatbuffers"
+version = "25.12.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35f6839d7b3b98adde531effaf34f0c2badc6f4735d26fe74709d8e513a96ef3"
+dependencies = [
+ "bitflags 2.13.1",
+ "rustc_version",
+]
 
 [[package]]
 name = "flate2"
@@ -3515,6 +3566,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
+name = "httpdate"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3536,6 +3593,7 @@ dependencies = [
  "http",
  "http-body",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project-lite",
  "smallvec",
@@ -4322,6 +4380,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
+name = "learning_mode_core"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "same-file",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "learning_mode_windows"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "learning_mode_core",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+ "windows",
+ "windows-core",
+ "wxc_common",
+]
+
+[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4537,6 +4621,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "lxc_common"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "libc",
+ "mxc_pty",
+ "nix 0.29.0",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+ "wxc_common",
+]
+
+[[package]]
 name = "macro_rules_attribute"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4704,7 +4803,7 @@ dependencies = [
  "once_cell",
  "png",
  "thiserror 2.0.19",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4718,6 +4817,68 @@ name = "mutate_once"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13d2233c9842d08cfe13f9eac96e207ca6a2ea10b80259ebe8ad0268be27d2af"
+
+[[package]]
+name = "mxc-sdk"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "mxc_engine",
+ "wxc_common",
+]
+
+[[package]]
+name = "mxc_build_common"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "winresource",
+]
+
+[[package]]
+name = "mxc_config_contract"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "mxc_engine"
+version = "0.8.0"
+dependencies = [
+ "appcontainer_common",
+ "bwrap_common",
+ "learning_mode_core",
+ "lxc_common",
+ "plm",
+ "seatbelt_common",
+ "serde",
+ "serde_json",
+ "windows",
+ "windows_sandbox_lifecycle",
+ "wxc_common",
+]
+
+[[package]]
+name = "mxc_pty"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "libc",
+ "nix 0.29.0",
+]
+
+[[package]]
+name = "mxc_telemetry"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "tracelogging",
+ "uuid",
+]
 
 [[package]]
 name = "naga"
@@ -5456,7 +5617,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5832,6 +5993,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "plm"
+version = "0.1.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "getrandom 0.2.17",
+ "learning_mode_core",
+ "learning_mode_windows",
+ "mxc_build_common",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "windows",
+ "wxc_common",
+]
+
+[[package]]
 name = "png"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5912,7 +6092,7 @@ dependencies = [
  "shared_library",
  "shell-words",
  "winapi",
- "winreg",
+ "winreg 0.10.1",
 ]
 
 [[package]]
@@ -6057,6 +6237,14 @@ dependencies = [
  "tokio",
  "tracing",
  "windows",
+]
+
+[[package]]
+name = "process_security_environment_spec"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "flatbuffers",
 ]
 
 [[package]]
@@ -6309,7 +6497,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7064,7 +7252,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7145,7 +7333,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7217,6 +7405,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sandbox_spec"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "flatbuffers",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7274,6 +7470,14 @@ dependencies = [
  "memmap2",
  "smithay-client-toolkit",
  "tiny-skia 0.11.4",
+]
+
+[[package]]
+name = "seatbelt_common"
+version = "0.8.0"
+dependencies = [
+ "libc",
+ "wxc_common",
 ]
 
 [[package]]
@@ -7743,7 +7947,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7814,7 +8018,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -8105,7 +8309,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -8387,6 +8591,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
@@ -8640,6 +8845,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
+name = "tracelogging"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4314470f3f54b29d582ff6776fceb7c819b023141828d559f19c790cee40e94"
+dependencies = [
+ "tracelogging_macros",
+]
+
+[[package]]
+name = "tracelogging_macros"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95e2d891464ff33bc1814c4cbbb251bae7800458b1efdb6ac8b7c01ee6382563"
+
+[[package]]
 name = "tracing"
 version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8688,7 +8908,7 @@ dependencies = [
  "once_cell",
  "png",
  "thiserror 2.0.19",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9180,7 +9400,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9250,6 +9470,12 @@ name = "unicode-ccc"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce61d488bcdc9bc8b5d1772c404828b17fc481c0a582b5581e95fb233aef503e"
+
+[[package]]
+name = "unicode-general-category"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b993bddc193ae5bd0d623b49ec06ac3e9312875fdae725a975c51db1cc1677f"
 
 [[package]]
 name = "unicode-ident"
@@ -10072,6 +10298,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "widestring"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72069c3113ab32ab29e5584db3c6ec55d416895e60715417b5b883a357c3e471"
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10093,7 +10325,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -10342,6 +10574,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e7ac75179f18232fe9c285163565a57ef8d3c89254a30685b57d83a38d326c2"
 
 [[package]]
+name = "windows_sandbox_common"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "getrandom 0.2.17",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wxc_common",
+]
+
+[[package]]
+name = "windows_sandbox_lifecycle"
+version = "0.8.0"
+source = "git+https://github.com/microsoft/mxc?rev=6cd3d58f05d3447e67109cfb75e042803b843ca4#6cd3d58f05d3447e67109cfb75e042803b843ca4"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+ "windows",
+ "windows_sandbox_common",
+ "wxc_common",
+]
+
+[[package]]
 name = "windows_x86_64_gnu"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10463,6 +10722,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "winreg"
+version = "0.55.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb5a765337c50e9ec252c2069be9bf91c7df47afb103b642ba3a53bf8101be97"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "winresource"
+version = "0.1.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0986a8b1d586b7d3e4fe3d9ea39fb451ae22869dcea4aa109d287a374d866087"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
 name = "winsafe"
 version = "0.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10535,6 +10813,29 @@ name = "writeable"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
+
+[[package]]
+name = "wxc_common"
+version = "0.8.0"
+dependencies = [
+ "base64 0.22.1",
+ "cidr",
+ "getrandom 0.2.17",
+ "libc",
+ "mxc_config_contract",
+ "mxc_telemetry",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "thiserror 2.0.19",
+ "unicode-general-category",
+ "url",
+ "widestring",
+ "windows",
+ "windows-core",
+ "winreg 0.55.0",
+]
 
 [[package]]
 name = "x11-dl"
@@ -11070,7 +11371,6 @@ dependencies = [
  "zeta-install-context",
  "zeta-instructions",
  "zeta-kimi",
- "zeta-linux-sandbox",
  "zeta-login",
  "zeta-lsp-manager",
  "zeta-lsp-server-provider",
@@ -11080,6 +11380,8 @@ dependencies = [
  "zeta-model-provider",
  "zeta-model-provider-config",
  "zeta-models-manager",
+ "zeta-mxc-sandbox",
+ "zeta-network-proxy",
  "zeta-plugin",
  "zeta-projects",
  "zeta-prompts",
@@ -11102,7 +11404,6 @@ dependencies = [
  "zeta-uds",
  "zeta-utils-pty",
  "zeta-web-search-extension",
- "zeta-windows-sandbox",
 ]
 
 [[package]]
@@ -11795,11 +12096,10 @@ dependencies = [
  "zeta-core",
  "zeta-file-access",
  "zeta-install-context",
- "zeta-linux-sandbox",
+ "zeta-mxc-sandbox",
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-tool-executor",
- "zeta-windows-sandbox",
 ]
 
 [[package]]
@@ -11906,15 +12206,6 @@ dependencies = [
  "zeta-http-client",
  "zeta-login",
  "zeta-secrets",
-]
-
-[[package]]
-name = "zeta-linux-sandbox"
-version = "0.1.0"
-dependencies = [
- "zeta-file-access",
- "zeta-install-context",
- "zeta-sandboxing",
 ]
 
 [[package]]
@@ -12109,6 +12400,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-mxc-sandbox"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "log",
+ "mxc-sdk",
+ "tempfile",
+ "tracelogging",
+ "zeta-async-utils",
+ "zeta-file-access",
+ "zeta-install-context",
+ "zeta-network-proxy",
+ "zeta-protocol",
+ "zeta-sandboxing",
+ "zeta-tool-executor",
+]
+
+[[package]]
+name = "zeta-network-proxy"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "tokio",
+ "url",
+ "zeta-async-utils",
+]
+
+[[package]]
 name = "zeta-ollama"
 version = "0.1.0"
 dependencies = [
@@ -12289,6 +12611,7 @@ version = "0.1.0"
 dependencies = [
  "tempfile",
  "zeta-file-access",
+ "zeta-utils-pty",
 ]
 
 [[package]]
@@ -12385,6 +12708,9 @@ dependencies = [
  "serde_json",
  "zeta-async-utils",
  "zeta-file-access",
+ "zeta-install-context",
+ "zeta-mxc-sandbox",
+ "zeta-network-proxy",
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-tool-executor",
@@ -12563,9 +12889,11 @@ version = "0.1.0"
 dependencies = [
  "zeta-async-utils",
  "zeta-file-access",
+ "zeta-install-context",
+ "zeta-mxc-sandbox",
+ "zeta-network-proxy",
  "zeta-protocol",
  "zeta-sandboxing",
- "zeta-utils-pty",
 ]
 
 [[package]]
@@ -12578,6 +12906,7 @@ dependencies = [
  "sha2 0.10.9",
  "zeta-async-utils",
  "zeta-environment",
+ "zeta-network-proxy",
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-utils-output-truncation",
@@ -12833,31 +13162,6 @@ dependencies = [
  "url",
  "zeroize",
  "zeta-http-client",
-]
-
-[[package]]
-name = "zeta-windows-sandbox"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "windows-sys 0.59.0",
- "zeta-file-access",
- "zeta-install-context",
- "zeta-sandboxing",
-]
-
-[[package]]
-name = "zeta-windows-sandbox-service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde_json",
- "sha2 0.10.9",
- "windows-sys 0.59.0",
- "zeta-windows-sandbox",
 ]
 
 [[package]]

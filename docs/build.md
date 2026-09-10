@@ -28,7 +28,6 @@ Zeta 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` �
 | `just zeta` | 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，然后直接从源码开发运行目录启动 |
 | `just zeta-package` | 组装并发布 Desktop、Web 与 Code TUI 共用的完整不可变开发包 |
 | `just zeta-package-run` | 组装完整开发包，并让 Code TUI 连接该包中的 daemon 与产品服务 |
-| `just windows-sandbox-runtime` | 从完整 Windows Zeta package 生成三条产品线共用的机器级沙箱 Runtime MSI |
 | `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
 | `just test-python [zeta-code|build|release]` | 运行全部 Python 单元测试，或只运行指定 owner 的测试 |
 | `corepack pnpm build` | 构建 Electron Main、Preload 和当前 `ZETA_PRODUCT` Renderer |
@@ -83,7 +82,6 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
 | `build/desktop/` | Desktop 资源生成、Electron 启动和打包校验 |
 | `build/zeta-package/` | Desktop、Web 与 Code TUI 共用的完整开发包组装和代发布 |
-| `build/release/windows_sandbox_runtime.py` | 从已校验 Windows package 生成固定 `ZetaSandboxService` 的 per-machine WiX 定义与 MSI 调用 |
 | `build/vite/` | Renderer 入口、Vite 配置、开发桥接与热重载插件 |
 | `build/download/` | 受锁文件约束的第三方构建运行时下载器 |
 | `build/release/` | Python/Shell 发布打包、签名、验证以及 Bazel 入口 |

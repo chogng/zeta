@@ -19,7 +19,6 @@ from .layout import build_package_directory, load_protocol_metadata
 from .node import resolve_node
 from .ripgrep import resolve_ripgrep
 from .version import read_workspace_version
-from .windows_helpers import resolve_windows_sandbox_helpers
 
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parents[1]
@@ -133,21 +132,6 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         ),
     )
     parser.add_argument(
-        "--windows-command-runner-bin",
-        type=Path,
-        help="Prebuilt Windows AppContainer command runner.",
-    )
-    parser.add_argument(
-        "--windows-sandbox-service-bin",
-        type=Path,
-        help="Prebuilt Zeta Windows sandbox service.",
-    )
-    parser.add_argument(
-        "--windows-sandbox-worker-bin",
-        type=Path,
-        help="Prebuilt Windows AppContainer provisioning worker.",
-    )
-    parser.add_argument(
         "--cargo",
         default="cargo",
         help="Cargo executable used to build first-party package binaries.",
@@ -241,15 +225,6 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
-    windows_helpers = resolve_windows_sandbox_helpers(
-        REPOSITORY_ROOT,
-        spec,
-        args.windows_command_runner_bin,
-        args.windows_sandbox_service_bin,
-        args.windows_sandbox_worker_bin,
-        cargo=args.cargo,
-        cargo_profile=args.cargo_profile,
-    )
     version = read_workspace_version(REPOSITORY_ROOT / "Cargo.toml")
     output = args.package_dir.expanduser().resolve()
     build_package_directory(
@@ -263,7 +238,6 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         ripgrep,
         node,
         bubblewrap,
-        windows_helpers,
         protocol_metadata=protocol_metadata,
         build_profile=args.cargo_profile,
         cli_binary=cli_binary,

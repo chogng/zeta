@@ -234,7 +234,7 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
 - `zeta-action-policy → zeta-execpolicy + zeta-sandboxing`；
 - `zeta-execpolicy` 不依赖 sandbox、Core、Tool 或配置 I/O；
 - `zeta-auto-review → zeta-action-policy + zeta-sandboxing`；
-- 本地进程执行器可依赖 `zeta-sandboxing` 与当前平台后端；`zeta-linux-sandbox` 私有构造 Bubblewrap 参数；
+- 本地进程执行器只依赖 `zeta-sandboxing` 契约；产品组合注入 `mxc-sandbox`，平台细节留在适配器；
 - `zeta-api → zeta-tools + zeta-protocol`；
 - App Server 组合 Tool registry、source runtime、policy 和 Core port。
 

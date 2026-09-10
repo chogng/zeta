@@ -37,9 +37,8 @@ flowchart LR
 `Electron Main` 只属于 `zeta` 产品线。它负责 Electron 生命周期、App Server 子进程监督、
 可信 IPC 和 Renderer adapter；它不是三条产品线共享的通用后端层。
 
-Windows 沙箱机器服务由三条产品线共同消费，但仍只有一个 Zeta 产品 owner。`zeta code`、Electron
-`zeta` 和 Rust `app` 的 Agent 能力都通过 App Server 使用同一个 `ZetaSandboxService`；三个宿主
-不能分别注册或更新机器服务。服务的安装与认证边界见 [`sandboxing.md`](sandboxing.md)。
+三条产品线通过 App Server 注入同一个 `mxc-sandbox` 适配器。Windows 由 Microsoft MXC SDK 执行系统隔离，
+不注册 Zeta 机器服务；平台依赖与进程生命周期见 [`sandboxing.md`](sandboxing.md)。
 
 `zeta code` 的 TUI 宿主终端和“运行一个子 Shell 的终端能力”必须区分：前者属于 TUI 的
 `crossterm`/`ratatui` 事件循环，后者如果产品需要，应通过 App Server 的 typed contract 使用

@@ -64,7 +64,7 @@ struct UnavailableBackend;
 
 impl SandboxBackend for UnavailableBackend {
     fn kind(&self) -> SandboxKind {
-        SandboxKind::MacosSeatbelt
+        SandboxKind::Restricted
     }
 
     fn prepare(
@@ -74,7 +74,7 @@ impl SandboxBackend for UnavailableBackend {
         _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         Err(SandboxError::BackendUnavailable {
-            backend: SandboxKind::MacosSeatbelt,
+            backend: SandboxKind::Restricted,
             message: "test backend unavailable".into(),
         })
     }
@@ -249,7 +249,7 @@ fn unavailable_sandbox_is_a_safe_to_retry_structured_denial() {
 #[cfg(target_os = "macos")]
 #[test]
 fn sandboxed_tool_invocation_enforces_dir_metadata_and_network_boundaries() {
-    use zeta_sandboxing::MacosSeatbeltSandbox;
+    use mxc_sandbox::MxcSandbox;
 
     let dir = TestDir::new();
     let protected = dir.path.join(".git");
@@ -263,7 +263,7 @@ fn sandboxed_tool_invocation_enforces_dir_metadata_and_network_boundaries() {
     let tool = ShellCommandTool::new(
         environment_id(),
         dir.root(),
-        MacosSeatbeltSandbox::new(),
+        MxcSandbox::new(zeta_install_context::InstallContext::current()),
         AllowAll,
         ShellCommandLimits {
             timeout: Duration::from_secs(3),
@@ -335,7 +335,7 @@ fn sandboxed_tool_invocation_enforces_dir_metadata_and_network_boundaries() {
 
 #[cfg(target_os = "macos")]
 fn execute_sandboxed_command(
-    tool: &ShellCommandTool<AllowAll, zeta_sandboxing::MacosSeatbeltSandbox>,
+    tool: &ShellCommandTool<AllowAll, mxc_sandbox::MxcSandbox>,
     definition: &ToolDefinition,
     sandbox: SandboxPolicy,
     program: &str,

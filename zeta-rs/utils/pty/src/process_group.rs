@@ -127,6 +127,13 @@ fn signal_process_group_id(pgid: libc::pid_t, signal: libc::c_int) -> io::Result
         if err.kind() == ErrorKind::NotFound || err.raw_os_error() == Some(libc::ESRCH) {
             return Ok(false);
         }
+        #[cfg(target_os = "macos")]
+        if err.raw_os_error() == Some(libc::EPERM) && !group_has_live_members(pgid)? {
+            // See Apple xnu/bsd/kern/kern_sig.c killpg1: its group filter excludes SZOMB.
+            // Darwin excludes zombies from killpg's permission check, then returns EPERM
+            // when no signalable member remains. Preserve real permission failures.
+            return Ok(false);
+        }
         return Err(err);
     }
 
@@ -186,4 +193,75 @@ pub fn kill_child_process_group(child: &mut Child) -> io::Result<()> {
 /// No-op on non-Unix platforms.
 pub fn kill_child_process_group(_child: &mut Child) -> io::Result<()> {
     Ok(())
+}
+
+/// Checks for a child's terminal state without reaping it. The caller retains the PID until
+/// cleanup and wait complete; it must not concurrently wait on this child elsewhere.
+#[cfg(unix)]
+pub fn child_has_exited(pid: u32) -> io::Result<bool> {
+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    loop {
+        let result = unsafe {
+            libc::waitid(
+                libc::P_PID,
+                pid,
+                &mut info,
+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+            )
+        };
+        if result == 0 {
+            return Ok(unsafe { info.si_pid() } != 0);
+        }
+        let error = io::Error::last_os_error();
+        if error.kind() != io::ErrorKind::Interrupted {
+            return Err(error);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn group_has_live_members(pgid: libc::pid_t) -> io::Result<bool> {
+    const PROC_PGRP_ONLY: u32 = 2;
+    let mut pids = vec![0_i32; 4096];
+    let capacity = std::mem::size_of_val(pids.as_slice());
+    let bytes = unsafe {
+        libc::proc_listpids(
+            PROC_PGRP_ONLY,
+            pgid as u32,
+            pids.as_mut_ptr().cast(),
+            capacity as i32,
+        )
+    };
+    if bytes <= 0 || bytes as usize >= capacity {
+        return Err(io::Error::other(
+            "could not enumerate the exiting process group",
+        ));
+    }
+    for pid in pids
+        .into_iter()
+        .take(bytes as usize / std::mem::size_of::<i32>())
+    {
+        let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+        let size = std::mem::size_of_val(&info) as i32;
+        let result = unsafe {
+            libc::proc_pidinfo(
+                pid,
+                libc::PROC_PIDTBSDINFO,
+                0,
+                (&mut info as *mut libc::proc_bsdinfo).cast(),
+                size,
+            )
+        };
+        if result != size {
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::ESRCH) {
+                continue;
+            }
+            return Err(error);
+        }
+        if info.pbi_pgid == pgid as u32 && info.pbi_status != libc::SZOMB {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }

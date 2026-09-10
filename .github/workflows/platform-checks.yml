@@ -68,6 +68,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             build-essential \
+            bubblewrap \
             libcap-dev \
             libdbus-1-dev \
             libgtk-3-dev \
@@ -105,6 +106,24 @@ jobs:
         if: matrix.checks != false
         shell: bash
         run: ${{ matrix.python }} -B scripts/test-python.py release
+
+      - name: Test Linux managed network boundary
+        if: matrix.checks != false && runner.os == 'Linux'
+        shell: bash
+        run: |
+          ${{ matrix.python }} -B scripts/cargo.py build -p zeta-network-proxy --example probe --target "${{ matrix.target }}"
+          export ZETA_NETWORK_PROBE="$GITHUB_WORKSPACE/.build/cargo/${{ matrix.target }}/debug/examples/probe"
+          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --lib --target "${{ matrix.target }}"
+          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --test linux --target "${{ matrix.target }}" -- --ignored
+
+      - name: Test Windows MXC execution
+        if: matrix.checks != false && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --lib --target "${{ matrix.target }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ${{ matrix.python }} -B scripts/cargo.py test -p zeta-mxc-sandbox --test windows --target "${{ matrix.target }}" -- --ignored --test-threads=1
+          exit $LASTEXITCODE
 
       - name: Build Zeta Code release package
         if: github.event_name == 'release' && matrix.release_package != false

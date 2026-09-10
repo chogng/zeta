@@ -95,7 +95,7 @@ current zeta-rs/exec
 
 `zeta-tool-executor` 继续拥有 `CommandRequest`、process capture、timeout、sandbox 与 approval start
 gate；`zeta-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件输出与终态映射。Sandbox 的
-共享 policy、macOS backend、Linux Bubblewrap 和 Windows AppContainer crate 边界见
+共享 policy、进程生命周期与 MXC 三平台适配边界见
 [`sandboxing.md`](sandboxing.md)。
 
 若后续需要远程 process/filesystem execution：

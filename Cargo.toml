@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["zeta-rs/vendor/mxc"]
 members = [
     "zeta-rs/agent-environment",
     "zeta-rs/github",
@@ -63,6 +64,8 @@ members = [
     "zeta-rs/message-history",
     "zeta-rs/hooks",
     "zeta-rs/http-client",
+    "zeta-rs/network-proxy",
+    "zeta-rs/mxc-sandbox",
     "zeta-rs/websocket-client",
     "zeta-rs/install-context",
     "zeta-rs/input-classifier",
@@ -74,7 +77,6 @@ members = [
     "zeta-rs/lsp-manager",
     "zeta-rs/login",
     "zeta-rs/core-plugins",
-    "zeta-rs/linux-sandbox",
     "zeta-rs/lsp",
     "zeta-rs/model-accounting",
     "zeta-rs/model-provider",
@@ -127,8 +129,6 @@ members = [
     "zeta-rs/utils/stream-parser",
     "zeta-rs/utils/template",
     "zeta-rs/utils/typst",
-    "zeta-rs/windows-sandbox-rs",
-    "zeta-rs/windows-sandbox-service",
     "zeta-rs/file-access",
     "zeta-rs/worktree",
     "zeta-rs/content-search",
@@ -163,6 +163,13 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+mxc-sandbox = { package = "zeta-mxc-sandbox", path = "zeta-rs/mxc-sandbox" }
+mxc-sdk = { git = "https://github.com/microsoft/mxc", rev = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
+network-proxy = { package = "zeta-network-proxy", path = "zeta-rs/network-proxy" }
+bytes = "1"
+http-body-util = "0.1"
+hyper = "1"
+hyper-util = "0.1"
 zeta-memory-diagnostics = { path = "zeta-rs/memory-diagnostics" }
 accesskit = "0.24.0"
 accesskit-platform = { package = "accesskit_winit", version = "0.32.2" }
@@ -371,7 +378,6 @@ zeta-lsp-server-provider = { path = "zeta-rs/lsp-server-provider" }
 zeta-lsp-manager = { path = "zeta-rs/lsp-manager" }
 zeta-login = { path = "zeta-rs/login" }
 zeta-core-plugins = { path = "zeta-rs/core-plugins" }
-zeta-linux-sandbox = { path = "zeta-rs/linux-sandbox" }
 zeta-lsp = { path = "zeta-rs/lsp" }
 zeta-markdown = { path = "app/markdown" }
 zeta-mcp = { path = "zeta-rs/mcp" }
@@ -437,7 +443,6 @@ zeta-utils-template = { path = "zeta-rs/utils/template" }
 zeta-pdf = { path = "zeta-rs/utils/pdf" }
 zeta-typst = { path = "zeta-rs/utils/typst" }
 zeta-utils-pty = { path = "zeta-rs/utils/pty" }
-zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
 zeta-file-access = { path = "zeta-rs/file-access" }
 worktree = { path = "zeta-rs/worktree" }
 zui = { path = "app/zui", default-features = false }
@@ -489,3 +494,10 @@ unsafe_code = "forbid"
 
 [patch.crates-io]
 candle-onnx = { path = "third_party/candle-onnx" }
+
+[patch."https://github.com/microsoft/mxc"]
+mxc_engine = { path = "zeta-rs/vendor/mxc/core/mxc_engine" }
+wxc_common = { path = "zeta-rs/vendor/mxc/core/wxc_common" }
+appcontainer_common = { path = "zeta-rs/vendor/mxc/backends/appcontainer/common" }
+bwrap_common = { path = "zeta-rs/vendor/mxc/backends/bubblewrap/common" }
+seatbelt_common = { path = "zeta-rs/vendor/mxc/backends/seatbelt/common" }

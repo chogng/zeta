@@ -50,6 +50,7 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
         ripgrep.clone(),
         PassThroughBackend,
         ActionPolicyRevision::new("test-policy-v1"),
+        super::super::shell_sandbox(),
     )
     .unwrap();
     let agent_grep = Arc::new(AgentGrepService::new(

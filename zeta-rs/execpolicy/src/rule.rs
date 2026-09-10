@@ -191,6 +191,21 @@ pub enum ExecPolicySelector {
 }
 
 impl ExecPolicySelector {
+    /// Reports whether a selector explicitly governs observed network requests.
+    pub fn targets_network(&self) -> bool {
+        match self {
+            Self::Network { .. }
+            | Self::ActionKind {
+                action_kind: ExecPolicyActionKind::NetworkRequest,
+            } => true,
+            Self::Capability {
+                capability_kind, ..
+            } => capability_kind == "network",
+            Self::All { selectors } => selectors.iter().any(Self::targets_network),
+            _ => false,
+        }
+    }
+
     pub fn source(source: Option<String>, source_id: Option<String>) -> Self {
         Self::Source { source, source_id }
     }

@@ -844,6 +844,48 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         }
         Ok(output)
     }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        interactions: Arc<dyn zeta_core::ToolInteractionService>,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        if call.name.as_str() != "shell-command" {
+            return self.execute_streaming_with_facts(
+                call,
+                authorization,
+                cancellation,
+                facts,
+                sink,
+            );
+        }
+        let identity = facts.execution_identity().ok_or_else(|| {
+            CoreError::Execution("local tools require durable caller identity".into())
+        })?;
+        let review = self.prepare_with_facts(call, facts)?;
+        let network = crate::network_policy::for_execution(
+            review,
+            format!("{}:{}", identity.turn_id(), call.id),
+            interactions,
+        );
+        let output = self.execute_scoped_with_network(
+            call,
+            authorization,
+            cancellation,
+            &identity.thread_id().to_string(),
+            Some(identity.session_id()),
+            Some(identity.thread_id()),
+            Some(&network),
+        )?;
+        if let ToolExecutionOutput::Success(text) = &output {
+            sink.emit(ToolOutputStream::Stdout, text.clone())?;
+        }
+        Ok(output)
+    }
 }
 
 impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
@@ -855,6 +897,27 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         scope: &str,
         session_id: Option<&SessionId>,
         thread_id: Option<&ThreadId>,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_scoped_with_network(
+            call,
+            authorization,
+            cancellation,
+            scope,
+            session_id,
+            thread_id,
+            None,
+        )
+    }
+
+    fn execute_scoped_with_network(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        scope: &str,
+        session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         if call.name.as_str() == "shell-command" {
             let request = ShellCommandRequest::from_arguments(
@@ -876,6 +939,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 cancellation,
                 &resolved.authorization,
                 resolved.relative,
+                network_policy,
             );
         }
         cancellation

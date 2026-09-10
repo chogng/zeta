@@ -1,0 +1,1040 @@
+--- a/src/core/mxc_engine/Cargo.toml
++++ b/src/core/mxc_engine/Cargo.toml
+@@ -1,8 +1,8 @@
+ [package]
+ name = "mxc_engine"
+-version.workspace = true
+-edition.workspace = true
+-license.workspace = true
++version = "0.8.0"
++edition = "2021"
++license = "MIT"
+ description = "MXC execution engine: backend dispatch, host probing, and config building shared by the public SDK and the executor binaries."
+ 
+ [lib]
+@@ -10,51 +10,35 @@
+ path = "src/lib.rs"
+ 
+ [dependencies]
+-wxc_common.workspace = true
+-serde = { workspace = true }
+-serde_json = { workspace = true }
+-# MicroVM runner — used by the Windows and Linux run-to-completion bodies under
+-# the `microvm` feature. Never built on hosts/features that don't select it.
+-nanvix_runner = { workspace = true, optional = true }
++wxc_common = { "path" = "../wxc_common" }
++serde = { "version" = "1", "features" = ["derive"] }
++serde_json = { "version" = "1" }
++nanvix_runner = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
+ 
+-[target.'cfg(target_arch = "x86_64")'.dependencies]
+-hyperlight_common = { workspace = true, optional = true }
++[target."cfg(target_arch = \"x86_64\")".dependencies]
++hyperlight_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
+ 
+-[target.'cfg(target_os = "windows")'.dependencies]
+-appcontainer_common = { workspace = true }
+-windows_sandbox_lifecycle = { workspace = true }
+-isolation_session_common = { workspace = true, optional = true }
+-isolation_session_bindings = { workspace = true, optional = true }
+-wslc_common = { workspace = true, optional = true }
+-# Elevated PLM guardian client, used to adapt appcontainer_common's
+-# GuardedCaptureFactory/GuardedCaptureSession DI traits (guarded-WPR
+-# captureDenials fallback) without appcontainer_common depending on plm
+-# directly.
+-plm = { workspace = true }
+-# ProcessLifetime / AnalysisResult types shared across the guarded-capture DI
+-# boundary; appcontainer_common and plm already depend on this crate.
+-learning_mode_core = { workspace = true }
+-windows.workspace = true
++[target."cfg(target_os = \"windows\")".dependencies]
++appcontainer_common = { "path" = "../../backends/appcontainer/common" }
++windows_sandbox_lifecycle = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++isolation_session_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
++isolation_session_bindings = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
++wslc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
++plm = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++learning_mode_core = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++windows = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
+ 
+-[target.'cfg(target_os = "linux")'.dependencies]
+-bwrap_common = { workspace = true }
+-lxc_common = { workspace = true }
++[target."cfg(target_os = \"linux\")".dependencies]
++bwrap_common = { "path" = "../../backends/bubblewrap/common" }
++lxc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
+ 
+-[target.'cfg(target_os = "macos")'.dependencies]
+-seatbelt_common = { workspace = true }
++[target."cfg(target_os = \"macos\")".dependencies]
++seatbelt_common = { "path" = "../../backends/seatbelt/common" }
+ 
+ [features]
+ default = []
+-# Enables constructing the run-to-completion runner for each experimental
+-# backend. Mirrors the executor binaries' feature set so backend selection can
+-# live in one place. The build-time binary-staging that some backends also need
+-# (e.g. NanVix's `nanvix_binaries`) stays with the executor crates.
+ microvm = ["dep:nanvix_runner"]
+ wslc = ["dep:wslc_common", "wslc_common/link-wslcsdk"]
+ hyperlight = ["dep:hyperlight_common", "hyperlight_common/hyperlight"]
+-isolation_session = [
+-    "dep:isolation_session_bindings",
+-    "dep:isolation_session_common",
+-]
+-# Forwards appcontainer_common/tier2_bfs. OFF by default; see appcontainer_common/Cargo.toml.
++isolation_session = ["dep:isolation_session_bindings", "dep:isolation_session_common"]
+ tier2_bfs = ["appcontainer_common/tier2_bfs"]
+--- a/src/core/mxc_engine/src/lib.rs
++++ b/src/core/mxc_engine/src/lib.rs
+@@ -141,3 +141,5 @@
+         self.inner.stderr_closer()
+     }
+ }
++
++mod request;
+--- a/src/core/mxc_engine/src/policy.rs
++++ b/src/core/mxc_engine/src/policy.rs
+@@ -1715,3 +1715,10 @@
+         );
+     }
+ }
++
++/// Broad host access beneath explicit per-directory restrictions.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum HostFilesystemAccess {
++    ReadOnly,
++    ReadWrite,
++}
+--- /dev/null
++++ b/src/core/mxc_engine/src/request.rs
+@@ -0,0 +1,148 @@
++// Copyright (c) Microsoft Corporation.
++// Licensed under the MIT License.
++
++//! Request construction controls used by embedding applications.
++use crate::policy::HostFilesystemAccess;
++use crate::policy::SandboxRequest;
++use crate::Error;
++use crate::ErrorCode;
++use std::path::Path;
++use std::path::PathBuf;
++
++impl SandboxRequest {
++    /// Encodes an argv vector for this request's backend, without shell expansion of arguments.
++    pub fn set_command(&mut self, argv: &[String]) -> Result<&mut Self, Error> {
++        if argv.is_empty() || argv[0].is_empty() || argv.iter().any(|arg| arg.contains('\0')) {
++            return Err(Error::new(
++                ErrorCode::MalformedRequest,
++                "invalid command arguments",
++            ));
++        }
++        use wxc_common::cmdline::CommandLineContext;
++        let context = CommandLineContext::for_backend(&self.inner.containment);
++        let command = wxc_common::cmdline::cmdline_from_argv_for_context(argv, context)
++            .map_err(|error| Error::new(ErrorCode::MalformedRequest, error.to_string()))?;
++        self.inner.script_code = if matches!(context, CommandLineContext::PosixShell) {
++            format!("exec {command}")
++        } else {
++            command
++        };
++        Ok(self)
++    }
++
++    /// Authorizes only scoped, temporary host ACL changes required by the requested filesystem policy.
++    pub fn permit_scoped_host_acl_changes(&mut self) -> &mut Self {
++        self.inner.policy.fallback.allow_dacl_mutation = true;
++        self.inner.lifecycle.preserve_policy = false;
++        self
++    }
++
++    /// Refuses any backend that would modify host ACLs to implement this request.
++    pub fn forbid_host_acl_changes(&mut self) -> &mut Self {
++        self.inner.policy.fallback.allow_dacl_mutation = false;
++        self
++    }
++
++    /// Binds Bubblewrap validation and launch to one caller-resolved executable.
++    pub fn set_bubblewrap_executable(&mut self, executable: &Path) -> Result<&mut Self, Error> {
++        let path = std::fs::canonicalize(executable)
++            .map_err(|error| Error::new(ErrorCode::BackendUnavailable, error.to_string()))?;
++        if !path.is_file() {
++            return Err(Error::new(
++                ErrorCode::BackendUnavailable,
++                "Bubblewrap is not a regular file",
++            ));
++        }
++        self.inner.bubblewrap_executable = Some(path);
++        Ok(self)
++    }
++
++    /// Denies pathname Unix sockets on Seatbelt, independently of filesystem write grants.
++    pub fn deny_seatbelt_unix_sockets(&mut self) -> &mut Self {
++        self.inner
++            .seatbelt
++            .get_or_insert_with(Default::default)
++            .allow_unix_sockets = false;
++        self
++    }
++
++    /// Adds a host-filesystem baseline while preserving explicit directory overrides.
++    /// Windows volume-root grants are expanded to existing children because PSEC roots do not recurse.
++    pub fn set_host_filesystem(
++        &mut self,
++        access: HostFilesystemAccess,
++    ) -> Result<&mut Self, Error> {
++        for path in roots()? {
++            let name = path
++                .to_str()
++                .ok_or_else(|| {
++                    Error::new(
++                        ErrorCode::MalformedRequest,
++                        "host filesystem path is not Unicode",
++                    )
++                })?
++                .to_owned();
++            if self.inner.policy.readwrite_paths.contains(&name)
++                || self.inner.policy.readonly_paths.contains(&name)
++                || self.inner.policy.denied_paths.contains(&name)
++            {
++                continue;
++            }
++            match access {
++                HostFilesystemAccess::ReadOnly => self.inner.policy.readonly_paths.push(name),
++                HostFilesystemAccess::ReadWrite => self.inner.policy.readwrite_paths.push(name),
++            }
++        }
++        Ok(self)
++    }
++}
++
++#[cfg(not(windows))]
++fn roots() -> Result<Vec<PathBuf>, Error> {
++    Ok(vec![PathBuf::from("/")])
++}
++
++#[cfg(windows)]
++fn roots() -> Result<Vec<PathBuf>, Error> {
++    let mask = unsafe { windows::Win32::Storage::FileSystem::GetLogicalDrives() };
++    if mask == 0 {
++        return Err(Error::new(
++            ErrorCode::BackendUnavailable,
++            "could not enumerate host volumes",
++        ));
++    }
++    let mut paths = Vec::new();
++    for index in 0..26 {
++        if mask & (1 << index) == 0 {
++            continue;
++        }
++        let root = PathBuf::from(format!("{}:\\", char::from(b'A' + index)));
++        match std::fs::read_dir(&root) {
++            Ok(entries) => {
++                paths.push(root);
++                for entry in entries {
++                    paths.push(
++                        entry
++                            .map_err(|error| {
++                                Error::new(ErrorCode::BackendError, error.to_string())
++                            })?
++                            .path(),
++                    );
++                    if paths.len() > 4096 {
++                        return Err(Error::new(
++                            ErrorCode::MalformedRequest,
++                            "host filesystem expansion exceeds 4096 paths",
++                        ));
++                    }
++                }
++            }
++            Err(error)
++                if matches!(
++                    error.kind(),
++                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
++                ) || matches!(error.raw_os_error(), Some(21 | 53 | 1201 | 1167)) => {}
++            Err(error) => return Err(Error::new(ErrorCode::BackendError, error.to_string())),
++        }
++    }
++    Ok(paths)
++}
+--- a/src/core/wxc_common/Cargo.toml
++++ b/src/core/wxc_common/Cargo.toml
+@@ -1,41 +1,39 @@
+ [package]
+ name = "wxc_common"
+-version.workspace = true
+-edition.workspace = true
+-license.workspace = true
++version = "0.8.0"
++edition = "2021"
++license = "MIT"
+ 
+ [features]
+ microvm = ["dep:nanvix_common", "dep:uuid"]
+-# Enables JSON Schema generation from the dedicated wire model. Off by default
+-# so normal builds don't carry schemars.
+ schema-gen = ["dep:mxc_schema_support", "dep:schemars"]
+ 
+ [dependencies]
+-serde = { workspace = true }
+-serde_json = { workspace = true, features = ["raw_value"] }
+-serde_path_to_error = { workspace = true }
+-unicode-general-category = { workspace = true }
+-thiserror = { workspace = true }
+-base64 = { workspace = true }
+-cidr = { workspace = true }
+-url = { workspace = true }
+-getrandom = { workspace = true }
++serde = { "version" = "1", "features" = ["derive"] }
++serde_json = { "version" = "1", "features" = ["raw_value"] }
++serde_path_to_error = { "version" = "0.1" }
++unicode-general-category = { "version" = "1" }
++thiserror = { "version" = "2" }
++base64 = { "version" = "0.22" }
++cidr = { "version" = "0.3.2" }
++url = { "version" = "2" }
++getrandom = { "version" = "0.2" }
+ semver = "1"
+-schemars = { workspace = true, optional = true }
+-nanvix_common = { path = "../../backends/nanvix/common", optional = true }
+-uuid = { workspace = true, optional = true }
+-mxc_config_contract = { workspace = true }
+-mxc_schema_support = { workspace = true, optional = true }
+-mxc_telemetry = { workspace = true }
++schemars = { "version" = "0.8", "optional" = true }
++nanvix_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
++uuid = { "version" = "1", "features" = ["v4"], "optional" = true }
++mxc_config_contract = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++mxc_schema_support = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
++mxc_telemetry = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
+ 
+-[target.'cfg(target_os = "windows")'.dependencies]
+-windows = { workspace = true, features = ["Win32_Globalization"] }
+-windows-core = { workspace = true }
+-widestring = { workspace = true }
+-winreg = { workspace = true }
++[target."cfg(target_os = \"windows\")".dependencies]
++windows = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell", "Win32_Globalization"] }
++windows-core = { "version" = "0.62" }
++widestring = { "version" = "1" }
++winreg = { "version" = "0.55" }
+ 
+-[target.'cfg(unix)'.dependencies]
+-libc = { workspace = true }
++[target."cfg(unix)".dependencies]
++libc = { "version" = "0.2" }
+ 
+ [dev-dependencies]
+-tempfile.workspace = true
++tempfile = { "version" = "3" }
+diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/mod.rs b/src/core/wxc_common/src/config_contract_adapters/dev.rs
+rename from src/core/wxc_common/src/config_contract_adapters/dev/mod.rs
+rename to src/core/wxc_common/src/config_contract_adapters/dev.rs
+diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests/mod.rs b/src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests.rs
+rename from src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests/mod.rs
+rename to src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests.rs
+diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests/mod.rs b/src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests.rs
+rename from src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests/mod.rs
+rename to src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests.rs
+diff --git a/src/core/wxc_common/src/config_contract_adapters/mod.rs b/src/core/wxc_common/src/config_contract_adapters.rs
+rename from src/core/wxc_common/src/config_contract_adapters/mod.rs
+rename to src/core/wxc_common/src/config_contract_adapters.rs
+--- a/src/core/wxc_common/src/config_parser.rs
++++ b/src/core/wxc_common/src/config_parser.rs
+@@ -614,6 +614,7 @@
+         extra_mach_lookups,
+     } = sb;
+     SeatbeltConfig {
++        allow_unix_sockets: true,
+         profile_override,
+         gui_access: gui_access.unwrap_or(false),
+         launch_method: launch_method.map(Into::into).unwrap_or_default(),
+@@ -1342,6 +1343,7 @@
+     }
+ 
+     Ok(ExecutionRequest {
++        bubblewrap_executable: None,
+         schema_version,
+         container_id,
+         env,
+--- a/src/core/wxc_common/src/models.rs
++++ b/src/core/wxc_common/src/models.rs
+@@ -139,6 +139,9 @@
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(default)]
+ pub struct SeatbeltConfig {
++    /// Whether writable filesystem grants may also open pathname Unix sockets.
++    #[serde(default = "default_true")]
++    pub allow_unix_sockets: bool,
+     /// Optional override of the generated TinyScheme profile.
+     #[serde(rename = "profileOverride", skip_serializing_if = "Option::is_none")]
+     pub profile_override: Option<String>,
+@@ -204,6 +207,7 @@
+ impl Default for SeatbeltConfig {
+     fn default() -> Self {
+         Self {
++            allow_unix_sockets: true,
+             profile_override: None,
+             gui_access: false,
+             launch_method: LaunchMethod::default(),
+@@ -944,6 +948,9 @@
+ #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+ #[serde(default)]
+ pub struct ExecutionRequest {
++    /// Host-resolved executable; unavailable to untrusted serialized requests.
++    #[serde(skip)]
++    pub bubblewrap_executable: Option<std::path::PathBuf>,
+     /// Schema version for the config format.
+     pub schema_version: String,
+     /// Externally assigned container identifier.
+--- a/src/core/wxc_common/src/proxy_env.rs
++++ b/src/core/wxc_common/src/proxy_env.rs
+@@ -50,10 +50,14 @@
+     "HTTPS_PROXY",
+     "ALL_PROXY",
+     "FTP_PROXY",
++    "WS_PROXY",
++    "WSS_PROXY",
+     "http_proxy",
+     "https_proxy",
+     "all_proxy",
+     "ftp_proxy",
++    "ws_proxy",
++    "wss_proxy",
+     "NO_PROXY",
+     "no_proxy",
+ ];
+@@ -68,10 +72,14 @@
+     "HTTPS_PROXY",
+     "ALL_PROXY",
+     "FTP_PROXY",
++    "WS_PROXY",
++    "WSS_PROXY",
+     "http_proxy",
+     "https_proxy",
+     "all_proxy",
+     "ftp_proxy",
++    "ws_proxy",
++    "wss_proxy",
+ ];
+ 
+ /// Proxy env var keys that [`apply_cooperative_proxy_env`] sets to the *empty
+@@ -296,8 +304,29 @@
+         .cloned()
+         .collect();
+ 
++    let all_proxy = caller_env
++        .iter()
++        .filter_map(|entry| entry.split_once('='))
++        .find(|(key, _)| key.eq_ignore_ascii_case("ALL_PROXY"))
++        .and_then(|(_, value)| url::Url::parse(value).ok())
++        .filter(|url| matches!(url.scheme(), "socks5" | "socks5h"))
++        .and_then(|url| {
++            let target = url::Url::parse(proxy_url).ok()?;
++            Some(format!(
++                "{}://{}:{}",
++                url.scheme(),
++                target.host_str()?,
++                target.port_or_known_default()?
++            ))
++        })
++        .unwrap_or_else(|| proxy_url.to_owned());
+     for key in PROXY_SET_KEYS {
+-        effective.push(format!("{key}={proxy_url}"));
++        let value = if key.eq_ignore_ascii_case("ALL_PROXY") {
++            &all_proxy
++        } else {
++            proxy_url
++        };
++        effective.push(format!("{key}={value}"));
+     }
+ 
+     // Neutralize any inherited NO_PROXY: WSLc merges over the image's ENV, so
+--- a/src/core/wxc_common/src/sandbox_process.rs
++++ b/src/core/wxc_common/src/sandbox_process.rs
+@@ -747,3 +747,34 @@
+         assert!(status.success());
+     }
+ }
++
++/// Observes a Unix child without releasing its PID. Only wait may reap the process.
++#[cfg(unix)]
++pub fn poll_child_exit(child: &std::process::Child) -> std::io::Result<Option<i32>> {
++    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
++    loop {
++        let result = unsafe {
++            libc::waitid(
++                libc::P_PID,
++                child.id(),
++                &mut info,
++                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
++            )
++        };
++        if result == 0 {
++            break;
++        }
++        let error = std::io::Error::last_os_error();
++        if error.kind() != std::io::ErrorKind::Interrupted {
++            return Err(error);
++        }
++    }
++    if unsafe { info.si_pid() } == 0 {
++        return Ok(None);
++    }
++    Ok(Some(if info.si_code == libc::CLD_EXITED {
++        unsafe { info.si_status() }
++    } else {
++        -1
++    }))
++}
+diff --git a/src/core/wxc_common/src/telemetry/mod.rs b/src/core/wxc_common/src/telemetry.rs
+rename from src/core/wxc_common/src/telemetry/mod.rs
+rename to src/core/wxc_common/src/telemetry.rs
+--- a/src/backends/appcontainer/common/Cargo.toml
++++ b/src/backends/appcontainer/common/Cargo.toml
+@@ -1,34 +1,29 @@
+ [package]
+ name = "appcontainer_common"
+-version.workspace = true
+-edition.workspace = true
+-license.workspace = true
++version = "0.8.0"
++edition = "2021"
++license = "MIT"
+ 
+ [features]
+-# Compile-time gate for Tier 2 (AppContainer + BFS via bfscfg.exe).
+-# OFF by default: production wxc-exec cannot resolve or spawn bfscfg.exe,
+-# and `fallback_detector::detect` naturally falls through T2 to T3 because
+-# `find_bfscfg_exe` returns `Ok(None)`. Enable explicitly on hosts where
+-# bfscfg.exe is known safe to invoke.
+ tier2_bfs = []
+ 
+ [dependencies]
+-wxc_common = { workspace = true }
+-serde = { workspace = true }
+-serde_json = { workspace = true }
+-thiserror = { workspace = true }
+-getrandom = { workspace = true }
++wxc_common = { "path" = "../../../core/wxc_common" }
++serde = { "version" = "1", "features" = ["derive"] }
++serde_json = { "version" = "1" }
++thiserror = { "version" = "2" }
++getrandom = { "version" = "0.2" }
+ 
+-[target.'cfg(target_os = "windows")'.dependencies]
+-windows = { workspace = true }
+-windows-core = { workspace = true }
+-flatbuffers = { workspace = true }
+-sandbox_spec = { workspace = true }
+-process_security_environment_spec = { workspace = true }
+-widestring = { workspace = true }
+-winreg = { workspace = true }
+-learning_mode_windows = { workspace = true }
+-learning_mode_core = { workspace = true }
++[target."cfg(target_os = \"windows\")".dependencies]
++windows = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
++windows-core = { "version" = "0.62" }
++flatbuffers = { "version" = "25" }
++sandbox_spec = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++process_security_environment_spec = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++widestring = { "version" = "1" }
++winreg = { "version" = "0.55" }
++learning_mode_windows = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++learning_mode_core = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
+ 
+ [dev-dependencies]
+-tempfile.workspace = true
++tempfile = { "version" = "3" }
+--- a/src/backends/appcontainer/common/src/appcontainer_runner.rs
++++ b/src/backends/appcontainer/common/src/appcontainer_runner.rs
+@@ -68,7 +68,6 @@
+ const PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT: u32 = 1;
+ 
+ /// Proxy-related env var names to strip/override when building the child env block.
+-const PROXY_VAR_NAMES: &[&str] = &["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY"];
+ 
+ fn create_process_failure(
+     err: &windows_core::Error,
+@@ -202,14 +201,18 @@
+     entries: &mut Vec<(String, String)>,
+     addr: &wxc_common::models::ProxyAddress,
+ ) {
+-    entries.retain(|(key, _)| {
+-        !PROXY_VAR_NAMES
+-            .iter()
+-            .any(|name| key.eq_ignore_ascii_case(name))
+-    });
+-    let proxy_url = addr.to_url();
+-    entries.push(("HTTP_PROXY".to_string(), proxy_url.clone()));
+-    entries.push(("HTTPS_PROXY".to_string(), proxy_url));
++    let source = entries
++        .iter()
++        .map(|(key, value)| format!("{key}={value}"))
++        .collect::<Vec<_>>();
++    // Windows environment keys are case-insensitive. Retain one canonical entry per key.
++    let mut variables = std::collections::BTreeMap::new();
++    for entry in wxc_common::proxy_env::apply_cooperative_proxy_env(&source, &addr.to_url()) {
++        if let Some((key, value)) = entry.split_once('=') {
++            variables.insert(key.to_ascii_uppercase(), value.to_owned());
++        }
++    }
++    *entries = variables.into_iter().collect();
+ }
+ 
+ /// Owned capability SID derived from a capability name. Frees the underlying
+--- a/src/backends/bubblewrap/common/Cargo.toml
++++ b/src/backends/bubblewrap/common/Cargo.toml
+@@ -1,18 +1,18 @@
+ [package]
+ name = "bwrap_common"
+-version.workspace = true
+-edition.workspace = true
+-license.workspace = true
++version = "0.8.0"
++edition = "2021"
++license = "MIT"
+ 
+ [dependencies]
+-wxc_common = { workspace = true }
+-lxc_common = { workspace = true }
+-nix = { workspace = true }
++wxc_common = { "path" = "../../../core/wxc_common" }
++lxc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++nix = { "version" = "0.29", "features" = ["fs", "mount", "sched", "signal", "net", "process", "user", "term"] }
+ semver = "1"
+-serde = { workspace = true }
+-serde_json = { workspace = true }
+-tempfile = { workspace = true }
+-thiserror = { workspace = true }
+-url = { workspace = true }
++serde = { "version" = "1", "features" = ["derive"] }
++serde_json = { "version" = "1" }
++tempfile = { "version" = "3" }
++thiserror = { "version" = "2" }
++url = { "version" = "2" }
+ 
+ [dev-dependencies]
+--- a/src/backends/bubblewrap/common/src/bwrap_command.rs
++++ b/src/backends/bubblewrap/common/src/bwrap_command.rs
+@@ -14,7 +14,6 @@
+     ContainerPolicy, ExecutionRequest, NetworkAction, NetworkEnforcementMode, NetworkPolicy,
+     ProxyAddress,
+ };
+-use wxc_common::proxy_env::{is_managed_proxy_key, PROXY_SET_KEYS};
+ 
+ /// The fixed prefix of the command bwrap is asked to run.
+ ///
+@@ -648,7 +647,11 @@
+             // Read-only: already covered by the base ro-bind, but listed
+             // explicitly so the intent is clear and it overrides any rw parent.
+             FsIntent::ReadOnly => {
+-                args.extend(["--ro-bind".into(), mount.path.clone(), mount.path.clone()]);
++                args.extend([
++                    "--ro-bind-try".into(),
++                    mount.path.clone(),
++                    mount.path.clone(),
++                ]);
+             }
+             FsIntent::Denied => {
+                 if denied_files.contains(&mount.path) {
+@@ -660,39 +663,47 @@
+         }
+     }
+ 
++    if request
++        .policy
++        .readonly_paths
++        .iter()
++        .chain(&request.policy.readwrite_paths)
++        .any(|path| path == "/")
++    {
++        for (flag, path) in [("--proc", "/proc"), ("--dev", "/dev")] {
++            if !request
++                .policy
++                .denied_paths
++                .iter()
++                .any(|denied| path == denied || path.starts_with(&format!("{denied}/")))
++            {
++                args.extend([flag.into(), path.into()]);
++            }
++        }
++    }
++    for hidden in &request.policy.denied_paths {
++        if !denied_files.contains(hidden) {
++            args.extend(["--remount-ro".into(), hidden.clone()]);
++        }
++    }
++    args.push("--new-session".into());
++
+     // -- Working directory -------------------------------------------------
+     if !request.working_directory.is_empty() {
+         args.extend(["--chdir".into(), request.working_directory.clone()]);
+     }
+ 
+-    // -- Environment -------------------------------------------------------
+-    // Clear the inherited environment, then set only the vars from the
+-    // request so the sandbox has a minimal, predictable environment.
++    // Bind the complete environment to the namespace-visible proxy endpoint.
+     args.push("--clearenv".into());
+-    for env_str in &request.env {
+-        if let Some((key, value)) = env_str.split_once('=') {
+-            // When the proxy is active, drop any caller-supplied proxy env
+-            // entries so they cannot override the values we set below.
+-            if proxy_address.is_some() && is_managed_proxy_key(key) {
+-                continue;
+-            }
++    let env = match proxy_address {
++        Some(address) => {
++            wxc_common::proxy_env::apply_cooperative_proxy_env(&request.env, &address.to_url())
++        }
++        None => request.env.clone(),
++    };
++    for entry in env {
++        if let Some((key, value)) = entry.split_once('=') {
+             args.extend(["--setenv".into(), key.into(), value.into()]);
+-        }
+-    }
+-
+-    // -- Network proxy env vars -------------------------------------------
+-    // Cooperative env-var proxying: well-behaved tools (curl, requests,
+-    // etc.) honor these and route through the proxy where allow / block
+-    // enforcement happens. Tools that bypass these variables (raw sockets)
+-    // are NOT enforced -- this is a documented limitation of the
+-    // unprivileged proxy model.
+-    //
+-    // We deliberately do NOT set NO_PROXY here. Exempting any destination
+-    // would let cooperating clients bypass the configured proxy policy.
+-    if let Some(addr) = proxy_address {
+-        let url = addr.to_url();
+-        for key in PROXY_SET_KEYS {
+-            args.extend(["--setenv".into(), (*key).into(), url.clone()]);
+         }
+     }
+ 
+--- a/src/backends/bubblewrap/common/src/bwrap_runner.rs
++++ b/src/backends/bubblewrap/common/src/bwrap_runner.rs
+@@ -172,7 +172,10 @@
+         // Execution validation deliberately bypasses the advisory success
+         // cache: a prior platform-support query must not approve a different
+         // executable after `PATH` or its contents change.
+-        self.validate_prepared_with_probe(request, bwrap_version::probe_bwrap_uncached)
++        self.validate_prepared_with_probe(request, || match &request.bubblewrap_executable {
++            Some(path) => bwrap_version::probe_bwrap_at(path),
++            None => bwrap_version::probe_bwrap_uncached(),
++        })
+     }
+ 
+     /// `validate_prepared` with an injectable environment probe.
+@@ -544,7 +547,12 @@
+         };
+ 
+         // 4. Spawn `bwrap`.
+-        let mut command = Command::new("bwrap");
++        let mut command = Command::new(
++            request
++                .bubblewrap_executable
++                .as_deref()
++                .unwrap_or_else(|| std::path::Path::new("bwrap")),
++        );
+         command.args(&args);
+         match stdio {
+             StdioMode::Pipes => {
+@@ -705,6 +713,7 @@
+ /// [`BwrapChild`] (child, pipes, and per-run network state), tearing the network
+ /// state down once the child exits.
+ struct BubblewrapSandboxProcess {
++    reaped: bool,
+     inner: BwrapChild,
+     teardown_done: bool,
+ }
+@@ -713,6 +722,7 @@
+     fn new(child: BwrapChild) -> Self {
+         Self {
+             inner: child,
++            reaped: false,
+             teardown_done: false,
+         }
+     }
+@@ -749,11 +759,14 @@
+     }
+ 
+     fn try_wait(&mut self) -> std::io::Result<Option<i32>> {
+-        Ok(self
+-            .inner
+-            .child
+-            .try_wait()?
+-            .map(|status| status.code().unwrap_or(-1)))
++        if self.reaped {
++            return Ok(self
++                .inner
++                .child
++                .try_wait()?
++                .map(|status| status.code().unwrap_or(-1)));
++        }
++        wxc_common::sandbox_process::poll_child_exit(&self.inner.child)
+     }
+ 
+     fn id(&self) -> u32 {
+@@ -764,7 +777,7 @@
+         // No-op once the child has exited and been reaped: its pid/pgid can be
+         // recycled, so signaling it could hit an unrelated process (group). A
+         // reaped `Child` returns its cached status here without a syscall.
+-        if self.inner.child.try_wait()?.is_some() {
++        if self.reaped {
+             return Ok(());
+         }
+         if self.inner.group {
+@@ -816,6 +829,7 @@
+             }
+         };
+ 
++        self.reaped = true;
+         cancel_and_join_discard(stdout_thread, &self.inner.stdout_canceller);
+         cancel_and_join_discard(stderr_thread, &self.inner.stderr_canceller);
+         self.run_teardown();
+--- a/src/backends/bubblewrap/common/src/bwrap_version.rs
++++ b/src/backends/bubblewrap/common/src/bwrap_version.rs
+@@ -1497,3 +1497,15 @@
+         assert_eq!(first.join().unwrap(), Err(BwrapUnavailable::NotFound));
+     }
+ }
++
++/// Checks the exact executable bound to an embedding application's request.
++pub fn probe_bwrap_at(path: &Path) -> Result<BwrapVersion, BwrapUnavailable> {
++    probe_bwrap_uncached_with(|| {
++        run_version_command_until(
++            path,
++            &["--version"],
++            Instant::now() + BWRAP_VERSION_TIMEOUT,
++            BWRAP_VERSION_TIMEOUT,
++        )
++    })
++}
+--- a/src/backends/seatbelt/common/Cargo.toml
++++ b/src/backends/seatbelt/common/Cargo.toml
+@@ -1,14 +1,11 @@
+ [package]
+ name = "seatbelt_common"
+-version.workspace = true
+-edition.workspace = true
+-license.workspace = true
++version = "0.8.0"
++edition = "2021"
++license = "MIT"
+ 
+ [dependencies]
+-# Provides ExecutionRequest, ContainerPolicy, SeatbeltConfig, Logger, and
+-# the ScriptRunner trait that seatbelt_runner implements. Same dep that
+-# lxc_common uses.
+-wxc_common = { workspace = true }
++wxc_common = { "path" = "../../../core/wxc_common" }
+ 
+-[target.'cfg(target_os = "macos")'.dependencies]
+-libc = { workspace = true }
++[target."cfg(target_os = \"macos\")".dependencies]
++libc = { "version" = "0.2" }
+--- a/src/backends/seatbelt/common/src/profile_builder.rs
++++ b/src/backends/seatbelt/common/src/profile_builder.rs
+@@ -82,6 +82,13 @@
+     write_extra_seatbelt_rules(&mut out, request);
+     write_ui_rules(&mut out, request);
+ 
++    if request
++        .seatbelt
++        .as_ref()
++        .is_some_and(|config| !config.allow_unix_sockets)
++    {
++        out.push_str("(deny network-bind network-outbound (subpath \"/\"))\n");
++    }
+     // Policy-derived deny rules go LAST so they win on conflict.
+     write_filesystem_deny(&mut out, &resolved);
+ 
+@@ -174,7 +181,7 @@
+         let readonly = resolve_all(&policy.readonly_paths)?;
+         let mut readwrite = resolve_all(&policy.readwrite_paths)?;
+ 
+-        // `denied` is emitted last and would override either allow anyway, but
++        // An exact denied path overrides either grant, so
+         // dropping the path keeps the emitted profile an honest description of
+         // the effective policy.
+         let mut readonly: Vec<String> = readonly;
+@@ -204,8 +211,8 @@
+     // makes the *deepest* intent win at every path — a `readonlyPaths` entry
+     // nested inside a broader `readwritePaths` subtree stays read-only rather
+     // than inheriting the parent's write grant. `deniedPaths` is deliberately
+-    // not part of this plan: it is emitted last so it outranks these filtered
+-    // allows regardless of depth.
++    // emitted separately so a denied ancestor can exclude explicit deeper grants,
++    // matching the specificity ordering used by the other filesystem backends.
+     out.push_str(";; --- policy.readonlyPaths / policy.readwritePaths (shallow-to-deep) ---\n");
+     for mount in resolve_path_plan(&paths.readwrite, &paths.readonly, &[]) {
+         let subpath = [mount.path.clone()];
+@@ -256,11 +263,27 @@
+         // whatever listens there. A Docker / ssh-agent / gpg-agent socket is a
+         // control plane, so that would be an escape.
+         out.push_str(";; --- policy.deniedPaths (override broader allow rules) ---\n");
+-        write_path_rule(
+-            out,
+-            "deny file-read* file-write* network-bind network-outbound",
+-            &paths.denied,
+-        );
++        for hidden in &paths.denied {
++            let exceptions = paths
++                .readonly
++                .iter()
++                .chain(&paths.readwrite)
++                .filter(|path| *path != hidden && std::path::Path::new(path).starts_with(hidden))
++                .collect::<Vec<_>>();
++            if exceptions.is_empty() {
++                write_path_rule(
++                    out,
++                    "deny file-read* file-write* network-bind network-outbound",
++                    &[hidden.clone()],
++                );
++            } else {
++                let _ = write!(out, "(deny file-read* file-write* network-bind network-outbound (require-all (subpath {})", quote_scheme(hidden));
++                for path in exceptions {
++                    let _ = write!(out, " (require-not (subpath {}))", quote_scheme(path));
++                }
++                out.push_str("))\n");
++            }
++        }
+     }
+ }
+ 
+--- a/src/backends/seatbelt/common/src/seatbelt_runner.rs
++++ b/src/backends/seatbelt/common/src/seatbelt_runner.rs
+@@ -42,36 +42,6 @@
+ };
+ 
+ use crate::profile_builder::build_profile_with_proxy;
+-
+-/// Env var keys the cooperative proxy manages. When a proxy is active these
+-/// are stripped from the caller-supplied environment so sandboxed code cannot
+-/// override the `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` values we inject (or
+-/// re-enable a `NO_PROXY` bypass). `ALL_PROXY` is the catch-all curl/libcurl
+-/// and many HTTP clients honor for every scheme, so leaving it caller-settable
+-/// would let sandboxed code redirect or bypass the proxy. Mirrors the
+-/// Bubblewrap backend's `PROXY_ENV_KEYS`.
+-const PROXY_ENV_KEYS: &[&str] = &[
+-    "HTTP_PROXY",
+-    "HTTPS_PROXY",
+-    "ALL_PROXY",
+-    "http_proxy",
+-    "https_proxy",
+-    "all_proxy",
+-    "NO_PROXY",
+-    "no_proxy",
+-];
+-
+-/// Proxy env var keys injected (pointing at the resolved proxy URL) when a
+-/// proxy is active. `NO_PROXY` is intentionally absent — see the module docs
+-/// and [`resolve_environment`].
+-const PROXY_INJECT_KEYS: &[&str] = &[
+-    "HTTP_PROXY",
+-    "HTTPS_PROXY",
+-    "ALL_PROXY",
+-    "http_proxy",
+-    "https_proxy",
+-    "all_proxy",
+-];
+ 
+ // ---------------------------------------------------------------------------
+ // FFI declarations for Apple's sandbox API (libsandbox.dylib).
+@@ -284,6 +254,7 @@
+         };
+ 
+     Ok(Box::new(SeatbeltSandboxProcess {
++        reaped: false,
+         child,
+         stdin,
+         stdout,
+@@ -412,6 +383,7 @@
+     // inside Terminal. No streamable stdio; the temp files are removed once the
+     // handle's `wait()` (or drop) runs.
+     Ok(Box::new(SeatbeltSandboxProcess {
++        reaped: false,
+         child,
+         stdin: None,
+         stdout: None,
+@@ -428,6 +400,7 @@
+ /// A running Seatbelt-sandboxed process: the child plus, for the pipes path,
+ /// its parent-side pipe ends. See [`SandboxProcess`] for the contract.
+ struct SeatbeltSandboxProcess {
++    reaped: bool,
+     child: std::process::Child,
+     /// Pipe ends — `Some` only for [`StdioMode::Pipes`]; `None` for inherited
+     /// stdio / Open mode (the streams are the binary's own, or detached). The
+@@ -496,10 +469,13 @@
+     }
+ 
+     fn try_wait(&mut self) -> std::io::Result<Option<i32>> {
+-        Ok(self
+-            .child
+-            .try_wait()?
+-            .map(|status| status.code().unwrap_or(-1)))
++        if self.reaped {
++            return Ok(self
++                .child
++                .try_wait()?
++                .map(|status| status.code().unwrap_or(-1)));
++        }
++        wxc_common::sandbox_process::poll_child_exit(&self.child)
+     }
+ 
+     fn id(&self) -> u32 {
+@@ -510,7 +486,7 @@
+         // No-op once the child has exited and been reaped: its pid/pgid can be
+         // recycled, so signaling it could hit an unrelated process (group). A
+         // reaped `Child` returns its cached status here without a syscall.
+-        if self.child.try_wait()?.is_some() {
++        if self.reaped {
+             return Ok(());
+         }
+         if self.group {
+@@ -557,6 +533,7 @@
+             }
+         };
+ 
++        self.reaped = true;
+         cancel_and_join_discard(stdout_thread, &self.stdout_canceller);
+         cancel_and_join_discard(stderr_thread, &self.stderr_canceller);
+         self.run_cleanup();
+@@ -757,22 +734,20 @@
+     request: &ExecutionRequest,
+     proxy_address: Option<&ProxyAddress>,
+ ) -> Vec<(String, String)> {
+-    let mut pairs = Vec::new();
+-    for kv in &request.env {
+-        if let Some((key, value)) = kv.split_once('=') {
+-            if proxy_address.is_some() && PROXY_ENV_KEYS.contains(&key) {
+-                continue;
+-            }
+-            pairs.push((key.to_string(), value.to_string()));
+-        }
+-    }
+-    if let Some(addr) = proxy_address {
+-        let url = addr.to_url();
+-        for key in PROXY_INJECT_KEYS {
+-            pairs.push((key.to_string(), url.clone()));
+-        }
+-    }
+-    pairs
++    let entries = match proxy_address {
++        Some(address) => {
++            wxc_common::proxy_env::apply_cooperative_proxy_env(&request.env, &address.to_url())
++        }
++        None => request.env.clone(),
++    };
++    entries
++        .into_iter()
++        .filter_map(|entry| {
++            entry
++                .split_once('=')
++                .map(|(key, value)| (key.to_owned(), value.to_owned()))
++        })
++        .collect()
+ }
+ 
+ /// Write `content` to a temp file with a cryptographically random name and the

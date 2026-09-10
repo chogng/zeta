@@ -36,7 +36,6 @@ from zeta_package.node import (
 )
 from zeta_package.ripgrep import load_lock, resolve_ripgrep
 from zeta_package.version import read_workspace_version
-from zeta_package.windows_helpers import resolve_windows_sandbox_helpers
 
 
 PRODUCTION_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
@@ -336,7 +335,7 @@ class PackageTests(unittest.TestCase):
             )
             self.assertEqual("local-override", metadata["components"]["node"]["source"])
             self.assertRegex(metadata["buildId"], r"^sha256:[a-f0-9]{64}$")
-            self.assertEqual(1, metadata["protocol"]["major"])
+            self.assertEqual(2, metadata["protocol"]["major"])
             self.assertRegex(
                 metadata["protocol"]["schemaHash"], r"^sha256:[a-f0-9]{64}$"
             )
@@ -581,12 +580,6 @@ class PackageTests(unittest.TestCase):
             code_mode_host_binary.write_bytes(b"zeta-code-mode-host")
             rg_binary = root / "rg.exe"
             rg_binary.write_bytes(b"ripgrep")
-            command_runner = root / "zeta-command-runner.exe"
-            command_runner.write_bytes(b"runner")
-            sandbox_service = root / "zeta-windows-sandbox-service.exe"
-            sandbox_service.write_bytes(b"service")
-            sandbox_worker = root / "zeta-windows-sandbox-worker.exe"
-            sandbox_worker.write_bytes(b"worker")
             spec = TARGETS["x86_64-pc-windows-msvc"]
             ripgrep = resolve_ripgrep(
                 spec,
@@ -595,16 +588,6 @@ class PackageTests(unittest.TestCase):
                 explicit_binary=rg_binary,
             )
             node = test_node_resolution(root, spec)
-            helpers = resolve_windows_sandbox_helpers(
-                REPOSITORY_ROOT,
-                spec,
-                command_runner,
-                sandbox_service,
-                sandbox_worker,
-                cargo="cargo",
-                cargo_profile="release",
-            )
-            self.assertIsNotNone(helpers)
             output = root / "package"
 
             build_package_directory(
@@ -617,55 +600,30 @@ class PackageTests(unittest.TestCase):
                 code_mode_host_binary,
                 ripgrep,
                 node,
-                windows_helpers=helpers,
             )
 
             resources = output / "zeta-resources"
+            for name in [
+                "zeta-command-runner.exe",
+                "zeta-windows-sandbox-service.exe",
+                "zeta-windows-sandbox-worker.exe",
+            ]:
+                self.assertFalse((resources / name).exists())
+            artifacts = system_signing_artifacts(output, spec)
             self.assertEqual(
-                b"runner",
-                (resources / "zeta-command-runner.exe").read_bytes(),
+                set(),
+                {name for name in artifacts if name.startswith("windows")},
             )
-            self.assertEqual(
-                b"service",
-                (resources / "zeta-windows-sandbox-service.exe").read_bytes(),
-            )
-            self.assertEqual(
-                b"worker",
-                (resources / "zeta-windows-sandbox-worker.exe").read_bytes(),
-            )
-            metadata = json.loads(
-                (output / "zeta-package.json").read_text(encoding="utf-8")
-            )
-            component = metadata["components"]["windowsSandbox"]
-            self.assertEqual("local-override", component["source"])
-            self.assertEqual(
-                hashlib.sha256(b"runner").hexdigest(),
-                component["commandRunnerSha256"],
-            )
-            self.assertEqual(
-                hashlib.sha256(b"service").hexdigest(),
-                component["sandboxServiceSha256"],
-            )
-            self.assertEqual(
-                hashlib.sha256(b"worker").hexdigest(),
-                component["sandboxWorkerSha256"],
-            )
-
-    def test_windows_helper_overrides_are_rejected_for_other_targets(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            helper = executable_file(root / "helper", b"helper")
-
-            with self.assertRaisesRegex(RuntimeError, "only supported for Windows"):
-                resolve_windows_sandbox_helpers(
-                    REPOSITORY_ROOT,
-                    TARGETS["aarch64-apple-darwin"],
-                    helper,
-                    helper,
-                    helper,
-                    cargo="cargo",
-                    cargo_profile="release",
-                )
+            signed = {}
+            for name, artifact in artifacts.items():
+                unsigned = file_sha256(artifact)
+                artifact.write_bytes(artifact.read_bytes() + b"-signed")
+                signed[name] = {
+                    "unsignedSha256": unsigned,
+                    "signedSha256": file_sha256(artifact),
+                }
+            record_system_signing(output, spec, signed)
+            require_verified_system_signing(output, spec)
 
     @unittest.skipIf(
         os.name == "nt", "creating symbolic links may require Windows privilege"

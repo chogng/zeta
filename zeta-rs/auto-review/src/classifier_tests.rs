@@ -8,6 +8,19 @@ use zeta_async_utils::CancellationSource;
 
 struct StaticModel(&'static str);
 
+#[test]
+fn model_input_distinguishes_managed_network_from_unrestricted_network() {
+    let request = request(SandboxCompatibility::Supported(
+        zeta_sandboxing::SandboxPolicy::new(
+            zeta_sandboxing::FileSystemAccess::DirectoryWrite,
+            zeta_sandboxing::NetworkAccess::Managed,
+        ),
+    ));
+    let input: serde_json::Value =
+        serde_json::from_str(&crate::protocol::input_json(&request).unwrap()).unwrap();
+    assert_eq!(input["sandbox"]["network"], "managed_proxy");
+}
+
 impl ReviewModel for StaticModel {
     fn complete(
         &self,
@@ -128,7 +141,7 @@ fn binds_model_advice_to_the_host_action_and_action_policy_revision() {
         assessment.action_policy_revision(),
         request.action_policy_revision()
     );
-    assert_eq!(assessment.review_protocol_revision(), "review-protocol-3");
+    assert_eq!(assessment.review_protocol_revision(), "review-protocol-4");
     assert!(matches!(
         assessment.recommendation(),
         ClassifierRecommendation::Approve { .. }

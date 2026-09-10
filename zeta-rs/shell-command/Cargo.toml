@@ -11,6 +11,7 @@ name = "zeta_shell_command"
 path = "src/lib.rs"
 
 [dependencies]
+network-proxy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 zeta-async-utils = { workspace = true }
@@ -20,6 +21,8 @@ zeta-file-access = { workspace = true }
 zeta-tools = { workspace = true }
 
 [dev-dependencies]
+mxc-sandbox = { workspace = true }
+zeta-install-context = { workspace = true }
 zeta-protocol = { workspace = true }
 
 [lints]

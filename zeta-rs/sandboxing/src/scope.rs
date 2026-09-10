@@ -141,7 +141,8 @@ impl SandboxScope {
         &self.hidden_dirs
     }
 
-    pub(crate) fn is_single_unhidden(&self) -> bool {
+    /// Whether this scope grants only its command directory without hiding host directories.
+    pub fn is_single_unhidden(&self) -> bool {
         self.hidden_dirs.is_empty()
             && self.grants.len() == 1
             && self.grants[0].dir() == &self.command_dir

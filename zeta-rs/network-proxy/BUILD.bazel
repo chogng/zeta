@@ -1,0 +1,7 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "network-proxy",
+    crate_name = "network_proxy",
+    crate_features = ["server"],
+)

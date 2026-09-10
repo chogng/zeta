@@ -14,12 +14,6 @@ from .bubblewrap import BubblewrapResolution
 from .node import NodeResolution
 from .ripgrep import RipgrepResolution
 from build.lib.zeta_build.targets import TargetSpec
-from .windows_helpers import (
-    COMMAND_RUNNER_NAME,
-    SANDBOX_SERVICE_NAME,
-    SANDBOX_WORKER_NAME,
-    WindowsSandboxHelpers,
-)
 
 
 LAYOUT_VERSION = 2
@@ -38,7 +32,6 @@ def build_package_directory(
     ripgrep: RipgrepResolution,
     node: Optional[NodeResolution],
     bubblewrap: Optional[BubblewrapResolution] = None,
-    windows_helpers: Optional[WindowsSandboxHelpers] = None,
     protocol_metadata: Optional[Dict[str, object]] = None,
     build_profile: str = "release",
     cli_binary: Optional[Path] = None,
@@ -116,6 +109,12 @@ def build_package_directory(
                 is_windows=spec.is_windows,
             )
             shutil.copyfile(node.license_file, node_license_directory / "LICENSE")
+        mxc_license_directory = staging / "zeta-resources" / "licenses" / "mxc"
+        mxc_license_directory.mkdir()
+        shutil.copyfile(
+            repository_root / "zeta-rs" / "vendor" / "mxc" / "LICENSE.md",
+            mxc_license_directory / "LICENSE.md",
+        )
         for name in ("LICENSE-MIT", "UNLICENSE"):
             shutil.copyfile(
                 repository_root / "third_party" / "ripgrep" / name,
@@ -148,31 +147,6 @@ def build_package_directory(
                 "binarySha256": bubblewrap.binary_sha256,
                 "sourceArchive": bubblewrap.source_archive,
                 "sourceArchiveSha256": bubblewrap.source_archive_sha256,
-            }
-
-        windows_sandbox_metadata = None
-        if windows_helpers is not None:
-            resources_directory = staging / "zeta-resources"
-            copy_executable(
-                windows_helpers.command_runner,
-                resources_directory / COMMAND_RUNNER_NAME,
-                is_windows=True,
-            )
-            copy_executable(
-                windows_helpers.sandbox_service,
-                resources_directory / SANDBOX_SERVICE_NAME,
-                is_windows=True,
-            )
-            copy_executable(
-                windows_helpers.sandbox_worker,
-                resources_directory / SANDBOX_WORKER_NAME,
-                is_windows=True,
-            )
-            windows_sandbox_metadata = {
-                "source": windows_helpers.source,
-                "commandRunnerSha256": windows_helpers.command_runner_sha256,
-                "sandboxServiceSha256": windows_helpers.sandbox_service_sha256,
-                "sandboxWorkerSha256": windows_helpers.sandbox_worker_sha256,
             }
 
         ripgrep_metadata = {
@@ -228,8 +202,6 @@ def build_package_directory(
             }
         if bubblewrap_metadata is not None:
             components["bubblewrap"] = bubblewrap_metadata
-        if windows_sandbox_metadata is not None:
-            components["windowsSandbox"] = windows_sandbox_metadata
         protocol = (
             protocol_metadata
             if protocol_metadata is not None
@@ -368,6 +340,9 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         )
         if not license_path.is_file():
             raise RuntimeError("Missing ripgrep license: {}".format(license_path))
+    mxc_license = package / "zeta-resources" / "licenses" / "mxc" / "LICENSE.md"
+    if mxc_license.is_symlink() or not mxc_license.is_file():
+        raise RuntimeError("Missing MXC license")
     vscode_license = package / "zeta-resources" / "licenses" / "vscode" / "LICENSE.txt"
     if vscode_license.is_symlink() or not vscode_license.is_file():
         raise RuntimeError(
@@ -394,32 +369,6 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
                 raise RuntimeError(
                     "Missing Bubblewrap license: {}".format(license_path)
                 )
-    if spec.is_windows:
-        windows_sandbox = components.get("windowsSandbox")
-        if not isinstance(windows_sandbox, dict):
-            raise RuntimeError("Windows package has no sandbox component metadata")
-        helper_digests = (
-            (COMMAND_RUNNER_NAME, "commandRunnerSha256"),
-            (SANDBOX_SERVICE_NAME, "sandboxServiceSha256"),
-            (SANDBOX_WORKER_NAME, "sandboxWorkerSha256"),
-        )
-        for helper_name, digest_name in helper_digests:
-            helper = package / "zeta-resources" / helper_name
-            if not helper.is_file():
-                raise RuntimeError(
-                    "Windows package is missing sandbox helper {}".format(helper_name)
-                )
-            expected_digest = windows_sandbox.get(digest_name)
-            if (
-                not isinstance(expected_digest, str)
-                or re.fullmatch(r"[a-f0-9]{64}", expected_digest) is None
-                or file_sha256(helper) != expected_digest
-            ):
-                raise RuntimeError(
-                    "Windows sandbox component digest does not match: {}".format(
-                        helper_name
-                    )
-                )
 
 
 def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]:
@@ -438,13 +387,6 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         artifacts["cli"] = package / "bin" / spec.cli_name
     if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
         artifacts["node"] = package / "zeta-resources" / "node" / "bin" / spec.node_name
-    if spec.is_windows:
-        artifacts["windowsCommandRunner"] = (
-            package / "zeta-resources" / COMMAND_RUNNER_NAME
-        )
-        artifacts["windowsSandboxSetup"] = (
-            package / "zeta-resources" / SANDBOX_SETUP_NAME
-        )
     for path in artifacts.values():
         if path.is_symlink() or not path.is_file():
             raise RuntimeError("Missing package signing artifact: {}".format(path))
@@ -499,16 +441,6 @@ def record_system_signing(
             if not isinstance(component, dict):
                 raise RuntimeError("Missing package component {}".format(name))
             component["binarySha256"] = signed_digest
-        elif name == "windowsCommandRunner":
-            helpers = components.get("windowsSandbox")
-            if not isinstance(helpers, dict):
-                raise RuntimeError("Missing Windows sandbox component")
-            helpers["commandRunnerSha256"] = signed_digest
-        elif name == "windowsSandboxSetup":
-            helpers = components.get("windowsSandbox")
-            if not isinstance(helpers, dict):
-                raise RuntimeError("Missing Windows sandbox component")
-            helpers["sandboxSetupSha256"] = signed_digest
     metadata["systemSigning"] = {
         "formatVersion": 1,
         "platform": spec.operating_system.value,

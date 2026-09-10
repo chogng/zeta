@@ -1,6 +1,9 @@
+use crate::ProcessHandle;
+use crate::SandboxError;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::process::Stdio;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileSystemAccess {
@@ -13,6 +16,35 @@ pub enum FileSystemAccess {
 pub enum NetworkAccess {
     Denied,
     Allowed,
+    /// Connect only through the execution's host-prepared loopback proxy listeners.
+    Managed,
+}
+
+/// Exact proxy endpoints supplied by the process owner after its listeners have bound.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ManagedNetworkAccess {
+    http_port: std::num::NonZeroU16,
+    socks_port: std::num::NonZeroU16,
+}
+
+impl ManagedNetworkAccess {
+    pub fn new(http_port: std::num::NonZeroU16, socks_port: std::num::NonZeroU16) -> Self {
+        Self {
+            http_port,
+            socks_port,
+        }
+    }
+
+    pub fn ports(self) -> [u16; 2] {
+        [self.http_port.get(), self.socks_port.get()]
+    }
+}
+
+/// Whether applying isolation may temporarily change the host ACLs of the authorized paths.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HostAclChanges {
+    Denied,
+    Scoped,
 }
 
 /// Immutable filesystem and network authority for one local process.
@@ -20,6 +52,7 @@ pub enum NetworkAccess {
 pub struct SandboxPolicy {
     file_system: FileSystemAccess,
     network: NetworkAccess,
+    host_acl_changes: HostAclChanges,
 }
 
 impl SandboxPolicy {
@@ -27,6 +60,7 @@ impl SandboxPolicy {
         Self {
             file_system,
             network,
+            host_acl_changes: HostAclChanges::Denied,
         }
     }
 
@@ -36,6 +70,14 @@ impl SandboxPolicy {
 
     pub fn network(self) -> NetworkAccess {
         self.network
+    }
+
+    pub fn with_host_acl_changes(mut self, changes: HostAclChanges) -> Self {
+        self.host_acl_changes = changes;
+        self
+    }
+    pub fn host_acl_changes(self) -> HostAclChanges {
+        self.host_acl_changes
     }
 
     pub fn requires_platform_sandbox(self) -> bool {
@@ -49,6 +91,7 @@ pub struct SandboxCommand {
     program: OsString,
     arguments: Vec<OsString>,
     working_directory: PathBuf,
+    network_proxy: Option<ManagedNetworkAccess>,
 }
 
 impl SandboxCommand {
@@ -61,6 +104,7 @@ impl SandboxCommand {
             program: program.into(),
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory: working_directory.into(),
+            network_proxy: None,
         }
     }
 
@@ -76,11 +120,21 @@ impl SandboxCommand {
         &self.working_directory
     }
 
+    pub fn with_network_proxy(mut self, access: ManagedNetworkAccess) -> Self {
+        self.network_proxy = Some(access);
+        self
+    }
+
+    pub fn network_proxy(&self) -> Option<ManagedNetworkAccess> {
+        self.network_proxy
+    }
+
     pub(crate) fn with_working_directory(&self, working_directory: PathBuf) -> Self {
         Self {
             program: self.program.clone(),
             arguments: self.arguments.clone(),
             working_directory,
+            network_proxy: self.network_proxy,
         }
     }
 }
@@ -88,9 +142,7 @@ impl SandboxCommand {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SandboxKind {
     Unrestricted,
-    MacosSeatbelt,
-    LinuxBubblewrap,
-    WindowsAppContainer,
+    Restricted,
 }
 
 /// Process termination shape used by a backend when classifying enforcement output.
@@ -138,13 +190,35 @@ impl SandboxProcessDenial {
     }
 }
 
-/// A host command produced by a sandbox backend and ready for the process executor.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// A prepared backend launch. Implementations retain their SDK request until the executor
+/// reaches the authorized start boundary; no SDK type crosses this interface.
+pub trait SandboxLaunch: Send {
+    fn spawn(
+        self: Box<Self>,
+        environment: &[(String, String)],
+    ) -> Result<ProcessHandle, SandboxError>;
+}
+
+enum Launch {
+    Command,
+    Sandbox(Box<dyn SandboxLaunch>),
+}
+
+/// A validated launch and its command metadata, ready for the execution boundary.
 pub struct PreparedCommand {
     kind: SandboxKind,
-    program: OsString,
-    arguments: Vec<OsString>,
-    working_directory: PathBuf,
+    command: SandboxCommand,
+    launch: Launch,
+}
+
+impl std::fmt::Debug for PreparedCommand {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PreparedCommand")
+            .field("kind", &self.kind)
+            .field("command", &self.command)
+            .finish_non_exhaustive()
+    }
 }
 
 impl PreparedCommand {
@@ -156,42 +230,64 @@ impl PreparedCommand {
     ) -> Self {
         Self {
             kind,
-            program: program.into(),
-            arguments: arguments.into_iter().map(Into::into).collect(),
-            working_directory: working_directory.into(),
+            command: SandboxCommand::new(program, arguments, working_directory),
+            launch: Launch::Command,
         }
     }
-
-    pub fn unrestricted(command: &SandboxCommand) -> Self {
-        Self::new(
-            SandboxKind::Unrestricted,
-            command.program.clone(),
-            command.arguments.clone(),
-            command.working_directory.clone(),
-        )
+    pub fn sandboxed(command: &SandboxCommand, launch: impl SandboxLaunch + 'static) -> Self {
+        Self {
+            kind: SandboxKind::Restricted,
+            command: command.clone(),
+            launch: Launch::Sandbox(Box::new(launch)),
+        }
     }
-
+    pub fn unrestricted(command: &SandboxCommand) -> Self {
+        Self {
+            kind: SandboxKind::Unrestricted,
+            command: command.clone(),
+            launch: Launch::Command,
+        }
+    }
     pub fn kind(&self) -> SandboxKind {
         self.kind
     }
-
     pub fn program(&self) -> &OsStr {
-        &self.program
+        self.command.program()
     }
-
     pub fn arguments(&self) -> &[OsString] {
-        &self.arguments
+        self.command.arguments()
     }
-
     pub fn working_directory(&self) -> &Path {
-        &self.working_directory
+        self.command.working_directory()
     }
 
-    pub fn into_command(self) -> Command {
-        let mut command = Command::new(self.program);
-        command
-            .args(self.arguments)
-            .current_dir(self.working_directory);
-        command
+    pub fn spawn(self, environment: &[(String, String)]) -> Result<ProcessHandle, SandboxError> {
+        match self.launch {
+            Launch::Sandbox(launch) => launch.spawn(environment),
+            Launch::Command => {
+                let mut command = Command::new(self.command.program());
+                command
+                    .args(self.command.arguments())
+                    .current_dir(self.command.working_directory())
+                    .env_clear()
+                    .envs(environment.iter().cloned())
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped());
+                ProcessHandle::spawn_command(command).map_err(|error| SandboxError::StartFailed {
+                    timing: SandboxDenialTiming::BeforeProcessStart,
+                    message: error.to_string(),
+                })
+            }
+        }
+    }
+}
+
+impl SandboxProcessExitStatus {
+    pub fn code(self) -> Option<i32> {
+        match self {
+            Self::Code(code) => Some(code),
+            Self::Terminated => None,
+        }
     }
 }

@@ -115,10 +115,7 @@ interface ResolvedBubblewrap {
 interface FirstPartyExecutables {
   readonly appServerDaemon: string;
   readonly bubblewrap?: ResolvedBubblewrap;
-  readonly commandRunner?: string;
   readonly packageStore: string;
-  readonly sandboxService?: string;
-  readonly sandboxWorker?: string;
   readonly serverHost: string;
   readonly codeModeHost: string;
 }
@@ -517,14 +514,6 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     "--bin", "zeta-code-mode-host",
   ];
   const expectedTargets = ["zeta-package-store", "zeta-server", "zeta-app-server-daemon", "zeta-code-mode-host"];
-  if (platform === "win32") {
-    binaryArgs.push(
-      "--bin", "zeta-command-runner",
-      "--bin", "zeta-windows-sandbox-service",
-      "--bin", "zeta-windows-sandbox-worker",
-    );
-    expectedTargets.push("zeta-command-runner", "zeta-windows-sandbox-service", "zeta-windows-sandbox-worker");
-  }
   if (platform === "linux") {
     binaryArgs.push("--bin", "bwrap");
     expectedTargets.push("bwrap");
@@ -533,10 +522,7 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
   const executables: {
     appServerDaemon: string;
     bubblewrap?: ResolvedBubblewrap;
-    commandRunner?: string;
     packageStore: string;
-    sandboxService?: string;
-    sandboxWorker?: string;
     serverHost: string;
     codeModeHost: string;
   } = {
@@ -545,11 +531,6 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     packageStore: requiredExecutable(artifacts, "zeta-package-store"),
     serverHost: requiredExecutable(artifacts, "zeta-server"),
   };
-  if (platform === "win32") {
-    executables.commandRunner = requiredExecutable(artifacts, "zeta-command-runner");
-    executables.sandboxService = requiredExecutable(artifacts, "zeta-windows-sandbox-service");
-    executables.sandboxWorker = requiredExecutable(artifacts, "zeta-windows-sandbox-worker");
-  }
   if (platform === "linux") {
     const bubblewrap = await resolveVendoredBubblewrapSource();
     executables.bubblewrap = {
@@ -736,6 +717,9 @@ export async function assemblePackage(
     await copyFile(join(repositoryRoot, "third_party", "ripgrep", name), join(ripgrepLicenseDirectory, name));
   }
   await copyFile(join(repositoryRoot, "third_party", "vscode", "LICENSE.txt"), join(vscodeLicenseDirectory, "LICENSE.txt"));
+  const mxcLicenseDirectory = join(resourcesDirectory, "licenses", "mxc");
+  await mkdir(mxcLicenseDirectory, { recursive: true });
+  await copyFile(join(sharedRustSource, "vendor", "mxc", "LICENSE.md"), join(mxcLicenseDirectory, "LICENSE.md"));
 
   const components: Record<string, unknown> & { node?: unknown } = {
     appServerDaemon: {
@@ -765,20 +749,6 @@ export async function assemblePackage(
       binarySha256: node.binarySha256,
       source: node.source,
       version: node.version,
-    };
-  }
-  if (isWindows) {
-    const commandRunner = requiredPath(executables.commandRunner, "Windows command runner");
-    const sandboxService = requiredPath(executables.sandboxService, "Windows sandbox service");
-    const sandboxWorker = requiredPath(executables.sandboxWorker, "Windows sandbox worker");
-    await copyExecutable(commandRunner, join(resourcesDirectory, "zeta-command-runner.exe"), true);
-    await copyExecutable(sandboxService, join(resourcesDirectory, "zeta-windows-sandbox-service.exe"), true);
-    await copyExecutable(sandboxWorker, join(resourcesDirectory, "zeta-windows-sandbox-worker.exe"), true);
-    components.windowsSandbox = {
-      commandRunnerSha256: await sha256(commandRunner),
-      sandboxServiceSha256: await sha256(sandboxService),
-      sandboxWorkerSha256: await sha256(sandboxWorker),
-      source: "cargo-build",
     };
   }
   if (platform === "linux") {
@@ -894,20 +864,8 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "LICENSE-MIT"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "ripgrep", "UNLICENSE"));
   await requireFile(join(packageRoot, "zeta-resources", "licenses", "vscode", "LICENSE.txt"));
+  await requireFile(join(packageRoot, "zeta-resources", "licenses", "mxc", "LICENSE.md"));
   await validateProductServices(join(packageRoot, "zeta-resources", "product-services"));
-  if (isWindows) {
-    const windowsSandbox = metadata.components.windowsSandbox;
-    if (typeof windowsSandbox !== "object" || windowsSandbox === null) throw new Error("Windows sandbox component metadata is missing");
-    for (const [name, digest] of [
-      ["zeta-command-runner.exe", "commandRunnerSha256"],
-      ["zeta-windows-sandbox-service.exe", "sandboxServiceSha256"],
-      ["zeta-windows-sandbox-worker.exe", "sandboxWorkerSha256"],
-    ] as const) {
-      const path = join(packageRoot, "zeta-resources", name);
-      await requireFile(path);
-      if ((windowsSandbox as Record<string, unknown>)[digest] !== await sha256(path)) throw new Error(`Windows sandbox component digest does not match: ${name}`);
-    }
-  }
   if (platform === "linux") {
     await requireFile(join(packageRoot, "zeta-resources", "bwrap"));
     await requireFile(join(packageRoot, "zeta-resources", "licenses", "bubblewrap", "COPYING"));

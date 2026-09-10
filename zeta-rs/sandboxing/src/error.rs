@@ -11,6 +11,10 @@ pub enum SandboxError {
         backend: SandboxKind,
         message: String,
     },
+    StartFailed {
+        timing: crate::SandboxDenialTiming,
+        message: String,
+    },
     Io(String),
 }
 
@@ -31,6 +35,7 @@ impl fmt::Display for SandboxError {
             Self::BackendUnavailable { backend, message } => {
                 write!(formatter, "{backend:?} sandbox is unavailable: {message}")
             }
+            Self::StartFailed { message, .. } => formatter.write_str(message),
             Self::Io(message) => formatter.write_str(message),
         }
     }

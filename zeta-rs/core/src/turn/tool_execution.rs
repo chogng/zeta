@@ -440,6 +440,10 @@ impl ToolExecutionOrchestrator {
             turn_id: context.turn_id.clone(),
             item_id: context.item_id.clone(),
             cancellation: context.cancellation.clone(),
+            policy: Arc::clone(&self.policy),
+            frozen_policy_revision: context.frozen_policy_revision.to_owned(),
+            approval_mode: context.approval_mode,
+            source_id: call.name.as_str().to_owned(),
         });
         let before_sequence = snapshot.sequence;
         let output = self.tools.execute_streaming_with_facts_and_interactions(
@@ -656,13 +660,122 @@ struct CoreToolInteractions {
     turn_id: TurnId,
     item_id: ItemId,
     cancellation: CancellationToken,
+    policy: Arc<dyn crate::ActionPolicyService>,
+    frozen_policy_revision: String,
+    approval_mode: ApprovalMode,
+    source_id: String,
 }
 
 impl ToolInteractionService for CoreToolInteractions {
+    fn approve_network(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<zeta_protocol::ActionApprovalDecision, CoreError> {
+        use zeta_protocol::ActionApprovalDecision;
+        self.cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.to_string()))?;
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.to_string()))?;
+        if request.action().kind() != &zeta_action_policy::ActionKind::NetworkRequest
+            || !matches!(
+                request.phase(),
+                zeta_action_policy::ActionReviewPhase::Initial
+            )
+            || request.provenance().source_id() != self.source_id
+            || request.action().required_capabilities().iter().count() != 1
+            || request
+                .action()
+                .required_capabilities()
+                .iter()
+                .any(|capability| capability.kind() != &CapabilityKind::Network)
+            || !matches!(
+                request.sandbox(),
+                zeta_action_policy::SandboxCompatibility::NotApplicable { .. }
+            )
+        {
+            return Err(CoreError::Policy(
+                "live network review must describe exactly one network capability for this tool"
+                    .into(),
+            ));
+        }
+        let decision = self.policy.decide_for_turn_with_approval_mode(
+            &self.frozen_policy_revision,
+            self.approval_mode,
+            request,
+            cancellation,
+        )?;
+        match decision {
+            ExecutionDecision::RunExecPolicyGranted(grant)
+                if grant.matches(
+                    request.action().digest(),
+                    request.action().required_capabilities(),
+                    request.action_policy_revision(),
+                ) =>
+            {
+                Ok(ActionApprovalDecision::ApproveOnce)
+            }
+            ExecutionDecision::RunAutoReviewed(grant)
+                if grant.matches(
+                    request.action().digest(),
+                    request.action().required_capabilities(),
+                    request.action_policy_revision(),
+                ) =>
+            {
+                Ok(ActionApprovalDecision::ApproveOnce)
+            }
+            ExecutionDecision::RunWithPermissionBypass(grant)
+                if grant.matches(
+                    request.action().digest(),
+                    request.action().required_capabilities(),
+                    request.action_policy_revision(),
+                ) =>
+            {
+                Ok(ActionApprovalDecision::ApproveOnce)
+            }
+            ExecutionDecision::RunUnsandboxed { .. } => Ok(ActionApprovalDecision::ApproveOnce),
+            ExecutionDecision::AskUser(approval) => {
+                let request =
+                    crate::action_policy_service::durable_approval_request(request, &approval)?;
+                match self.request_live(AgentRequest::Approval { request }, cancellation)? {
+                    crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(AgentResponse::Approval { response }) => Ok(response.decision),
+                    crate::thread_controller::live_interaction::LiveInteractionOutcome::Cancelled(_) => Ok(ActionApprovalDecision::Decline),
+                    _ => Err(CoreError::Journal("network approval resolved with the wrong response kind".into())),
+                }
+            }
+            _ => Ok(ActionApprovalDecision::Decline),
+        }
+    }
+
     fn request_user_input(
         &self,
         request: RequestUserInput,
     ) -> Result<ToolUserInputOutcome, CoreError> {
+        match self.request_live(AgentRequest::UserInput { request }, &self.cancellation)? {
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(
+                AgentResponse::UserInput { response },
+            ) => Ok(ToolUserInputOutcome::Answered(response)),
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Cancelled(
+                reason,
+            ) => Ok(ToolUserInputOutcome::Cancelled(reason)),
+            _ => Err(CoreError::Journal(
+                "live Tool user-input interaction resolved with the wrong response kind".into(),
+            )),
+        }
+    }
+}
+
+impl CoreToolInteractions {
+    fn request_live(
+        &self,
+        request: AgentRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<crate::thread_controller::live_interaction::LiveInteractionOutcome, CoreError> {
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.to_string()))?;
         self.cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
@@ -678,9 +791,9 @@ impl ToolInteractionService for CoreToolInteractions {
             &self.thread_id,
             &self.turn_id,
             RequestTurnInteraction {
-                request_id,
+                request_id: request_id.clone(),
                 item_id: Some(self.item_id.clone()),
-                request: AgentRequest::UserInput { request },
+                request,
                 deadline: None,
             },
         )?;
@@ -690,19 +803,33 @@ impl ToolInteractionService for CoreToolInteractions {
         {
             self.updates.publish(update);
         }
-        match waiter.wait(&self.cancellation)? {
-            crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(
-                AgentResponse::UserInput { response },
-            ) => Ok(ToolUserInputOutcome::Answered(response)),
-            crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(_) => {
-                Err(CoreError::Journal(
-                    "live Tool user-input interaction resolved with the wrong response kind".into(),
-                ))
+        let outcome = waiter.wait(cancellation);
+        if outcome.is_err() {
+            let snapshot = self.threads.read_thread(&self.thread_id)?;
+            if snapshot.turns.iter().any(|turn| {
+                turn.turn_id == self.turn_id
+                    && turn
+                        .pending_interaction
+                        .as_ref()
+                        .is_some_and(|pending| pending.request_id == request_id)
+            }) {
+                self.threads.cancel_turn_interaction(
+                    &self.thread_id,
+                    crate::CancelTurnInteractionRequest {
+                        turn_id: self.turn_id.clone(),
+                        request_id,
+                        reason: zeta_protocol::InteractionCancelReason::OwnerDisconnected,
+                    },
+                )?;
+                for update in self
+                    .threads
+                    .thread_updates_after(&self.thread_id, snapshot.sequence)?
+                {
+                    self.updates.publish(update);
+                }
             }
-            crate::thread_controller::live_interaction::LiveInteractionOutcome::Cancelled(
-                reason,
-            ) => Ok(ToolUserInputOutcome::Cancelled(reason)),
         }
+        outcome
     }
 }
 

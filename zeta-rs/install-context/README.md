@@ -5,7 +5,7 @@
 > 由 [`docs/sandboxing.md`](../../docs/sandboxing.md) 维护。
 
 `zeta-install-context` 在进程启动边界捕获 current executable、package layout、
-`ZETA_RG_PATH`、`ZETA_BWRAP_PATH`、两个 Windows sandbox helper override 与 host `PATH`，
+`ZETA_RG_PATH`、`ZETA_BWRAP_PATH` 与 host `PATH`，
 并为消费方提供稳定、有序的资源候选。它不验证或执行 binary，不拥有 Workspace、Tool policy、
 approval、sandbox capability probe、下载、更新或安装 mutation。
 
@@ -22,9 +22,6 @@ approval、sandbox capability probe、下载、更新或安装 mutation。
 │   └── rg[.exe]
 └── zeta-resources/
     ├── bwrap              # Linux
-    ├── zeta-command-runner.exe              # Windows
-    ├── zeta-windows-sandbox-service.exe      # Windows machine-runtime input
-    ├── zeta-windows-sandbox-worker.exe       # Windows service-owned worker
     ├── node/bin/node[.exe] # packaged-node variant only
     ├── skills/            # built-in Agent Skills
     └── product-services/  # product Marketplace config + pinned public TUF root
@@ -49,14 +46,8 @@ layout marker，不解析或信任其中的字段。
 `ZETA_BWRAP_PATH` 时只返回 override；否则顺序为 package `zeta-resources/bwrap`、启动时 host
 `PATH` candidates。它不会采用 executable sibling legacy path。
 
-`ManagedExecutable::WindowsCommandRunner` 使用 `ZETA_WINDOWS_COMMAND_RUNNER_PATH`。无 override
-时顺序为 package `zeta-resources/`、启动时 host `PATH`；Windows backend 只有在 runner 通过精确
-probe 后才可用。
-
-`zeta-windows-sandbox-service.exe` 不是进程运行时按 PATH 选择的 helper。它只作为完整 Windows
-package 中的机器级 Runtime 输入，由 MSI 安装到受保护目录并注册为固定服务；command runner
-通过 Windows Service Manager 和协议版本发现它。因此本 crate 不为 service/worker 暴露环境
-override 或候选列表。
+MXC SDK 直接提供受限进程句柄，Zeta 不再分发或发现 Windows command runner、配置服务或 Linux namespace helper。
+Bubblewrap 候选交由适配器固定路径，再由 SDK 对同一路径验证和执行。
 
 ## 公共契约
 
@@ -77,9 +68,7 @@ host composition
    ├─ executable_candidates(Ripgrep)
    │  └─ RipgrepExecutable validation + canonical identity freeze
    ├─ executable_candidates(Bubblewrap)
-   │  └─ LinuxSandbox validation + capability probe + canonical identity freeze
-   ├─ executable_candidates(WindowsCommandRunner)
-   │  └─ WindowsSandbox validation + protocol probe + canonical identity freeze
+   │  └─ MxcSandbox Linux validation + capability probe + canonical identity freeze
    ├─ bundled_resource_directory("skills")
       └─ zeta-skills controlled BuiltIn source validation
    ├─ Desktop host declaration or bundled_resource("node/bin/node[.exe]")
@@ -94,7 +83,7 @@ host composition
 ## 验证
 
 ```bash
-cargo test --manifest-path Cargo.toml -p zeta-install-context
+just test zeta-install-context
 cargo clippy --manifest-path Cargo.toml \
   -p zeta-install-context --all-targets --no-deps -- -D warnings
 bazel test //zeta-rs/install-context:install-context-unit-tests

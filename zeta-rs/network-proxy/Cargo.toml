@@ -1,0 +1,26 @@
+[package]
+name = "zeta-network-proxy"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "network_proxy"
+doctest = false
+
+[features]
+default = []
+server = ["dep:bytes", "dep:http-body-util", "dep:hyper", "dep:hyper-util", "dep:tokio"]
+
+[dependencies]
+bytes = { workspace = true, optional = true }
+http-body-util = { workspace = true, optional = true }
+hyper = { workspace = true, features = ["http1", "client", "server"], optional = true }
+hyper-util = { workspace = true, features = ["tokio"], optional = true }
+tokio = { workspace = true, features = ["io-util", "macros", "sync"], optional = true }
+url = { workspace = true }
+zeta-async-utils = { workspace = true }
+
+[lints]
+workspace = true

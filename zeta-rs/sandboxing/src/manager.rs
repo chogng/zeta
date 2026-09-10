@@ -11,6 +11,11 @@ use zeta_file_access::Dir;
 pub trait SandboxBackend: Send + Sync {
     fn kind(&self) -> SandboxKind;
 
+    /// Whether HTTP and SOCKS must share the one endpoint allowed by this backend.
+    fn requires_shared_network_proxy(&self) -> bool {
+        false
+    }
+
     /// Classifies a non-successful prepared process result as sandbox enforcement or an ordinary
     /// command failure.
     ///
@@ -35,7 +40,7 @@ pub trait SandboxBackend: Send + Sync {
 
     /// Prepares a command whose exact directory visibility may span several roots.
     ///
-    /// Backends that do not implement multi-root isolation accept only the legacy single-directory
+    /// Backends that do not implement multi-root isolation accept only the single-directory
     /// shape. Any richer scope fails closed instead of silently exposing sibling directories.
     fn prepare_scoped(
         &self,
@@ -66,6 +71,10 @@ impl<B: SandboxBackend> SandboxManager<B> {
 
     pub fn backend_kind(&self) -> SandboxKind {
         self.backend.kind()
+    }
+
+    pub fn requires_shared_network_proxy(&self) -> bool {
+        self.backend.requires_shared_network_proxy()
     }
 
     pub fn prepare(

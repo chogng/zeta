@@ -7,6 +7,130 @@ use zeta_sandboxing::{PreparedCommand, SandboxError, SandboxKind};
 
 struct AllowAll;
 
+#[cfg(target_os = "macos")]
+#[test]
+fn managed_command_can_reach_only_its_authorized_proxy_destinations() {
+    assert_managed_command(mxc_sandbox::MxcSandbox::new(
+        zeta_install_context::InstallContext::current(),
+    ));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn shared_proxy_execution_enforces_the_same_destination_and_file_policy() {
+    struct SharedProxyBackend;
+    impl SandboxBackend for SharedProxyBackend {
+        fn kind(&self) -> SandboxKind {
+            SandboxKind::Restricted
+        }
+        fn requires_shared_network_proxy(&self) -> bool {
+            true
+        }
+        fn prepare(
+            &self,
+            command: &SandboxCommand,
+            policy: SandboxPolicy,
+            dir: &Dir,
+        ) -> Result<PreparedCommand, SandboxError> {
+            let ports = command.network_proxy().unwrap().ports();
+            assert_eq!(ports[0], ports[1]);
+            mxc_sandbox::MxcSandbox::new(zeta_install_context::InstallContext::current())
+                .prepare(command, policy, dir)
+        }
+    }
+    assert_managed_command(SharedProxyBackend);
+}
+
+#[cfg(target_os = "macos")]
+fn assert_managed_command(backend: impl SandboxBackend) {
+    use std::io::Read;
+    use std::io::Write;
+    use std::net::TcpListener;
+    let origin = TcpListener::bind("127.0.0.1:0").unwrap();
+    let allowed_port = origin.local_addr().unwrap().port();
+    let denied = TcpListener::bind("127.0.0.1:0").unwrap();
+    denied.set_nonblocking(true).unwrap();
+    let denied_port = denied.local_addr().unwrap().port();
+    let foreign_calls = std::sync::Arc::new(AtomicUsize::new(0));
+    let observed_foreign = std::sync::Arc::clone(&foreign_calls);
+    let foreign = network_proxy::NetworkProxy::start(
+        network_proxy::NetworkPolicyHandle::new(move |_, _| {
+            observed_foreign.fetch_add(1, Ordering::Relaxed);
+            async { network_proxy::NetworkDecision::Allow }
+        }),
+        &CancellationSource::new().token(),
+    )
+    .unwrap();
+    let foreign_port = foreign.http_port();
+    let upstream = thread::spawn(move || {
+        let (mut stream, _) = origin.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut bytes = [0; 2048];
+        assert!(stream.read(&mut bytes).unwrap() > 0);
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\napproved")
+            .unwrap();
+    });
+    let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let observed = std::sync::Arc::clone(&requests);
+    let policy = network_proxy::NetworkPolicyHandle::new(
+        move |request: network_proxy::NetworkRequest, _| {
+            let allow = request.port() == allowed_port;
+            observed.lock().unwrap().push(request);
+            async move {
+                if allow {
+                    network_proxy::NetworkDecision::Allow
+                } else {
+                    network_proxy::NetworkDecision::Deny("test denied target".into())
+                }
+            }
+        },
+    );
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), backend, AllowAll, test_limits());
+    let script = format!(
+        "/usr/bin/curl -fsS --max-time 3 http://127.0.0.1:{allowed_port}/ || exit 10\n\
+         if /usr/bin/curl -fsS --max-time 3 http://127.0.0.1:{denied_port}/; then exit 11; fi\n\
+         if NO_PROXY='*' /usr/bin/curl -fsS --max-time 3 http://127.0.0.1:{denied_port}/; then exit 12; fi\n\
+         if /usr/bin/curl --noproxy '*' -fsS --max-time 3 http://127.0.0.1:{denied_port}/; then exit 13; fi\n\
+         if /usr/bin/curl --proxy http://127.0.0.1:{foreign_port} -fsS --max-time 3 http://127.0.0.1:{denied_port}/; then exit 14; fi\n\
+         if /usr/bin/touch forbidden-write; then exit 15; fi\n\
+         printf '\nrestricted'"
+    );
+    let outcome = executor
+        .execute_scoped_with_network(
+            CommandRequest {
+                program: "/bin/sh".into(),
+                arguments: vec!["-c".into(), script],
+                working_directory: ".".into(),
+                input: CommandInput::Closed,
+            },
+            CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Managed,
+            )),
+            &CancellationSource::new().token(),
+            None,
+            Some(&policy),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = outcome else {
+        panic!("managed command did not complete: {outcome:?}");
+    };
+    assert_eq!(output.exit_code, Some(0), "{output:?}");
+    assert_eq!(output.stdout, "approved\nrestricted");
+    assert_eq!(requests.lock().unwrap().len(), 2);
+    assert_eq!(foreign_calls.load(Ordering::Relaxed), 0);
+    assert!(!dir.root().canonical_path().join("forbidden-write").exists());
+    assert_eq!(
+        denied.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    upstream.join().unwrap();
+}
+
 impl ApprovalPolicy for AllowAll {
     fn requirement_for(&self, _: &str) -> ApprovalRequirement {
         ApprovalRequirement::NotRequired
@@ -43,6 +167,31 @@ struct MissingSandboxLauncher;
 
 struct PassThroughBackend;
 
+#[test]
+fn managed_network_rejects_an_unrestricted_backend_before_spawn() {
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
+    let policy = network_proxy::NetworkPolicyHandle::new(|_, _| async {
+        network_proxy::NetworkDecision::Allow
+    });
+    let outcome = executor.execute_scoped_with_network(
+        CommandRequest {
+            program: "must-not-start".into(),
+            arguments: Vec::new(),
+            working_directory: ".".into(),
+            input: CommandInput::Closed,
+        },
+        CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
+            FileSystemAccess::ReadOnly,
+            NetworkAccess::Managed,
+        )),
+        &CancellationSource::new().token(),
+        None,
+        Some(&policy),
+    );
+    assert!(matches!(outcome, Err(ExecutionError::Network(_))));
+}
+
 impl SandboxBackend for PassThroughBackend {
     fn kind(&self) -> SandboxKind {
         SandboxKind::Unrestricted
@@ -60,7 +209,7 @@ impl SandboxBackend for PassThroughBackend {
 
 impl SandboxBackend for MissingSandboxLauncher {
     fn kind(&self) -> SandboxKind {
-        SandboxKind::MacosSeatbelt
+        SandboxKind::Restricted
     }
 
     fn prepare(
@@ -70,7 +219,7 @@ impl SandboxBackend for MissingSandboxLauncher {
         _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         Ok(PreparedCommand::new(
-            SandboxKind::MacosSeatbelt,
+            SandboxKind::Restricted,
             "/zeta-test/missing-sandbox-launcher",
             Vec::<String>::new(),
             command.working_directory(),

@@ -169,6 +169,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
             &CancellationSource::new().token(),
             &zeta_protocol::SessionId::new("session-7").unwrap(),
             &TurnId::new("turn-7").unwrap(),
+            None,
             &mut sink,
         )
         .unwrap();
@@ -239,6 +240,7 @@ fn executor_runtime_rechecks_and_retires_a_revoked_dir_authorization() {
         &CancellationSource::new().token(),
         &zeta_protocol::SessionId::new("session-9").unwrap(),
         &TurnId::new("turn-9").unwrap(),
+        None,
         &mut RecordingSink::default(),
     );
 
@@ -300,6 +302,7 @@ fn executor_runtime_preserves_original_image_detail_until_model_capability_gate(
             &CancellationSource::new().token(),
             &zeta_protocol::SessionId::new("session-8").unwrap(),
             &TurnId::new("turn-8").unwrap(),
+            None,
             &mut RecordingSink::default(),
         )
         .unwrap();

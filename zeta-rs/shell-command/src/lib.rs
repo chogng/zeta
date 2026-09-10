@@ -99,6 +99,18 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         cancellation: &CancellationToken,
         scope: Option<&SandboxScope>,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
+        self.execute_authorized_with_network(request, authority, cancellation, scope, None)
+    }
+
+    /// Executes with the host's request authority and the same process sandbox throughout.
+    pub fn execute_authorized_with_network(
+        &self,
+        request: ShellCommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        scope: Option<&SandboxScope>,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
+    ) -> Result<CommandExecutionOutcome, ExecutionError> {
         let dir = request
             .dir_root()
             .map(Dir::open_local)
@@ -120,7 +132,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             .is_none()
             .then(|| dir.clone().map(SandboxScope::single))
             .flatten();
-        self.executor.execute_scoped(
+        self.executor.execute_scoped_with_network(
             CommandRequest {
                 program: request.program,
                 arguments: request.arguments,
@@ -130,6 +142,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             authority,
             cancellation,
             scope.or(owned_scope.as_ref()),
+            network_policy,
         )
     }
 
@@ -149,11 +162,12 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             Err(error) => return returned_error(error.to_string()),
         };
 
-        match self.execute_authorized_scoped(
+        match self.execute_authorized_with_network(
             input,
             authority,
             invocation.context().cancellation(),
             invocation.context().sandbox_scope(),
+            invocation.context().network_policy(),
         ) {
             Ok(CommandExecutionOutcome::Completed(output)) => {
                 let mut value = json!({
@@ -364,6 +378,7 @@ fn not_started(message: impl Into<String>) -> ToolExecutionOutcome {
 
 fn command_error_message(error: ExecutionError) -> String {
     match error {
+        ExecutionError::Network(message) => format!("shell command network failed: {message}"),
         ExecutionError::ApprovalRequired => "command requires approval".to_owned(),
         ExecutionError::Denied => "command execution is denied by policy".to_owned(),
         ExecutionError::Spawn(message) => format!("could not execute command: {message}"),

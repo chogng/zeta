@@ -1472,9 +1472,15 @@ impl ToolService for CompositeToolService {
                     interactions,
                     sink,
                 ),
-            ToolContributionRuntime::Executor(executor) => {
-                executor.execute(binding, call, authorization, cancellation, facts, sink)
-            }
+            ToolContributionRuntime::Executor(executor) => executor.execute_with_interactions(
+                binding,
+                call,
+                authorization,
+                cancellation,
+                facts,
+                interactions,
+                sink,
+            ),
         }
     }
 }

@@ -41,13 +41,13 @@ impl ApprovalPolicy for AlwaysAuthorized {
 
 pub(crate) struct LocalHookProcessExecutor {
     dir: Dir,
-    executor: CommandExecutor<AlwaysAuthorized, PlatformSandbox>,
+    executor: CommandExecutor<AlwaysAuthorized, mxc_sandbox::MxcSandbox>,
 }
 
 impl LocalHookProcessExecutor {
-    pub(crate) fn new(dir: Dir) -> Result<Self, String> {
-        let backend = platform_sandbox().map_err(|error| error.to_string())?;
-        Ok(Self {
+    pub(crate) fn new(dir: Dir) -> Self {
+        let backend = mxc_sandbox::MxcSandbox::new(zeta_install_context::InstallContext::current());
+        Self {
             dir: dir.clone(),
             executor: CommandExecutor::new(
                 dir,
@@ -58,7 +58,7 @@ impl LocalHookProcessExecutor {
                     max_output_bytes: HOOK_OUTPUT_BYTES,
                 },
             ),
-        })
+        }
     }
 }
 
@@ -97,32 +97,3 @@ impl HookProcessExecutor for LocalHookProcessExecutor {
         }
     }
 }
-
-#[cfg(target_os = "macos")]
-type PlatformSandbox = zeta_sandboxing::MacosSeatbeltSandbox;
-
-#[cfg(target_os = "macos")]
-fn platform_sandbox() -> Result<PlatformSandbox, String> {
-    Ok(PlatformSandbox::new())
-}
-
-#[cfg(target_os = "linux")]
-type PlatformSandbox = zeta_linux_sandbox::LinuxSandbox;
-
-#[cfg(target_os = "linux")]
-fn platform_sandbox() -> Result<PlatformSandbox, String> {
-    PlatformSandbox::discover(&zeta_install_context::InstallContext::current())
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(target_os = "windows")]
-type PlatformSandbox = zeta_windows_sandbox::WindowsSandbox;
-
-#[cfg(target_os = "windows")]
-fn platform_sandbox() -> Result<PlatformSandbox, String> {
-    PlatformSandbox::discover(&zeta_install_context::InstallContext::current())
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-compile_error!("configured Hooks require a supported sandbox backend");

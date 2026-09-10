@@ -2,6 +2,7 @@ use zeta_tool_executor::ExecutionError;
 
 pub(crate) fn hook_execution_error(error: ExecutionError) -> String {
     match error {
+        ExecutionError::Network(_) => "Hook network preparation failed".into(),
         ExecutionError::ApprovalRequired => "Hook execution unexpectedly required approval".into(),
         ExecutionError::Denied => "Hook execution was denied".into(),
         ExecutionError::Spawn(_) => "Hook process could not be started".into(),

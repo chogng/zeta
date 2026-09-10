@@ -299,6 +299,14 @@ pub enum ToolUserInputOutcome {
 /// wait for the exact response or cancellation. Tool services must never mutate Thread state or
 /// contact product clients directly.
 pub trait ToolInteractionService: Send + Sync {
+    /// Applies the Turn's final policy to a live network request and, when needed, awaits one
+    /// exact durable approval. Approval never changes the running process's sandbox.
+    fn approve_network(
+        &self,
+        request: &zeta_action_policy::ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<zeta_protocol::ActionApprovalDecision, CoreError>;
+
     fn request_user_input(
         &self,
         request: RequestUserInput,

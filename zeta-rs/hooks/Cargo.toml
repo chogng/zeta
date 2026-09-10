@@ -11,6 +11,8 @@ name = "zeta_hooks"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-install-context = { workspace = true }
+mxc-sandbox = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 zeta-action-policy = { workspace = true }
@@ -21,14 +23,6 @@ zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-tool-executor = { workspace = true }
 zeta-file-access = { workspace = true }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-zeta-install-context = { workspace = true }
-zeta-linux-sandbox = { workspace = true }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-zeta-install-context = { workspace = true }
-zeta-windows-sandbox = { workspace = true }
 
 [lints]
 workspace = true

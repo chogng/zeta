@@ -131,7 +131,7 @@ impl ReviewProtocol {
 }
 
 pub(crate) const CURRENT_REVIEW_PROTOCOL: ReviewProtocol = ReviewProtocol {
-    revision: "review-protocol-3",
+    revision: "review-protocol-4",
     system_prompt: SYSTEM_PROMPT,
     response_schema_json: RESPONSE_SCHEMA_JSON,
 };
@@ -172,6 +172,7 @@ impl<'a> From<&'a ActionReviewRequest> for ModelInput<'a> {
                 network: match policy.network() {
                     zeta_sandboxing::NetworkAccess::Denied => "denied",
                     zeta_sandboxing::NetworkAccess::Allowed => "allowed",
+                    zeta_sandboxing::NetworkAccess::Managed => "managed_proxy",
                 },
             },
             SandboxCompatibility::Unsupported { reason } => {

@@ -1,16 +1,14 @@
 //! The single process-execution boundary used by Zeta tools.
 
-mod process_tree;
-
 use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::thread;
 use std::time::{Duration, Instant};
 use zeta_async_utils::CancellationToken;
 use zeta_file_access::Dir;
 use zeta_protocol::{ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput};
+use zeta_sandboxing::ProcessHandle;
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, SandboxBackend, SandboxCommand, SandboxDenialTiming,
     SandboxError, SandboxManager, SandboxPolicy, SandboxProcessExitStatus, SandboxScope,
@@ -108,6 +106,7 @@ pub enum ExecutionError {
     CancelledAfterStart(String),
     TimedOut,
     Sandbox(SandboxError),
+    Network(String),
 }
 
 /// Starts approved commands only after the selected sandbox backend prepares their host process.
@@ -153,6 +152,18 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         cancellation: &CancellationToken,
         scope: Option<&SandboxScope>,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
+        self.execute_scoped_with_network(request, authority, cancellation, scope, None)
+    }
+
+    /// Starts an execution-owned proxy before preparing the matching operating-system sandbox.
+    pub fn execute_scoped_with_network(
+        &self,
+        request: CommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        scope: Option<&SandboxScope>,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
+    ) -> Result<CommandExecutionOutcome, ExecutionError> {
         check_cancellation_before_start(cancellation)?;
         let action_digest = format!("{}:{}", request.program, request.arguments.join("\u{1f}"));
         match self.approval_policy.requirement_for(&action_digest) {
@@ -166,7 +177,27 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             working_directory,
             input,
         } = request;
-        let command = SandboxCommand::new(program, arguments, working_directory);
+        let mut command = SandboxCommand::new(program, arguments, working_directory);
+        let network = if authority.sandbox_policy().network() == NetworkAccess::Managed {
+            let policy = network_policy.ok_or_else(|| {
+                ExecutionError::Network(
+                    "managed networking has no request authorization authority".into(),
+                )
+            })?;
+            let proxy = if self.sandbox.requires_shared_network_proxy() {
+                network_proxy::NetworkProxy::start_shared(policy.clone(), cancellation)
+            } else {
+                network_proxy::NetworkProxy::start(policy.clone(), cancellation)
+            }
+            .map_err(|error| ExecutionError::Network(error.to_string()))?;
+            command = command.with_network_proxy(zeta_sandboxing::ManagedNetworkAccess::new(
+                std::num::NonZeroU16::new(proxy.http_port()).expect("bound port"),
+                std::num::NonZeroU16::new(proxy.socks_port()).expect("bound port"),
+            ));
+            Some(proxy)
+        } else {
+            None
+        };
         let prepared = match scope.map_or_else(
             || self.sandbox.prepare(&command, authority.sandbox_policy()),
             |scope| {
@@ -176,7 +207,8 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         ) {
             Ok(prepared) => prepared,
             Err(error @ SandboxError::BackendUnavailable { .. })
-                if matches!(authority, CommandExecutionAuthority::Sandboxed(_)) =>
+                if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
+                    && authority.sandbox_policy().network() != NetworkAccess::Managed =>
             {
                 return Ok(CommandExecutionOutcome::SandboxDenied(
                     SandboxDenialOutput::safe_to_retry(
@@ -193,21 +225,39 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         };
         check_cancellation_before_start(cancellation)?;
         let prepared_kind = prepared.kind();
-        let mut command = prepared.into_command();
-        let stdin = match &input {
-            CommandInput::Closed => Stdio::null(),
-            CommandInput::Bytes(_) => Stdio::piped(),
-        };
-        command
-            .stdin(stdin)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        process_tree::isolate(&mut command);
-        let mut child = match command.spawn() {
+        if authority.sandbox_policy().network() == NetworkAccess::Managed
+            && prepared_kind == zeta_sandboxing::SandboxKind::Unrestricted
+        {
+            return Err(ExecutionError::Network(
+                "the backend did not enforce managed network access".into(),
+            ));
+        }
+        let mut environment = execution_environment();
+        environment.extend(
+            network
+                .as_ref()
+                .map(|proxy| {
+                    network_proxy::ProxyEnvironment::new(
+                        proxy.http_port().try_into().expect("bound port"),
+                        proxy.socks_port().try_into().expect("bound port"),
+                    )
+                    .variables()
+                    .into_iter()
+                    .map(|(name, value)| (name.to_owned(), value))
+                    .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+        );
+        let mut child = match prepared.spawn(&environment) {
             Ok(child) => child,
-            Err(error)
-                if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
-                    && prepared_kind != zeta_sandboxing::SandboxKind::Unrestricted =>
+            Err(
+                error @ SandboxError::StartFailed {
+                    timing: SandboxDenialTiming::BeforeProcessStart,
+                    ..
+                },
+            ) if matches!(authority, CommandExecutionAuthority::Sandboxed(_))
+                && prepared_kind != zeta_sandboxing::SandboxKind::Unrestricted
+                && authority.sandbox_policy().network() != NetworkAccess::Managed =>
             {
                 return Ok(CommandExecutionOutcome::SandboxDenied(
                     SandboxDenialOutput::safe_to_retry(
@@ -220,19 +270,22 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
                     ),
                 ));
             }
-            Err(error) => return Err(ExecutionError::Spawn(error.to_string())),
+            Err(error) => return Err(ExecutionError::Sandbox(error)),
         };
         let stdin_writer = match input {
-            CommandInput::Closed => None,
+            CommandInput::Closed => {
+                drop(child.take_stdin());
+                None
+            }
             CommandInput::Bytes(bytes) => {
-                let mut stdin = child.stdin.take().expect("stdin was piped");
+                let mut stdin = child.take_stdin().expect("stdin was piped");
                 Some(thread::spawn(move || {
                     stdin.write_all(&bytes).map_err(|error| error.to_string())
                 }))
             }
         };
-        let stdout = child.stdout.take().expect("stdout was piped");
-        let stderr = child.stderr.take().expect("stderr was piped");
+        let stdout = child.take_stdout().expect("stdout was piped");
+        let stderr = child.take_stderr().expect("stderr was piped");
         let max_output_bytes = self.limits.max_output_bytes;
         let stdout_reader = thread::spawn(move || drain_stream(stdout, max_output_bytes));
         let stderr_reader = thread::spawn(move || drain_stream(stderr, max_output_bytes));
@@ -256,7 +309,6 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             }
             thread::sleep(Duration::from_millis(10));
         };
-        process_tree::kill(child.id()).map_err(|error| ExecutionError::Spawn(error.to_string()))?;
         if let Some(stdin_writer) = stdin_writer {
             stdin_writer
                 .join()
@@ -314,6 +366,37 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
     }
 }
 
+fn execution_environment() -> Vec<(String, String)> {
+    [
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        "TERM",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        "SystemRoot",
+        "WINDIR",
+        "PATHEXT",
+        "COMSPEC",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "CARGO_HOME",
+        "RUSTUP_HOME",
+        "JAVA_HOME",
+        "GOPATH",
+    ]
+    .into_iter()
+    .filter_map(|key| std::env::var(key).ok().map(|value| (key.to_owned(), value)))
+    .collect()
+}
+
 fn check_cancellation_before_start(cancellation: &CancellationToken) -> Result<(), ExecutionError> {
     cancellation
         .check()
@@ -321,14 +404,14 @@ fn check_cancellation_before_start(cancellation: &CancellationToken) -> Result<(
 }
 
 fn terminate(
-    child: &mut std::process::Child,
+    child: &mut ProcessHandle,
     stdin_writer: Option<thread::JoinHandle<Result<(), String>>>,
     stdout_reader: thread::JoinHandle<Result<(Vec<u8>, bool), String>>,
     stderr_reader: thread::JoinHandle<Result<(Vec<u8>, bool), String>>,
 ) -> Result<(), ExecutionError> {
-    process_tree::kill(child.id()).map_err(|error| ExecutionError::Spawn(error.to_string()))?;
-    let _ = child.kill();
-    let _ = child.wait();
+    child
+        .close()
+        .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
     if let Some(stdin_writer) = stdin_writer {
         let _ = stdin_writer.join();
     }

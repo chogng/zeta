@@ -3,7 +3,7 @@
 load("@crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
-def zeta_rust_crate(name, crate_name, data = []):
+def zeta_rust_crate(name, crate_name, data = [], crate_features = []):
     """Defines a Cargo library crate and its unit-test target.
 
     The crate's dependencies come from the workspace Cargo.lock through the
@@ -18,6 +18,7 @@ def zeta_rust_crate(name, crate_name, data = []):
     rust_library(
         name = name,
         crate_name = crate_name,
+        crate_features = crate_features,
         compile_data = data,
         deps = all_crate_deps(),
         edition = "2024",

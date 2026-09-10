@@ -87,6 +87,7 @@ pub(crate) fn review_request(
 ) -> Result<ActionReviewRequest, CoreError> {
     let HookAction::Process { program, args } = &hook.action;
     let canonical = serde_json::to_vec(&serde_json::json!({
+        "execution_contract": "sandbox-v2-scoped-host-acl",
         "hook_id": hook.id.as_str(),
         "program": program,
         "arguments": args,
@@ -112,10 +113,10 @@ pub(crate) fn review_request(
             capabilities,
         ),
         ActionProvenance::new(ActionSource::User, hook.id.as_str()),
-        SandboxCompatibility::Supported(SandboxPolicy::new(
-            FileSystemAccess::DirectoryWrite,
-            NetworkAccess::Denied,
-        )),
+        SandboxCompatibility::Supported(
+            SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
+                .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped),
+        ),
         ActionPolicyRevision::new(policy_revision),
     ))
 }

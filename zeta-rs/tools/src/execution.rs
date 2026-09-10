@@ -63,6 +63,7 @@ pub struct ToolExecutionContext {
     session_id: Option<zeta_protocol::SessionId>,
     execution_dir: Option<PathBuf>,
     sandbox_scope: Option<SandboxScope>,
+    network_policy: Option<network_proxy::NetworkPolicyHandle>,
 }
 
 /// Exact runtime boundary selected by policy for one materialized tool invocation.
@@ -89,6 +90,7 @@ impl ToolExecutionContext {
             session_id: None,
             execution_dir: None,
             sandbox_scope: None,
+            network_policy: None,
         }
     }
 
@@ -107,6 +109,15 @@ impl ToolExecutionContext {
     pub fn with_sandbox_scope(mut self, scope: SandboxScope) -> Self {
         self.sandbox_scope = Some(scope);
         self
+    }
+
+    pub fn with_network_policy(mut self, policy: network_proxy::NetworkPolicyHandle) -> Self {
+        self.network_policy = Some(policy);
+        self
+    }
+
+    pub fn network_policy(&self) -> Option<&network_proxy::NetworkPolicyHandle> {
+        self.network_policy.as_ref()
     }
 
     pub fn session_id(&self) -> Option<&zeta_protocol::SessionId> {

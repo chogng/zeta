@@ -2346,6 +2346,178 @@ struct ScriptedModel {
     requests: Mutex<Vec<ModelRequest>>,
 }
 
+#[test]
+fn abandoned_network_request_cancels_approval_without_restarting_the_tool() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let request_lifetime = CancellationSource::new();
+    let tools = Arc::new(NetworkApprovalTool {
+        request_lifetime: request_lifetime.clone(),
+        executions: AtomicUsize::new(0),
+    });
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("network-call").unwrap(),
+                name: ToolName::new("network-tool").unwrap(),
+                arguments: json!({}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("done")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        tools.clone(),
+        Arc::new(NetworkPromptPolicy),
+    );
+    executor.start(&thread_id, &turn_id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        if matches!(
+            snapshot.turns[0]
+                .pending_interaction
+                .as_ref()
+                .map(|pending| &pending.request),
+            Some(zeta_protocol::AgentRequest::Approval { .. })
+        ) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "network request did not ask for approval: {snapshot:#?}"
+        );
+        thread::sleep(Duration::from_millis(2));
+    }
+    request_lifetime.cancel();
+    wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Completed);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(snapshot.turns[0].pending_interaction.is_none());
+    assert_eq!(tools.executions.load(Ordering::Relaxed), 1);
+    assert!(
+        threads
+            .thread_updates_after(&thread_id, 0)
+            .unwrap()
+            .iter()
+            .any(|update| matches!(
+                &update.update,
+                ThreadUpdate::Committed {
+                    event: zeta_protocol::ThreadEvent::InteractionCancelled {
+                        reason: zeta_protocol::InteractionCancelReason::OwnerDisconnected,
+                        ..
+                    },
+                    ..
+                }
+            ))
+    );
+}
+
+struct NetworkPromptPolicy;
+
+impl ActionPolicyService for NetworkPromptPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        if request.action().kind() == &ActionKind::NetworkRequest {
+            Ok(ExecutionDecision::AskUser(
+                zeta_action_policy::ApprovalRequest::new(
+                    request.action().digest().clone(),
+                    request.action().required_capabilities().clone(),
+                    "approve this destination",
+                ),
+            ))
+        } else {
+            Ok(ExecutionDecision::RunSandboxed(SandboxPolicy::new(
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Managed,
+            )))
+        }
+    }
+}
+
+struct NetworkApprovalTool {
+    request_lifetime: CancellationSource,
+    executions: AtomicUsize,
+}
+
+impl ToolService for NetworkApprovalTool {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![tool_definition("network-tool")]
+    }
+
+    fn prepare(&self, _: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(b"network-parent"),
+                ActionKind::LocalProcess(zeta_action_policy::ProcessInvocationKind::Direct),
+                "run a network command",
+                CapabilitySet::new([]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "network-tool"),
+            SandboxCompatibility::Supported(SandboxPolicy::new(
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Managed,
+            )),
+            ActionPolicyRevision::new("test-policy-v1"),
+        ))
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        panic!("network tool requires its live interaction context")
+    }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+        _: &ToolExecutionFacts,
+        interactions: Arc<dyn ToolInteractionService>,
+        _: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.executions.fetch_add(1, Ordering::Relaxed);
+        let review = ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(b"network-request"),
+                ActionKind::NetworkRequest,
+                "connect to example.com:443",
+                CapabilitySet::new([Capability::new(
+                    CapabilityKind::Network,
+                    "https://example.com:443",
+                )]),
+            )
+            .with_network_target("https", "example.com", Some(443)),
+            ActionProvenance::new(ActionSource::BuiltInTool, "network-tool"),
+            SandboxCompatibility::NotApplicable {
+                reason: "the proxy controls the network request".into(),
+            },
+            ActionPolicyRevision::new("test-policy-v1"),
+        );
+        assert!(
+            interactions
+                .approve_network(&review, &self.request_lifetime.token())
+                .is_err()
+        );
+        Ok(ToolExecutionOutput::Failure(
+            "network request abandoned".into(),
+        ))
+    }
+}
+
 #[derive(Default)]
 struct BatchedCompactionModel {
     requests: Mutex<Vec<ModelRequest>>,

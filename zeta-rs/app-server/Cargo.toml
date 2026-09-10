@@ -11,6 +11,8 @@ name = "zeta_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+mxc-sandbox = { workspace = true }
+network-proxy = { workspace = true }
 zeta-memory-diagnostics = { workspace = true }
 zeta-automation = { workspace = true }
 base64 = { workspace = true }
@@ -100,12 +102,6 @@ worktree = { workspace = true }
 image = { workspace = true, features = ["png"] }
 tempfile = { workspace = true }
 zeta-uds = { workspace = true }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-zeta-linux-sandbox = { workspace = true }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-zeta-windows-sandbox = { workspace = true }
 
 [lints]
 workspace = true

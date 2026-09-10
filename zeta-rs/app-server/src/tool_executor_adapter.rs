@@ -82,6 +82,7 @@ impl PreparedToolExecution {
 }
 
 struct PreparedToolInvocation {
+    review: ActionReviewRequest,
     payload: ToolPayload,
     dir_authorizations: Vec<Authorization>,
     execution_dir: Option<PathBuf>,
@@ -137,6 +138,7 @@ impl ToolExecutorRuntime {
             .insert(
                 call.id.clone(),
                 PreparedToolInvocation {
+                    review: prepared.review.clone(),
                     payload: prepared.payload,
                     dir_authorizations: prepared.dir_authorizations,
                     execution_dir: prepared.execution_dir,
@@ -170,6 +172,32 @@ impl ToolExecutorRuntime {
             cancellation,
             identity.session_id(),
             identity.turn_id(),
+            None,
+            sink,
+        )
+    }
+
+    pub(crate) fn execute_with_interactions(
+        &self,
+        binding: &ToolBinding,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ToolExecutionFacts,
+        interactions: Arc<dyn zeta_core::ToolInteractionService>,
+        sink: &mut dyn ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let identity = facts.execution_identity().ok_or_else(|| {
+            CoreError::Execution("ToolExecutor requires durable execution identity".into())
+        })?;
+        self.execute_for_turn(
+            binding,
+            call,
+            authorization,
+            cancellation,
+            identity.session_id(),
+            identity.turn_id(),
+            Some(interactions),
             sink,
         )
     }
@@ -182,11 +210,12 @@ impl ToolExecutorRuntime {
         cancellation: &CancellationToken,
         session_id: &zeta_protocol::SessionId,
         turn_id: &TurnId,
+        interactions: Option<Arc<dyn zeta_core::ToolInteractionService>>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let operation_id = ToolOperationId::new(format!("{turn_id}:{}", call.id))
             .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let (payload, dir_authorizations, execution_dir) = {
+        let (review, payload, dir_authorizations, execution_dir) = {
             let prepared = self
                 .prepared
                 .lock()
@@ -198,6 +227,7 @@ impl ToolExecutorRuntime {
                 ))
             })?;
             (
+                prepared.review.clone(),
                 prepared.payload.clone(),
                 prepared.dir_authorizations.clone(),
                 prepared.execution_dir.clone(),
@@ -237,7 +267,7 @@ impl ToolExecutorRuntime {
                 "host-selected execution directory has no matching authorization".into(),
             ));
         }
-        let authority = match authorization {
+        let mut authority = match authorization {
             ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
             ToolAuthorization::UnsandboxedGrant { .. }
             | ToolAuthorization::ExecPolicyGranted(_)
@@ -245,9 +275,32 @@ impl ToolExecutorRuntime {
             | ToolAuthorization::PermissionBypassed(_)
             | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,
         };
+        let managed = matches!(review.sandbox(), zeta_action_policy::SandboxCompatibility::Supported(policy) if policy.network() == zeta_sandboxing::NetworkAccess::Managed);
+        if managed && authority == ToolRuntimeAuthority::Unrestricted {
+            authority = ToolRuntimeAuthority::Sandboxed(zeta_sandboxing::SandboxPolicy::new(
+                zeta_sandboxing::FileSystemAccess::FullAccess,
+                zeta_sandboxing::NetworkAccess::Managed,
+            ));
+        }
         let mut context =
             ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority)
                 .with_session_id(session_id.clone());
+        if managed {
+            let interactions = interactions.ok_or_else(|| {
+                self.prepared
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(&call.id);
+                CoreError::Policy(
+                    "managed networking requires Core's live approval authority".into(),
+                )
+            })?;
+            context = context.with_network_policy(crate::network_policy::for_execution(
+                review,
+                operation_id.as_str().to_owned(),
+                interactions,
+            ));
+        }
         if let Some(execution_dir) = execution_dir {
             context = context.with_execution_dir(execution_dir);
         }

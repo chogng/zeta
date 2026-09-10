@@ -148,9 +148,6 @@ test("assembles and validates the canonical Windows development layout", async (
   const executables = {
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     codeModeHost: join(root, "zeta-code-mode-host.exe"),
-    commandRunner: join(root, "zeta-command-runner.exe"),
-    sandboxService: join(root, "zeta-windows-sandbox-service.exe"),
-    sandboxWorker: join(root, "zeta-windows-sandbox-worker.exe"),
     serverHost: join(root, "zeta-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
@@ -162,9 +159,6 @@ test("assembles and validates the canonical Windows development layout", async (
     await Promise.all([
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.codeModeHost, "zeta-code-mode-host"),
-      writeFile(executables.commandRunner, "runner"),
-      writeFile(executables.sandboxService, "service"),
-      writeFile(executables.sandboxWorker, "worker"),
       writeFile(executables.serverHost, "zeta-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
       writeFile(nodeExecutable, "node"),
@@ -220,10 +214,7 @@ test("assembles and validates the canonical Windows development layout", async (
     assert.equal(await readFile(join(staging, "zeta-path", "rg.exe"), "utf8"), "ripgrep");
     assert.equal(await readFile(join(staging, "bin", "zeta-app-server-daemon.exe"), "utf8"), "zeta-app-server-daemon");
     assert.equal(await readFile(join(staging, "zeta-resources", "node", "bin", "node.exe"), "utf8"), "node");
-    assert.equal(await readFile(join(staging, "zeta-resources", "zeta-command-runner.exe"), "utf8"), "runner");
-    assert.equal(await readFile(join(staging, "zeta-resources", "zeta-windows-sandbox-service.exe"), "utf8"), "service");
-    assert.equal(await readFile(join(staging, "zeta-resources", "zeta-windows-sandbox-worker.exe"), "utf8"), "worker");
-    assert.equal(await readFile(join(staging, "zeta-resources", "zeta-windows-sandbox-worker.exe"), "utf8"), "worker");
+    assert.equal((await readdir(join(staging, "zeta-resources"))).includes("zeta-command-runner.exe"), false);
     const productServices = JSON.parse(await readFile(join(staging, "zeta-resources", "product-services", "product-services.json"), "utf8"));
     const marketplace = productServices.marketplaces.find((source: { name: string }) => source.name === "zeta");
     assert.equal(marketplace.metadataBaseUrl, "https://chogng.github.io/marketplace/metadata/");
@@ -277,9 +268,6 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   const executables = {
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     codeModeHost: join(root, "zeta-code-mode-host.exe"),
-    commandRunner: join(root, "zeta-command-runner.exe"),
-    sandboxService: join(root, "zeta-windows-sandbox-service.exe"),
-    sandboxWorker: join(root, "zeta-windows-sandbox-worker.exe"),
     serverHost: join(root, "zeta-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
@@ -287,9 +275,6 @@ test("host-provided runtime package omits the standalone Node payload", async ()
     await Promise.all([
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.codeModeHost, "zeta-code-mode-host"),
-      writeFile(executables.commandRunner, "runner"),
-      writeFile(executables.sandboxService, "service"),
-      writeFile(executables.sandboxWorker, "worker"),
       writeFile(executables.serverHost, "zeta-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
     ]);
@@ -324,6 +309,24 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   } finally {
     await rm(root, { force: true, recursive: true });
   }
+});
+
+test("Linux development packages retain Bubblewrap without a Zeta namespace helper", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-linux-network-package-"));
+  try {
+    const names = ["zeta-server", "zeta-app-server-daemon", "zeta-code-mode-host", "bwrap", "COPYING", "rg"];
+    await Promise.all(names.map((name) => writeFile(join(root, name), name)));
+    const staging = join(root, "package");
+    await assemblePackage(staging, "x86_64-unknown-linux-gnu", "linux", {
+      serverHost: join(root, "zeta-server"), appServerDaemon: join(root, "zeta-app-server-daemon"),
+      codeModeHost: join(root, "zeta-code-mode-host"), packageStore: join(root, "unused-store"),
+      bubblewrap: { binary: join(root, "bwrap"), license: join(root, "COPYING"), version: "0.11.2", archive: "bwrap.tar", archiveSha256: "a".repeat(64) },
+    }, { executable: join(root, "rg"), archive: "rg.tar", archiveSha256: "b".repeat(64), binarySha256: "c".repeat(64), source: "upstream-release", version: "1" }, undefined);
+    assert.equal(await readFile(join(staging, "zeta-resources", "bwrap"), "utf8"), "bwrap");
+    assert.equal((await readdir(join(staging, "zeta-resources"))).includes("zeta-linux-sandbox"), false);
+    const metadata = JSON.parse(await readFile(join(staging, "zeta-package.json"), "utf8"));
+    assert.equal(metadata.components.linuxSandbox, undefined);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("rejects an empty built-in extension source", async () => {

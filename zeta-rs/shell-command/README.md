@@ -69,7 +69,7 @@ canonical package builder 当前按 checksum-locked manifest 把 ripgrep 放到
 metadata，也尚未执行版本/capability probe。Packaging 不能改变上述 executable validation、
 identity freeze 和 fail-closed 语义。Linux package 同时携带经过 source lock 构建的
 `zeta-resources/bwrap`；它的 discovery/probe contract 由
-[`zeta-linux-sandbox`](../linux-sandbox/README.md) 拥有。
+[`mxc-sandbox`](../mxc-sandbox/README.md) 拥有。
 
 ## 失败、取消与输出
 

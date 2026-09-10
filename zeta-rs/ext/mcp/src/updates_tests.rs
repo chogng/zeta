@@ -39,6 +39,14 @@ struct TestInteractions {
 }
 
 impl ToolInteractionService for TestInteractions {
+    fn approve_network(
+        &self,
+        _: &zeta_action_policy::ActionReviewRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<zeta_protocol::ActionApprovalDecision, CoreError> {
+        panic!("MCP elicitation must not request network approval")
+    }
+
     fn request_user_input(
         &self,
         request: RequestUserInput,

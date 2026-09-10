@@ -67,7 +67,7 @@ fn exact_command_network_and_capability_selectors_are_evaluated() {
             ExecPolicyRuleId::new("capability"),
             ExecPolicySelector::Capability {
                 capability_kind: "file_read".into(),
-                scope: ScopeMatcher::prefix("/work"),
+                scope: ScopeMatcher::prefix("/dir"),
             },
             ExecPolicyEffect::Continue,
         ),

@@ -504,6 +504,201 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     );
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
+    use std::io::Read;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::time::Instant;
+    let origin = TcpListener::bind("127.0.0.1:0").unwrap();
+    origin.set_nonblocking(true).unwrap();
+    let port = origin.local_addr().unwrap().port();
+    let denied_origin = TcpListener::bind("127.0.0.1:0").unwrap();
+    denied_origin.set_nonblocking(true).unwrap();
+    let denied_port = denied_origin.local_addr().unwrap().port();
+    let upstream = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let mut stream = loop {
+            match origin.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::WouldBlock
+                        && Instant::now() < deadline =>
+                {
+                    thread::sleep(Duration::from_millis(5))
+                }
+                Err(error) => panic!("approved request did not reach origin: {error}"),
+            }
+        };
+        stream
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        let mut buffer = [0; 4096];
+        assert!(stream.read(&mut buffer).unwrap() > 0);
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\napproved")
+            .unwrap();
+    });
+    let profile = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_dir_root(dir.path()),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let initialized = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"network-test","version":"1"},"capabilities":{"agentInteractions":{"version":1,"kinds":["approval"]}}}
+        }),
+    );
+    assert!(initialized["result"].is_object(), "{initialized}");
+    let configured = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"execPolicy/rule/upsert","params":{
+                "commandId":"ask-network","expectedRevision":0,
+                "rule":{"id":"ask-network","selector":{"type":"network","protocol":"http","host":{"type":"exact","value":"127.0.0.1"},"port":port},"effect":{"type":"requireApproval"}}
+            }
+        }),
+    );
+    assert_eq!(configured["result"]["revision"], 1, "{configured}");
+    let shell_grant = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"execPolicy/rule/upsert","params":{
+                "commandId":"allow-shell-process","expectedRevision":1,
+                "rule":{"id":"allow-shell-process","selector":{"type":"all","selectors":[
+                    {"type":"source","source":"built_in_tool","sourceId":"shell-command"},
+                    {"type":"actionKind","actionKind":"localProcess"}
+                ]},"effect":{"type":"allowUnsandboxed"}}
+            }
+        }),
+    );
+    assert_eq!(shell_grant["result"]["revision"], 2, "{shell_grant}");
+    let denied_rule = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"execPolicy/rule/upsert","params":{
+                "commandId":"deny-network","expectedRevision":2,
+                "rule":{"id":"deny-network","selector":{"type":"network","host":{"type":"exact","value":"127.0.0.1"},"port":denied_port},"effect":{"type":"deny","reason":"host must stay blocked"}}
+            }
+        }),
+    );
+    assert_eq!(denied_rule["result"]["revision"], 3, "{denied_rule}");
+    let session = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"network-session","title":"Network"}
+        }),
+    );
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request","params":{"commandId":"network-thread","sessionId":session_id,"expectedSequence":1,"request":{"type":"createThread","title":"Network"}}
+        }),
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let thread_id_typed = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    let mut digests = Vec::new();
+    let subscribed = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/thread/subscribe","params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
+        }),
+    );
+    assert!(subscribed["result"].is_object(), "{subscribed}");
+    for (index, decision, expected_status) in [(0, "approveOnce", 0), (1, "decline", 22)] {
+        let before = server.threads().read_thread(&thread_id_typed).unwrap();
+        let started = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":10+index,"method":"session/request","params":{
+                    "commandId":format!("network-turn-{index}"),"sessionId":session_id,
+                    "request":{"type":"startShellTurn","threadId":thread_id,"expectedSequence":before.sequence,
+                        "approvalMode":"askPermissions","command":format!("printf run >> attempts-{index}.txt; /usr/bin/curl -fsS --max-time 10 http://127.0.0.1:{port}/; printf '|status=%s|attempts=' $?; cat attempts-{index}.txt; /usr/bin/curl -fsS --max-time 3 http://127.0.0.1:{denied_port}/; printf '|denied=%s' $?"),"workingDirectory":"."}
+                }
+            }),
+        );
+        let turn_id = started["result"]["value"]["turnId"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{started}"));
+        let deadline = Instant::now() + Duration::from_secs(8);
+        let pending = loop {
+            let snapshot = server.threads().read_thread(&thread_id_typed).unwrap();
+            if let Some(pending) = snapshot.turns.last().unwrap().pending_interaction.clone() {
+                break (snapshot.sequence, pending);
+            }
+            assert!(
+                Instant::now() < deadline,
+                "network approval missing: {snapshot:#?}"
+            );
+            thread::sleep(Duration::from_millis(5));
+        };
+        let zeta_protocol::AgentRequest::Approval { request } = &pending.1.request else {
+            panic!("expected network approval");
+        };
+        assert_eq!(request.capabilities.len(), 1);
+        assert_eq!(
+            request.capabilities[0].kind,
+            zeta_protocol::ActionApprovalCapabilityKind::Network
+        );
+        assert_eq!(
+            request.capabilities[0].scope,
+            format!("http://127.0.0.1:{port}")
+        );
+        assert!(request.sandbox_denial.is_none());
+        digests.push(request.action_digest.clone());
+        assert!(
+            server
+                .drain_notifications(&mut connection)
+                .iter()
+                .any(|notification| notification.contains("agent/request"))
+        );
+        let resolved = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":20+index,"method":"session/request","params":{"commandId":format!("network-approval-{index}"),"sessionId":session_id,
+                    "request":{"type":"resolveInteraction","threadId":thread_id,"turnId":turn_id,"expectedSequence":pending.0,"requestId":pending.1.request_id,"response":{"type":"approval","response":{"decision":decision}}}}
+            }),
+        );
+        assert!(resolved["result"].is_object(), "{resolved}");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let snapshot = server.threads().read_thread(&thread_id_typed).unwrap();
+            if snapshot.turns.last().unwrap().status == zeta_protocol::TurnStatus::Completed {
+                assert!(snapshot.items.iter().any(|item| matches!(item, zeta_protocol::ThreadItem::ToolResult { text, .. } if text.contains(&format!("status={expected_status}|attempts=run")) && !text.contains("attempts=runrun"))), "{snapshot:#?}");
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "approved shell did not complete: {snapshot:#?}"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+    assert_ne!(digests[0], digests[1]);
+    assert_eq!(
+        denied_origin.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    upstream.join().unwrap();
+}
+
 #[test]
 fn non_git_turns_keep_their_isolated_dir_without_creating_change_sets() {
     let profile = tempfile::tempdir().unwrap();

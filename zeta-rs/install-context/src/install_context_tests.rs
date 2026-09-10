@@ -21,11 +21,6 @@ fn package_layout_precedes_legacy_sibling_and_search_path_candidates() {
     let metadata_file = package.join(PACKAGE_METADATA_FILE);
     fs::write(&metadata_file, b"{}").unwrap();
     fs::write(resources_directory.join("bwrap"), b"helper").unwrap();
-    fs::write(
-        resources_directory.join("zeta-command-runner.exe"),
-        b"runner",
-    )
-    .unwrap();
     fs::create_dir(resources_directory.join("skills")).unwrap();
     fs::create_dir(resources_directory.join("product-services")).unwrap();
     fs::write(
@@ -36,7 +31,6 @@ fn package_layout_precedes_legacy_sibling_and_search_path_candidates() {
     let executable = binary_directory.join("zeta");
     let context = InstallContext::detect(
         Some(&executable),
-        None,
         None,
         None,
         Some(env::join_paths([&search_directory]).unwrap()),
@@ -77,17 +71,12 @@ fn package_layout_precedes_legacy_sibling_and_search_path_candidates() {
         resources_directory.join("bwrap"),
         search_directory.join("bwrap"),
     ];
+
     assert_eq!(
         context.executable_candidates(ManagedExecutable::Bubblewrap),
         ExecutableCandidates::SearchPaths(expected_bubblewrap_candidates.into())
     );
-    assert_eq!(
-        context.executable_candidates(ManagedExecutable::WindowsCommandRunner),
-        ExecutableCandidates::SearchPaths(vec![
-            resources_directory.join("zeta-command-runner.exe"),
-            search_directory.join("zeta-command-runner.exe"),
-        ])
-    );
+
     assert_eq!(context.bundled_resource("../bin/zeta"), None);
     assert_eq!(context.bundled_resource(&executable), None);
     assert_eq!(context.bundled_resource(""), None);
@@ -104,7 +93,7 @@ fn package_directories_without_metadata_are_not_treated_as_an_install() {
     fs::create_dir_all(&binary_directory).unwrap();
     let executable = binary_directory.join("zeta");
 
-    let context = InstallContext::detect(Some(&executable), None, None, None, None);
+    let context = InstallContext::detect(Some(&executable), None, None, None);
 
     assert_eq!(context.method(), InstallMethod::Other);
     assert_eq!(context.package_layout(), None);
@@ -118,12 +107,10 @@ fn explicit_override_is_authoritative_and_excludes_fallback_candidates() {
     let executable = executable_directory.join("zeta");
     let override_path = directory.path().join("custom-rg");
     let bubblewrap_override = directory.path().join("custom-bwrap");
-    let runner_override = directory.path().join("custom-runner.exe");
     let context = InstallContext::detect(
         Some(&executable),
         Some(override_path.clone().into_os_string()),
         Some(bubblewrap_override.clone().into_os_string()),
-        Some(runner_override.clone().into_os_string()),
         Some(env::join_paths([&search_directory]).unwrap()),
     );
 
@@ -144,13 +131,6 @@ fn explicit_override_is_authoritative_and_excludes_fallback_candidates() {
             path: bubblewrap_override,
         })
     );
-    assert_eq!(
-        context.executable_candidates(ManagedExecutable::WindowsCommandRunner),
-        ExecutableCandidates::ExplicitOverride(ExecutableOverride {
-            variable: WINDOWS_COMMAND_RUNNER_OVERRIDE,
-            path: runner_override,
-        })
-    );
 }
 
 #[test]
@@ -158,7 +138,7 @@ fn host_path_candidates_validate_names_and_use_the_frozen_search_path() {
     let first = TestDirectory::new();
     let second = TestDirectory::new();
     let search_path = env::join_paths([first.path(), second.path()]).expect("search path");
-    let context = InstallContext::detect(None, None, None, None, Some(search_path));
+    let context = InstallContext::detect(None, None, None, Some(search_path));
     let name = HostExecutableName::new("rust-analyzer").expect("name");
     let candidates = context.host_path_candidates(&name);
 

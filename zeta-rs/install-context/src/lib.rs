@@ -16,7 +16,6 @@ const PACKAGE_RESOURCES_DIRECTORY: &str = "zeta-resources";
 const PACKAGE_METADATA_FILE: &str = "zeta-package.json";
 const RIPGREP_OVERRIDE: &str = "ZETA_RG_PATH";
 const BUBBLEWRAP_OVERRIDE: &str = "ZETA_BWRAP_PATH";
-const WINDOWS_COMMAND_RUNNER_OVERRIDE: &str = "ZETA_WINDOWS_COMMAND_RUNNER_PATH";
 
 /// Installation shape detected for the running Zeta executable.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -64,7 +63,6 @@ impl PackageLayout {
 pub enum ManagedExecutable {
     Ripgrep,
     Bubblewrap,
-    WindowsCommandRunner,
 }
 
 /// One explicit environment override that must not silently fall back when invalid.
@@ -137,7 +135,6 @@ pub struct InstallContext {
     executable_directory: Option<PathBuf>,
     ripgrep_override: Option<OsString>,
     bubblewrap_override: Option<OsString>,
-    windows_command_runner_override: Option<OsString>,
     search_path: Option<OsString>,
 }
 
@@ -154,7 +151,6 @@ impl InstallContext {
                     executable.as_deref(),
                     env::var_os(RIPGREP_OVERRIDE),
                     env::var_os(BUBBLEWRAP_OVERRIDE),
-                    env::var_os(WINDOWS_COMMAND_RUNNER_OVERRIDE),
                     env::var_os("PATH"),
                 )
             })
@@ -199,10 +195,6 @@ impl InstallContext {
             ManagedExecutable::Bubblewrap => {
                 (BUBBLEWRAP_OVERRIDE, self.bubblewrap_override.as_ref())
             }
-            ManagedExecutable::WindowsCommandRunner => (
-                WINDOWS_COMMAND_RUNNER_OVERRIDE,
-                self.windows_command_runner_override.as_ref(),
-            ),
         };
         if let Some(path) = explicit_override {
             return ExecutableCandidates::ExplicitOverride(ExecutableOverride {
@@ -214,13 +206,11 @@ impl InstallContext {
         if let Some(layout) = &self.package_layout {
             let directory = match executable {
                 ManagedExecutable::Ripgrep => &layout.path_directory,
-                ManagedExecutable::Bubblewrap | ManagedExecutable::WindowsCommandRunner => {
-                    &layout.resources_directory
-                }
+                ManagedExecutable::Bubblewrap => &layout.resources_directory,
             };
             push_executable_candidates(&mut paths, directory, executable);
         }
-        if executable == ManagedExecutable::Ripgrep
+        if matches!(executable, ManagedExecutable::Ripgrep)
             && let Some(directory) = &self.executable_directory
         {
             push_executable_candidates(&mut paths, directory, executable);
@@ -252,7 +242,6 @@ impl InstallContext {
         current_executable: Option<&Path>,
         ripgrep_override: Option<OsString>,
         bubblewrap_override: Option<OsString>,
-        windows_command_runner_override: Option<OsString>,
         search_path: Option<OsString>,
     ) -> Self {
         let executable_directory = current_executable
@@ -270,7 +259,6 @@ impl InstallContext {
             executable_directory,
             ripgrep_override,
             bubblewrap_override,
-            windows_command_runner_override,
             search_path,
         }
     }
@@ -323,7 +311,6 @@ fn executable_names(executable: ManagedExecutable) -> &'static [&'static str] {
         ManagedExecutable::Ripgrep if cfg!(windows) => &["rg.exe", "rg"],
         ManagedExecutable::Ripgrep => &["rg"],
         ManagedExecutable::Bubblewrap => &["bwrap"],
-        ManagedExecutable::WindowsCommandRunner => &["zeta-command-runner.exe"],
     }
 }
 

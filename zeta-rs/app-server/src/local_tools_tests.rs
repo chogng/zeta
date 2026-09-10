@@ -150,6 +150,7 @@ fn shell_executor_runs_in_a_session_dir() {
         )
         .unwrap();
     let reviewer = LocalExecutorReviewer {
+        shell_policy: shell_sandbox(),
         authorization: cwd_dir.authorization(),
         ripgrep: RipgrepExecutable::from_path(cwd_dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
@@ -250,6 +251,7 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
         RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         PassThroughBackend,
         action_policy_revision.clone(),
+        shell_sandbox(),
     )
     .unwrap();
     let call = tool_call(json!({
@@ -298,6 +300,7 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
         RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         PassThroughBackend,
         action_policy_revision.clone(),
+        shell_sandbox(),
     )
     .unwrap();
     let restrictive_review = restrictive_service.prepare(&call).unwrap();
@@ -314,6 +317,34 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
             ..
         }) if reason.contains("repository policy")
     ));
+}
+
+#[test]
+fn network_rules_select_managed_execution_without_broadening_the_default_policy() {
+    let mut config = LocalToolConfig::default();
+    assert_eq!(
+        configured_shell_policy(&config.snapshot().unwrap()),
+        shell_sandbox()
+    );
+    config.user.rules.push(ExecPolicyRule::new(
+        ExecPolicyRuleId::new("network"),
+        ExecPolicySelector::all([
+            ExecPolicySelector::source(Some("built_in_tool".into()), Some("shell-command".into())),
+            ExecPolicySelector::Network {
+                protocol: Some("https".into()),
+                host: zeta_execpolicy::HostMatcher::exact("example.com"),
+                port: Some(443),
+            },
+        ]),
+        ExecPolicyEffect::RequireApproval,
+    ));
+    let snapshot = config.snapshot().unwrap();
+    assert_eq!(
+        configured_shell_policy(&snapshot),
+        SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Managed)
+            .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
+    );
+    assert!(matches!(snapshot.default(), ExecPolicyDefault::Deny(_)));
 }
 
 #[test]
@@ -351,6 +382,7 @@ fn local_policy_runs_agent_coordination_without_an_external_approval() {
 fn apply_patch_reviewer_materializes_paths_before_policy() {
     let dir = TestDir::new();
     let reviewer = LocalExecutorReviewer {
+        shell_policy: shell_sandbox(),
         authorization: dir.authorization(),
         ripgrep: RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
@@ -403,6 +435,7 @@ fn apply_patch_reviewer_selects_the_session_dir() {
         )
         .unwrap();
     let reviewer = LocalExecutorReviewer {
+        shell_policy: shell_sandbox(),
         authorization: cwd_dir.authorization(),
         ripgrep: RipgrepExecutable::from_path(cwd_dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
@@ -436,6 +469,7 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
     let ripgrep = RipgrepExecutable::from_path(dir.ripgrep()).unwrap();
     let environment_id = zeta_tools::EnvId::new("local-dir").unwrap();
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
+        shell_policy: shell_sandbox(),
         authorization: authorization.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: local_policy_revision(),

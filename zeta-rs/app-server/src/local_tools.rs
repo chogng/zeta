@@ -90,7 +90,7 @@ pub(crate) use agent_grep::AgentGrepService;
 pub(crate) use suite::LocalToolSuite;
 
 const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
-const LOCAL_REVIEWER_POLICY_REVISION: &str = "local-interactive-review-v1";
+const LOCAL_REVIEWER_POLICY_REVISION: &str = "local-network-review-v5";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_OUTPUT_BYTES: usize = 256 * 1024;
 
@@ -157,12 +157,14 @@ pub(crate) fn compose_local_tools_with_config(
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = zeta_tools::EnvId::local();
     let exec_policy = config.snapshot()?;
+    let shell_policy = configured_shell_policy(&exec_policy);
     let action_policy_revision = ActionPolicyRevision::from_components(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
         LOCAL_REVIEWER_POLICY_REVISION,
     );
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
+        shell_policy,
         authorization: authorization.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: action_policy_revision.clone(),
@@ -172,7 +174,7 @@ pub(crate) fn compose_local_tools_with_config(
         ShellCommandTool::new(
             environment_id.clone(),
             authorization.dir().clone(),
-            native_sandbox(&install_context)?,
+            mxc_sandbox::MxcSandbox::new(install_context.clone()),
             CoreAuthorized,
             ShellCommandLimits {
                 timeout: DEFAULT_TIMEOUT,
@@ -196,8 +198,9 @@ pub(crate) fn compose_local_tools_with_config(
     let shell = LocalShellToolService::new_with_action_policy_revision(
         authorization.clone(),
         ripgrep.clone(),
-        native_sandbox(&install_context)?,
+        mxc_sandbox::MxcSandbox::new(install_context.clone()),
         action_policy_revision.clone(),
+        shell_policy,
     )?;
     let agent_grep = Arc::new(match existing_agent_grep {
         Some(existing) => existing.reconfigured(config.agent_grep_backend, ripgrep.clone()),
@@ -492,6 +495,7 @@ struct LocalShellToolService<B> {
     shell: ShellCommandTool<CoreAuthorized, B>,
     definition: ToolDefinition,
     action_policy_revision: ActionPolicyRevision,
+    shell_policy: SandboxPolicy,
 }
 
 impl<B: SandboxBackend> LocalShellToolService<B> {
@@ -506,6 +510,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             ripgrep,
             backend,
             local_policy_revision(),
+            shell_sandbox(),
         )
     }
 
@@ -514,6 +519,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         ripgrep: RipgrepExecutable,
         backend: B,
         action_policy_revision: ActionPolicyRevision,
+        shell_policy: SandboxPolicy,
     ) -> Result<Self, LocalToolError> {
         let shell = ShellCommandTool::new(
             zeta_tools::EnvId::local(),
@@ -533,6 +539,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             ripgrep,
             shell,
             definition,
+            shell_policy,
             action_policy_revision,
         })
     }
@@ -639,13 +646,14 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         cancellation: &CancellationToken,
         dir_authorization: &Authorization,
         relative: PathBuf,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Execution(error.to_string()))?;
         let request = self.materialize_at(request, dir_authorization.dir(), relative)?;
-        self.execute_request_scoped(request, authorization, cancellation, None)
+        self.execute_request_scoped(request, authorization, cancellation, None, network_policy)
     }
 
     fn review_request(
@@ -692,7 +700,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         let sandbox = if is_ripgrep {
             read_only_sandbox()
         } else {
-            shell_sandbox()
+            self.shell_policy
         };
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
@@ -722,7 +730,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        self.execute_request_scoped(request, authorization, cancellation, None)
+        self.execute_request_scoped(request, authorization, cancellation, None, None)
     }
 
     fn execute_request_scoped(
@@ -731,9 +739,10 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
         sandbox_scope: Option<&SandboxScope>,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let authority = if sandbox_scope.is_some() {
-            CommandExecutionAuthority::Sandboxed(shell_sandbox())
+        let mut authority = if sandbox_scope.is_some() {
+            CommandExecutionAuthority::Sandboxed(self.shell_policy)
         } else {
             match authorization {
                 ToolAuthorization::Sandboxed(policy) => {
@@ -746,10 +755,21 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
                 | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
             }
         };
-        match self
-            .shell
-            .execute_authorized_scoped(request, authority, cancellation, sandbox_scope)
+        if self.shell_policy.network() == NetworkAccess::Managed
+            && matches!(authority, CommandExecutionAuthority::Unrestricted)
         {
+            authority = CommandExecutionAuthority::Sandboxed(
+                SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Managed)
+                    .with_host_acl_changes(self.shell_policy.host_acl_changes()),
+            );
+        }
+        match self.shell.execute_authorized_with_network(
+            request,
+            authority,
+            cancellation,
+            sandbox_scope,
+            network_policy,
+        ) {
             Ok(CommandExecutionOutcome::Completed(output)) => {
                 let mut value = json!({
                     "exit_code": output.exit_code,
@@ -822,6 +842,7 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
 }
 
 struct LocalExecutorReviewer {
+    shell_policy: SandboxPolicy,
     authorization: Authorization,
     ripgrep: RipgrepExecutable,
     action_policy_revision: ActionPolicyRevision,
@@ -943,7 +964,7 @@ impl LocalExecutorReviewer {
         let sandbox = if is_ripgrep {
             read_only_sandbox()
         } else {
-            shell_sandbox()
+            self.shell_policy
         };
         let canonical = serde_json::to_vec(&json!({
             "program": request.program(),
@@ -1464,10 +1485,28 @@ fn shell_capabilities() -> CapabilitySet {
 
 fn read_only_sandbox() -> SandboxPolicy {
     SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied)
+        .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
 }
 
+#[cfg(test)]
 fn shell_sandbox() -> SandboxPolicy {
     SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
+        .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
+}
+
+fn configured_shell_policy(policy: &ExecPolicySnapshot) -> SandboxPolicy {
+    let network = if policy
+        .layers()
+        .iter()
+        .flat_map(|layer| layer.rules())
+        .any(|rule| rule.selector().targets_network())
+    {
+        NetworkAccess::Managed
+    } else {
+        NetworkAccess::Denied
+    };
+    SandboxPolicy::new(FileSystemAccess::DirectoryWrite, network)
+        .with_host_acl_changes(zeta_sandboxing::HostAclChanges::Scoped)
 }
 
 fn validate_dir_arguments(
@@ -1499,6 +1538,7 @@ fn validate_dir_arguments(
 
 fn execution_error(error: ExecutionError) -> String {
     match error {
+        ExecutionError::Network(message) => format!("shell command network failed: {message}"),
         ExecutionError::ApprovalRequired => {
             "shell command unexpectedly requires host approval".into()
         }
@@ -1514,30 +1554,6 @@ fn execution_error(error: ExecutionError) -> String {
         ExecutionError::Sandbox(error) => format!("shell command sandbox failed: {error}"),
     }
 }
-
-#[cfg(target_os = "macos")]
-type NativeSandbox = zeta_sandboxing::MacosSeatbeltSandbox;
-#[cfg(target_os = "macos")]
-fn native_sandbox(_: &InstallContext) -> Result<NativeSandbox, LocalToolError> {
-    Ok(NativeSandbox::new())
-}
-
-#[cfg(target_os = "linux")]
-type NativeSandbox = zeta_linux_sandbox::LinuxSandbox;
-#[cfg(target_os = "linux")]
-fn native_sandbox(context: &InstallContext) -> Result<NativeSandbox, LocalToolError> {
-    NativeSandbox::discover(context).map_err(LocalToolError::sandbox)
-}
-
-#[cfg(target_os = "windows")]
-type NativeSandbox = zeta_windows_sandbox::WindowsSandbox;
-#[cfg(target_os = "windows")]
-fn native_sandbox(context: &InstallContext) -> Result<NativeSandbox, LocalToolError> {
-    NativeSandbox::discover(context).map_err(LocalToolError::sandbox)
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-compile_error!("local shell tools require a supported sandbox backend");
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct LocalToolError(String);
@@ -1559,11 +1575,6 @@ impl LocalToolError {
 
     fn policy(error: impl fmt::Display) -> Self {
         Self(format!("could not compose local execution policy: {error}"))
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
-    fn sandbox(error: impl fmt::Display) -> Self {
-        Self(format!("could not resolve platform sandbox: {error}"))
     }
 }
 

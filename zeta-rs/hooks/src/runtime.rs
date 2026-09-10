@@ -90,8 +90,7 @@ impl DeclarativeHookRuntime {
             self.unbind_dir();
             return Ok(());
         }
-        let process = LocalHookProcessExecutor::new(dir)
-            .map_err(|message| HookDirBindingError { message })?;
+        let process = LocalHookProcessExecutor::new(dir);
         *self
             .process
             .write()
@@ -119,10 +118,8 @@ impl DeclarativeHookRuntime {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         ) {
-            Some(Arc::new(
-                LocalHookProcessExecutor::new(dir.clone())
-                    .map_err(|message| HookDirBindingError { message })?,
-            ) as Arc<dyn HookProcessExecutor>)
+            Some(Arc::new(LocalHookProcessExecutor::new(dir.clone()))
+                as Arc<dyn HookProcessExecutor>)
         } else {
             None
         };
@@ -165,10 +162,7 @@ impl DeclarativeHookRuntime {
                 .map_err(|error| HookDirBindingError {
                     message: error.to_string(),
                 })?;
-            let process = Arc::new(
-                LocalHookProcessExecutor::new(execution.dir().clone())
-                    .map_err(|message| HookDirBindingError { message })?,
-            );
+            let process = Arc::new(LocalHookProcessExecutor::new(execution.dir().clone()));
             bindings.push(SessionHookBinding {
                 config,
                 discovery,
@@ -346,9 +340,7 @@ impl DeclarativeHookRuntime {
             return Ok(None);
         };
         if binding.process.is_none() && has_enabled_hooks(config) {
-            binding.process = Some(Arc::new(
-                LocalHookProcessExecutor::new(binding.dir.clone()).map_err(CoreError::Execution)?,
-            ));
+            binding.process = Some(Arc::new(LocalHookProcessExecutor::new(binding.dir.clone())));
         }
         Ok(binding.process.clone())
     }
