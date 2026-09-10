@@ -1,0 +1,13 @@
+load("//:defs.bzl", "zeta_rust_crate", "zeta_rust_binary")
+
+zeta_rust_crate(
+    name = "config-schema",
+    crate_name = "zeta_config_schema",
+    data = ["//zeta-rs/config:schema.json"],
+)
+zeta_rust_binary(
+    name = "generate",
+    crate_name = "zeta_config_schema",
+    crate_root = "src/main.rs",
+    deps = [":config-schema"],
+)

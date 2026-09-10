@@ -70,3 +70,6 @@ pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId, ToolMode};
 #[cfg(test)]
 #[path = "config_tests.rs"]
 mod tests;
+
+/// Version emitted in the canonical on-disk TOML document.
+pub const CONFIG_FILE_SCHEMA_VERSION: i64 = document_migration::CURRENT_FILE_SCHEMA_VERSION;

@@ -5,6 +5,7 @@ use zeta_protocol::{SkillId, SkillName, SkillSourceId};
 
 /// Desired enablement for one configured Skill source.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum SkillSourceEnablement {
     #[default]
@@ -14,6 +15,7 @@ pub enum SkillSourceEnablement {
 
 /// Desired user enablement for one discovered Skill.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum SkillEnablement {
     Disabled,
@@ -26,6 +28,7 @@ pub enum SkillEnablement {
 /// `root_reference` is an opaque host reference, not a trusted filesystem handle. A future Skill
 /// manager resolves it, checks containment and the required capability, then publishes a separate catalog snapshot.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SkillSourceConfig {
     pub id: SkillSourceId,
@@ -50,6 +53,7 @@ impl SkillSourceConfig {
 
 /// Skill source declarations owned by the user configuration authority.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SkillsConfig {
     #[serde(default)]

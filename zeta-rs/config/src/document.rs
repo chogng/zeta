@@ -28,6 +28,7 @@ use zeta_protocol::ProviderId;
 /// that provider's definition. `Explicit` binds review to one configured provider/model without
 /// changing the main Agent model.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -52,6 +53,7 @@ impl ApprovalReviewModelSelection {
 
 /// Monotonic revision of the user configuration authority.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct ConfigRevision(u64);
 
@@ -73,6 +75,7 @@ impl ConfigRevision {
 
 /// Consumer-visible generation of the resolved user configuration snapshot.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct ConfigGeneration(u64);
 
@@ -94,6 +97,7 @@ impl ConfigGeneration {
 
 /// Selects the implementation behind the Agent-only `grep` Tool.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum AgentGrepBackend {
     #[default]
@@ -103,6 +107,7 @@ pub enum AgentGrepBackend {
 
 /// Agent defaults that may be resolved into future model invocations.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -122,8 +127,11 @@ pub struct AgentConfig {
 /// Provider entries are keyed by `ProviderId`; each value repeats its provider identity so a
 /// serialized document remains self-describing and mismatched entries can be rejected.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UserConfigDocument {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub features: features::FeatureOverrides,
     #[serde(default)]
     pub issues: crate::IssueConfig,
     #[serde(default)]
@@ -256,6 +264,7 @@ impl UserConfigDocument {
 /// type without exposing file or authority implementation details to runtime consumers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedConfig {
+    pub features: features::FeatureOverrides,
     pub issues: crate::IssueConfig,
     pub preferred_model: Option<ModelRef>,
     pub approval_review_model: ApprovalReviewModelSelection,
@@ -341,6 +350,7 @@ fn provider_config_error(error: ProviderConfigError) -> ConfigError {
 impl From<&UserConfigDocument> for ResolvedConfig {
     fn from(document: &UserConfigDocument) -> Self {
         Self {
+            features: document.features.clone(),
             issues: document.issues.clone(),
             preferred_model: document.agent.preferred_model.clone(),
             approval_review_model: document.agent.approval_review_model.clone(),

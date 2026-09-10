@@ -11,7 +11,11 @@ doctest = false
 name = "zeta_execpolicy"
 path = "src/lib.rs"
 
+[features]
+schema = ["dep:schemars"]
+
 [dependencies]
+schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

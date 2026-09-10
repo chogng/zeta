@@ -8,6 +8,7 @@ use zeta_file_access::Permissions;
 
 /// Durable user-owned permissions for explicitly selected directories.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DirPermissionsConfig {
     #[serde(default)]

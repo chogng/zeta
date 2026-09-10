@@ -48,6 +48,10 @@ check *args:
 check-config-migrations:
     {{ python }} -B scripts/cargo.py test -p zeta-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact
 
+# Refresh the canonical user configuration schema.
+generate-config-schema:
+    cargo run --quiet -p zeta-config-schema -- zeta-rs/config/schema.json
+
 # Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
 generate-protocol:
     cargo run --quiet -p zeta-app-server-protocol --bin generate_protocol -- fixtures

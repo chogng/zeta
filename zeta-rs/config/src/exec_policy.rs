@@ -12,6 +12,7 @@ use zeta_execpolicy::ExecPolicySnapshot;
 
 /// Durable user-owned execution-policy rules.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UserExecPolicyConfig {
     #[serde(default)]
@@ -55,6 +56,7 @@ impl UserExecPolicyConfig {
 
 /// Directory-authored policy restrictions preserved as capability-gated configuration input.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DirExecPolicyConfig {
     #[serde(default)]

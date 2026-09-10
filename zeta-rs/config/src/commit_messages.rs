@@ -6,6 +6,7 @@ use zeta_protocol::ModelRef;
 
 /// Exact model and endpoint configuration authorized to receive one Directory's source text.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CommitMessageEgressGrant {
     pub model: ModelRef,
@@ -14,6 +15,7 @@ pub struct CommitMessageEgressGrant {
 
 /// Directory-scoped authorization for automatic commit-message generation.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CommitMessageConfig {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

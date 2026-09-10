@@ -349,6 +349,7 @@ fn update_preferences(
         command_id: CommandId::new(command_id).unwrap(),
         expected_revision: ConfigRevision::new(revision),
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            features: Default::default(),
             preferred_model,
             approval_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
@@ -631,6 +632,7 @@ fn frontend_section_patch_is_durable_and_null_clears_the_section() {
             command_id: CommandId::new("configure-gui").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 gui: Patch::Value(configured.clone()),
                 ..PreferencesUpdate::default()
             }),
@@ -643,6 +645,7 @@ fn frontend_section_patch_is_durable_and_null_clears_the_section() {
             command_id: CommandId::new("reset-gui").unwrap(),
             expected_revision: ConfigRevision::new(1),
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 gui: Patch::Null,
                 ..PreferencesUpdate::default()
             }),
@@ -682,6 +685,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command_id: CommandId::new("select-code-mode-only").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 preferred_model: Patch::Missing,
                 approval_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
@@ -717,6 +721,7 @@ fn tui_section_is_persisted_in_the_tui_table() {
             command_id: CommandId::new("select-tui-theme").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 tui: Patch::Value(BTreeMap::from([(
                     "theme".into(),
                     serde_json::json!("zeta-code-light"),
@@ -746,6 +751,7 @@ fn tui_section_values_are_not_interpreted_by_the_backend() {
             command_id: CommandId::new("select-frontend-owned-theme").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 tui: Patch::Value(BTreeMap::from([(
                     "theme".into(),
                     serde_json::json!("Not A Theme"),
@@ -1209,6 +1215,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-missing-review-provider").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 preferred_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
@@ -1229,6 +1236,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-review-model").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 preferred_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,

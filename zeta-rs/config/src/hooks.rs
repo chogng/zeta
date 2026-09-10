@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 
 /// Stable namespaced identity for one declarative Hook.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct HookId(String);
 
@@ -59,6 +60,7 @@ impl<'de> Deserialize<'de> for HookId {
 
 /// Safe-point event that may request a Hook execution.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum HookEvent {
     BeforeTool,
@@ -68,6 +70,7 @@ pub enum HookEvent {
 
 /// Desired enablement of one Hook declaration.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum HookEnablement {
     #[default]
@@ -80,6 +83,7 @@ pub enum HookEnablement {
 /// An empty set matches every tool for `beforeTool` and `afterTool`. `turnCompleted` requires an
 /// empty set because it has no tool subject.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HookMatcher {
     #[serde(default)]
@@ -88,6 +92,7 @@ pub struct HookMatcher {
 
 /// Declarative Hook action. Runtime execution still requires policy and sandbox approval.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", tag = "type", deny_unknown_fields)]
 pub enum HookAction {
     Process {
@@ -99,6 +104,7 @@ pub enum HookAction {
 
 /// Runtime-free Hook declaration stored in User or Directory TOML.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HookConfig {
     pub id: HookId,
@@ -134,6 +140,7 @@ impl HookConfig {
 
 /// Hook declarations keyed by namespaced identity.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HooksConfig {
     #[serde(default)]

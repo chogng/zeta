@@ -256,6 +256,11 @@ pub(crate) fn apply_command(
 }
 
 fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpdate) {
+    match &update.features {
+        Patch::Missing => {}
+        Patch::Null => document.features.clear(),
+        Patch::Value(values) => document.features = values.clone(),
+    }
     match &update.preferred_model {
         Patch::Missing => {}
         Patch::Null => document.agent.preferred_model = None,

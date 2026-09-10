@@ -4,6 +4,7 @@ use zeta_protocol::ModelRef;
 
 /// User-selected device-local models for semantic codebase indexing and query.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CodebaseModelSelection {
     pub embedding_model: ModelRef,
@@ -13,6 +14,7 @@ pub struct CodebaseModelSelection {
 
 /// Whether code retrieval is automatically added to the first model invocation of a Turn.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum CodebaseAutomaticContext {
     #[default]
@@ -22,6 +24,7 @@ pub enum CodebaseAutomaticContext {
 
 /// Durable local Codebase preferences. Cloud publication consent is owned by Cloud Codebase.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CodebaseConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]

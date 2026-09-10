@@ -7,6 +7,7 @@ pub use plugin::PluginVersion;
 
 /// Desired participation of a requested Plugin in future activation resolution.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum PluginRequestEnablement {
     #[default]
@@ -19,9 +20,12 @@ pub enum PluginRequestEnablement {
 /// This is desired configuration only. It does not install the package, grant capabilities,
 /// bind credentials, or prove that activation succeeded.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginRequest {
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub plugin_id: PluginPackageId,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub version: PluginVersion,
     #[serde(default)]
     pub enablement: PluginRequestEnablement,
@@ -29,9 +33,11 @@ pub struct PluginRequest {
 
 /// User Plugin requests keyed by stable package identity.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginsConfig {
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, PluginRequest>"))]
     pub requests: BTreeMap<PluginPackageId, PluginRequest>,
 }
 
@@ -43,6 +49,7 @@ impl PluginsConfig {
 
 /// Scope requested by a directory Plugin request.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum DirPluginRequestScope {
     #[default]
@@ -51,9 +58,12 @@ pub enum DirPluginRequestScope {
 
 /// A non-authoritative directory request for an exact Plugin package.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DirPluginRequest {
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub plugin_id: PluginPackageId,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub version: PluginVersion,
     #[serde(default)]
     pub requested_scope: DirPluginRequestScope,
@@ -61,9 +71,14 @@ pub struct DirPluginRequest {
 
 /// Directory Plugin requests keyed by stable package identity.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DirPluginRequests {
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "BTreeMap<String, DirPluginRequest>")
+    )]
     pub requests: BTreeMap<PluginPackageId, DirPluginRequest>,
 }
 

@@ -16,3 +16,10 @@ just test zeta-config
 ```
 
 用户文件 schemaVersion 2 移除旧 Issue 执行配置，只保留 `issues.autoRefreshMinutes`；SQLite 配置文档版本 10 继续支持从版本 7 起的既有记录。Root Role、模型指导与委托通过通用 Agent 系统处理，见 [指令组合](../docs/agent-instructions.md)。
+
+## Feature 与 Schema
+
+- `[features]` 接受 `codeMode`、`queue`、`analytics`；前两者默认开启，使用统计默认关闭。
+- Config 保存用户覆盖；`zeta-features` 统一解释默认值、阶段和来源。`config/read` 返回 resolved Feature 列表，`config/update.features` 整体替换覆盖，`null` 清空覆盖。
+- `schema.json` 从配置类型生成，包含当前文件 `schemaVersion`、严格字段名和嵌套结构。执行 `just generate-config-schema` 更新，`just test zeta-config-schema` 检查同步。
+- Schema 生成依赖仅在 Cargo 的 `schema` feature 启用；跨字段约束仍由运行时校验。

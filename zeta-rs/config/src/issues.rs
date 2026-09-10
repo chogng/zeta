@@ -3,6 +3,7 @@ use serde::Serialize;
 
 /// Refresh preferences for the Issue browser. Agent execution uses ordinary Session settings.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct IssueConfig {
     #[serde(default = "default_refresh_minutes")]

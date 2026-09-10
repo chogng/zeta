@@ -4,6 +4,7 @@ use zeta_protocol::ModelRef;
 
 /// User-selected retrieval policy for deferred Agent tools.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum ToolSearchModeConfig {
     /// Search names and metadata locally with exact/regex matching and BM25 ranking.
@@ -15,6 +16,7 @@ pub enum ToolSearchModeConfig {
 
 /// Runtime-free user preference for deferred Agent-tool retrieval.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ToolSearchConfig {
     #[serde(default)]

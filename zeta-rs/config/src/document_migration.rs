@@ -17,7 +17,7 @@ use zeta_file_access::Permissions;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::ProviderId;
 
-const CURRENT_FILE_SCHEMA_VERSION: i64 = 2;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 2;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 

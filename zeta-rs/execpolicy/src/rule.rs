@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 
 /// Stable identity of one configuration layer participating in policy evaluation.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct ExecPolicyLayerId(String);
 
@@ -21,6 +22,7 @@ impl ExecPolicyLayerId {
 
 /// Stable identity of one deterministic rule.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct ExecPolicyRuleId(String);
 
@@ -36,6 +38,7 @@ impl ExecPolicyRuleId {
 
 /// Source and precedence category of one policy layer.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ExecPolicyLayerKind {
     Host,
@@ -46,6 +49,7 @@ pub enum ExecPolicyLayerKind {
 
 /// One argument position in a command-prefix selector.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum ExecPolicyToken {
     Literal(String),
@@ -80,6 +84,7 @@ impl ExecPolicyToken {
 
 /// Explicit network host matching semantics.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum HostMatcher {
     Exact(String),
@@ -129,6 +134,7 @@ fn normalize_host(value: String) -> String {
 
 /// Explicit capability-scope matching semantics.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum ScopeMatcher {
     Exact(String),
@@ -160,6 +166,7 @@ impl ScopeMatcher {
 
 /// A deterministic selector over trusted, host-materialized action fields.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ExecPolicySelector {
     Any,
@@ -313,6 +320,7 @@ impl ExecPolicySelector {
 
 /// Policy effect returned when a rule matches.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", content = "reason", rename_all = "snake_case")]
 pub enum ExecPolicyEffect {
     Continue,
@@ -340,6 +348,7 @@ impl ExecPolicyEffect {
 
 /// Fail-closed behavior when no rule matches a subject.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", content = "reason", rename_all = "snake_case")]
 pub enum ExecPolicyDefault {
     Continue,
@@ -354,6 +363,7 @@ impl ExecPolicyDefault {
 
 /// One validated rule in an immutable execution-policy layer.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ExecPolicyRule {
     id: ExecPolicyRuleId,
     selector: ExecPolicySelector,
@@ -413,6 +423,7 @@ impl ExecPolicyRule {
 
 /// One ordered policy layer supplied by a trusted configuration adapter.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ExecPolicyLayer {
     id: ExecPolicyLayerId,
     kind: ExecPolicyLayerKind,

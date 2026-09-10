@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 /// The containing configuration authority validates the namespace it owns. This keeps User,
 /// Directory, and Plugin declarations from silently colliding on a display name.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct McpServerId(String);
 
@@ -49,6 +50,7 @@ impl<'de> Deserialize<'de> for McpServerId {
 
 /// A non-secret reference to credential material owned by the relevant authentication domain.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -67,6 +69,7 @@ pub enum McpCredentialBinding {
 /// This is user intent only. An enabled declaration still needs runtime policy, credential, and
 /// transport checks before an MCP manager may connect it.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum McpServerEnablement {
     #[default]
@@ -76,6 +79,7 @@ pub enum McpServerEnablement {
 
 /// Non-secret transport declaration for one standalone MCP server.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum McpTransportConfig {
     Stdio { command: String, args: Vec<String> },
@@ -84,6 +88,7 @@ pub enum McpTransportConfig {
 
 /// Desired, runtime-free definition for a standalone MCP server.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct McpServerConfig {
     pub id: McpServerId,
@@ -108,6 +113,7 @@ impl McpServerConfig {
 
 /// MCP declarations owned by the user configuration authority.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct McpConfig {
     #[serde(default)]

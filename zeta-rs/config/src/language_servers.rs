@@ -7,6 +7,7 @@ use crate::ConfigError;
 
 /// Stable configuration identity for one language-server integration.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct LanguageServerId(String);
 
@@ -51,6 +52,7 @@ impl<'de> Deserialize<'de> for LanguageServerId {
 
 /// Durable user intent for one language server.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum LanguageServerModeConfig {
     Disabled,
@@ -60,6 +62,7 @@ pub enum LanguageServerModeConfig {
 
 /// Runtime-free language-server preference stored by the User Config authority.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServerConfig {
     #[serde(default)]
@@ -83,6 +86,7 @@ impl LanguageServerConfig {
 
 /// User-owned language-server preferences keyed by stable integration identity.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServersConfig {
     #[serde(default)]

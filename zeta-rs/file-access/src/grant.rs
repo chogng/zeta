@@ -25,7 +25,19 @@ pub enum GrantSource {
 }
 
 /// Permission kind that can be granted for one directory scope.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum Permission {
     ReadFiles,
@@ -68,7 +80,7 @@ impl fmt::Display for Permission {
 }
 
 /// Complete permission set granted to one directory.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(transparent)]
 pub struct Permissions {
     entries: BTreeSet<Permission>,
