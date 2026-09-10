@@ -49,7 +49,6 @@ use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::ChatInputMode;
 use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::CompletionView;
-use crate::thread::composer::SteerSource;
 use crate::thread::composer::built_in_slash_command_definitions;
 use crate::thread::composer::file_search::FileSearchManager;
 use crate::thread::interaction::approval::Approval;
@@ -1969,60 +1968,61 @@ fn control_enter_steers_the_working_turn_and_tracks_delivery() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
 
     let Some(AppCommand::Thread(ThreadCommand::SteerTurn {
-        source,
         steer_id,
         submission,
     })) = action
     else {
         panic!("expected active Turn steer");
     };
-    assert_eq!(source, SteerSource::Composer);
     assert_eq!(submission.display_text, "secondthird");
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages()[1].text(), "secondthird");
     assert!(app.command_panel().is_none());
 
-    app.update(ThreadEvent::SteerCompleted { source, steer_id });
+    app.update(ThreadEvent::SteerCompleted { steer_id });
 
     assert!(app.command_panel().is_none());
     assert_eq!(app.status(), &Status::Working);
 }
 
 #[test]
-fn queue_selection_can_steer_an_older_message_immediately() {
+fn queue_selection_requests_durable_steering_of_the_selected_message() {
     let mut app = App::new();
-    app.insert_text("first");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
-    for message in ["second", "third"] {
-        app.insert_text(message);
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.set_active_turn(zeta_protocol::TurnId::new("running").unwrap());
+    let mut messages = Vec::new();
+    for text in ["second", "third"] {
+        app.insert_text(text);
+        let action = app
+            .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .unwrap();
+        messages.push(crate::test_support::queued_message(action));
+        app.update(ThreadEvent::QueueReceived {
+            messages: messages.clone(),
+            restore: None,
+        });
     }
-    let second_id = app.queue_view().items[0].id;
-
+    let first = app.queue_view().items[0].id;
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
-
-    let Some(AppCommand::Thread(ThreadCommand::SteerTurn {
-        source: SteerSource::Queue(queue_id),
-        steer_id,
-        submission,
+    let Some(AppCommand::Thread(ThreadCommand::EditQueue {
+        target,
+        action: crate::thread::queue::QueueAction::Send(turn),
     })) = action
     else {
-        panic!("expected the selected Queue message to steer");
+        panic!("expected durable queue send")
     };
-    assert_eq!(queue_id, second_id);
-    assert_eq!(submission.display_text, "second");
+    assert_eq!(target.queue_id, first);
+    assert_eq!(turn.unwrap().as_str(), "running");
     assert!(app.queue_view().items[0].sending);
-    assert!(!app.queue_focused());
-
-    app.update(ThreadEvent::SteerCompleted {
-        source: SteerSource::Queue(queue_id),
-        steer_id,
+    messages[0].status = ::queue::QueueStatus::Started;
+    messages[0].revision = 2;
+    app.update(ThreadEvent::QueueReceived {
+        messages,
+        restore: None,
     });
-
     assert_eq!(app.queue_view().items.len(), 1);
     assert_eq!(app.queue_view().items[0].text, "third");
 }
@@ -2037,7 +2037,10 @@ fn enter_queues_a_new_turn_by_default_while_the_current_turn_is_working() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, None);
+    assert!(matches!(
+        action,
+        Some(AppCommand::Thread(ThreadCommand::Enqueue { .. }))
+    ));
     assert_eq!(app.queue_view().items[0].text, "next turn");
     assert_eq!(app.status(), &Status::Working);
 
@@ -2047,20 +2050,35 @@ fn enter_queues_a_new_turn_by_default_while_the_current_turn_is_working() {
 }
 
 #[test]
-fn alt_up_focuses_the_queue_and_enter_restores_the_selected_message() {
+fn queue_restore_waits_for_backend_pause_before_editing() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("restore me");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT)),
-        None
-    );
+    let action = app
+        .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .unwrap();
+    let mut message = crate::test_support::queued_message(action);
+    app.update(ThreadEvent::QueueReceived {
+        messages: vec![message.clone()],
+        restore: None,
+    });
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
     assert!(app.queue_focused());
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
+    let Some(AppCommand::Thread(ThreadCommand::EditQueue {
+        target,
+        action: crate::thread::queue::QueueAction::Pause,
+    })) = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected pause")
+    };
+    assert_eq!(app.input(), "");
+    message.status = ::queue::QueueStatus::Paused;
+    message.revision = 2;
+    app.update(ThreadEvent::QueueReceived {
+        messages: vec![message],
+        restore: Some(target.queue_id),
+    });
     assert_eq!(app.input(), "restore me");
-    assert!(!app.queue_focused());
     assert!(app.queue_view().items[0].editing);
 }
 
@@ -2142,28 +2160,31 @@ fn manager_session_keys_archive_show_details_and_open_the_selected_session() {
 }
 
 #[test]
-fn queued_turn_stays_editable_when_automatic_submission_is_rejected() {
+fn rejected_enqueue_keeps_the_draft_and_retry_identity() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("keep this message");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.update(ThreadEvent::TurnCompleted);
-
-    let Some(AppCommand::Thread(ThreadCommand::SubmitQueuedTurn {
+    let Some(AppCommand::Thread(ThreadCommand::Enqueue {
         queue_id,
-        submission,
-    })) = app.dispatch_next_queued_turn()
+        command_id,
+        ..
+    })) = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
-        panic!("expected queued Turn dispatch");
+        panic!("expected enqueue")
     };
-    assert_eq!(submission.display_text, "keep this message");
-    assert!(app.queue_view().items[0].sending);
-
-    app.update(ThreadEvent::QueueSubmissionFailed {
-        queue_id,
+    app.update(ThreadEvent::QueueFailed {
+        queue_id: Some(queue_id),
         error: "server unavailable".into(),
     });
     assert!(!app.queue_view().items[0].sending);
+    let Some(AppCommand::Thread(ThreadCommand::Enqueue {
+        command_id: retry, ..
+    })) = app.send_queued_message(queue_id)
+    else {
+        panic!("expected retry")
+    };
+    assert_eq!(retry, command_id);
+    assert_eq!(app.queue_view().items[0].text, "keep this message");
 }
 
 #[test]
@@ -2187,7 +2208,10 @@ fn a_created_turn_does_not_claim_the_running_steer_action() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, None);
+    assert!(matches!(
+        action,
+        Some(AppCommand::Thread(ThreadCommand::Enqueue { .. }))
+    ));
     assert_eq!(app.queue_view().items[0].text, "after the queued turn");
     assert_eq!(app.status(), &Status::Working);
 }
@@ -2206,7 +2230,6 @@ fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
     };
 
     app.update(ThreadEvent::SteerSubmissionFailed {
-        source: SteerSource::Composer,
         steer_id,
         error: "sequence conflict".into(),
     });

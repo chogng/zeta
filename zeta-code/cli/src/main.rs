@@ -27,12 +27,17 @@ mod remote;
 mod update;
 
 fn main() {
+    if let Err(error) = process_hardening::initialize() {
+        eprintln!("process hardening failed: {error}");
+        std::process::exit(1);
+    }
+
     let mut arguments = env::args().skip(1);
     let outcome = match arguments.next() {
         None => interactive().map_err(CliError::failure),
         Some(command) => match command.as_str() {
             "--version" | "-V" => {
-                println!("zeta {}", env!("CARGO_PKG_VERSION"));
+                println!("zeta {}", build_info::VERSION);
                 Ok(())
             }
             "ask" => ask(arguments.collect::<Vec<_>>().join(" ")),
@@ -243,7 +248,7 @@ fn headless_runner() -> Result<ExecRunner, CliError> {
             local_profile_root(),
             ClientInfo {
                 name: "zeta-cli-exec".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
+                version: build_info::VERSION.into(),
             },
         )
         .with_dir_root(configured_dir().map_err(CliError::failure)?),

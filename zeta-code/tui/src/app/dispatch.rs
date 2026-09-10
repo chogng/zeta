@@ -265,7 +265,10 @@ fn text_arguments(arguments: &[ChatInputItem]) -> Result<String, CommandExecutio
     if arguments.iter().any(|argument| {
         matches!(
             argument,
-            ChatInputItem::Image { .. } | ChatInputItem::Skill { .. }
+            ChatInputItem::Image { .. }
+                | ChatInputItem::Attachment(_)
+                | ChatInputItem::Context { .. }
+                | ChatInputItem::Skill { .. }
         )
     }) {
         return Err(CommandExecutionError(
@@ -276,7 +279,10 @@ fn text_arguments(arguments: &[ChatInputItem]) -> Result<String, CommandExecutio
         .iter()
         .filter_map(|argument| match argument {
             ChatInputItem::Text(text) => Some(text.as_str()),
-            ChatInputItem::Image { .. } | ChatInputItem::Skill { .. } => None,
+            ChatInputItem::Image { .. }
+            | ChatInputItem::Attachment(_)
+            | ChatInputItem::Context { .. }
+            | ChatInputItem::Skill { .. } => None,
         })
         .collect::<Vec<_>>()
         .join(" ")

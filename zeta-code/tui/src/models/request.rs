@@ -105,6 +105,7 @@ where
     };
 
     client.update_config(ConfigUpdateParams {
+        features: Default::default(),
         command_id: new_command_id("model"),
         expected_revision: config.revision,
         preferred_model,
@@ -160,6 +161,7 @@ fn write_pins<T: JsonRpcTransport>(
         serde_json::to_value(pins).map_err(|error| ModelCommandError(error.to_string()))?,
     );
     client.update_config(ConfigUpdateParams {
+        features: Default::default(),
         command_id: new_command_id("pin-model"),
         expected_revision: config.revision,
         preferred_model: Patch::Missing,

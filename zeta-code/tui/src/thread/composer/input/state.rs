@@ -41,6 +41,8 @@ pub(crate) enum ChatInputQueueOutcome {
 pub(crate) enum ChatInputItem {
     Text(String),
     Image { url: String },
+    Attachment(zeta_protocol::ImageAttachmentRef),
+    Context { name: String, content: String },
     Skill { skill: SkillRef },
 }
 
@@ -57,6 +59,79 @@ pub(crate) struct QueuedChatInput {
 }
 
 impl QueuedChatInput {
+    pub(crate) fn from_submission(submission: ChatSubmission) -> Self {
+        let mut input = ChatInput::with_catalog(ChatInputCatalog::default());
+        let mut skills = submission
+            .input
+            .iter()
+            .filter_map(|item| match item {
+                ChatInputItem::Skill { skill } => Some(skill.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for item in &submission.input {
+            match item {
+                ChatInputItem::Text(text) => {
+                    let mut remaining = text.as_str();
+                    loop {
+                        let next = skills
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(index, skill)| {
+                                let selector = format!("${}", skill.id.name);
+                                remaining
+                                    .match_indices(&selector)
+                                    .find(|(offset, _)| {
+                                        let before = &remaining[..*offset];
+                                        let after = &remaining[*offset + selector.len()..];
+                                        (before.is_empty() || before.ends_with(char::is_whitespace))
+                                            && after.chars().next().is_none_or(|ch| {
+                                                !ch.is_alphanumeric()
+                                                    && !matches!(ch, '_' | '-' | '.')
+                                            })
+                                    })
+                                    .map(|(offset, _)| (offset, index, selector))
+                            })
+                            .min_by_key(|(offset, _, _)| *offset);
+                        let Some((offset, index, selector)) = next else {
+                            input
+                                .pending_pastes
+                                .insert_text(&mut input.textarea, remaining.to_owned());
+                            break;
+                        };
+                        input
+                            .pending_pastes
+                            .insert_text(&mut input.textarea, remaining[..offset].to_owned());
+                        let element = input.textarea.insert_element(&selector);
+                        input.skill_bindings.push((element, skills.remove(index)));
+                        remaining = &remaining[offset + selector.len()..];
+                    }
+                }
+                ChatInputItem::Image { .. } | ChatInputItem::Attachment(_) => input
+                    .attachments
+                    .insert_item(&mut input.textarea, item.clone()),
+                ChatInputItem::Context { name, content } => {
+                    let element = input.textarea.insert_element(&format!("[Context: {name}]"));
+                    input
+                        .contexts
+                        .push((element, name.clone(), content.clone()));
+                }
+                ChatInputItem::Skill { .. } => {}
+            }
+        }
+        for skill in skills {
+            input.textarea.insert_text(" ");
+            let element = input
+                .textarea
+                .insert_element(&format!("${}", skill.id.name));
+            input.skill_bindings.push((element, skill));
+        }
+        Self {
+            submission,
+            draft: input.take_draft(),
+        }
+    }
+
     pub(crate) fn display_text(&self) -> &str {
         &self.submission.display_text
     }
@@ -72,6 +147,7 @@ struct ChatInputDraft {
     vim: VimState,
     slash_command_element: Option<TextElementId>,
     skill_bindings: Vec<(TextElementId, SkillRef)>,
+    contexts: Vec<(TextElementId, String, String)>,
     pending_pastes: PendingPastes,
     attachments: Attachments,
 }
@@ -86,6 +162,7 @@ pub(crate) struct ChatInput {
     vim: VimState,
     pub(super) slash_command_element: Option<TextElementId>,
     pub(super) skill_bindings: Vec<(TextElementId, SkillRef)>,
+    contexts: Vec<(TextElementId, String, String)>,
     pub(super) pending_pastes: PendingPastes,
     pub(super) attachments: Attachments,
     history: HistoryRecall,
@@ -107,6 +184,7 @@ impl ChatInput {
             vim: VimState::default(),
             slash_command_element: None,
             skill_bindings: Vec::new(),
+            contexts: Vec::new(),
             pending_pastes: PendingPastes::default(),
             attachments: Attachments::default(),
             history: HistoryRecall::default(),
@@ -327,6 +405,7 @@ impl ChatInput {
         self.vim = draft.vim;
         self.slash_command_element = draft.slash_command_element;
         self.skill_bindings = draft.skill_bindings;
+        self.contexts = draft.contexts;
         self.pending_pastes = draft.pending_pastes;
         self.attachments = draft.attachments;
         self.sync_completion();
@@ -355,11 +434,17 @@ impl ChatInput {
             text.push_str(&raw_text[cursor..range.start]);
             if let Some(replacement) = self.pending_pastes.replacement(element_id) {
                 text.push_str(replacement);
-            } else if let Some(url) = self.attachments.image_url(element_id) {
+            } else if let Some((_, name, content)) =
+                self.contexts.iter().find(|(id, _, _)| *id == element_id)
+            {
                 push_text_input(&mut input, &mut text);
-                input.push(ChatInputItem::Image {
-                    url: url.to_owned(),
+                input.push(ChatInputItem::Context {
+                    name: name.clone(),
+                    content: content.clone(),
                 });
+            } else if let Some(image) = self.attachments.image_item(element_id) {
+                push_text_input(&mut input, &mut text);
+                input.push(image.clone());
             } else {
                 text.push_str(&raw_text[range.clone()]);
                 if let Some(skill) = self
@@ -395,6 +480,7 @@ impl ChatInput {
             vim: std::mem::take(&mut self.vim),
             slash_command_element: self.slash_command_element.take(),
             skill_bindings: std::mem::take(&mut self.skill_bindings),
+            contexts: std::mem::take(&mut self.contexts),
             pending_pastes: std::mem::take(&mut self.pending_pastes),
             attachments: std::mem::take(&mut self.attachments),
         }
@@ -429,6 +515,7 @@ impl ChatInput {
         self.vim.reset_draft();
         self.slash_command_element = None;
         self.skill_bindings.clear();
+        self.contexts.clear();
         self.pending_pastes.clear();
         self.attachments.clear();
         self.completion.clear();
@@ -541,6 +628,7 @@ impl ChatInput {
                     self.vim = draft.vim;
                     self.slash_command_element = draft.slash_command_element;
                     self.skill_bindings = draft.skill_bindings;
+                    self.contexts = draft.contexts;
                     self.pending_pastes = draft.pending_pastes;
                     self.attachments = draft.attachments;
                     self.sync_completion();
@@ -556,6 +644,7 @@ impl ChatInput {
                 self.attachments.clear();
                 self.slash_command_element = None;
                 self.skill_bindings.clear();
+                self.contexts.clear();
                 self.completion.clear();
             }
         }

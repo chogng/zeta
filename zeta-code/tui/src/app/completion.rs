@@ -27,7 +27,6 @@ use crate::thread::ThreadRequestScope;
 use crate::thread::ThreadSubscription;
 use crate::thread::ThreadSwitch;
 use crate::thread::TurnStartCompletion;
-use crate::thread::queue::QueueId;
 use std::time::Instant;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
@@ -213,7 +212,7 @@ pub(super) fn apply_request_completion(
                 origin,
             );
             app.show_policy_tip(Instant::now());
-            apply_turn_start_completion(turn, None, conversation, thread_subscription, app);
+            apply_turn_start_completion(turn, conversation, thread_subscription, app);
             if rejected && let Some(draft) = draft {
                 app.thread_presentations
                     .active_mut()
@@ -415,7 +414,7 @@ pub(super) fn apply_request_completion(
                     &mut current.conversation,
                     &mut current.subscription,
                     app,
-                    panel_generation,
+                    origin,
                 );
             }
         }
@@ -427,8 +426,9 @@ fn apply_thread_completion(
     conversation: &mut ActiveConversation,
     thread_subscription: &mut ThreadSubscription,
     app: &mut App,
-    panel_generation: u64,
+    origin: super::requests::RequestOrigin,
 ) {
+    let panel_generation = origin.panel_generation;
     match completion {
         ThreadCompletion::RewindPickerLoaded {
             result: Ok(choices),
@@ -438,24 +438,41 @@ fn apply_thread_completion(
             result: Err(error), ..
         } => app.update(ThreadEvent::FailureReported(error)),
         ThreadCompletion::Started { result, .. } => {
-            apply_turn_start_completion(result, None, conversation, thread_subscription, app)
+            apply_turn_start_completion(result, conversation, thread_subscription, app)
         }
-        ThreadCompletion::QueuedTurnStarted {
-            queue_id, result, ..
-        } => apply_turn_start_completion(
+        ThreadCompletion::QueueUpdated {
+            queue_id,
+            restore,
             result,
-            Some(queue_id),
-            conversation,
-            thread_subscription,
-            app,
-        ),
+            ..
+        } => match result {
+            Ok(snapshot) => {
+                app.update(ThreadEvent::QueueReceived {
+                    messages: snapshot.messages,
+                    restore,
+                });
+                if restore.is_some() && app.thread_presentations.active().queue.is_editing() {
+                    match origin.mode {
+                        crate::terminal::ScreenMode::Fullscreen => {
+                            app.fullscreen.viewports.active_mut().queue.blur()
+                        }
+                        crate::terminal::ScreenMode::Inline => {
+                            app.inline.viewports.active_mut().queue.blur()
+                        }
+                    }
+                }
+            }
+            Err(error) => app.update(ThreadEvent::QueueFailed {
+                queue_id,
+                error: error.to_string(),
+            }),
+        },
         ThreadCompletion::Steered {
-            source,
             steer_id,
             result: Ok((steer, snapshot)),
             ..
         } => {
-            app.update(ThreadEvent::SteerCompleted { source, steer_id });
+            app.update(ThreadEvent::SteerCompleted { steer_id });
             if snapshot.thread.sequence < conversation.thread_sequence().max(steer.sequence) {
                 return;
             }
@@ -472,13 +489,11 @@ fn apply_thread_completion(
             );
         }
         ThreadCompletion::Steered {
-            source,
             steer_id,
             result: Err(error),
             ..
         } => {
             app.update(ThreadEvent::SteerSubmissionFailed {
-                source,
                 steer_id,
                 error: error.to_string(),
             });
@@ -610,28 +625,15 @@ fn report_turn_start_failure(app: &mut App, error: String) {
 
 fn apply_turn_start_completion(
     result: TurnStartCompletion,
-    queue_id: Option<QueueId>,
     conversation: &mut ActiveConversation,
     thread_subscription: &mut ThreadSubscription,
     app: &mut App,
 ) {
     match result {
-        TurnStartCompletion::Rejected(error) => {
-            if let Some(queue_id) = queue_id {
-                app.update(ThreadEvent::QueueSubmissionFailed {
-                    queue_id,
-                    error: error.to_string(),
-                });
-            } else {
-                report_turn_start_failure(app, error.to_string());
-            }
-        }
+        TurnStartCompletion::Rejected(error) => report_turn_start_failure(app, error.to_string()),
         TurnStartCompletion::Accepted { start, snapshot } => {
             conversation.set_thread_sequence(start.sequence);
             app.set_active_turn_if_idle(start.turn_id);
-            if let Some(queue_id) = queue_id {
-                app.update(ThreadEvent::QueueSubmissionCompleted(queue_id));
-            }
             match *snapshot {
                 Ok(snapshot) => {
                     if snapshot.thread.sequence < conversation.thread_sequence() {

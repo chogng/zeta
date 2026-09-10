@@ -147,7 +147,11 @@ impl SlashCommandInvocation {
             Some(ChatInputItem::Text(text)) => {
                 *text = format!("{command_text} {text}");
             }
-            Some(ChatInputItem::Image { .. }) | Some(ChatInputItem::Skill { .. }) | None => {
+            Some(ChatInputItem::Image { .. })
+            | Some(ChatInputItem::Attachment(_))
+            | Some(ChatInputItem::Context { .. })
+            | Some(ChatInputItem::Skill { .. })
+            | None => {
                 self.arguments.insert(0, ChatInputItem::Text(command_text));
             }
         }

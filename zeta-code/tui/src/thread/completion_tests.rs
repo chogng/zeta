@@ -8,7 +8,6 @@ use crate::thread::Event;
 use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::Steer;
-use crate::thread::composer::SteerSource;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::TurnId;
@@ -86,7 +85,6 @@ fn working_turn_requeues_a_steer_until_the_composer_marks_it_active() {
             CommandActivity::Working,
         ),
         Command::SteerTurn {
-            source: SteerSource::Composer,
             steer_id,
             submission: submission(),
         },
@@ -95,7 +93,6 @@ fn working_turn_requeues_a_steer_until_the_composer_marks_it_active() {
     assert!(matches!(
         preparation,
         CommandPreparation::Requeue(Command::SteerTurn {
-            source: SteerSource::Composer,
             steer_id: prepared,
             ..
         }) if prepared == steer_id
@@ -111,7 +108,6 @@ fn waiting_turn_can_start_a_steer_request() {
         None,
         command_state(Some(turn_id.clone()), CommandActivity::Other),
         Command::SteerTurn {
-            source: SteerSource::Composer,
             steer_id,
             submission: submission(),
         },

@@ -7,7 +7,6 @@ use super::ThreadRequestResponse;
 use super::ThreadRequestScope;
 use super::composer::ChatSubmission;
 use super::composer::SteerId;
-use super::composer::SteerSource;
 use super::interrupt_turn;
 use super::queue::QueueId;
 use super::read_older_thread_history;
@@ -98,7 +97,6 @@ pub(crate) enum ThreadCompletion {
     },
     Steered {
         scope: ThreadRequestScope,
-        source: SteerSource,
         steer_id: SteerId,
         result: Result<(TurnSteerResult, LatestThreadSnapshot), ClientError>,
     },
@@ -106,10 +104,11 @@ pub(crate) enum ThreadCompletion {
         scope: ThreadRequestScope,
         result: TurnStartCompletion,
     },
-    QueuedTurnStarted {
+    QueueUpdated {
         scope: ThreadRequestScope,
-        queue_id: QueueId,
-        result: TurnStartCompletion,
+        queue_id: Option<QueueId>,
+        restore: Option<QueueId>,
+        result: Result<zeta_app_server_protocol::protocol::queue::QueueListResult, ClientError>,
     },
     RewindPickerLoaded {
         scope: ThreadRequestScope,
@@ -126,7 +125,7 @@ impl ThreadCompletion {
             | Self::Interrupted { scope, .. }
             | Self::Steered { scope, .. }
             | Self::Started { scope, .. }
-            | Self::QueuedTurnStarted { scope, .. }
+            | Self::QueueUpdated { scope, .. }
             | Self::RewindPickerLoaded { scope, .. } => scope,
         }
     }
@@ -148,14 +147,12 @@ pub(crate) enum CommandRequest {
         submission: ChatSubmission,
         approval_mode: ApprovalMode,
     },
-    SubmitQueuedTurn {
-        queue_id: QueueId,
-        submission: ChatSubmission,
+    Queue {
+        command: Command,
         approval_mode: ApprovalMode,
     },
     SteerTurn {
         turn_id: TurnId,
-        source: SteerSource,
         steer_id: SteerId,
         submission: ChatSubmission,
     },
@@ -206,22 +203,19 @@ pub(crate) fn prepare_command(
                 approval_mode: state.approval_mode,
             })
         }
-        Command::SubmitQueuedTurn {
-            queue_id,
-            submission,
-        } => CommandPreparation::Request(CommandRequest::SubmitQueuedTurn {
-            queue_id,
-            submission,
+        command @ (Command::Enqueue { .. }
+        | Command::EditQueue { .. }
+        | Command::CancelQueue(_)
+        | Command::RefreshQueue) => CommandPreparation::Request(CommandRequest::Queue {
+            command,
             approval_mode: state.approval_mode,
         }),
         Command::SteerTurn {
-            source,
             steer_id,
             submission,
         } => {
             if state.activity == CommandActivity::Working && !state.steering {
                 return CommandPreparation::Requeue(Command::SteerTurn {
-                    source,
                     steer_id,
                     submission,
                 });
@@ -229,12 +223,10 @@ pub(crate) fn prepare_command(
             match state.active_turn {
                 Some(turn_id) => CommandPreparation::Request(CommandRequest::SteerTurn {
                     turn_id,
-                    source,
                     steer_id,
                     submission,
                 }),
                 None => CommandPreparation::Present(Event::SteerSubmissionFailed {
-                    source,
                     steer_id,
                     error: "the active Turn is no longer available".into(),
                 }),
@@ -251,7 +243,7 @@ impl CommandRequest {
             Self::OpenRewindPicker { .. } => "zeta-tui-load-rewind",
             Self::ResolveRequest { .. } => "zeta-tui-resolve-thread-request",
             Self::SubmitTurn { .. } => "zeta-tui-start-turn",
-            Self::SubmitQueuedTurn { .. } => "zeta-tui-start-queued-turn",
+            Self::Queue { .. } => "zeta-tui-queue",
             Self::SteerTurn { .. } => "zeta-tui-steer-turn",
         }
     }
@@ -301,28 +293,36 @@ impl CommandRequest {
                     result: start_turn_and_read(client, scope, submission, approval_mode, history),
                 }
             }
-            Self::SubmitQueuedTurn {
-                queue_id,
-                submission,
+            Self::Queue {
+                command,
                 approval_mode,
             } => {
-                let completion_scope = scope.clone();
-                ThreadCompletion::QueuedTurnStarted {
-                    scope: completion_scope,
+                let (queue_id, restore) = match &command {
+                    Command::Enqueue { queue_id, .. } => (Some(*queue_id), None),
+                    Command::EditQueue { target, action } => (
+                        Some(target.queue_id),
+                        matches!(action, super::queue::QueueAction::Pause)
+                            .then_some(target.queue_id),
+                    ),
+                    Command::CancelQueue(target) => (Some(target.queue_id), None),
+                    _ => (None, None),
+                };
+                let result = queue_request(&mut client, &scope, command, approval_mode);
+                ThreadCompletion::QueueUpdated {
+                    scope,
                     queue_id,
-                    result: start_turn_and_read(client, scope, submission, approval_mode, history),
+                    restore,
+                    result,
                 }
             }
             Self::SteerTurn {
                 turn_id,
-                source,
                 steer_id,
                 submission,
             } => {
                 let completion_scope = scope.clone();
                 ThreadCompletion::Steered {
                     scope: completion_scope,
-                    source,
                     steer_id,
                     result: steer_turn_and_read(client, scope, turn_id, submission, history),
                 }
@@ -398,3 +398,65 @@ pub(crate) fn steer_turn_and_read(
 #[cfg(test)]
 #[path = "completion_tests.rs"]
 mod tests;
+
+fn queue_request(
+    client: &mut AppServerRequestHandle,
+    scope: &ThreadRequestScope,
+    command: Command,
+    approval_mode: ApprovalMode,
+) -> Result<zeta_app_server_protocol::protocol::queue::QueueListResult, ClientError> {
+    use super::queue::QueueAction;
+    use zeta_app_server_protocol::protocol::queue::QueueCancelParams;
+    use zeta_app_server_protocol::protocol::queue::QueueEditAction;
+    use zeta_app_server_protocol::protocol::queue::QueueEditParams;
+    use zeta_app_server_protocol::protocol::queue::QueueEnqueueParams;
+    use zeta_app_server_protocol::protocol::queue::QueueListParams;
+    match command {
+        Command::Enqueue {
+            command_id,
+            submission,
+            ..
+        } => {
+            let input = super::request::materialize_submission(client, submission)?;
+            let tool_mode = client.read_config()?.tool_mode;
+            client.enqueue_message(QueueEnqueueParams {
+                command_id,
+                session_id: scope.session_id().clone(),
+                thread_id: scope.thread_id().clone(),
+                input,
+                tool_mode,
+                approval_mode,
+            })?;
+        }
+        Command::EditQueue { target, action } => {
+            let action = match action {
+                QueueAction::Pause => QueueEditAction::Pause,
+                QueueAction::Replace(submission) => QueueEditAction::Replace {
+                    input: super::request::materialize_submission(client, submission)?,
+                },
+                QueueAction::Move(direction) => QueueEditAction::Move { direction },
+                QueueAction::Send(turn_id) => QueueEditAction::Send { turn_id },
+            };
+            client.edit_queued_message(QueueEditParams {
+                session_id: scope.session_id().clone(),
+                thread_id: scope.thread_id().clone(),
+                command_id: target.command_id,
+                expected_revision: target.revision,
+                action,
+            })?;
+        }
+        Command::CancelQueue(target) => {
+            client.cancel_queued_message(QueueCancelParams {
+                session_id: scope.session_id().clone(),
+                thread_id: scope.thread_id().clone(),
+                command_id: target.command_id,
+            })?;
+        }
+        Command::RefreshQueue => {}
+        _ => return Err(ClientError::Protocol("invalid queue command".into())),
+    }
+    client.list_queued_messages(QueueListParams {
+        session_id: scope.session_id().clone(),
+        thread_id: scope.thread_id().clone(),
+    })
+}

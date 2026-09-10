@@ -9,6 +9,7 @@ use super::TuiSlashCommandAction;
 use super::built_in_catalog_command;
 use super::built_in_slash_command_definitions;
 use super::default_slash_command_catalog;
+use crate::thread::composer::ChatSubmission;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -351,5 +352,51 @@ fn queued_input_preserves_exact_text_image_paste_and_skill_bindings() {
             .filter(|item| matches!(item, ChatInputItem::Skill { .. }))
             .count(),
         1
+    );
+}
+
+#[test]
+fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors() {
+    let skill = SkillRef::follow_latest(SkillId::new(
+        SkillSourceId::new("user:skill-source:test").unwrap(),
+        SkillName::new("commit").unwrap(),
+    ));
+    let submission = ChatSubmission {
+        display_text: "$commit inspect".into(),
+        input: vec![
+            ChatInputItem::Skill {
+                skill: skill.clone(),
+            },
+            ChatInputItem::Text("$commit inspect".into()),
+            ChatInputItem::Context {
+                name: "file".into(),
+                content: "file contents".into(),
+            },
+        ],
+    };
+    let queued = super::state::QueuedChatInput::from_submission(submission);
+    let mut input = super::state::ChatInput::new();
+    input.restore_queued(queued).unwrap();
+    assert_eq!(input.text().matches("$commit").count(), 1);
+    let ChatInputQueueOutcome::Queued(restored) = input.queue_current() else {
+        panic!("restored input")
+    };
+    assert_eq!(
+        restored
+            .submission()
+            .input
+            .iter()
+            .filter(|item| matches!(item, ChatInputItem::Skill { .. }))
+            .count(),
+        1
+    );
+    assert!(
+        restored
+            .submission()
+            .input
+            .contains(&ChatInputItem::Context {
+                name: "file".into(),
+                content: "file contents".into()
+            })
     );
 }

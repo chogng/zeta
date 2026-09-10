@@ -22,20 +22,33 @@ pub(crate) const DEFAULT_MAX_VISIBLE_ITEMS: usize = 3;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct QueueId(u64);
 
-impl QueueId {
-    fn new(value: u64) -> Self {
-        Self(value)
-    }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct QueueTarget {
+    pub(crate) queue_id: QueueId,
+    pub(crate) command_id: zeta_protocol::CommandId,
+    pub(crate) revision: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum QueueAction {
+    Pause,
+    Replace(ChatSubmission),
+    Move(queue::QueueMove),
+    Send(Option<zeta_protocol::TurnId>),
 }
 
 #[derive(Debug, Eq, PartialEq)]
 struct QueueEntry {
     id: QueueId,
+    command_id: zeta_protocol::CommandId,
+    revision: Option<i64>,
     input: Option<QueuedChatInput>,
     display_text: String,
     sending: bool,
+    paused: bool,
 }
 
+/// Keeps drafts and a view of the backend queue. Dispatch belongs to App Server.
 #[derive(Debug, Default, Eq, PartialEq)]
 pub(crate) struct Queue {
     next_id: u64,
@@ -46,153 +59,171 @@ pub(crate) struct Queue {
 impl Queue {
     pub(crate) fn push(&mut self, input: QueuedChatInput) -> QueueId {
         if let Some(id) = self.editing.take()
-            && let Some(entry) = self
-                .entries
-                .iter_mut()
-                .find(|entry| entry.id == id && entry.input.is_none())
+            && let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id)
         {
             entry.display_text = input.display_text().to_owned();
             entry.input = Some(input);
             return id;
         }
-        let id = QueueId::new(self.next_id);
+        let id = QueueId(self.next_id);
         self.next_id = self.next_id.saturating_add(1);
         self.entries.push(QueueEntry {
             id,
+            command_id: crate::client::new_command_id("queue"),
+            revision: None,
             display_text: input.display_text().to_owned(),
             input: Some(input),
             sending: false,
+            paused: false,
         });
         id
+    }
+
+    pub(crate) fn submit(&mut self, id: QueueId) -> Option<crate::thread::Command> {
+        let entry = self.entries.iter_mut().find(|entry| entry.id == id)?;
+        if entry.sending {
+            return None;
+        }
+        let submission = entry.input.as_ref()?.submission().clone();
+        entry.sending = true;
+        Some(match entry.revision {
+            Some(revision) => crate::thread::Command::EditQueue {
+                target: QueueTarget {
+                    queue_id: id,
+                    command_id: entry.command_id.clone(),
+                    revision,
+                },
+                action: QueueAction::Replace(submission),
+            },
+            None => crate::thread::Command::Enqueue {
+                queue_id: id,
+                command_id: entry.command_id.clone(),
+                submission,
+            },
+        })
+    }
+
+    pub(crate) fn target(&mut self, id: QueueId) -> Option<QueueTarget> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == id && !entry.sending)?;
+        let target = QueueTarget {
+            queue_id: id,
+            command_id: entry.command_id.clone(),
+            revision: entry.revision?,
+        };
+        entry.sending = true;
+        Some(target)
+    }
+
+    pub(crate) fn apply(&mut self, messages: Vec<queue::QueuedMessage>) -> Result<(), String> {
+        let messages = messages
+            .into_iter()
+            .map(|message| {
+                let submission = submission(&message.request.input)?;
+                Ok((message, submission))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let mut previous = std::mem::take(&mut self.entries);
+        let mut entries = Vec::new();
+        for (message, submission) in messages {
+            let existing = previous
+                .iter()
+                .position(|entry| entry.command_id == message.request.command_id)
+                .map(|index| previous.remove(index));
+            if matches!(
+                message.status,
+                queue::QueueStatus::Started | queue::QueueStatus::Cancelled
+            ) {
+                continue;
+            }
+            let mut entry = match existing {
+                Some(entry) => entry,
+                None => {
+                    let id = QueueId(self.next_id);
+                    self.next_id = self.next_id.saturating_add(1);
+                    QueueEntry {
+                        id,
+                        command_id: message.request.command_id,
+                        revision: None,
+                        display_text: submission.display_text.clone(),
+                        input: Some(QueuedChatInput::from_submission(submission.clone())),
+                        sending: false,
+                        paused: false,
+                    }
+                }
+            };
+            if entry
+                .revision
+                .is_none_or(|revision| revision <= message.revision)
+            {
+                entry.revision = Some(message.revision);
+                entry.sending = message.status == queue::QueueStatus::Delivering;
+                entry.paused = message.status == queue::QueueStatus::Paused;
+                entry.display_text = match message.error {
+                    Some(error) => format!("{} · {error}", submission.display_text),
+                    None => submission.display_text.clone(),
+                };
+                if self.editing != Some(entry.id) {
+                    entry.input = Some(QueuedChatInput::from_submission(submission));
+                }
+            }
+            entries.push(entry);
+        }
+        entries.extend(
+            previous
+                .into_iter()
+                .filter(|entry| entry.revision.is_none()),
+        );
+        self.entries = entries;
+        Ok(())
     }
 
     pub(crate) fn restore(&mut self, id: QueueId, input: &mut ChatInput) -> Result<(), String> {
         if !input.is_empty() {
             return Err("clear the current draft before restoring a queued message".into());
         }
-        let index = self
+        let entry = self
             .entries
-            .iter()
-            .position(|entry| entry.id == id && !entry.sending && entry.input.is_some())
-            .ok_or_else(|| "the queued message is no longer editable".to_owned())?;
-        let queued = self.entries[index]
+            .iter_mut()
+            .find(|entry| entry.id == id && !entry.sending)
+            .ok_or("the queued message is no longer editable")?;
+        let queued = entry
             .input
             .take()
-            .expect("an editable Queue entry contains its input");
+            .ok_or("the queued message is already being edited")?;
         match input.restore_queued(queued) {
             Ok(()) => {
                 self.editing = Some(id);
                 Ok(())
             }
             Err(queued) => {
-                self.entries[index].input = Some(*queued);
+                entry.input = Some(*queued);
                 Err("clear the current draft before restoring a queued message".into())
             }
         }
     }
 
+    pub(crate) fn is_editing(&self) -> bool {
+        self.editing.is_some()
+    }
+
     pub(crate) fn finish_edit(&mut self) {
-        let Some(id) = self.editing.take() else {
-            return;
-        };
-        self.entries
-            .retain(|entry| entry.id != id || entry.input.is_some());
+        self.editing = None;
     }
-
-    pub(crate) fn begin_next_send(&mut self) -> Option<(QueueId, ChatSubmission)> {
-        let entry = self.entries.iter_mut().find(|entry| !entry.sending)?;
-        let id = entry.id;
-        let submission = entry.input.as_ref()?.submission().clone();
-        entry.sending = true;
-        Some((id, submission))
-    }
-
-    pub(crate) fn begin_send(&mut self, id: QueueId) -> Option<ChatSubmission> {
-        let entry = self
-            .entries
-            .iter_mut()
-            .find(|entry| entry.id == id && !entry.sending && entry.input.is_some())?;
-        let submission = entry
-            .input
-            .as_ref()
-            .expect("an editable Queue entry contains its input")
-            .submission()
-            .clone();
-        entry.sending = true;
-        Some(submission)
-    }
-
-    pub(crate) fn delete(&mut self, id: QueueId) -> bool {
-        let Some(index) = self
-            .entries
-            .iter()
-            .position(|entry| entry.id == id && !entry.sending)
-        else {
-            return false;
-        };
-        self.entries.remove(index);
-        if self.editing == Some(id) {
-            self.editing = None;
-        }
-        true
-    }
-
-    pub(crate) fn move_up(&mut self, id: QueueId) -> bool {
-        let Some(index) = self.entries.iter().position(|entry| entry.id == id) else {
-            return false;
-        };
-        if index == 0
-            || self.entries[index].sending
-            || self.entries[index].input.is_none()
-            || self.entries[index - 1].sending
-            || self.entries[index - 1].input.is_none()
-        {
-            return false;
-        }
-        self.entries.swap(index, index - 1);
-        true
-    }
-
-    pub(crate) fn move_down(&mut self, id: QueueId) -> bool {
-        let Some(index) = self.entries.iter().position(|entry| entry.id == id) else {
-            return false;
-        };
-        if index + 1 >= self.entries.len()
-            || self.entries[index].sending
-            || self.entries[index].input.is_none()
-            || self.entries[index + 1].sending
-            || self.entries[index + 1].input.is_none()
-        {
-            return false;
-        }
-        self.entries.swap(index, index + 1);
-        true
-    }
-
-    pub(crate) fn finish_send(&mut self, id: QueueId) -> bool {
-        let previous_len = self.entries.len();
-        self.entries.retain(|entry| entry.id != id);
-        self.entries.len() != previous_len
-    }
-
     pub(crate) fn fail_send(&mut self, id: QueueId) -> bool {
-        let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) else {
-            return false;
-        };
-        entry.sending = false;
-        true
+        if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) {
+            entry.sending = false;
+            true
+        } else {
+            false
+        }
     }
-
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
         self.editing = None;
     }
-
-    #[cfg(test)]
-    pub(crate) fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
     pub(crate) fn view(&self, navigation: &QueueNavigation) -> QueueView<'_> {
         QueueView {
             focused: navigation.focused(self),
@@ -203,10 +234,11 @@ impl Queue {
                 .enumerate()
                 .map(|(index, entry)| QueueItemView {
                     id: entry.id,
-                    position: index.saturating_add(1),
+                    position: index + 1,
                     text: &entry.display_text,
                     sending: entry.sending,
-                    editing: entry.input.is_none(),
+                    editing: self.editing == Some(entry.id),
+                    paused: entry.paused,
                 })
                 .collect(),
         }
@@ -234,35 +266,45 @@ impl QueueNavigation {
     }
 
     pub(crate) fn reconcile(&mut self, queue: &Queue) {
-        if self.selected.is_some() && !self.focused(queue) {
+        if let Some(selected) = self.selected {
+            // An in-flight edit temporarily disables a row without changing its selection.
+            if queue
+                .entries
+                .iter()
+                .any(|entry| entry.id == selected && entry.input.is_some())
+            {
+                return;
+            }
             self.selected = None;
             self.focus_latest(queue);
         }
     }
+
     pub(crate) fn focus_latest(&mut self, queue: &Queue) -> bool {
-        let selected = queue
+        let Some(id) = queue
             .entries
             .iter()
             .rev()
             .find(|entry| !entry.sending && entry.input.is_some())
-            .map(|entry| entry.id);
-        let Some(selected) = selected else {
+            .map(|entry| entry.id)
+        else {
             return false;
         };
-        self.selected = Some(selected);
+        self.selected = Some(id);
         true
     }
-    pub(crate) fn handle_key(&mut self, queue: &mut Queue, key: KeyEvent) -> QueueKeyOutcome {
+
+    pub(crate) fn handle_key(&mut self, queue: &Queue, key: KeyEvent) -> QueueKeyOutcome {
         if !self.focused(queue) {
             return QueueKeyOutcome::Unhandled;
         }
         if let Some(navigation) = Navigation::from_key(key) {
-            let ids = queue
+            let ids: Vec<_> = queue
                 .entries
                 .iter()
                 .filter(|entry| !entry.sending && entry.input.is_some())
                 .map(|entry| entry.id)
-                .collect::<Vec<_>>();
+                .collect();
             if let Some(last) = ids.len().checked_sub(1) {
                 let current = ids
                     .iter()
@@ -275,52 +317,73 @@ impl QueueNavigation {
         if key.kind != KeyEventKind::Press {
             return QueueKeyOutcome::Consumed;
         }
-        let selected = self.selected;
-        match (key.modifiers, key.code) {
-            _ if bindings::QUEUE_UP.matches(key) => {
-                if let Some(id) = selected {
-                    queue.move_up(id);
-                }
-                QueueKeyOutcome::Consumed
+        let Some(id) = self.selected else {
+            return QueueKeyOutcome::Consumed;
+        };
+        if bindings::QUEUE_UP.matches(key) {
+            QueueKeyOutcome::Move(id, queue::QueueMove::Up)
+        } else if bindings::QUEUE_DOWN.matches(key) {
+            QueueKeyOutcome::Move(id, queue::QueueMove::Down)
+        } else if bindings::QUEUE_EDIT.matches(key) {
+            QueueKeyOutcome::Restore(id)
+        } else if bindings::QUEUE_SEND.matches(key) {
+            QueueKeyOutcome::Send(id)
+        } else if bindings::QUEUE_REMOVE.matches(key) {
+            if let Some(index) = queue.entries.iter().position(|entry| entry.id == id) {
+                self.selected = queue
+                    .entries
+                    .iter()
+                    .skip(index + 1)
+                    .chain(queue.entries[..index].iter().rev())
+                    .find(|entry| !entry.sending && entry.input.is_some())
+                    .map(|entry| entry.id);
             }
-            _ if bindings::QUEUE_DOWN.matches(key) => {
-                if let Some(id) = selected {
-                    queue.move_down(id);
-                }
-                QueueKeyOutcome::Consumed
-            }
-            _ if bindings::QUEUE_EDIT.matches(key) => selected
-                .map(QueueKeyOutcome::Restore)
-                .unwrap_or(QueueKeyOutcome::Consumed),
-            _ if bindings::QUEUE_SEND.matches(key) => selected
-                .map(QueueKeyOutcome::Send)
-                .unwrap_or(QueueKeyOutcome::Consumed),
-            _ if bindings::QUEUE_REMOVE.matches(key) => {
-                if let Some(id) = selected {
-                    let index = queue
-                        .entries
-                        .iter()
-                        .position(|entry| entry.id == id)
-                        .unwrap_or(0);
-                    queue.delete(id);
-                    self.selected = queue
-                        .entries
-                        .iter()
-                        .skip(index)
-                        .chain(queue.entries.iter().take(index).rev())
-                        .find(|entry| !entry.sending && entry.input.is_some())
-                        .map(|entry| entry.id);
-                }
-                QueueKeyOutcome::Consumed
-            }
-            _ if bindings::RETURN_INPUT.matches(key) => {
-                self.blur();
-                QueueKeyOutcome::Consumed
-            }
-            _ if bindings::INTERRUPT.matches(key) => QueueKeyOutcome::Unhandled,
-            _ => QueueKeyOutcome::Consumed,
+            QueueKeyOutcome::Delete(id)
+        } else if bindings::RETURN_INPUT.matches(key) {
+            self.blur();
+            QueueKeyOutcome::Consumed
+        } else if bindings::INTERRUPT.matches(key) {
+            QueueKeyOutcome::Unhandled
+        } else {
+            QueueKeyOutcome::Consumed
         }
     }
+}
+
+fn submission(input: &[zeta_protocol::UserInput]) -> Result<ChatSubmission, String> {
+    let mut values = Vec::new();
+    let mut display = Vec::new();
+    for item in input {
+        match item {
+            zeta_protocol::UserInput::Context { name, content } => {
+                values.push(crate::thread::composer::ChatInputItem::Context {
+                    name: name.clone(),
+                    content: content.clone(),
+                });
+                display.push(format!("[Context: {name}]"));
+            }
+            zeta_protocol::UserInput::Text { text } => {
+                values.push(crate::thread::composer::ChatInputItem::Text(text.clone()));
+                display.push(text.clone());
+            }
+            zeta_protocol::UserInput::ImageAttachment { attachment } => {
+                values.push(crate::thread::composer::ChatInputItem::Attachment(
+                    attachment.clone(),
+                ));
+                display.push("[Image]".into());
+            }
+            zeta_protocol::UserInput::Skill { skill } => {
+                values.push(crate::thread::composer::ChatInputItem::Skill {
+                    skill: skill.clone(),
+                });
+            }
+            _ => return Err("queued input contains a type this composer cannot edit".into()),
+        }
+    }
+    Ok(ChatSubmission {
+        display_text: display.join(" "),
+        input: values,
+    })
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -330,12 +393,15 @@ pub(crate) struct QueueItemView<'a> {
     pub(crate) text: &'a str,
     pub(crate) sending: bool,
     pub(crate) editing: bool,
+    pub(crate) paused: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum QueueKeyOutcome {
     Restore(QueueId),
     Send(QueueId),
+    Delete(QueueId),
+    Move(QueueId, queue::QueueMove),
     Consumed,
     Unhandled,
 }
@@ -372,6 +438,8 @@ pub(crate) fn draw(
                 " · sending"
             } else if item.editing {
                 " · editing"
+            } else if item.paused {
+                " · paused"
             } else {
                 ""
             };

@@ -10,6 +10,8 @@ name = "zeta"
 path = "src/main.rs"
 
 [dependencies]
+process-hardening = { workspace = true }
+build-info = { workspace = true }
 flate2 = { workspace = true }
 fs2 = { workspace = true }
 semver = { workspace = true }

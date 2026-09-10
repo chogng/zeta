@@ -21,6 +21,7 @@ pub(crate) fn in_process_test_guard() -> MutexGuard<'static, ()> {
 
 pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
     ConfigReadResult {
+        features: vec![],
         revision: 0,
         generation: 0,
         preferred_model: None,
@@ -50,5 +51,54 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         },
         exec_policy_rules: Vec::new(),
         tui: FrontendConfigDto::default(),
+    }
+}
+
+/// Scripted server acceptance for a text-only queue submission in App simulations.
+pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::QueuedMessage {
+    let crate::app::AppCommand::Thread(crate::thread::Command::Enqueue {
+        command_id,
+        submission,
+        ..
+    }) = command
+    else {
+        panic!("expected queue enqueue command")
+    };
+    let input = submission
+        .input
+        .into_iter()
+        .map(|input| match input {
+            crate::thread::composer::ChatInputItem::Context { name, content } => {
+                zeta_protocol::UserInput::Context { name, content }
+            }
+            crate::thread::composer::ChatInputItem::Text(text) => {
+                zeta_protocol::UserInput::Text { text }
+            }
+            crate::thread::composer::ChatInputItem::Attachment(attachment) => {
+                zeta_protocol::UserInput::ImageAttachment { attachment }
+            }
+            crate::thread::composer::ChatInputItem::Skill { skill } => {
+                zeta_protocol::UserInput::Skill { skill }
+            }
+            crate::thread::composer::ChatInputItem::Image { .. } => {
+                panic!("image tests must provide a materialized server attachment")
+            }
+        })
+        .collect();
+    ::queue::QueuedMessage {
+        request: ::queue::QueueInput {
+            command_id,
+            session_id: zeta_protocol::SessionId::new("session").unwrap(),
+            thread_id: zeta_protocol::ThreadId::new("thread").unwrap(),
+            directory: "/work".into(),
+            input,
+            tool_mode: Default::default(),
+            approval_mode: Default::default(),
+            steer_turn: None,
+        },
+        status: ::queue::QueueStatus::Pending,
+        turn_id: None,
+        error: None,
+        revision: 1,
     }
 }

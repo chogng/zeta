@@ -1,187 +1,189 @@
-use super::Queue;
-use super::QueueKeyOutcome;
-use super::QueueNavigation;
-use crate::thread::composer::ChatInput;
-use crate::thread::composer::ChatInputQueueOutcome;
+use super::*;
+use crate::thread::composer::ChatInputItem;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 
-fn queued_input(text: &str) -> crate::thread::composer::QueuedChatInput {
-    let mut input = ChatInput::new();
-    input.insert_text(text);
-    let ChatInputQueueOutcome::Queued(input) = input.queue_current() else {
-        panic!("expected queued input");
-    };
-    input
+fn pending(queue: &mut Queue, text: &str) -> (QueueId, ::queue::QueuedMessage) {
+    let id = queue.push(QueuedChatInput::from_submission(ChatSubmission {
+        display_text: text.into(),
+        input: vec![ChatInputItem::Text(text.into())],
+    }));
+    let command = queue.submit(id).unwrap();
+    (id, crate::test_support::queued_message(command.into()))
 }
 
 #[test]
-fn queue_preserves_stable_identity_and_derives_display_positions() {
+fn queue_preserves_backend_identity_and_reconciles_terminal_delivery() {
     let mut queue = Queue::default();
     let navigation = QueueNavigation::default();
-    queue.push(queued_input("first"));
-    queue.push(queued_input("second"));
-
+    let (first_id, mut first) = pending(&mut queue, "first");
+    let (second_id, second) = pending(&mut queue, "second");
+    queue.apply(vec![first.clone(), second.clone()]).unwrap();
     assert_eq!(
         queue
             .view(&navigation)
             .items
             .iter()
-            .map(|item| (item.position, item.text, item.sending, item.editing))
+            .map(|item| (item.id, item.text, item.sending))
             .collect::<Vec<_>>(),
-        [(1, "first", false, false), (2, "second", false, false)]
+        [(first_id, "first", false), (second_id, "second", false)]
     );
-    assert!(!queue.is_empty());
-
-    let (first_id, submission) = queue.begin_next_send().unwrap();
-    assert_eq!(submission.display_text, "first");
-    assert_eq!(
-        queue
-            .view(&navigation)
-            .items
-            .iter()
-            .map(|item| (item.position, item.text, item.sending, item.editing))
-            .collect::<Vec<_>>(),
-        [(1, "first", true, false), (2, "second", false, false)]
-    );
-
-    assert!(queue.fail_send(first_id));
-    assert!(!queue.view(&navigation).items[0].sending);
-    let (retry_id, _) = queue.begin_next_send().unwrap();
-    assert_eq!(retry_id, first_id);
-    assert!(queue.finish_send(retry_id));
-    assert_eq!(
-        queue
-            .view(&navigation)
-            .items
-            .iter()
-            .map(|item| (item.position, item.text))
-            .collect::<Vec<_>>(),
-        [(1, "second")]
-    );
+    let target = queue.target(first_id).unwrap();
+    assert_eq!(target.command_id, first.request.command_id);
+    assert!(queue.view(&navigation).items[0].sending);
+    first.status = ::queue::QueueStatus::Started;
+    first.revision = 2;
+    queue.apply(vec![first, second]).unwrap();
+    assert_eq!(queue.view(&navigation).items.len(), 1);
+    assert_eq!(queue.view(&navigation).items[0].id, second_id);
 }
 
 #[test]
-fn restore_preserves_position_while_the_message_is_edited() {
+fn restore_and_replace_keep_identity_and_do_not_start_a_turn() {
     let mut queue = Queue::default();
-    let navigation = QueueNavigation::default();
-    let first = queue.push(queued_input("first"));
-    let second = queue.push(queued_input("second"));
+    let (id, mut message) = pending(&mut queue, "first");
+    message.status = ::queue::QueueStatus::Paused;
+    queue.apply(vec![message.clone()]).unwrap();
     let mut input = ChatInput::new();
-    input.insert_text("draft");
-
-    assert!(queue.restore(first, &mut input).is_err());
-    assert_eq!(input.text(), "draft");
-    assert_eq!(queue.view(&navigation).items.len(), 2);
-
-    input = ChatInput::new();
-    queue.restore(second, &mut input).unwrap();
-    assert_eq!(input.text(), "second");
-    assert_eq!(
-        queue
-            .view(&navigation)
-            .items
-            .iter()
-            .map(|item| (item.id, item.position, item.editing))
-            .collect::<Vec<_>>(),
-        [(first, 1, false), (second, 2, true)]
-    );
-
+    queue.restore(id, &mut input).unwrap();
+    assert_eq!(input.text(), "first");
     input.insert_text(" updated");
-    let ChatInputQueueOutcome::Queued(updated) = input.queue_current() else {
-        panic!("expected edited Queue content");
+    let crate::thread::composer::ChatInputQueueOutcome::Queued(updated) = input.queue_current()
+    else {
+        panic!("queued draft")
     };
-    assert_eq!(queue.push(updated), second);
-    assert_eq!(
-        queue
-            .view(&navigation)
-            .items
-            .iter()
-            .map(|item| (item.id, item.position, item.text, item.editing))
-            .collect::<Vec<_>>(),
-        [
-            (first, 1, "first", false),
-            (second, 2, "second updated", false)
-        ]
-    );
+    assert_eq!(queue.push(updated), id);
+    let crate::thread::Command::EditQueue {
+        target,
+        action: QueueAction::Replace(submission),
+    } = queue.submit(id).unwrap()
+    else {
+        panic!("expected replacement")
+    };
+    assert_eq!(target.command_id, message.request.command_id);
+    assert_eq!(submission.display_text, "first updated");
 }
 
 #[test]
-fn focused_queue_supports_selection_reordering_and_actions() {
+fn focus_emits_backend_actions_without_reordering_or_deleting_locally() {
     let mut queue = Queue::default();
     let mut navigation = QueueNavigation::default();
-    let first = queue.push(queued_input("first"));
-    let second = queue.push(queued_input("second"));
-
+    let (one, first) = pending(&mut queue, "first");
+    let (two, second) = pending(&mut queue, "second");
+    queue.apply(vec![first, second]).unwrap();
     assert!(navigation.focus_latest(&queue));
-    assert_eq!(queue.view(&navigation).selected, Some(second));
+    assert_eq!(queue.view(&navigation).selected, Some(two));
     assert_eq!(
-        navigation.handle_key(&mut queue, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)),
-        QueueKeyOutcome::Consumed
+        navigation.handle_key(&queue, KeyEvent::new(KeyCode::Up, KeyModifiers::CONTROL)),
+        QueueKeyOutcome::Move(two, ::queue::QueueMove::Up)
     );
-    assert_eq!(queue.view(&navigation).selected, Some(first));
+    assert_eq!(queue.view(&navigation).items[0].id, one);
     assert_eq!(
-        navigation.handle_key(
-            &mut queue,
-            KeyEvent::new(KeyCode::Down, KeyModifiers::CONTROL)
-        ),
-        QueueKeyOutcome::Consumed
+        navigation.handle_key(&queue, KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
+        QueueKeyOutcome::Delete(two)
     );
-    assert_eq!(queue.view(&navigation).items[1].id, first);
-    assert_eq!(queue.view(&navigation).selected, Some(first));
+    assert_eq!(queue.view(&navigation).items.len(), 2);
+    navigation.handle_key(&queue, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(!navigation.focused(&queue));
+}
+
+#[test]
+fn reconnect_rebuilds_queue_and_preserves_unsent_local_drafts() {
+    let mut original = Queue::default();
+    let (_, message) = pending(&mut original, "persisted");
+    let mut restored = Queue::default();
+    let navigation = QueueNavigation::default();
+    restored.push(QueuedChatInput::from_submission(ChatSubmission {
+        display_text: "not accepted".into(),
+        input: vec![ChatInputItem::Text("not accepted".into())],
+    }));
+    restored.apply(vec![message]).unwrap();
     assert_eq!(
-        navigation.handle_key(
-            &mut queue,
-            KeyEvent {
-                kind: KeyEventKind::Release,
-                ..KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)
-            }
-        ),
-        QueueKeyOutcome::Consumed
+        restored
+            .view(&navigation)
+            .items
+            .iter()
+            .map(|item| item.text)
+            .collect::<Vec<_>>(),
+        ["persisted", "not accepted"]
     );
-    assert_eq!(
-        navigation.handle_key(
-            &mut queue,
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)
-        ),
-        QueueKeyOutcome::Restore(first)
-    );
+}
+
+#[test]
+fn queue_navigation_is_independent_while_backend_messages_are_shared() {
+    let mut queue = Queue::default();
+    let (first_id, first) = pending(&mut queue, "first");
+    let (second_id, second) = pending(&mut queue, "second");
+    queue.apply(vec![first, second]).unwrap();
+    let mut fullscreen = QueueNavigation::default();
+    let mut inline = QueueNavigation::default();
+    fullscreen.focus_latest(&queue);
+    inline.focus_latest(&queue);
+    inline.handle_key(&queue, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(queue.view(&fullscreen).selected, Some(second_id));
+    assert_eq!(queue.view(&inline).selected, Some(first_id));
+    fullscreen.blur();
+    assert!(!fullscreen.focused(&queue));
+    assert!(inline.focused(&queue));
+    assert_eq!(queue.view(&inline).items.len(), 2);
+}
+
+#[test]
+fn pending_backend_edit_keeps_the_selected_identity_until_its_reply() {
+    let mut queue = Queue::default();
+    let (id, mut message) = pending(&mut queue, "selected");
+    queue.apply(vec![message.clone()]).unwrap();
+    let mut navigation = QueueNavigation::default();
+    navigation.focus_latest(&queue);
+    queue.target(id).unwrap();
+    navigation.reconcile(&queue);
+    assert!(!navigation.focused(&queue));
+    assert_eq!(queue.view(&navigation).selected, Some(id));
+    message.revision += 1;
+    queue.apply(vec![message]).unwrap();
+    navigation.reconcile(&queue);
+    assert!(navigation.focused(&queue));
+    assert_eq!(queue.view(&navigation).selected, Some(id));
 }
 
 #[test]
 fn down_after_the_last_message_stays_in_the_queue_until_escape() {
     let mut queue = Queue::default();
+    let (_, message) = pending(&mut queue, "only");
+    queue.apply(vec![message]).unwrap();
     let mut navigation = QueueNavigation::default();
-    queue.push(queued_input("only"));
-
-    assert!(navigation.focus_latest(&queue));
+    navigation.focus_latest(&queue);
     assert_eq!(
-        navigation.handle_key(&mut queue, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
+        navigation.handle_key(&queue, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
         QueueKeyOutcome::Consumed
     );
     assert!(navigation.focused(&queue));
-    navigation.handle_key(&mut queue, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    navigation.handle_key(&queue, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(!navigation.focused(&queue));
 }
 
 #[test]
-fn deleting_a_selected_message_keeps_the_nearest_message_selected() {
+fn deleting_a_selected_message_keeps_the_nearest_message_selected_after_the_reply() {
     let mut queue = Queue::default();
+    let (first_id, first) = pending(&mut queue, "first");
+    let (second_id, mut second) = pending(&mut queue, "second");
+    let (third_id, third) = pending(&mut queue, "third");
+    queue
+        .apply(vec![first.clone(), second.clone(), third.clone()])
+        .unwrap();
     let mut navigation = QueueNavigation::default();
-    let first = queue.push(queued_input("first"));
-    let second = queue.push(queued_input("second"));
-    let third = queue.push(queued_input("third"));
     navigation.focus_latest(&queue);
-    navigation.handle_key(&mut queue, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    assert_eq!(queue.view(&navigation).selected, Some(second));
-
-    navigation.handle_key(
-        &mut queue,
-        KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE),
+    navigation.handle_key(&queue, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(queue.view(&navigation).selected, Some(second_id));
+    assert_eq!(
+        navigation.handle_key(&queue, KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
+        QueueKeyOutcome::Delete(second_id)
     );
-
+    assert_eq!(queue.view(&navigation).items.len(), 3);
+    second.status = ::queue::QueueStatus::Cancelled;
+    second.revision += 1;
+    queue.apply(vec![first, second, third]).unwrap();
+    navigation.reconcile(&queue);
     assert_eq!(
         queue
             .view(&navigation)
@@ -189,7 +191,7 @@ fn deleting_a_selected_message_keeps_the_nearest_message_selected() {
             .iter()
             .map(|item| item.id)
             .collect::<Vec<_>>(),
-        [first, third]
+        [first_id, third_id]
     );
-    assert_eq!(queue.view(&navigation).selected, Some(third));
+    assert_eq!(queue.view(&navigation).selected, Some(third_id));
 }

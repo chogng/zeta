@@ -87,17 +87,18 @@ pub(crate) enum Event {
     ContextUsageChanged(Option<(zeta_protocol::ModelRef, zeta_protocol::ModelContextUsage)>),
     GoalChanged(Option<zeta_protocol::ThreadGoal>),
     SteerCompleted {
-        source: composer::SteerSource,
         steer_id: composer::SteerId,
     },
     SteerSubmissionFailed {
-        source: composer::SteerSource,
         steer_id: composer::SteerId,
         error: String,
     },
-    QueueSubmissionCompleted(queue::QueueId),
-    QueueSubmissionFailed {
-        queue_id: queue::QueueId,
+    QueueReceived {
+        messages: Vec<::queue::QueuedMessage>,
+        restore: Option<queue::QueueId>,
+    },
+    QueueFailed {
+        queue_id: Option<queue::QueueId>,
         error: String,
     },
     TranscriptSnapshotReceived(
@@ -133,12 +134,18 @@ pub(crate) enum Command {
     SubmitTurn {
         submission: composer::ChatSubmission,
     },
-    SubmitQueuedTurn {
+    Enqueue {
         queue_id: queue::QueueId,
+        command_id: zeta_protocol::CommandId,
         submission: composer::ChatSubmission,
     },
+    EditQueue {
+        target: queue::QueueTarget,
+        action: queue::QueueAction,
+    },
+    CancelQueue(queue::QueueTarget),
+    RefreshQueue,
     SteerTurn {
-        source: composer::SteerSource,
         steer_id: composer::SteerId,
         submission: composer::ChatSubmission,
     },

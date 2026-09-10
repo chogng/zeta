@@ -241,6 +241,7 @@ where
         .map_err(ConfigCommandError)?;
     let tui = edit.status_line.write_to_tui(&tui);
     client.update_config(ConfigUpdateParams {
+        features: Default::default(),
         command_id: new_command_id("tui"),
         expected_revision: edit.server_config.revision,
         preferred_model: Patch::Missing,

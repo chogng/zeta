@@ -798,7 +798,14 @@ fn queue_focus_is_visible_and_queue_rows_leave_mouse_to_the_terminal() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("edit this later");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let action = app
+        .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .unwrap();
+    let message = crate::test_support::queued_message(action);
+    app.update(ThreadEvent::QueueReceived {
+        messages: vec![message],
+        restore: None,
+    });
     let terminal_area = Rect::new(0, 0, 120, 20);
     let queue_area = layout(&app, terminal_area).session.queue;
 
@@ -2198,4 +2205,24 @@ fn input_overlay_index_at(app: &App, area: Rect, column: u16, row: u16) -> Optio
         }
         _ => None,
     }
+}
+
+#[test]
+fn persistent_queue_snapshot_distinguishes_pending_and_paused_messages() {
+    let mut app = App::new();
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
+    let mut messages = Vec::new();
+    for text in ["Run the focused tests", "Review the result"] {
+        app.insert_text(text);
+        let command = app
+            .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .unwrap();
+        messages.push(crate::test_support::queued_message(command));
+    }
+    messages[1].status = ::queue::QueueStatus::Paused;
+    app.update(ThreadEvent::QueueReceived {
+        messages,
+        restore: None,
+    });
+    assert_snapshot!("persistent_queue", render(&app, 80, 20));
 }

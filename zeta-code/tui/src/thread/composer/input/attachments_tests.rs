@@ -17,10 +17,7 @@ fn pasted_png_path_becomes_an_atomic_chat_input_attachment() {
     assert_eq!(textarea.text(), "[Image #1] ");
     let (element_id, _) = textarea.elements().next().unwrap();
     assert!(
-        attachments
-            .image_url(element_id)
-            .unwrap()
-            .starts_with("data:image/png;base64,")
+        matches!(attachments.image_item(element_id), Some(super::super::state::ChatInputItem::Image { url }) if url.starts_with("data:image/png;base64,"))
     );
     let _ = fs::remove_file(path);
 }
@@ -37,10 +34,7 @@ fn clipboard_png_bytes_become_an_atomic_image_attachment() {
     assert_eq!(textarea.text(), "[Image #1] ");
     let (element_id, _) = textarea.elements().next().unwrap();
     assert!(
-        attachments
-            .image_url(element_id)
-            .unwrap()
-            .starts_with("data:image/png;base64,")
+        matches!(attachments.image_item(element_id), Some(super::super::state::ChatInputItem::Image { url }) if url.starts_with("data:image/png;base64,"))
     );
 }
 

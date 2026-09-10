@@ -113,6 +113,7 @@ where
     tui.insert(CONFIG_KEY.into(), document);
     client
         .update_config(ConfigUpdateParams {
+            features: Default::default(),
             command_id: new_command_id("keybindings"),
             expected_revision: config.revision,
             preferred_model: Patch::Missing,

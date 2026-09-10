@@ -180,7 +180,7 @@ where
     }
 }
 
-fn materialize_submission<T>(
+pub(super) fn materialize_submission<T>(
     client: &mut AppServerClient<T>,
     submission: ChatSubmission,
 ) -> Result<Vec<InputItem>, ClientError>
@@ -190,6 +190,8 @@ where
     let mut input = Vec::with_capacity(submission.input.len());
     for item in submission.input {
         input.push(match item {
+            ChatInputItem::Context { name, content } => InputItem::Context { name, content },
+            ChatInputItem::Attachment(attachment) => InputItem::ImageAttachment { attachment },
             ChatInputItem::Text(text) => InputItem::Text { text },
             ChatInputItem::Image { url } => InputItem::ImageAttachment {
                 attachment: materialize_image(client, &url)?,

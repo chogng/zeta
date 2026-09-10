@@ -73,6 +73,7 @@ where
     let tui = settings.write_to_tui(&config.tui);
     client
         .update_config(ConfigUpdateParams {
+            features: Default::default(),
             command_id: new_command_id("status-line"),
             expected_revision: config.revision,
             preferred_model: Patch::Missing,

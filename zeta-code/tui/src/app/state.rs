@@ -84,7 +84,6 @@ use crate::thread::composer::ChatComposerOutcome;
 use crate::thread::composer::ChatComposerView;
 use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::ChatInputItem;
-use crate::thread::composer::SteerSource;
 use crate::thread::preview::ConversationPreview;
 use crate::thread::queue::QueueId;
 use crate::thread::queue::QueueView;
@@ -317,12 +316,20 @@ impl App {
                     self.sessions.creation_error = None;
                     return Some(SessionCommand::CreateAndEnter { submission }.into());
                 }
-                self.thread_presentations.active_mut().queue.push(input);
-                None
+                let queue = &mut self.thread_presentations.active_mut().queue;
+                let id = queue.push(input);
+                queue.submit(id).map(Into::into)
             }
             ChatComposerOutcome::Submit(submission) => {
                 if self.starts_new_session() {
                     return Some(SessionCommand::CreateAndEnter { submission }.into());
+                }
+                let queue = &mut self.thread_presentations.active_mut().queue;
+                if queue.is_editing() {
+                    let id = queue.push(crate::thread::composer::QueuedChatInput::from_submission(
+                        submission,
+                    ));
+                    return queue.submit(id).map(Into::into);
                 }
                 self.follow_latest_transcript();
                 self.thread_presentations.active_mut().queue.finish_edit();
@@ -337,7 +344,6 @@ impl App {
                     let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
                     return Some(
                         ThreadCommand::SteerTurn {
-                            source: SteerSource::Composer,
                             steer_id,
                             submission,
                         }
@@ -356,58 +362,22 @@ impl App {
     pub(super) fn send_queued_message(&mut self, queue_id: QueueId) -> Option<AppCommand> {
         if matches!(self.status, Status::Working) && !self.chat_panel.is_steering() {
             self.thread.update(ThreadPresentationEvent::FailureReported(
-                "wait until the active Turn can accept steering before sending this queued message"
-                    .into(),
+                "wait until the active Turn can accept steering".into(),
             ));
             return None;
         }
-        let submission = self
-            .thread_presentations
-            .active_mut()
-            .queue
-            .begin_send(queue_id)?;
-        self.follow_latest_transcript();
-        if matches!(self.status, Status::Working) {
-            if submission
-                .input
-                .iter()
-                .any(|item| matches!(item, ChatInputItem::Skill { .. }))
-            {
-                self.thread_presentations
-                    .active_mut()
-                    .queue
-                    .fail_send(queue_id);
-                self.thread.update(ThreadPresentationEvent::FailureReported(
-                    "A running Turn cannot change its Skill; leave this message queued or wait for the next Turn"
-                        .into(),
-                ));
-                return None;
-            }
-            self.thread.update(ThreadPresentationEvent::UserSubmitted(
-                submission.display_text.clone(),
-            ));
-            let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
-            return Some(
-                ThreadCommand::SteerTurn {
-                    source: SteerSource::Queue(queue_id),
-                    steer_id,
-                    submission,
+        let turn = self.active_turn().cloned();
+        let queue = &mut self.thread_presentations.active_mut().queue;
+        match queue.target(queue_id) {
+            Some(target) => Some(
+                ThreadCommand::EditQueue {
+                    target,
+                    action: crate::thread::queue::QueueAction::Send(turn),
                 }
                 .into(),
-            );
+            ),
+            None => queue.submit(queue_id).map(Into::into),
         }
-        self.thread.update(ThreadPresentationEvent::UserSubmitted(
-            submission.display_text.clone(),
-        ));
-        self.set_status(Status::Working);
-        self.chat_panel.queue_input();
-        Some(
-            ThreadCommand::SubmitQueuedTurn {
-                queue_id,
-                submission,
-            }
-            .into(),
-        )
     }
 
     pub(super) fn handle_thread_request_key(
@@ -1591,24 +1561,8 @@ impl App {
         self.agent_thread_switcher().focused()
     }
 
-    pub(crate) fn dispatch_next_queued_turn(&mut self) -> Option<AppCommand> {
-        let (queue_id, submission) = self
-            .thread_presentations
-            .active_mut()
-            .queue
-            .begin_next_send()?;
-        self.thread.update(ThreadPresentationEvent::UserSubmitted(
-            submission.display_text.clone(),
-        ));
-        self.set_status(Status::Working);
-        self.chat_panel.queue_input();
-        Some(
-            ThreadCommand::SubmitQueuedTurn {
-                queue_id,
-                submission,
-            }
-            .into(),
-        )
+    pub(crate) fn refresh_queued_messages(&self) -> Option<AppCommand> {
+        Some(ThreadCommand::RefreshQueue.into())
     }
 
     pub(crate) fn approval_mode_status(&self) -> TurnApprovalModes {
@@ -1956,51 +1910,37 @@ impl App {
             ThreadEvent::GoalChanged(goal) => {
                 self.thread_presentations.active_mut().goal = goal;
             }
-            ThreadEvent::SteerCompleted { source, steer_id } => {
+            ThreadEvent::SteerCompleted { steer_id, .. } => {
                 self.chat_panel.finish_steer(steer_id);
-                if let SteerSource::Queue(queue_id) = source {
-                    self.thread_presentations
-                        .active_mut()
-                        .queue
-                        .finish_send(queue_id);
-                }
             }
             ThreadEvent::SteerSubmissionFailed {
-                source,
-                steer_id,
-                error,
+                steer_id, error, ..
             } => {
                 self.chat_panel.finish_steer(steer_id);
-                let message = match source {
-                    SteerSource::Composer => format!("could not steer the active Turn: {error}"),
-                    SteerSource::Queue(queue_id) => {
-                        self.thread_presentations
-                            .active_mut()
-                            .queue
-                            .fail_send(queue_id);
-                        format!("could not steer the queued message: {error}")
-                    }
-                };
-                self.thread
-                    .update(ThreadPresentationEvent::FailureReported(message));
-            }
-            ThreadEvent::QueueSubmissionCompleted(queue_id) => {
-                self.thread_presentations
-                    .active_mut()
-                    .queue
-                    .finish_send(queue_id);
-            }
-            ThreadEvent::QueueSubmissionFailed { queue_id, error } => {
-                self.thread_presentations
-                    .active_mut()
-                    .queue
-                    .fail_send(queue_id);
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(format!(
-                        "could not send the queued Turn: {error}"
+                        "could not steer the active Turn: {error}"
                     )));
-                self.set_status(Status::Error);
-                self.chat_panel.start_input();
+            }
+            ThreadEvent::QueueReceived { messages, restore } => {
+                let state = self.thread_presentations.active_mut();
+                let result = state.queue.apply(messages).and_then(|()| match restore {
+                    Some(id) => state.queue.restore(id, &mut state.input),
+                    None => Ok(()),
+                });
+                if let Err(error) = result {
+                    self.thread
+                        .update(ThreadPresentationEvent::FailureReported(error));
+                }
+            }
+            ThreadEvent::QueueFailed { queue_id, error } => {
+                if let Some(id) = queue_id {
+                    self.thread_presentations.active_mut().queue.fail_send(id);
+                }
+                self.thread
+                    .update(ThreadPresentationEvent::FailureReported(format!(
+                        "could not update the queue: {error}"
+                    )));
             }
             ThreadEvent::TranscriptSnapshotReceived(transcript) => {
                 self.thread
@@ -2581,7 +2521,6 @@ impl App {
                     let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
                     return Some(
                         ThreadCommand::SteerTurn {
-                            source: SteerSource::Composer,
                             steer_id,
                             submission,
                         }

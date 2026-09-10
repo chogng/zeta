@@ -85,7 +85,7 @@ pub(super) struct AppDriver {
     requests: RequestTasks,
     queued_commands: VecDeque<ScheduledCommand>,
     refresh: ServerRefresh,
-    queued_turn_dispatch_requested: bool,
+    queue_refresh_requested: bool,
     file_search: Option<FileSearchManager>,
     host_dir_root: PathBuf,
     theme_resource: ThemeResource,
@@ -118,7 +118,7 @@ impl AppDriver {
             requests: RequestTasks::default(),
             queued_commands: VecDeque::from([initial]),
             refresh: ServerRefresh::default(),
-            queued_turn_dispatch_requested: false,
+            queue_refresh_requested: true,
             file_search: resources.file_search,
             host_dir_root: resources.host_dir_root,
             theme_resource: resources.theme_resource,
@@ -148,6 +148,9 @@ impl AppDriver {
     }
 
     pub(super) fn handle_client_event(&mut self, event: client::ClientEvent) {
+        if matches!(event, client::ClientEvent::QueueChanged) {
+            self.queue_refresh_requested = true;
+        }
         let refresh = refresh_server_event(event, self.conversation.as_mut(), &mut self.app);
         self.refresh.merge(refresh);
     }
@@ -157,6 +160,10 @@ impl AppDriver {
         let completions = self.requests.poll();
         let mut changed = self.app.poll_input_history() || !completions.is_empty();
         for completion in completions {
+            let thread_before = self
+                .conversation
+                .as_ref()
+                .map(|current| current.conversation.thread_id().clone());
             match completion {
                 Ok(RequestCompletion {
                     completion: Completion::Memory(completion),
@@ -177,6 +184,14 @@ impl AppDriver {
                 Err(error) => self
                     .app
                     .update(ThreadEvent::FailureReported(error.to_string())),
+            }
+            if self
+                .conversation
+                .as_ref()
+                .map(|current| current.conversation.thread_id())
+                != thread_before.as_ref()
+            {
+                self.queue_refresh_requested = true;
             }
         }
         changed |= self.reconcile_memory_diagnostics();
@@ -239,19 +254,20 @@ impl AppDriver {
             }
             ScheduledCommand::new(command, &self.app)
         });
-        self.queued_turn_dispatch_requested |= had_active_turn && self.app.active_turn().is_none();
+        self.queue_refresh_requested |= had_active_turn && self.app.active_turn().is_none();
 
         let mut command = schedule_command(command, &self.requests, &mut self.queued_commands);
         if command.is_none()
             && self.requests.is_idle(Some(RequestKey::Thread))
             && self.queued_commands.is_empty()
-            && self.queued_turn_dispatch_requested
+            && self.queue_refresh_requested
+            && self.conversation.is_some()
         {
             command = self
                 .app
-                .dispatch_next_queued_turn()
+                .refresh_queued_messages()
                 .map(|command| ScheduledCommand::new(command, &self.app));
-            self.queued_turn_dispatch_requested = false;
+            self.queue_refresh_requested = false;
         }
         command
     }
@@ -480,6 +496,7 @@ fn refresh_server_event(
             app.update(crate::config::Event::Subscription(event));
             ServerRefresh::default()
         }
+        client::ClientEvent::QueueChanged => ServerRefresh::default(),
         client::ClientEvent::ConfigChanged => ServerRefresh {
             config: true,
             ..ServerRefresh::default()

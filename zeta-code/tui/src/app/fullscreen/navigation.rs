@@ -180,20 +180,30 @@ pub(in crate::app) fn handle_queue_key(app: &mut App, key: KeyEvent) -> Option<O
             .viewports
             .active_mut()
             .queue
-            .handle_key(&mut app.thread_presentations.active_mut().queue, key);
+            .handle_key(&app.thread_presentations.active().queue, key);
         if outcome == QueueKeyOutcome::Unhandled {
             return None;
         }
         return Some(match outcome {
             QueueKeyOutcome::Restore(queue_id) => {
-                let state = app.thread_presentations.active_mut();
-                if let Err(error) = state.queue.restore(queue_id, &mut state.input) {
-                    app.thread
-                        .update(ThreadPresentationEvent::FailureReported(error));
+                if !app.thread_presentations.active().input.is_empty() {
+                    app.thread.update(ThreadPresentationEvent::FailureReported(
+                        "clear the current draft before restoring a queued message".into(),
+                    ));
+                    None
                 } else {
-                    app.fullscreen.viewports.active_mut().queue.blur();
+                    app.thread_presentations
+                        .active_mut()
+                        .queue
+                        .target(queue_id)
+                        .map(|target| {
+                            crate::thread::Command::EditQueue {
+                                target,
+                                action: crate::thread::queue::QueueAction::Pause,
+                            }
+                            .into()
+                        })
                 }
-                None
             }
             QueueKeyOutcome::Send(queue_id) => {
                 let command = app.send_queued_message(queue_id);
@@ -202,6 +212,24 @@ pub(in crate::app) fn handle_queue_key(app: &mut App, key: KeyEvent) -> Option<O
                 }
                 command
             }
+            QueueKeyOutcome::Delete(queue_id) => app
+                .thread_presentations
+                .active_mut()
+                .queue
+                .target(queue_id)
+                .map(|target| crate::thread::Command::CancelQueue(target).into()),
+            QueueKeyOutcome::Move(queue_id, direction) => app
+                .thread_presentations
+                .active_mut()
+                .queue
+                .target(queue_id)
+                .map(|target| {
+                    crate::thread::Command::EditQueue {
+                        target,
+                        action: crate::thread::queue::QueueAction::Move(direction),
+                    }
+                    .into()
+                }),
             QueueKeyOutcome::Consumed => None,
             QueueKeyOutcome::Unhandled => unreachable!("handled above"),
         });

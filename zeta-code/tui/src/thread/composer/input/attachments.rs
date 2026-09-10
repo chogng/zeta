@@ -18,7 +18,7 @@ const MAX_LOCAL_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 struct AttachedImage {
     element_id: TextElementId,
     placeholder: String,
-    data_url: String,
+    item: super::state::ChatInputItem,
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -76,7 +76,9 @@ impl Attachments {
         self.images.push(AttachedImage {
             element_id,
             placeholder,
-            data_url: data_url_from_bytes(image.format.mime_type(), &image.bytes),
+            item: super::state::ChatInputItem::Image {
+                url: data_url_from_bytes(image.format.mime_type(), &image.bytes),
+            },
         });
     }
 
@@ -92,11 +94,29 @@ impl Attachments {
         }
     }
 
-    pub(super) fn image_url(&self, element_id: TextElementId) -> Option<&str> {
+    pub(super) fn image_item(
+        &self,
+        element_id: TextElementId,
+    ) -> Option<&super::state::ChatInputItem> {
         self.images
             .iter()
             .find(|image| image.element_id == element_id)
-            .map(|image| image.data_url.as_str())
+            .map(|image| &image.item)
+    }
+
+    pub(super) fn insert_item(
+        &mut self,
+        textarea: &mut TextArea,
+        item: super::state::ChatInputItem,
+    ) {
+        let placeholder = image_placeholder(self.images.len() + 1);
+        let element_id = textarea.insert_element(&placeholder);
+        textarea.insert_text(" ");
+        self.images.push(AttachedImage {
+            element_id,
+            placeholder,
+            item,
+        });
     }
 
     pub(super) fn clear(&mut self) {

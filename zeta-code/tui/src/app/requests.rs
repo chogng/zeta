@@ -208,7 +208,10 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | ThreadCommand::OpenRewindPicker
             | ThreadCommand::RewindToCheckpoint { .. }
             | ThreadCommand::SubmitTurn { .. }
-            | ThreadCommand::SubmitQueuedTurn { .. }
+            | ThreadCommand::Enqueue { .. }
+            | ThreadCommand::EditQueue { .. }
+            | ThreadCommand::CancelQueue(_)
+            | ThreadCommand::RefreshQueue
             | ThreadCommand::SteerTurn { .. },
         ) => Some(RequestKey::Thread),
         AppCommand::Issues(command) if command.is_control() => Some(RequestKey::IssueControl),
