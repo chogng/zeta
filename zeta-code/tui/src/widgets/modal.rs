@@ -88,7 +88,7 @@ pub(crate) fn draw(
                     .fg(context.foreground())
                     .bg(context.background()),
             )
-            .border_style(Style::default().fg(context.border())),
+            .border_style(Style::default().fg(context.modal_border())),
         layout.surface,
     );
     frame.render_widget(

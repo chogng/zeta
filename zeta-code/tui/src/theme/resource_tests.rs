@@ -100,6 +100,7 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
     "focus": "#112233",
     "actionForeground": "#334477",
     "hoverBackground": "#223344",
+    "modalBorder": "#556677",
     "pressedForeground": "#334455",
     "selectionBackground": "#445566",
     "transcriptJumpBackground": "#414141",
@@ -129,6 +130,7 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
     assert_eq!(selected.theme.focus(), Color::Rgb(17, 34, 51));
     assert_eq!(selected.theme.action_foreground(), Color::Rgb(51, 68, 119));
     assert_eq!(selected.theme.hover_background(), Color::Rgb(34, 51, 68));
+    assert_eq!(selected.theme.modal_border(), Color::Rgb(85, 102, 119));
     assert_eq!(selected.theme.pressed_foreground(), Color::Rgb(51, 68, 85));
     assert_eq!(
         selected.theme.selection_background(),

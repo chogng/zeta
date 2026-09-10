@@ -49,6 +49,7 @@ pub(crate) struct ThemePalette {
     pub(crate) inserted_background: ThemeRgb,
     pub(crate) inserted_marker: ThemeRgb,
     pub(crate) keyword: ThemeRgb,
+    pub(crate) modal_border: ThemeRgb,
     pub(crate) muted: ThemeRgb,
     pub(crate) overlay_background: ThemeRgb,
     pub(crate) pressed_background: ThemeRgb,
@@ -88,6 +89,7 @@ impl ThemePalette {
             inserted_background: ThemeRgb::new(0x13, 0x2d, 0x1d),
             inserted_marker: ThemeRgb::new(0x3f, 0xb9, 0x50),
             keyword: ThemeRgb::new(0xff, 0x7b, 0x72),
+            modal_border: ThemeRgb::new(0x8b, 0x94, 0x9e),
             muted: ThemeRgb::new(0x8b, 0x94, 0x9e),
             overlay_background: ThemeRgb::new(0x25, 0x25, 0x26),
             pressed_background: ThemeRgb::new(0x3b, 0x35, 0x68),
@@ -127,6 +129,7 @@ impl ThemePalette {
             inserted_background: ThemeRgb::new(0xda, 0xfb, 0xe1),
             inserted_marker: ThemeRgb::new(0x1a, 0x7f, 0x37),
             keyword: ThemeRgb::new(0xcf, 0x22, 0x2e),
+            modal_border: ThemeRgb::new(0x57, 0x60, 0x6a),
             muted: ThemeRgb::new(0x57, 0x60, 0x6a),
             overlay_background: ThemeRgb::new(0xf8, 0xf8, 0xf8),
             pressed_background: ThemeRgb::new(0xd8, 0xd1, 0xff),
@@ -243,6 +246,7 @@ pub(crate) struct RenderTheme {
     inserted_background: Color,
     inserted_marker: Color,
     keyword: Color,
+    modal_border: Color,
     muted: Color,
     pressed_background: Color,
     pressed_foreground: Color,
@@ -285,6 +289,7 @@ impl RenderTheme {
             inserted_background: projected(palette.inserted_background),
             inserted_marker: projected(palette.inserted_marker),
             keyword: projected(palette.keyword),
+            modal_border: projected(palette.modal_border),
             muted: projected(palette.muted),
             pressed_background: projected(palette.pressed_background),
             pressed_foreground: projected(palette.pressed_foreground),
@@ -331,6 +336,7 @@ impl RenderTheme {
             inserted_background: hex("#13301c"),
             inserted_marker: hex("#3fb950"),
             keyword: hex("#ff7b72"),
+            modal_border: hex("#9b9b9b"),
             muted: hex("#808080"),
             pressed_background: hex("#3b3568"),
             pressed_foreground: hex("#ffffff"),
@@ -401,6 +407,9 @@ impl RenderTheme {
     }
     pub(crate) const fn keyword(self) -> Color {
         self.keyword
+    }
+    pub(crate) const fn modal_border(self) -> Color {
+        self.modal_border
     }
     pub(crate) const fn muted(self) -> Color {
         self.muted
@@ -538,6 +547,9 @@ impl<'a> RenderContext<'a> {
     }
     pub(crate) const fn inserted_marker(self) -> Color {
         self.theme.inserted_marker()
+    }
+    pub(crate) const fn modal_border(self) -> Color {
+        self.theme.modal_border()
     }
     pub(crate) const fn muted(self) -> Color {
         self.theme.muted()

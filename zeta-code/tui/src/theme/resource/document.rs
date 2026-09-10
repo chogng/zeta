@@ -92,6 +92,7 @@ fn apply_color(palette: &mut ThemePalette, name: &str, color: ThemeRgb) -> Resul
         "insertedBackground" => &mut palette.inserted_background,
         "insertedMarker" => &mut palette.inserted_marker,
         "keyword" => &mut palette.keyword,
+        "modalBorder" => &mut palette.modal_border,
         "muted" => &mut palette.muted,
         "pressedBackground" => &mut palette.pressed_background,
         "pressedForeground" => &mut palette.pressed_foreground,
