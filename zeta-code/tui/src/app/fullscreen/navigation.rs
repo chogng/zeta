@@ -5,7 +5,7 @@ use crate::keymap::AppChordMatch;
 use crate::keymap::bindings;
 use crate::sessions::Command as SessionCommand;
 use crate::sessions::SessionManagerInputOutcome;
-use crate::sessions::TerminalScreen;
+use crate::sessions::SessionScreen;
 use crate::thread::Command as ThreadCommand;
 use crate::thread::ThreadPresentationEvent;
 use crate::thread::composer::ChatComposerOutcome;
@@ -112,14 +112,14 @@ pub(in crate::app) fn handle_key(
     }
     if matches!(
         app.fullscreen.sessions.screen(),
-        Some(TerminalScreen::Manager)
+        Some(SessionScreen::Manager)
     ) && app.fullscreen.sessions.manager().focused()
     {
         return handle_screen_navigation_key(app, key).flatten();
     }
     if matches!(
         app.fullscreen.sessions.screen(),
-        Some(TerminalScreen::Session(_))
+        Some(SessionScreen::Session(_))
     ) {
         if let Some(command) = app.handle_thread_request_key(key) {
             return command;
@@ -237,7 +237,7 @@ pub(in crate::app) fn handle_screen_navigation_key(
     }
     if matches!(
         app.fullscreen.sessions.screen(),
-        Some(TerminalScreen::Manager)
+        Some(SessionScreen::Manager)
     ) && app.fullscreen.sessions.manager().focused()
     {
         return match app
@@ -308,12 +308,12 @@ pub(in crate::app) fn handle_screen_navigation_key(
         }
     };
     match target {
-        TerminalScreen::Manager => {
+        SessionScreen::Manager => {
             close_transient_surfaces(app);
             app.fullscreen.sessions.show_manager(&app.sessions);
             Some(None)
         }
-        TerminalScreen::Session(session_id) => {
+        SessionScreen::Session(session_id) => {
             if app.sessions.active_session_id() == Some(&session_id) {
                 if let Some(thread_id) = app.sessions.restorable_thread(&session_id)
                     && app.sessions.remembered_thread(&session_id) != Some(&thread_id)
@@ -395,7 +395,7 @@ pub(in crate::app) fn handle_transcript_selection_key(app: &mut App, key: KeyEve
     if key.kind == KeyEventKind::Release
         || !matches!(
             app.fullscreen.sessions.screen(),
-            Some(TerminalScreen::Session(_))
+            Some(SessionScreen::Session(_))
         )
         || app.fullscreen.panels.command_active()
         || app.completion().is_some()
@@ -575,7 +575,7 @@ pub(in crate::app) fn transcript_selection_active(app: &App) -> bool {
     !app.fullscreen.home_visible()
         && matches!(
             app.fullscreen.sessions.screen(),
-            Some(TerminalScreen::Session(_))
+            Some(SessionScreen::Session(_))
         )
         && app.fullscreen.viewports.active().selected_cell.is_some()
 }
@@ -585,8 +585,8 @@ pub(in crate::app) fn screen_navigation_tip(app: &App) -> Option<&'static str> {
         return None;
     }
     match app.fullscreen.sessions.previous_screen()? {
-        TerminalScreen::Manager => Some("← for agents"),
-        TerminalScreen::Session(_) => None,
+        SessionScreen::Manager => Some("← for agents"),
+        SessionScreen::Session(_) => None,
     }
 }
 
@@ -599,19 +599,19 @@ enum EmptyInputNavigation {
 }
 
 fn empty_input_navigation(
-    screen: Option<&TerminalScreen>,
+    screen: Option<&SessionScreen>,
     key: KeyCode,
 ) -> Option<EmptyInputNavigation> {
     match key {
         KeyCode::Left => Some(EmptyInputNavigation::PreviousScreen),
         KeyCode::Right => Some(EmptyInputNavigation::NextScreen),
-        KeyCode::Esc if matches!(screen, Some(TerminalScreen::Manager)) => {
+        KeyCode::Esc if matches!(screen, Some(SessionScreen::Manager)) => {
             Some(EmptyInputNavigation::NextScreen)
         }
-        KeyCode::Up if matches!(screen, Some(TerminalScreen::Manager)) => {
+        KeyCode::Up if matches!(screen, Some(SessionScreen::Manager)) => {
             Some(EmptyInputNavigation::FocusManager)
         }
-        KeyCode::Down if matches!(screen, Some(TerminalScreen::Session(_))) => {
+        KeyCode::Down if matches!(screen, Some(SessionScreen::Session(_))) => {
             Some(EmptyInputNavigation::FocusAgentThreads)
         }
         _ => None,

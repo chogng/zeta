@@ -15,7 +15,7 @@ use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_protocol::SessionId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum TerminalScreen {
+pub(crate) enum SessionScreen {
     Manager,
     Session(SessionId),
 }
@@ -29,13 +29,14 @@ pub(crate) enum SessionManagerInputOutcome {
     DetailsRequested,
 }
 
+/// Per-terminal-mode state and interaction for browsing sessions.
 #[derive(Debug, Default)]
 pub(crate) struct SessionNavigation {
     pub(crate) details: Option<super::details::SessionDetails>,
     details_generation: u64,
     pub(crate) preview: Option<ConversationPreview>,
     preview_generation: u64,
-    screen: Option<TerminalScreen>,
+    screen: Option<SessionScreen>,
     manager: SessionManagerState,
 }
 
@@ -47,7 +48,7 @@ impl SessionNavigation {
     ) -> SessionManagerInputOutcome {
         use SessionManagerInputOutcome as Outcome;
 
-        if !matches!(self.screen(), Some(TerminalScreen::Manager))
+        if !matches!(self.screen(), Some(SessionScreen::Manager))
             || !self.manager.focused()
             || key.kind == KeyEventKind::Release
             || (key.kind == KeyEventKind::Repeat && Navigation::from_key(key).is_none())
@@ -221,20 +222,20 @@ impl SessionNavigation {
         }
     }
 
-    pub(crate) fn screen(&self) -> Option<&TerminalScreen> {
+    pub(crate) fn screen(&self) -> Option<&SessionScreen> {
         self.screen.as_ref()
     }
 
     pub(crate) fn show_manager(&mut self, model: &SessionsState) {
         self.preview = None;
-        self.screen = Some(TerminalScreen::Manager);
+        self.screen = Some(SessionScreen::Manager);
         self.manager.reconcile(model.catalog());
     }
 
     pub(crate) fn show_session(&mut self, session_id: SessionId) {
         self.preview = None;
         self.manager.blur();
-        self.screen = Some(TerminalScreen::Session(session_id));
+        self.screen = Some(SessionScreen::Session(session_id));
     }
 
     pub(crate) fn manager(&self) -> &SessionManagerState {
@@ -249,20 +250,20 @@ impl SessionNavigation {
         self.manager.refresh_time(now, model.catalog())
     }
 
-    pub(crate) fn previous_screen(&self) -> Option<TerminalScreen> {
+    pub(crate) fn previous_screen(&self) -> Option<SessionScreen> {
         match self.screen()? {
-            TerminalScreen::Manager => None,
-            TerminalScreen::Session(_) => Some(TerminalScreen::Manager),
+            SessionScreen::Manager => None,
+            SessionScreen::Session(_) => Some(SessionScreen::Manager),
         }
     }
 
-    pub(crate) fn next_screen(&self, model: &SessionsState) -> Option<TerminalScreen> {
+    pub(crate) fn next_screen(&self, model: &SessionsState) -> Option<SessionScreen> {
         match self.screen()? {
-            TerminalScreen::Manager => model
+            SessionScreen::Manager => model
                 .active_session_id()
                 .cloned()
-                .map(TerminalScreen::Session),
-            TerminalScreen::Session(_) => None,
+                .map(SessionScreen::Session),
+            SessionScreen::Session(_) => None,
         }
     }
 
@@ -287,22 +288,26 @@ impl SessionNavigation {
             self.preview = None;
         }
         self.manager.reconcile(model.catalog());
-        if let Some(TerminalScreen::Session(session_id)) = self.screen.as_ref()
+        if let Some(SessionScreen::Session(session_id)) = self.screen.as_ref()
             && !model
                 .catalog()
                 .iter()
                 .any(|session| &session.session_id == session_id)
         {
-            self.screen = Some(TerminalScreen::Manager);
+            self.screen = Some(SessionScreen::Manager);
         }
     }
 
     pub(crate) fn context_changed(&mut self, model: &SessionsState) {
-        if self.screen.is_none() || matches!(self.screen, Some(TerminalScreen::Session(_))) {
+        if self.screen.is_none() || matches!(self.screen, Some(SessionScreen::Session(_))) {
             self.screen = model
                 .active_session_id()
                 .cloned()
-                .map(TerminalScreen::Session);
+                .map(SessionScreen::Session);
         }
     }
 }
+
+#[cfg(test)]
+#[path = "navigation_tests.rs"]
+mod tests;

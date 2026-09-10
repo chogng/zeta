@@ -48,9 +48,9 @@ use crate::sessions::Command as SessionCommand;
 use crate::sessions::Event as SessionEvent;
 use crate::sessions::SessionChoices;
 use crate::sessions::SessionManagerView;
+use crate::sessions::SessionScreen;
 use crate::sessions::SessionSelectionAction;
 use crate::sessions::SessionsState;
-use crate::sessions::TerminalScreen;
 use crate::skills::Command as SkillCommand;
 use crate::skills::Event as SkillEvent;
 use crate::skills::SkillChoices;
@@ -657,7 +657,7 @@ impl App {
         if !self.fullscreen_home_visible()
             && matches!(
                 self.session_navigation().screen(),
-                Some(TerminalScreen::Session(_))
+                Some(SessionScreen::Session(_))
             )
             && self.chat_panel.request_active()
         {
@@ -963,7 +963,7 @@ impl App {
             || self.sessions.active_session_id().is_none()
             || matches!(
                 self.session_navigation().screen(),
-                Some(TerminalScreen::Manager)
+                Some(SessionScreen::Manager)
             )
     }
 
@@ -1082,7 +1082,7 @@ impl App {
         (!self.fullscreen_home_visible()
             && matches!(
                 self.session_navigation().screen(),
-                Some(TerminalScreen::Session(_))
+                Some(SessionScreen::Session(_))
             ))
         .then(|| self.chat_panel.approval_view())
         .flatten()
@@ -1092,7 +1092,7 @@ impl App {
         (!self.fullscreen_home_visible()
             && matches!(
                 self.session_navigation().screen(),
-                Some(TerminalScreen::Session(_))
+                Some(SessionScreen::Session(_))
             ))
         .then(|| self.chat_panel.query_view())
         .flatten()
@@ -1518,7 +1518,7 @@ impl App {
             && self.session_navigation().preview.is_none()
             && matches!(
                 self.session_navigation().screen(),
-                Some(TerminalScreen::Manager)
+                Some(SessionScreen::Manager)
             ))
         .then(|| {
             self.session_navigation()
@@ -1530,7 +1530,7 @@ impl App {
     fn session_manager_focused_internal(&self) -> bool {
         matches!(
             self.session_navigation().screen(),
-            Some(TerminalScreen::Manager)
+            Some(SessionScreen::Manager)
         ) && self.session_navigation().manager().focused()
     }
 
@@ -1571,7 +1571,7 @@ impl App {
     pub(crate) fn agent_thread_switcher_view(&self) -> Option<AgentThreadSwitcherView<'_>> {
         matches!(
             self.session_navigation().screen(),
-            Some(TerminalScreen::Session(_))
+            Some(SessionScreen::Session(_))
         )
         .then(|| self.agent_thread_switcher().view())
     }
@@ -1579,7 +1579,7 @@ impl App {
     pub(crate) fn agent_thread_switcher_rows(&self) -> u16 {
         if matches!(
             self.session_navigation().screen(),
-            Some(TerminalScreen::Session(_))
+            Some(SessionScreen::Session(_))
         ) {
             self.agent_thread_switcher().desired_rows()
         } else {
@@ -1656,8 +1656,8 @@ impl App {
     pub(crate) fn status_line_runtime(&self) -> StatusLineRuntime {
         let plan = self.plan_view().map(|view| (view.completed, view.total));
         let visible_session = match self.session_navigation().screen() {
-            Some(TerminalScreen::Session(session_id)) => Some(session_id),
-            Some(TerminalScreen::Manager) | None => None,
+            Some(SessionScreen::Session(session_id)) => Some(session_id),
+            Some(SessionScreen::Manager) | None => None,
         };
         let viewed_thread =
             visible_session.and_then(|session_id| self.sessions.remembered_thread(session_id));
@@ -1714,12 +1714,12 @@ impl App {
             && !self.viewed_thread_accepts_input()
             && matches!(
                 self.session_navigation().screen(),
-                Some(TerminalScreen::Session(_))
+                Some(SessionScreen::Session(_))
             )
     }
 
     fn viewed_thread_accepts_input(&self) -> bool {
-        let Some(TerminalScreen::Session(session_id)) = self.session_navigation().screen() else {
+        let Some(SessionScreen::Session(session_id)) = self.session_navigation().screen() else {
             return true;
         };
         let Some(thread_id) = self.sessions.remembered_thread(session_id) else {
@@ -2415,7 +2415,7 @@ impl App {
         let elapsed_changed = self.agent_thread_switcher_mut().refresh_elapsed();
         let manager_changed = matches!(
             self.session_navigation().screen(),
-            Some(TerminalScreen::Manager)
+            Some(SessionScreen::Manager)
         ) && match self.screen_mode() {
             crate::terminal::ScreenMode::Fullscreen => self
                 .fullscreen
