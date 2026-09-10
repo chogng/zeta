@@ -6,6 +6,9 @@ use super::QueryQuestion;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 
 #[test]
 fn fixed_answers_advance_pages_and_complete_once() {
@@ -108,6 +111,60 @@ fn keyboard_activation_answers_the_selected_choice() {
         query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
         panic!("expected the selected choice to complete the query");
+    };
+    assert_eq!(answers[0].value, "Second");
+}
+
+#[test]
+fn pointer_choice_uses_the_full_row_and_the_ordinary_activation_path() {
+    let mut query = Query::new(vec![QueryQuestion {
+        id: "choice".into(),
+        header: "Choose".into(),
+        prompt: "Which one?".into(),
+        choices: vec![
+            QueryChoice {
+                label: "First".into(),
+                description: "First choice".into(),
+            },
+            QueryChoice {
+                label: "Second".into(),
+                description: "Second choice".into(),
+            },
+        ],
+        custom_answer: QueryCustomAnswer::Unavailable,
+    }])
+    .unwrap();
+    let area = Rect::new(0, 0, 50, super::desired_height(query.view()));
+    let second_row = area.y + 3;
+    assert_eq!(
+        super::choice_at(
+            area,
+            query.view(),
+            ratatui::layout::Position::new(area.right() - 2, second_row)
+        ),
+        Some(1)
+    );
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| {
+            super::draw(
+                frame,
+                area,
+                query.view(),
+                Some(1),
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    for column in area.x + 1..area.right() - 1 {
+        assert_eq!(
+            terminal.backend().buffer()[(column, second_row)].bg,
+            crate::render::test_context().hover_background()
+        );
+    }
+    let QueryOutcome::Completed(answers) = query.activate(1) else {
+        panic!("clicking a fixed answer must use its ordinary activation path")
     };
     assert_eq!(answers[0].value, "Second");
 }

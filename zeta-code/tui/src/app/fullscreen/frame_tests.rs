@@ -360,7 +360,7 @@ fn modal_keeps_wrapped_tabs_between_title_and_body() {
     let body = super::modal::body_area(&panel, modal.content);
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
     terminal
-        .draw(|frame| super::modal::draw_panel(frame, &panel, modal, test_context()))
+        .draw(|frame| super::modal::draw_panel(frame, &panel, modal, None, None, test_context()))
         .unwrap();
     let buffer = terminal.backend().buffer();
     assert_eq!(body.y, modal.content.y + 3);
@@ -794,7 +794,7 @@ fn queued_message_is_visible_only_in_the_queue_region() {
 }
 
 #[test]
-fn queue_focus_is_visible_and_queue_rows_leave_mouse_to_the_terminal() {
+fn queue_focus_and_pointer_target_share_the_visible_row_identity() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("edit this later");
@@ -809,10 +809,12 @@ fn queue_focus_is_visible_and_queue_rows_leave_mouse_to_the_terminal() {
     let terminal_area = Rect::new(0, 0, 120, 20);
     let queue_area = layout(&app, terminal_area).session.queue;
 
-    assert_eq!(
-        target_at(&app, terminal_area, queue_area.x + 2, queue_area.y),
-        None
-    );
+    let Some(PointerTarget::Queue(pointer_id)) =
+        target_at(&app, terminal_area, queue_area.x + 2, queue_area.y)
+    else {
+        panic!("the queue row must expose its stable pointer identity")
+    };
+    assert_eq!(pointer_id, app.queue_view().items[0].id);
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
     let rendered = render(&app, 120, 20);
 

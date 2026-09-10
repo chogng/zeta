@@ -123,9 +123,9 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
     let layout = super::layout(ratatui::layout::Rect::new(0, 0, 80, height));
     terminal
-        .draw(|frame| super::draw_panel(frame, &panel, layout, test_context()))
+        .draw(|frame| super::draw_panel(frame, &panel, layout, None, None, test_context()))
         .unwrap();
-    let buffer = terminal.backend().buffer();
+    let buffer = terminal.backend().buffer().clone();
     let rows = (0..height)
         .map(|row| {
             (0..80)
@@ -147,6 +147,25 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
     assert!(rendered.contains('┘'));
     assert_eq!(title_row, usize::from(layout.surface.y));
     assert_eq!(first_choice_row - title_row, 2);
+    let hover = super::Target::List(
+        crate::widgets::list_selection::ListSelectionPointerTarget::Item(
+            panel.list_selection().unwrap().visible_items()[0]
+                .id()
+                .unwrap()
+                .clone(),
+        ),
+    );
+    terminal
+        .draw(|frame| super::draw_panel(frame, &panel, layout, Some(&hover), None, test_context()))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(layout.content.x, first_choice_row as u16)].bg,
+        test_context().hover_background()
+    );
+    assert_eq!(
+        terminal.backend().buffer()[(layout.content.x, first_choice_row as u16 + 1)].bg,
+        test_context().selection_background()
+    );
     let custom_row = rows
         .iter()
         .position(|row| row.contains("8. Custom color theme"))

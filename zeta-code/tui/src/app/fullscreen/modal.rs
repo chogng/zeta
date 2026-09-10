@@ -107,7 +107,15 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
         );
         detail.draw_body(frame, layout.content, context);
     } else if let Some(panel) = app.command_panel() {
-        draw_panel(frame, panel, layout, context);
+        let hovered = match app.fullscreen.pointer.hovered() {
+            Some(super::pointer::PointerTarget::Modal(target)) => Some(target),
+            _ => None,
+        };
+        let pressed = match app.fullscreen.pointer.pressed() {
+            Some(super::pointer::PointerTarget::Modal(target)) => Some(target),
+            _ => None,
+        };
+        draw_panel(frame, panel, layout, hovered, pressed, context);
     }
 }
 
@@ -115,6 +123,8 @@ pub(super) fn draw_panel(
     frame: &mut Frame<'_>,
     panel: &CommandPanel,
     layout: ModalLayout,
+    hovered: Option<&Target>,
+    pressed: Option<&Target>,
     context: RenderContext<'_>,
 ) {
     let body = panel.body();
@@ -125,8 +135,29 @@ pub(super) fn draw_panel(
             .min(layout.content.height),
         ..layout.content
     };
-    body.draw_tabs(frame, tabs, None, None, context);
-    body.draw_body(frame, body_area(panel, layout.content), context);
+    let tab = |target: Option<&Target>| match target {
+        Some(Target::Tab(index))
+        | Some(Target::List(crate::widgets::list_selection::ListSelectionPointerTarget::Tab(
+            index,
+        ))) => Some(*index),
+        _ => None,
+    };
+    let hovered_list = match hovered {
+        Some(Target::List(target)) => Some(target),
+        _ => None,
+    };
+    let pressed_list = match pressed {
+        Some(Target::List(target)) => Some(target),
+        _ => None,
+    };
+    body.draw_tabs(frame, tabs, tab(hovered), tab(pressed), context);
+    body.draw_body(
+        frame,
+        body_area(panel, layout.content),
+        hovered_list,
+        pressed_list,
+        context,
+    );
 }
 
 /// An open modal consumes every key; unhandled content input never reaches the page below.

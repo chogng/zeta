@@ -29,6 +29,7 @@ pub(crate) use state::ChatSubmission;
 pub(crate) use state::QueuedChatInput;
 pub(crate) use view::ChatInputChrome;
 pub(crate) use view::ChatInputCursor;
+pub(crate) use view::ChatInputFocus;
 pub(crate) use view::content_area;
 pub(crate) use view::draw as draw_chat_input;
 pub(crate) use vim::ChatInputMode;

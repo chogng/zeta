@@ -116,6 +116,21 @@ enum Focus {
     List,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum PointerTarget {
+    Tab(usize),
+    Search,
+    Issue(u64),
+}
+
+#[derive(Clone, Copy)]
+struct InteractionAreas {
+    tabs: Rect,
+    search: Rect,
+    summary: Rect,
+    list: Rect,
+}
+
 #[derive(Debug)]
 pub(crate) struct Manager {
     open: bool,
@@ -359,6 +374,63 @@ impl Manager {
             _ => None,
         }
     }
+
+    pub(crate) fn pointer_target_at(
+        &self,
+        area: Rect,
+        position: ratatui::layout::Position,
+    ) -> Option<PointerTarget> {
+        if self.detail.is_some() {
+            return None;
+        }
+        let areas = self.interaction_areas(area);
+        if let Some(index) = tab_list::index_at(self.tabs.tabs(), areas.tabs, position) {
+            return Some(PointerTarget::Tab(index));
+        }
+        if areas.search.contains(position) {
+            return Some(PointerTarget::Search);
+        }
+        if !areas.list.contains(position) {
+            return None;
+        }
+        let first = self
+            .cursor
+            .saturating_sub(areas.list.height.saturating_sub(1) as usize);
+        self.issues
+            .get(first + usize::from(position.y - areas.list.y))
+            .map(|issue| PointerTarget::Issue(issue.number))
+    }
+
+    pub(crate) fn activate_pointer(&mut self, target: &PointerTarget) -> Option<Command> {
+        match target {
+            PointerTarget::Tab(index) => {
+                self.focus = Focus::Tabs;
+                self.search.set_input_active(false);
+                if self.tabs.select(*index) == tab_list::TabListInputOutcome::ActiveChanged {
+                    self.issues.clear();
+                    self.cursor = 0;
+                    Some(self.load(1, ListMode::Cached))
+                } else {
+                    None
+                }
+            }
+            PointerTarget::Search => {
+                self.focus = Focus::Search;
+                self.search.set_input_active(true);
+                None
+            }
+            PointerTarget::Issue(number) => {
+                let index = self
+                    .issues
+                    .iter()
+                    .position(|issue| issue.number == *number)?;
+                self.cursor = index;
+                self.focus = Focus::List;
+                self.search.set_input_active(false);
+                self.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            }
+        }
+    }
     fn start(&mut self) -> Option<Command> {
         if self.selected.is_empty() {
             self.status = "Select one or more issues with Space.".into();
@@ -453,7 +525,54 @@ impl Manager {
             _ => {}
         }
     }
-    pub(crate) fn draw(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
+    fn interaction_areas(&self, area: Rect) -> InteractionAreas {
+        let body = PanelLayout::new(area, 0).body;
+        let tabs_height = tab_list::desired_height(self.tabs.tabs(), body.width).min(body.height);
+        let tabs = Rect {
+            height: tabs_height,
+            ..body
+        };
+        let search_height =
+            search_box::SEARCH_BOX_HEIGHT.min(body.height.saturating_sub(tabs_height));
+        let search = Rect {
+            y: body.y.saturating_add(tabs_height),
+            height: search_height,
+            ..body
+        };
+        let summary_height = (1 + u16::from(!self.status.is_empty()))
+            .min(body.height.saturating_sub(tabs_height + search_height));
+        let summary = Rect {
+            y: search.bottom(),
+            height: summary_height,
+            ..body
+        };
+        let state_column = (crate::render::selection_marker(false).len() as u16).min(body.x);
+        let list = Rect {
+            x: body.x - state_column,
+            y: summary.bottom(),
+            width: body.width.saturating_add(state_column),
+            height: body.height.saturating_sub(
+                tabs_height
+                    .saturating_add(search_height)
+                    .saturating_add(summary_height),
+            ),
+        };
+        InteractionAreas {
+            tabs,
+            search,
+            summary,
+            list,
+        }
+    }
+
+    pub(crate) fn draw(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        hovered: Option<&PointerTarget>,
+        pressed: Option<&PointerTarget>,
+        context: RenderContext<'_>,
+    ) {
         panel::draw_header(frame, area, "Issues", context.focus());
         let body = PanelLayout::new(area, 0).body;
         let style = Style::default()
@@ -470,31 +589,30 @@ impl Manager {
             );
             return;
         }
-        let tabs_height = tab_list::desired_height(self.tabs.tabs(), body.width).min(body.height);
+        let areas = self.interaction_areas(area);
+        let hovered_tab = match hovered {
+            Some(PointerTarget::Tab(index)) => Some(*index),
+            _ => None,
+        };
+        let pressed_tab = match pressed {
+            Some(PointerTarget::Tab(index)) => Some(*index),
+            _ => None,
+        };
         tab_list::draw(
             frame,
-            Rect {
-                height: tabs_height,
-                ..body
-            },
+            areas.tabs,
             &self.tabs,
             self.focus == Focus::Tabs,
-            None,
-            None,
+            hovered_tab,
+            pressed_tab,
             context,
         );
-        let search_height =
-            search_box::SEARCH_BOX_HEIGHT.min(body.height.saturating_sub(tabs_height));
         search_box::draw(
             frame,
-            Rect {
-                y: body.y.saturating_add(tabs_height),
-                height: search_height,
-                ..body
-            },
+            areas.search,
             &self.search,
-            false,
-            false,
+            hovered == Some(&PointerTarget::Search),
+            pressed == Some(&PointerTarget::Search),
             context,
         );
         let mut lines = vec![Line::styled(
@@ -513,24 +631,8 @@ impl Manager {
         if !self.status.is_empty() {
             lines.push(Line::styled(self.status.as_str(), muted));
         }
-        let summary_height = lines.len() as u16;
-        let offset = tabs_height.saturating_add(search_height);
-        frame.render_widget(
-            Paragraph::new(lines),
-            Rect {
-                y: body.y.saturating_add(offset),
-                height: summary_height.min(body.height.saturating_sub(offset)),
-                ..body
-            },
-        );
-        let offset = offset.saturating_add(summary_height);
-        let state_column = (crate::render::selection_marker(false).len() as u16).min(body.x);
-        let list_area = Rect {
-            x: body.x - state_column,
-            y: body.y.saturating_add(offset),
-            width: body.width.saturating_add(state_column),
-            height: body.height.saturating_sub(offset),
-        };
+        frame.render_widget(Paragraph::new(lines), areas.summary);
+        let list_area = areas.list;
         frame.render_widget(Paragraph::default().style(style), list_area);
         let first = self
             .cursor
@@ -544,6 +646,8 @@ impl Manager {
             .enumerate()
         {
             let focused = self.focus == Focus::List && self.cursor == index;
+            let hovered = hovered == Some(&PointerTarget::Issue(issue.number));
+            let pressed = pressed == Some(&PointerTarget::Issue(issue.number));
             let text = format!(
                 "{}{} #{} {}",
                 crate::render::selection_marker(focused),
@@ -556,7 +660,8 @@ impl Manager {
                 issue.title
             );
             frame.render_widget(
-                Paragraph::new(text).style(style.patch(item_style(context, focused, false, false))),
+                Paragraph::new(text)
+                    .style(style.patch(item_style(context, focused, hovered, pressed))),
                 Rect {
                     y: list_area.y.saturating_add(row as u16),
                     height: 1,

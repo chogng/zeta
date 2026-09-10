@@ -38,14 +38,30 @@ pub(super) fn draw(
         }
         super::footer::draw(frame, areas.session.bottom, app, context);
     } else if let Some(manager) = app.issue_manager() {
-        manager.draw(frame, areas.session.transcript, context);
+        let hovered = match app.fullscreen.pointer.hovered() {
+            Some(super::pointer::PointerTarget::Issues(target)) => Some(target),
+            _ => None,
+        };
+        let pressed = match app.fullscreen.pointer.pressed() {
+            Some(super::pointer::PointerTarget::Issues(target)) => Some(target),
+            _ => None,
+        };
+        manager.draw(frame, areas.session.transcript, hovered, pressed, context);
     } else if let Some(manager) = app.session_manager_view() {
+        let hovered = match app.fullscreen.pointer.hovered() {
+            Some(super::pointer::PointerTarget::SessionManager(target)) => Some(target),
+            _ => None,
+        };
+        let pressed = match app.fullscreen.pointer.pressed() {
+            Some(super::pointer::PointerTarget::SessionManager(target)) => Some(target),
+            _ => None,
+        };
         crate::sessions::draw_manager(
             frame,
             areas.session.transcript,
             manager,
-            None,
-            None,
+            hovered,
+            pressed,
             context,
         );
     } else {

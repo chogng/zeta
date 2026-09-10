@@ -30,6 +30,13 @@ pub(crate) struct ChatHistoryView<'a> {
     pub(crate) pointer: ChatHistoryPointerState<'a>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ChatHistoryPointerTarget {
+    JumpToBottom,
+    Toggle(String),
+    Details(String),
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ChatHistoryPointerState<'a> {
     pub(crate) hovered_jump_to_bottom: bool,
@@ -99,6 +106,66 @@ impl ChatHistoryView<'_> {
         target.x = area.x + (area.width - width) / 2;
         target.width = width;
         Some(target)
+    }
+
+    pub(crate) fn pointer_target_at(
+        &self,
+        area: Rect,
+        position: ratatui::layout::Position,
+        context: RenderContext<'_>,
+    ) -> Option<ChatHistoryPointerTarget> {
+        if self
+            .jump_area(area, context)
+            .is_some_and(|target| target.contains(position))
+        {
+            return Some(ChatHistoryPointerTarget::JumpToBottom);
+        }
+        let heights = measured_heights(self.messages, self.render_cache, area.width, context);
+        let header_rows = header_rows(self.header);
+        let (content_area, _) = scroll_areas(area, header_rows, &heights, self.scroll);
+        if !content_area.contains(position) {
+            return None;
+        }
+        let total_rows = header_rows.saturating_add(heights.iter().sum::<usize>());
+        let bottom_offset = total_rows.saturating_sub(usize::from(content_area.height));
+        let viewport_start = viewport_offset(
+            self.messages,
+            header_rows,
+            &heights,
+            self.scroll,
+            bottom_offset,
+        );
+        let logical_row = viewport_start.saturating_add(usize::from(position.y - content_area.y));
+        let mut cell_start = header_rows;
+        for (cell, height) in self.messages.iter().zip(heights) {
+            let cell_end = cell_start.saturating_add(height);
+            if logical_row < cell_start || logical_row >= cell_end {
+                cell_start = cell_end;
+                continue;
+            }
+            let cell_id = cell.cell_id.as_ref()?;
+            if cell.can_expand && logical_row == cell_start && position.x == content_area.x {
+                return Some(ChatHistoryPointerTarget::Toggle(cell_id.clone()));
+            }
+            let details_row = self
+                .render_cache
+                .measure(cell, area.width, context, || {
+                    cell.lines(context, Some(self.render_cache), area.width)
+                })
+                .details_row;
+            if cell.has_details
+                && details_row.is_some_and(|row| logical_row == cell_start.saturating_add(row))
+                && position.x >= content_area.x
+                && position.x
+                    < content_area
+                        .x
+                        .saturating_add(("   view full".len() as u16).min(content_area.width))
+            {
+                return Some(ChatHistoryPointerTarget::Details(cell_id.clone()));
+            }
+            return None;
+        }
+        None
     }
 }
 

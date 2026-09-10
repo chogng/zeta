@@ -24,3 +24,5 @@ Prefer command-line-observable tests for state, events, terminal output, timing,
 * 固定高度面板需要页签时，直接复用通用 `TabList` 的状态、绘制、命中和页签焦点按键；能力代码只提供页签标签与业务身份，并根据 `TabList` 返回的切页或进入正文结果执行业务动作。嵌入内容不保留未绘制的内部页签，只向父面板报告焦点到达边界；父面板不能检查子组件内部索引来猜边界，避免出现不可见焦点和同类面板交互漂移。
 * 设计 StatusLine 数据需求时，先确认同一数据是否服务其他能力。Git 状态必须持续跟随 ChangeTurn；关闭 StatusLine 的 Git branch 或 Git changes 只能停止对应显示与 StatusLine 专属的额外计算，不能停止基础 Git 状态跟随。
 * Status 只展示状态和证据，不拥有功能启停；需要跨启动保留的 TUI 诊断开关由 Config 写入 `[tui]`，运行层按配置管理诊断会话，不能把会话身份或采样结果写回配置。
+* TUI 内置调色板统一使用 `ThemeRgb::from_hex("#RRGGBB")` 声明六位十六进制颜色，例如 `ThemeRgb::from_hex("#58a6ff")`；不要用 `ThemeRgb::new(0x58, 0xa6, 0xff)` 分散书写三个分量。`ThemeRgb` 只保存解析后的 RGB，内置值与用户主题共用格式校验，`RenderTheme` 不保存或解释颜色字符串。
+* 新增可交互 item 时，能力 owner 必须用绘制所用的同一布局提供 typed hit-test，并把 `selected`、`hovered`、`pressed` 分别交给共享 `InteractionState`；页面组合层只聚合目标，不能按坐标猜业务身份，也不能靠 hover 改写键盘选择。点击必须复用该 item 的键盘激活路径；不可操作的只读行不暴露指针目标，并用 owner 测试断言整行命中、主题状态和键盘选择互不干扰。

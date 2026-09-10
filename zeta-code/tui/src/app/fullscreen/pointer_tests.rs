@@ -6,12 +6,14 @@ use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::frame;
 use crate::app::fullscreen::pointer::PointerTarget;
+use crate::sessions::Command as SessionCommand;
 use crate::sessions::Event as SessionEvent;
 use crate::terminal::MouseMode;
 use crate::thread::Command as ThreadCommand;
 use crate::thread::Event as ThreadEvent;
 use crate::thread::composer::ChatComposerPointerTarget;
 use crate::thread::composer::CompletionView;
+use crate::thread::transcript::ChatHistoryPointerTarget;
 use crate::thread::transcript::TranscriptScrollDirection;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
@@ -204,6 +206,94 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
 }
 
 #[test]
+fn input_focus_follows_clicks_and_survives_modal_background_clicks() {
+    let mut app = App::new();
+    app.insert_text("draft");
+    let area = Rect::new(0, 0, 80, 24);
+    let areas = crate::app::fullscreen::layout(&app, area);
+    let input_position = ratatui::layout::Position::new(
+        crate::thread::composer::content_area(areas.input).x,
+        areas.input.y,
+    );
+    let page_position =
+        ratatui::layout::Position::new(areas.session.transcript.x, areas.session.transcript.y);
+    let mouse = |kind, position: ratatui::layout::Position| MouseEvent {
+        kind,
+        column: position.x,
+        row: position.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    let input_border = |app: &App| {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
+                .unwrap();
+        terminal.draw(|frame| frame::draw(frame, app)).unwrap();
+        terminal.backend().buffer()[input_position].fg
+    };
+
+    assert_eq!(
+        super::target_at(&app, area, input_position.x, input_position.y),
+        Some(PointerTarget::Composer(ChatComposerPointerTarget::Input))
+    );
+    assert!(app.chat_input_focused());
+    assert_eq!(input_border(&app), app.render_context().chat_input_chrome());
+
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), page_position),
+    );
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), page_position),
+    );
+    assert!(!app.chat_input_focused());
+    assert_eq!(input_border(&app), app.render_context().border());
+    app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+    app.handle_paste("ignored".into());
+    assert_eq!(app.input(), "draft");
+
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), input_position),
+    );
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), input_position),
+    );
+    assert!(app.chat_input_focused());
+    assert_eq!(input_border(&app), app.render_context().chat_input_chrome());
+
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Help",
+        vec![ListSelectionGroup::new(
+            "Commands",
+            vec![ListSelectionItem::new("Help")],
+        )],
+    )));
+    assert!(!app.chat_input_focused());
+    let modal = super::super::modal::layout(area).surface;
+    let outside = ratatui::layout::Position::new(area.x, area.y);
+    assert!(!modal.contains(outside));
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left), outside),
+    );
+    handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left), outside),
+    );
+    assert!(app.command_panel().is_some());
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.chat_input_focused());
+}
+
+#[test]
 fn command_modals_capture_mouse_and_keep_keyboard_navigation() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(
@@ -247,7 +337,7 @@ fn command_modals_capture_mouse_and_keep_keyboard_navigation() {
     assert!(app.command_panel().is_none());
 }
 
-fn assert_tui_capture_without_pointer_actions(app: &mut App, area: Rect) {
+fn assert_base_pointer_targets(app: &mut App, area: Rect) {
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     for row in area.y..area.bottom() {
         for column in area.x..area.right() {
@@ -256,9 +346,11 @@ fn assert_tui_capture_without_pointer_actions(app: &mut App, area: Rect) {
                 area,
                 ratatui::layout::Position::new(column, row)
             ));
-            if super::target_at(app, area, column, row) != Some(PointerTarget::Home) {
-                assert_eq!(super::target_at(app, area, column, row), None);
-                assert_eq!(activate_pointer_item(app, area, column, row), None);
+            match super::target_at(app, area, column, row) {
+                Some(PointerTarget::Home)
+                | Some(PointerTarget::Composer(ChatComposerPointerTarget::Input)) => {}
+                None => assert_eq!(activate_pointer_item(app, area, column, row), None),
+                target => panic!("unexpected base pointer target: {target:?}"),
             }
         }
     }
@@ -334,7 +426,7 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
         }
     }
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_tui_capture_without_pointer_actions(&mut app, area);
+    assert_base_pointer_targets(&mut app, area);
 }
 
 #[test]
@@ -359,7 +451,7 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
 }
 
 #[test]
-fn fixed_session_manager_ignores_mouse_without_changing_focus_or_opening_preview() {
+fn session_manager_items_hover_and_activate_without_changing_the_draft() {
     let mut app = App::new();
     let session_id = SessionId::new("pointer-session").unwrap();
     let thread_id = ThreadId::new("pointer-thread").unwrap();
@@ -388,10 +480,34 @@ fn fixed_session_manager_ignores_mouse_without_changing_focus_or_opening_preview
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let area = Rect::new(0, 0, 80, 24);
     app.insert_text("keep this draft");
-    assert_tui_capture_without_pointer_actions(&mut app, area);
+    let target = (0..area.height)
+        .flat_map(|row| (0..area.width).map(move |column| (column, row)))
+        .find(|(column, row)| {
+            matches!(
+                super::target_at(&app, area, *column, *row),
+                Some(PointerTarget::SessionManager(
+                    crate::sessions::SessionManagerPointerTarget::Session(id)
+                )) if id.as_str() == "pointer-session"
+            )
+        })
+        .expect("the visible session row is pointer-addressable");
+    update_pointer_hover(&mut app, area, target.0, target.1);
+    assert!(matches!(
+        app.fullscreen.pointer.hovered(),
+        Some(PointerTarget::SessionManager(
+            crate::sessions::SessionManagerPointerTarget::Session(id)
+        )) if id.as_str() == "pointer-session"
+    ));
     assert!(!app.session_manager_focused());
     assert!(app.session_preview().is_none());
     assert!(app.session_manager_view().is_some());
+    assert_eq!(app.input(), "keep this draft");
+    assert!(matches!(
+        activate_pointer_item(&mut app, area, target.0, target.1),
+        Some(AppCommand::Sessions(SessionCommand::Resume { session_id, .. }))
+            if session_id == "pointer-session"
+    ));
+    assert!(app.session_manager_focused());
     assert_eq!(app.input(), "keep this draft");
 }
 
@@ -712,7 +828,9 @@ fn jump_control_click_and_keyboard_restore_latest_without_changing_the_draft() {
         let columns = (0..width)
             .filter(|column| {
                 super::target_at(&app, area, *column, row)
-                    == Some(PointerTarget::TranscriptJumpToBottom)
+                    == Some(PointerTarget::Transcript(
+                        ChatHistoryPointerTarget::JumpToBottom,
+                    ))
             })
             .collect::<Vec<_>>();
         assert!(!columns.is_empty());
@@ -727,7 +845,9 @@ fn jump_control_click_and_keyboard_restore_latest_without_changing_the_draft() {
             handle_mouse(&mut app, area, event(MouseEventKind::Moved));
             assert_eq!(
                 app.fullscreen.pointer.hovered(),
-                Some(&PointerTarget::TranscriptJumpToBottom)
+                Some(&PointerTarget::Transcript(
+                    ChatHistoryPointerTarget::JumpToBottom
+                ))
             );
             handle_mouse(
                 &mut app,
@@ -736,7 +856,9 @@ fn jump_control_click_and_keyboard_restore_latest_without_changing_the_draft() {
             );
             assert_eq!(
                 app.fullscreen.pointer.pressed(),
-                Some(&PointerTarget::TranscriptJumpToBottom)
+                Some(&PointerTarget::Transcript(
+                    ChatHistoryPointerTarget::JumpToBottom
+                ))
             );
             let super::MouseAction::Selection(Some(
                 crate::app::fullscreen::selection::ScreenSelectionOutcome::Click {

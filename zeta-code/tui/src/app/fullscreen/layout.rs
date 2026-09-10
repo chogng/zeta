@@ -57,6 +57,7 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
     let input_rows = ChatComposerSurface {
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
+        focus: chat_input::ChatInputFocus::Blurred,
         chrome: chat_input::ChatInputChrome::Box,
     }
     .desired_height(terminal_area.width, app.render_context());

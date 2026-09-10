@@ -9,24 +9,44 @@ pub(crate) struct ThemeRgb {
 }
 
 impl ThemeRgb {
-    pub(crate) const fn new(red: u8, green: u8, blue: u8) -> Self {
-        Self { red, green, blue }
+    pub(crate) const fn from_hex(value: &str) -> Self {
+        match Self::decode(value) {
+            Some(color) => color,
+            None => panic!("theme color must use the #RRGGBB format"),
+        }
     }
 
     pub(crate) fn parse(value: &str) -> Result<Self, String> {
-        let hex = value
-            .strip_prefix('#')
-            .filter(|hex| hex.len() == 6 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
-            .ok_or_else(|| format!("invalid TUI theme color '{value}'; expected #RRGGBB"))?;
-        let component = |start| {
-            u8::from_str_radix(&hex[start..start + 2], 16)
-                .map_err(|_| format!("invalid TUI theme color '{value}'; expected #RRGGBB"))
+        Self::decode(value)
+            .ok_or_else(|| format!("invalid TUI theme color '{value}'; expected #RRGGBB"))
+    }
+
+    const fn decode(value: &str) -> Option<Self> {
+        let bytes = value.as_bytes();
+        if bytes.len() != 7 || bytes[0] != b'#' {
+            return None;
+        }
+        let red = match hex_pair(bytes[1], bytes[2]) {
+            Some(component) => component,
+            None => return None,
         };
-        Ok(Self::new(component(0)?, component(2)?, component(4)?))
+        let green = match hex_pair(bytes[3], bytes[4]) {
+            Some(component) => component,
+            None => return None,
+        };
+        let blue = match hex_pair(bytes[5], bytes[6]) {
+            Some(component) => component,
+            None => return None,
+        };
+        Some(Self { red, green, blue })
     }
 
     const fn components(self) -> [u8; 3] {
         [self.red, self.green, self.blue]
+    }
+
+    const fn true_color(self) -> Color {
+        Color::Rgb(self.red, self.green, self.blue)
     }
 }
 
@@ -72,157 +92,151 @@ pub(crate) struct ThemePalette {
 impl ThemePalette {
     pub(crate) const fn dark() -> Self {
         Self {
-            accent: ThemeRgb::new(0x58, 0xa6, 0xff),
-            accent_surface_background: ThemeRgb::new(0x66, 0x58, 0xc7),
-            accent_surface_foreground: ThemeRgb::new(0xff, 0xff, 0xff),
-            action_foreground: ThemeRgb::new(0x58, 0xa6, 0xff),
-            background: ThemeRgb::new(0x0d, 0x11, 0x17),
-            border: ThemeRgb::new(0x2b, 0x2b, 0x2b),
-            chat_input_chrome: ThemeRgb::new(0x8b, 0x94, 0x9e),
-            danger: ThemeRgb::new(0xf8, 0x51, 0x49),
-            disabled_foreground: ThemeRgb::new(0x8b, 0x94, 0x9e),
-            focus: ThemeRgb::new(0x9a, 0x91, 0xeb),
-            foreground: ThemeRgb::new(0xe6, 0xed, 0xf3),
-            function: ThemeRgb::new(0xd2, 0xa8, 0xff),
-            hover_background: ThemeRgb::new(0x25, 0x23, 0x3a),
-            hover_foreground: ThemeRgb::new(0xf0, 0xed, 0xff),
-            inserted_background: ThemeRgb::new(0x13, 0x2d, 0x1d),
-            inserted_marker: ThemeRgb::new(0x3f, 0xb9, 0x50),
-            keyword: ThemeRgb::new(0xff, 0x7b, 0x72),
-            modal_border: ThemeRgb::new(0x8b, 0x94, 0x9e),
-            muted: ThemeRgb::new(0x8b, 0x94, 0x9e),
-            overlay_background: ThemeRgb::new(0x25, 0x25, 0x26),
-            pressed_background: ThemeRgb::new(0x3b, 0x35, 0x68),
-            pressed_foreground: ThemeRgb::new(0xff, 0xff, 0xff),
-            removed_background: ThemeRgb::new(0x35, 0x1b, 0x1b),
-            removed_marker: ThemeRgb::new(0xf8, 0x51, 0x49),
-            string: ThemeRgb::new(0xa5, 0xd6, 0xff),
-            success: ThemeRgb::new(0x3f, 0xb9, 0x50),
-            selection_background: ThemeRgb::new(0x2f, 0x2b, 0x52),
-            selection_foreground: ThemeRgb::new(0xf0, 0xed, 0xff),
-            screen_selection_background: ThemeRgb::new(0x87, 0xce, 0xeb),
-            screen_selection_foreground: ThemeRgb::new(0x0d, 0x11, 0x17),
-            r#type: ThemeRgb::new(0xd2, 0xa8, 0xff),
-            transcript_jump_background: ThemeRgb::new(0x30, 0x30, 0x30),
-            user_message_background: ThemeRgb::new(0x16, 0x1b, 0x22),
-            variable: ThemeRgb::new(0xff, 0xa6, 0x57),
-            warning: ThemeRgb::new(0xff, 0xa6, 0x57),
+            accent: ThemeRgb::from_hex("#58a6ff"),
+            accent_surface_background: ThemeRgb::from_hex("#6658c7"),
+            accent_surface_foreground: ThemeRgb::from_hex("#ffffff"),
+            action_foreground: ThemeRgb::from_hex("#58a6ff"),
+            background: ThemeRgb::from_hex("#0d1117"),
+            border: ThemeRgb::from_hex("#2b2b2b"),
+            chat_input_chrome: ThemeRgb::from_hex("#8b949e"),
+            danger: ThemeRgb::from_hex("#f85149"),
+            disabled_foreground: ThemeRgb::from_hex("#8b949e"),
+            focus: ThemeRgb::from_hex("#9a91eb"),
+            foreground: ThemeRgb::from_hex("#e6edf3"),
+            function: ThemeRgb::from_hex("#d2a8ff"),
+            hover_background: ThemeRgb::from_hex("#25233a"),
+            hover_foreground: ThemeRgb::from_hex("#f0edff"),
+            inserted_background: ThemeRgb::from_hex("#132d1d"),
+            inserted_marker: ThemeRgb::from_hex("#3fb950"),
+            keyword: ThemeRgb::from_hex("#ff7b72"),
+            modal_border: ThemeRgb::from_hex("#8b949e"),
+            muted: ThemeRgb::from_hex("#8b949e"),
+            overlay_background: ThemeRgb::from_hex("#252526"),
+            pressed_background: ThemeRgb::from_hex("#3b3568"),
+            pressed_foreground: ThemeRgb::from_hex("#ffffff"),
+            removed_background: ThemeRgb::from_hex("#351b1b"),
+            removed_marker: ThemeRgb::from_hex("#f85149"),
+            string: ThemeRgb::from_hex("#a5d6ff"),
+            success: ThemeRgb::from_hex("#3fb950"),
+            selection_background: ThemeRgb::from_hex("#2f2b52"),
+            selection_foreground: ThemeRgb::from_hex("#f0edff"),
+            screen_selection_background: ThemeRgb::from_hex("#87ceeb"),
+            screen_selection_foreground: ThemeRgb::from_hex("#0d1117"),
+            r#type: ThemeRgb::from_hex("#d2a8ff"),
+            transcript_jump_background: ThemeRgb::from_hex("#303030"),
+            user_message_background: ThemeRgb::from_hex("#161b22"),
+            variable: ThemeRgb::from_hex("#ffa657"),
+            warning: ThemeRgb::from_hex("#ffa657"),
         }
     }
 
     pub(crate) const fn light() -> Self {
         Self {
-            accent: ThemeRgb::new(0x09, 0x69, 0xda),
-            accent_surface_background: ThemeRgb::new(0x66, 0x58, 0xc7),
-            accent_surface_foreground: ThemeRgb::new(0xff, 0xff, 0xff),
-            action_foreground: ThemeRgb::new(0x09, 0x69, 0xda),
-            background: ThemeRgb::new(0xff, 0xff, 0xff),
-            border: ThemeRgb::new(0xe5, 0xe5, 0xe5),
-            chat_input_chrome: ThemeRgb::new(0x57, 0x60, 0x6a),
-            danger: ThemeRgb::new(0xcf, 0x22, 0x2e),
-            disabled_foreground: ThemeRgb::new(0x57, 0x60, 0x6a),
-            focus: ThemeRgb::new(0x66, 0x58, 0xc7),
-            foreground: ThemeRgb::new(0x1f, 0x23, 0x28),
-            function: ThemeRgb::new(0x82, 0x50, 0xdf),
-            hover_background: ThemeRgb::new(0xf2, 0xf0, 0xff),
-            hover_foreground: ThemeRgb::new(0x34, 0x2b, 0x72),
-            inserted_background: ThemeRgb::new(0xda, 0xfb, 0xe1),
-            inserted_marker: ThemeRgb::new(0x1a, 0x7f, 0x37),
-            keyword: ThemeRgb::new(0xcf, 0x22, 0x2e),
-            modal_border: ThemeRgb::new(0x57, 0x60, 0x6a),
-            muted: ThemeRgb::new(0x57, 0x60, 0x6a),
-            overlay_background: ThemeRgb::new(0xf8, 0xf8, 0xf8),
-            pressed_background: ThemeRgb::new(0xd8, 0xd1, 0xff),
-            pressed_foreground: ThemeRgb::new(0x27, 0x1f, 0x63),
-            removed_background: ThemeRgb::new(0xff, 0xeb, 0xe9),
-            removed_marker: ThemeRgb::new(0xcf, 0x22, 0x2e),
-            string: ThemeRgb::new(0x0a, 0x30, 0x69),
-            success: ThemeRgb::new(0x1a, 0x7f, 0x37),
-            selection_background: ThemeRgb::new(0xe9, 0xe5, 0xff),
-            selection_foreground: ThemeRgb::new(0x34, 0x2b, 0x72),
-            screen_selection_background: ThemeRgb::new(0x87, 0xce, 0xeb),
-            screen_selection_foreground: ThemeRgb::new(0x0d, 0x11, 0x17),
-            r#type: ThemeRgb::new(0x82, 0x50, 0xdf),
-            transcript_jump_background: ThemeRgb::new(0xe5, 0xe5, 0xe5),
-            user_message_background: ThemeRgb::new(0xf0, 0xf0, 0xf0),
-            variable: ThemeRgb::new(0x95, 0x38, 0x00),
-            warning: ThemeRgb::new(0x95, 0x38, 0x00),
+            accent: ThemeRgb::from_hex("#0969da"),
+            accent_surface_background: ThemeRgb::from_hex("#6658c7"),
+            accent_surface_foreground: ThemeRgb::from_hex("#ffffff"),
+            action_foreground: ThemeRgb::from_hex("#0969da"),
+            background: ThemeRgb::from_hex("#ffffff"),
+            border: ThemeRgb::from_hex("#e5e5e5"),
+            chat_input_chrome: ThemeRgb::from_hex("#57606a"),
+            danger: ThemeRgb::from_hex("#cf222e"),
+            disabled_foreground: ThemeRgb::from_hex("#57606a"),
+            focus: ThemeRgb::from_hex("#6658c7"),
+            foreground: ThemeRgb::from_hex("#1f2328"),
+            function: ThemeRgb::from_hex("#8250df"),
+            hover_background: ThemeRgb::from_hex("#f2f0ff"),
+            hover_foreground: ThemeRgb::from_hex("#342b72"),
+            inserted_background: ThemeRgb::from_hex("#dafbe1"),
+            inserted_marker: ThemeRgb::from_hex("#1a7f37"),
+            keyword: ThemeRgb::from_hex("#cf222e"),
+            modal_border: ThemeRgb::from_hex("#57606a"),
+            muted: ThemeRgb::from_hex("#57606a"),
+            overlay_background: ThemeRgb::from_hex("#f8f8f8"),
+            pressed_background: ThemeRgb::from_hex("#d8d1ff"),
+            pressed_foreground: ThemeRgb::from_hex("#271f63"),
+            removed_background: ThemeRgb::from_hex("#ffebe9"),
+            removed_marker: ThemeRgb::from_hex("#cf222e"),
+            string: ThemeRgb::from_hex("#0a3069"),
+            success: ThemeRgb::from_hex("#1a7f37"),
+            selection_background: ThemeRgb::from_hex("#e9e5ff"),
+            selection_foreground: ThemeRgb::from_hex("#342b72"),
+            screen_selection_background: ThemeRgb::from_hex("#87ceeb"),
+            screen_selection_foreground: ThemeRgb::from_hex("#0d1117"),
+            r#type: ThemeRgb::from_hex("#8250df"),
+            transcript_jump_background: ThemeRgb::from_hex("#e5e5e5"),
+            user_message_background: ThemeRgb::from_hex("#f0f0f0"),
+            variable: ThemeRgb::from_hex("#953800"),
+            warning: ThemeRgb::from_hex("#953800"),
         }
     }
 
     pub(crate) const fn colorblind_dark() -> Self {
         Self {
-            accent_surface_background: ThemeRgb::new(0x09, 0x69, 0xda),
-            action_foreground: ThemeRgb::new(0x58, 0xa6, 0xff),
-            danger: ThemeRgb::new(0xd4, 0x76, 0x16),
-            focus: ThemeRgb::new(0x58, 0xa6, 0xff),
-            hover_background: ThemeRgb::new(0x17, 0x2a, 0x46),
-            hover_foreground: ThemeRgb::new(0xdd, 0xf4, 0xff),
-            inserted_background: ThemeRgb::new(0x12, 0x29, 0x4b),
-            inserted_marker: ThemeRgb::new(0x58, 0xa6, 0xff),
-            keyword: ThemeRgb::new(0xec, 0x8e, 0x2c),
-            pressed_background: ThemeRgb::new(0x1f, 0x4f, 0x85),
-            removed_background: ThemeRgb::new(0x40, 0x28, 0x10),
-            removed_marker: ThemeRgb::new(0xd4, 0x76, 0x16),
-            success: ThemeRgb::new(0x58, 0xa6, 0xff),
-            selection_background: ThemeRgb::new(0x12, 0x29, 0x4b),
-            selection_foreground: ThemeRgb::new(0xdd, 0xf4, 0xff),
-            screen_selection_background: ThemeRgb::new(0x80, 0xcc, 0xff),
-            variable: ThemeRgb::new(0xfd, 0xac, 0x54),
-            warning: ThemeRgb::new(0xfd, 0xac, 0x54),
+            accent_surface_background: ThemeRgb::from_hex("#0969da"),
+            action_foreground: ThemeRgb::from_hex("#58a6ff"),
+            danger: ThemeRgb::from_hex("#d47616"),
+            focus: ThemeRgb::from_hex("#58a6ff"),
+            hover_background: ThemeRgb::from_hex("#172a46"),
+            hover_foreground: ThemeRgb::from_hex("#ddf4ff"),
+            inserted_background: ThemeRgb::from_hex("#12294b"),
+            inserted_marker: ThemeRgb::from_hex("#58a6ff"),
+            keyword: ThemeRgb::from_hex("#ec8e2c"),
+            pressed_background: ThemeRgb::from_hex("#1f4f85"),
+            removed_background: ThemeRgb::from_hex("#402810"),
+            removed_marker: ThemeRgb::from_hex("#d47616"),
+            success: ThemeRgb::from_hex("#58a6ff"),
+            selection_background: ThemeRgb::from_hex("#12294b"),
+            selection_foreground: ThemeRgb::from_hex("#ddf4ff"),
+            screen_selection_background: ThemeRgb::from_hex("#80ccff"),
+            variable: ThemeRgb::from_hex("#fdac54"),
+            warning: ThemeRgb::from_hex("#fdac54"),
             ..Self::dark()
         }
     }
 
     pub(crate) const fn colorblind_light() -> Self {
         Self {
-            accent_surface_background: ThemeRgb::new(0x09, 0x69, 0xda),
-            action_foreground: ThemeRgb::new(0x09, 0x69, 0xda),
-            danger: ThemeRgb::new(0xb3, 0x59, 0x00),
-            focus: ThemeRgb::new(0x09, 0x69, 0xda),
-            hover_background: ThemeRgb::new(0xee, 0xf8, 0xff),
-            hover_foreground: ThemeRgb::new(0x03, 0x4b, 0x7a),
-            inserted_background: ThemeRgb::new(0xdd, 0xf4, 0xff),
-            inserted_marker: ThemeRgb::new(0x09, 0x69, 0xda),
-            keyword: ThemeRgb::new(0xb3, 0x59, 0x00),
-            pressed_background: ThemeRgb::new(0xb6, 0xe3, 0xff),
-            pressed_foreground: ThemeRgb::new(0x03, 0x3d, 0x66),
-            removed_background: ThemeRgb::new(0xff, 0xf1, 0xe5),
-            removed_marker: ThemeRgb::new(0xb3, 0x59, 0x00),
-            success: ThemeRgb::new(0x09, 0x69, 0xda),
-            selection_background: ThemeRgb::new(0xdd, 0xf4, 0xff),
-            selection_foreground: ThemeRgb::new(0x03, 0x4b, 0x7a),
-            screen_selection_background: ThemeRgb::new(0x80, 0xcc, 0xff),
-            variable: ThemeRgb::new(0x8a, 0x46, 0x00),
-            warning: ThemeRgb::new(0x8a, 0x46, 0x00),
+            accent_surface_background: ThemeRgb::from_hex("#0969da"),
+            action_foreground: ThemeRgb::from_hex("#0969da"),
+            danger: ThemeRgb::from_hex("#b35900"),
+            focus: ThemeRgb::from_hex("#0969da"),
+            hover_background: ThemeRgb::from_hex("#eef8ff"),
+            hover_foreground: ThemeRgb::from_hex("#034b7a"),
+            inserted_background: ThemeRgb::from_hex("#ddf4ff"),
+            inserted_marker: ThemeRgb::from_hex("#0969da"),
+            keyword: ThemeRgb::from_hex("#b35900"),
+            pressed_background: ThemeRgb::from_hex("#b6e3ff"),
+            pressed_foreground: ThemeRgb::from_hex("#033d66"),
+            removed_background: ThemeRgb::from_hex("#fff1e5"),
+            removed_marker: ThemeRgb::from_hex("#b35900"),
+            success: ThemeRgb::from_hex("#0969da"),
+            selection_background: ThemeRgb::from_hex("#ddf4ff"),
+            selection_foreground: ThemeRgb::from_hex("#034b7a"),
+            screen_selection_background: ThemeRgb::from_hex("#80ccff"),
+            variable: ThemeRgb::from_hex("#8a4600"),
+            warning: ThemeRgb::from_hex("#8a4600"),
             ..Self::light()
         }
     }
 }
 
 const fn hex(value: &str) -> Color {
-    let bytes = value.as_bytes();
-    assert!(
-        bytes.len() == 7 && bytes[0] == b'#',
-        "hex color must use the #RRGGBB format"
-    );
-    Color::Rgb(
-        hex_pair(bytes[1], bytes[2]),
-        hex_pair(bytes[3], bytes[4]),
-        hex_pair(bytes[5], bytes[6]),
-    )
+    ThemeRgb::from_hex(value).true_color()
 }
 
-const fn hex_pair(high: u8, low: u8) -> u8 {
-    (hex_digit(high) << 4) | hex_digit(low)
+const fn hex_pair(high: u8, low: u8) -> Option<u8> {
+    match (hex_digit(high), hex_digit(low)) {
+        (Some(high), Some(low)) => Some((high << 4) | low),
+        _ => None,
+    }
 }
 
-const fn hex_digit(value: u8) -> u8 {
+const fn hex_digit(value: u8) -> Option<u8> {
     match value {
-        b'0'..=b'9' => value - b'0',
-        b'a'..=b'f' => value - b'a' + 10,
-        b'A'..=b'F' => value - b'A' + 10,
-        _ => panic!("hex color contains an invalid digit"),
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
     }
 }
 

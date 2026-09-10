@@ -186,6 +186,22 @@ impl ChatPanel {
         None
     }
 
+    pub(crate) fn activate_approval(&mut self, index: usize) -> Option<ThreadRequestResponse> {
+        let approval = self.approval.as_mut()?;
+        match approval.activate(index) {
+            ApprovalOutcome::Respond(decision) => Some(approval.response(decision)),
+            ApprovalOutcome::Consumed | ApprovalOutcome::Unhandled => None,
+        }
+    }
+
+    pub(crate) fn activate_query_choice(&mut self, index: usize) -> Option<ThreadRequestResponse> {
+        let query = self.query.as_mut()?;
+        match query.activate(index) {
+            QueryOutcome::Completed(answers) => Some(query.response(answers)),
+            QueryOutcome::Consumed | QueryOutcome::Unhandled => None,
+        }
+    }
+
     pub(crate) fn handle_request_paste(&mut self, pasted: String) -> bool {
         if self.approval.is_some() {
             return true;

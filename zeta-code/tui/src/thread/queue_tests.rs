@@ -195,3 +195,47 @@ fn deleting_a_selected_message_keeps_the_nearest_message_selected_after_the_repl
     );
     assert_eq!(queue.view(&navigation).selected, Some(third_id));
 }
+
+#[test]
+fn pointer_target_uses_the_visible_queue_row_and_focuses_its_identity() {
+    let mut queue = Queue::default();
+    let (first_id, first) = pending(&mut queue, "first");
+    let (second_id, second) = pending(&mut queue, "second");
+    queue.apply(vec![first, second]).unwrap();
+    let mut navigation = QueueNavigation::default();
+    let area = ratatui::layout::Rect::new(0, 0, 40, 2);
+    let target = pointer_target_at(
+        area,
+        &queue.view(&navigation),
+        DEFAULT_MAX_VISIBLE_ITEMS,
+        ratatui::layout::Position::new(area.right() - 1, 1),
+    )
+    .unwrap();
+
+    assert_eq!(target, second_id);
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
+            .unwrap();
+    terminal
+        .draw(|frame| {
+            draw(
+                frame,
+                area,
+                &queue.view(&navigation),
+                DEFAULT_MAX_VISIBLE_ITEMS,
+                Some(target),
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    for column in area.x..area.right() {
+        assert_eq!(
+            terminal.backend().buffer()[(column, 1)].bg,
+            crate::render::test_context().hover_background()
+        );
+    }
+    assert!(navigation.focus(&queue, target));
+    assert_eq!(queue.view(&navigation).selected, Some(second_id));
+    assert_ne!(first_id, second_id);
+}

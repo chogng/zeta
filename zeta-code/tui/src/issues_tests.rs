@@ -48,7 +48,15 @@ fn key(manager: &mut Manager, code: KeyCode) -> Option<Command> {
 fn snapshot(manager: &Manager, name: &str, width: u16, height: u16) -> ratatui::buffer::Buffer {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
-        .draw(|frame| manager.draw(frame, frame.area(), crate::render::test_context()))
+        .draw(|frame| {
+            manager.draw(
+                frame,
+                frame.area(),
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
         .unwrap();
     let buffer = terminal.backend().buffer();
     let text = (0..height)
@@ -155,7 +163,7 @@ fn issue_browser_uses_the_shared_state_column_and_handles_narrow_terminals() {
         assert_eq!(buffer[(2, 7)].symbol(), "[");
         assert_eq!(
             buffer[(2, 7)].bg,
-            crate::render::test_context().background()
+            crate::render::test_context().selection_background()
         );
         assert!(
             buffer[(2, 7)]
@@ -169,7 +177,7 @@ fn issue_browser_uses_the_shared_state_column_and_handles_narrow_terminals() {
         );
         assert_eq!(
             buffer[(width - 3, 7)].bg,
-            crate::render::test_context().background()
+            crate::render::test_context().selection_background()
         );
         for y in 2..7 {
             assert_eq!(buffer[(0, y)].symbol(), " ");
@@ -178,8 +186,68 @@ fn issue_browser_uses_the_shared_state_column_and_handles_narrow_terminals() {
     }
     let mut terminal = Terminal::new(TestBackend::new(1, 1)).unwrap();
     terminal
-        .draw(|frame| manager.draw(frame, frame.area(), crate::render::test_context()))
+        .draw(|frame| {
+            manager.draw(
+                frame,
+                frame.area(),
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
         .unwrap();
+}
+
+#[test]
+fn issue_items_tabs_and_search_share_pointer_targeting_and_hover_feedback() {
+    let mut manager = loaded();
+    let area = ratatui::layout::Rect::new(0, 0, 80, 16);
+    let areas = manager.interaction_areas(area);
+    let issue = manager
+        .pointer_target_at(
+            area,
+            ratatui::layout::Position::new(areas.list.right() - 1, areas.list.y + 1),
+        )
+        .unwrap();
+    assert_eq!(issue, PointerTarget::Issue(5));
+    assert_eq!(
+        manager.pointer_target_at(
+            area,
+            ratatui::layout::Position::new(areas.search.x, areas.search.y)
+        ),
+        Some(PointerTarget::Search)
+    );
+    assert!(matches!(
+        manager.pointer_target_at(
+            area,
+            ratatui::layout::Position::new(areas.tabs.x + 1, areas.tabs.y)
+        ),
+        Some(PointerTarget::Tab(0))
+    ));
+
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| {
+            manager.draw(
+                frame,
+                area,
+                Some(&issue),
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    for column in areas.list.x..areas.list.right() {
+        assert_eq!(
+            terminal.backend().buffer()[(column, areas.list.y + 1)].bg,
+            crate::render::test_context().hover_background()
+        );
+    }
+    let Some(Command::Read { number, .. }) = manager.activate_pointer(&issue) else {
+        panic!("clicking an issue item must use its ordinary activation path")
+    };
+    assert_eq!(number, 5);
+    assert_eq!(manager.cursor, 1);
 }
 
 #[test]

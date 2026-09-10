@@ -126,6 +126,18 @@ impl Approval {
         }
     }
 
+    pub(crate) fn activate(&mut self, index: usize) -> ApprovalOutcome {
+        self.selected = match index {
+            0 => ApprovalDecision::ApproveOnce,
+            1 => ApprovalDecision::Decline,
+            _ => return ApprovalOutcome::Consumed,
+        };
+        self.handle_key(KeyEvent::new(
+            KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ))
+    }
+
     pub(crate) fn submission_failed(&mut self, error: String) {
         self.submitting = false;
         self.error = Some(error);
@@ -206,6 +218,20 @@ pub(crate) fn draw(
     pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
+    let states = [
+        choice_state(
+            0,
+            view.selected == ApprovalDecision::ApproveOnce,
+            hovered,
+            pressed,
+        ),
+        choice_state(
+            1,
+            view.selected == ApprovalDecision::Decline,
+            hovered,
+            pressed,
+        ),
+    ];
     let mut lines = vec![Line::styled(
         view.reason,
         Style::default().add_modifier(Modifier::BOLD),
@@ -216,26 +242,8 @@ pub(crate) fn draw(
             .take(MAX_DETAIL_ROWS)
             .map(|detail| Line::styled(detail, Style::default().fg(context.muted()))),
     );
-    lines.push(choice_line(
-        "Approve once",
-        choice_state(
-            0,
-            view.selected == ApprovalDecision::ApproveOnce,
-            hovered,
-            pressed,
-        ),
-        context,
-    ));
-    lines.push(choice_line(
-        "Decline",
-        choice_state(
-            1,
-            view.selected == ApprovalDecision::Decline,
-            hovered,
-            pressed,
-        ),
-        context,
-    ));
+    lines.push(choice_line("Approve once", states[0], context));
+    lines.push(choice_line("Decline", states[1], context));
     if view.submitting {
         lines.push(Line::styled(
             "Submitting…",
@@ -253,6 +261,46 @@ pub(crate) fn draw(
         ),
         area,
     );
+    for (index, state) in states.into_iter().enumerate() {
+        let row = choice_row(area, view, index);
+        if row < area.bottom().saturating_sub(1) {
+            frame.buffer_mut().set_style(
+                Rect::new(
+                    area.x.saturating_add(1),
+                    row,
+                    area.width.saturating_sub(2),
+                    1,
+                ),
+                interaction_style(context, state),
+            );
+        }
+    }
+}
+
+pub(crate) fn choice_at(
+    area: Rect,
+    view: ApprovalView<'_>,
+    position: ratatui::layout::Position,
+) -> Option<usize> {
+    if view.submitting {
+        return None;
+    }
+    (0..2).find(|index| {
+        Rect::new(
+            area.x.saturating_add(1),
+            choice_row(area, view, *index),
+            area.width.saturating_sub(2),
+            1,
+        )
+        .contains(position)
+    })
+}
+
+fn choice_row(area: Rect, view: ApprovalView<'_>, index: usize) -> u16 {
+    area.y
+        .saturating_add(2)
+        .saturating_add(view.details.len().min(MAX_DETAIL_ROWS) as u16)
+        .saturating_add(index as u16)
 }
 
 fn choice_line<'a>(

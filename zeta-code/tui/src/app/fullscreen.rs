@@ -13,6 +13,14 @@ pub(super) mod selection;
 
 pub(super) use layout::layout;
 
+/// Base focus below temporary surfaces; page features own their focus within `Page`.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum Focus {
+    #[default]
+    Input,
+    Page,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) enum Page {
     Home,
@@ -39,6 +47,7 @@ pub(super) struct Fullscreen {
     pub(super) issues: crate::issues::Manager,
     pub(super) agent_thread_switcher: crate::thread::AgentThreadSwitcher,
     page: Page,
+    focus: Focus,
     home: home::Home,
     pub(super) preview: crate::thread::transcript::viewport::PreviewViewport,
     pub(super) escape: crate::app::escape::ScreenEscapeSequence,
@@ -55,6 +64,7 @@ impl Fullscreen {
             issues: Default::default(),
             agent_thread_switcher: Default::default(),
             page: Page::Conversation,
+            focus: Focus::default(),
             home: home::Home::default(),
             preview: Default::default(),
             escape: Default::default(),
@@ -72,6 +82,18 @@ impl Fullscreen {
 
     pub(in crate::app) fn home_visible(&self) -> bool {
         self.page == Page::Home
+    }
+
+    pub(super) fn focus_input(&mut self) {
+        self.focus = Focus::Input;
+    }
+
+    pub(super) fn focus_page(&mut self) {
+        self.focus = Focus::Page;
+    }
+
+    pub(super) fn input_focused(&self) -> bool {
+        self.focus == Focus::Input
     }
 }
 
@@ -94,7 +116,22 @@ pub(super) fn draw(
     let hovered = app.fullscreen.pointer.hovered();
     let pressed = app.fullscreen.pointer.pressed();
     if app.fullscreen.home_visible() {
-        home::draw(frame, areas.session.transcript, app, context);
+        let hovered_action = match hovered {
+            Some(PointerTarget::HomeAction(action)) => Some(*action),
+            _ => None,
+        };
+        let pressed_action = match pressed {
+            Some(PointerTarget::HomeAction(action)) => Some(*action),
+            _ => None,
+        };
+        home::draw(
+            frame,
+            areas.session.transcript,
+            app,
+            hovered_action,
+            pressed_action,
+            context,
+        );
     } else {
         conversation::draw(frame, &areas, app, context);
     }

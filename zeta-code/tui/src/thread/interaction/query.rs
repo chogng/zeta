@@ -187,6 +187,14 @@ impl Query {
         }
     }
 
+    pub(crate) fn activate(&mut self, index: usize) -> QueryOutcome {
+        if index >= self.option_count() || self.submitting || self.custom_answer.is_some() {
+            return QueryOutcome::Consumed;
+        }
+        self.selected = index;
+        self.activate_selected()
+    }
+
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         let Some(custom_answer) = self.custom_answer.as_mut() else {
             return;
@@ -310,6 +318,14 @@ pub(crate) fn draw(
     pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
+    let choice_count = view.question.choices.len()
+        + usize::from(
+            view.question.custom_answer == QueryCustomAnswer::Allowed
+                && view.question.choices.len() < MAX_CHOICE_ROWS,
+        );
+    let states = (0..choice_count)
+        .map(|index| choice_state(index, view.selected, hovered, pressed))
+        .collect::<Vec<_>>();
     let mut lines = vec![Line::styled(
         &view.question.prompt,
         Style::default().add_modifier(Modifier::BOLD),
@@ -321,12 +337,7 @@ pub(crate) fn draw(
             .enumerate()
             .take(MAX_CHOICE_ROWS)
             .map(|(index, choice)| {
-                choice_line(
-                    &choice.label,
-                    &choice.description,
-                    choice_state(index, view.selected, hovered, pressed),
-                    context,
-                )
+                choice_line(&choice.label, &choice.description, states[index], context)
             }),
     );
     if view.question.custom_answer == QueryCustomAnswer::Allowed
@@ -335,7 +346,7 @@ pub(crate) fn draw(
         lines.push(choice_line(
             "自己输入",
             "在下方输入框中回答",
-            choice_state(view.question.choices.len(), view.selected, hovered, pressed),
+            states[view.question.choices.len()],
             context,
         ));
     }
@@ -367,6 +378,48 @@ pub(crate) fn draw(
         ),
         area,
     );
+    for (index, state) in states.into_iter().enumerate() {
+        let row = choice_row(area, index);
+        if row < area.bottom().saturating_sub(1) {
+            frame.buffer_mut().set_style(
+                Rect::new(
+                    area.x.saturating_add(1),
+                    row,
+                    area.width.saturating_sub(2),
+                    1,
+                ),
+                interaction_style(context, state),
+            );
+        }
+    }
+}
+
+pub(crate) fn choice_at(
+    area: Rect,
+    view: QueryView<'_>,
+    position: ratatui::layout::Position,
+) -> Option<usize> {
+    if view.submitting || view.custom_answer.is_some() {
+        return None;
+    }
+    let count = view.question.choices.len().min(MAX_CHOICE_ROWS)
+        + usize::from(
+            view.question.custom_answer == QueryCustomAnswer::Allowed
+                && view.question.choices.len() < MAX_CHOICE_ROWS,
+        );
+    (0..count).find(|index| {
+        Rect::new(
+            area.x.saturating_add(1),
+            choice_row(area, *index),
+            area.width.saturating_sub(2),
+            1,
+        )
+        .contains(position)
+    })
+}
+
+fn choice_row(area: Rect, index: usize) -> u16 {
+    area.y.saturating_add(2).saturating_add(index as u16)
 }
 
 fn choice_line<'a>(

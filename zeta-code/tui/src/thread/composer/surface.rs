@@ -3,17 +3,20 @@ use crate::render::RenderContext;
 use crate::render::Renderable;
 use crate::thread::composer as chat_input;
 use crate::thread::composer::ChatInputCursor;
+use crate::thread::composer::ChatInputFocus;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChatComposerPointerTarget {
+    Input,
     CompletionItem(usize),
 }
 
 pub(crate) struct ChatComposerSurface<'a, 'view> {
     pub(crate) view: &'view ChatComposerView<'a>,
     pub(crate) cursor: ChatInputCursor,
+    pub(crate) focus: ChatInputFocus,
     pub(crate) chrome: chat_input::ChatInputChrome,
 }
 
@@ -36,6 +39,7 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             } else {
                 self.cursor
             },
+            self.focus,
             self.chrome,
             context,
         );
@@ -67,10 +71,12 @@ pub(crate) fn draw_completion_layer(
         area,
         view.input_completion(),
         match hovered {
+            Some(ChatComposerPointerTarget::Input) => None,
             Some(ChatComposerPointerTarget::CompletionItem(index)) => Some(index),
             None => None,
         },
         match pressed {
+            Some(ChatComposerPointerTarget::Input) => None,
             Some(ChatComposerPointerTarget::CompletionItem(index)) => Some(index),
             None => None,
         },

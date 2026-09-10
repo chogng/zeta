@@ -4,7 +4,11 @@ use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::command_panel::CommandPanel;
 use crate::app::welcome::pet;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
+use crate::render::selection_marker;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -50,14 +54,9 @@ pub(super) struct HomeLayout {
 }
 
 pub(super) fn layout(area: Rect) -> HomeLayout {
-    let width = area.width.saturating_sub(4).min(120);
+    let width = area.width.saturating_sub(4);
     let height = area.height.min(13);
-    let card = Rect::new(
-        area.x + (area.width - width) / 2,
-        area.y + area.height.saturating_sub(height).min(2),
-        width,
-        height,
-    );
+    let card = Rect::new(area.x + (area.width - width) / 2, area.y, width, height);
     let show_pet = width >= 64 && height >= 10;
     let content_x = card.x + 3.min(card.width);
     let content_y = card.y + (if height >= 5 { 2 } else { 1 }).min(card.height);
@@ -72,10 +71,11 @@ pub(super) fn layout(area: Rect) -> HomeLayout {
         if height >= 10 { 3 } else { 1 }.min(card.bottom().saturating_sub(content_y + 1));
     let identity = Rect::new(text_x, content_y, text_width, identity_rows);
     let actions_y = identity.bottom() + u16::from(height >= 10);
+    let actions_x = text_x.saturating_sub(2).max(card.x);
     let actions = Rect::new(
-        text_x,
+        actions_x,
         actions_y.min(card.bottom()),
-        text_width,
+        card.right().saturating_sub(actions_x.saturating_add(2)),
         card.bottom()
             .saturating_sub(actions_y + 1)
             .min(ACTIONS.len() as u16),
@@ -88,7 +88,14 @@ pub(super) fn layout(area: Rect) -> HomeLayout {
     }
 }
 
-pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: RenderContext<'_>) {
+pub(super) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    hovered: Option<Action>,
+    pressed: Option<Action>,
+    context: RenderContext<'_>,
+) {
     let areas = layout(area);
     frame.render_widget(
         Block::default()
@@ -127,19 +134,29 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
         if let Some(index) = selected
             && !areas.identity.is_empty()
         {
-            let style = Style::default()
-                .fg(context.foreground())
-                .add_modifier(Modifier::BOLD);
-            frame.render_widget(
-                Paragraph::new(ACTIONS[index].1).style(style),
-                areas.identity,
+            let style = interaction_style(
+                context,
+                InteractionState {
+                    target: InteractionTarget::Rest,
+                    selected: !super::modal::is_open(app),
+                    hovered: false,
+                    pressed: false,
+                },
             );
-            if !super::modal::is_open(app) {
-                frame.render_widget(
-                    Paragraph::new(">").style(style.fg(context.focus())),
-                    Rect::new(areas.identity.x.saturating_sub(2), areas.identity.y, 1, 1),
-                );
-            }
+            frame.render_widget(
+                Paragraph::new(format!(
+                    "{}{}",
+                    selection_marker(!super::modal::is_open(app)),
+                    ACTIONS[index].1
+                ))
+                .style(style),
+                Rect::new(
+                    areas.identity.x.saturating_sub(2),
+                    areas.identity.y,
+                    areas.identity.width.saturating_add(2),
+                    1,
+                ),
+            );
         }
         return;
     }
@@ -147,7 +164,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
         .unwrap_or(0)
         .saturating_add(1)
         .saturating_sub(usize::from(areas.actions.height));
-    for (row, (index, (_, label))) in ACTIONS
+    for (row, (index, (action, label))) in ACTIONS
         .iter()
         .enumerate()
         .skip(offset)
@@ -155,24 +172,20 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
         .enumerate()
     {
         let y = areas.actions.y + row as u16;
-        let focused = selected == Some(index) && !super::modal::is_open(app);
-        let style = if focused {
-            Style::default()
-                .fg(context.focus())
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(context.foreground())
-        };
+        let selected = selected == Some(index) && !super::modal::is_open(app);
+        let style = interaction_style(
+            context,
+            InteractionState {
+                target: InteractionTarget::Rest,
+                selected,
+                hovered: hovered == Some(*action),
+                pressed: pressed == Some(*action),
+            },
+        );
         frame.render_widget(
-            Paragraph::new(*label).style(style),
+            Paragraph::new(format!("{}{}", selection_marker(selected), label)).style(style),
             Rect::new(areas.actions.x, y, areas.actions.width, 1),
         );
-        if focused {
-            frame.render_widget(
-                Paragraph::new(">").style(style),
-                Rect::new(areas.actions.x.saturating_sub(2), y, 1, 1),
-            );
-        }
     }
 }
 
@@ -201,6 +214,7 @@ pub(super) fn activate(app: &mut App, action: Action) -> Option<AppCommand> {
     app.fullscreen.home.selected = ACTIONS
         .iter()
         .position(|(candidate, _)| *candidate == action);
+    app.fullscreen.focus_page();
     match action {
         Action::Resume => {
             let choices = crate::sessions::session_choices(
@@ -272,6 +286,11 @@ pub(super) fn handle_key(app: &mut App, key: KeyEvent) -> Option<Option<AppComma
         }
         _ if selected.is_some() => return Some(None),
         _ => return None,
+    }
+    if app.fullscreen.home.selected.is_some() {
+        app.fullscreen.focus_page();
+    } else {
+        app.fullscreen.focus_input();
     }
     Some(None)
 }

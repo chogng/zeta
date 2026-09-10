@@ -11,6 +11,7 @@ pub(crate) use input::ChatInput;
 pub(crate) use input::ChatInputCatalog;
 pub(crate) use input::ChatInputChrome;
 pub(crate) use input::ChatInputCursor;
+pub(crate) use input::ChatInputFocus;
 pub(crate) use input::ChatInputItem;
 pub(crate) use input::ChatInputMode;
 pub(crate) use input::ChatInputOutcome;

@@ -566,7 +566,6 @@ pub(in crate::app) fn chat_input_focused(app: &App) -> bool {
         && !app.queue_focused()
         && !transcript_selection_active(app)
         && !app.inline.panels.command_active()
-        && app.completion().is_none()
 }
 
 pub(in crate::app) fn transcript_selection_active(app: &App) -> bool {

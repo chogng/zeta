@@ -383,6 +383,46 @@ fn blurred_manager_keeps_its_cursor_without_rendering_keyboard_selection() {
     );
 }
 
+#[test]
+fn pointer_targets_and_hover_cover_the_complete_visible_session_row() {
+    let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
+    let mut state = SessionManagerState::default();
+    state.reconcile(&sessions);
+    let area = Rect::new(0, 0, 32, 3);
+    let target = pointer_target_at(
+        area,
+        state.view(&sessions),
+        ratatui::layout::Position::new(area.right() - 1, 1),
+    )
+    .unwrap();
+    assert_eq!(
+        target,
+        SessionManagerPointerTarget::Session(SessionId::new("idle").unwrap())
+    );
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_manager(
+                frame,
+                area,
+                state.view(&sessions),
+                Some(&target),
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    for column in area.x..area.right() {
+        assert_eq!(
+            terminal.backend().buffer()[(column, 1)].bg,
+            crate::render::test_context().hover_background()
+        );
+    }
+    assert!(state.focus_pointer(&sessions, &target));
+    assert!(state.focused());
+    assert_eq!(state.selected_session().unwrap().as_str(), "idle");
+}
+
 fn session(
     id: &str,
     status: SessionManagerStatus,

@@ -6,8 +6,11 @@ use crate::host;
 use crate::terminal;
 use crate::thread::composer as chat_composer;
 use crate::thread::composer::ChatComposerPointerTarget;
+use crate::thread::queue::QueueId;
 use crate::thread::transcript::ChatHistoryPointerState;
+use crate::thread::transcript::ChatHistoryPointerTarget;
 use crate::thread::transcript::ChatHistoryView;
+use crate::thread::transcript::TranscriptCellId;
 use crate::thread::transcript::TranscriptScrollDirection;
 use crossterm::event::MouseButton;
 use crossterm::event::MouseEvent;
@@ -67,18 +70,51 @@ impl<T> PointerInteraction<T> {
 pub(crate) enum PointerTarget {
     Home,
     HomeAction(super::home::Action),
+    Issues(crate::issues::PointerTarget),
+    SessionManager(crate::sessions::SessionManagerPointerTarget),
+    Approval(usize),
+    Query(usize),
+    Queue(QueueId),
+    AgentThread(zeta_protocol::ThreadId),
     Modal(super::modal::Target),
     Composer(ChatComposerPointerTarget),
-    TranscriptJumpToBottom,
+    Transcript(ChatHistoryPointerTarget),
 }
 
 pub(super) fn transcript_pointer(app: &App) -> ChatHistoryPointerState<'_> {
     ChatHistoryPointerState {
         hovered_jump_to_bottom: app.fullscreen.pointer.hovered()
-            == Some(&PointerTarget::TranscriptJumpToBottom),
+            == Some(&PointerTarget::Transcript(
+                ChatHistoryPointerTarget::JumpToBottom,
+            )),
+        hovered_toggle: match app.fullscreen.pointer.hovered() {
+            Some(PointerTarget::Transcript(ChatHistoryPointerTarget::Toggle(cell_id))) => {
+                Some(cell_id.as_str())
+            }
+            _ => None,
+        },
+        hovered_details: match app.fullscreen.pointer.hovered() {
+            Some(PointerTarget::Transcript(ChatHistoryPointerTarget::Details(cell_id))) => {
+                Some(cell_id.as_str())
+            }
+            _ => None,
+        },
         pressed_jump_to_bottom: app.fullscreen.pointer.pressed()
-            == Some(&PointerTarget::TranscriptJumpToBottom),
-        ..Default::default()
+            == Some(&PointerTarget::Transcript(
+                ChatHistoryPointerTarget::JumpToBottom,
+            )),
+        pressed_toggle: match app.fullscreen.pointer.pressed() {
+            Some(PointerTarget::Transcript(ChatHistoryPointerTarget::Toggle(cell_id))) => {
+                Some(cell_id.as_str())
+            }
+            _ => None,
+        },
+        pressed_details: match app.fullscreen.pointer.pressed() {
+            Some(PointerTarget::Transcript(ChatHistoryPointerTarget::Details(cell_id))) => {
+                Some(cell_id.as_str())
+            }
+            _ => None,
+        },
     }
 }
 
@@ -114,15 +150,65 @@ pub(crate) fn target_at(
         )
         .map(PointerTarget::Composer);
     }
+    if app.approval_view().is_none()
+        && app.query_view().is_none()
+        && !areas.input.is_empty()
+        && areas.input.contains(position)
+    {
+        return Some(PointerTarget::Composer(ChatComposerPointerTarget::Input));
+    }
     if app.fullscreen.home_visible() {
         return super::home::action_at(app, areas.session.transcript, position)
             .map(PointerTarget::HomeAction);
     }
-    if app.issue_manager().is_some() {
-        return None;
+    if let Some(manager) = app.issue_manager() {
+        return manager
+            .pointer_target_at(areas.session.transcript, position)
+            .map(PointerTarget::Issues);
     }
-    if app.session_manager_view().is_some() && app.session_preview().is_none() {
-        return None;
+    if let Some(manager) = app.session_manager_view()
+        && app.session_preview().is_none()
+    {
+        return crate::sessions::session_manager_pointer_target_at(
+            areas.session.transcript,
+            manager,
+            position,
+        )
+        .map(PointerTarget::SessionManager);
+    }
+    if let Some(approval) = app.approval_view() {
+        return crate::thread::interaction::approval::choice_at(
+            areas.session.composer,
+            approval,
+            position,
+        )
+        .map(PointerTarget::Approval);
+    }
+    if let Some(query) = app.query_view() {
+        return crate::thread::interaction::query::choice_at(
+            areas.session.request,
+            query,
+            position,
+        )
+        .map(PointerTarget::Query);
+    }
+    let queue_view = app.queue_view();
+    if let Some(queue_id) = crate::thread::queue::pointer_target_at(
+        areas.session.queue,
+        &queue_view,
+        crate::thread::queue::DEFAULT_MAX_VISIBLE_ITEMS,
+        position,
+    ) {
+        return Some(PointerTarget::Queue(queue_id));
+    }
+    if let Some(agent_threads) = app.agent_thread_switcher_view()
+        && let Some(thread_id) = crate::thread::agent_thread_pointer_target_at(
+            crate::thread::composer::content_area(areas.session.agent_thread_switcher),
+            agent_threads,
+            position,
+        )
+    {
+        return Some(PointerTarget::AgentThread(thread_id));
     }
     let context = app.render_context();
     let messages = if let Some(preview) = app.session_preview() {
@@ -138,7 +224,7 @@ pub(crate) fn target_at(
     } else {
         (app.transcript_scroll(), app.transcript_render_cache())
     };
-    ChatHistoryView {
+    let target = ChatHistoryView {
         jump_label: super::JUMP_LABEL,
         header: None,
         messages: &messages,
@@ -146,9 +232,11 @@ pub(crate) fn target_at(
         render_cache,
         pointer: transcript_pointer(app),
     }
-    .jump_area(areas.session.transcript, context)
-    .filter(|area| area.contains(position))
-    .map(|_| PointerTarget::TranscriptJumpToBottom)
+    .pointer_target_at(areas.session.transcript, position, context)?;
+    if app.session_preview().is_some() && target != ChatHistoryPointerTarget::JumpToBottom {
+        return None;
+    }
+    Some(PointerTarget::Transcript(target))
 }
 
 pub(crate) fn overlay_contains(
@@ -228,6 +316,16 @@ pub(in crate::app) fn handle_mouse(
         }
         return MouseAction::Selection(None);
     }
+    if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+        let input = super::layout(app, area).input;
+        if !input.is_empty() && app.approval_view().is_none() && app.query_view().is_none() {
+            match target_at(app, area, mouse.column, mouse.row) {
+                Some(PointerTarget::Composer(_)) => super::navigation::focus_input(app),
+                Some(_) => app.fullscreen.focus_page(),
+                None => super::navigation::focus_page(app),
+            }
+        }
+    }
     let overlay_contains = overlay_contains(app, area, position);
     if (app.overlay().is_some() || app.completion_visible()) && !overlay_contains {
         app.fullscreen.clear();
@@ -289,13 +387,78 @@ pub(super) fn activate_pointer_item(
             None
         }
         PointerTarget::HomeAction(action) => super::home::activate(app, action),
+        PointerTarget::Issues(target) => app
+            .fullscreen
+            .issues
+            .activate_pointer(&target)
+            .map(Into::into),
+        PointerTarget::SessionManager(target) => {
+            match app
+                .fullscreen
+                .sessions
+                .activate_manager_pointer(&app.sessions, &target)
+            {
+                crate::sessions::SessionManagerInputOutcome::Command(command) => {
+                    Some(command.into())
+                }
+                crate::sessions::SessionManagerInputOutcome::DetailsRequested => {
+                    app.fullscreen.panels.overlay = None;
+                    app.fullscreen.sessions.open_details(&app.sessions);
+                    app.fullscreen.pointer.clear();
+                    None
+                }
+                crate::sessions::SessionManagerInputOutcome::Consumed
+                | crate::sessions::SessionManagerInputOutcome::Unhandled => None,
+            }
+        }
+        PointerTarget::Approval(index) => app.activate_approval(index),
+        PointerTarget::Query(index) => app.activate_query_choice(index),
+        PointerTarget::Queue(queue_id) => {
+            if !app.focus_queue_item(queue_id) {
+                return None;
+            }
+            super::navigation::handle_queue_key(
+                app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Enter,
+                    crossterm::event::KeyModifiers::NONE,
+                ),
+            )
+            .flatten()
+        }
+        PointerTarget::AgentThread(thread_id) => {
+            if !app
+                .fullscreen
+                .agent_thread_switcher
+                .focus_pointer(&thread_id)
+            {
+                return None;
+            }
+            Some(crate::sessions::Command::SwitchThread { thread_id }.into())
+        }
         PointerTarget::Modal(target) => super::modal::activate(app, area, target),
-        PointerTarget::TranscriptJumpToBottom => {
-            app.follow_latest_transcript();
+        PointerTarget::Composer(ChatComposerPointerTarget::Input) => {
+            super::navigation::focus_input(app);
             None
         }
         PointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
+            super::navigation::focus_input(app);
             app.activate_input_completion(index)
+        }
+        PointerTarget::Transcript(ChatHistoryPointerTarget::JumpToBottom) => {
+            app.follow_latest_transcript();
+            None
+        }
+        PointerTarget::Transcript(ChatHistoryPointerTarget::Toggle(cell_id)) => {
+            app.fullscreen
+                .viewports
+                .active_mut()
+                .toggle_cell(&TranscriptCellId::from_render_key(cell_id));
+            None
+        }
+        PointerTarget::Transcript(ChatHistoryPointerTarget::Details(cell_id)) => {
+            app.open_transcript_cell_details(&cell_id);
+            None
         }
     }
 }

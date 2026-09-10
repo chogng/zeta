@@ -17,6 +17,7 @@ pub(crate) use model::TranscriptCell;
 pub(crate) use model::TranscriptCellId;
 pub(crate) use model::TranscriptModel;
 pub(crate) use view::ChatHistoryPointerState;
+pub(crate) use view::ChatHistoryPointerTarget;
 pub(crate) use view::ChatHistoryScroll;
 pub(crate) use view::ChatHistoryView;
 pub(crate) use view::TranscriptScrollAnchor;

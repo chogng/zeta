@@ -63,7 +63,14 @@ fn rows_use_selection_dots_lowercase_names_and_right_aligned_elapsed_time() {
 
     terminal
         .draw(|frame| {
-            draw_agent_thread_switcher(frame, frame.area(), switcher.view(), test_context())
+            draw_agent_thread_switcher(
+                frame,
+                frame.area(),
+                switcher.view(),
+                None,
+                None,
+                test_context(),
+            )
         })
         .unwrap();
 
@@ -93,7 +100,14 @@ fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
 
     terminal
         .draw(|frame| {
-            draw_agent_thread_switcher(frame, frame.area(), switcher.view(), test_context())
+            draw_agent_thread_switcher(
+                frame,
+                frame.area(),
+                switcher.view(),
+                None,
+                None,
+                test_context(),
+            )
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
@@ -108,7 +122,14 @@ fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
     switcher.blur();
     terminal
         .draw(|frame| {
-            draw_agent_thread_switcher(frame, frame.area(), switcher.view(), test_context())
+            draw_agent_thread_switcher(
+                frame,
+                frame.area(),
+                switcher.view(),
+                None,
+                None,
+                test_context(),
+            )
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
@@ -130,6 +151,45 @@ fn switcher_is_absent_without_an_active_subagent() {
     assert_eq!(switcher.desired_rows(), 0);
     assert!(switcher.view().rows.is_empty());
     assert!(!switcher.focus());
+}
+
+#[test]
+fn pointer_hover_uses_the_complete_thread_row_without_moving_keyboard_focus() {
+    let session = session();
+    let mut switcher = AgentThreadSwitcher::default();
+    let active = thread_id("child-a");
+    switcher.reconcile(Some(&session), Some(&active));
+    let area = ratatui::layout::Rect::new(0, 0, 30, 3);
+    let target = super::pointer_target_at(
+        area,
+        switcher.view(),
+        ratatui::layout::Position::new(area.right() - 1, 2),
+    )
+    .unwrap();
+    assert_eq!(target, thread_id("child-b"));
+    assert!(!switcher.focused());
+
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_agent_thread_switcher(
+                frame,
+                area,
+                switcher.view(),
+                Some(&target),
+                None,
+                test_context(),
+            )
+        })
+        .unwrap();
+    for column in area.x..area.right() {
+        assert_eq!(
+            terminal.backend().buffer()[(column, 2)].bg,
+            test_context().hover_background()
+        );
+    }
+    assert!(switcher.focus_pointer(&target));
+    assert_eq!(switcher.selected(), Some(&target));
 }
 
 fn session() -> Session {

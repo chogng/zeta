@@ -10,8 +10,8 @@ use zeta_terminal_detection::ColorLevel;
 #[test]
 fn git_diff_statistics_use_the_theme_marker_colors() {
     let mut palette = ThemePalette::dark();
-    palette.inserted_marker = ThemeRgb::new(1, 2, 3);
-    palette.removed_marker = ThemeRgb::new(4, 5, 6);
+    palette.inserted_marker = ThemeRgb::from_hex("#010203");
+    palette.removed_marker = ThemeRgb::from_hex("#040506");
     let theme = RenderTheme::from_palette(palette, ColorLevel::TrueColor);
     let context = RenderContext::new(&theme, 1);
     let line = top_line(

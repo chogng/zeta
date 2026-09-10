@@ -18,6 +18,12 @@ pub(crate) enum ChatInputCursor {
     Visible,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ChatInputFocus {
+    Blurred,
+    Focused,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum ChatInputChrome {
     Rules,
@@ -50,6 +56,7 @@ pub(crate) fn draw(
     cursor_line: usize,
     prompt: &str,
     cursor: ChatInputCursor,
+    focus: ChatInputFocus,
     chrome: ChatInputChrome,
     context: RenderContext<'_>,
 ) {
@@ -93,7 +100,10 @@ pub(crate) fn draw(
                     ChatInputChrome::Box => Borders::ALL,
                 })
                 .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(context.chat_input_chrome())),
+                .border_style(Style::default().fg(match focus {
+                    ChatInputFocus::Blurred => context.border(),
+                    ChatInputFocus::Focused => context.chat_input_chrome(),
+                })),
         );
     let border_area = match chrome {
         ChatInputChrome::Rules => area,
@@ -131,3 +141,7 @@ pub(crate) fn draw(
         frame.set_cursor_position((content.x.saturating_add(input_width), cursor_y));
     }
 }
+
+#[cfg(test)]
+#[path = "view_tests.rs"]
+mod tests;

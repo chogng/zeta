@@ -3,6 +3,24 @@ use zeta_terminal_detection::ColorLevel;
 
 use super::RenderTheme;
 use super::ThemePalette;
+use super::ThemeRgb;
+
+#[test]
+fn theme_rgb_accepts_exact_six_digit_hex_colors() {
+    assert_eq!(
+        ThemeRgb::parse("#09aF10"),
+        Ok(ThemeRgb::from_hex("#09af10"))
+    );
+
+    for value in ["09af10", "#09af1", "#09af100", "#09ag10", "#fff"] {
+        assert_eq!(
+            ThemeRgb::parse(value),
+            Err(format!(
+                "invalid TUI theme color '{value}'; expected #RRGGBB"
+            ))
+        );
+    }
+}
 
 #[test]
 fn render_theme_maps_its_colors_for_each_terminal_capability() {

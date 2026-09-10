@@ -94,6 +94,16 @@ impl AgentThreadSwitcher {
         self.selected.as_ref()
     }
 
+    pub(crate) fn focus_pointer(&mut self, thread_id: &ThreadId) -> bool {
+        if !self.rows.iter().any(|row| &row.thread_id == thread_id) {
+            return false;
+        }
+        self.selected = Some(thread_id.clone());
+        self.focused = true;
+        self.keep_selection_visible(DEFAULT_MAX_ROWS);
+        true
+    }
+
     pub(crate) fn view(&self) -> AgentThreadSwitcherView<'_> {
         let end = self
             .viewport_start
@@ -150,6 +160,8 @@ pub(crate) fn draw_agent_thread_switcher(
     frame: &mut Frame<'_>,
     area: Rect,
     view: AgentThreadSwitcherView<'_>,
+    hovered: Option<&ThreadId>,
+    pressed: Option<&ThreadId>,
     context: RenderContext<'_>,
 ) {
     let lines = view
@@ -158,8 +170,10 @@ pub(crate) fn draw_agent_thread_switcher(
         .map(|row| {
             let selected = view.selected == Some(&row.thread_id);
             let active = view.viewed == Some(&row.thread_id);
+            let hovered = hovered == Some(&row.thread_id);
+            let pressed = pressed == Some(&row.thread_id);
             let marker = if active { '●' } else { '○' };
-            let style = if view.focused && selected || active {
+            let style = if view.focused && selected || active || hovered || pressed {
                 interaction_style(
                     context,
                     InteractionState {
@@ -169,8 +183,8 @@ pub(crate) fn draw_agent_thread_switcher(
                             InteractionTarget::Rest
                         },
                         selected: view.focused && selected,
-                        hovered: false,
-                        pressed: false,
+                        hovered,
+                        pressed,
                     },
                 )
             } else {
@@ -195,6 +209,19 @@ pub(crate) fn draw_agent_thread_switcher(
         })
         .collect::<Vec<_>>();
     frame.render_widget(Paragraph::new(lines), area);
+}
+
+pub(crate) fn pointer_target_at(
+    area: Rect,
+    view: AgentThreadSwitcherView<'_>,
+    position: ratatui::layout::Position,
+) -> Option<ThreadId> {
+    if !area.contains(position) {
+        return None;
+    }
+    view.rows
+        .get(usize::from(position.y - area.y))
+        .map(|row| row.thread_id.clone())
 }
 
 fn row_text(marker: char, label: &str, elapsed: &str, width: usize) -> String {

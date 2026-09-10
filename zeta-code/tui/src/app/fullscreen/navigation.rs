@@ -35,6 +35,13 @@ pub(in crate::app) fn handle_key(
     if let Some(command) = super::modal::handle_key(app, key, terminal_area) {
         return command;
     }
+    if key.kind == KeyEventKind::Press
+        && bindings::RETURN_INPUT.matches(key)
+        && !app.fullscreen.input_focused()
+    {
+        focus_input(app);
+        return None;
+    }
     if app.fullscreen.home_visible() {
         if let Some(command) = super::home::handle_key(app, key) {
             return command;
@@ -46,6 +53,9 @@ pub(in crate::app) fn handle_key(
             AppChordMatch::Command(action) => return app.apply_app_keymap_action(action, now),
         }
         if !app.accepts_input() {
+            return None;
+        }
+        if !app.fullscreen.input_focused() {
             return None;
         }
         let outcome = app.handle_composer_key(key);
@@ -163,6 +173,9 @@ pub(in crate::app) fn handle_key(
     }
     if !app.accepts_input() {
         app.fullscreen.escape.reset();
+        return handle_app_key(app, key, now, terminal_area);
+    }
+    if !app.fullscreen.input_focused() {
         return handle_app_key(app, key, now, terminal_area);
     }
 
@@ -584,19 +597,21 @@ pub(in crate::app) fn completion_visible(app: &App) -> bool {
 
 pub(in crate::app) fn chat_input_focused(app: &App) -> bool {
     if app.fullscreen.home_visible() {
-        return !super::modal::is_open(app)
+        return app.fullscreen.input_focused()
+            && !super::modal::is_open(app)
             && app.fullscreen.home.selected.is_none()
             && app.sessions.pending_submission.is_none();
     }
-    app.overlay().is_none()
+    app.fullscreen.input_focused()
+        && app.overlay().is_none()
         && app.approval_view().is_none()
         && app.query_view().is_none()
+        && !app.fullscreen.issues.is_open()
         && !app.fullscreen.sessions.manager().focused()
         && !app.fullscreen.agent_thread_switcher.focused()
         && !app.queue_focused()
         && !transcript_selection_active(app)
         && !app.fullscreen.panels.command_active()
-        && app.completion().is_none()
 }
 
 pub(in crate::app) fn transcript_selection_active(app: &App) -> bool {
@@ -684,6 +699,24 @@ pub(in crate::app) fn close_transient_surfaces(app: &mut App) {
     app.fullscreen.clear();
 }
 
+pub(super) fn focus_input(app: &mut App) {
+    clear_page_focus(app);
+    app.fullscreen.focus_input();
+}
+
+pub(super) fn focus_page(app: &mut App) {
+    clear_page_focus(app);
+    app.fullscreen.focus_page();
+}
+
+fn clear_page_focus(app: &mut App) {
+    app.fullscreen.home.selected = None;
+    app.fullscreen.sessions.manager_mut().blur();
+    app.fullscreen.agent_thread_switcher.blur();
+    app.fullscreen.viewports.active_mut().queue.blur();
+    app.fullscreen.viewports.active_mut().selected_cell = None;
+}
+
 pub(in crate::app) fn open_home(app: &mut App) {
     close_transient_surfaces(app);
     app.fullscreen.issues.close();
@@ -691,12 +724,14 @@ pub(in crate::app) fn open_home(app: &mut App) {
     app.fullscreen.sessions.manager_mut().blur();
     app.fullscreen.home.selected = None;
     app.fullscreen.page = super::Page::Home;
+    app.fullscreen.focus_input();
 }
 
 pub(in crate::app) fn show_conversation(app: &mut App, session_id: zeta_protocol::SessionId) {
     close_transient_surfaces(app);
     app.fullscreen.page = super::Page::Conversation;
     app.fullscreen.sessions.show_session(session_id);
+    app.fullscreen.focus_input();
 }
 
 pub(in crate::app) fn show_manager(app: &mut App) {
@@ -704,6 +739,7 @@ pub(in crate::app) fn show_manager(app: &mut App) {
     app.fullscreen.agent_thread_switcher.blur();
     app.fullscreen.page = super::Page::Conversation;
     app.fullscreen.sessions.show_manager(&app.sessions);
+    app.fullscreen.focus_input();
 }
 
 pub(in crate::app) fn open_issues(app: &mut App) -> Option<AppCommand> {

@@ -294,6 +294,17 @@ impl QueueNavigation {
         true
     }
 
+    pub(crate) fn focus(&mut self, queue: &Queue, id: QueueId) -> bool {
+        let selectable = queue
+            .entries
+            .iter()
+            .any(|entry| entry.id == id && !entry.sending && entry.input.is_some());
+        if selectable {
+            self.selected = Some(id);
+        }
+        selectable
+    }
+
     pub(crate) fn handle_key(&mut self, queue: &Queue, key: KeyEvent) -> QueueKeyOutcome {
         if !self.focused(queue) {
             return QueueKeyOutcome::Unhandled;
@@ -429,7 +440,7 @@ pub(crate) fn draw(
     let range = visible_range(view, max_visible_items);
     let lines = view
         .items
-        .get(range)
+        .get(range.clone())
         .unwrap_or_default()
         .iter()
         .map(|item| {
@@ -468,6 +479,40 @@ pub(crate) fn draw(
         })
         .collect::<Vec<_>>();
     frame.render_widget(Paragraph::new(lines), area);
+    for (row, item) in view.items.get(range).unwrap_or_default().iter().enumerate() {
+        let selected = view.focused && view.selected == Some(item.id);
+        let hovered = hovered == Some(item.id);
+        let pressed = pressed == Some(item.id);
+        if selected || hovered || pressed {
+            frame.buffer_mut().set_style(
+                Rect::new(area.x, area.y.saturating_add(row as u16), area.width, 1),
+                interaction_style(
+                    context,
+                    InteractionState {
+                        target: InteractionTarget::Rest,
+                        selected,
+                        hovered,
+                        pressed,
+                    },
+                ),
+            );
+        }
+    }
+}
+
+pub(crate) fn pointer_target_at(
+    area: Rect,
+    view: &QueueView<'_>,
+    max_visible_items: usize,
+    position: ratatui::layout::Position,
+) -> Option<QueueId> {
+    if !area.contains(position) {
+        return None;
+    }
+    let range = visible_range(view, max_visible_items);
+    view.items
+        .get(range.start + usize::from(position.y - area.y))
+        .map(|item| item.id)
 }
 
 fn visible_range(view: &QueueView<'_>, max_visible_items: usize) -> Range<usize> {

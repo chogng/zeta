@@ -134,7 +134,7 @@ fn draw_content(
         return;
     }
     if let Some(manager) = app.issue_manager() {
-        manager.draw(frame, areas.session.transcript, context);
+        manager.draw(frame, areas.session.transcript, None, None, context);
     } else if let Some(manager) = app.session_manager_view() {
         let manager_areas = layout::manager_areas(
             areas.session.transcript,
@@ -170,6 +170,11 @@ fn draw_content(
     } else {
         chat_input::ChatInputCursor::Hidden
     };
+    let focus = if app.chat_input_focused() {
+        chat_input::ChatInputFocus::Focused
+    } else {
+        chat_input::ChatInputFocus::Blurred
+    };
     let input_view = app.chat_composer_view();
     if let Some(approval) = app.approval_view() {
         approval::draw(frame, areas.session.composer, approval, None, None, context);
@@ -180,6 +185,7 @@ fn draw_content(
             chrome: chat_input::ChatInputChrome::Rules,
             view: &input_view,
             cursor,
+            focus,
         }
         .render(frame, areas.input, context);
     }
@@ -206,6 +212,8 @@ fn draw_content(
             frame,
             chat_input::content_area(areas.session.agent_thread_switcher),
             agent_thread_switcher,
+            None,
+            None,
             context,
         );
     }

@@ -389,6 +389,18 @@ impl App {
             .map(|response| response.map(|response| ThreadCommand::ResolveRequest(response).into()))
     }
 
+    pub(super) fn activate_approval(&mut self, index: usize) -> Option<AppCommand> {
+        self.chat_panel
+            .activate_approval(index)
+            .map(|response| ThreadCommand::ResolveRequest(response).into())
+    }
+
+    pub(super) fn activate_query_choice(&mut self, index: usize) -> Option<AppCommand> {
+        self.chat_panel
+            .activate_query_choice(index)
+            .map(|response| ThreadCommand::ResolveRequest(response).into())
+    }
+
     fn close_thread_request(&mut self, request: &ThreadRequestIdentity) {
         self.chat_panel.close_request(request);
     }
@@ -638,7 +650,7 @@ impl App {
             self.panels_mut().handle_command_paste(pasted);
             return;
         }
-        if self.accepts_input() && !self.queue_focused() {
+        if self.accepts_input() && self.chat_input_focused() && !self.queue_focused() {
             let (panel, input) = self.composer_parts_mut();
             if let Err(error) = panel.handle_input_paste(input, pasted) {
                 self.thread
@@ -1459,6 +1471,15 @@ impl App {
             .active()
             .queue
             .view(&self.viewport().queue)
+    }
+
+    pub(super) fn focus_queue_item(&mut self, id: QueueId) -> bool {
+        let queue = &self.thread_presentations.active().queue;
+        self.fullscreen
+            .viewports
+            .active_mut()
+            .queue
+            .focus(queue, id)
     }
 
     pub(crate) fn goal_view(&self) -> Option<&zeta_protocol::ThreadGoal> {

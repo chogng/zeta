@@ -1571,12 +1571,21 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
         }
         assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
         let area = Rect::new(0, 0, 80, 24);
+        let mut request_targets = 0;
         for row in 0..area.height {
             for column in 0..area.width {
-                assert_eq!(
-                    crate::app::fullscreen::pointer::target_at(&app, area, column, row),
-                    None
-                );
+                match crate::app::fullscreen::pointer::target_at(&app, area, column, row) {
+                    Some(crate::app::fullscreen::pointer::PointerTarget::Approval(_))
+                        if approval =>
+                    {
+                        request_targets += 1
+                    }
+                    Some(crate::app::fullscreen::pointer::PointerTarget::Query(_)) if !approval => {
+                        request_targets += 1
+                    }
+                    None => {}
+                    target => panic!("hidden completion exposed the wrong target: {target:?}"),
+                }
                 assert!(!crate::app::fullscreen::pointer::overlay_contains(
                     &app,
                     area,
@@ -1584,6 +1593,7 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
                 ));
             }
         }
+        assert!(request_targets > 0);
         assert!(matches!(
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
             Some(AppCommand::Thread(ThreadCommand::ResolveRequest(_)))

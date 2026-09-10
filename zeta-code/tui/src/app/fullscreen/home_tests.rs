@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::app::AppCommand;
+use crate::app::fullscreen::pointer::PointerTarget;
 use crate::sessions::Command as SessionCommand;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -46,17 +47,18 @@ fn home_keeps_actions_above_the_fixed_composer() {
     assert!(app.messages().is_empty());
     app.handle_key(key(KeyCode::Tab));
     assert_eq!(app.fullscreen.home.selected, Some(0));
-    let area = crate::app::fullscreen::layout(&app, ratatui::layout::Rect::new(0, 0, 100, 30));
+    let terminal = ratatui::layout::Rect::new(0, 0, 140, 30);
+    let area = crate::app::fullscreen::layout(&app, terminal);
     let actions = super::layout(area.session.transcript).actions;
-    let buffer = render(&app, 100, 30);
-    assert_eq!(buffer[(actions.x - 2, actions.y)].symbol(), ">");
-    assert_eq!(buffer[(actions.x, actions.y)].symbol(), "R");
+    let buffer = render(&app, terminal.width, terminal.height);
+    assert_eq!(buffer[(actions.x, actions.y)].symbol(), ">");
+    assert_eq!(buffer[(actions.x + 2, actions.y)].symbol(), "R");
     assert_eq!(
-        buffer[(actions.x - 2, actions.y)].fg,
-        app.render_context().focus()
+        buffer[(actions.x, actions.y)].bg,
+        app.render_context().selection_background()
     );
     assert!(
-        buffer[(actions.x, actions.y)]
+        buffer[(actions.x + 2, actions.y)]
             .modifier
             .contains(Modifier::BOLD)
     );
@@ -64,8 +66,81 @@ fn home_keeps_actions_above_the_fixed_composer() {
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.fullscreen.home.selected, None);
     app.insert_text("检查项目结构");
-    insta::assert_snapshot!("home_draft", text(&render(&app, 100, 30)));
+    insta::assert_snapshot!(
+        "home_draft",
+        text(&render(&app, terminal.width, terminal.height))
+    );
     assert!(app.messages().is_empty());
+}
+
+#[test]
+fn home_card_uses_the_page_width_without_an_empty_top_band() {
+    let mut app = unstarted_app();
+    app.open_home();
+    let terminal = ratatui::layout::Rect::new(0, 0, 180, 30);
+    let transcript = crate::app::fullscreen::layout(&app, terminal)
+        .session
+        .transcript;
+    let card = super::layout(transcript).card;
+
+    assert_eq!(card.x, transcript.x + 2);
+    assert_eq!(card.right(), transcript.right() - 2);
+    assert_eq!(card.y, transcript.y);
+}
+
+#[test]
+fn home_action_hover_and_press_do_not_change_keyboard_selection() {
+    let mut app = unstarted_app();
+    app.open_home();
+    app.handle_key(key(KeyCode::Tab));
+    let terminal = ratatui::layout::Rect::new(0, 0, 100, 30);
+    let actions = super::layout(
+        crate::app::fullscreen::layout(&app, terminal)
+            .session
+            .transcript,
+    )
+    .actions;
+    app.fullscreen
+        .pointer
+        .update_hover(Some(PointerTarget::HomeAction(super::Action::Settings)));
+
+    let hovered = render(&app, terminal.width, terminal.height);
+    assert_eq!(app.fullscreen.home.selected, Some(0));
+    assert_eq!(hovered[(actions.x, actions.y)].symbol(), ">");
+    assert_eq!(
+        hovered[(actions.x + 2, actions.y)].bg,
+        app.render_context().selection_background()
+    );
+    assert_eq!(hovered[(actions.x, actions.y + 2)].symbol(), " ");
+    assert_eq!(hovered[(actions.x + 2, actions.y + 2)].symbol(), "S");
+    for x in actions.x..actions.right() {
+        assert_eq!(
+            hovered[(x, actions.y + 2)].bg,
+            app.render_context().hover_background()
+        );
+    }
+    assert_eq!(
+        super::action_at(
+            &app,
+            crate::app::fullscreen::layout(&app, terminal)
+                .session
+                .transcript,
+            ratatui::layout::Position::new(actions.right() - 1, actions.y + 2),
+        ),
+        Some(super::Action::Settings)
+    );
+
+    app.fullscreen
+        .pointer
+        .update_pressed(Some(PointerTarget::HomeAction(super::Action::Settings)));
+    let pressed = render(&app, terminal.width, terminal.height);
+    for x in actions.x..actions.right() {
+        assert_eq!(
+            pressed[(x, actions.y + 2)].bg,
+            app.render_context().pressed_background()
+        );
+    }
+    assert_eq!(app.fullscreen.home.selected, Some(0));
 }
 
 #[test]

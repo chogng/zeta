@@ -1,4 +1,5 @@
 use super::ChatHistoryPointerState;
+use super::ChatHistoryPointerTarget;
 use super::ChatHistoryView;
 use super::first_scroll_target;
 use super::message_lines;
@@ -246,6 +247,14 @@ fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
             ..Default::default()
         },
     };
+    assert_eq!(
+        hovered.pointer_target_at(
+            Rect::new(0, 0, 30, 4),
+            ratatui::layout::Position::new(0, 0),
+            test_context(),
+        ),
+        Some(ChatHistoryPointerTarget::Toggle("reasoning".into()))
+    );
     terminal
         .draw(|frame| hovered.render(frame, frame.area(), test_context()))
         .unwrap();
@@ -307,7 +316,7 @@ fn wrapped_details_link_remains_visible_in_a_narrow_terminal() {
     terminal
         .draw(|frame| view.render(frame, area, test_context()))
         .unwrap();
-    (0..area.height)
+    let row = (0..area.height)
         .find(|&row| {
             (0..area.width)
                 .map(|column| terminal.backend().buffer()[(column, row)].symbol())
@@ -315,6 +324,14 @@ fn wrapped_details_link_remains_visible_in_a_narrow_terminal() {
                 .starts_with("   view")
         })
         .expect("the details link is visible");
+    assert_eq!(
+        view.pointer_target_at(
+            area,
+            ratatui::layout::Position::new(area.right() - 1, row),
+            test_context(),
+        ),
+        Some(ChatHistoryPointerTarget::Details("reasoning".into()))
+    );
 }
 
 #[test]

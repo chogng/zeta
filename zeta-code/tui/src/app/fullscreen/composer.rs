@@ -16,18 +16,41 @@ pub(super) fn draw(
     areas: &Layout,
     context: crate::render::RenderContext<'_>,
 ) {
+    let hovered = app.fullscreen.pointer.hovered();
+    let pressed = app.fullscreen.pointer.pressed();
     let cursor = if app.accepts_input() && app.chat_input_focused() {
         chat_input::ChatInputCursor::Visible
     } else {
         chat_input::ChatInputCursor::Hidden
     };
+    let focus = if app.chat_input_focused() {
+        chat_input::ChatInputFocus::Focused
+    } else {
+        chat_input::ChatInputFocus::Blurred
+    };
     let input_view = app.chat_composer_view();
     if let Some(approval) = app.approval_view() {
-        approval::draw(frame, areas.session.composer, approval, None, None, context);
+        let hovered = match hovered {
+            Some(super::pointer::PointerTarget::Approval(index)) => Some(*index),
+            _ => None,
+        };
+        let pressed = match pressed {
+            Some(super::pointer::PointerTarget::Approval(index)) => Some(*index),
+            _ => None,
+        };
+        approval::draw(
+            frame,
+            areas.session.composer,
+            approval,
+            hovered,
+            pressed,
+            context,
+        );
     } else {
         ChatComposerSurface {
             view: &input_view,
             cursor,
+            focus,
             chrome: chat_input::ChatInputChrome::Box,
         }
         .render(frame, areas.input, context);
@@ -46,7 +69,22 @@ pub(super) fn draw(
         }
     }
     if let Some(query) = app.query_view() {
-        query::draw(frame, areas.session.request, query, None, None, context);
+        let hovered = match hovered {
+            Some(super::pointer::PointerTarget::Query(index)) => Some(*index),
+            _ => None,
+        };
+        let pressed = match pressed {
+            Some(super::pointer::PointerTarget::Query(index)) => Some(*index),
+            _ => None,
+        };
+        query::draw(
+            frame,
+            areas.session.request,
+            query,
+            hovered,
+            pressed,
+            context,
+        );
     }
     if !app.fullscreen.home_visible() && app.session_manager_view().is_none() {
         goal::draw(frame, areas.session.goal, app.goal_view(), context);
@@ -57,8 +95,14 @@ pub(super) fn draw(
             areas.session.queue,
             &queue_view,
             queue::DEFAULT_MAX_VISIBLE_ITEMS,
-            None,
-            None,
+            match hovered {
+                Some(super::pointer::PointerTarget::Queue(id)) => Some(*id),
+                _ => None,
+            },
+            match pressed {
+                Some(super::pointer::PointerTarget::Queue(id)) => Some(*id),
+                _ => None,
+            },
             context,
         );
     }
@@ -70,6 +114,14 @@ pub(super) fn draw(
             frame,
             chat_input::content_area(areas.session.agent_thread_switcher),
             agent_thread_switcher,
+            match hovered {
+                Some(super::pointer::PointerTarget::AgentThread(thread_id)) => Some(thread_id),
+                _ => None,
+            },
+            match pressed {
+                Some(super::pointer::PointerTarget::AgentThread(thread_id)) => Some(thread_id),
+                _ => None,
+            },
             context,
         );
     }

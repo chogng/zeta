@@ -128,6 +128,23 @@ impl SessionManagerState {
         }
     }
 
+    pub(crate) fn focus_pointer(
+        &mut self,
+        sessions: &[Session],
+        target: &SessionManagerPointerTarget,
+    ) -> bool {
+        if !manager_rows(sessions, &self.pinned, &self.collapsed)
+            .iter()
+            .any(|row| &row.target() == target)
+        {
+            return false;
+        }
+        self.selected = Some(target.clone());
+        self.focused = true;
+        self.update_selected_status(sessions);
+        true
+    }
+
     pub(super) fn selected_group(&self) -> Option<SessionGroup> {
         match self.selected {
             Some(SessionManagerPointerTarget::Group(group)) => Some(group),
@@ -400,6 +417,27 @@ pub(crate) fn draw_manager(
         ));
     }
     frame.render_widget(Paragraph::new(lines), area);
+}
+
+pub(crate) fn pointer_target_at(
+    area: Rect,
+    view: SessionManagerView<'_>,
+    position: ratatui::layout::Position,
+) -> Option<SessionManagerPointerTarget> {
+    if !area.contains(position) {
+        return None;
+    }
+    let rows = manager_rows(view.sessions, view.pinned, view.collapsed);
+    let selected_row = rows
+        .iter()
+        .position(|row| Some(&row.target()) == view.selected);
+    let viewport = manager_viewport(rows.len(), selected_row, usize::from(area.height));
+    let mut row = usize::from(position.y - area.y);
+    if viewport.start > 0 {
+        row = row.checked_sub(1)?;
+    }
+    let index = viewport.start.saturating_add(row);
+    (index < viewport.end).then(|| rows[index].target())
 }
 
 #[derive(Clone, Copy)]

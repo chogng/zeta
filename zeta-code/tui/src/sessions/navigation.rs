@@ -2,6 +2,7 @@
 
 use super::Command;
 use super::SessionsState;
+use super::manager::SessionManagerPointerTarget;
 use super::manager::SessionManagerState;
 use crate::keymap::bindings;
 use crate::thread::preview::ConversationPreview;
@@ -41,6 +42,25 @@ pub(crate) struct SessionNavigation {
 }
 
 impl SessionNavigation {
+    pub(crate) fn activate_manager_pointer(
+        &mut self,
+        model: &SessionsState,
+        target: &SessionManagerPointerTarget,
+    ) -> SessionManagerInputOutcome {
+        if !matches!(self.screen(), Some(SessionScreen::Manager))
+            || !self.manager.focus_pointer(model.catalog(), target)
+        {
+            return SessionManagerInputOutcome::Unhandled;
+        }
+        self.handle_manager_key(
+            model,
+            KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+        )
+    }
+
     pub(crate) fn handle_manager_key(
         &mut self,
         model: &SessionsState,

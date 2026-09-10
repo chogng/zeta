@@ -18,6 +18,7 @@ mod update;
 pub(crate) use agent_switcher::AgentThreadSwitcher;
 pub(crate) use agent_switcher::AgentThreadSwitcherView;
 pub(crate) use agent_switcher::draw_agent_thread_switcher;
+pub(crate) use agent_switcher::pointer_target_at as agent_thread_pointer_target_at;
 pub(crate) use completion::CommandActivity;
 pub(crate) use completion::CommandPreparation;
 pub(crate) use completion::CommandState;

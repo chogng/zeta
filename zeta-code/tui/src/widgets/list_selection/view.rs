@@ -437,17 +437,18 @@ pub(crate) fn item_style(
     hovered: bool,
     pressed: bool,
 ) -> Style {
-    let mut style = Style::default().fg(if pressed {
-        context.pressed_foreground()
-    } else if selected || hovered {
-        context.foreground()
-    } else {
-        context.muted()
-    });
-    if selected || pressed {
-        style = style.add_modifier(Modifier::BOLD);
+    if selected || hovered || pressed {
+        return crate::render::interaction_style(
+            context,
+            crate::render::InteractionState {
+                target: crate::render::InteractionTarget::Rest,
+                selected,
+                hovered,
+                pressed,
+            },
+        );
     }
-    style
+    Style::default().fg(context.muted())
 }
 
 fn dashed_rule(width: u16, title: Option<&str>, color: Color) -> Line<'static> {
