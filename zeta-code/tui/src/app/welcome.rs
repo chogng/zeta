@@ -36,10 +36,6 @@ impl WelcomeModel {
         &self.directory
     }
 
-    pub(super) fn model(&self) -> &str {
-        &self.model
-    }
-
     pub(super) fn model_line(&self) -> String {
         format!("{} · {}", self.model, access_label(self.access))
     }

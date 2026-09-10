@@ -1,9 +1,9 @@
 ---
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
-assertion_line: 2227
 expression: "render(&app, 80, 20)"
 ---
-  Home  .                                                                       
+  ≡ .                                                                           
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -17,9 +17,8 @@ expression: "render(&app, 80, 20)"
   Queue 2: Review the result · paused                                           
 ⠋ Starting · 0m 00s total                                                       
                                                                                 
-  ╭────────────────────────────────────────────────────────────────────────────╮
-> │                                                                            │
-  ╰────────────────────────────────────────────────────────── Automatic model ─╯
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                        │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                 
-  ⏸ ask permissions on                                                          
-  Enter send  ·  shift+tab permissions  ·  /home
+  Enter send  ·  shift+tab permissions  ·  /home          ⏸ ask permissions on

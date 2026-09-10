@@ -57,10 +57,7 @@ pub(crate) fn model_choices(
         let id = ListSelectionItemId::new(&preference);
         actions.insert(
             id.clone(),
-            ModelSelectionAction::Select {
-                preference,
-                pinned,
-            },
+            ModelSelectionAction::Select { preference, pinned },
         );
         let item = ListSelectionItem::new(entry.display_name.clone()).with_id(id);
         groups.entry(model.provider).or_default().push(item.clone());

@@ -4,6 +4,7 @@ pub(crate) use request::start;
 
 use crate::client::new_command_id;
 use crate::render::RenderContext;
+use crate::widgets::key_hint::KeyHints;
 use crate::widgets::list_selection::item_style;
 use crate::widgets::navigation::Navigation;
 use crate::widgets::panel;
@@ -26,6 +27,7 @@ use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 use std::collections::BTreeSet;
+use std::sync::LazyLock;
 use std::time::Duration;
 use std::time::Instant;
 use zeta_protocol::CommandId;
@@ -228,13 +230,36 @@ impl Manager {
             None
         }
     }
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &KeyHints {
+        static SEARCH: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::compact()
+                .with_note("Type keywords/#number")
+                .with_compact_action("Enter", "search")
+                .with_compact_action("Esc", "cancel")
+        });
+        static DETAIL: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::compact()
+                .with_compact_action("↑↓", "scroll")
+                .with_compact_action("Esc", "back")
+        });
+        static LIST: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::compact()
+                .with_compact_action("↑↓", "navigate")
+                .with_compact_action("Tab", "state")
+                .with_compact_action("Enter", "details")
+                .with_compact_action("Space", "select")
+                .with_compact_action("Ctrl+Enter", "start")
+                .with_compact_action("/", "search")
+                .with_compact_action("r", "refresh")
+                .with_compact_action("n", "next")
+                .with_compact_action("Esc", "close")
+        });
         if self.search.input_active() {
-            "Type keywords/#number · Enter search · Esc cancel"
+            &SEARCH
         } else if self.detail.is_some() {
-            "↑↓ scroll · Esc back"
+            &DETAIL
         } else {
-            "↑↓ navigate · Tab state · Enter details · Space select · Ctrl+Enter start · / search · r refresh · n next · Esc close"
+            &LIST
         }
     }
     pub(crate) fn handle_paste(&mut self, pasted: String) {

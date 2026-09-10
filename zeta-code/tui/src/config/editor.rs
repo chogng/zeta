@@ -5,6 +5,7 @@ use crate::nls::Language;
 use crate::nls::Message;
 use crate::status::StatusLineSettings;
 use crate::thread::composer::ChatInputMode;
+use crate::widgets::key_hint::KeyHints;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionAdjustment;
 use crate::widgets::list_selection::ListSelectionGroup;
@@ -19,6 +20,7 @@ use crate::widgets::text_prompt::TextPromptOutcome;
 use crate::widgets::text_prompt::TextPromptSpec;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::LazyLock;
 use zeroize::Zeroizing;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::LanguageServerConfigDto;
@@ -315,19 +317,25 @@ impl ConfigEditor {
         }
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &KeyHints {
+        static CUSTOM_PROVIDER: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::new()
+                .with_action("Enter", "edit")
+                .with_action("Delete", "remove provider")
+                .with_action("Esc", "return")
+        });
         if let Some(subscription) = &self.subscription {
             return subscription.key_hints();
         }
         self.prompt
             .as_ref()
-            .map(|prompt| prompt.key_hints.text())
+            .map(|prompt| &prompt.key_hints)
             .unwrap_or_else(|| {
                 if let Some(provider_panel) = &self.provider_panel {
                     provider_panel.key_hints()
                 } else {
                     if self.selection.state().items_focused() && self.selection.state().selected_item().and_then(ListSelectionItem::id).and_then(|id| self.selection.action(id)).is_some_and(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.custom.is_some())) {
-                        "Enter to edit  ·  Delete to remove provider  ·  Esc to return"
+                        &CUSTOM_PROVIDER
                     } else { self.selection.key_hints() }
                 }
             })
@@ -505,6 +513,28 @@ pub(crate) fn config_choices(
             providers: providers.clone(),
         }),
     );
+    let key_hint_style_id = ListSelectionItemId::new("key-hint-style");
+    let mut next_key_hint_style = terminal;
+    next_key_hint_style.set_key_hint_style(terminal.key_hint_style().next());
+    actions.insert(
+        key_hint_style_id.clone(),
+        ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
+            terminal: next_key_hint_style,
+            status_line: status_line.clone(),
+            server_config: config.clone(),
+            providers: providers.clone(),
+        }),
+    );
+    let (key_hint_style_label, key_hint_style_description) = match terminal.key_hint_style() {
+        crate::config::KeyHintStyle::Contrast => (
+            Message::ConfigKeyHintContrast,
+            Message::ConfigKeyHintContrastDescription,
+        ),
+        crate::config::KeyHintStyle::Muted => (
+            Message::ConfigKeyHintMuted,
+            Message::ConfigKeyHintMutedDescription,
+        ),
+    };
     let memory_diagnostics_id = ListSelectionItemId::new("memory-diagnostics");
     let memory_diagnostics = terminal.memory_diagnostics();
     let mut toggled_terminal = terminal;
@@ -626,6 +656,13 @@ pub(crate) fn config_choices(
                 nls::text(language, Message::ConfigStatusLineStyle),
                 nls::text(language, style_description),
                 nls::text(language, style_label),
+            ),
+        ListSelectionItem::new(nls::text(language, Message::ConfigKeyHintStyle))
+            .with_id(key_hint_style_id)
+            .with_columns(
+                nls::text(language, Message::ConfigKeyHintStyle),
+                nls::text(language, key_hint_style_description),
+                nls::text(language, key_hint_style_label),
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigScreenMode))
             .with_id(screen_id)

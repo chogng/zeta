@@ -5,19 +5,43 @@ use serde::Serialize;
 use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum KeyHintStyle {
+    Contrast,
+    Muted,
+}
+
+impl KeyHintStyle {
+    pub(crate) const fn next(self) -> Self {
+        match self {
+            Self::Contrast => Self::Muted,
+            Self::Muted => Self::Contrast,
+        }
+    }
+}
+
+impl Default for KeyHintStyle {
+    fn default() -> Self {
+        Self::Contrast
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct TerminalSettings {
     screen_mode: crate::terminal::ScreenMode,
     input_mode: ChatInputMode,
+    key_hint_style: KeyHintStyle,
     memory_diagnostics: bool,
     auto_update: crate::UpdatePolicy,
     language: Language,
 }
 
 impl TerminalSettings {
-    const KEYS: [&'static str; 5] = [
+    const KEYS: [&'static str; 6] = [
         "screenMode",
         "inputMode",
+        "keyHintStyle",
         "memoryDiagnostics",
         "autoUpdate",
         "language",
@@ -78,6 +102,14 @@ impl TerminalSettings {
         self.input_mode = mode;
     }
 
+    pub(crate) const fn key_hint_style(self) -> KeyHintStyle {
+        self.key_hint_style
+    }
+
+    pub(crate) fn set_key_hint_style(&mut self, style: KeyHintStyle) {
+        self.key_hint_style = style;
+    }
+
     pub(crate) const fn memory_diagnostics(self) -> bool {
         self.memory_diagnostics
     }
@@ -108,6 +140,7 @@ impl Default for TerminalSettings {
         Self {
             screen_mode: crate::terminal::ScreenMode::Fullscreen,
             input_mode: ChatInputMode::Standard,
+            key_hint_style: KeyHintStyle::Contrast,
             memory_diagnostics: false,
             auto_update: crate::UpdatePolicy::Latest,
             language: Language::English,

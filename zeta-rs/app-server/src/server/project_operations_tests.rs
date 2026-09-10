@@ -175,6 +175,7 @@ impl Fixture {
     fn start_root(&self, command_id: &str) -> zeta_core::ThreadSnapshot {
         self.server
             .start_thread(StartThreadRequest {
+                agent_id: None,
                 agent: None,
                 command_id: CommandId::new(command_id).unwrap(),
                 title: command_id.into(),

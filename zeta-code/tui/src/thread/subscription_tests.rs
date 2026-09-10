@@ -426,6 +426,8 @@ fn bounded_snapshot_without_a_history_boundary_is_rejected() {
 
 fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
     Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new(session_id).unwrap(),
         thread_id: ThreadId::new(thread_id).unwrap(),
         parent_thread_id: None,
@@ -469,6 +471,8 @@ fn update(session_id: &str, thread_id: &str, durable_sequence: u64) -> ThreadUpd
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {
+                agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+                origin: Default::default(),
                 agent: None,
                 session_id,
                 thread_id,

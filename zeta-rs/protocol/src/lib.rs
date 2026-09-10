@@ -46,6 +46,7 @@ pub use config::Theme;
 pub use config::WebSearchMode;
 pub use error::StableTurnError;
 pub use error::StableTurnErrorCode;
+pub use ids::AgentId;
 pub use ids::AgentJoinId;
 pub use ids::AgentMessageId;
 pub use ids::CommandId;

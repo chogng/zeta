@@ -25,6 +25,8 @@ fn switching_threads_cancels_submission_even_with_identical_history() {
 
     let mut pane = super::SessionPaneState::default();
     let mut thread = Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("classification-session").unwrap(),
         thread_id: ThreadId::new("first-thread").unwrap(),
         parent_thread_id: None,
@@ -107,6 +109,8 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
     let agent_turn_id = TurnId::new("turn-agent").unwrap();
     let shell_turn_id = TurnId::new("turn-shell").unwrap();
     let thread = Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("session-1").unwrap(),
         thread_id: ThreadId::new("thread-1").unwrap(),
         parent_thread_id: None,

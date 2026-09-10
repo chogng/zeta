@@ -71,11 +71,11 @@ impl TextField {
         self.mode == Mode::Editing
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &KeyHints {
         match self.mode {
-            Mode::Selected => self.hints[0].text(),
-            Mode::Editing => self.hints[1].text(),
-            Mode::Saving => self.hints[2].text(),
+            Mode::Selected => &self.hints[0],
+            Mode::Editing => &self.hints[1],
+            Mode::Saving => &self.hints[2],
         }
     }
 

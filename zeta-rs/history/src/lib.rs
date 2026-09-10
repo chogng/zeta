@@ -5,6 +5,9 @@
 
 mod record;
 
+pub use record::created_thread_agent_id;
+pub use record::inherited_thread_origin;
+
 pub use record::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 pub use record::EventId;
 pub use record::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;

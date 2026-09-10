@@ -1,3 +1,4 @@
+use super::KeyHintStyle;
 use super::TerminalSettings;
 use crate::nls::Language;
 use std::collections::BTreeMap;
@@ -15,10 +16,34 @@ fn tui_table_defaults_missing_terminal_fields() {
     assert!(!settings.memory_diagnostics());
     assert_eq!(settings.auto_update(), crate::UpdatePolicy::Latest);
     assert_eq!(settings.language(), Language::English);
+    assert_eq!(settings.key_hint_style(), KeyHintStyle::Contrast);
     assert_eq!(
         settings.screen_mode(),
         crate::terminal::ScreenMode::Fullscreen
     );
+}
+
+#[test]
+fn key_hint_style_round_trips_and_rejects_unknown_values() {
+    for (value, expected) in [
+        ("contrast", KeyHintStyle::Contrast),
+        ("muted", KeyHintStyle::Muted),
+    ] {
+        let section = FrontendConfigDto(BTreeMap::from([(
+            "keyHintStyle".into(),
+            serde_json::json!(value),
+        )]));
+        let settings = TerminalSettings::from_tui(&section).unwrap();
+        assert_eq!(settings.key_hint_style(), expected);
+        assert_eq!(
+            settings.write_to_tui(&section).unwrap().0["keyHintStyle"],
+            serde_json::json!(value)
+        );
+    }
+    for value in [serde_json::json!(true), serde_json::json!("strong")] {
+        let section = FrontendConfigDto(BTreeMap::from([("keyHintStyle".into(), value)]));
+        assert!(TerminalSettings::from_tui(&section).is_err());
+    }
 }
 
 #[test]
@@ -107,6 +132,7 @@ fn terminal_settings_update_preserves_other_tui_fields() {
     settings.set_memory_diagnostics(true);
     settings.set_auto_update(crate::UpdatePolicy::Never);
     settings.set_language(Language::French);
+    settings.set_key_hint_style(KeyHintStyle::Muted);
 
     let updated = settings.write_to_tui(&section).unwrap();
 
@@ -118,6 +144,7 @@ fn terminal_settings_update_preserves_other_tui_fields() {
     assert_eq!(updated.0["memoryDiagnostics"], serde_json::json!(true));
     assert_eq!(updated.0["autoUpdate"], serde_json::json!("never"));
     assert_eq!(updated.0["language"], serde_json::json!("fr"));
+    assert_eq!(updated.0["keyHintStyle"], serde_json::json!("muted"));
 }
 
 #[test]

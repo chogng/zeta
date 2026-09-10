@@ -23,6 +23,10 @@ use zeta_thread_transcript::ThreadTranscriptSnapshot;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionCreateParams {
+    /// Reuse an existing Agent identity in a new task; omission allocates a new identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub agent_id: Option<zeta_protocol::AgentId>,
     #[serde(default)]
     pub agent: zeta_protocol::AgentRoleSelection,
     pub command_id: CommandId,
@@ -74,6 +78,13 @@ pub enum SessionRequest {
     Delete,
     Stop,
     CreateThread {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        agent_id: Option<zeta_protocol::AgentId>,
+        title: String,
+    },
+    ReplaceThread {
+        source_thread_id: ThreadId,
         title: String,
     },
     ForkThread {

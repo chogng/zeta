@@ -208,7 +208,7 @@ fn short_home_keeps_the_input_and_selected_action_visible() {
     assert_eq!(areas.input.height, 3);
     let buffer = render(&app, 40, 12);
     assert!(text(&buffer).contains("> Quit"));
-    assert!(!text(&buffer).contains("Zeta Code"));
+    assert!(text(&buffer).contains("Zeta Code"));
     assert!(!text(&buffer).contains("Quit Code"));
     assert_eq!(buffer[(areas.input.x + 2, areas.input.y)].symbol(), "╭");
     insta::assert_snapshot!("home_short", text(&buffer));

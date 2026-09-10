@@ -21,5 +21,9 @@ pub use sqlite_runtime::{SqliteDurability, open_in_memory_database, open_sqlite_
 mod tests;
 
 #[cfg(test)]
+#[path = "graph_tests.rs"]
+mod graph_tests;
+
+#[cfg(test)]
 #[path = "project_store_tests.rs"]
 mod project_store_tests;

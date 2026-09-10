@@ -313,7 +313,7 @@ fn status_panel_switches_tabs_with_keyboard() {
     );
     assert_eq!(panel.tabs.active_index(), Some(0));
     assert_eq!(desired_height(&panel, 80), height_before);
-    assert_eq!(panel.key_hints(), "Tab to switch · Esc to close");
+    assert_eq!(panel.key_hints().text(), "Tab to switch · Esc to close");
 }
 
 #[test]

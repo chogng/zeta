@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::{SqliteDurability, open_sqlite_database};
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 5;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 6;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -115,7 +115,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  DROP TABLE IF EXISTS session_streams;",
             )
             .map_err(sql_error)?,
-        Some(4) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
+        Some(4) | Some(5) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
                 "unsupported event-store SQLite schema version {version}"
@@ -155,6 +155,25 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                 [STORAGE_SQLITE_SCHEMA_VERSION],
             )
             .map_err(sql_error)?;
+    }
+    transaction.execute_batch(
+        "CREATE TABLE IF NOT EXISTS agents (
+             agent_id TEXT PRIMARY KEY,
+             created_at_unix_ms INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS agent_threads (
+             thread_id TEXT PRIMARY KEY REFERENCES thread_streams(thread_id),
+             agent_id TEXT NOT NULL REFERENCES agents(agent_id),
+             session_id TEXT NOT NULL,
+             spawn_parent_id TEXT,
+             replacement_source_id TEXT UNIQUE,
+             binding_json TEXT NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS agent_threads_agent ON agent_threads(agent_id, thread_id);
+         CREATE INDEX IF NOT EXISTS agent_threads_parent ON agent_threads(spawn_parent_id, thread_id);"
+    ).map_err(sql_error)?;
+    if locked_version.is_some_and(|version| version < 6) {
+        super::graph::migrate_bindings(&transaction).map_err(sql_error)?;
     }
     transaction.commit().map_err(sql_error)?;
     Ok(connection)

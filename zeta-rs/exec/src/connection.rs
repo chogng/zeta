@@ -179,6 +179,7 @@ impl ExecConnection for EmbeddedConnection {
     ) -> Result<Session, ConnectionError> {
         self.client
             .create_session(SessionCreateParams {
+                agent_id: None,
                 agent: zeta_protocol::AgentRoleSelection::Default,
                 command_id,
                 title,

@@ -1,6 +1,7 @@
 //! Transport-independent App Server business contract.
 
 pub mod account;
+pub mod agent;
 pub mod attachments;
 pub mod automation;
 pub mod browser;

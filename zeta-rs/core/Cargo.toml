@@ -14,6 +14,7 @@ name = "zeta_core"
 path = "src/lib.rs"
 
 [dependencies]
+agent-graph-store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

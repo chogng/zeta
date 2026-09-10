@@ -11,6 +11,7 @@ use zeta_protocol::ThreadId;
 /// Lightweight durable facts used to list Sessions without replaying Thread history.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ThreadCatalogRecord {
+    pub binding: agent_graph_store::ThreadBinding,
     pub session_id: SessionId,
     pub thread: SessionThread,
     pub sequence: u64,
@@ -41,8 +42,14 @@ pub struct AppendBatchResult {
 /// Implementations must reject stale `expected_sequence` values. `append_batch` commits every
 /// event or none, makes the complete batch durable before returning success, and excludes
 /// uncommitted tail batches from subsequent `load` results.
-pub trait ThreadStore: Send + Sync {
+pub trait ThreadStore: agent_graph_store::AgentGraphStore {
     fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError>;
+
+    /// Reads one Session's membership through its durable index, without replaying histories.
+    fn list_session_thread_ids(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadId>, ThreadStoreError>;
 
     fn list_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError>;
 
@@ -88,6 +95,30 @@ pub fn validate_append_batch(
                 "new events must use the current schema version".into(),
             ));
         }
+        if let zeta_protocol::ThreadEvent::ThreadCreated {
+            agent_id,
+            origin,
+            session_id,
+            ..
+        } = &event.event
+        {
+            if sequence != 1
+                || agent_id.as_ref() != Some(&batch.catalog.binding.agent_id)
+                || origin != &batch.catalog.binding.origin
+                || session_id != &batch.catalog.session_id
+            {
+                return Err(ThreadStoreError::InvalidBatch(
+                    "Thread creation and Agent binding disagree".into(),
+                ));
+            }
+        }
+        if let Some(origin) = zeta_history::inherited_thread_origin(&event.event) {
+            if origin != batch.catalog.binding.origin {
+                return Err(ThreadStoreError::InvalidBatch(
+                    "inherited context and Thread origin disagree".into(),
+                ));
+            }
+        }
         if event.thread_id != batch.thread_id
             || event.event.thread_id() != &batch.thread_id
             || event.sequence != sequence
@@ -106,6 +137,8 @@ pub fn validate_append_batch(
         }
     }
     if batch.catalog.thread.thread_id != batch.thread_id
+        || batch.catalog.binding.thread_id != batch.thread_id
+        || batch.catalog.binding.session_id != batch.catalog.session_id
         || batch.catalog.sequence != batch.expected_sequence + batch.events.len() as u64
     {
         return Err(ThreadStoreError::InvalidBatch(
@@ -117,6 +150,42 @@ pub fn validate_append_batch(
         committed_sequence: batch.expected_sequence + batch.events.len() as u64,
         event_count: batch.events.len(),
     })
+}
+
+/// Validates a new branch against the source's committed catalog at the same storage boundary.
+pub fn validate_binding_source(
+    record: &ThreadCatalogRecord,
+    source: &ThreadCatalogRecord,
+) -> Result<(), ThreadStoreError> {
+    record
+        .binding
+        .validate_source(&source.binding)
+        .map_err(|error| ThreadStoreError::InvalidBatch(error.to_string()))?;
+    let (sequence, replacement) = match &record.binding.origin {
+        zeta_protocol::ThreadOrigin::Root | zeta_protocol::ThreadOrigin::Rewind { .. } => {
+            return Ok(());
+        }
+        zeta_protocol::ThreadOrigin::Fork {
+            parent_sequence, ..
+        }
+        | zeta_protocol::ThreadOrigin::AgentSpawn {
+            parent_sequence, ..
+        } => (*parent_sequence, false),
+        zeta_protocol::ThreadOrigin::Replacement {
+            source_sequence, ..
+        } => (*source_sequence, true),
+    };
+    if sequence == 0
+        || sequence > source.sequence
+        || (replacement
+            && (sequence != source.sequence
+                || source.thread.status != zeta_protocol::ThreadStatus::Archived))
+    {
+        return Err(ThreadStoreError::InvalidBatch(
+            "Thread source sequence or replacement state is invalid".into(),
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

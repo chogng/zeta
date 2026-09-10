@@ -19,6 +19,8 @@ use zeta_protocol::TurnId;
 #[test]
 fn snapshot_preserves_items_and_turn_plans_in_order() {
     let snapshot = ThreadTranscriptSnapshot::from_thread(&Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: session_id(),
         thread_id: thread_id(),
         parent_thread_id: None,
@@ -402,6 +404,8 @@ fn agent_item(item: &str, text: &str) -> ThreadItem {
 
 fn empty_thread() -> Thread {
     Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: session_id(),
         thread_id: thread_id(),
         parent_thread_id: None,

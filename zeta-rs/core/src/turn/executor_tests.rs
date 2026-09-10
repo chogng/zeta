@@ -313,6 +313,8 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
     let thread_id = ThreadId::new("profile-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("profile-session").unwrap(),
             thread_id: thread_id.clone(),
@@ -1249,6 +1251,8 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
     let thread_id = ThreadId::new("skill-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("session").unwrap(),
             thread_id: thread_id.clone(),
@@ -1802,6 +1806,8 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
     let thread_id = ThreadId::new("overflow-restart-thread").unwrap();
     original
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("overflow-restart-session").unwrap(),
             thread_id: thread_id.clone(),
@@ -1966,6 +1972,8 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
     let thread_id = ThreadId::new("usage-recovery-thread").unwrap();
     original
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("usage-recovery-session").unwrap(),
             thread_id: thread_id.clone(),
@@ -2158,6 +2166,8 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
     let fast_thread_id = ThreadId::new("fast-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("session").unwrap(),
             thread_id: fast_thread_id.clone(),
@@ -3563,6 +3573,8 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
     let thread_id = ThreadId::new("review-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("review-session").unwrap(),
             thread_id: thread_id.clone(),
@@ -3602,6 +3614,8 @@ fn started_turn_with_tool_mode(
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("session").unwrap(),
             thread_id: thread_id.clone(),

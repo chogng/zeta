@@ -878,6 +878,11 @@
       ],
       "type": "string"
     },
+    "AgentId": {
+      "description": "Persistent Agent identity shared by its independent execution branches.",
+      "minLength": 1,
+      "type": "string"
+    },
     "AgentInteractionCapability": {
       "description": "Agent interaction kinds that one client connection can present and resolve.\n\nApp Server uses this declaration only for ephemeral owner selection. It never persists the\nconnection capability in Session or Thread state, and clients must still subscribe to the\ntarget Thread before they can become an interaction owner.",
       "properties": {
@@ -1149,6 +1154,41 @@
       ],
       "type": "string"
     },
+    "AgentReadParams": {
+      "properties": {
+        "agentId": {
+          "$ref": "#/$defs/AgentId"
+        }
+      },
+      "required": [
+        "agentId"
+      ],
+      "type": "object"
+    },
+    "AgentReadResult": {
+      "properties": {
+        "agentId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "createdAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "threads": {
+          "items": {
+            "$ref": "#/$defs/AgentThread"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "agentId",
+        "createdAtUnixMs",
+        "threads"
+      ],
+      "type": "object"
+    },
     "AgentRequest": {
       "oneOf": [
         {
@@ -1382,6 +1422,26 @@
           "type": "object"
         }
       ]
+    },
+    "AgentThread": {
+      "description": "One execution branch belonging to the requested Agent, including archived branches.",
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/ThreadOrigin"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "origin"
+      ],
+      "type": "object"
     },
     "AgentTreeExecutionStatus": {
       "description": "Canonical execution state rendered for one Agent-tree node.",
@@ -3324,6 +3384,22 @@
             },
             "params": {
               "$ref": "#/$defs/SessionCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "agent/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AgentReadParams"
             }
           },
           "required": [
@@ -7216,6 +7292,22 @@
             },
             "result": {
               "$ref": "#/$defs/SessionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "agent/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AgentReadResult"
             }
           },
           "required": [
@@ -25588,6 +25680,17 @@
             "type": "default"
           }
         },
+        "agentId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Reuse an existing Agent identity in a new task; omission allocates a new identity."
+        },
         "commandId": {
           "$ref": "#/$defs/CommandId"
         },
@@ -25998,6 +26101,16 @@
         },
         {
           "properties": {
+            "agentId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AgentId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "title": {
               "type": "string"
             },
@@ -26008,6 +26121,26 @@
           },
           "required": [
             "type",
+            "title"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "sourceThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "const": "replaceThread",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sourceThreadId",
             "title"
           ],
           "type": "object"
@@ -28218,6 +28351,9 @@
     "Thread": {
       "description": "Canonical readable state for one independently ordered Agent execution branch.",
       "properties": {
+        "agentId": {
+          "$ref": "#/$defs/AgentId"
+        },
         "forkedFromId": {
           "anyOf": [
             {
@@ -28237,6 +28373,9 @@
               "type": "null"
             }
           ]
+        },
+        "origin": {
+          "$ref": "#/$defs/ThreadOrigin"
         },
         "parentThreadId": {
           "anyOf": [
@@ -28306,6 +28445,8 @@
         }
       },
       "required": [
+        "agentId",
+        "origin",
         "sessionId",
         "threadId",
         "title",
@@ -28364,6 +28505,20 @@
                   "type": "null"
                 }
               ]
+            },
+            "agentId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AgentId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Absent only in history written before schema version 16."
+            },
+            "origin": {
+              "$ref": "#/$defs/ThreadOrigin"
             },
             "sessionId": {
               "$ref": "#/$defs/SessionId"
@@ -29912,6 +30067,114 @@
             "toolCallId",
             "text",
             "isError"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ThreadOrigin": {
+      "description": "How a Thread entered a product Session.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "root",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A fresh execution replacing an archived branch while retaining its Agent identity.",
+          "properties": {
+            "sourceSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sourceThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "replacement",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sourceThreadId",
+            "sourceSequence"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "parentSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "fork",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "parentSequence"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "beforeTurnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "rewind",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "beforeTurnId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "delegationId": {
+              "$ref": "#/$defs/DelegationId"
+            },
+            "parentSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "agentSpawn",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "parentSequence",
+            "delegationId"
           ],
           "type": "object"
         }

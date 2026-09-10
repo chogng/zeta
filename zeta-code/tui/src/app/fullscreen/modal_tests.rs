@@ -117,13 +117,23 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         .collect::<String>();
     assert_eq!(caption, "Syntax palette: Palette 1");
     let panel = crate::app::CommandPanel::theme(view);
-    let key_hints = panel.key_hints().to_owned();
+    let key_hints = panel.key_hints().text().to_owned();
     assert_eq!(key_hints, "Enter to apply  ·  Esc to close");
     let height = 28;
     let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
     let layout = super::layout(ratatui::layout::Rect::new(0, 0, 80, height));
     terminal
-        .draw(|frame| super::draw_panel(frame, &panel, layout, None, None, test_context()))
+        .draw(|frame| {
+            super::draw_panel(
+                frame,
+                &panel,
+                layout,
+                None,
+                None,
+                crate::config::KeyHintStyle::Contrast,
+                test_context(),
+            )
+        })
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let rows = (0..height)
@@ -156,7 +166,17 @@ fn theme_picker_is_numbered_fixed_and_not_searchable() {
         ),
     );
     terminal
-        .draw(|frame| super::draw_panel(frame, &panel, layout, Some(&hover), None, test_context()))
+        .draw(|frame| {
+            super::draw_panel(
+                frame,
+                &panel,
+                layout,
+                Some(&hover),
+                None,
+                crate::config::KeyHintStyle::Contrast,
+                test_context(),
+            )
+        })
         .unwrap();
     assert_eq!(
         terminal.backend().buffer()[(layout.content.x, first_choice_row as u16)].bg,

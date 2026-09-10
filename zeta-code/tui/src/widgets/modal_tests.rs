@@ -27,7 +27,16 @@ fn border_uses_the_modal_theme_color() {
     let layout = ModalLayout::new(Rect::new(0, 0, 40, 12), 32, 10);
 
     terminal
-        .draw(|frame| super::draw(frame, layout, "Config", "Esc to close", test_context()))
+        .draw(|frame| {
+            super::draw(
+                frame,
+                layout,
+                "Config",
+                &crate::widgets::key_hint::KeyHints::new().with_action("Esc", "close"),
+                crate::config::KeyHintStyle::Contrast,
+                test_context(),
+            )
+        })
         .unwrap();
 
     assert_eq!(

@@ -33,6 +33,7 @@ get_session(S1) = all Threads where thread.session_id == S1
 
 | 字段 | 含义 | 约束 |
 | --- | --- | --- |
+| `agent_id` | 长期 Agent 身份 | 可跨任务绑定多个 Thread，不共享执行状态 |
 | `session_id` | Thread tree 的共同分组身份 | 保存在每个 Thread 上 |
 | `thread_id` | 一条具体分支的地址 | 持久化、恢复和执行边界 |
 | `parent_thread_id` | 拓扑父 Thread | 不替代 `session_id` |
@@ -41,6 +42,10 @@ get_session(S1) = all Threads where thread.session_id == S1
 | `item_id` | Turn 内的具体内容或工具活动 | 随 Thread 事件保存 |
 
 根 Thread 常见 `thread_id == session_id`，但调用方不得依赖这个关系推断归属；是否同树只看显式 `session_id`。
+
+Agent 身份与云端认证分开。历史版本 16 的 `ThreadCreated` 记录 `agent_id` 和来源；Agent 记录、绑定、事件与目录记录同事务提交。普通 fork、rewind 和 replacement 保留 AgentId，委托创建独立 AgentId。删除任务只删除所属 Thread，Agent 身份继续保留。
+
+历史版本 12–15 的各个 Thread 在迁移时获得独立的 `legacy-agent:<thread_id>`；已有 fork 不追溯合并身份。迁移保存可验证的来源锚点，保留原事件字节；迁移后的新 fork 延续源 AgentId。
 
 Project 是可选的长期组织关系，不参与上述身份、顺序或恢复。Environment、目录和授权也不是对话身份的一部分。
 
@@ -74,7 +79,8 @@ Session 订阅没有 Session update gap。它返回当前树视图、各 Thread 
 | --- | --- |
 | `zeta-protocol` | 共享领域类型、稳定 ID、serde/schema |
 | `zeta-history` | `ThreadEvent` 的持久记录格式 |
-| `zeta-thread-store` | Thread 流读取、原子追加和冲突校验 |
+| `zeta-agent-graph-store` | Agent 身份、Thread 绑定和委托关系读取契约 |
+| `zeta-thread-store` | Thread 流读取、Session 成员查询、原子追加和冲突校验 |
 | `zeta-core` | 命令执行、reducer、恢复与运行状态 |
 | `zeta-state` | SQLite 实现与迁移 |
 | `zeta-app-server-protocol` | JSON-RPC DTO、方法注册和生成 schema |

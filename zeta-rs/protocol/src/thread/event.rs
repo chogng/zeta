@@ -75,6 +75,12 @@ pub enum ToolExecutionAuthority {
 )]
 pub enum ThreadEvent {
     ThreadCreated {
+        /// Absent only in history written before schema version 16.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        agent_id: Option<crate::AgentId>,
+        #[serde(default, skip_serializing_if = "crate::ThreadOrigin::is_root")]
+        origin: crate::ThreadOrigin,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         agent: Option<crate::AgentConfiguration>,

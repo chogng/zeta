@@ -33,7 +33,7 @@ fn enter_edits_then_submits_once_and_success_keeps_the_field_out_of_editing() {
     field.accept("one two".into());
     assert!(!field.is_editing());
     assert_eq!(field.query(), "one two");
-    assert!(field.key_hints().contains("edit"));
+    assert!(field.key_hints().text().contains("edit"));
 }
 
 #[test]

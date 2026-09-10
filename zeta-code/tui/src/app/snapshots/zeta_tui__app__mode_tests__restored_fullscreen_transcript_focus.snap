@@ -2,8 +2,9 @@
 source: zeta-code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  Home  .                                         
+  ≡ .                                             
                                                   
+● focus message 05                                
                                                   
 ● focus message 06                                
                                                   
@@ -12,9 +13,8 @@ expression: render(&app)
              Jump to bottom (click) ↓             
   Queue 1: queued message · next                  
                                                   
-  ╭──────────────────────────────────────────────╮
-> │                                              │
-  ╰──────────────────────────── Automatic model ─╯
-                                                  
+  ╭────────────────────────────────────────────╮  
+  │ > Build anything                           │  
+  ╰────────────────────────── Automatic model ─╯  
                                                   
   Space to expand · Esc to return to input

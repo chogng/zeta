@@ -31,7 +31,9 @@ impl WorkbenchApplication {
             AppCommandId::StartMemoryDiagnostics
             | AppCommandId::ReadMemoryDiagnostics
             | AppCommandId::StopMemoryDiagnostics
-            | AppCommandId::ExportMemoryDiagnostics => self.memory.execute(command, self.app_server_client.clone()),
+            | AppCommandId::ExportMemoryDiagnostics => {
+                self.memory.execute(command, self.app_server_client.clone())
+            }
             AppCommandId::Copy => execute_copy(self),
             AppCommandId::Paste => execute_paste(self),
             AppCommandId::Save => execute_save(self),

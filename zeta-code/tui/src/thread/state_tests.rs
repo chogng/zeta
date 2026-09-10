@@ -198,6 +198,8 @@ fn empty_snapshot() -> ThreadTranscriptSnapshot {
 fn thread_snapshot() -> Thread {
     let turn_id = TurnId::new("turn_1").unwrap();
     Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: session_id(),
         thread_id: thread_id(),
         parent_thread_id: None,

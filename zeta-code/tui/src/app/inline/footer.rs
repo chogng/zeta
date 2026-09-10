@@ -4,26 +4,18 @@ use crate::keymap::bindings;
 use crate::status as status_line;
 use crate::thread::composer as chat_input;
 use crate::widgets::key_hint;
+use crate::widgets::key_hint::KeyHints;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
-use std::borrow::Cow;
 use zeta_memory_diagnostics::ProcessResourceDemand;
 
 enum BottomContent<'a> {
-    HitBar {
-        text: Cow<'a, str>,
-        style: HitBarStyle,
-    },
+    Keys(&'a KeyHints),
+    Warning(String),
+    Muted(&'a str),
     StatusLine,
-}
-
-#[derive(Clone, Copy)]
-enum HitBarStyle {
-    Keys,
-    Warning,
-    Muted,
 }
 
 pub(super) fn process_resource_demand(app: &App, areas: &Layout) -> ProcessResourceDemand {
@@ -61,94 +53,65 @@ pub(super) fn draw(
     context: crate::render::RenderContext<'_>,
 ) {
     match bottom_content(app) {
-        BottomContent::HitBar { text, style } => match style {
-            HitBarStyle::Keys => key_hint::draw(frame, bottom_row(area), &text, context),
-            HitBarStyle::Warning => frame.render_widget(
-                Paragraph::new(text.as_ref() as &str).style(Style::default().fg(context.warning())),
-                chat_input::content_area(bottom_row(area)),
-            ),
-            HitBarStyle::Muted => frame.render_widget(
-                Paragraph::new(text.as_ref() as &str).style(Style::default().fg(context.muted())),
-                chat_input::content_area(bottom_row(area)),
-            ),
-        },
+        BottomContent::Keys(hints) => key_hint::draw(
+            frame,
+            bottom_row(area),
+            hints,
+            app.key_hint_style(),
+            context,
+        ),
+        BottomContent::Warning(text) => frame.render_widget(
+            Paragraph::new(text).style(Style::default().fg(context.warning())),
+            chat_input::content_area(bottom_row(area)),
+        ),
+        BottomContent::Muted(text) => frame.render_widget(
+            Paragraph::new(text).style(Style::default().fg(context.muted())),
+            chat_input::content_area(bottom_row(area)),
+        ),
         BottomContent::StatusLine => draw_status_line(frame, area, app, context),
     }
 }
 
 fn bottom_content(app: &App) -> BottomContent<'_> {
     if let Some(manager) = app.issue_manager() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(manager.key_hints()),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(manager.key_hints());
     }
     if app.overlay().is_some() || app.session_preview().is_some() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(bindings::CLOSE_HINTS.as_str()),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(&bindings::CLOSE_HINTS);
     }
     if let Some(hints) = app.command_panel_key_hints() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(hints),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(hints);
     }
     if app.session_manager_view().is_some() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(app.session_manager_hint()),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(app.session_manager_hint());
     }
     if app.approval_view().is_some() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(bindings::APPROVAL_HINTS.as_str()),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(&bindings::APPROVAL_HINTS);
     }
     if let Some(query) = app.query_view() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(if query.custom_answer.is_some() {
-                bindings::CUSTOM_ANSWER_HINTS.as_str()
-            } else {
-                bindings::ANSWER_HINTS.as_str()
-            }),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(if query.custom_answer.is_some() {
+            &bindings::CUSTOM_ANSWER_HINTS
+        } else {
+            &bindings::ANSWER_HINTS
+        });
     }
     if app.queue_focused() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(app.queue_key_hints()),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(app.queue_key_hints());
     }
     if app.transcript_selection_active() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(bindings::TRANSCRIPT_HINTS.as_str()),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(&bindings::TRANSCRIPT_HINTS);
     }
     if app.agent_thread_switcher_focused() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed(bindings::THREAD_HINTS.as_str()),
-            style: HitBarStyle::Keys,
-        };
+        return BottomContent::Keys(&bindings::THREAD_HINTS);
     }
     if let Some(prefix) = app.pending_key_chord_label() {
-        return BottomContent::HitBar {
-            text: Cow::Owned(format!(
-                "{prefix} … waiting for next key · {}",
-                bindings::CANCEL_HINTS.as_str()
-            )),
-            style: HitBarStyle::Warning,
-        };
+        return BottomContent::Warning(format!(
+            "{prefix} … waiting for next key · {}",
+            bindings::CANCEL_HINTS.text()
+        ));
     }
     if app.viewed_thread_completed() {
-        return BottomContent::HitBar {
-            text: Cow::Borrowed("completed · choose Main or another Subagent"),
-            style: HitBarStyle::Muted,
-        };
+        return BottomContent::Muted("completed · choose Main or another Subagent");
     }
     BottomContent::StatusLine
 }

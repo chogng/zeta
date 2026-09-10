@@ -845,7 +845,7 @@ impl App {
         }
     }
 
-    pub(crate) fn command_panel_key_hints(&self) -> Option<&str> {
+    pub(crate) fn command_panel_key_hints(&self) -> Option<&crate::widgets::key_hint::KeyHints> {
         self.panels().command_key_hints()
     }
 
@@ -920,8 +920,8 @@ impl App {
                 .focused(&self.thread_presentations.active().queue)
     }
 
-    pub(crate) fn queue_key_hints(&self) -> &'static str {
-        bindings::QUEUE_HINTS.as_str()
+    pub(crate) fn queue_key_hints(&self) -> &'static crate::widgets::key_hint::KeyHints {
+        &bindings::QUEUE_HINTS
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
@@ -933,6 +933,10 @@ impl App {
 
     pub(crate) const fn screen_mode(&self) -> crate::terminal::ScreenMode {
         self.terminal_settings.screen_mode()
+    }
+
+    pub(crate) const fn key_hint_style(&self) -> crate::config::KeyHintStyle {
+        self.terminal_settings.key_hint_style()
     }
 
     pub(crate) fn fullscreen_home_visible(&self) -> bool {
@@ -1530,7 +1534,7 @@ impl App {
         self.session_manager_focused_internal()
     }
 
-    pub(crate) fn session_manager_hint(&self) -> &'static str {
+    pub(crate) fn session_manager_hint(&self) -> &'static crate::widgets::key_hint::KeyHints {
         self.session_navigation().manager().status_hint()
     }
 

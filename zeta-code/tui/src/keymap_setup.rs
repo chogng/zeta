@@ -167,10 +167,10 @@ impl KeymapEditor {
         }
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
         self.capture
             .as_ref()
-            .map(|capture| capture.key_hints.text())
+            .map(|capture| &capture.key_hints)
             .unwrap_or_else(|| {
                 self.pages
                     .last()

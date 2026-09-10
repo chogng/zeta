@@ -2,7 +2,8 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: working
 ---
-  Home  .                                                                       
+  ≡ .                                                                           
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -16,9 +17,8 @@ expression: working
                                                                                 
 ⠋ Working · 0m 00s total · ctrl+c to interrupt                                  
                                                                Copied 42 chars  
-  ╭────────────────────────────────────────────────────────────────────────────╮
-> │                                                                            │
-  ╰────────────────────────────────────────────────────────── Automatic model ─╯
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                        │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                 
-  ⏸ ask permissions on                                                          
-  Enter queue  ·  shift+tab permissions  ·  /home
+  Enter queue  ·  shift+tab permissions  ·  /home         ⏸ ask permissions on

@@ -239,6 +239,7 @@ Desktop 当前实现和 Playwright 后续边界见
 
 | Method | Aggregate | Effect |
 | --- | --- | --- |
+| `agent/read` | Agent identity | 按 agentId 读取身份与全部执行分支，不加载历史 |
 | `session/create` | new root Thread | 创建根 Thread，返回由其 `session_id` 得出的 Session 视图 |
 | `session/read` | session tree view | 按 `session_id` 读取当前树视图 |
 | `session/list` | global | 列出按 `session_id` 聚合的 Session 视图 |
@@ -602,7 +603,11 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 `agent` 使用 `{ "type": "default" }` 或 `{ "type": "exact", "source": { "type": "builtIn" }, "name": "issue" }`；目录来源为 `{ "type": "directory", "id": "<authorized-directory-id>" }`。省略 agent 等同 Default，不按标题匹配。调用方不能提交角色正文或扩大工具权限。
 
-角色及必需 Skill/Tool 校验完成后，配置随 ThreadCreated 原子提交。相同 commandId、标题与角色选择返回原 Thread，不重新加载角色；改变选择或标题返回 CommandConflict。创建失败不留下半成品 Thread。协议主版本 2 阻止旧后端忽略 agent 字段；历史记录版本 15 阻止旧执行器绕过根角色配置。
+角色及必需 Skill/Tool 校验完成后，配置随 ThreadCreated 原子提交。相同 commandId、身份、标题与角色选择返回原 Thread，不重新加载角色；改变选择或标题返回 CommandConflict。创建失败不留下半成品 Thread。协议主版本 3 要求后端理解 Agent 身份和执行分支；历史记录版本 16 保存明确的 AgentId 与来源。
+
+`agentId` 可指定已存在的长期 Agent 身份；省略时创建新身份。未知 ID 返回错误。角色选择 `agent` 与长期身份 `agentId` 分别表达，执行配置仍按新任务冻结。
+
+`agent/read` 接受 `{ "agentId": "..." }`，返回 `{ "agentId", "createdAtUnixMs", "threads": [{ "sessionId", "threadId", "origin" }] }`。分支按 ThreadId 稳定排序，包含归档分支；任务删除后相应分支消失，Agent 记录保留。
 
 ### 创建 Thread
 
@@ -617,12 +622,18 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 }
 ```
 
-创建直接追加一个带相同 `sessionId` 的新 Thread stream。`commandId` receipt 提供幂等，不需要
+`createThread` 同样接受可选 `agentId`。创建直接追加一个带相同 `sessionId` 的新 Thread stream。`commandId` receipt 提供幂等，不需要
 Session planned/attached saga。
 
 ### 分叉 Thread
 
 `session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 执行命令时读取父 Thread 的当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Core 只重放到这个 sequence：已结束的 Turn 逐条写成 `ForkTurnImported`；第一个正在进行的 Turn 保留已持久化内容、移除没有结果的 Tool Call，并在子 Thread 中标成 `Interrupted`；它之后尚未执行的 Turn 不导入。`ForkHistoryImportCompleted` 保存导入数量和父 Thread 的最新已验证上下文检查点。子 Thread 拥有独立历史和 sequence，父 Thread 的后续提交不会改变它。
+
+### 替换 Thread
+
+`session/request` 接受 `{ "type": "replaceThread", "sourceThreadId": "...", "title": "..." }`。源 Thread 必须属于当前 Session 且已归档；新 Thread 保留 AgentId 和冻结配置，历史从空开始。`origin` 记录 `replacement`、`sourceThreadId` 与 `sourceSequence`。旧历史、委托和结果不迁移。每个源 Thread 最多产生一个替代者，并发请求由存储事务保证唯一；同 commandId 重试返回同一 Thread。
+
+普通 fork 与 rewind 也保留 AgentId。身份一致不建立新的委托关系，也不保证模型缓存命中。
 
 ### 生命周期
 

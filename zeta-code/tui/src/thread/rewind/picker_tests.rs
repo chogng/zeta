@@ -40,6 +40,8 @@ fn rewind_picker_lists_user_message_checkpoints_and_selects_the_latest() {
 
 fn thread(messages: &[&str]) -> Thread {
     Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
         parent_thread_id: None,

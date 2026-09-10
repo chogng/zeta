@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/home_tests.rs
 expression: "text(&render(&app, 80, 24))"
 ---
-  Home  .                                                                       
+  ≡ .                                                                           
                                                                                 
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │                                                                          │  
@@ -19,10 +19,10 @@ expression: "text(&render(&app, 80, 24))"
   ╰──────────────────────────────────────────────────────────────────────────╯  
                                                                                 
                                                                                 
-  Could not create session                                                      
-  ╭────────────────────────────────────────────────────────────────────────────╮
-> │[Pasted Content 1500 chars]                                                 │
-  ╰────────────────────────────────────────────────────────── Automatic model ─╯
                                                                                 
-  ⏸ ask permissions on                                                          
-  Enter send  ·  Tab actions  ·  / commands
+  Could not create session                                                      
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ > [Pasted Content 1500 chars]                                            │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  Tab actions  ·  / commands               ⏸ ask permissions on

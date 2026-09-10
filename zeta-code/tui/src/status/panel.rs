@@ -181,8 +181,8 @@ impl StatusPanel {
         );
     }
 
-    pub(crate) fn key_hints(&self) -> &'static str {
-        bindings::STATUS_HINTS.as_str()
+    pub(crate) fn key_hints(&self) -> &'static crate::widgets::key_hint::KeyHints {
+        &bindings::STATUS_HINTS
     }
 
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {

@@ -2,15 +2,15 @@
 source: zeta-code/tui/src/app/fullscreen/pointer_tests.rs
 expression: text
 ---
-  Home  .                               
+  ≡ .                                   
+                                        
                                         
                                         
                                         
                                         
   /quit                      quit Zeta  
-  ╭────────────────────────────────────╮
-> │/q                                  │
-  ╰────────────────── Automatic model ─╯
+  ╭──────────────────────────────────╮  
+  │ > /q                             │  
+  ╰──────────────── Automatic model ─╯  
                                         
-  ⏸ ask permissions on                  
-  Enter send · shift+tab permissions
+  Enter send      ⏸ ask permissions on

@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 20)"
 ---
-  Home  .                                                                                           
+  ≡ .                                                                                               
                                                                                                     
 > /pr                                                                                               
                                                                                                     
@@ -14,11 +14,11 @@ the target branch and checks, and report the pull request link.
                                                                                                     
                                                                                                     
                                                                                                     
+                                                                                                    
 ⠋ Starting · 0m 00s total                                                                           
                                                                          shift+tab to cycle policy  
-  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
-> │                                                                                                │
-  ╰────────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                                            │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                                     
-  ⏸ ask permissions on                                                                              
-  Enter send  ·  shift+tab permissions  ·  /home
+  Enter send  ·  shift+tab permissions  ·  /home                              ⏸ ask permissions on

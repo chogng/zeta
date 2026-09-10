@@ -3,6 +3,7 @@ use super::AppUserBinding;
 use super::chords::validate_specs;
 use super::chords::validate_user_bindings;
 use super::input::normalized_key;
+use crate::widgets::key_hint::KeyHints;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -637,9 +638,9 @@ pub(crate) const EDIT_FIELD: Keybinding = Keybinding::new(ENTER, "edit");
 pub(crate) const DIR_ADD: Keybinding = Keybinding::new(ENTER, "add");
 pub(crate) const DIR_INPUT: Keybinding =
     Keybinding::new(&[(NONE, KeyCode::Char('/'))], "add directory");
-pub(crate) static DIR_INPUT_HINTS: LazyLock<String> =
+pub(crate) static DIR_INPUT_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[DIR_ADD, RETURN_LIST]));
-pub(crate) static DIR_HINTS: LazyLock<String> =
+pub(crate) static DIR_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[DIR_CHANGE, DIR_INPUT, CLOSE]));
 pub(crate) const DIR_CHANGE: Keybinding = Keybinding::new(ENTER, "change");
 pub(crate) const THEME_APPLY: Keybinding = Keybinding::new(ENTER, "apply");
@@ -680,34 +681,33 @@ pub(crate) const QUEUE_REMOVE: Keybinding = Keybinding::new(&[(NONE, KeyCode::De
 pub(crate) const INTERRUPT: Keybinding =
     Keybinding::new(&[(CTRL, KeyCode::Char('c'))], "interrupt");
 
-fn hints(actions: &[Keybinding]) -> String {
-    actions
-        .iter()
-        .map(|shortcut| format!("{} to {}", shortcut.keys(), shortcut.action()))
-        .collect::<Vec<_>>()
-        .join(" · ")
+fn hints(actions: &[Keybinding]) -> KeyHints {
+    actions.iter().fold(KeyHints::compact(), |hints, shortcut| {
+        hints.with_binding(*shortcut)
+    })
 }
 
 // HitBar composition lives here; callers only select the recipe for their state.
-pub(crate) static CLOSE_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[CLOSE]));
-pub(crate) static STATUS_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[TAB_NEXT, CLOSE]));
-pub(crate) static TAB_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[TABS, ENTER_LIST, CLOSE]));
-pub(crate) static APPROVAL_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[APPROVE]));
-pub(crate) static ANSWER_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[ANSWER]));
-pub(crate) static CUSTOM_ANSWER_HINTS: LazyLock<String> =
+pub(crate) static CLOSE_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[CLOSE]));
+pub(crate) static STATUS_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[TAB_NEXT, CLOSE]));
+pub(crate) static TAB_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| hints(&[TABS, ENTER_LIST, CLOSE]));
+pub(crate) static APPROVAL_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[APPROVE]));
+pub(crate) static ANSWER_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ANSWER]));
+pub(crate) static CUSTOM_ANSWER_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[ANSWER, CANCEL_ANSWER]));
-pub(crate) static TRANSCRIPT_HINTS: LazyLock<String> =
+pub(crate) static TRANSCRIPT_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[TRANSCRIPT_EXPAND, TRANSCRIPT_DETAILS, RETURN_INPUT]));
-pub(crate) static THREAD_HINTS: LazyLock<String> =
+pub(crate) static THREAD_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[THREAD_SWITCH, RETURN_INPUT]));
-pub(crate) static CANCEL_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[CANCEL]));
-pub(crate) static RETURN_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[ENTER_LIST]));
-pub(crate) static INPUT_HINTS: LazyLock<String> = LazyLock::new(|| hints(&[RETURN_INPUT]));
-pub(crate) static EXPAND_HINTS: LazyLock<String> =
+pub(crate) static CANCEL_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[CANCEL]));
+pub(crate) static RETURN_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[ENTER_LIST]));
+pub(crate) static INPUT_HINTS: LazyLock<KeyHints> = LazyLock::new(|| hints(&[RETURN_INPUT]));
+pub(crate) static EXPAND_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[GROUP_EXPAND, RETURN_INPUT]));
-pub(crate) static COLLAPSE_HINTS: LazyLock<String> =
+pub(crate) static COLLAPSE_HINTS: LazyLock<KeyHints> =
     LazyLock::new(|| hints(&[GROUP_COLLAPSE, RETURN_INPUT]));
-pub(crate) static SESSION_HINTS: LazyLock<String> = LazyLock::new(|| {
+pub(crate) static SESSION_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     hints(&[
         SESSION_OPEN,
         SESSION_PREVIEW,
@@ -715,7 +715,7 @@ pub(crate) static SESSION_HINTS: LazyLock<String> = LazyLock::new(|| {
         SESSION_DETAILS,
     ])
 });
-pub(crate) static ARCHIVED_HINTS: LazyLock<String> = LazyLock::new(|| {
+pub(crate) static ARCHIVED_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     hints(&[
         SESSION_RESTORE,
         SESSION_PREVIEW,
@@ -723,7 +723,7 @@ pub(crate) static ARCHIVED_HINTS: LazyLock<String> = LazyLock::new(|| {
         SESSION_DETAILS,
     ])
 });
-pub(crate) static QUEUE_HINTS: LazyLock<String> = LazyLock::new(|| {
+pub(crate) static QUEUE_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     const MOVE_KEYS: &[(KeyModifiers, KeyCode)] = &[QUEUE_UP.bindings[0], QUEUE_DOWN.bindings[0]];
     let move_keys = Keybinding::new(MOVE_KEYS, "move");
     hints(&[
@@ -747,17 +747,13 @@ fn app_keys(action: AppKeymapAction) -> &'static str {
         .keybinding
 }
 
-pub(crate) static POLICY_HINTS: LazyLock<String> = LazyLock::new(|| {
-    format!(
-        "{} to cycle policy",
-        app_keys(AppKeymapAction::CycleApprovalMode)
-    )
+pub(crate) static POLICY_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    KeyHints::compact().with_action(app_keys(AppKeymapAction::CycleApprovalMode), "cycle policy")
 });
-pub(crate) static CLIPBOARD_HINTS: LazyLock<String> = LazyLock::new(|| {
-    format!(
-        "image in clipboard · {} to paste",
-        app_keys(AppKeymapAction::ReadClipboardImage)
-    )
+pub(crate) static CLIPBOARD_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
+    KeyHints::compact()
+        .with_note("image in clipboard")
+        .with_action(app_keys(AppKeymapAction::ReadClipboardImage), "paste")
 });
 
 pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static str)> {

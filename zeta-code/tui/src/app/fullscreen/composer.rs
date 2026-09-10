@@ -9,6 +9,10 @@ use crate::thread::interaction::query;
 use crate::thread::plan;
 use crate::thread::queue;
 use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::widgets::Paragraph;
 
 pub(super) fn draw(
     frame: &mut Frame<'_>,
@@ -54,17 +58,17 @@ pub(super) fn draw(
             chrome: chat_input::ChatInputChrome::Box,
         }
         .render(frame, areas.input, context);
-        if areas.input.height >= 3 && areas.input.width >= 30 {
+        let border = chat_input::ChatInputChrome::Box.border_area(areas.input);
+        if border.height >= 3 && border.width >= 8 {
+            let model = crate::render::truncate_with_ellipsis(
+                app.status_line().model_label(),
+                usize::from(border.width.saturating_sub(6)),
+            );
+            let label = Line::from(format!(" {model} "));
+            let width = label.width() as u16;
             frame.render_widget(
-                ratatui::widgets::Paragraph::new(format!(" {} ", app.welcome().model()))
-                    .alignment(ratatui::layout::Alignment::Right)
-                    .style(ratatui::style::Style::default().fg(context.muted())),
-                ratatui::layout::Rect::new(
-                    areas.input.x + 4,
-                    areas.input.bottom() - 1,
-                    areas.input.width.saturating_sub(6),
-                    1,
-                ),
+                Paragraph::new(label).style(Style::default().fg(context.muted())),
+                Rect::new(border.right() - 2 - width, border.bottom() - 1, width, 1),
             );
         }
     }
@@ -132,3 +136,7 @@ pub(super) fn draw(
     }
     super::footer::draw_tip(frame, areas.session.top_tip, app, context);
 }
+
+#[cfg(test)]
+#[path = "composer_tests.rs"]
+mod tests;

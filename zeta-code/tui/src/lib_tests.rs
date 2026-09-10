@@ -120,6 +120,8 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         error: None,
     };
     let thread = Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("session_1").unwrap(),
         thread_id: ThreadId::new("thread_1").unwrap(),
         parent_thread_id: None,
@@ -297,6 +299,8 @@ fn failed_turn_shows_one_concise_error_on_failure_and_resume() {
     };
 
     let thread = Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("session_1").unwrap(),
         thread_id: ThreadId::new("thread_1").unwrap(),
         parent_thread_id: None,
@@ -310,7 +314,9 @@ fn failed_turn_shows_one_concise_error_on_failure_and_resume() {
         turns: vec![turn.clone()],
     };
     let snapshot =
-        zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot::from_thread(&thread);
+        zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot::from_thread(
+            &thread,
+        );
     app.update(ThreadEvent::TranscriptSnapshotReceived(snapshot.clone()));
     apply_active_turn_snapshot(&mut app, &[turn]);
 

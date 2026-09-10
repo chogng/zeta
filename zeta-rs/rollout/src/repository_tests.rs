@@ -26,6 +26,8 @@ fn repository_keeps_idle_history_lazy_and_loads_it_on_access() {
     let thread_id = ThreadId::new("thread-1").expect("test ID is non-empty");
     let created = threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),

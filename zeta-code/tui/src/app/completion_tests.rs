@@ -40,14 +40,16 @@ fn initial_turn_failure_enters_error_state() {
 fn status_line_context_follows_thread_snapshots() {
     use zeta_protocol::ModelContextUsage;
     use zeta_protocol::ModelContextUsageSource;
-    use zeta_protocol::ModelRef;
     use zeta_protocol::ModelId;
+    use zeta_protocol::ModelRef;
     use zeta_protocol::ProviderId;
     let model = ModelRef::new(
         ProviderId::new("provider").unwrap(),
         ModelId::new("model").unwrap(),
     );
     let mut snapshot = zeta_protocol::Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: zeta_protocol::SessionId::new("session").unwrap(),
         thread_id: zeta_protocol::ThreadId::new("thread").unwrap(),
         parent_thread_id: None,
@@ -85,7 +87,10 @@ fn status_line_context_follows_thread_snapshots() {
     }
     let mut config = crate::test_support::empty_config_snapshot();
     config.tui = settings.write_to_tui(&config.tui);
-    config.preferred_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto { provider: "provider".into(), model: "model".into() });
+    config.preferred_model = Some(zeta_app_server_protocol::protocol::config::ModelRefDto {
+        provider: "provider".into(),
+        model: "model".into(),
+    });
     let catalog = zeta_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
@@ -111,7 +116,11 @@ fn status_line_context_follows_thread_snapshots() {
         "context 40%"
     );
     super::apply_tui_config(config, Some(&catalog), &mut app);
-    assert_eq!(app.status_line().top_text_for_width(80, app.status_line_runtime()), "context 40%");
+    assert_eq!(
+        app.status_line()
+            .top_text_for_width(80, app.status_line_runtime()),
+        "context 40%"
+    );
     snapshot.thread_id = zeta_protocol::ThreadId::new("other").unwrap();
     snapshot.turns.clear();
     super::apply_thread_snapshot_parts(&mut app, snapshot, None);

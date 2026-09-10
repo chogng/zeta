@@ -94,9 +94,7 @@ impl Request {
                 })
                 .map(Box::new),
             ),
-            Self::Stop { mut recording } => {
-                Completion::Stopped(recording.stop().map(|_| ()))
-            }
+            Self::Stop { mut recording } => Completion::Stopped(recording.stop().map(|_| ())),
         }
     }
 }

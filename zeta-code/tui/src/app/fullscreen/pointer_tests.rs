@@ -153,19 +153,19 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
         handle_mouse(
             &mut app,
             area,
-            mouse(MouseEventKind::Down(MouseButton::Left), 3),
+            mouse(MouseEventKind::Down(MouseButton::Left), 6),
         );
         handle_mouse(
             &mut app,
             area,
-            mouse(MouseEventKind::Drag(MouseButton::Left), 9),
+            mouse(MouseEventKind::Drag(MouseButton::Left), 12),
         );
         let super::MouseAction::Selection(Some(
             crate::app::fullscreen::selection::ScreenSelectionOutcome::Selection(range),
         )) = handle_mouse(
             &mut app,
             area,
-            mouse(MouseEventKind::Up(MouseButton::Left), 9),
+            mouse(MouseEventKind::Up(MouseButton::Left), 12),
         )
         else {
             panic!("drag must select text");
@@ -187,7 +187,7 @@ fn fullscreen_selection_copies_text_and_reports_the_clipboard_result() {
             .unwrap();
         let buffer = terminal.backend().buffer();
         assert_eq!(
-            buffer[(3, row)].bg,
+            buffer[(6, row)].bg,
             app.render_context().screen_selection_background()
         );
         let text = buffer

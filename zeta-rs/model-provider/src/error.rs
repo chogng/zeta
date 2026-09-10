@@ -25,7 +25,9 @@ pub enum ModelProviderError {
 impl fmt::Display for ModelProviderError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ConfigurationMissing => formatter.write_str("model or provider is not configured"),
+            Self::ConfigurationMissing => {
+                formatter.write_str("model or provider is not configured")
+            }
             Self::InvalidRequest(message) => write!(formatter, "invalid model request: {message}"),
             Self::InvalidResponse(message) => {
                 write!(formatter, "invalid model response: {message}")

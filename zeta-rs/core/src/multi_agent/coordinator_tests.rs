@@ -1002,6 +1002,7 @@ fn fixture_with_agent(
         .start_thread(
             &crate::NoThreadWorktreeBinder,
             StartThreadRequest {
+                agent_id: None,
                 agent,
                 command_id: CommandId::new("create-parent").unwrap(),
                 title: "parent".into(),

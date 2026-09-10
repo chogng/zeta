@@ -109,11 +109,11 @@ impl TopTip {
             return Some(notice.text.as_str());
         }
         if self.clipboard_image_expires_at.is_some() {
-            return Some(bindings::CLIPBOARD_HINTS.as_str());
+            return Some(bindings::CLIPBOARD_HINTS.text());
         }
         match self.phase {
             TopTipPhase::Navigation => tip,
-            TopTipPhase::Policy { .. } => Some(bindings::POLICY_HINTS.as_str()),
+            TopTipPhase::Policy { .. } => Some(bindings::POLICY_HINTS.text()),
             TopTipPhase::Hidden => None,
         }
     }

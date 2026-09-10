@@ -8,6 +8,8 @@ use super::format_compact_process_cpu;
 use super::format_compact_process_memory;
 use super::format_memory_change;
 use crate::AppServerProcess;
+use std::time::Duration;
+use std::time::Instant;
 use zeta_memory_diagnostics::ObservedProcess;
 use zeta_memory_diagnostics::ProcessResourceDemand;
 use zeta_memory_diagnostics::ProcessResourceMetrics;
@@ -15,8 +17,6 @@ use zeta_memory_diagnostics::ProcessResourceRequest;
 use zeta_memory_diagnostics::ProcessResourceUsage;
 use zeta_memory_diagnostics::ProcessResourcesReading;
 use zeta_memory_diagnostics::ProcessTreeResourceUsage;
-use std::time::Duration;
-use std::time::Instant;
 
 const MIB: u64 = 1024 * 1024;
 

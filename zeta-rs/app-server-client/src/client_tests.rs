@@ -410,6 +410,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
     assert_eq!(client.initialization().unwrap(), &initialized);
     let session = client
         .create_session(SessionCreateParams {
+            agent_id: None,
             agent: zeta_protocol::AgentRoleSelection::Default,
             command_id: CommandId::new("session-one").expect("test ID is non-empty"),
             title: "test".into(),
@@ -420,6 +421,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
             command_id: CommandId::new("thread-one").expect("test ID is non-empty"),
             session_id: session.session.session_id.clone(),
             request: SessionRequest::CreateThread {
+                agent_id: None,
                 title: "root".into(),
             },
         })
@@ -663,6 +665,7 @@ fn ephemeral_session_state_ignores_and_does_not_append_durable_history() {
     .unwrap();
     durable
         .create_session(SessionCreateParams {
+            agent_id: None,
             agent: zeta_protocol::AgentRoleSelection::Default,
             command_id: CommandId::new("durable-seed-session").unwrap(),
             title: "durable seed".into(),
@@ -684,6 +687,7 @@ fn ephemeral_session_state_ignores_and_does_not_append_durable_history() {
     assert!(ephemeral.list_sessions().unwrap().sessions.is_empty());
     ephemeral
         .create_session(SessionCreateParams {
+            agent_id: None,
             agent: zeta_protocol::AgentRoleSelection::Default,
             command_id: CommandId::new("ephemeral-session").unwrap(),
             title: "ephemeral session".into(),

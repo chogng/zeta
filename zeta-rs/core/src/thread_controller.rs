@@ -73,6 +73,8 @@ use zeta_thread_store::validate_append_batch;
 mod agent;
 mod context;
 mod execution;
+mod graph;
+mod identity;
 pub(crate) mod live_interaction;
 mod loaded_thread;
 mod mailbox;
@@ -169,6 +171,8 @@ pub struct StartContextCompactionRequest {
 }
 
 pub struct CreateThreadRequest {
+    pub agent_id: zeta_protocol::AgentId,
+    pub origin: ThreadOrigin,
     pub agent: Option<zeta_protocol::AgentConfiguration>,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
@@ -176,18 +180,27 @@ pub struct CreateThreadRequest {
 }
 
 pub struct StartThreadRequest {
+    pub agent_id: Option<zeta_protocol::AgentId>,
     pub agent: Option<zeta_protocol::AgentConfiguration>,
     pub command_id: CommandId,
     pub title: String,
 }
 
 pub struct CreateBranchRequest {
+    pub agent_id: Option<zeta_protocol::AgentId>,
     pub command_id: CommandId,
     pub session_id: SessionId,
     pub title: String,
 }
 
 pub struct ForkThreadRequest {
+    pub command_id: CommandId,
+    pub source_thread_id: ThreadId,
+    pub title: String,
+}
+
+/// Replaces an archived execution with a fresh branch of the same Agent.
+pub struct ReplaceThreadRequest {
     pub command_id: CommandId,
     pub source_thread_id: ThreadId,
     pub title: String,
@@ -534,6 +547,14 @@ impl ThreadController {
     /// Repeating the same request is safe when the durable Thread identity, owner, and title all
     /// match. A conflicting existing stream is rejected.
     pub fn create_thread(&self, request: CreateThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+        self.create_thread_with_events(request, Vec::new())
+    }
+
+    fn create_thread_with_events(
+        &self,
+        request: CreateThreadRequest,
+        initial_events: Vec<ThreadEvent>,
+    ) -> Result<ThreadSnapshot, CoreError> {
         if let Some(agent) = &request.agent {
             agent
                 .validate()
@@ -556,17 +577,17 @@ impl ThreadController {
             *loaded = Some(self.loaded_threads.install(existing.clone()));
             return Ok(existing);
         }
-        let (snapshot, batch) = self.project_batch(
-            None,
-            &request.thread_id,
-            vec![ThreadEvent::ThreadCreated {
-                agent: request.agent,
-                session_id: request.session_id,
-                thread_id: request.thread_id.clone(),
-                title: request.title,
-            }],
-            BatchCommand::None,
-        )?;
+        let mut events = vec![ThreadEvent::ThreadCreated {
+            agent_id: Some(request.agent_id),
+            origin: request.origin,
+            agent: request.agent,
+            session_id: request.session_id,
+            thread_id: request.thread_id.clone(),
+            title: request.title,
+        }];
+        events.extend(initial_events);
+        let (snapshot, batch) =
+            self.project_batch(None, &request.thread_id, events, BatchCommand::None)?;
         self.commit_batch(&batch)?;
         *loaded = Some(self.loaded_threads.install(snapshot.clone()));
         Ok(snapshot)
@@ -598,6 +619,7 @@ impl ThreadController {
                 .map_err(|error| CoreError::InvalidInput(error.into()))?;
         }
         let thread_id = command_thread_id("thread", &request.command_id)?;
+        let agent_id = self.select_agent_id(request.agent_id.as_ref(), &thread_id)?;
         let session_id = SessionId::new(thread_id.as_str().to_owned())
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         binder.provision(&ThreadWorktreeBindingRequest {
@@ -606,6 +628,8 @@ impl ThreadController {
             origin: ThreadOrigin::Root,
         })?;
         self.create_thread(CreateThreadRequest {
+            agent_id,
+            origin: ThreadOrigin::Root,
             agent: request.agent,
             session_id,
             thread_id,
@@ -620,16 +644,23 @@ impl ThreadController {
         request: CreateBranchRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
-        if self.list_session_threads(&request.session_id)?.is_empty() {
+        if self
+            .store
+            .list_session_thread_ids(&request.session_id)?
+            .is_empty()
+        {
             return Err(CoreError::NotFound(request.session_id.to_string()));
         }
         let thread_id = command_thread_id("branch", &request.command_id)?;
+        let agent_id = self.select_agent_id(request.agent_id.as_ref(), &thread_id)?;
         binder.provision(&ThreadWorktreeBindingRequest {
             session_id: request.session_id.clone(),
             thread_id: thread_id.clone(),
             origin: ThreadOrigin::Root,
         })?;
         self.create_thread(CreateThreadRequest {
+            agent_id,
+            origin: ThreadOrigin::Root,
             agent: None,
             session_id: request.session_id,
             thread_id,
@@ -644,8 +675,18 @@ impl ThreadController {
         request: ForkThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
-        let source = self.read_thread(&request.source_thread_id)?;
         let thread_id = command_thread_id("fork", &request.command_id)?;
+        if let Some(binding) = self.store.read_thread_binding(&thread_id)? {
+            if matches!(&binding.origin, ThreadOrigin::Fork { parent_thread_id, .. } if parent_thread_id == &request.source_thread_id)
+            {
+                let snapshot = self.read_thread(&thread_id)?;
+                if snapshot.title == request.title {
+                    return Ok(snapshot);
+                }
+            }
+            return Err(CoreError::CommandConflict);
+        }
+        let source = self.read_thread(&request.source_thread_id)?;
         binder.provision(&ThreadWorktreeBindingRequest {
             session_id: source.session_id.clone(),
             thread_id: thread_id.clone(),
@@ -684,7 +725,6 @@ impl ThreadController {
             thread_id: thread_id.clone(),
             origin: ThreadOrigin::Rewind {
                 parent_thread_id: source.thread_id.clone(),
-                parent_sequence: source.sequence,
                 before_turn_id: request.before_turn_id.clone(),
             },
         })?;
@@ -720,33 +760,25 @@ impl ThreadController {
         for turn in &mut imported_turns {
             turn.usage = zeta_protocol::ModelUsageSummary::default();
         }
-        let created = self.create_thread(CreateThreadRequest {
-            agent: source.agent_configuration().cloned(),
-            session_id: request.session_id,
-            thread_id: request.thread_id.clone(),
-            title: request.title,
-        })?;
-        if created.sequence > 1 {
-            return Ok(created);
-        }
-
-        let child_thread_id = request.thread_id;
-        let event_thread_id = child_thread_id.clone();
-        self.mutate_thread(&child_thread_id, |snapshot| {
-            if snapshot.sequence > 1 {
-                return Ok(snapshot.clone());
-            }
-            self.record_batch(
-                snapshot,
-                vec![ThreadEvent::HistoryImported {
-                    thread_id: event_thread_id,
-                    source_thread_id: request.source_thread_id,
-                    before_turn_id: request.before_turn_id,
-                    turns: imported_turns,
-                }],
-            )?;
-            Ok(snapshot.clone())
-        })
+        self.create_thread_with_events(
+            CreateThreadRequest {
+                agent_id: source.agent_id.clone(),
+                origin: ThreadOrigin::Rewind {
+                    parent_thread_id: source.thread_id.clone(),
+                    before_turn_id: request.before_turn_id.clone(),
+                },
+                agent: source.agent_configuration().cloned(),
+                session_id: request.session_id,
+                thread_id: request.thread_id.clone(),
+                title: request.title,
+            },
+            vec![ThreadEvent::HistoryImported {
+                thread_id: request.thread_id,
+                source_thread_id: request.source_thread_id,
+                before_turn_id: request.before_turn_id,
+                turns: imported_turns,
+            }],
+        )
     }
 
     /// Creates a child Thread containing the source history at one exact fork point.
@@ -766,49 +798,43 @@ impl ThreadController {
         }
         let imported_turns = fork_snapshot_turns(source.public_thread().turns);
         let context_checkpoint = inherited_fork_checkpoint(&source, &imported_turns)?;
-        let created = self.create_thread(CreateThreadRequest {
-            agent: source.agent_configuration().cloned(),
-            session_id: request.session_id,
-            thread_id: request.thread_id.clone(),
-            title: request.title,
-        })?;
-        if created.sequence > 1 {
-            return Ok(created);
-        }
-
-        let child_thread_id = request.thread_id;
-        let event_thread_id = child_thread_id.clone();
-        self.mutate_thread(&child_thread_id, |snapshot| {
-            if snapshot.sequence > 1 {
-                return Ok(snapshot.clone());
-            }
-            let imported_turn_count = u64::try_from(imported_turns.len())
-                .map_err(|_| CoreError::Journal("fork Turn count exceeds u64".into()))?;
-            let mut events = imported_turns
-                .into_iter()
-                .enumerate()
-                .map(|(turn_index, turn)| {
-                    Ok(ThreadEvent::ForkTurnImported {
-                        thread_id: event_thread_id.clone(),
-                        source_thread_id: request.source_thread_id.clone(),
-                        source_sequence: request.source_sequence,
-                        turn_index: u64::try_from(turn_index).map_err(|_| {
-                            CoreError::Journal("fork Turn index exceeds u64".into())
-                        })?,
-                        turn: Box::new(turn),
-                    })
+        let imported_turn_count = u64::try_from(imported_turns.len())
+            .map_err(|_| CoreError::Journal("fork Turn count exceeds u64".into()))?;
+        let mut events = imported_turns
+            .into_iter()
+            .enumerate()
+            .map(|(index, turn)| {
+                Ok(ThreadEvent::ForkTurnImported {
+                    thread_id: request.thread_id.clone(),
+                    source_thread_id: request.source_thread_id.clone(),
+                    source_sequence: request.source_sequence,
+                    turn_index: u64::try_from(index)
+                        .map_err(|_| CoreError::Journal("fork Turn index exceeds u64".into()))?,
+                    turn: Box::new(turn),
                 })
-                .collect::<Result<Vec<_>, CoreError>>()?;
-            events.push(ThreadEvent::ForkHistoryImportCompleted {
-                thread_id: event_thread_id,
-                source_thread_id: request.source_thread_id,
-                source_sequence: request.source_sequence,
-                imported_turn_count,
-                context_checkpoint,
-            });
-            self.record_batch(snapshot, events)?;
-            Ok(snapshot.clone())
-        })
+            })
+            .collect::<Result<Vec<_>, CoreError>>()?;
+        events.push(ThreadEvent::ForkHistoryImportCompleted {
+            thread_id: request.thread_id.clone(),
+            source_thread_id: request.source_thread_id.clone(),
+            source_sequence: request.source_sequence,
+            imported_turn_count,
+            context_checkpoint,
+        });
+        self.create_thread_with_events(
+            CreateThreadRequest {
+                agent_id: source.agent_id.clone(),
+                origin: ThreadOrigin::Fork {
+                    parent_thread_id: source.thread_id.clone(),
+                    parent_sequence: request.source_sequence,
+                },
+                agent: source.agent_configuration().cloned(),
+                session_id: request.session_id,
+                thread_id: request.thread_id,
+                title: request.title,
+            },
+            events,
+        )
     }
 
     pub fn start_turn(
@@ -1894,10 +1920,11 @@ impl ThreadController {
         session_id: &SessionId,
     ) -> Result<Vec<ThreadSnapshot>, CoreError> {
         Ok(self
-            .list_threads()?
+            .store
+            .list_session_thread_ids(session_id)?
             .into_iter()
-            .filter(|thread| &thread.session_id == session_id)
-            .collect())
+            .map(|thread_id| self.read_thread(&thread_id))
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     /// Interrupts every active Turn in a Session tree and archives each Thread.
@@ -2605,6 +2632,8 @@ fn matching_created_thread(
     request: &CreateThreadRequest,
 ) -> Result<ThreadSnapshot, CoreError> {
     if snapshot.session_id == request.session_id
+        && snapshot.agent_id == request.agent_id
+        && snapshot.origin == request.origin
         && snapshot.thread_id == request.thread_id
         && snapshot.title == request.title
         && snapshot.agent.as_ref() == request.agent.as_ref()
@@ -2617,6 +2646,12 @@ fn matching_created_thread(
 
 fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
     ThreadCatalogRecord {
+        binding: agent_graph_store::ThreadBinding {
+            agent_id: snapshot.agent_id.clone(),
+            session_id: snapshot.session_id.clone(),
+            thread_id: snapshot.thread_id.clone(),
+            origin: snapshot.origin.clone(),
+        },
         session_id: snapshot.session_id.clone(),
         thread: SessionThread {
             thread_id: snapshot.thread_id.clone(),
@@ -2811,6 +2846,7 @@ pub struct InMemoryThreadStore(Mutex<InMemoryThreadStoreState>);
 
 #[derive(Default)]
 struct InMemoryThreadStoreState {
+    agents: BTreeMap<zeta_protocol::AgentId, agent_graph_store::AgentRecord>,
     threads: BTreeMap<ThreadId, Vec<StoredEvent>>,
     catalog: BTreeMap<ThreadId, ThreadCatalogRecord>,
     batch_ids: BTreeSet<String>,
@@ -2830,6 +2866,20 @@ impl InMemoryThreadStore {
 }
 
 impl ThreadStore for InMemoryThreadStore {
+    fn list_session_thread_ids(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?
+            .catalog
+            .values()
+            .filter(|record| &record.session_id == session_id)
+            .map(|record| record.thread.thread_id.clone())
+            .collect())
+    }
     fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError> {
         Ok(self
             .0
@@ -2864,9 +2914,38 @@ impl ThreadStore for InMemoryThreadStore {
     }
 
     fn backfill_catalog(&self, record: &ThreadCatalogRecord) -> Result<(), ThreadStoreError> {
-        self.0
+        let mut state = self
+            .0
             .lock()
-            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?;
+        let actual = state
+            .threads
+            .get(&record.thread.thread_id)
+            .and_then(|events| events.last())
+            .map_or(0, |event| event.sequence);
+        if actual != record.sequence || actual == 0 {
+            return Err(ThreadStoreError::SequenceConflict {
+                expected: record.sequence,
+                actual,
+            });
+        }
+        if state
+            .catalog
+            .get(&record.thread.thread_id)
+            .is_some_and(|existing| existing.binding != record.binding)
+        {
+            return Err(ThreadStoreError::InvalidBatch(
+                "Thread Agent identity and origin are immutable".into(),
+            ));
+        }
+        state
+            .agents
+            .entry(record.binding.agent_id.clone())
+            .or_insert_with(|| agent_graph_store::AgentRecord {
+                agent_id: record.binding.agent_id.clone(),
+                created_at_unix_ms: record.thread.created_at_unix_ms,
+            });
+        state
             .catalog
             .insert(record.thread.thread_id.clone(), record.clone());
         Ok(())
@@ -2903,19 +2982,56 @@ impl ThreadStore for InMemoryThreadStore {
                 "batch ID already exists".into(),
             ));
         }
-        let events = state.threads.entry(batch.thread_id.clone()).or_default();
-        let actual_sequence = events.last().map_or(0, |event| event.sequence);
+        if let Some(previous) = state.catalog.get(&batch.thread_id) {
+            if previous.binding != batch.catalog.binding {
+                return Err(ThreadStoreError::InvalidBatch(
+                    "Thread Agent identity and origin are immutable".into(),
+                ));
+            }
+        } else if let Some(source) = batch.catalog.binding.source_thread_id() {
+            let source = state.catalog.get(source).ok_or_else(|| {
+                ThreadStoreError::InvalidBatch("Thread origin does not exist".into())
+            })?;
+            zeta_thread_store::validate_binding_source(&batch.catalog, source)?;
+            if let ThreadOrigin::Replacement {
+                source_thread_id, ..
+            } = &batch.catalog.binding.origin
+            {
+                if state.catalog.values().any(|record| matches!(&record.binding.origin,
+                    ThreadOrigin::Replacement { source_thread_id: replaced, .. } if replaced == source_thread_id)) {
+                    return Err(ThreadStoreError::InvalidBatch("Thread already has a replacement".into()));
+                }
+            }
+        }
+        let actual_sequence = state
+            .threads
+            .get(&batch.thread_id)
+            .and_then(|events| events.last())
+            .map_or(0, |event| event.sequence);
         let result = validate_append_batch(batch, actual_sequence)?;
         if batch.events.iter().any(|event| {
-            events
-                .iter()
+            state
+                .threads
+                .values()
+                .flatten()
                 .any(|existing| existing.event_id == event.event_id)
         }) {
             return Err(ThreadStoreError::InvalidBatch(
                 "event ID already exists".into(),
             ));
         }
-        events.extend(batch.events.iter().cloned());
+        state
+            .threads
+            .entry(batch.thread_id.clone())
+            .or_default()
+            .extend(batch.events.iter().cloned());
+        state
+            .agents
+            .entry(batch.catalog.binding.agent_id.clone())
+            .or_insert_with(|| agent_graph_store::AgentRecord {
+                agent_id: batch.catalog.binding.agent_id.clone(),
+                created_at_unix_ms: batch.catalog.thread.created_at_unix_ms,
+            });
         state
             .catalog
             .insert(batch.thread_id.clone(), batch.catalog.clone());

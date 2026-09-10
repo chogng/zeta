@@ -560,6 +560,8 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         .map(|(index, item)| (item.item_id().clone(), index as u64 + 2))
         .collect();
     ThreadSnapshot {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
         created_at_unix_ms: 0,

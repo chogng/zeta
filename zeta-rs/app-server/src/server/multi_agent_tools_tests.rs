@@ -176,6 +176,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .start_thread(
             &zeta_core::NoThreadWorktreeBinder,
             StartThreadRequest {
+                agent_id: None,
                 agent: None,
                 command_id: CommandId::new("timeout-parent").unwrap(),
                 title: "parent".into(),
@@ -270,6 +271,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
         .start_thread(
             &zeta_core::NoThreadWorktreeBinder,
             StartThreadRequest {
+                agent_id: None,
                 agent: None,
                 command_id: CommandId::new("create-parent").unwrap(),
                 title: "parent".into(),

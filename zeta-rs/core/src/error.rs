@@ -67,6 +67,12 @@ impl fmt::Display for CoreError {
 
 impl std::error::Error for CoreError {}
 
+impl From<agent_graph_store::AgentGraphStoreError> for CoreError {
+    fn from(error: agent_graph_store::AgentGraphStoreError) -> Self {
+        Self::Journal(error.to_string())
+    }
+}
+
 impl From<ThreadStoreError> for CoreError {
     fn from(error: ThreadStoreError) -> Self {
         Self::ThreadStore(error)

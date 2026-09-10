@@ -104,6 +104,7 @@ pub use thread_controller::RecordToolCallRequest;
 pub use thread_controller::RecordToolResultRequest;
 pub use thread_controller::RecordedToolCall;
 pub use thread_controller::RecordedToolResult;
+pub use thread_controller::ReplaceThreadRequest;
 pub use thread_controller::RequestTurnInteraction;
 pub use thread_controller::RequestedTurnInteraction;
 pub use thread_controller::ResolveTurnInteractionDisposition;

@@ -2,7 +2,8 @@
 source: zeta-code/tui/src/app/fullscreen/pointer_tests.rs
 expression: text
 ---
-  Home  .                                                   
+  ≡ .                                                       
+                                                            
                                                             
                                                             
                                                             
@@ -12,9 +13,8 @@ expression: text
                                                             
                                                             
                                Copied 7 chars to clipboard  
-  ╭────────────────────────────────────────────────────────╮
-> │copy me                                                 │
-  ╰────────────────────────────────────── Automatic model ─╯
+  ╭──────────────────────────────────────────────────────╮  
+  │ > copy me                                            │  
+  ╰──────────────────────────────────── Automatic model ─╯  
                                                             
-  ⏸ ask permissions on                                      
-  Enter send  ·  shift+tab permissions  ·  /home
+  Enter send                          ⏸ ask permissions on

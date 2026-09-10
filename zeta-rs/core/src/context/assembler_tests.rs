@@ -470,6 +470,8 @@ fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
         created_at_unix_ms: 0,

@@ -65,6 +65,8 @@ mod approval;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadSnapshot {
+    pub agent_id: zeta_protocol::AgentId,
+    pub origin: zeta_protocol::ThreadOrigin,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub created_at_unix_ms: u64,
@@ -165,6 +167,8 @@ impl ThreadSnapshot {
     /// Builds the canonical public Thread projection without exposing command receipts.
     pub fn public_thread(&self) -> Thread {
         Thread {
+            agent_id: self.agent_id.clone(),
+            origin: self.origin.clone(),
             session_id: self.session_id.clone(),
             thread_id: self.thread_id.clone(),
             parent_thread_id: self.parent_thread_id.clone(),
@@ -355,10 +359,12 @@ pub fn reduce_thread_event(
         }
         return match &envelope.event {
             ThreadEvent::ThreadCreated {
+                origin,
                 agent,
                 session_id,
                 title,
                 thread_id,
+                ..
             } => {
                 if let Some(agent) = agent {
                     agent
@@ -371,6 +377,9 @@ pub fn reduce_thread_event(
                 let mut event_digests = BTreeMap::new();
                 event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
                 Ok(ThreadSnapshot {
+                    agent_id: zeta_history::created_thread_agent_id(envelope)
+                        .map_err(CoreError::Journal)?,
+                    origin: origin.clone(),
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
                     created_at_unix_ms,
@@ -439,6 +448,11 @@ pub fn reduce_thread_event(
         ));
     }
 
+    if envelope.schema_version < 16 {
+        if let Some(origin) = zeta_history::inherited_thread_origin(&envelope.event) {
+            snapshot.origin = origin;
+        }
+    }
     match &envelope.event {
         ThreadEvent::ThreadCreated { .. } => {
             return Err(CoreError::Journal(

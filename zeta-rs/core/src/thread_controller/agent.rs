@@ -90,6 +90,15 @@ impl ThreadController {
             &thread_id,
             vec![
                 ThreadEvent::ThreadCreated {
+                    agent_id: Some(
+                        zeta_protocol::AgentId::new(format!("agent:{thread_id}"))
+                            .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+                    ),
+                    origin: ThreadOrigin::AgentSpawn {
+                        parent_thread_id: request.context_seed.parent_thread_id.clone(),
+                        parent_sequence: request.context_seed.parent_sequence,
+                        delegation_id: request.context_seed.delegation_id.clone(),
+                    },
                     agent: None,
                     session_id: request.session_id,
                     thread_id: thread_id.clone(),

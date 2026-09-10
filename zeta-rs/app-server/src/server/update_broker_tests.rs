@@ -320,6 +320,8 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
     ));
 
     let thread = zeta_protocol::Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id,
         thread_id,
         parent_thread_id: None,

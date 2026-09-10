@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/modal_tests.rs
 expression: frame_text(&app)
 ---
-  Home  .                                                                                           
+  ≡ .                                                                                               
                                                                                                     
                                                                                                     
             ┌── Config ───────────────────────────────────────────────────────────[×]─┐             
@@ -19,6 +19,7 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
+            │                                                                         │             
 ┌Question  (│                                                                         │────────────┐
 │Choose an o│                                                                         │            │
 │> Continue │                                                                         │            │
@@ -26,6 +27,6 @@ expression: frame_text(&app)
 │           │                                                                         │            │
 └───────────│                                                                         │────────────┘
             │                                                                         │             
-  ╭─────────│                                                                         │────────────╮
-> │         │  Enter/Esc/Ctrl+C to return  ·  Tab/Shift+Tab to switch                 │            │
-  ╰─────────└─────────────────────────────────────────────────────────────────────────┘atic model ─╯
+  ╭─────────│  Enter/Esc/Ctrl+C to return  ·  Tab/Shift+Tab to switch                 │──────────╮  
+  │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

@@ -5595,3 +5595,88 @@ fn custom_provider_order_survives_edits_and_remove_cleans_only_its_secret() {
             .contains_key(&id)
     );
 }
+
+#[test]
+fn agent_identity_spans_tasks_forks_and_replacement_through_rpc() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let first = create_session(&server, &mut connection, 2, "identity-first");
+    let session_id = first["result"]["session"]["sessionId"].as_str().unwrap();
+    let root_id = first["result"]["session"]["threads"][0]["threadId"]
+        .as_str()
+        .unwrap();
+    let root = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":3, "method":"session/thread/read",
+            "params":{"sessionId":session_id,"threadId":root_id}
+        }),
+    );
+    let agent_id = root["result"]["thread"]["agentId"].as_str().unwrap();
+    let second = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"session/create",
+            "params":{"commandId":"identity-second","title":"another task","agentId":agent_id}
+        }),
+    );
+    assert!(second.get("error").is_none(), "{second}");
+    assert_ne!(second["result"]["session"]["sessionId"], session_id);
+    let fork = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":5, "method":"session/request",
+            "params":{"commandId":"identity-fork","sessionId":session_id,"request":{"type":"forkThread","parentThreadId":root_id,"title":"fork"}}
+        }),
+    );
+    assert!(fork.get("error").is_none(), "{fork}");
+    let archived = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":6, "method":"session/request",
+            "params":{"commandId":"identity-archive","sessionId":session_id,"request":{"type":"archive"}}
+        }),
+    );
+    assert!(archived.get("error").is_none(), "{archived}");
+    let replacement_request = serde_json::json!({
+        "jsonrpc":"2.0", "id":7, "method":"session/request",
+        "params":{"commandId":"identity-replace","sessionId":session_id,"request":{"type":"replaceThread","sourceThreadId":root_id,"title":"replacement"}}
+    });
+    let replaced = call(&server, &mut connection, replacement_request.clone());
+    assert!(replaced.get("error").is_none(), "{replaced}");
+    let mut retry = replacement_request;
+    retry["id"] = serde_json::json!(10);
+    let replayed = call(&server, &mut connection, retry);
+    assert!(replayed.get("error").is_none(), "{replayed}");
+    assert_eq!(replayed["result"], replaced["result"]);
+    let agent = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":8, "method":"agent/read", "params":{"agentId":agent_id}
+        }),
+    );
+    let branches = agent["result"]["threads"].as_array().unwrap();
+    assert_eq!(branches.len(), 4);
+    assert_eq!(agent["result"]["agentId"], agent_id);
+    assert!(
+        branches
+            .iter()
+            .any(|branch| branch["origin"]["type"] == "replacement"
+                && branch["origin"]["sourceThreadId"] == root_id)
+    );
+    let unknown = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":9, "method":"session/create",
+            "params":{"commandId":"identity-unknown","title":"unknown","agentId":"missing-agent"}
+        }),
+    );
+    assert!(unknown.get("error").is_some());
+}

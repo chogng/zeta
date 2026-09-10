@@ -88,7 +88,7 @@ fn binding_aliases_format_from_the_same_keys_and_require_exact_modifiers() {
         "Esc to close"
     );
     assert_eq!(
-        QUEUE_HINTS.as_str(),
+        QUEUE_HINTS.text(),
         "Enter to edit · Ctrl+Enter to send now · Ctrl+↑/↓ to move · Delete to remove · Esc to return to input"
     );
 }

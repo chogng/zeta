@@ -21,6 +21,33 @@ use zeta_core::StartThreadRequest;
 use zeta_protocol::SessionId;
 
 impl AppServer {
+    pub(super) fn agent_read(&self, params: &Value) -> Result<Value, RpcError> {
+        use zeta_app_server_protocol::protocol::agent::AgentReadParams;
+        use zeta_app_server_protocol::protocol::agent::AgentReadResult;
+        use zeta_app_server_protocol::protocol::agent::AgentThread;
+        let params: AgentReadParams = decode(params)?;
+        let agent = self
+            .threads
+            .read_agent(&params.agent_id)
+            .map_err(core_error)?;
+        let threads = self
+            .threads
+            .list_agent_threads(&params.agent_id)
+            .map_err(core_error)?
+            .into_iter()
+            .map(|binding| AgentThread {
+                session_id: binding.session_id,
+                thread_id: binding.thread_id,
+                origin: binding.origin,
+            })
+            .collect();
+        result(&AgentReadResult {
+            agent_id: agent.agent_id,
+            created_at_unix_ms: agent.created_at_unix_ms,
+            threads,
+        })
+    }
+
     pub(super) fn session_create(
         &self,
         connection: &mut ConnectionState,
@@ -43,7 +70,16 @@ impl AppServer {
                 }
                 _ => false,
             };
-            if !matches || params.title != existing.title {
+            let expected_agent_id = params.agent_id.clone().unwrap_or_else(|| {
+                zeta_protocol::AgentId::new(format!("agent:{}", existing.thread_id))
+                    .expect("derived Agent ID is non-empty")
+            });
+            let legacy_creation = params.agent_id.is_none()
+                && existing.agent_id.as_str() == format!("legacy-agent:{}", existing.thread_id);
+            if !matches
+                || params.title != existing.title
+                || (expected_agent_id != existing.agent_id && !legacy_creation)
+            {
                 return Err(core_error(zeta_core::CoreError::CommandConflict));
             }
             existing
@@ -56,6 +92,7 @@ impl AppServer {
                 response
             })?;
             self.start_thread(StartThreadRequest {
+                agent_id: params.agent_id,
                 command_id: params.command_id,
                 title: params.title,
                 agent,

@@ -58,6 +58,8 @@ fn model(name: &str) -> ModelRef {
 
 fn thread(model: ModelRef) -> Thread {
     Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("session-1").unwrap(),
         thread_id: ThreadId::new("thread-1").unwrap(),
         parent_thread_id: None,

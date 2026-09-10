@@ -2,9 +2,9 @@
 
 mod credential;
 mod device_flow;
+mod maintenance;
 mod oauth;
 mod storage;
-mod maintenance;
 
 pub use maintenance::ChatGptAuthManagement;
 

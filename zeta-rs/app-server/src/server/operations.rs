@@ -320,8 +320,24 @@ impl AppServer {
             SessionRequest::Stop => result(&SessionRequestResult::Session(
                 self.stop_session_request(mutation)?,
             )),
-            SessionRequest::CreateThread { title } => result(&SessionRequestResult::Thread(
-                self.create_session_thread_request(connection.connection_id, mutation, title)?,
+            SessionRequest::CreateThread { agent_id, title } => result(
+                &SessionRequestResult::Thread(self.create_session_thread_request(
+                    connection.connection_id,
+                    mutation,
+                    agent_id,
+                    title,
+                )?),
+            ),
+            SessionRequest::ReplaceThread {
+                source_thread_id,
+                title,
+            } => result(&SessionRequestResult::Thread(
+                self.replace_session_thread_request(
+                    connection.connection_id,
+                    mutation,
+                    source_thread_id,
+                    title,
+                )?,
             )),
             SessionRequest::ForkThread {
                 parent_thread_id,
@@ -457,6 +473,7 @@ impl AppServer {
         &self,
         connection_id: u64,
         mutation: SessionMutation,
+        agent_id: Option<zeta_protocol::AgentId>,
         title: String,
     ) -> Result<SessionThreadResult, RpcError> {
         let created = self
@@ -464,6 +481,7 @@ impl AppServer {
             .create_branch(
                 self.thread_worktree_binder.as_ref(),
                 CreateBranchRequest {
+                    agent_id,
                     command_id: mutation.command_id,
                     session_id: mutation.session_id.clone(),
                     title,
@@ -484,6 +502,39 @@ impl AppServer {
         })
     }
 
+    fn replace_session_thread_request(
+        &self,
+        connection_id: u64,
+        mutation: SessionMutation,
+        source_thread_id: zeta_protocol::ThreadId,
+        title: String,
+    ) -> Result<SessionThreadResult, RpcError> {
+        self.read_session_thread_snapshot(&mutation.session_id, &source_thread_id)?;
+        let replaced = self
+            .threads
+            .replace_thread(
+                self.thread_worktree_binder.as_ref(),
+                zeta_core::ReplaceThreadRequest {
+                    command_id: mutation.command_id,
+                    source_thread_id,
+                    title,
+                },
+            )
+            .map_err(core_error)?;
+        self.updates.subscribe_session_thread(
+            connection_id,
+            mutation.session_id.clone(),
+            replaced.thread_id.clone(),
+            0,
+        );
+        self.notify_thread_updates(&replaced.thread_id, 0)?;
+        self.updates.publish_session_changed(&mutation.session_id);
+        Ok(SessionThreadResult {
+            session: self.session_view(&mutation.session_id)?,
+            thread_id: replaced.thread_id,
+        })
+    }
+
     fn fork_session_thread_request(
         &self,
         connection_id: u64,
@@ -491,6 +542,7 @@ impl AppServer {
         parent_thread_id: zeta_protocol::ThreadId,
         title: String,
     ) -> Result<SessionThreadResult, RpcError> {
+        self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
         let forked = self
             .threads
             .fork_thread(
@@ -524,6 +576,7 @@ impl AppServer {
         before_turn_id: zeta_protocol::TurnId,
         title: String,
     ) -> Result<SessionThreadResult, RpcError> {
+        self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
         let rewound = self
             .threads
             .rewind_thread(

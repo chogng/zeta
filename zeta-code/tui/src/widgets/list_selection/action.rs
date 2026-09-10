@@ -59,13 +59,13 @@ impl<A> ListSelection<A> {
         self.actions = actions;
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &KeyHints {
         if self.state.search_focused() {
-            self.search_hints.text()
+            &self.search_hints
         } else if self.state.tabs_focused() {
-            bindings::TAB_HINTS.as_str()
+            &bindings::TAB_HINTS
         } else {
-            self.key_hints.text()
+            &self.key_hints
         }
     }
 

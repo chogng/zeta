@@ -29,6 +29,8 @@ fn trace_groups_thread_streams_by_session_id() {
         .recover_threads()
         .unwrap()
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),

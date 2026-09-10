@@ -21,6 +21,8 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             recorded_at: Timestamp(1),
             command: None,
             event: ThreadEvent::ThreadCreated {
+                agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+                origin: Default::default(),
                 agent: None,
                 session_id: zeta_protocol::SessionId::new("session_1")
                     .expect("test ID is non-empty"),
@@ -29,6 +31,12 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             },
         }],
         catalog: ThreadCatalogRecord {
+            binding: agent_graph_store::ThreadBinding {
+                agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+                session_id: SessionId::new("session_1").unwrap(),
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                origin: Default::default(),
+            },
             session_id: zeta_protocol::SessionId::new("session_1").expect("test ID is non-empty"),
             thread: SessionThread {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),

@@ -309,6 +309,8 @@ fn selected_custom_theme_closes_the_entire_theme_flow_immediately() {
 fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
     let turn_id = TurnId::new("turn-1").unwrap();
     let thread = Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
         parent_thread_id: None,
@@ -748,7 +750,10 @@ fn startup_slash_command_opens_a_read_only_context_panel() {
         app.list_selection().map(|selection| selection.title()),
         Some("Startup")
     );
-    assert_eq!(app.command_panel_key_hints(), Some("Esc to close"));
+    assert_eq!(
+        app.command_panel_key_hints().map(|hints| hints.text()),
+        Some("Esc to close")
+    );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
@@ -793,7 +798,7 @@ fn screen_mode_keyboard_toggle_emits_a_revision_bound_edit() {
         StatusLineSettings::default(),
     )));
 
-    for _ in 0..6 {
+    for _ in 0..7 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -2132,7 +2137,7 @@ fn manager_session_keys_archive_show_details_and_open_the_selected_session() {
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
 
     assert_eq!(
-        app.session_manager_hint(),
+        app.session_manager_hint().text(),
         "Enter to open · Space to preview · Ctrl+X to archive · i to details"
     );
     assert_eq!(
@@ -2151,7 +2156,7 @@ fn manager_session_keys_archive_show_details_and_open_the_selected_session() {
     assert!(app.overlay().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
-        app.session_manager_hint(),
+        app.session_manager_hint().text(),
         "Enter to open · Space to preview · Ctrl+X to archive · i to details"
     );
     assert_eq!(
@@ -2416,7 +2421,7 @@ fn panel_search_owns_letters_and_paste_then_returns_to_the_list_and_original_dra
             .input_active()
     );
     assert_eq!(
-        app.command_panel_key_hints(),
+        app.command_panel_key_hints().map(|hints| hints.text()),
         Some("Enter/Esc/Ctrl+C to return  ·  Tab/Shift+Tab to switch")
     );
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));

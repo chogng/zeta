@@ -1,19 +1,30 @@
 use super::KeyHints;
 use super::draw;
 use super::draw_right;
+use crate::config::KeyHintStyle;
 use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::style::Modifier;
+
+fn visible(hints: &KeyHints, width: usize) -> String {
+    let (entries, shortened) = super::visible_entries(hints, width);
+    super::visible_text(&entries, if shortened { " · " } else { hints.separator })
+}
 
 #[test]
 fn narrow_hints_keep_the_exit_action_whole() {
-    let hints =
-        "Enter/Space to change · ↑↓/jk to choose · / to search · Tab to switch · Esc to close";
+    let hints = KeyHints::compact()
+        .with_action("Enter/Space", "change")
+        .with_action("↑↓/jk", "choose")
+        .with_action("/", "search")
+        .with_action("Tab", "switch")
+        .with_action("Esc", "close");
     assert_eq!(
-        super::visible_hints(hints, 76),
+        visible(&hints, 76),
         "Enter/Space to change · / to search · Tab to switch · Esc to close"
     );
-    assert_eq!(super::visible_hints(hints, 32), "Esc to close");
+    assert_eq!(visible(&hints, 32), "Esc to close");
 }
 
 #[test]
@@ -35,13 +46,61 @@ fn key_hint_uses_two_character_horizontal_insets() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), "Enter to apply", test_context()))
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &KeyHints::new().with_action("Enter", "apply"),
+                KeyHintStyle::Contrast,
+                test_context(),
+            )
+        })
         .unwrap();
 
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(0, 0)].symbol(), " ");
     assert_eq!(buffer[(1, 0)].symbol(), " ");
     assert_eq!(buffer[(2, 0)].symbol(), "E");
+}
+
+#[test]
+fn key_hint_styles_preserve_key_and_description_hierarchy() {
+    let hints = KeyHints::new().with_compact_action("Shift+Tab", "mode");
+    let mut contrast = Terminal::new(TestBackend::new(30, 1)).unwrap();
+    contrast
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &hints,
+                KeyHintStyle::Contrast,
+                test_context(),
+            )
+        })
+        .unwrap();
+    let buffer = contrast.backend().buffer();
+    assert_eq!(buffer[(2, 0)].fg, test_context().foreground());
+    assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(11, 0)].fg, test_context().muted());
+    assert!(!buffer[(11, 0)].modifier.contains(Modifier::BOLD));
+
+    let mut muted = Terminal::new(TestBackend::new(30, 1)).unwrap();
+    muted
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &hints,
+                KeyHintStyle::Muted,
+                test_context(),
+            )
+        })
+        .unwrap();
+    let buffer = muted.backend().buffer();
+    assert_eq!(buffer[(2, 0)].fg, test_context().muted());
+    assert!(buffer[(2, 0)].modifier.contains(Modifier::ITALIC));
+    assert_eq!(buffer[(11, 0)].fg, test_context().muted());
+    assert!(buffer[(11, 0)].modifier.contains(Modifier::ITALIC));
 }
 
 #[test]

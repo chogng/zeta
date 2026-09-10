@@ -76,7 +76,8 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     layout: ModalLayout,
     title: &str,
-    hints: &str,
+    hints: &crate::widgets::key_hint::KeyHints,
+    hint_style: crate::config::KeyHintStyle,
     context: RenderContext<'_>,
 ) {
     frame.render_widget(Clear, layout.surface);
@@ -103,7 +104,7 @@ pub(crate) fn draw(
         Paragraph::new("[×]").style(Style::default().fg(context.muted())),
         layout.close,
     );
-    crate::widgets::key_hint::draw_content(frame, layout.footer, hints, context);
+    crate::widgets::key_hint::draw_content(frame, layout.footer, hints, hint_style, context);
 }
 
 #[cfg(test)]

@@ -29,6 +29,8 @@ impl Fixture {
         let thread = ThreadId::new("prompt-thread").unwrap();
         controller
             .create_thread(CreateThreadRequest {
+                agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+                origin: Default::default(),
                 agent: None,
                 session_id: SessionId::new("prompt-session").unwrap(),
                 thread_id: thread.clone(),

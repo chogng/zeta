@@ -347,6 +347,7 @@ where
     T: JsonRpcTransport,
 {
     let session = client.create_session(SessionCreateParams {
+        agent_id: None,
         agent: zeta_protocol::AgentRoleSelection::Default,
         command_id: new_command_id("session"),
         title,

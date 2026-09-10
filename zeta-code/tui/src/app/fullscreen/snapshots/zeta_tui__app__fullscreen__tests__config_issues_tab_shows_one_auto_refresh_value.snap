@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 20)"
 ---
-  Home  .                                                                                           
+  ≡ .                                                                                               
                                                                                                     
             ┌── Config ───────────────────────────────────────────────────────────[×]─┐             
             │                                                                         │             
@@ -16,7 +16,7 @@ expression: "render(&app, 100, 20)"
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│                                                                         │────────────╮
-> │         │                                                                         │            │
-  ╰─────────│  Enter/Space to change · Tab/Shift+Tab to switch · Esc to close         │atic model ─╯
-            └─────────────────────────────────────────────────────────────────────────┘
+            │                                                                         │             
+  ╭─────────│                                                                         │──────────╮  
+  │ > Build │  Enter/Space to change · Tab/Shift+Tab to switch · Esc to close         │          │  
+  ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯

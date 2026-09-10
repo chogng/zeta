@@ -134,9 +134,7 @@ pub(crate) fn target_at(
     }
     if app.approval_view().is_none()
         && app.query_view().is_none()
-        && areas.header.height > 0
-        && Rect::new(areas.header.x, areas.header.y, 4.min(areas.header.width), 1)
-            .contains(position)
+        && super::header::home_at(areas.header, position)
     {
         return Some(PointerTarget::Home);
     }
@@ -153,7 +151,9 @@ pub(crate) fn target_at(
     if app.approval_view().is_none()
         && app.query_view().is_none()
         && !areas.input.is_empty()
-        && areas.input.contains(position)
+        && chat_composer::ChatInputChrome::Box
+            .border_area(areas.input)
+            .contains(position)
     {
         return Some(PointerTarget::Composer(ChatComposerPointerTarget::Input));
     }

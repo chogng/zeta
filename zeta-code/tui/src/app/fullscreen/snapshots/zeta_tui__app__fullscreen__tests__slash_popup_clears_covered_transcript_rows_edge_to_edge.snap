@@ -2,8 +2,9 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, terminal_area.width, terminal_area.height)"
 ---
-  Home  .                                                                       
+  ≡ .                                                                           
                                                                                 
+● Model invocation failed 8 underlying transcript content underlying transcript 
 content underlying transcript content underlying transcript content             
                                                                                 
 ● Model invocation failed 9 underlying transcript content underlying transcript 
@@ -16,9 +17,8 @@ content underlying transcript content underlying transcript content
   /mcp                       list configured MCP tools                          
   /resume                    list or resume a saved session                     
   /archive                   archive the current session and start a new chat   
-  ╭────────────────────────────────────────────────────────────────────────────╮
-> │/                                                                           │
-  ╰────────────────────────────────────────────────────────── Automatic model ─╯
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ > /                                                                      │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                 
-  ⏸ ask permissions on                                                          
-  Enter send  ·  shift+tab permissions  ·  /home
+  Enter send  ·  shift+tab permissions  ·  /home          ⏸ ask permissions on

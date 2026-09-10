@@ -338,7 +338,7 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
         match self {
             Self::Help(content) | Self::Loading(content) => content.key_hints(),
             Self::Dirs(content) => content.key_hints(),
@@ -635,7 +635,7 @@ impl Panels {
         self.command.as_ref()
     }
 
-    pub(crate) fn command_key_hints(&self) -> Option<&str> {
+    pub(crate) fn command_key_hints(&self) -> Option<&crate::widgets::key_hint::KeyHints> {
         self.command.as_ref().map(CommandPanel::key_hints)
     }
 

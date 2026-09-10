@@ -4,6 +4,7 @@ use super::ConfigSelectionAction;
 use super::ProviderApiKeyEdit;
 use crate::client::new_command_id;
 use crate::render::RenderContext;
+use crate::widgets::key_hint::KeyHints;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::text_field;
 use crate::widgets::text_field::TextField;
@@ -20,6 +21,7 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 use std::time::Instant;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::CustomProviderConfigDto;
@@ -189,12 +191,36 @@ impl Panel {
         }
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &KeyHints {
+        static SAVING: LazyLock<KeyHints> = LazyLock::new(|| KeyHints::new().with_note("Saving…"));
+        static WORKING: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::new()
+                .with_note("Working…")
+                .with_action("Esc", "return")
+        });
+        static EDIT: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::new()
+                .with_action("Enter", "edit")
+                .with_action("Tab/Shift+Tab", "move")
+                .with_action("Esc", "return")
+        });
+        static CHANGE: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::new()
+                .with_action("←/→", "change")
+                .with_action("Tab/Shift+Tab", "move")
+                .with_action("Esc", "return")
+        });
+        static TEST: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::new()
+                .with_action("Enter", "test")
+                .with_action("Tab/Shift+Tab", "move")
+                .with_action("Esc", "return")
+        });
         if let Some(pending) = &self.pending {
             return if pending.operation == Operation::Save {
-                "Saving…"
+                &SAVING
             } else {
-                "Working…  ·  Esc to return"
+                &WORKING
             };
         }
         match self.focus {
@@ -208,11 +234,11 @@ impl Panel {
                 if field.is_editing() {
                     field.key_hints()
                 } else {
-                    "Enter to edit  ·  Tab/Shift+Tab to move  ·  Esc to return"
+                    &EDIT
                 }
             }
-            4 | 5 => "←/→ to change  ·  Tab/Shift+Tab to move  ·  Esc to return",
-            _ => "Enter to test  ·  Tab/Shift+Tab to move  ·  Esc to return",
+            4 | 5 => &CHANGE,
+            _ => &TEST,
         }
     }
 

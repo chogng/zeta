@@ -1186,6 +1186,9 @@ test("ChatPaneModel mechanically clears and replaces transient transcript entrie
 test("ChatPaneModel projects a durable Turn failure into the conversation", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const failedThread: Thread = {
+		agentId: "agent-1",
+		origin: { type: "root" },
+		referenceCost: { knownAmounts: [], complete: true },
 		sessionId: "session-1",
 		threadId: "thread-1",
 		title: "Main",
@@ -1347,6 +1350,14 @@ interface FakeOptions {
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService): ChatService {
 	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}) });
 }
+
+test("Chat service retains Agent identity and branch origin when reading a Thread", async () => {
+	const fake = fakeApi();
+	using chat = createChatService(fake.api);
+	const read = await chat.readThread("session-1", "thread-1");
+	assert.equal(read.thread.agentId, "agent-1");
+	assert.deepEqual(read.thread.origin, { type: "root" });
+});
 
 test("Chat service accepts committed fork-history import notifications", () => {
 	const fake = fakeApi();
@@ -1746,6 +1757,9 @@ function sessionDto(value: ISession): SessionDto {
 
 function thread(agentText?: string): Thread {
 	return {
+		agentId: "agent-1",
+		origin: { type: "root" },
+		referenceCost: { knownAmounts: [], complete: true },
 		sessionId: "session-1",
 		threadId: "thread-1",
 		title: "Main",
@@ -1800,6 +1814,9 @@ function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn
 
 function threadWithFailure(code: TurnError["code"], retryable: boolean, sequence = 3): Thread {
 	return {
+		agentId: "agent-1",
+		origin: { type: "root" },
+		referenceCost: { knownAmounts: [], complete: true },
 		sessionId: "session-1",
 		threadId: "thread-1",
 		title: "Main",

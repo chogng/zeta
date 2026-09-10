@@ -34,7 +34,7 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     assert_eq!(app.handle_key(key(KeyCode::Up)), None);
     assert!(app.session_manager_focused());
     assert_eq!(
-        app.session_manager_hint(),
+        app.session_manager_hint().text(),
         "Enter to open · Space to preview · Ctrl+X to archive · i to details"
     );
 
@@ -265,7 +265,11 @@ fn session_manager_archived_group_restores_deletes_and_previews() {
     assert!(!render(&app).contains("Archived chat"));
     app.handle_key(key(KeyCode::Up));
     app.handle_key(key(KeyCode::Down));
-    assert!(app.session_manager_hint().contains("Enter to expand"));
+    assert!(
+        app.session_manager_hint()
+            .text()
+            .contains("Enter to expand")
+    );
     app.handle_key(key(KeyCode::Enter));
     app.handle_key(key(KeyCode::Down));
     assert_snapshot!("session_manager_archived_expanded", render(&app));
@@ -294,7 +298,11 @@ fn session_manager_archived_group_restores_deletes_and_previews() {
     archived.status = SessionStatus::Active;
     archived.threads[0].status = ThreadStatus::Active;
     app.update(SessionEvent::CatalogReceived(vec![session(), archived]));
-    assert!(app.session_manager_hint().contains("Ctrl+X to archive"));
+    assert!(
+        app.session_manager_hint()
+            .text()
+            .contains("Ctrl+X to archive")
+    );
     assert!(render(&app).contains("Archived (0)"));
 }
 
@@ -304,16 +312,28 @@ fn session_manager_group_keys_collapse_expand_and_skip_hidden_sessions() {
     app.handle_key(key(KeyCode::Left));
     app.handle_key(key(KeyCode::Up));
     app.handle_key(key(KeyCode::Up));
-    assert!(app.session_manager_hint().contains("Enter to collapse"));
+    assert!(
+        app.session_manager_hint()
+            .text()
+            .contains("Enter to collapse")
+    );
     assert!(render(&app).contains("> Idle (1)"));
     assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
-    assert!(app.session_manager_hint().contains("Enter to expand"));
+    assert!(
+        app.session_manager_hint()
+            .text()
+            .contains("Enter to expand")
+    );
     assert!(!render(&app).contains("Snapshot session"));
     assert!(app.session_preview().is_none());
     assert_snapshot!("session_manager_idle_collapsed", render(&app));
 
     app.update(SessionEvent::CatalogReceived(vec![session()]));
-    assert!(app.session_manager_hint().contains("Enter to expand"));
+    assert!(
+        app.session_manager_hint()
+            .text()
+            .contains("Enter to expand")
+    );
     app.handle_key(key(KeyCode::Down));
     assert!(render(&app).contains("> Archived (0)"));
     app.handle_key(key(KeyCode::Up));
@@ -345,6 +365,8 @@ fn preview_result(
     use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
     use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
     let thread = zeta_protocol::Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("current").unwrap(),
         thread_id: ThreadId::new("current").unwrap(),
         title: "Snapshot session".into(),
@@ -493,7 +515,7 @@ fn manager_navigation_stays_focused_and_repeated_keys_cannot_open_or_modify_sess
     app.handle_key(key(KeyCode::Left));
     app.handle_key(key(KeyCode::Up));
     app.handle_key(key(KeyCode::Char('j')));
-    assert!(app.session_manager_hint().contains("expand"));
+    assert!(app.session_manager_hint().text().contains("expand"));
     for _ in 0..3 {
         app.handle_key(key(KeyCode::Char('j')));
     }

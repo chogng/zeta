@@ -15,7 +15,10 @@ fn same_turn_retains_total_time_and_new_turn_resets_it() {
     timer.bind_turn(&first, now + Duration::from_secs(90));
     timer.tick(now + Duration::from_secs(100));
     assert_eq!(timer.elapsed(), Duration::from_secs(100));
-    timer.bind_turn(&TurnId::new("second").unwrap(), now + Duration::from_secs(101));
+    timer.bind_turn(
+        &TurnId::new("second").unwrap(),
+        now + Duration::from_secs(101),
+    );
     assert_eq!(timer.elapsed(), Duration::ZERO);
     timer.clear();
     assert!(!timer.tick(now + Duration::from_secs(200)));

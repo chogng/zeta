@@ -12,6 +12,8 @@ use zui::ui::{Color, Rect};
 #[test]
 fn timeline_groups_shell_result_under_its_tool_call() {
     let thread = Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
         parent_thread_id: None,

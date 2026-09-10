@@ -2,7 +2,8 @@
 source: zeta-code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  Home  .                                         
+  ≡ .                                             
+                                                  
                                                   
 ● focus message 05                                
                                                   
@@ -12,9 +13,8 @@ expression: render(&app)
                                                   
              Jump to bottom (click) ↓             
                                                   
-  ╭──────────────────────────────────────────────╮
-> │x                                             │
-  ╰──────────────────────────── Automatic model ─╯
+  ╭────────────────────────────────────────────╮  
+  │ > x                                        │  
+  ╰────────────────────────── Automatic model ─╯  
                                                   
-  ⏸ ask permissions on                            
-  Enter send  ·  shift+tab permissions  ·  /home
+  Enter send                ⏸ ask permissions on

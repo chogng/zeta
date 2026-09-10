@@ -207,6 +207,9 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 function threadProjection(sessionId: string, threadId: string): SessionThreadProjection {
 	return {
 		thread: {
+			agentId: "agent-1",
+			origin: { type: "root" },
+			referenceCost: { knownAmounts: [], complete: true },
 			sessionId,
 			threadId,
 			title: "Main",

@@ -95,7 +95,16 @@ export interface ThreadGoal {
 	readonly tokensUsed: number;
 }
 
+export type ThreadOrigin =
+	| { readonly type: "root" }
+	| { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number }
+	| { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly beforeTurnId: string }
+	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string }
+	| { readonly type: "replacement"; readonly sourceThreadId: ThreadId; readonly sourceSequence: number };
+
 export interface Thread {
+	readonly agentId: string;
+	readonly origin: ThreadOrigin;
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly title: string;

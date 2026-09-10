@@ -54,7 +54,7 @@ Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 
 - 每种模式的 `layout.rs` 独立定义整页区域，绘制与命中共用本模式的区域计算；公共 App 不计算输入、正文或浮层坐标。`composer.rs` 组合全屏输入、批准、提问和队列。
 - `navigation.rs` 负责区域间的按键路由、焦点顺序、正文导航与面板打开关闭，功能组件继续处理自身的编辑和操作。全屏 `pointer.rs` 处理鼠标路由，`selection.rs` 处理选区手势、高亮和复制结果。
 - `fullscreen/modal.rs` 替代原 `fullscreen/panel.rs`，负责弹窗层的绘制和输入路由；`widgets/modal.rs` 计算外框、标题、关闭按钮、正文与提示区域。`CommandPanel` 共用功能编辑器和操作结果，inline 继续用自己的 `panel.rs` 承载。
-- `home.rs` 维护欢迎卡片与开始入口；欢迎卡片不进入对话历史。`header.rs` 显示固定的 Home 入口、分支和目录，`footer.rs` 显示状态与有效快捷键。输入框保留标识列，模型名称位于边框下沿。
+- `home.rs` 维护欢迎卡片与开始入口；欢迎卡片不进入对话历史。`header.rs` 左侧显示菜单入口、分支和目录，右侧显示其余已配置状态；`footer.rs` 用一行 hintbar 显示有效快捷键与权限状态。输入框保留标识列和左右内边距，模型名称嵌在右下边框，长标签按终端列宽省略。
 - `frame.rs` 只选择屏幕绘制入口和可见资源需求。两种模式彼此不调用，共用正文、输入编辑、通用控件和终端能力。
 - 终端模块负责捕获协议、输出与恢复，`terminal/text.rs` 负责缓冲区文字范围和提取，不保存界面手势状态。
 - Modal 打开时拦截背景键盘、鼠标和滚动；内容先处理内部返回，关闭后恢复原页面焦点。列表点击使用稳定条目身份，绘制与命中共用区域；Resize 取消未完成的点击。输入补全与批准、提问仍由各自的交互容器处理。
@@ -224,6 +224,7 @@ TUI 设置保存在 `<profile>/config.toml` 的根级 `[tui]` 表：
 screenMode = "fullscreen"
 theme = "graphite"
 inputMode = "standard"
+keyHintStyle = "contrast"
 memoryDiagnostics = false
 autoUpdate = "latest"
 showGitChangesAsDiff = false
@@ -232,6 +233,8 @@ language = "en"
 ```
 
 `screenMode` 只接受 `fullscreen` 和 `inline`，缺省为 `fullscreen`。已有主屏配置需要将该值更新为 `inline`；其他值按配置错误报告。在 Config 的“通用”页通过 Enter、Space 或左右键切换，保存成功后立即应用；外部配置重载也使用同一路径。设置沿用现有 Config 读写通路；本地运行保存在本机 profile，远程连接目前读取和写入远端 App Server 的 profile。本机独立 UX 配置通路尚未接入。启动时先验证设置，再获取终端模式；非法值会报告配置错误。
+
+`keyHintStyle` 只接受 `contrast` 和 `muted`，缺省为 `contrast`。`contrast` 使用当前主题的前景色与粗体显示按键，说明文字使用弱化色；`muted` 保留整条弱化斜体效果。该设置由 Config 的“通用”页写入，fullscreen、inline 和两者的功能面板共用同一渲染通路并即时应用。
 
 鼠标交互和选中复制由 `screenMode` 决定，不再提供独立开关。旧 `mouseInteractions`、`copyOnSelect` 字段不参与解析和运行决策，在 Config 的“通用”页保存设置时删除；它们不会改变已选择的屏幕模式。
 

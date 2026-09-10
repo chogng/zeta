@@ -285,6 +285,8 @@ fn session(ids: &TestIds) -> Session {
 
 fn thread(ids: &TestIds, sequence: u64, turns: Vec<Turn>) -> Thread {
     Thread {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: ids.session_id.clone(),
         thread_id: ids.thread_id.clone(),
         parent_thread_id: None,

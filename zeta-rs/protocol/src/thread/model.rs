@@ -14,6 +14,8 @@ use ts_rs::TS;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Thread {
+    pub agent_id: crate::AgentId,
+    pub origin: crate::ThreadOrigin,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     #[serde(default, skip_serializing_if = "Option::is_none")]

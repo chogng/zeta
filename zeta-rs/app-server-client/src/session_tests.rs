@@ -49,6 +49,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
     let mut client = session.client();
     let created_session = client
         .create_session(SessionCreateParams {
+            agent_id: None,
             agent: zeta_protocol::AgentRoleSelection::Default,
             command_id: command_id("session"),
             title: "session".into(),
@@ -59,6 +60,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
             command_id: command_id("thread"),
             session_id: created_session.session.session_id.clone(),
             request: SessionRequest::CreateThread {
+                agent_id: None,
                 title: "thread".into(),
             },
         })

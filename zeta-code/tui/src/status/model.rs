@@ -1,3 +1,4 @@
+use crate::render::truncate_with_ellipsis;
 use crate::thread::TurnApprovalModes;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -28,6 +29,12 @@ pub(crate) struct StatusLineRuntime {
     pub(crate) plan: Option<(usize, usize)>,
     pub(crate) subagents: usize,
     pub(crate) process_resources: ProcessUsageView,
+}
+
+#[derive(Clone, Copy)]
+enum StatusLineLocation {
+    Footer,
+    Header,
 }
 
 impl StatusLineRuntime {
@@ -163,6 +170,13 @@ pub(crate) struct StatusLineModel {
 }
 
 impl StatusLineModel {
+    pub(crate) fn model_label(&self) -> &str {
+        match &self.preferred_model {
+            Some(value) => &value.full[0].text,
+            None => "Automatic model",
+        }
+    }
+
     pub(crate) fn branch_label(&self) -> Option<&str> {
         self.git_branch
             .as_ref()
@@ -297,7 +311,8 @@ impl StatusLineModel {
         width: usize,
         runtime: StatusLineRuntime,
     ) -> Vec<StatusLineSegment> {
-        self.top_layout_for_width(width, runtime).segments
+        self.top_layout_for_width(width, runtime, StatusLineLocation::Footer)
+            .segments
     }
 
     pub(crate) fn visible_process_resources(
@@ -305,10 +320,34 @@ impl StatusLineModel {
         width: usize,
         runtime: StatusLineRuntime,
     ) -> Option<ProcessResourceMetrics> {
-        self.top_layout_for_width(width, runtime).process_resources
+        self.top_layout_for_width(width, runtime, StatusLineLocation::Footer)
+            .process_resources
     }
 
-    fn top_layout_for_width(&self, width: usize, runtime: StatusLineRuntime) -> StatusLineLayout {
+    pub(super) fn header_segments_for_width(
+        &self,
+        width: usize,
+        runtime: StatusLineRuntime,
+    ) -> Vec<StatusLineSegment> {
+        self.top_layout_for_width(width, runtime, StatusLineLocation::Header)
+            .segments
+    }
+
+    pub(crate) fn header_process_resources(
+        &self,
+        width: usize,
+        runtime: StatusLineRuntime,
+    ) -> Option<ProcessResourceMetrics> {
+        self.top_layout_for_width(width, runtime, StatusLineLocation::Header)
+            .process_resources
+    }
+
+    fn top_layout_for_width(
+        &self,
+        width: usize,
+        runtime: StatusLineRuntime,
+        location: StatusLineLocation,
+    ) -> StatusLineLayout {
         let process_resources = runtime.process_resources;
         let mut values = Vec::new();
         if self.settings.style() == StatusLineStyle::Rich {
@@ -333,7 +372,7 @@ impl StatusLineModel {
                 values.push(DisplayValue::plain(text.clone(), text));
             }
         }
-        values.extend(self.configured_values(process_resources));
+        values.extend(self.configured_values(process_resources, location));
         let fitted = fit_values(&values, width);
         let process_resources = values[..fitted.visible_values]
             .iter()
@@ -356,9 +395,18 @@ impl StatusLineModel {
         truncate_with_ellipsis(&approval_mode_text(approval.into()), width)
     }
 
-    fn configured_values(&self, resources: ProcessUsageView) -> Vec<DisplayValue> {
+    fn configured_values(
+        &self,
+        resources: ProcessUsageView,
+        location: StatusLineLocation,
+    ) -> Vec<DisplayValue> {
         let mut values = Vec::new();
         for item in self.settings.items() {
+            if matches!(location, StatusLineLocation::Header)
+                && matches!(item, StatusLineItem::Model | StatusLineItem::GitBranch)
+            {
+                continue;
+            }
             let start = values.len();
             match item {
                 StatusLineItem::Context => values.push(self.context_display()),
@@ -735,32 +783,6 @@ pub(super) fn approval_mode_display(approval_mode: ApprovalMode) -> ApprovalMode
             label: "bypass permissions on",
         },
     }
-}
-
-pub(super) fn truncate_with_ellipsis(text: &str, width: usize) -> String {
-    if width == 0 {
-        return String::new();
-    }
-    if text.width() <= width {
-        return text.to_owned();
-    }
-    if width == 1 {
-        return "…".into();
-    }
-
-    let content_width = width - 1;
-    let mut rendered = String::new();
-    let mut rendered_width = 0;
-    for character in text.graphemes(true) {
-        let character_width = character.width();
-        if rendered_width + character_width > content_width {
-            break;
-        }
-        rendered.push_str(character);
-        rendered_width += character_width;
-    }
-    rendered.push('…');
-    rendered
 }
 
 #[cfg(test)]

@@ -1040,6 +1040,8 @@ fn fixture_with_approval_mode(
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("session").unwrap(),
             thread_id: thread_id.clone(),

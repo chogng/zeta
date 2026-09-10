@@ -116,6 +116,8 @@ fn create_thread(controller: &ThreadController, title: &str) -> ThreadId {
     .expect("test ID is non-empty");
     controller
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("session_1").expect("test ID is non-empty"),
             thread_id: thread_id.clone(),
@@ -135,6 +137,8 @@ fn restoring_a_session_replays_durably_without_reopening_children() {
     for id in [&root, &child] {
         threads
             .create_thread(CreateThreadRequest {
+                agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+                origin: Default::default(),
                 agent: None,
                 session_id: session_id.clone(),
                 thread_id: id.clone(),
@@ -190,6 +194,8 @@ fn deleting_a_session_forgets_loaded_threads_and_keeps_other_sessions() {
     let kept = ThreadId::new("thread_kept").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: kept_session.clone(),
             thread_id: kept.clone(),
@@ -634,7 +640,51 @@ struct ToggleStore {
     reject_writes: AtomicBool,
 }
 
+impl agent_graph_store::AgentGraphStore for ToggleStore {
+    fn read_agent(
+        &self,
+        _agent_id: &zeta_protocol::AgentId,
+    ) -> Result<Option<agent_graph_store::AgentRecord>, agent_graph_store::AgentGraphStoreError>
+    {
+        Ok(None)
+    }
+    fn read_thread_binding(
+        &self,
+        _thread_id: &ThreadId,
+    ) -> Result<Option<agent_graph_store::ThreadBinding>, agent_graph_store::AgentGraphStoreError>
+    {
+        Ok(None)
+    }
+    fn list_agent_threads(
+        &self,
+        _agent_id: &zeta_protocol::AgentId,
+    ) -> Result<Vec<agent_graph_store::ThreadBinding>, agent_graph_store::AgentGraphStoreError>
+    {
+        Ok(Vec::new())
+    }
+    fn list_spawn_children(
+        &self,
+        _thread_id: &ThreadId,
+    ) -> Result<Vec<ThreadId>, agent_graph_store::AgentGraphStoreError> {
+        Ok(Vec::new())
+    }
+    fn list_spawn_descendants(
+        &self,
+        _thread_id: &ThreadId,
+    ) -> Result<Vec<ThreadId>, agent_graph_store::AgentGraphStoreError> {
+        Ok(Vec::new())
+    }
+}
+
 impl ThreadStore for ToggleStore {
+    fn list_session_thread_ids(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        let _ = session_id;
+        Ok(Vec::new())
+    }
+
     fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError> {
         Ok(Vec::new())
     }
@@ -957,6 +1007,8 @@ fn failed_thread_creation_does_not_register_a_projection() {
     assert!(
         threads
             .create_thread(CreateThreadRequest {
+                agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+                origin: Default::default(),
                 agent: None,
                 session_id: SessionId::new("session_1").expect("test ID is non-empty"),
                 thread_id,
@@ -1048,7 +1100,50 @@ impl PerThreadBlockingStore {
     }
 }
 
+impl agent_graph_store::AgentGraphStore for PerThreadBlockingStore {
+    fn read_agent(
+        &self,
+        agent_id: &zeta_protocol::AgentId,
+    ) -> Result<Option<agent_graph_store::AgentRecord>, agent_graph_store::AgentGraphStoreError>
+    {
+        self.inner.read_agent(agent_id)
+    }
+    fn read_thread_binding(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Option<agent_graph_store::ThreadBinding>, agent_graph_store::AgentGraphStoreError>
+    {
+        self.inner.read_thread_binding(thread_id)
+    }
+    fn list_agent_threads(
+        &self,
+        agent_id: &zeta_protocol::AgentId,
+    ) -> Result<Vec<agent_graph_store::ThreadBinding>, agent_graph_store::AgentGraphStoreError>
+    {
+        self.inner.list_agent_threads(agent_id)
+    }
+    fn list_spawn_children(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Vec<ThreadId>, agent_graph_store::AgentGraphStoreError> {
+        self.inner.list_spawn_children(thread_id)
+    }
+    fn list_spawn_descendants(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Vec<ThreadId>, agent_graph_store::AgentGraphStoreError> {
+        self.inner.list_spawn_descendants(thread_id)
+    }
+}
+
 impl ThreadStore for PerThreadBlockingStore {
+    fn list_session_thread_ids(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        self.inner.list_session_thread_ids(session_id)
+    }
+
     fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError> {
         self.inner.list_thread_ids()
     }
@@ -2212,4 +2307,25 @@ fn extension_lifecycle_observes_commits_without_replaying_reads() {
         .start_turn(&thread_id, start_request("lifecycle-turn"))
         .unwrap();
     assert_eq!(*log.0.lock().unwrap(), events);
+}
+
+#[test]
+fn agent_bindings_cannot_change_through_catalog_backfill() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread_id = create_thread(&threads, "agent-binding");
+    let original = threads.thread_catalog_record(&thread_id).unwrap();
+    let mut changed = original.clone();
+    changed.binding.agent_id = zeta_protocol::AgentId::new("different-agent").unwrap();
+    assert!(store.backfill_catalog(&changed).is_err());
+    assert_eq!(
+        agent_graph_store::AgentGraphStore::read_thread_binding(store.as_ref(), &thread_id)
+            .unwrap(),
+        Some(original.binding)
+    );
+    assert!(
+        agent_graph_store::AgentGraphStore::read_agent(store.as_ref(), &changed.binding.agent_id)
+            .unwrap()
+            .is_none()
+    );
 }

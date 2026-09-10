@@ -57,8 +57,8 @@ fn adding_keeps_existing_items_visible_and_focuses_the_confirmed_directory() {
     assert_eq!(panel.state().visible_items().len(), 16);
     assert_eq!(panel.state().message(), Some("Adding directory…"));
     assert_eq!(
-        panel.key_hints(),
-        crate::keymap::bindings::CLOSE_HINTS.as_str()
+        panel.key_hints().text(),
+        crate::keymap::bindings::CLOSE_HINTS.text()
     );
     assert_eq!(
         panel.handle_key(key(KeyCode::Enter)),
@@ -92,7 +92,7 @@ fn failed_add_preserves_input_and_can_retry_without_accepting_stale_results() {
     assert_eq!(panel.state().query(), "/dir/missing");
     assert!(panel.state().search().unwrap().input_active());
     assert_eq!(panel.state().message(), Some("Directory does not exist"));
-    assert!(panel.key_hints().contains("add"));
+    assert!(panel.key_hints().text().contains("add"));
     let crate::widgets::list_selection::ListSelectionOutcome::Activate(DirSelectionAction::Add {
         request_id: second,
         ..
@@ -328,9 +328,11 @@ fn panel_add_uses_server_paths_preserves_permissions_and_reports_missing_directo
     assert_eq!(repeated.path, canonical);
     assert!(repeated.already_present);
     let listed = client
-        .list_session_dirs(zeta_app_server_protocol::protocol::environment::SessionDirListParams {
-            session_id: session.clone(),
-        })
+        .list_session_dirs(
+            zeta_app_server_protocol::protocol::environment::SessionDirListParams {
+                session_id: session.clone(),
+            },
+        )
         .unwrap();
     assert_eq!(listed.dirs.len(), 1);
     assert_eq!(listed.dirs[0].permissions, vec![PermissionDto::ReadFiles]);

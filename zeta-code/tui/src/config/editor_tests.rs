@@ -57,7 +57,7 @@ fn screen_mode_can_be_changed_with_activation_and_both_arrow_keys() {
                 terminal,
                 StatusLineSettings::default(),
             ));
-            for _ in 0..6 {
+            for _ in 0..7 {
                 editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
             }
             assert!(
@@ -169,6 +169,17 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
         view.actions.get(language.id().unwrap()).unwrap(),
         ConfigSelectionAction::SetLanguage(edit)
             if edit.terminal.language() == Language::English
+    ));
+    let key_hint_style = &state.visible_items()[6];
+    assert_eq!(key_hint_style.label(), "Key hint style");
+    assert_eq!(
+        key_hint_style.description(),
+        Some("Emphasize keys over their descriptions Contrast")
+    );
+    assert!(matches!(
+        view.actions.get(key_hint_style.id().unwrap()).unwrap(),
+        ConfigSelectionAction::SetTerminalSettings(edit)
+            if edit.terminal.key_hint_style() == crate::config::KeyHintStyle::Muted
     ));
 
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
@@ -282,7 +293,7 @@ fn config_root_uses_the_selected_language_through_nls() {
         vec!["通用", "提供商", "语言服务器", "Issues"]
     );
     assert_eq!(state.visible_items()[0].label(), "Vim 模式");
-    assert_eq!(state.visible_items()[6].label(), "屏幕模式");
+    assert_eq!(state.visible_items()[7].label(), "屏幕模式");
     assert_eq!(state.visible_items()[1].label(), "内存诊断");
     assert_eq!(state.visible_items()[2].label(), "自动更新");
     assert_eq!(
@@ -294,6 +305,36 @@ fn config_root_uses_the_selected_language_through_nls() {
         state.visible_items()[4].description(),
         Some("切换界面语言 中文")
     );
+    assert_eq!(state.visible_items()[6].label(), "按键提示风格");
+}
+
+#[test]
+fn key_hint_style_cycles_with_activation_and_arrow_keys() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    for (key, expected) in [
+        (KeyCode::Enter, crate::config::KeyHintStyle::Muted),
+        (KeyCode::Char(' '), crate::config::KeyHintStyle::Muted),
+        (KeyCode::Right, crate::config::KeyHintStyle::Muted),
+        (KeyCode::Left, crate::config::KeyHintStyle::Muted),
+    ] {
+        let mut editor = super::ConfigEditor::new(config_choices(
+            &empty_config_snapshot(),
+            &providers(),
+            TerminalSettings::default(),
+            StatusLineSettings::default(),
+        ));
+        assert!(
+            editor
+                .selection
+                .state_mut()
+                .focus_item(&ListSelectionItemId::new("key-hint-style"))
+        );
+        assert!(matches!(
+            editor.handle_key(KeyEvent::new(key, KeyModifiers::NONE)),
+            super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
+                if edit.terminal.key_hint_style() == expected
+        ));
+    }
 }
 
 #[test]
@@ -594,7 +635,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
         editor.selection().unwrap().visible_items()[0].label(),
         "Zulu"
     );
-    assert!(editor.key_hints().contains("Delete"));
+    assert!(editor.key_hints().text().contains("Delete"));
     assert!(
         matches!(editor.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)), super::ConfigEditorOutcome::Action(ConfigSelectionAction::Connection(request)) if request.operation == crate::config::provider::Operation::Remove)
     );
@@ -602,7 +643,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
     editor.selection.state_mut().focus_item(
         &crate::widgets::list_selection::ListSelectionItemId::new("provider-api-key-openai"),
     );
-    assert!(!editor.key_hints().contains("Delete"));
+    assert!(!editor.key_hints().text().contains("Delete"));
     assert!(matches!(
         editor.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
         super::ConfigEditorOutcome::Consumed

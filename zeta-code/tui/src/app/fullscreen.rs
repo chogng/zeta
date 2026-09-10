@@ -178,5 +178,5 @@ pub(super) fn process_resource_demand(
             zeta_memory_diagnostics::ProcessResourceDemand::Disabled
         };
     }
-    footer::process_resource_demand(app, &layout(app, area))
+    header::process_resource_demand(app, layout(app, area).header)
 }

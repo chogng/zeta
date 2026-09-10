@@ -87,6 +87,8 @@ fn tool_call_durably_updates_the_running_turn_plan() {
     let thread_id = ThreadId::new("plan-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("plan-session").unwrap(),
             thread_id: thread_id.clone(),

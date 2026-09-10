@@ -306,7 +306,7 @@ fn custom_provider_uses_selected_protocol_and_isolated_credentials() {
         let mut config = ModelProviderConfig::new(provider_id("custom-test"));
         config.custom = Some(CustomProviderConfig {
             context_window: 272_000,
-        order: 0,
+            order: 0,
             model: None,
             name: "My service".into(),
             protocol,
@@ -1734,7 +1734,7 @@ fn unsaved_provider_probe_uses_exact_ids_and_draft_keys_without_persisting() {
         config.base_url = Some("https://example.test/gateway/v1".into());
         config.custom = Some(CustomProviderConfig {
             context_window: 272_000,
-        order: 0,
+            order: 0,
             model: None,
             name: "Draft".into(),
             protocol,

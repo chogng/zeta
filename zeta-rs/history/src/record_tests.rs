@@ -22,6 +22,8 @@ fn stored_event_round_trip_preserves_history_contract() {
             },
         }),
         event: ThreadEvent::ThreadCreated {
+            agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("session_1").unwrap(),
             thread_id: thread_id.clone(),
@@ -48,4 +50,27 @@ fn supported_schema_range_distinguishes_reads_from_new_writes() {
     assert!(!supports_stored_event_schema_version(
         CURRENT_STORED_EVENT_SCHEMA_VERSION + 1
     ));
+}
+
+#[test]
+fn legacy_creation_keeps_serialized_event_bytes_and_new_creation_requires_identity() {
+    let json = r#"{"schemaVersion":15,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","sessionId":"session","threadId":"old","title":"Old"}}"#;
+    let mut record: StoredEvent = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        created_thread_agent_id(&record).unwrap().as_str(),
+        "legacy-agent:old"
+    );
+    assert_eq!(serde_json::to_string(&record).unwrap(), json);
+    record.schema_version = CURRENT_STORED_EVENT_SCHEMA_VERSION;
+    assert!(created_thread_agent_id(&record).is_err());
+    let ThreadEvent::ThreadCreated { agent_id, .. } = &mut record.event else {
+        unreachable!()
+    };
+    *agent_id = Some(zeta_protocol::AgentId::new("independent-agent").unwrap());
+    assert_eq!(
+        created_thread_agent_id(&record).unwrap().as_str(),
+        "independent-agent"
+    );
+    record.schema_version += 1;
+    assert!(created_thread_agent_id(&record).is_err());
 }

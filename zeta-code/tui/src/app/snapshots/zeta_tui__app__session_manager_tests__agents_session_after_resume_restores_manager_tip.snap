@@ -2,7 +2,8 @@
 source: zeta-code/tui/src/app/session_manager_tests.rs
 expression: render(&app)
 ---
-  Home  .
+  ≡ .
+
 
 
 
@@ -28,9 +29,8 @@ expression: render(&app)
 
 
                                                                                       ← for agents
-  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
-> │                                                                                                │
-  ╰────────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ >                                                                                            │
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
 
-  ⏸ ask permissions on
-  Enter send  ·  shift+tab permissions  ·  /home
+  Enter send  ·  shift+tab permissions  ·  /home                              ⏸ ask permissions on

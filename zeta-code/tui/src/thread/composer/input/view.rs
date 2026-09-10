@@ -10,6 +10,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::BorderType;
 use ratatui::widgets::Borders;
+use ratatui::widgets::Padding;
 use ratatui::widgets::Paragraph;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,10 +32,24 @@ pub(crate) enum ChatInputChrome {
 }
 
 impl ChatInputChrome {
-    pub(crate) fn inset(self) -> u16 {
+    pub(crate) fn inset(self, width: u16) -> u16 {
         match self {
             Self::Rules => 0,
-            Self::Box => 2,
+            Self::Box => 6 + 2 * self.padding(width),
+        }
+    }
+
+    fn padding(self, width: u16) -> u16 {
+        u16::from(matches!(self, Self::Box) && width >= 10)
+    }
+
+    pub(crate) fn border_area(self, area: Rect) -> Rect {
+        match self {
+            Self::Rules => area,
+            Self::Box => Rect {
+                width: content_area(area).width.saturating_sub(2),
+                ..content_area(area)
+            },
         }
     }
 }
@@ -64,18 +79,14 @@ pub(crate) fn draw(
         input,
         cursor_line,
         cursor_width,
-        area.width.saturating_sub(chrome.inset()),
+        area.width.saturating_sub(chrome.inset(area.width)),
     );
-    let lines = wrapped
+    let mut lines = wrapped
         .lines
         .iter()
         .enumerate()
         .map(|(index, line)| {
-            let prompt = match chrome {
-                ChatInputChrome::Rules if index == 0 => prompt,
-                ChatInputChrome::Rules => "  ",
-                ChatInputChrome::Box => "",
-            };
+            let prompt = if index == 0 { prompt } else { "  " };
             Line::from(vec![
                 Span::styled(
                     prompt,
@@ -87,6 +98,20 @@ pub(crate) fn draw(
             ])
         })
         .collect::<Vec<_>>();
+    if input.is_empty()
+        && matches!(chrome, ChatInputChrome::Box)
+        && focus == ChatInputFocus::Blurred
+    {
+        lines = vec![Line::from(vec![
+            Span::styled(
+                prompt,
+                Style::default()
+                    .fg(context.foreground())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("Build anything", Style::default().fg(context.muted())),
+        ])];
+    }
     let visible_rows = area.height.saturating_sub(2) as usize;
     let scroll_row = wrapped
         .cursor_row
@@ -100,35 +125,36 @@ pub(crate) fn draw(
                     ChatInputChrome::Box => Borders::ALL,
                 })
                 .border_type(BorderType::Rounded)
+                .padding(match chrome {
+                    ChatInputChrome::Rules => Padding::ZERO,
+                    ChatInputChrome::Box => Padding::horizontal(chrome.padding(area.width)),
+                })
                 .border_style(Style::default().fg(match focus {
                     ChatInputFocus::Blurred => context.border(),
                     ChatInputFocus::Focused => context.chat_input_chrome(),
                 })),
         );
-    let border_area = match chrome {
-        ChatInputChrome::Rules => area,
-        ChatInputChrome::Box => content_area(area),
-    };
+    let border_area = chrome.border_area(area);
     frame.render_widget(chat_input, border_area);
-    if matches!(chrome, ChatInputChrome::Box) && scroll_row == 0 && visible_rows > 0 {
-        frame.render_widget(
-            Paragraph::new(prompt).style(
-                Style::default()
-                    .fg(context.foreground())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Rect::new(area.x, area.y.saturating_add(1), 2.min(area.width), 1),
-        );
-    }
 
-    if cursor == ChatInputCursor::Visible {
-        let inset = chrome.inset() / 2;
-        let content = content_area(Rect::new(
-            area.x + inset.min(area.width),
-            area.y,
-            area.width.saturating_sub(chrome.inset()),
-            area.height,
-        ));
+    if cursor == ChatInputCursor::Visible
+        && (matches!(chrome, ChatInputChrome::Rules)
+            || (visible_rows > 0 && area.width > chrome.inset(area.width) + PROMPT_WIDTH as u16))
+    {
+        let prompt_area = match chrome {
+            ChatInputChrome::Rules => area,
+            ChatInputChrome::Box => {
+                let horizontal_inset = 1 + chrome.padding(area.width);
+                Rect {
+                    x: border_area
+                        .x
+                        .saturating_add(horizontal_inset.min(border_area.width)),
+                    width: border_area.width.saturating_sub(2 * horizontal_inset),
+                    ..border_area
+                }
+            }
+        };
+        let content = content_area(prompt_area);
         let input_width = wrapped
             .cursor_column
             .min(content.width.saturating_sub(1) as usize) as u16;

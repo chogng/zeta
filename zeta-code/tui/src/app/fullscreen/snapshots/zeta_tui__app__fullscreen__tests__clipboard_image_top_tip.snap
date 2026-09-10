@@ -2,7 +2,8 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: rendered
 ---
-  Home  .                                                                       
+  ≡ .                                                                           
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -16,9 +17,8 @@ expression: rendered
                                                                                 
                                                                                 
                                           image in clipboard · ctrl+v to paste  
-  ╭────────────────────────────────────────────────────────────────────────────╮
-> │                                                                            │
-  ╰────────────────────────────────────────────────────────── Automatic model ─╯
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ >                                                                        │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
                                                                                 
-  ⏸ ask permissions on                                                          
-  Enter send  ·  shift+tab permissions  ·  /home
+  Enter send  ·  shift+tab permissions  ·  /home          ⏸ ask permissions on

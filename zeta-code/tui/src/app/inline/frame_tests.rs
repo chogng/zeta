@@ -12,6 +12,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
 
 pub(super) fn app() -> App {
     let mut app = App::new();
@@ -95,4 +96,46 @@ fn config_opens_and_closes_without_reprinting_history() {
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     insta::assert_snapshot!("config_closed", text(&render(&app, 100, 32)));
+}
+
+#[test]
+fn key_hint_style_applies_to_inline_panels_without_changing_hint_text() {
+    let mut app = app();
+    let choices = crate::config::config_choices(
+        &crate::test_support::empty_config_snapshot(),
+        &zeta_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
+        {
+            let mut settings = TerminalSettings::default();
+            settings.set_screen_mode(ScreenMode::Inline);
+            settings
+        },
+        crate::status::StatusLineSettings::default(),
+    );
+    app.update(ConfigEvent::EditorOpened(choices));
+
+    let contrast = render(&app, 100, 32);
+    let row = contrast.area.height - 1;
+    assert_eq!(contrast[(2, row)].symbol(), "E");
+    assert_eq!(
+        contrast[(2, row)].fg,
+        crate::render::test_context().foreground()
+    );
+    assert!(contrast[(2, row)].modifier.contains(Modifier::BOLD));
+    assert_eq!(
+        contrast[(13, row)].fg,
+        crate::render::test_context().muted()
+    );
+    assert!(!contrast[(13, row)].modifier.contains(Modifier::BOLD));
+
+    let mut settings = TerminalSettings::default();
+    settings.set_screen_mode(ScreenMode::Inline);
+    settings.set_key_hint_style(crate::config::KeyHintStyle::Muted);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    let muted = render(&app, 100, 32);
+    let row = muted.area.height - 1;
+    assert_eq!(muted[(2, row)].symbol(), "E");
+    assert_eq!(muted[(2, row)].fg, crate::render::test_context().muted());
+    assert!(muted[(2, row)].modifier.contains(Modifier::ITALIC));
+    assert_eq!(muted[(13, row)].fg, crate::render::test_context().muted());
+    assert!(muted[(13, row)].modifier.contains(Modifier::ITALIC));
 }

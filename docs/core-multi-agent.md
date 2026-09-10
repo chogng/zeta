@@ -59,7 +59,7 @@ Session
 - cancellation domain；
 - 恢复和 terminal outcome。
 
-产品上一个独立 Agent 任务通常显示为一个 Session，但真正执行它的是该 Session 的根 Thread。另一个 Session 的根 Thread 是独立 Agent，不是当前根 Thread 的 child，也不能通过本文的委托关系假装成 child。
+产品上一个独立 Agent 任务通常显示为一个 Session，但真正执行它的是该 Session 的根 Thread。另一个 Session 的根 Thread 是独立执行分支，可以复用同一个 AgentId；它不是当前根 Thread 的 child，也不能通过本文的委托关系假装成 child。
 
 多 Agent 不是多个执行 task 共享一份 `SessionHistory`。父子和 sibling 不共享 mutable context、
 projection、provider conversation ID 或 Tool state。
@@ -84,16 +84,18 @@ budget、cancellation 和 result delivery，远端连接只承担执行通信。
 标识一个产品任务及其 Thread 拓扑。Session 只串行 membership、lineage、shared defaults 和
 lifecycle，不串行 child Thread 执行。
 
-### 2.2 ThreadId
+### 2.2 AgentId 与 ThreadId
 
-标识一条独立 Agent execution branch。当前阶段一个活跃 Agent 对应一个 Thread，因此可以用
-`ThreadId` 作为 Agent execution identity。Thread 位于树根还是通过委托产生，不改变它使用的 Agent 定义类型。
+`AgentId` 标识长期 Agent 身份，`ThreadId` 标识独立执行分支。一个 Agent 可以同时拥有多个 Thread，也可以参与不同 Session 的任务。各 Thread 独立冻结角色、工具和 Skill 配置，不共享可变上下文、执行状态或取消域。
 
-暂不增加与 Thread 一一对应的 `AgentId`。只有出现下列真实需求时才引入：
+- 新建根或委托运行分配 AgentId；显式指定已有 AgentId 可在另一任务中复用身份。
+- 普通 fork、rewind 和 replacement 保留源 AgentId。
+- replacement 要求源 Thread 已归档，新分支从空历史开始；旧历史、委托和结果留在原 Thread。
+- Agent 与 Thread 绑定、Thread 来源均不可重新分配；替换通过创建新绑定表达。
+- Agent 记录与首次 Thread 创建同事务提交，删除所有任务后仍保留身份。
+- `agent-graph-store` 定义读取契约，`zeta-state` 实现索引；云端认证不进入该模型。
 
-- 一个 Agent 身份跨多个 Thread 延续；
-- Thread 被替换但 Agent identity 必须保持；
-- 产品需要独立查询 Agent，而不能从 Thread/delegation 投影得到。
+身份跨 Session 复用不建立跨 Session 委托、消息、共同预算或取消关系。
 
 ### 2.3 DelegationId
 
@@ -188,8 +190,7 @@ enum ThreadOrigin {
 `ThreadOrigin` 只描述来源和不可变 anchor。具体 context inheritance 放在独立
 `AgentContextSeed` 中，避免把拓扑与 prompt policy 混成一个 enum。
 
-当前实现的 `Fork` 只保存 lineage anchor，并创建空 child Thread；它不是完整的 history fork 或
-Agent spawn contract。文档和 API 在实现 inheritance 前必须保持这一事实。
+普通 `Fork` 保留 AgentId、来源锚点、已提交历史和检查点；委托的 `ForkedPrefix` 仍通过物化种子继承上下文。不可变历史共享与模型缓存验证尚未完成，由后续改动处理。
 
 ## 5. AgentContextSeed
 
@@ -646,9 +647,9 @@ projection，不公开 coordinator 内部状态机。
 
 ## 18. 固定决策
 
-- 一个活跃 Agent 当前绑定一个独立 Thread；
+- 一个 Agent 可绑定多个独立 Thread；
 - Agent 定义不区分主或子；会话入口和委托只是运行关系；
-- ThreadId 暂时足够表达 Agent execution identity；
+- AgentId 表达长期身份，ThreadId 表达执行分支；
 - DelegationId 与 AgentMessageId 是独立稳定身份；
 - fork lineage、Agent delegation 与 context inheritance 分离；
 - 被委托 Agent 不共享调用方或同级 Agent 的 mutable context；

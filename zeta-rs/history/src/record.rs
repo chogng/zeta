@@ -6,8 +6,66 @@ use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 
 /// Schema version written for newly persisted Thread history records.
-/// Version 15 adds root Agent configurations and composed model instructions; older readers must reject them.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 15;
+/// Version 16 records independent Agent identities and immutable Thread origins.
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 16;
+
+/// Resolves the identity at the history-version boundary. Legacy branches each receive one
+/// deterministic identity; current records must carry their explicitly allocated identity.
+pub fn created_thread_agent_id(record: &StoredEvent) -> Result<zeta_protocol::AgentId, String> {
+    if !supports_stored_event_schema_version(record.schema_version) {
+        return Err("unsupported Thread history schema".into());
+    }
+    let ThreadEvent::ThreadCreated {
+        agent_id,
+        thread_id,
+        ..
+    } = &record.event
+    else {
+        return Err("first Thread event must create its Thread".into());
+    };
+    if let Some(agent_id) = agent_id {
+        return Ok(agent_id.clone());
+    }
+    if record.schema_version < 16 {
+        return zeta_protocol::AgentId::new(format!("legacy-agent:{thread_id}"))
+            .map_err(|error| error.to_string());
+    }
+    Err("Thread creation must record its Agent identity".into())
+}
+
+/// Reads exact provenance anchors from inherited-history and delegation facts.
+pub fn inherited_thread_origin(event: &ThreadEvent) -> Option<zeta_protocol::ThreadOrigin> {
+    use zeta_protocol::ThreadOrigin;
+    match event {
+        ThreadEvent::AgentContextSeedCommitted { seed, .. } => Some(ThreadOrigin::AgentSpawn {
+            parent_thread_id: seed.parent_thread_id.clone(),
+            parent_sequence: seed.parent_sequence,
+            delegation_id: seed.delegation_id.clone(),
+        }),
+        ThreadEvent::HistoryImported {
+            source_thread_id,
+            before_turn_id,
+            ..
+        } => Some(ThreadOrigin::Rewind {
+            parent_thread_id: source_thread_id.clone(),
+            before_turn_id: before_turn_id.clone(),
+        }),
+        ThreadEvent::ForkHistoryImported {
+            source_thread_id,
+            source_sequence,
+            ..
+        }
+        | ThreadEvent::ForkHistoryImportCompleted {
+            source_thread_id,
+            source_sequence,
+            ..
+        } => Some(ThreadOrigin::Fork {
+            parent_thread_id: source_thread_id.clone(),
+            parent_sequence: *source_sequence,
+        }),
+        _ => None,
+    }
+}
 
 /// Oldest Thread history record schema accepted during recovery.
 pub const MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION: u32 = 12;

@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  Home  .                                         
+  ≡ .                                             
                                                   
   ╭────────────────────────────────────────────╮  
   │                                            │  
@@ -10,11 +10,11 @@ expression: render(&app)
   │  Resume session                            │  
   │  Manage sessions                           │  
   │  Settings                                  │  
+  │  Help and shortcuts                        │  
   ╰────────────────────────────────────────────╯  
   Type a new task · Tab actions · Esc return      
-  ╭──────────────────────────────────────────────╮
-> │new task [Image #1]                           │
-  ╰──────────────────────────── Automatic model ─╯
+  ╭────────────────────────────────────────────╮  
+  │ > new task [Image #1]                      │  
+  ╰────────────────────────── Automatic model ─╯  
                                                   
-  ⏸ ask permissions on                            
-  Enter send  ·  Tab actions  ·  / commands
+  Enter send                ⏸ ask permissions on

@@ -45,6 +45,7 @@ macro_rules! identifier {
     };
 }
 
+mod agent_id;
 mod agent_join_id;
 mod agent_message_id;
 mod command_id;
@@ -59,6 +60,7 @@ mod thread_id;
 mod tool_call_id;
 mod turn_id;
 
+pub use agent_id::AgentId;
 pub use agent_join_id::AgentJoinId;
 pub use agent_message_id::AgentMessageId;
 pub use command_id::CommandId;

@@ -2,10 +2,6 @@ use super::RuntimeEvent;
 use super::RuntimeQueue;
 use super::next_process_resource_request;
 use crate::client::ClientEvent;
-use zeta_memory_diagnostics::ProcessResourceDemand;
-use zeta_memory_diagnostics::ProcessResourceRequest;
-use zeta_memory_diagnostics::ProcessResourceUsage;
-use zeta_memory_diagnostics::ProcessResourcesReading;
 use crate::terminal::TerminalEvent;
 use crossterm::event::Event;
 use crossterm::event::KeyModifiers;
@@ -16,6 +12,10 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::Instant;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+use zeta_memory_diagnostics::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceRequest;
+use zeta_memory_diagnostics::ProcessResourceUsage;
+use zeta_memory_diagnostics::ProcessResourcesReading;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
@@ -123,9 +123,7 @@ fn stale_process_resource_reading_cannot_replace_a_newer_request() {
 
 #[test]
 fn cpu_observation_cycle_restarts_only_after_cpu_was_not_requested() {
-    let cpu = ProcessResourceDemand::Summary(
-        zeta_memory_diagnostics::ProcessResourceMetrics::Cpu,
-    );
+    let cpu = ProcessResourceDemand::Summary(zeta_memory_diagnostics::ProcessResourceMetrics::Cpu);
     let first = next_process_resource_request(ProcessResourceRequest::default(), cpu);
     let detailed = next_process_resource_request(first, ProcessResourceDemand::Detailed);
     let disabled = next_process_resource_request(detailed, ProcessResourceDemand::Disabled);

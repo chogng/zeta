@@ -11,6 +11,7 @@ name = "zeta_state"
 path = "src/lib.rs"
 
 [dependencies]
+agent-graph-store = { workspace = true }
 message-history = { workspace = true }
 github = { workspace = true }
 fs2 = { workspace = true }
@@ -27,6 +28,7 @@ zeta-utils-path = { workspace = true }
 zeta-file-access = { workspace = true }
 
 [dev-dependencies]
+zeta-core = { workspace = true }
 tempfile = { workspace = true }
 zeta-environment = { workspace = true }
 

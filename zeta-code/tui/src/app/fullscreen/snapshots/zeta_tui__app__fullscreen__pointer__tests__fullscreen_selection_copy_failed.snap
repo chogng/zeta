@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/pointer_tests.rs
 expression: text
 ---
-  Home  .                                                   
+  ≡ .                                                       
                                                             
 ● clipboard unavailable                                     
                                                             
@@ -12,9 +12,9 @@ expression: text
                                                             
                                                             
                                                             
-  ╭────────────────────────────────────────────────────────╮
-> │copy me                                                 │
-  ╰────────────────────────────────────── Automatic model ─╯
                                                             
-  ⏸ ask permissions on                                      
-  Enter send  ·  shift+tab permissions  ·  /home
+  ╭──────────────────────────────────────────────────────╮  
+  │ > copy me                                            │  
+  ╰──────────────────────────────────── Automatic model ─╯  
+                                                            
+  Enter send                          ⏸ ask permissions on

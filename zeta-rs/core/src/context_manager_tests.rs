@@ -65,6 +65,8 @@ fn manager_rejects_a_snapshot_older_than_its_observed_sequence() {
 
 fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
     ThreadSnapshot {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
         created_at_unix_ms: 0,

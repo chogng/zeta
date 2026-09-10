@@ -2,19 +2,19 @@
 source: zeta-code/tui/src/app/mode_tests.rs
 expression: render(&app)
 ---
-  Home  .                                         
+  ≡ .                                             
+                                                  
+● message 10                                      
                                                   
 ● message 11                                      
                                                   
 ● message 12                                      
                                                   
-● message 13                                      
              Jump to bottom (click) ↓             
   Queue 1: queued message · next                  
                                                   
-  ╭──────────────────────────────────────────────╮
-> │shared draft                                  │
-  ╰──────────────────────────── Automatic model ─╯
+  ╭────────────────────────────────────────────╮  
+  │ > shared draft                             │  
+  ╰────────────────────────── Automatic model ─╯  
                                                   
-  ⏸ ask permissions on                            
-  Enter send  ·  shift+tab permissions  ·  /home
+  Enter send                ⏸ ask permissions on

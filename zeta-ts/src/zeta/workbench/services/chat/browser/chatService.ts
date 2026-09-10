@@ -270,6 +270,8 @@ function sameKeys(left: ReadonlyMap<string, unknown>, right: ReadonlyMap<string,
 
 function toThread(thread: ThreadDto): Thread {
 	return {
+		agentId: thread.agentId,
+		origin: { ...thread.origin },
 		sessionId: thread.sessionId,
 		threadId: thread.threadId,
 		title: thread.title,

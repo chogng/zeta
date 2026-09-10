@@ -56,6 +56,12 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
 
 fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> ThreadCatalogRecord {
     ThreadCatalogRecord {
+        binding: agent_graph_store::ThreadBinding {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+            origin: Default::default(),
+        },
         session_id: session_id.clone(),
         thread: SessionThread {
             thread_id: thread_id.clone(),
@@ -95,6 +101,8 @@ fn append_created_thread(
                 recorded_at: Timestamp(u128::from(ordinal)),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
+                    agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+                    origin: Default::default(),
                     agent: None,
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
@@ -198,6 +206,8 @@ fn sqlite_thread_store_recovers_typed_events() {
         recorded_at: Timestamp(2),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+            origin: Default::default(),
             agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
@@ -277,6 +287,8 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
                 recorded_at: Timestamp(2),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
+                    agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+                    origin: Default::default(),
                     agent: None,
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
@@ -315,6 +327,8 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+            origin: Default::default(),
             agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
@@ -364,6 +378,8 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+            origin: Default::default(),
             agent: None,
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),

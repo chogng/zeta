@@ -35,6 +35,22 @@ impl SqliteThreadStore {
 }
 
 impl ThreadStore for SqliteThreadStore {
+    fn list_session_thread_ids(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT thread_id FROM thread_catalog WHERE session_id = ?1 ORDER BY thread_id",
+            )
+            .map_err(storage_error)?;
+        statement
+            .query_map([session_id.as_str()], |row| row.get::<_, String>(0))
+            .map_err(storage_error)?
+            .map(|row| ThreadId::new(row.map_err(storage_error)?).map_err(storage_error))
+            .collect()
+    }
     fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError> {
         let connection = self.connection()?;
         let mut statement = connection
@@ -119,6 +135,7 @@ impl ThreadStore for SqliteThreadStore {
             });
         }
         write_catalog(&transaction, record)?;
+        super::graph::write_binding(&transaction, record)?;
         transaction.commit().map_err(storage_error)
     }
 
@@ -144,6 +161,12 @@ impl ThreadStore for SqliteThreadStore {
                 .collect::<Result<Vec<_>, _>>()?
         };
         for thread_id in &thread_ids {
+            transaction
+                .execute(
+                    "DELETE FROM agent_threads WHERE thread_id = ?1",
+                    [thread_id.as_str()],
+                )
+                .map_err(storage_error)?;
             transaction
                 .execute(
                     "DELETE FROM turn_change_sets WHERE thread_id = ?1",
@@ -347,6 +370,7 @@ impl ThreadStore for SqliteThreadStore {
             });
         }
         write_catalog(&transaction, &batch.catalog)?;
+        super::graph::write_binding(&transaction, &batch.catalog)?;
         transaction.commit().map_err(storage_error)?;
         Ok(result)
     }
@@ -378,7 +402,9 @@ fn write_catalog(
 }
 
 impl SqliteThreadStore {
-    fn connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>, ThreadStoreError> {
+    pub(super) fn connection(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Connection>, ThreadStoreError> {
         self.connection
             .lock()
             .map_err(|_| ThreadStoreError::Storage("Thread SQLite lock poisoned".into()))

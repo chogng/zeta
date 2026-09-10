@@ -62,6 +62,31 @@ fn top_line(segments: Vec<StatusLineSegment>, context: RenderContext<'_>) -> Lin
     )
 }
 
+pub(crate) fn header_line(
+    status_line: &StatusLineModel,
+    width: usize,
+    runtime: StatusLineRuntime,
+    context: RenderContext<'_>,
+) -> Line<'static> {
+    top_line(
+        status_line.header_segments_for_width(width, runtime),
+        context,
+    )
+}
+
+pub(crate) fn policy_line(
+    status_line: &StatusLineModel,
+    width: usize,
+    approval: TurnApprovalModes,
+    context: RenderContext<'_>,
+) -> Line<'static> {
+    styled_policy_line(
+        status_line.policy_text_for_width(width, approval),
+        approval,
+        context,
+    )
+}
+
 fn styled_policy_line(
     policy: String,
     approval: TurnApprovalModes,

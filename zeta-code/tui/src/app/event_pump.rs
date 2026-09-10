@@ -1,11 +1,6 @@
 use crate::client::ClientEvent;
 use crate::client::ClientEventSource;
 use crate::host::TerminationSource;
-use zeta_memory_diagnostics::ProcessResourceDemand;
-use zeta_memory_diagnostics::ProcessResourceRequest;
-use zeta_memory_diagnostics::ProcessResourceTargets;
-use zeta_memory_diagnostics::ProcessResourcesReading;
-use zeta_memory_diagnostics::ProcessResourcesSource;
 use crate::terminal::TerminalEvent;
 use crate::terminal::TerminalEventSource;
 use crossterm::event::Event;
@@ -19,6 +14,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use zeta_app_server_client::AppServerEvents;
+use zeta_memory_diagnostics::ProcessResourceDemand;
+use zeta_memory_diagnostics::ProcessResourceRequest;
+use zeta_memory_diagnostics::ProcessResourceTargets;
+use zeta_memory_diagnostics::ProcessResourcesReading;
+use zeta_memory_diagnostics::ProcessResourcesSource;
 
 const EVENT_QUEUE_CAPACITY: usize = 1_024;
 const TERMINAL_BURST_LIMIT: usize = 8;

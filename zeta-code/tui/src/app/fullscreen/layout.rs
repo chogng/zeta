@@ -9,7 +9,7 @@ use crate::thread::plan;
 use crate::thread::queue;
 use ratatui::layout::Rect;
 
-const BOTTOM_ROWS: u16 = 3;
+const BOTTOM_ROWS: u16 = 2;
 
 pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
     let header_rows = terminal_area.height.saturating_sub(8).min(2);

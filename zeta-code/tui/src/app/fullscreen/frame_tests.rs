@@ -123,7 +123,7 @@ fn input_history_search_and_cancel_preserve_the_composer() {
         buffer[(content.x + 2, area.y)].fg,
         app.render_context().foreground()
     );
-    assert_eq!(buffer[(area.x, area.y + 1)].symbol(), ">");
+    assert_eq!(buffer[(area.x + 4, area.y + 1)].symbol(), ">");
     assert_snapshot!("input_history_search", render(&app, 100, 20));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
@@ -160,14 +160,13 @@ fn pull_request_command_submits_an_ordinary_agent_task() {
 #[test]
 fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() {
     let rendered = render(&App::new(), 80, 20);
-    assert!(rendered.lines().next().unwrap().contains("Home"));
+    assert!(rendered.lines().next().unwrap().contains("≡"));
     assert!(!rendered.contains("Zeta Code v"));
     assert!(rendered.contains("Automatic model"));
     assert!(
         rendered
             .lines()
-            .rev()
-            .nth(1)
+            .last()
             .unwrap()
             .contains("ask permissions on")
     );
@@ -360,7 +359,17 @@ fn modal_keeps_wrapped_tabs_between_title_and_body() {
     let body = super::modal::body_area(&panel, modal.content);
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
     terminal
-        .draw(|frame| super::modal::draw_panel(frame, &panel, modal, None, None, test_context()))
+        .draw(|frame| {
+            super::modal::draw_panel(
+                frame,
+                &panel,
+                modal,
+                None,
+                None,
+                crate::config::KeyHintStyle::Contrast,
+                test_context(),
+            )
+        })
         .unwrap();
     let buffer = terminal.backend().buffer();
     assert_eq!(body.y, modal.content.y + 3);
@@ -595,7 +604,7 @@ fn empty_session_input_offers_manager_navigation() {
 
     assert!(rows[top_tip_row].contains("← for agents"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
+    assert!(rows[19].trim_end().ends_with("⏸ ask permissions on"));
 
     assert!(!app.handle_tick(Instant::now() + Duration::from_secs(10)));
     let rendered = render(&app, terminal_area.width, terminal_area.height);
@@ -606,11 +615,11 @@ fn empty_session_input_offers_manager_navigation() {
     app.insert_text("draft");
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
-    let status_line = rendered.lines().rev().nth(1).unwrap();
+    let status_line = rendered.lines().last().unwrap();
 
     assert!(!rows[top_tip_row].contains("← for agents"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+    assert!(status_line.trim_end().ends_with("⏸ ask permissions on"));
     assert!(!status_line.contains("← for agents"));
 }
 
@@ -630,7 +639,7 @@ fn narrow_session_keeps_manager_tip_above_input_and_status_below() {
 
     assert!(rows[top_tip_row].contains("← for agents"));
     assert!(!rows[top_tip_row].contains("shift+tab"));
-    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(rows[19].trim_end(), "  Enter send    ⏸ ask…");
 }
 
 #[test]
@@ -692,7 +701,7 @@ fn manager_uses_the_page_body_for_grouped_three_column_status_rows() {
         .unwrap();
     assert!(!rendered.lines().any(|line| line.contains("done")));
 
-    assert!(rendered.lines().next().unwrap().contains("Home"));
+    assert!(rendered.lines().next().unwrap().contains("≡"));
     assert!(rendered.contains("Needs input"));
     assert!(rendered.contains("Working"));
     assert!(
@@ -729,42 +738,51 @@ fn pending_steer_is_shown_once_in_chat_history() {
 }
 
 #[test]
-fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
+fn hintbar_keeps_the_permission_mode_beside_input_shortcuts() {
     let mut app = App::new();
-    let ask_permissions = render(&app, 80, 20)
-        .lines()
-        .rev()
-        .nth(1)
-        .unwrap()
-        .trim_end()
-        .to_owned();
+    for (mode, label) in [
+        (
+            zeta_protocol::ApprovalMode::AskPermissions,
+            "⏸ ask permissions on",
+        ),
+        (
+            zeta_protocol::ApprovalMode::AutoReview,
+            "⏩  auto review on",
+        ),
+        (
+            zeta_protocol::ApprovalMode::BypassPermissions,
+            "▶ bypass permissions on",
+        ),
+    ] {
+        app.set_next_approval_mode(mode);
+        let screen = render(&app, 100, 20);
+        let hints = screen.lines().last().unwrap().trim_end();
+        assert!(hints.starts_with("  Enter send"));
+        assert!(hints.ends_with(label), "{hints}");
+        assert!(screen.lines().nth(18).unwrap().trim().is_empty());
+    }
+}
 
-    app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
-    let auto_review = render(&app, 80, 20)
-        .lines()
-        .rev()
-        .nth(1)
-        .unwrap()
-        .trim_end()
-        .to_owned();
+#[test]
+fn key_hint_style_applies_to_fullscreen_without_changing_hint_text() {
+    let mut app = App::new();
+    let contrast = render_buffer(&app, 100, 20);
+    let row = 19;
+    assert_eq!(contrast[(2, row)].symbol(), "E");
+    assert_eq!(contrast[(2, row)].fg, test_context().foreground());
+    assert!(contrast[(2, row)].modifier.contains(Modifier::BOLD));
+    assert_eq!(contrast[(7, row)].fg, test_context().muted());
+    assert!(!contrast[(7, row)].modifier.contains(Modifier::BOLD));
 
-    app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
-    let bypass_permissions = render(&app, 80, 20)
-        .lines()
-        .rev()
-        .nth(1)
-        .unwrap()
-        .trim_end()
-        .to_owned();
-
-    assert_eq!(
-        [ask_permissions, auto_review, bypass_permissions],
-        [
-            "  ⏸ ask permissions on",
-            "  ⏩  auto review on",
-            "  ▶ bypass permissions on",
-        ]
-    );
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_key_hint_style(crate::config::KeyHintStyle::Muted);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    let muted = render_buffer(&app, 100, 20);
+    assert_eq!(muted[(2, row)].symbol(), "E");
+    assert_eq!(muted[(2, row)].fg, test_context().muted());
+    assert!(muted[(2, row)].modifier.contains(Modifier::ITALIC));
+    assert_eq!(muted[(7, row)].fg, test_context().muted());
+    assert!(muted[(7, row)].modifier.contains(Modifier::ITALIC));
 }
 
 #[test]
@@ -823,42 +841,50 @@ fn queue_focus_and_pointer_target_share_the_visible_row_identity() {
 }
 
 #[test]
-fn status_line_uses_a_distinct_color_for_each_approval_mode_symbol() {
+fn hintbar_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
-    let ask_permissions = render_buffer(&app, 80, 20);
-    assert_eq!(ask_permissions[(2, 18)].fg, test_context().warning());
-    assert_eq!(
-        ask_permissions[(2 + "⏸".width() as u16, 18)].fg,
-        test_context().chat_input_chrome()
-    );
-
-    app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
-    let auto_review = render_buffer(&app, 80, 20);
-    assert_eq!(auto_review[(2, 18)].fg, test_context().accent());
-    assert_eq!(
-        auto_review[(2 + "⏩".width() as u16, 18)].fg,
-        test_context().chat_input_chrome()
-    );
-
-    app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
-    let bypass_permissions = render_buffer(&app, 80, 20);
-    assert_eq!(bypass_permissions[(2, 18)].fg, test_context().danger());
-    assert_eq!(
-        bypass_permissions[(2 + "▶".width() as u16, 18)].fg,
-        test_context().chat_input_chrome()
-    );
+    for (mode, icon, color) in [
+        (
+            zeta_protocol::ApprovalMode::AskPermissions,
+            "⏸",
+            test_context().warning(),
+        ),
+        (
+            zeta_protocol::ApprovalMode::AutoReview,
+            "⏩",
+            test_context().accent(),
+        ),
+        (
+            zeta_protocol::ApprovalMode::BypassPermissions,
+            "▶",
+            test_context().danger(),
+        ),
+    ] {
+        app.set_next_approval_mode(mode);
+        let buffer = render_buffer(&app, 100, 20);
+        let column = (0..100)
+            .find(|x| buffer[(*x, 19)].symbol() == icon)
+            .unwrap();
+        assert_eq!(buffer[(column, 19)].fg, color);
+        assert_eq!(
+            buffer[(column + icon.width() as u16, 19)].fg,
+            test_context().chat_input_chrome()
+        );
+    }
 }
 
 #[test]
-fn status_line_colors_current_and_next_modes_independently() {
+fn hintbar_colors_current_and_next_modes_independently() {
     let mut app = App::new();
     app.set_current_approval_mode(Some(zeta_protocol::ApprovalMode::AskPermissions));
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
-
-    let buffer = render_buffer(&app, 80, 20);
-    let next_icon_column = 2 + "⏸ current: ask permissions on · ".width() as u16;
-    assert_eq!(buffer[(2, 18)].fg, test_context().warning());
-    assert_eq!(buffer[(next_icon_column, 18)].fg, test_context().accent());
+    let buffer = render_buffer(&app, 120, 20);
+    let current = (0..120).find(|x| buffer[(*x, 19)].symbol() == "⏸").unwrap();
+    let next = (0..120)
+        .find(|x| buffer[(*x, 19)].symbol() == "⏩")
+        .unwrap();
+    assert_eq!(buffer[(current, 19)].fg, test_context().warning());
+    assert_eq!(buffer[(next, 19)].fg, test_context().accent());
 }
 
 #[test]
@@ -891,7 +917,7 @@ fn workspace_header_stays_fixed_while_scrolling_conversation_history() {
 }
 
 #[test]
-fn status_line_renders_the_configured_model_without_provider() {
+fn composer_shows_the_configured_model_once_at_wide_and_narrow_widths() {
     let mut app = App::new();
     app.update(ModelEvent::SummaryReceived(ModelSummary::from_catalog(
         Some(ModelRefDto {
@@ -900,51 +926,36 @@ fn status_line_renders_the_configured_model_without_provider() {
         }),
         None,
     )));
-
-    let buffer = render_buffer(&app, 80, 20);
-    let context_line = (0..80)
-        .map(|x| buffer[(x, 17)].symbol())
-        .collect::<String>();
-    let policy_line = (0..80)
-        .map(|x| buffer[(x, 18)].symbol())
-        .collect::<String>();
-
-    assert_eq!(context_line.trim_end(), "  claude-sonnet");
-    assert_eq!(policy_line.trim_end(), "  ⏸ ask permissions on");
-    assert_eq!(buffer[(2, 18)].fg, test_context().warning());
+    for width in [80, 24] {
+        let screen = render(&app, width, 20);
+        let input = layout(&app, Rect::new(0, 0, width, 20)).input;
+        assert_eq!(screen.matches("claude-sonnet").count(), 1);
+        assert!(
+            screen
+                .lines()
+                .nth(usize::from(input.bottom() - 1))
+                .unwrap()
+                .contains(" claude-sonnet ")
+        );
+        assert!(!screen.contains("anthropic"));
+        assert!(screen.lines().nth(18).unwrap().trim().is_empty());
+    }
 }
 
 #[test]
-fn narrow_status_line_keeps_the_first_configured_item() {
-    let mut app = App::new();
-    app.update(ModelEvent::SummaryReceived(ModelSummary::from_catalog(
-        Some(ModelRefDto {
-            provider: "anthropic".into(),
-            model: "claude-sonnet".into(),
-        }),
-        None,
-    )));
-
-    let rendered = render(&app, 24, 20);
-    let rows = rendered.lines().collect::<Vec<_>>();
-
-    assert_eq!(rows[17].trim_end(), "  claude-sonnet");
-    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
-}
-
-#[test]
-fn boxed_input_keeps_its_border_outside_the_status_marker_column() {
+fn boxed_input_keeps_its_width_and_renders_the_prompt_inside() {
     let app = App::new();
     let input = layout(&app, Rect::new(0, 0, 80, 20)).input;
     let buffer = render_buffer(&app, 80, 20);
     assert_eq!(buffer[(0, input.y)].symbol(), " ");
     assert_eq!(buffer[(2, input.y)].symbol(), "╭");
-    assert_eq!(buffer[(79, input.y)].symbol(), "╮");
+    assert_eq!(buffer[(77, input.y)].symbol(), "╮");
     assert_eq!(buffer[(2, input.y)].fg, test_context().chat_input_chrome());
-    assert_eq!(buffer[(0, input.y + 1)].symbol(), ">");
-    assert_eq!(buffer[(0, input.y + 1)].fg, test_context().foreground());
+    assert_eq!(buffer[(0, input.y + 1)].symbol(), " ");
     assert_eq!(buffer[(2, input.y + 1)].symbol(), "│");
-    assert_eq!(buffer[(79, input.y + 1)].symbol(), "│");
+    assert_eq!(buffer[(4, input.y + 1)].symbol(), ">");
+    assert_eq!(buffer[(4, input.y + 1)].fg, test_context().foreground());
+    assert_eq!(buffer[(77, input.y + 1)].symbol(), "│");
 }
 
 #[test]
@@ -983,22 +994,22 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     ));
 
     let buffer = render_buffer(&app, 80, 20);
-    let bottom_row = layout(&app, terminal_area).session.bottom.bottom() - 2;
+    let bottom_row = layout(&app, terminal_area).session.bottom.bottom() - 1;
     let hint_column = 78 - "shift+tab to cycle policy".width() as u16;
     let hint = &buffer[(hint_column, top_tip_row)];
 
     assert_eq!(hint.symbol(), "s");
     assert_eq!(hint.fg, test_context().muted());
     assert!(hint.modifier.contains(Modifier::ITALIC));
-    assert_eq!(
+    assert!(
         (0..80)
             .map(|x| buffer[(x, bottom_row)].symbol())
             .collect::<String>()
-            .trim_end(),
-        "  ⏸ ask permissions on"
+            .trim_end()
+            .ends_with("⏸ ask permissions on")
     );
     assert_eq!(buffer[(2, composer.y)].symbol(), "╭");
-    assert_eq!(buffer[(79, composer.y)].symbol(), "╮");
+    assert_eq!(buffer[(77, composer.y)].symbol(), "╮");
 
     let first_tip_expired = Instant::now() + Duration::from_secs(6);
     assert!(app.handle_tick(first_tip_expired));
@@ -1108,20 +1119,20 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[usize::from(input.y + 1)].contains("first"));
     assert!(rows[usize::from(input.y + 2)].contains("second"));
     assert!(rows[usize::from(input.y + 3)].contains("third"));
-    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
+    assert!(rows[19].trim_end().ends_with("⏸ ask permissions on"));
 }
 
 #[test]
-fn turn_activity_keeps_permission_status_free_of_submission_hints() {
+fn turn_activity_does_not_replace_the_permission_mode_in_hintbar() {
     let mut app = App::new();
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
 
     let rendered = render(&app, 80, 20);
-    let status_line = rendered.lines().rev().nth(1).unwrap();
+    let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
-    assert!(!status_line.contains("enter queue"));
-    assert!(!status_line.contains("ctrl-c interrupt"));
+    assert!(status_line.trim_end().ends_with("⏸ ask permissions on"));
+    assert!(status_line.starts_with("  Enter send"));
+    assert!(!status_line.contains("Working"));
 }
 
 #[test]
@@ -1129,13 +1140,13 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
     let mut app = App::new();
     app.insert_text("abcdefghij");
 
-    let terminal_area = Rect::new(0, 0, 8, 20);
+    let terminal_area = Rect::new(0, 0, 12, 20);
     let input = layout(&app, terminal_area).input;
     let rendered = render(&app, terminal_area.width, terminal_area.height);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert!(rows[usize::from(input.y + 1)].contains("abcd"));
-    assert!(rows[usize::from(input.y + 2)].contains("efgh"));
+    assert!(rows[usize::from(input.y + 1)].contains("> ab"));
+    assert!(rows[usize::from(input.y + 2)].contains("  cd"));
 }
 
 #[test]
@@ -1244,7 +1255,7 @@ fn completed_error_remains_visible_in_the_scrollable_transcript() {
     assert!(rendered.contains("The configured model is unavailable."));
     assert!(rendered.contains("ask permissions on"));
     assert!(!rows.iter().any(|line| line.trim() == "error"));
-    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
+    assert!(rows[19].trim_end().ends_with("⏸ ask permissions on"));
     assert!(!rendered.contains("ready to retry"));
     assert!(!rendered.contains("esc esc rewind"));
     assert!(!rendered.contains("StableTurnError"));
@@ -1334,7 +1345,7 @@ fn command_completion_renders_an_adjacent_result_line() {
 }
 
 #[test]
-fn transcript_and_chat_input_content_start_in_the_same_column() {
+fn transcript_content_aligns_with_the_composer_border_and_input_has_padding() {
     let mut app = App::new();
     app.update(ThreadEvent::CommandCompleted {
         command: "/theme zeta-code-light".into(),
@@ -1355,7 +1366,7 @@ fn transcript_and_chat_input_content_start_in_the_same_column() {
 
     assert_eq!(buffer[(2, transcript_row)].symbol(), "/");
     assert_eq!(buffer[(2, input.y + 1)].symbol(), "│");
-    assert_eq!(buffer[(3, input.y + 1)].symbol(), "d");
+    assert_eq!(buffer[(6, input.y + 1)].symbol(), "d");
 }
 
 #[test]
@@ -1609,7 +1620,7 @@ fn escape_dismisses_the_slash_popup_without_clearing_input() {
 }
 
 #[test]
-fn mention_popup_aligns_markers_with_the_query_and_highlights_fuzzy_matches() {
+fn mention_popup_keeps_its_layout_and_highlights_fuzzy_matches() {
     let dir = std::env::temp_dir().join(format!(
         "zeta-tui-render-mention-{}-{}",
         std::process::id(),
@@ -1646,7 +1657,7 @@ fn mention_popup_aligns_markers_with_the_query_and_highlights_fuzzy_matches() {
         }
     }
     assert_eq!(
-        buffer[(3, layout(&app, terminal_area).input.y + 1)].symbol(),
+        buffer[(6, layout(&app, terminal_area).input.y + 1)].symbol(),
         "@"
     );
     let second = &popup.matches[1];
@@ -1770,6 +1781,9 @@ fn config_general_tab_uses_localized_label() {
             StatusLineSettings::default(),
         ),
     ));
+    for _ in 0..6 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
     assert_snapshot!("config_general_tab", render(&app, 100, 21));
 }
 

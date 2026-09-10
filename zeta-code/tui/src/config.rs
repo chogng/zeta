@@ -20,6 +20,7 @@ pub(crate) use editor::config_choices;
 pub(crate) use request::execute;
 #[cfg(test)]
 pub(crate) use request::set_settings;
+pub(crate) use settings::KeyHintStyle;
 pub(crate) use settings::TerminalSettings;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

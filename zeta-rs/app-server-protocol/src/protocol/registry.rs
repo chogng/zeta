@@ -14,6 +14,9 @@ use crate::protocol::account::AccountLogoutStatusDto;
 use crate::protocol::account::AccountReadResult;
 use crate::protocol::account::AccountStatusDto;
 use crate::protocol::account::AccountUpdated;
+use crate::protocol::agent::AgentReadParams;
+use crate::protocol::agent::AgentReadResult;
+use crate::protocol::agent::AgentThread;
 use crate::protocol::attachments::AttachmentImportRemoteParams;
 use crate::protocol::attachments::AttachmentMaterializeResult;
 use crate::protocol::attachments::AttachmentUploadCancelParams;
@@ -705,6 +708,7 @@ use zeta_protocol::AgentContextMode;
 use zeta_protocol::AgentContextSeed;
 use zeta_protocol::AgentContextSource;
 use zeta_protocol::AgentDefinitionSelectionReason;
+use zeta_protocol::AgentId;
 use zeta_protocol::AgentInteractionKind;
 use zeta_protocol::AgentJoin;
 use zeta_protocol::AgentJoinId;
@@ -1295,6 +1299,11 @@ client_methods! {
         params: SessionCreateParams,
         response: SessionResult,
         serialization: GlobalExclusive,
+    },
+    AgentRead => "agent/read" {
+        params: AgentReadParams,
+        response: AgentReadResult,
+        serialization: GlobalSharedRead,
     },
     SessionRead => "session/read" {
         params: SessionReadParams,
@@ -2998,6 +3007,10 @@ typescript_bindings! {
     ApprovalMode,
     SessionCreateParams,
     SessionReadParams,
+    AgentId,
+    AgentReadParams,
+    AgentReadResult,
+    AgentThread,
     SessionSubscribeParams,
     SessionUnsubscribeParams,
     SessionChanged,

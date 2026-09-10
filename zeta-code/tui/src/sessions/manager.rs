@@ -208,27 +208,27 @@ impl SessionManagerState {
             .collect()
     }
 
-    pub(crate) fn selection_hint(&self) -> &'static str {
+    pub(crate) fn selection_hint(&self) -> &'static crate::widgets::key_hint::KeyHints {
         if self.selected_group().is_some() {
             if self.selected_group_expanded() {
-                bindings::COLLAPSE_HINTS.as_str()
+                &bindings::COLLAPSE_HINTS
             } else {
-                bindings::EXPAND_HINTS.as_str()
+                &bindings::EXPAND_HINTS
             }
         } else if self.selected_archived {
-            bindings::ARCHIVED_HINTS.as_str()
+            &bindings::ARCHIVED_HINTS
         } else if self.selected.is_some() {
-            bindings::SESSION_HINTS.as_str()
+            &bindings::SESSION_HINTS
         } else {
-            bindings::INPUT_HINTS.as_str()
+            &bindings::INPUT_HINTS
         }
     }
 
-    pub(crate) fn status_hint(&self) -> &'static str {
+    pub(crate) fn status_hint(&self) -> &'static crate::widgets::key_hint::KeyHints {
         if self.focused {
             self.selection_hint()
         } else {
-            bindings::RETURN_HINTS.as_str()
+            &bindings::RETURN_HINTS
         }
     }
 

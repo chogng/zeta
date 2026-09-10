@@ -21,6 +21,8 @@ fn idle_lane_evicts_projection_and_a_later_load_gets_a_new_incarnation() {
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+            origin: Default::default(),
             agent: None,
             session_id: SessionId::new("session").unwrap(),
             thread_id: thread_id.clone(),
@@ -155,6 +157,8 @@ fn install(loaded_threads: &LoadedThreads, snapshot: ThreadSnapshot) {
 
 fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
+        agent_id: zeta_protocol::AgentId::new("agent-test").unwrap(),
+        origin: Default::default(),
         session_id: SessionId::new("session").unwrap(),
         thread_id: thread_id.clone(),
         created_at_unix_ms: 0,

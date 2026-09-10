@@ -60,7 +60,7 @@ impl ThemePicker {
             .push(ListSelection::new(spec.model, spec.actions));
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
         self.pages
             .last()
             .expect("a theme picker always has a selection page")

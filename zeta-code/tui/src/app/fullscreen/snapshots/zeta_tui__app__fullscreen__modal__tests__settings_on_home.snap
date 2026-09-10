@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/modal_tests.rs
 expression: frame_text(&app)
 ---
-  Home  .                                                                                           
+  ≡ .                                                                                               
                                                                                                     
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │         ┌── Config ───────────────────────────────────────────────────────────[×]─┐          │  
@@ -18,6 +18,7 @@ expression: frame_text(&app)
   │         │  Show Git changes as diff    Show added and deleted lines    [   ]      │          │  
   ╰─────────│  Language                    Change the interface languag    English    │──────────╯  
             │  Status bar style            Text and numbers, clean and     Simple     │             
+            │  Key hint style              Emphasize keys over their de    Contrast   │             
             │  Screen mode                 Use a full screen or keep te    fullscreen │             
             │                                                                         │             
             │                                                                         │             
@@ -26,6 +27,6 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
   Type a new│                                                                         │             
-  ╭─────────│                                                                         │────────────╮
-> │preserved│  Enter/Space to change · Tab/Shift+Tab to switch · Esc to close         │            │
-  ╰─────────└─────────────────────────────────────────────────────────────────────────┘atic model ─╯
+  ╭─────────│  Enter/Space to change · Tab/Shift+Tab to switch · Esc to close         │──────────╮  
+  │ > preser└─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

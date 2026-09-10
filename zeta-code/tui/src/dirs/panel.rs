@@ -42,16 +42,16 @@ impl DirPanel {
         self.selection.replace(choices.model, choices.actions);
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
+    pub(crate) fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
         if self.pending.is_some() {
-            return bindings::CLOSE_HINTS.as_str();
+            return &bindings::CLOSE_HINTS;
         }
         if self.input_active() {
-            bindings::DIR_INPUT_HINTS.as_str()
+            &bindings::DIR_INPUT_HINTS
         } else if self.state().tabs_focused() {
             self.selection.key_hints()
         } else {
-            bindings::DIR_HINTS.as_str()
+            &bindings::DIR_HINTS
         }
     }
 

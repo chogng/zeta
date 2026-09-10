@@ -77,6 +77,8 @@ fn thread_update_preserves_typed_scope_and_sequence() {
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {
+                agent_id: Some(zeta_protocol::AgentId::new("agent-test").unwrap()),
+                origin: Default::default(),
                 agent: None,
                 session_id,
                 thread_id,

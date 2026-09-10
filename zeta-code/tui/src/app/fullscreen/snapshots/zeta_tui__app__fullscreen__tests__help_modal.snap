@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: rendered
 ---
-  Home  .                                                                       
+  ≡ .                                                                           
                                                                                 
 ● Conver┌── Help ──────────────────────────────────────────────────[×]─┐        
         │                                                              │        
@@ -20,6 +20,7 @@ expression: rendered
         │                                                              │        
         │                                                              │        
         │                                                              │        
-  ╭─────│                                                              │───────╮
-> │draft│  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close    │       │
-  ╰─────└──────────────────────────────────────────────────────────────┘model ─╯
+        │                                                              │        
+  ╭─────│  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close    │─────╮  
+  │ > dr└──────────────────────────────────────────────────────────────┘     │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯

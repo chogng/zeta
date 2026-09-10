@@ -98,11 +98,15 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
     let layout = layout(frame.area());
     context.clear_hyperlinks(layout.surface);
     if let Some(detail) = app.overlay() {
+        let hints = crate::widgets::key_hint::KeyHints::new()
+            .with_compact_action("↑/↓", "scroll")
+            .with_action("Esc", "close");
         crate::widgets::modal::draw(
             frame,
             layout,
             detail.title(),
-            "↑/↓ scroll  ·  Esc to close",
+            &hints,
+            app.key_hint_style(),
             context,
         );
         detail.draw_body(frame, layout.content, context);
@@ -115,7 +119,15 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
             Some(super::pointer::PointerTarget::Modal(target)) => Some(target),
             _ => None,
         };
-        draw_panel(frame, panel, layout, hovered, pressed, context);
+        draw_panel(
+            frame,
+            panel,
+            layout,
+            hovered,
+            pressed,
+            app.key_hint_style(),
+            context,
+        );
     }
 }
 
@@ -125,10 +137,18 @@ pub(super) fn draw_panel(
     layout: ModalLayout,
     hovered: Option<&Target>,
     pressed: Option<&Target>,
+    hint_style: crate::config::KeyHintStyle,
     context: RenderContext<'_>,
 ) {
     let body = panel.body();
-    crate::widgets::modal::draw(frame, layout, body.title(), panel.key_hints(), context);
+    crate::widgets::modal::draw(
+        frame,
+        layout,
+        body.title(),
+        panel.key_hints(),
+        hint_style,
+        context,
+    );
     let tabs = Rect {
         height: body
             .tab_rows(layout.content.width)

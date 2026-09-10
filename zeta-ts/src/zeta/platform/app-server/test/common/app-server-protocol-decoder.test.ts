@@ -9,6 +9,19 @@ import {
 	decodeAppServerServerRequest,
 } from '../../../../../../generated/app-server/AppServerProtocolDecoder.js';
 
+test('Agent identity and replacement origins survive the generated RPC boundary', () => {
+	const response = {
+		jsonrpc: '2.0', id: 1,
+		result: {
+			agentId: 'agent-1', createdAtUnixMs: 1,
+			threads: [{ sessionId: 'session-1', threadId: 'thread-2', origin: { type: 'replacement', sourceThreadId: 'thread-1', sourceSequence: 7 } }],
+		},
+	};
+	assert.deepEqual(decodeAppServerResponse('agent/read', response), response);
+	assert.deepEqual(decodeAppServerRequestParams('session/create', { commandId: 'create', title: 'Task', agentId: 'agent-1' }), { commandId: 'create', title: 'Task', agentId: 'agent-1' });
+	assert.throws(() => decodeAppServerRequestParams('agent/read', { agentId: '' }), AppServerProtocolDecodeError);
+});
+
 test('App Server listen info accepts only the generated loopback record', () => {
 	const listenInfo = {
 		kind: 'app-server-listen-info',

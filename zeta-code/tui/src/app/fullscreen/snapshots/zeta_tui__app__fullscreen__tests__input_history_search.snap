@@ -2,7 +2,7 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 20)"
 ---
-  Home  .                                                                                           
+  ≡ .                                                                                               
                                                                                                     
                                                                                                     
                                                                                                     
@@ -16,9 +16,9 @@ expression: "render(&app, 100, 20)"
                                                                                                     
                                                                                                     
                                                                                                     
-  ╭─History search: find · ↑/↓ browse · Enter edit · Esc cancel────────────────────────────────────╮
-> │find the input history owner                                                                    │
-  ╰────────────────────────────────────────────────────────────────────────────── Automatic model ─╯
                                                                                                     
-  ⏸ ask permissions on                                                                              
-  Enter send  ·  shift+tab permissions  ·  /home
+  ╭─History search: find · ↑/↓ browse · Enter edit · Esc cancel──────────────────────────────────╮  
+  │ > find the input history owner                                                               │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                                    
+  Enter send  ·  shift+tab permissions  ·  /home                              ⏸ ask permissions on
