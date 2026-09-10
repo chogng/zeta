@@ -62,6 +62,15 @@ fn agents_manager_simulates_navigation_and_transient_details() {
     });
     assert_snapshot!("agents_manager_transient_session_details", render(&app));
 
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    assert!(app.overlay().is_some());
+    assert!(app.session_manager_focused());
+    settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    assert!(app.overlay().is_some());
+
     assert_eq!(app.handle_key(key(KeyCode::Esc)), None);
     assert!(app.overlay().is_none());
     assert!(app.session_manager_focused());
@@ -362,6 +371,45 @@ fn preview_result(
         thread,
         transcript,
         history: Some(boundary),
+    }
+}
+
+#[test]
+fn mode_switch_releases_thread_switcher_focus_before_restoring_transcript_focus() {
+    for (target, other) in [
+        (
+            crate::terminal::ScreenMode::Fullscreen,
+            crate::terminal::ScreenMode::Inline,
+        ),
+        (
+            crate::terminal::ScreenMode::Inline,
+            crate::terminal::ScreenMode::Fullscreen,
+        ),
+    ] {
+        let mut app = active_session_app();
+        let mut catalog = session();
+        let mut child = catalog.threads[0].clone();
+        child.thread_id = ThreadId::new("child").unwrap();
+        child.parent_thread_id = Some(ThreadId::new("current").unwrap());
+        child.title = "worker".into();
+        catalog.threads.push(child);
+        app.update(SessionEvent::CatalogReceived(vec![catalog]));
+        app.update(ThreadEvent::FailureReported("selectable message".into()));
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(target);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::CONTROL));
+        assert!(app.transcript_selection_active());
+
+        settings.set_screen_mode(other);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.handle_key(key(KeyCode::Down));
+        assert!(app.agent_thread_switcher_focused());
+
+        settings.set_screen_mode(target);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        assert!(!app.agent_thread_switcher_focused());
+        assert!(app.transcript_selection_active());
     }
 }
 

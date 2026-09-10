@@ -355,8 +355,17 @@ pub(in crate::app) fn handle_transcript_selection_key(app: &mut App, key: KeyEve
         || !matches!(app.sessions.screen(), Some(TerminalScreen::Session(_)))
         || app.fullscreen.panels.command_active()
         || app.completion().is_some()
-        || !app.input().is_empty()
     {
+        return false;
+    }
+    if key.kind == KeyEventKind::Press
+        && bindings::RETURN_INPUT.matches(key)
+        && app.fullscreen.viewports.active().selected_cell.is_some()
+    {
+        app.fullscreen.viewports.active_mut().selected_cell = None;
+        return true;
+    }
+    if !app.input().is_empty() {
         return false;
     }
     let cell_ids = app
@@ -417,12 +426,6 @@ pub(in crate::app) fn handle_transcript_selection_key(app: &mut App, key: KeyEve
                 return false;
             };
             app.open_transcript_cell_details(selected.as_str());
-            true
-        }
-        _ if bindings::RETURN_INPUT.matches(key)
-            && app.fullscreen.viewports.active().selected_cell.is_some() =>
-        {
-            app.fullscreen.viewports.active_mut().selected_cell = None;
             true
         }
         _ => false,
@@ -514,7 +517,7 @@ pub(in crate::app) fn chat_input_focused(app: &App) -> bool {
         && !app.sessions.manager().focused()
         && !app.agent_thread_switcher.focused()
         && !app.thread_presentations.active().queue.focused()
-        && app.fullscreen.viewports.active().selected_cell.is_none()
+        && !transcript_selection_active(app)
         && !app.fullscreen.panels.command_active()
         && app.completion().is_none()
 }

@@ -718,6 +718,12 @@ impl App {
     fn set_terminal_settings(&mut self, settings: TerminalSettings) {
         if self.screen_mode() != settings.screen_mode() {
             let panels = std::mem::take(self.panels_mut());
+            self.thread_presentations.active_mut().queue.blur();
+            self.agent_thread_switcher.blur();
+            // Session previews and details retain the manager as their return destination.
+            if self.sessions.preview.is_none() && self.sessions.details.is_none() {
+                self.sessions.manager_mut().blur();
+            }
             self.terminal_settings = settings;
             *self.panels_mut() = panels;
             self.fullscreen.clear();

@@ -63,6 +63,8 @@ Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 
 
 切换模式保留共用草稿和队列，恢复目标模式自己的浏览位置，并将正在编辑的面板完整转交给目标模式。面板编辑状态只有一份，不会遗留一个可被异步结果重新打开的后台面板。
 
+模式切换会结束共享控件的临时焦点，避免与目标模式恢复的正文焦点重叠；会话预览和详情保留管理器的返回焦点。即使共享草稿已有文字，Esc 仍可退出正文选中并返回输入框，不清空草稿。同一模式的设置重载不改变当前焦点。
+
 两种模式的测试与文本快照分别放在 `fullscreen/` 和 `inline/`。定向运行 `just test zeta-tui --lib app::fullscreen` 或 `just test zeta-tui --lib app::inline`；模式隔离与面板转交运行 `just test zeta-tui --lib app::mode_tests`，共用应用流程运行 `just test zeta-tui --lib app::`。
 
 跨功能命令由 [dispatch.rs](src/app/dispatch.rs) 分发，通过各功能接口执行，不在 `app` 中为功能类型追加方法。功能模块解释后端返回值：例如 `dirs::add` 统一校验添加结果，并返回 `AddedDir`，供行内命令和目录面板共用。测试执行助手只放在测试模块中。
