@@ -2,7 +2,13 @@
 
 mod contributors;
 mod fragment;
+mod lifecycle;
 mod registry;
+pub use lifecycle::IdleContributor;
+pub use lifecycle::ItemContributor;
+pub use lifecycle::LifecycleObserver;
+pub use lifecycle::ThreadContext;
+pub use lifecycle::ThreadLifecycle;
 
 pub use contributors::CapabilityToolContribution;
 pub use contributors::CapabilityToolContributor;

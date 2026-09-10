@@ -2289,7 +2289,47 @@ impl ThreadController {
     }
 
     fn commit_batch(&self, batch: &ThreadEventBatch) -> Result<AppendBatchResult, CoreError> {
-        self.store.append_batch(batch).map_err(CoreError::from)
+        let registries = self
+            .extensions
+            .read()
+            .map_err(|_| CoreError::Journal("extension registry lock poisoned".into()))?;
+        let extensions = registries
+            .sessions
+            .get(&batch.catalog.session_id)
+            .unwrap_or(&registries.fallback)
+            .clone();
+        drop(registries);
+        let result = self.store.append_batch(batch).map_err(CoreError::from)?;
+        for stored in &batch.events {
+            use zeta_extension_api::ThreadLifecycle;
+            let lifecycle = match &stored.event {
+                ThreadEvent::ThreadCreated { .. } => ThreadLifecycle::Created,
+                ThreadEvent::ThreadArchived { .. } => ThreadLifecycle::Archived,
+                ThreadEvent::ThreadRestored { .. } => ThreadLifecycle::Restored,
+                ThreadEvent::TurnStarted { turn_id, .. } => {
+                    ThreadLifecycle::TurnStarted(turn_id.clone())
+                }
+                ThreadEvent::TurnCompleted { turn_id, .. } => {
+                    ThreadLifecycle::TurnCompleted(turn_id.clone())
+                }
+                ThreadEvent::TurnFailed { turn_id, .. } => {
+                    ThreadLifecycle::TurnFailed(turn_id.clone())
+                }
+                ThreadEvent::TurnInterrupted { turn_id, .. } => {
+                    ThreadLifecycle::TurnInterrupted(turn_id.clone())
+                }
+                _ => continue,
+            };
+            extensions.thread_changed(
+                zeta_extension_api::ThreadContext {
+                    session_id: &batch.catalog.session_id,
+                    thread_id: &batch.thread_id,
+                    sequence: stored.sequence,
+                },
+                &lifecycle,
+            );
+        }
+        Ok(result)
     }
 
     fn timestamp(&self) -> Result<Timestamp, CoreError> {

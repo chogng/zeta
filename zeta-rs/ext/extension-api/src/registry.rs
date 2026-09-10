@@ -1,9 +1,14 @@
 use crate::CapabilityToolContribution;
 use crate::CapabilityToolContributor;
+use crate::IdleContributor;
+use crate::ItemContributor;
+use crate::LifecycleObserver;
 use crate::PromptFragment;
 use crate::ReadOnlyToolContributor;
 use crate::SkillActivationContext;
 use crate::SkillActivationContributor;
+use crate::ThreadContext;
+use crate::ThreadLifecycle;
 use crate::TurnInputContext;
 use crate::TurnInputContributor;
 use std::collections::BTreeSet;
@@ -31,6 +36,9 @@ impl std::error::Error for ExtensionError {}
 
 #[derive(Default)]
 pub struct ExtensionRegistryBuilder {
+    lifecycle: Vec<Arc<dyn LifecycleObserver>>,
+    idle: Vec<Arc<dyn IdleContributor>>,
+    items: Vec<Arc<dyn ItemContributor>>,
     capability_tools: Vec<Arc<dyn CapabilityToolContributor>>,
     read_only_tools: Vec<Arc<dyn ReadOnlyToolContributor>>,
     skill_activation: Vec<Arc<dyn SkillActivationContributor>>,
@@ -38,6 +46,30 @@ pub struct ExtensionRegistryBuilder {
 }
 
 impl ExtensionRegistryBuilder {
+    pub fn from_registry(registry: &ExtensionRegistry) -> Self {
+        Self {
+            lifecycle: registry.lifecycle.clone(),
+            idle: registry.idle.clone(),
+            items: registry.items.clone(),
+            capability_tools: registry.capability_tools.clone(),
+            read_only_tools: registry.read_only_tools.clone(),
+            skill_activation: registry.skill_activation.clone(),
+            turn_input: registry.turn_input.clone(),
+        }
+    }
+    pub fn lifecycle_observer(&mut self, observer: Arc<dyn LifecycleObserver>) -> &mut Self {
+        self.lifecycle.push(observer);
+        self
+    }
+    pub fn idle_contributor(&mut self, contributor: Arc<dyn IdleContributor>) -> &mut Self {
+        self.idle.push(contributor);
+        self
+    }
+    pub fn item_contributor(&mut self, contributor: Arc<dyn ItemContributor>) -> &mut Self {
+        self.items.push(contributor);
+        self
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -76,6 +108,9 @@ impl ExtensionRegistryBuilder {
 
     pub fn build(self) -> ExtensionRegistry {
         ExtensionRegistry {
+            lifecycle: self.lifecycle,
+            idle: self.idle,
+            items: self.items,
             capability_tools: self.capability_tools,
             read_only_tools: self.read_only_tools,
             skill_activation: self.skill_activation,
@@ -86,6 +121,9 @@ impl ExtensionRegistryBuilder {
 
 #[derive(Default)]
 pub struct ExtensionRegistry {
+    lifecycle: Vec<Arc<dyn LifecycleObserver>>,
+    idle: Vec<Arc<dyn IdleContributor>>,
+    items: Vec<Arc<dyn ItemContributor>>,
     capability_tools: Vec<Arc<dyn CapabilityToolContributor>>,
     read_only_tools: Vec<Arc<dyn ReadOnlyToolContributor>>,
     skill_activation: Vec<Arc<dyn SkillActivationContributor>>,
@@ -93,6 +131,48 @@ pub struct ExtensionRegistry {
 }
 
 impl ExtensionRegistry {
+    pub fn thread_changed(&self, context: ThreadContext<'_>, event: &ThreadLifecycle) {
+        for observer in &self.lifecycle {
+            observer.thread_changed(context, event);
+        }
+        if matches!(
+            event,
+            ThreadLifecycle::TurnCompleted(_)
+                | ThreadLifecycle::TurnFailed(_)
+                | ThreadLifecycle::TurnInterrupted(_)
+        ) {
+            for contributor in &self.idle {
+                contributor.contribute(context);
+            }
+        }
+    }
+    pub fn config_changed(&self, generation: u64) {
+        for observer in &self.lifecycle {
+            observer.config_changed(generation);
+        }
+    }
+    pub fn contribute_items(
+        &self,
+        context: ThreadContext<'_>,
+    ) -> Result<Vec<extension_items::ExtensionItem>, ExtensionError> {
+        let mut items = Vec::new();
+        let mut identities = BTreeSet::new();
+        for contributor in &self.items {
+            let contributed = contributor.contribute(context)?;
+            if items.len() + contributed.len() > 128 {
+                return Err(ExtensionError::new("too many extension items"));
+            }
+            for item in contributed {
+                item.validate().map_err(ExtensionError::new)?;
+                if !identities.insert((item.extension.clone(), item.id.clone())) {
+                    return Err(ExtensionError::new("duplicate extension item identity"));
+                }
+                items.push(item);
+            }
+        }
+        Ok(items)
+    }
+
     pub fn contribute_capability_tools(
         &self,
     ) -> Result<Vec<CapabilityToolContribution>, ExtensionError> {

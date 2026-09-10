@@ -2166,3 +2166,50 @@ fn update_plan_is_idempotent_and_recovers_as_canonical_turn_state() {
         Some(projected) if projected == &plan
     ));
 }
+
+#[derive(Default)]
+struct LifecycleLog(Mutex<Vec<(u64, zeta_extension_api::ThreadLifecycle)>>);
+impl zeta_extension_api::LifecycleObserver for LifecycleLog {
+    fn thread_changed(
+        &self,
+        context: zeta_extension_api::ThreadContext<'_>,
+        event: &zeta_extension_api::ThreadLifecycle,
+    ) {
+        self.0
+            .lock()
+            .unwrap()
+            .push((context.sequence, event.clone()));
+    }
+    fn config_changed(&self, _: u64) {}
+}
+
+#[test]
+fn extension_lifecycle_observes_commits_without_replaying_reads() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let controller = ThreadController::with_store(store.clone());
+    let log = Arc::new(LifecycleLog::default());
+    let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
+    builder.lifecycle_observer(log.clone());
+    controller
+        .install_extensions(Arc::new(builder.build()))
+        .unwrap();
+    let thread_id = create_thread(&controller, "lifecycle");
+    let start = controller
+        .start_turn(&thread_id, start_request("lifecycle-turn"))
+        .unwrap();
+    controller
+        .complete_turn(&thread_id, &start.turn_id, "done".into())
+        .unwrap();
+    let events = log.0.lock().unwrap().clone();
+    assert_eq!(
+        events.first().unwrap().1,
+        zeta_extension_api::ThreadLifecycle::Created
+    );
+    assert!(events.iter().any(|(_,event)| matches!(event,zeta_extension_api::ThreadLifecycle::TurnCompleted(id) if id==&start.turn_id)));
+    assert!(events.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    controller.read_thread(&thread_id).unwrap();
+    controller
+        .start_turn(&thread_id, start_request("lifecycle-turn"))
+        .unwrap();
+    assert_eq!(*log.0.lock().unwrap(), events);
+}

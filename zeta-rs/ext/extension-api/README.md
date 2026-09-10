@@ -28,3 +28,11 @@ read extension-owned source roots that were validated before registration; they 
 filesystem authority or perform filesystem mutation, process, network, credential, UI, or external
 mutation operations. A future extension that needs those capabilities requires a separate
 host-reviewed contract.
+
+## 生命周期与展示项
+
+- `LifecycleObserver` 接收已经提交的 Thread 创建、归档、恢复与 Turn 开始/终止事实，以及 Config generation 变化。
+- 回调不重入 Core，不否决已提交状态；有持久副作用的消费者按 Thread 和 sequence 去重。读取和历史重放不再次触发回调。
+- `IdleContributor` 在 Turn 终止后唤醒扩展自己的后台工作；持久工作仍须在启动时恢复。
+- `ItemContributor` 返回指定 Thread 的有界文本展示项；注册表检查重复身份和边界，`zeta-extension-items` 定义共享数据结构。
+- 队列已接入空闲唤醒和展示项，使用统计已接入 Turn/config 回调。
