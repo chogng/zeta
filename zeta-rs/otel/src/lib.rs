@@ -1,7 +1,7 @@
-//! Zeta's OpenTelemetry integration boundary.
-//!
-//! Production provider and exporter wiring is intentionally not installed yet. The isolated
-//! in-memory implementation is available only through the non-default `mock` feature.
+//! Production OpenTelemetry provider and a bounded local diagnostic exporter.
+
+mod provider;
+pub use provider::Telemetry;
 
 #[cfg(feature = "mock")]
 pub mod mock;

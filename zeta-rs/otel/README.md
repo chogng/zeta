@@ -1,31 +1,8 @@
-# zeta-otel
+# OpenTelemetry
 
-> 当前状态：只保留 OTel 职责边界和隔离的 in-memory mock；尚未接入产品运行链路。
-
-`zeta-otel` 预留与 `codex-otel` 同类的集成职责。未来由它统一承载 OTel provider、exporter、logs、traces、metrics、trace context 和生命周期管理。
-
-## 当前隔离方式
-
-| 文件 | 作用 | 默认构建是否包含 |
-| --- | --- | --- |
-| `src/lib.rs` | crate 边界，仅声明 feature-gated mock module | 是 |
-| `src/mock.rs` | in-memory metrics/spans、事件适配和 monitor snapshot | 否 |
-| `src/otel_tests.rs` | mock 测试 | 否 |
-
-`mock` 是非默认 feature。`model-provider` 和其他业务 crate 不依赖它，也没有因此增加运行时行为。
-
-```bash
-# 验证默认边界
-cargo check -p zeta-otel
-
-# 显式验证 mock
-cargo test -p zeta-otel --features mock
-```
-
-内部可视化 monitor 以后可以显式启用 `mock`，读取内存 snapshot。正式 OTel exporter 应作为独立模块实现，不在 `mock.rs` 上继续叠加。
-
-## 数据约束
-
-- 默认只记录安全的结构化字段，例如 provider、model、method、status 和 duration。
-- 不记录 prompt、response、token、authorization header 或其他用户内容。
-- mock 不启动网络请求，也不向外部 collector 导出数据。
+- 在 App Server 的 RPC、模型调用和 HTTP transport 中记录固定类别、结果与耗时。
+- 生产 provider 使用 OpenTelemetry SDK，将 span 导出到有界 `zeta-diagnostics`；最近 256 条记录和分类累计值可通过 `diagnostics/read` 查看。
+- 不记录 URL、请求参数、聊天、模型输出、路径、请求头或凭据；默认不向外部 collector 发请求。
+- `zeta-analytics` 单独拥有默认关闭的使用统计；`zeta-feedback` 负责用户确认后的快照上传。
+- provider 随所属后端资源释放，读取反馈前显式 flush；`mock` feature 仅保留隔离的 SDK 测试 exporter。
+- 验证：`just test zeta-otel`；mock 可用 `just test zeta-otel --features mock` 验证。
