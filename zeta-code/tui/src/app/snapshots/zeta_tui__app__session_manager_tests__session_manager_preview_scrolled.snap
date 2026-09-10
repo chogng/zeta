@@ -1,11 +1,8 @@
 ---
 source: zeta-code/tui/src/app/session_manager_tests.rs
-assertion_line: 158
 expression: render(&app)
 ---
-● Conversation message 07: content stays readable in preview.
-
-● Conversation message 08: content stays readable in preview.
+  Home  .
 
 ● Conversation message 09: content stays readable in preview.
 
@@ -30,6 +27,8 @@ expression: render(&app)
 ● Conversation message 19: content stays readable in preview.
 
 ● Conversation message 20: content stays readable in preview.
+
+● Conversation message 21: content stays readable in preview.
 
                                       Jump to bottom (click) ↓
 

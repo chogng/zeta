@@ -9,6 +9,7 @@ pub(crate) use catalog::chat_input_catalog_snapshot;
 pub(crate) use catalog::slash_command_registry;
 pub(crate) use input::ChatInput;
 pub(crate) use input::ChatInputCatalog;
+pub(crate) use input::ChatInputChrome;
 pub(crate) use input::ChatInputCursor;
 pub(crate) use input::ChatInputItem;
 pub(crate) use input::ChatInputMode;
@@ -39,3 +40,15 @@ pub(crate) use surface::ChatComposerPointerTarget;
 pub(crate) use surface::ChatComposerSurface;
 pub(crate) use surface::draw_completion_layer;
 pub(crate) use surface::pointer_target_at;
+
+/// Identifies the logical draft that requested an asynchronous attachment read.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum DraftTarget {
+    NewSession {
+        generation: u64,
+    },
+    Thread {
+        thread_id: zeta_protocol::ThreadId,
+        generation: u64,
+    },
+}

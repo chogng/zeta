@@ -41,7 +41,32 @@ pub(super) enum RequestKey {
 
 #[derive(Default)]
 pub(super) struct RequestTasks {
-    tasks: BTreeMap<RequestKey, client::RequestTask<Completion>>,
+    tasks: BTreeMap<RequestKey, PendingRequest>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct RequestOrigin {
+    pub(super) mode: crate::terminal::ScreenMode,
+    pub(super) panel_generation: u64,
+}
+
+impl RequestOrigin {
+    pub(super) fn current(app: &App) -> Self {
+        Self {
+            mode: app.screen_mode(),
+            panel_generation: app.panels().generation(),
+        }
+    }
+}
+
+struct PendingRequest {
+    task: client::RequestTask<Completion>,
+    origin: RequestOrigin,
+}
+
+pub(super) struct RequestCompletion {
+    pub(super) completion: Completion,
+    pub(super) origin: RequestOrigin,
 }
 
 impl RequestTasks {
@@ -55,6 +80,7 @@ impl RequestTasks {
         name: &'static str,
         request: impl FnOnce() -> Completion + Send + 'static,
         app: &mut App,
+        origin: RequestOrigin,
     ) {
         let Some(key) = key else {
             app.update(ThreadEvent::FailureReported(format!(
@@ -70,7 +96,7 @@ impl RequestTasks {
         }
         match client::RequestTask::spawn(name, request) {
             Ok(task) => {
-                self.tasks.insert(key, task);
+                self.tasks.insert(key, PendingRequest { task, origin });
             }
             Err(error) => app.update(ThreadEvent::FailureReported(format!(
                 "could not start background request: {error}"
@@ -84,6 +110,7 @@ impl RequestTasks {
         name: &'static str,
         request: impl FnOnce() -> Result<E, String> + Send + 'static,
         app: &mut App,
+        origin: RequestOrigin,
     ) where
         E: Into<AppEvent>,
     {
@@ -92,10 +119,11 @@ impl RequestTasks {
             name,
             move || Completion::Presentation(request().map(Into::into)),
             app,
+            origin,
         );
     }
 
-    pub(super) fn poll(&mut self) -> Vec<Result<Completion, std::io::Error>> {
+    pub(super) fn poll(&mut self) -> Vec<Result<RequestCompletion, std::io::Error>> {
         let mut completed = Vec::new();
         let keys = self.tasks.keys().copied().collect::<Vec<_>>();
         for key in keys {
@@ -103,11 +131,15 @@ impl RequestTasks {
                 .tasks
                 .get_mut(&key)
                 .expect("the request key was collected from the active task map")
+                .task
                 .poll();
             match result {
                 Ok(Some(completion)) => {
-                    self.tasks.remove(&key);
-                    completed.push(Ok(completion));
+                    let pending = self.tasks.remove(&key).unwrap();
+                    completed.push(Ok(RequestCompletion {
+                        completion,
+                        origin: pending.origin,
+                    }));
                 }
                 Ok(None) => {}
                 Err(error) => {
@@ -126,7 +158,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Thread(ThreadCommand::ResolveRequest(_)) => Some(RequestKey::Interaction),
         AppCommand::Host(
             HostCommand::CopyLastResponse
-            | HostCommand::ReadClipboardImage
+            | HostCommand::ReadClipboardImage { .. }
             | HostCommand::RefreshClipboardImageAvailability,
         ) => Some(RequestKey::Clipboard),
         AppCommand::Host(HostCommand::ExportTranscript { .. }) => Some(RequestKey::FileExport),

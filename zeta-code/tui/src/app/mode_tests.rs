@@ -150,7 +150,7 @@ fn focus_app() -> App {
 }
 
 #[test]
-fn switching_modes_releases_queue_focus_before_restoring_transcript_focus() {
+fn modes_restore_independent_queue_and_transcript_focus() {
     for (target, other, snapshot) in [
         (
             ScreenMode::Fullscreen,
@@ -191,6 +191,8 @@ fn switching_modes_releases_queue_focus_before_restoring_transcript_focus() {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(!app.transcript_selection_active());
         assert!(app.chat_input_focused());
+        switch(&mut app, other);
+        assert!(app.queue_focused());
     }
 }
 
@@ -244,13 +246,20 @@ fn escape_returns_to_the_shared_draft_after_restoring_transcript_selection() {
             .unwrap();
         assert_eq!(
             terminal.get_cursor_position().unwrap(),
-            Position::new(input.x + 3, input.y + 1)
+            Position::new(
+                input.x
+                    + match target {
+                        ScreenMode::Fullscreen => 4,
+                        ScreenMode::Inline => 3,
+                    },
+                input.y + 1
+            )
         );
     }
 }
 
 #[test]
-fn switching_modes_returns_manager_focus_to_input_without_activating_hidden_selection() {
+fn manager_navigation_in_one_mode_preserves_the_other_transcript_focus() {
     for (target, other) in [
         (ScreenMode::Fullscreen, ScreenMode::Inline),
         (ScreenMode::Inline, ScreenMode::Fullscreen),
@@ -264,9 +273,272 @@ fn switching_modes_returns_manager_focus_to_input_without_activating_hidden_sele
         app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         assert!(app.session_manager_focused());
         switch(&mut app, target);
-        assert!(app.session_manager_view().is_some());
+        assert!(app.session_manager_view().is_none());
         assert!(!app.session_manager_focused());
-        assert!(!app.transcript_selection_active());
-        assert!(app.chat_input_focused());
+        assert!(app.transcript_selection_active());
+        switch(&mut app, other);
+        assert!(app.session_manager_focused());
     }
+}
+
+fn session_catalog() -> Vec<zeta_protocol::Session> {
+    ["first", "second"]
+        .into_iter()
+        .map(|name| zeta_protocol::Session {
+            session_id: zeta_protocol::SessionId::new(name).unwrap(),
+            title: format!("{name} session"),
+            status: zeta_protocol::SessionStatus::Active,
+            manager: Default::default(),
+            threads: vec![zeta_protocol::SessionThread {
+                thread_id: zeta_protocol::ThreadId::new(name).unwrap(),
+                title: "main".into(),
+                created_at_unix_ms: 1,
+                completed_turn_duration_ms: 0,
+                active_turn_started_at_unix_ms: None,
+                usage: Default::default(),
+                parent_thread_id: None,
+                forked_from_id: None,
+                status: zeta_protocol::ThreadStatus::Active,
+            }],
+        })
+        .collect()
+}
+
+fn navigation_app() -> App {
+    let mut app = App::new();
+    app.update(ThreadEvent::ContextChanged {
+        session_id: zeta_protocol::SessionId::new("first").unwrap(),
+        thread_id: zeta_protocol::ThreadId::new("first").unwrap(),
+    });
+    app.update(crate::sessions::Event::CatalogReceived(session_catalog()));
+    app
+}
+
+#[test]
+fn inline_navigation_does_not_replace_the_fullscreen_home() {
+    let mut app = navigation_app();
+    app.open_home();
+    switch(&mut app, ScreenMode::Inline);
+    app.insert_text("/agents");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert!(app.session_manager_focused());
+    app.update(ThreadEvent::ContextChanged {
+        session_id: zeta_protocol::SessionId::new("second").unwrap(),
+        thread_id: zeta_protocol::ThreadId::new("second").unwrap(),
+    });
+    assert!(app.session_manager_focused());
+    assert_eq!(app.sessions.active_session_id().unwrap().as_str(), "second");
+    switch(&mut app, ScreenMode::Fullscreen);
+    assert!(app.fullscreen_home_visible());
+    assert!(app.session_manager_view().is_none());
+    insta::assert_snapshot!("fullscreen_home_after_inline_navigation", render(&app));
+    switch(&mut app, ScreenMode::Inline);
+    assert!(app.session_manager_focused());
+    assert!(app.session_manager_view().is_some());
+}
+
+#[test]
+fn managers_share_the_catalogue_but_keep_separate_selections_and_focus() {
+    let mut app = navigation_app();
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let selected = app
+        .session_navigation()
+        .manager()
+        .selected_session()
+        .cloned();
+    assert_eq!(selected.as_ref().map(|id| id.as_str()), Some("second"));
+    switch(&mut app, ScreenMode::Inline);
+    assert!(app.session_manager_view().is_none());
+    assert!(app.chat_input_focused());
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(
+        app.session_navigation()
+            .manager()
+            .selected_session()
+            .map(|id| id.as_str()),
+        Some("first")
+    );
+    insta::assert_snapshot!("inline_manager_own_selection", render(&app));
+    switch(&mut app, ScreenMode::Fullscreen);
+    assert_eq!(
+        app.session_navigation().manager().selected_session(),
+        selected.as_ref()
+    );
+    assert!(app.session_manager_focused());
+    assert_eq!(app.sessions.catalog().len(), 2);
+    assert_eq!(app.sessions.active_session_id().unwrap().as_str(), "first");
+    insta::assert_snapshot!("fullscreen_manager_own_selection", render(&app));
+}
+
+#[test]
+fn preview_replies_with_equal_generations_stay_with_the_requesting_mode() {
+    let mut app = navigation_app();
+    let preview = |app: &mut App| {
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        let Some(super::AppCommand::Sessions(crate::sessions::Command::Preview {
+            generation, ..
+        })) = app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE))
+        else {
+            panic!("preview request expected");
+        };
+        generation
+    };
+    let full_generation = preview(&mut app);
+    switch(&mut app, ScreenMode::Inline);
+    assert!(app.session_preview().is_none());
+    let inline_generation = preview(&mut app);
+    assert_eq!(full_generation, inline_generation);
+    app.finish_session_preview(
+        ScreenMode::Fullscreen,
+        full_generation,
+        Err("fullscreen preview failed".into()),
+    );
+    assert_eq!(
+        app.session_preview().unwrap().notice(),
+        Some("Loading conversation…")
+    );
+    insta::assert_snapshot!("inline_preview_ignores_other_mode_reply", render(&app));
+    switch(&mut app, ScreenMode::Fullscreen);
+    assert_eq!(
+        app.session_preview().unwrap().notice(),
+        Some("fullscreen preview failed")
+    );
+    insta::assert_snapshot!("fullscreen_preview_receives_own_reply", render(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    switch(&mut app, ScreenMode::Inline);
+    assert!(app.session_preview().is_some());
+}
+
+#[test]
+fn new_task_and_current_conversation_keep_distinct_shared_drafts() {
+    let mut app = navigation_app();
+    app.insert_text("current conversation draft");
+    app.open_home();
+    assert_eq!(app.input(), "");
+    app.insert_text("new task draft");
+    switch(&mut app, ScreenMode::Inline);
+    assert!(!app.starts_new_session());
+    assert_eq!(app.input(), "current conversation draft");
+    app.insert_text(" edited inline");
+    switch(&mut app, ScreenMode::Fullscreen);
+    assert!(app.fullscreen_home_visible());
+    assert_eq!(app.input(), "new task draft");
+    insta::assert_snapshot!(
+        "home_draft_is_separate_from_current_conversation",
+        render(&app)
+    );
+    switch(&mut app, ScreenMode::Inline);
+    app.open_home();
+    assert!(app.starts_new_session());
+    assert_eq!(app.input(), "new task draft");
+    app.show_conversation();
+    assert_eq!(app.input(), "current conversation draft edited inline");
+}
+
+#[test]
+fn issue_pages_and_their_async_results_are_owned_by_the_requesting_mode() {
+    let mut app = navigation_app();
+    let open = |app: &mut App| {
+        let Some(super::AppCommand::Issues(crate::issues::Command::List { generation, .. })) =
+            app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
+        else {
+            panic!("issue list request expected");
+        };
+        (generation, super::requests::RequestOrigin::current(app))
+    };
+    let (full_generation, origin) = open(&mut app);
+    switch(&mut app, ScreenMode::Inline);
+    assert!(app.issue_manager().is_none());
+    let (inline_generation, _) = open(&mut app);
+    assert_eq!(inline_generation, full_generation);
+    app.update_from_origin(
+        origin,
+        crate::issues::Event::Listed {
+            generation: full_generation,
+            page: 1,
+            result: Err("FULL-ISSUE-ERROR".into()),
+        },
+    );
+    assert!(!render(&app).contains("FULL-ISSUE-ERROR"));
+    assert!(app.issue_manager().is_some());
+    switch(&mut app, ScreenMode::Fullscreen);
+    assert!(render(&app).contains("FULL-ISSUE-ERROR"));
+    insta::assert_snapshot!("fullscreen_issues_receive_own_result", render(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.issue_manager().is_none());
+    switch(&mut app, ScreenMode::Inline);
+    assert!(app.issue_manager().is_some());
+}
+
+#[test]
+fn an_async_clipboard_read_stays_with_its_logical_draft_after_switching_modes() {
+    let mut app = navigation_app();
+    app.insert_text("current draft");
+    app.open_home();
+    app.insert_text("new task ");
+    let Some(super::AppCommand::Host(crate::host::Command::ReadClipboardImage { target })) =
+        app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL))
+    else {
+        panic!("clipboard read expected");
+    };
+    let image = || crate::host::clipboard::ClipboardImage {
+        png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+        fingerprint: crate::host::clipboard::ClipboardImageFingerprint(71),
+        width: 1,
+        height: 1,
+    };
+    switch(&mut app, ScreenMode::Inline);
+    app.update(crate::host::Event::ClipboardImageRead {
+        target: target.clone(),
+        result: Ok(image()),
+    });
+    assert_eq!(app.input(), "current draft");
+    switch(&mut app, ScreenMode::Fullscreen);
+    assert_eq!(app.input(), "new task [Image #1] ");
+    insta::assert_snapshot!("clipboard_result_belongs_to_new_task_draft", render(&app));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(super::AppCommand::Sessions(
+            crate::sessions::Command::CreateAndEnter { .. }
+        ))
+    ));
+    app.update(crate::host::Event::ClipboardImageRead {
+        target,
+        result: Ok(image()),
+    });
+    assert_eq!(app.input(), "");
+    app.fail_session_creation("test failure".into());
+    assert_eq!(app.input(), "new task [Image #1] ");
+}
+
+#[test]
+fn read_only_overlays_stay_in_their_own_modes_instead_of_following_editor_handoff() {
+    use crate::widgets::detail_list::DetailList;
+    use crate::widgets::detail_list::DetailListRow;
+    let mut app = navigation_app();
+    app.show_overlay(DetailList::new(
+        "Fullscreen detail",
+        vec![DetailListRow::new("Text", "full detail")],
+    ));
+    switch(&mut app, ScreenMode::Inline);
+    assert!(app.overlay().is_none());
+    app.show_overlay(DetailList::new(
+        "Inline detail",
+        vec![DetailListRow::new("Text", "inline detail")],
+    ));
+    switch(&mut app, ScreenMode::Fullscreen);
+    assert_eq!(app.overlay().unwrap().title(), "Fullscreen detail");
+    insta::assert_snapshot!(
+        "fullscreen_detail_is_not_replaced_by_inline_detail",
+        render(&app)
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.overlay().is_none());
+    switch(&mut app, ScreenMode::Inline);
+    assert_eq!(app.overlay().unwrap().title(), "Inline detail");
 }

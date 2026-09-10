@@ -1,0 +1,34 @@
+---
+source: zeta-code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  Home  .                                                                                           
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │                                                                                              │  
+  │    ▄  ▄      Zeta Code v0.1.0                                                                │  
+  │  ▗█▛██▜█▖                                                                                    │  
+  │  ▝▜████▛▘    Start a task below, or continue a previous session.                             │  
+  │    ▝  ▘                                                                                      │  
+  │              Resume session                                                                  │  
+  │              Manage sessions                                                                 │  
+  │              Settings                                                                        │  
+  │              Help and shortcuts                                                              │  
+  │              Quit                                                                            │  
+  │                                                                                              │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  Type a new task · Tab actions · Esc return                                                        
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+> │preserved draft                                                                                 │
+  ╰────────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+                                                                                                    
+  ⏸ ask permissions on                                                                              
+  Enter send  ·  Tab actions  ·  / commands

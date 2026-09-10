@@ -74,6 +74,15 @@ impl KeyHints {
 
 pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, hints: &str, context: RenderContext<'_>) {
     let content = horizontal_margin(area, 2);
+    draw_content(frame, content, hints, context);
+}
+
+pub(crate) fn draw_content(
+    frame: &mut Frame<'_>,
+    content: Rect,
+    hints: &str,
+    context: RenderContext<'_>,
+) {
     let hints = visible_hints(hints, usize::from(content.width));
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(

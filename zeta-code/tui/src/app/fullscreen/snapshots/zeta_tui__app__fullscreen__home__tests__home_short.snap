@@ -1,0 +1,16 @@
+---
+source: zeta-code/tui/src/app/fullscreen/home_tests.rs
+expression: text(&buffer)
+---
+  Home  .                               
+                                        
+  ╭──────────────────────────────────╮  
+  │> Quit                            │  
+  ╰──────────────────────────────────╯  
+  Type a task · Tab actions             
+  ╭────────────────────────────────────╮
+> │                                    │
+  ╰────────────────── Automatic model ─╯
+                                        
+  ⏸ ask permissions on                  
+  Enter send · Tab actions

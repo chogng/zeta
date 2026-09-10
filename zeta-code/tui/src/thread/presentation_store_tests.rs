@@ -25,7 +25,15 @@ fn switching_threads_restores_draft_and_queue_together() {
     store.switch(main);
 
     assert_eq!(store.active().input.text(), "main remaining draft");
-    assert_eq!(store.active().queue.view().items[0].text, "main draft");
+    assert_eq!(
+        store
+            .active()
+            .queue
+            .view(&crate::thread::queue::QueueNavigation::default())
+            .items[0]
+            .text,
+        "main draft"
+    );
 }
 
 #[test]

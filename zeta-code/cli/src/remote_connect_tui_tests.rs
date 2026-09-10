@@ -25,7 +25,11 @@ fn remote_recovery_command_preserves_the_verified_connection() {
     );
 
     assert_eq!(
-        recovery_command(&profile, Some(Path::new("/opt/ssh client")), &recovery),
+        recovery_command(
+            &profile,
+            Some(Path::new("/opt/ssh client")),
+            Some(&recovery)
+        ),
         [
             "zeta",
             "remote",
@@ -41,6 +45,22 @@ fn remote_recovery_command_preserves_the_verified_connection() {
             "--resume",
             "session-1",
             "thread-1",
+        ]
+    );
+    assert_eq!(
+        recovery_command(&profile, Some(Path::new("/opt/ssh client")), None),
+        [
+            "zeta",
+            "remote",
+            "connect",
+            "--host",
+            "build-linux",
+            "--dir",
+            "/srv/project with spaces",
+            "--runtime",
+            "/srv/zeta/runtime/bin/zeta-server",
+            "--ssh",
+            "/opt/ssh client"
         ]
     );
 }

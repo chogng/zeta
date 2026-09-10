@@ -188,6 +188,17 @@ impl KeymapEditor {
         })
     }
 
+    pub(crate) fn selection_mut(
+        &mut self,
+    ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        self.capture.is_none().then(|| {
+            self.pages
+                .last_mut()
+                .expect("a keymap editor always has a selection page")
+                .state_mut()
+        })
+    }
+
     fn apply_selection_outcome(
         &mut self,
         outcome: ListSelectionOutcome<KeymapAction>,

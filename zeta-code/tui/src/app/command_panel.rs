@@ -55,6 +55,7 @@ pub(super) enum CommandPanelBody<'a> {
 
 #[derive(Debug)]
 pub(crate) enum CommandPanel {
+    Loading(ListSelection<()>),
     Help(ListSelection<()>),
     Dirs(DirPanel),
     Config(ConfigEditor),
@@ -89,6 +90,18 @@ pub(crate) enum CommandPanelOutcome {
 }
 
 impl CommandPanel {
+    pub(super) fn loading(title: &str, message: &str) -> Self {
+        Self::Loading(ListSelection::new(
+            list_selection::ListSelectionModel::new(
+                title,
+                vec![list_selection::ListSelectionGroup::new("", Vec::new())],
+            )
+            .without_tab_bar()
+            .with_empty_message(message),
+            BTreeMap::new(),
+        ))
+    }
+
     pub(crate) fn is_testing(&self) -> bool {
         matches!(self, Self::Config(editor) if editor.is_testing())
     }
@@ -173,7 +186,7 @@ impl CommandPanel {
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> CommandPanelOutcome {
         match self {
-            Self::Help(content) => map_read_only(content.handle_key(key)),
+            Self::Help(content) | Self::Loading(content) => map_read_only(content.handle_key(key)),
             Self::Dirs(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Dirs)
             }
@@ -226,7 +239,7 @@ impl CommandPanel {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         match self {
-            Self::Help(content) => content.handle_paste(pasted),
+            Self::Help(content) | Self::Loading(content) => content.handle_paste(pasted),
             Self::Dirs(content) => content.handle_paste(pasted),
             Self::Config(content) => content.handle_paste(pasted),
             Self::Connectors(content) => content.handle_paste(pasted),
@@ -245,7 +258,7 @@ impl CommandPanel {
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
         match self {
-            Self::Help(selection) => Some(selection.state()),
+            Self::Help(selection) | Self::Loading(selection) => Some(selection.state()),
             Self::Dirs(selection) => Some(selection.state()),
             Self::Config(editor) => editor.selection(),
             Self::Connectors(selection) => Some(selection.state()),
@@ -262,9 +275,46 @@ impl CommandPanel {
         }
     }
 
+    pub(super) fn focus_pointer(
+        &mut self,
+        target: &list_selection::ListSelectionPointerTarget,
+        area: Rect,
+    ) -> CommandPanelOutcome {
+        let selection = match self {
+            Self::Help(s) | Self::Startup(s) | Self::Loading(s) => Some(s.state_mut()),
+            Self::Dirs(s) => s.selection_mut(),
+            Self::Config(s) => s.selection_mut(),
+            Self::Connectors(s) => Some(s.state_mut()),
+            Self::Keymap(s) => s.selection_mut(),
+            Self::Mcp(s) => Some(s.state_mut()),
+            Self::Model(s) => Some(s.state_mut()),
+            Self::Rewind(s) => Some(s.state_mut()),
+            Self::Sessions(s) => Some(s.state_mut()),
+            Self::Skills(s) => Some(s.state_mut()),
+            Self::StatusLine(s) => Some(s.state_mut()),
+            Self::Theme(s) => Some(s.selection_mut()),
+            Self::Status(_) => None,
+        };
+        if selection.is_some_and(|selection| selection.focus_pointer(target))
+            && matches!(target, list_selection::ListSelectionPointerTarget::Item(_))
+        {
+            self.handle_key(
+                KeyEvent::new(
+                    crossterm::event::KeyCode::Enter,
+                    crossterm::event::KeyModifiers::NONE,
+                ),
+                area,
+            )
+        } else {
+            CommandPanelOutcome::Consumed
+        }
+    }
+
     pub(super) fn body(&self) -> CommandPanelBody<'_> {
         match self {
-            Self::Help(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Help(selection) | Self::Loading(selection) => {
+                CommandPanelBody::Selection(selection.state())
+            }
             Self::Dirs(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Config(editor) => match editor.page() {
                 ConfigEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
@@ -290,7 +340,7 @@ impl CommandPanel {
 
     pub(crate) fn key_hints(&self) -> &str {
         match self {
-            Self::Help(content) => content.key_hints(),
+            Self::Help(content) | Self::Loading(content) => content.key_hints(),
             Self::Dirs(content) => content.key_hints(),
             Self::Config(content) => content.key_hints(),
             Self::Connectors(content) => content.key_hints(),
@@ -304,6 +354,19 @@ impl CommandPanel {
             Self::Status(content) => content.key_hints(),
             Self::StatusLine(content) => content.key_hints(),
             Self::Theme(content) => content.key_hints(),
+        }
+    }
+
+    pub(super) fn tab_at(&self, area: Rect, position: ratatui::layout::Position) -> Option<usize> {
+        match self {
+            Self::Status(panel) => panel.tab_at(area, position),
+            _ => None,
+        }
+    }
+
+    pub(super) fn select_tab(&mut self, index: usize) {
+        if let Self::Status(panel) = self {
+            panel.select_tab(index);
         }
     }
 
@@ -508,11 +571,40 @@ impl<'a> CommandPanelBody<'a> {
 /// Mutable feature editors are held by the active page and moved intact on a mode switch.
 #[derive(Debug, Default)]
 pub(super) struct Panels {
+    generation: u64,
     command: Option<CommandPanel>,
     pub(super) overlay: Option<crate::widgets::overlay::DetailOverlay>,
 }
 
+/// An explicitly transferred feature editor, without the source mode's detail overlay.
+pub(super) struct Editor {
+    generation: u64,
+    command: CommandPanel,
+}
+
 impl Panels {
+    pub(super) fn take_editor(&mut self) -> Option<Editor> {
+        let command = self.command.take()?;
+        let generation = std::mem::take(&mut self.generation);
+        Some(Editor {
+            generation,
+            command,
+        })
+    }
+
+    pub(super) fn receive_editor(&mut self, editor: Option<Editor>) {
+        match editor {
+            Some(editor) => {
+                self.command = Some(editor.command);
+                self.generation = editor.generation;
+            }
+            None => self.close_command(),
+        }
+    }
+    pub(super) fn generation(&self) -> u64 {
+        self.generation
+    }
+
     pub(crate) fn command(&self) -> Option<&CommandPanel> {
         self.command.as_ref()
     }
@@ -525,11 +617,13 @@ impl Panels {
         self.command.is_some()
     }
 
-    pub(crate) fn open_command(&mut self, command: CommandPanel) {
+    pub(crate) fn open_command(&mut self, command: CommandPanel, generation: u64) {
+        self.generation = generation;
         self.command = Some(command);
     }
 
     pub(crate) fn close_command(&mut self) {
+        self.generation = 0;
         self.command = None;
     }
 

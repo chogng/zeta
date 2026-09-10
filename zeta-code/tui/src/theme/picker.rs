@@ -90,6 +90,15 @@ impl ThemePicker {
             .handle_paste(pasted);
     }
 
+    pub(crate) fn selection_mut(
+        &mut self,
+    ) -> &mut crate::widgets::list_selection::ListSelectionState {
+        self.pages
+            .last_mut()
+            .expect("a theme picker always has a selection page")
+            .state_mut()
+    }
+
     fn apply_selection_outcome(
         &mut self,
         outcome: ListSelectionOutcome<ThemeSelectionAction>,

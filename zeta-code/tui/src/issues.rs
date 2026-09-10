@@ -166,6 +166,15 @@ impl Default for Manager {
     }
 }
 impl Manager {
+    pub(crate) fn close(&mut self) {
+        self.open = false;
+        self.detail = None;
+        self.refresh_at = None;
+        if !self.pending_creation {
+            self.generation = self.generation.wrapping_add(1);
+            self.busy = false;
+        }
+    }
     pub(crate) fn is_open(&self) -> bool {
         self.open
     }
@@ -234,11 +243,7 @@ impl Manager {
                 self.search.set_input_active(false);
                 self.focus = Focus::List;
             } else if self.detail.take().is_none() {
-                self.open = false;
-                if !self.pending_creation {
-                    self.generation = self.generation.wrapping_add(1);
-                    self.busy = false;
-                }
+                self.close();
             }
             return None;
         }

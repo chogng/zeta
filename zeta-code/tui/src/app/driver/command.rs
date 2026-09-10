@@ -1,10 +1,12 @@
 use super::AppDriver;
 use super::CommandEffect;
+use super::ScheduledCommand;
 use crate::app::AppCommand;
 use crate::app::completion::Completion;
 use crate::app::completion::finish_product_command_request;
 use crate::app::dispatch::execute_product_command;
 use crate::app::requests::RequestKey;
+use crate::app::requests::RequestOrigin;
 use crate::app::requests::request_key;
 use crate::config;
 use crate::connectors;
@@ -27,7 +29,8 @@ use crate::thread::Event as ThreadEvent;
 use std::time::Instant;
 
 impl AppDriver {
-    pub(in crate::app) fn execute(&mut self, command: AppCommand) -> CommandEffect {
+    pub(in crate::app) fn execute(&mut self, scheduled: ScheduledCommand) -> CommandEffect {
+        let ScheduledCommand { command, origin } = scheduled;
         let request_key = request_key(&command);
         match command {
             AppCommand::Issues(command) => {
@@ -35,20 +38,15 @@ impl AppDriver {
                 if let crate::issues::Command::Start { generation, .. } = &command {
                     let generation = *generation;
                     let conversation = self.conversation.clone();
-                    let subscription = self.thread_subscription.clone();
                     self.requests.spawn(
                         request_key,
                         "zeta-tui-issue-start",
                         move || Completion::IssueCreated {
                             generation,
-                            result: crate::issues::start(
-                                client,
-                                conversation,
-                                subscription,
-                                command,
-                            ),
+                            result: crate::issues::start(client, conversation, command),
                         },
                         &mut self.app,
+                        origin,
                     );
                 } else {
                     self.requests.spawn_presentation(
@@ -56,6 +54,7 @@ impl AppDriver {
                         "zeta-tui-issues",
                         move || crate::issues::execute(&mut client, command),
                         &mut self.app,
+                        origin,
                     );
                 }
             }
@@ -67,6 +66,7 @@ impl AppDriver {
                     name,
                     move || config::execute(&mut client, command),
                     &mut self.app,
+                    origin,
                 );
             }
             AppCommand::Connectors(command) => {
@@ -77,20 +77,28 @@ impl AppDriver {
                     name,
                     move || connectors::execute(&mut client, command),
                     &mut self.app,
+                    origin,
                 );
             }
             AppCommand::Dirs(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();
-                let session_id = self.conversation.session_id().clone();
+                let Some(current) = self.conversation.as_ref() else {
+                    self.app.update(ThreadEvent::FailureReported(
+                        "Start or resume a session to manage directories".into(),
+                    ));
+                    return CommandEffect::None;
+                };
+                let session_id = current.conversation.session_id().clone();
                 self.requests.spawn_presentation(
                     request_key,
                     name,
                     move || dirs::execute(&mut client, &session_id, command),
                     &mut self.app,
+                    origin,
                 );
             }
-            AppCommand::Host(command) => self.execute_host_command(request_key, command),
+            AppCommand::Host(command) => self.execute_host_command(request_key, command, origin),
             AppCommand::Keymap(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();
@@ -99,6 +107,7 @@ impl AppDriver {
                     name,
                     move || keymap_setup::execute(&mut client, command),
                     &mut self.app,
+                    origin,
                 );
             }
             AppCommand::Mcp(command) => {
@@ -109,6 +118,7 @@ impl AppDriver {
                     name,
                     move || mcp::execute(&mut client, command),
                     &mut self.app,
+                    origin,
                 );
             }
             AppCommand::Models(command) => {
@@ -125,18 +135,25 @@ impl AppDriver {
                         result: crate::models::execute(&mut client, command),
                     },
                     &mut self.app,
+                    origin,
                 );
             }
-            AppCommand::Sessions(command) => self.execute_session_command(request_key, command),
+            AppCommand::Sessions(command) => {
+                self.execute_session_command(request_key, command, origin)
+            }
             AppCommand::Skills(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();
-                let session_id = self.conversation.session_id().clone();
+                let session_id = self
+                    .conversation
+                    .as_ref()
+                    .map(|current| current.conversation.session_id().clone());
                 self.requests.spawn_presentation(
                     request_key,
                     name,
-                    move || skills::execute(&mut client, &session_id, command),
+                    move || skills::execute(&mut client, session_id.as_ref(), command),
                     &mut self.app,
+                    origin,
                 );
             }
             AppCommand::Status(command) => {
@@ -147,6 +164,7 @@ impl AppDriver {
                     name,
                     move || status_line::execute(&mut client, command),
                     &mut self.app,
+                    origin,
                 );
             }
             AppCommand::Theme(command) => {
@@ -176,16 +194,24 @@ impl AppDriver {
                         }
                     },
                     &mut self.app,
+                    origin,
                 );
             }
-            AppCommand::Thread(command) => self.execute_thread_command(request_key, command),
+            AppCommand::Thread(command) => {
+                self.execute_thread_command(request_key, command, origin)
+            }
             AppCommand::Quit => return CommandEffect::Quit,
             AppCommand::Suspend => return CommandEffect::Suspend,
         }
         CommandEffect::None
     }
 
-    fn execute_host_command(&mut self, request_key: Option<RequestKey>, command: HostCommand) {
+    fn execute_host_command(
+        &mut self,
+        request_key: Option<RequestKey>,
+        command: HostCommand,
+        origin: RequestOrigin,
+    ) {
         let operation = match command {
             HostCommand::CopyLastResponse => HostOperation::CopyLastResponse(
                 self.app
@@ -198,7 +224,9 @@ impl AppDriver {
                 requested_path,
                 markdown: self.app.transcript_markdown(),
             },
-            HostCommand::ReadClipboardImage => HostOperation::ReadClipboardImage,
+            HostCommand::ReadClipboardImage { target } => {
+                HostOperation::ReadClipboardImage { target }
+            }
             HostCommand::RefreshClipboardImageAvailability => {
                 HostOperation::RefreshClipboardImageAvailability
             }
@@ -209,6 +237,7 @@ impl AppDriver {
             name,
             move || Ok(operation.execute()),
             &mut self.app,
+            origin,
         );
     }
 
@@ -216,6 +245,7 @@ impl AppDriver {
         &mut self,
         request_key: Option<RequestKey>,
         command: sessions::Command,
+        origin: RequestOrigin,
     ) {
         if let Some(command_line) = command.command_line() {
             self.app.update(ThreadEvent::CommandStarted(command_line));
@@ -225,47 +255,63 @@ impl AppDriver {
         let name = request.name();
         let client = self.client.clone();
         let conversation = self.conversation.clone();
-        let subscription = self.thread_subscription.clone();
         self.requests.spawn(
             request_key,
             name,
-            move || Completion::Sessions(request.execute(client, conversation, subscription)),
+            move || Completion::Sessions(request.execute(client, conversation)),
             &mut self.app,
+            origin,
         );
     }
 
-    fn execute_thread_command(&mut self, request_key: Option<RequestKey>, command: ThreadCommand) {
+    fn execute_thread_command(
+        &mut self,
+        request_key: Option<RequestKey>,
+        command: ThreadCommand,
+        origin: RequestOrigin,
+    ) {
         let preparation = thread::prepare_command(
-            self.thread_subscription.older_history(),
+            self.conversation
+                .as_ref()
+                .and_then(|current| current.subscription.older_history()),
             self.app.thread_command_state(),
             command,
         );
         match preparation {
             ThreadCommandPreparation::ExecuteProductCommand(invocation) => {
-                self.execute_product_command(request_key, invocation);
+                self.execute_product_command(request_key, invocation, origin);
             }
             ThreadCommandPreparation::RewindToCheckpoint {
                 before_turn_id,
                 checkpoint_label,
-            } => self.execute_rewind(request_key, before_turn_id, checkpoint_label),
+            } => self.execute_rewind(request_key, before_turn_id, checkpoint_label, origin),
             ThreadCommandPreparation::CycleNextApprovalMode => {
                 self.app.cycle_next_approval_mode(Instant::now());
             }
             ThreadCommandPreparation::Request(request) => {
                 let name = request.name();
                 let client = self.client.clone();
-                let scope = self.thread_request_scope();
-                let history = self.thread_subscription.history();
+                let Some(scope) = self.thread_request_scope() else {
+                    self.app.update(ThreadEvent::FailureReported(
+                        "Start or resume a session before using this command".into(),
+                    ));
+                    return;
+                };
+                let history = self.conversation.as_ref().unwrap().subscription.history();
                 self.requests.spawn(
                     request_key,
                     name,
                     move || Completion::Thread(request.execute(client, scope, history)),
                     &mut self.app,
+                    origin,
                 );
             }
             ThreadCommandPreparation::Present(event) => self.app.update(event),
             ThreadCommandPreparation::Requeue(command) => {
-                self.queued_commands.push_front(command.into());
+                self.queued_commands.push_front(ScheduledCommand {
+                    command: command.into(),
+                    origin,
+                });
             }
             ThreadCommandPreparation::None => {}
         }
@@ -275,10 +321,17 @@ impl AppDriver {
         &mut self,
         request_key: Option<RequestKey>,
         invocation: crate::thread::composer::SlashCommandInvocation,
+        origin: RequestOrigin,
     ) {
         let mut client = self.client.clone();
-        let conversation = self.conversation.clone();
-        let subscription = self.thread_subscription.clone();
+        let conversation = self
+            .conversation
+            .as_ref()
+            .map(|current| current.conversation.clone());
+        let subscription = self
+            .conversation
+            .as_ref()
+            .map(|current| current.subscription.clone());
         self.requests.spawn(
             request_key,
             "zeta-tui-product-command",
@@ -289,6 +342,7 @@ impl AppDriver {
                 ),
             },
             &mut self.app,
+            origin,
         );
     }
 
@@ -297,13 +351,17 @@ impl AppDriver {
         request_key: Option<RequestKey>,
         before_turn_id: zeta_protocol::TurnId,
         checkpoint_label: String,
+        origin: RequestOrigin,
     ) {
         let command = format!("/rewind {before_turn_id}");
         self.app
             .update(ThreadEvent::CommandStarted(command.clone()));
         let mut client = self.client.clone();
-        let mut conversation = self.conversation.clone();
-        let subscription = self.thread_subscription.clone();
+        let Some(current) = self.conversation.as_ref() else {
+            return;
+        };
+        let mut conversation = current.conversation.clone();
+        let subscription = current.subscription.clone();
         self.requests.spawn(
             request_key,
             "zeta-tui-rewind-thread",
@@ -317,13 +375,14 @@ impl AppDriver {
                             finish_conversation_request(
                                 &mut client,
                                 conversation,
-                                subscription,
+                                Some(subscription),
                                 change,
                             )
                         }),
                 })
             },
             &mut self.app,
+            origin,
         );
     }
 }

@@ -33,6 +33,9 @@ use ratatui::widgets::Paragraph;
 
 #[derive(Debug)]
 pub(super) struct Inline {
+    pub(super) sessions: crate::sessions::SessionNavigation,
+    pub(super) issues: crate::issues::Manager,
+    pub(super) agent_thread_switcher: crate::thread::AgentThreadSwitcher,
     pub(super) preview: crate::thread::transcript::viewport::PreviewViewport,
     pub(super) escape: crate::app::escape::ScreenEscapeSequence,
     pub(super) panels: crate::app::command_panel::Panels,
@@ -42,6 +45,9 @@ pub(super) struct Inline {
 impl Inline {
     pub(super) fn new(thread: zeta_protocol::ThreadId) -> Self {
         Self {
+            sessions: Default::default(),
+            issues: Default::default(),
+            agent_thread_switcher: Default::default(),
             preview: Default::default(),
             escape: Default::default(),
             panels: Default::default(),
@@ -171,6 +177,7 @@ fn draw_content(
         panel::draw(panel, frame, areas.session.composer, context);
     } else {
         ChatComposerSurface {
+            chrome: chat_input::ChatInputChrome::Rules,
             view: &input_view,
             cursor,
         }

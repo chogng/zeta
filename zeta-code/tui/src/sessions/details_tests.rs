@@ -108,25 +108,44 @@ fn details_show_nested_agents_forks_waiting_and_lifecycle_separately() {
 fn details_ignore_closed_requests_refresh_and_do_not_reopen_after_deletion() {
     let result = response();
     let mut state = super::super::SessionsState::default();
+    let mut navigation = crate::sessions::SessionNavigation::default();
     state.install_catalog(
         vec![result.session.clone()],
         result.session.session_id.clone(),
         result.session.threads[0].thread_id.clone(),
     );
-    state.open_details();
-    let first = state.details.as_mut().unwrap().take_request().unwrap();
-    assert!(state.details.as_mut().unwrap().take_request().is_none());
-    state.details = None;
-    state.open_details();
-    let second = state.details.as_mut().unwrap().take_request().unwrap();
+    navigation.reconcile(&state);
+    navigation.open_details(&state);
+    let first = navigation.details.as_mut().unwrap().take_request().unwrap();
+    assert!(
+        navigation
+            .details
+            .as_mut()
+            .unwrap()
+            .take_request()
+            .is_none()
+    );
+    navigation.details = None;
+    navigation.reconcile(&state);
+    navigation.open_details(&state);
+    let second = navigation.details.as_mut().unwrap().take_request().unwrap();
     assert_ne!(first.0, second.0);
-    state.finish_details(first.0, Err("old request".into()));
-    state.finish_details(second.0, Ok(result.clone()));
+    navigation.finish_details(first.0, Err("old request".into()));
+    navigation.finish_details(second.0, Ok(result.clone()));
     state.refresh_catalog(vec![result.session.clone()]);
-    assert!(state.details.as_mut().unwrap().take_request().is_some());
+    navigation.reconcile(&state);
+    assert!(
+        navigation
+            .details
+            .as_mut()
+            .unwrap()
+            .take_request()
+            .is_some()
+    );
     state.refresh_catalog(vec![]);
-    state.finish_details(second.0, Ok(result));
-    assert!(state.details.is_none());
+    navigation.reconcile(&state);
+    navigation.finish_details(second.0, Ok(result));
+    assert!(navigation.details.is_none());
 }
 
 #[test]

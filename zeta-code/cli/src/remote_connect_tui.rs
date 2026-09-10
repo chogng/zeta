@@ -44,11 +44,15 @@ pub(super) fn run(
                     .map_err(|error| {
                         reconnect::recovery_error(
                             error,
-                            &recovery_command(&profile, ssh_executable.as_deref(), &next_recovery),
+                            &recovery_command(
+                                &profile,
+                                ssh_executable.as_deref(),
+                                next_recovery.as_ref(),
+                            ),
                         )
                     })?
                     .session;
-                recovery = Some(next_recovery);
+                recovery = next_recovery;
             }
             zeta_tui::TuiExit::ConnectionLost {
                 kind,
@@ -57,7 +61,7 @@ pub(super) fn run(
             } => {
                 return Err(reconnect::recovery_error(
                     format!("Remote App Server recovery stopped after {kind:?}: {reason}"),
-                    &recovery_command(&profile, ssh_executable.as_deref(), &recovery),
+                    &recovery_command(&profile, ssh_executable.as_deref(), recovery.as_ref()),
                 ));
             }
         }
@@ -67,7 +71,7 @@ pub(super) fn run(
 fn recovery_command(
     profile: &RemoteProfile,
     ssh_executable: Option<&std::path::Path>,
-    recovery: &zeta_tui::TuiRecoveryState,
+    recovery: Option<&zeta_tui::TuiRecoveryState>,
 ) -> Vec<String> {
     let mut command = vec![
         "zeta".into(),
@@ -86,11 +90,13 @@ fn recovery_command(
             ssh_executable.to_string_lossy().into_owned(),
         ]);
     }
-    command.extend([
-        "--resume".into(),
-        recovery.session_id().to_string(),
-        recovery.thread_id().to_string(),
-    ]);
+    if let Some(recovery) = recovery {
+        command.extend([
+            "--resume".into(),
+            recovery.session_id().to_string(),
+            recovery.thread_id().to_string(),
+        ]);
+    }
     command
 }
 

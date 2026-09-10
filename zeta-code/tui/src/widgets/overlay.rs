@@ -38,7 +38,6 @@ impl DetailOverlay {
         self.detail = detail;
     }
 
-    #[cfg(test)]
     pub(crate) fn title(&self) -> &str {
         self.detail.title()
     }
@@ -56,6 +55,36 @@ impl DetailOverlay {
 
     pub(crate) fn surface(&self, available: Rect) -> Rect {
         overlay_layout(available, &self.detail).surface
+    }
+
+    pub(crate) fn scroll_body(&mut self, navigation: Navigation, area: Rect) {
+        let max_scroll = self
+            .detail
+            .content_height(area.width)
+            .saturating_sub(usize::from(area.height));
+        self.scroll = navigation
+            .offset(
+                usize::from(self.scroll),
+                max_scroll,
+                usize::from(area.height),
+            )
+            .min(usize::from(u16::MAX)) as u16;
+    }
+
+    pub(crate) fn draw_body(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
+        let max_scroll = self
+            .detail
+            .content_height(area.width)
+            .saturating_sub(usize::from(area.height));
+        detail_list::draw_body_scrolled(
+            frame,
+            area,
+            &self.detail,
+            usize::from(self.scroll)
+                .min(max_scroll)
+                .min(usize::from(u16::MAX)) as u16,
+            context,
+        );
     }
 
     pub(crate) fn scroll(&mut self, navigation: Navigation, available: Rect) {

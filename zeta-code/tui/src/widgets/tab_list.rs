@@ -148,6 +148,26 @@ pub(crate) fn desired_height<T: TabListItem>(tabs: &[T], width: u16) -> u16 {
         .min(u16::MAX as usize) as u16
 }
 
+pub(crate) fn index_at<T: TabListItem>(
+    tabs: &[T],
+    area: Rect,
+    position: ratatui::layout::Position,
+) -> Option<usize> {
+    if !area.contains(position) {
+        return None;
+    }
+    tab_positions(tabs, area.width)
+        .iter()
+        .enumerate()
+        .find_map(|(index, tab)| {
+            (usize::from(position.y - area.y) == tab.row
+                && usize::from(position.x - area.x) >= tab.start
+                && usize::from(position.x - area.x) < tab.start + tab.width
+                && tabs[index].tab_enabled())
+            .then_some(index)
+        })
+}
+
 pub(crate) fn draw<T: TabListItem>(
     frame: &mut Frame<'_>,
     area: Rect,

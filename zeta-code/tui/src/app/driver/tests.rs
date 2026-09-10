@@ -1,4 +1,28 @@
-use super::schedule_command;
+use super::ScheduledCommand;
+use super::schedule_command as schedule;
+use crate::app::requests::RequestOrigin;
+
+fn origin() -> RequestOrigin {
+    RequestOrigin {
+        mode: crate::terminal::ScreenMode::Fullscreen,
+        panel_generation: 0,
+    }
+}
+
+fn scheduled(command: AppCommand) -> ScheduledCommand {
+    ScheduledCommand {
+        command,
+        origin: origin(),
+    }
+}
+
+fn schedule_command(
+    command: Option<AppCommand>,
+    requests: &RequestTasks,
+    queued: &mut VecDeque<ScheduledCommand>,
+) -> Option<AppCommand> {
+    schedule(command.map(scheduled), requests, queued).map(|scheduled| scheduled.command)
+}
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::completion::Completion;
@@ -23,6 +47,7 @@ fn unrelated_actions_bypass_a_busy_request_without_losing_same_domain_order() {
             Completion::Presentation(Err("finished".into()))
         },
         &mut app,
+        origin(),
     );
     let mut queued = VecDeque::new();
     let write = ThemeCommand::Set {
@@ -83,6 +108,7 @@ fn interrupt_bypasses_an_active_interaction_response() {
             Completion::Presentation(Err("finished".into()))
         },
         &mut app,
+        origin(),
     );
     let mut queued = VecDeque::new();
 
@@ -120,6 +146,7 @@ fn quit_bypasses_a_pending_request() {
         "zeta-tui-test-write",
         || Completion::Presentation(Err("finished".into())),
         &mut app,
+        origin(),
     );
     let mut queued = VecDeque::new();
 
@@ -133,9 +160,9 @@ fn quit_bypasses_a_pending_request() {
 #[test]
 fn repeated_clipboard_availability_refreshes_are_coalesced() {
     let requests = RequestTasks::default();
-    let mut queued = VecDeque::from([AppCommand::from(
+    let mut queued = VecDeque::from([scheduled(AppCommand::from(
         HostCommand::RefreshClipboardImageAvailability,
-    )]);
+    ))]);
 
     let action = schedule_command(
         Some(HostCommand::RefreshClipboardImageAvailability.into()),
@@ -155,7 +182,7 @@ fn repeated_clipboard_availability_refreshes_are_coalesced() {
 #[test]
 fn repeated_older_history_requests_are_coalesced() {
     let requests = RequestTasks::default();
-    let mut queued = VecDeque::from([AppCommand::from(ThreadCommand::LoadOlderHistory)]);
+    let mut queued = VecDeque::from([scheduled(AppCommand::from(ThreadCommand::LoadOlderHistory))]);
 
     let action = schedule_command(
         Some(ThreadCommand::LoadOlderHistory.into()),
@@ -168,4 +195,44 @@ fn repeated_older_history_requests_are_coalesced() {
         Some(AppCommand::Thread(ThreadCommand::LoadOlderHistory))
     );
     assert!(queued.is_empty());
+}
+
+#[test]
+fn queued_work_and_completion_keep_the_origin_recorded_before_a_mode_switch() {
+    let mut app = App::new();
+    let expected = RequestOrigin::current(&app);
+    let mut queued = VecDeque::from([ScheduledCommand::new(
+        ThreadCommand::LoadOlderHistory.into(),
+        &app,
+    )]);
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    let mut requests = RequestTasks::default();
+    let scheduled = schedule(None, &requests, &mut queued).unwrap();
+    assert_eq!(scheduled.origin, expected);
+    assert_ne!(scheduled.origin.mode, app.screen_mode());
+    let (release, wait) = std::sync::mpsc::channel();
+    requests.spawn(
+        Some(RequestKey::Thread),
+        "zeta-tui-origin-test",
+        move || {
+            wait.recv().unwrap();
+            Completion::Presentation(Ok(
+                crate::thread::Event::ProductNotice("finished".into()).into()
+            ))
+        },
+        &mut app,
+        scheduled.origin,
+    );
+    release.send(()).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let completion = loop {
+        if let Some(completion) = requests.poll().pop() {
+            break completion.unwrap();
+        }
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::yield_now();
+    };
+    assert_eq!(completion.origin, expected);
 }

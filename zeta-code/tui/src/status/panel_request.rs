@@ -18,11 +18,38 @@ pub(crate) struct StatusRequestScope<'a> {
 
 pub(crate) fn load_status_panel<T>(
     client: &mut AppServerClient<T>,
-    scope: StatusRequestScope<'_>,
+    scope: Option<StatusRequestScope<'_>>,
 ) -> Result<StatusPanel, ClientError>
 where
     T: JsonRpcTransport,
 {
+    let Some(scope) = scope else {
+        let config = client.read_config()?;
+        let catalog = client.list_models()?;
+        let entry = config.preferred_model.as_ref().and_then(|selected| {
+            catalog.models.iter().find(|entry| {
+                entry.model.provider.as_str() == selected.provider
+                    && entry.model.model.as_str() == selected.model
+            })
+        });
+        let summary = crate::models::ModelSummary::from_catalog(
+            config.preferred_model.clone(),
+            Some(&catalog),
+        );
+        let label = summary.model_label();
+        return Ok(status_panel(StatusViewData {
+            model: &label,
+            full_context_window: entry.and_then(|entry| entry.context_window).map(u64::from),
+            available_context_window: entry
+                .and_then(|entry| entry.available_context_window)
+                .map(u64::from),
+            remaining_context_window: RemainingContextWindow::Unknown,
+            usage: &zeta_protocol::ModelUsageSummary::default(),
+            reference_cost: &zeta_protocol::ModelReferenceCostSummary::default(),
+            session_id: "Not started",
+            thread_id: "Not started",
+        }));
+    };
     let thread = client
         .read_session_thread(SessionThreadReadParams {
             session_id: scope.session_id.clone(),

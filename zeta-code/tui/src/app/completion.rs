@@ -9,6 +9,7 @@ use crate::keymap_setup;
 use crate::keymap_setup::Event as KeymapEvent;
 use crate::models;
 use crate::models::Event as ModelEvent;
+use crate::sessions::Conversation;
 use crate::sessions::ConversationChange;
 use crate::sessions::ConversationCompletion;
 use crate::sessions::ConversationTranscript;
@@ -76,19 +77,37 @@ pub(super) struct ProductCommandCompletion {
 
 pub(super) fn finish_product_command_request(
     client: &mut AppServerRequestHandle,
-    subscription: ThreadSubscription,
+    subscription: Option<ThreadSubscription>,
     output: ProductCommandOutput,
 ) -> Result<ProductCommandCompletion, String> {
     let switched = if output.conversation_change.is_some() {
-        let mut subscription = subscription;
-        let switch = subscription
-            .switch(
-                client,
-                output.conversation.session_id(),
-                output.conversation.thread_id(),
-            )
-            .map_err(subscription_error)?;
-        Some((subscription, switch))
+        let conversation = output
+            .conversation
+            .as_ref()
+            .ok_or("conversation change omitted its session")?;
+        Some(match subscription {
+            Some(mut subscription) => {
+                let switch = subscription
+                    .switch(client, conversation.session_id(), conversation.thread_id())
+                    .map_err(subscription_error)?;
+                (subscription, switch)
+            }
+            None => {
+                let (subscription, snapshot, transcript) = ThreadSubscription::start(
+                    client,
+                    conversation.session_id(),
+                    conversation.thread_id(),
+                )
+                .map_err(subscription_error)?;
+                (
+                    subscription,
+                    ThreadSwitch::Complete {
+                        snapshot,
+                        transcript,
+                    },
+                )
+            }
+        })
     } else {
         None
     };
@@ -101,14 +120,19 @@ fn subscription_error(error: ClientError) -> String {
 
 pub(super) fn apply_request_completion(
     completion: Completion,
-    conversation: &mut ActiveConversation,
-    thread_subscription: &mut ThreadSubscription,
+    origin: super::requests::RequestOrigin,
+    active: &mut Option<Conversation>,
     app: &mut App,
 ) {
-    if completion
-        .thread_scope()
-        .is_some_and(|scope| !scope.targets(conversation.session_id(), conversation.thread_id()))
-    {
+    let panel_generation = origin.panel_generation;
+    if completion.thread_scope().is_some_and(|scope| {
+        active.as_ref().is_none_or(|current| {
+            !scope.targets(
+                current.conversation.session_id(),
+                current.conversation.thread_id(),
+            )
+        })
+    }) {
         return;
     }
     match completion {
@@ -119,39 +143,46 @@ pub(super) fn apply_request_completion(
                 subscription,
                 switch,
             }) => {
-                *conversation = next;
-                *thread_subscription = subscription;
+                *active = Some(Conversation {
+                    conversation: next,
+                    subscription,
+                });
+                let conversation = &mut active.as_mut().unwrap().conversation;
                 finish_conversation_change(
                     conversation,
                     app,
                     change,
                     switch,
                     ConversationCompletionPresentation::Silent,
+                    origin,
                 );
-                app.finish_issue_start(generation, Ok(()));
+                app.finish_issue_start(origin.mode, generation, Ok(()));
             }
-            Err(error) => app.finish_issue_start(generation, Err(error)),
+            Err(error) => app.finish_issue_start(origin.mode, generation, Err(error)),
         },
         Completion::Memory(_) => unreachable!("memory completions are owned by AppDriver"),
         Completion::ConfigRefreshed(Ok((config, models))) => {
             apply_tui_config(config, Some(&models), app);
         }
         Completion::ConfigRefreshed(Err(error)) => {
-            app.update(ThreadEvent::FailureReported(error));
+            app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error));
         }
         Completion::Sessions(SessionCompletion::Preview { generation, result }) => {
-            app.finish_session_preview(generation, result);
+            app.finish_session_preview(origin.mode, generation, result);
         }
         Completion::Sessions(SessionCompletion::Catalog(Ok(sessions))) => {
-            app.update(SessionEvent::CatalogReceived(sessions));
+            app.update_for_panel(panel_generation, SessionEvent::CatalogReceived(sessions));
         }
         Completion::Sessions(SessionCompletion::Catalog(Err(error))) => {
-            app.show_overlay(crate::widgets::detail_list::DetailList::new(
-                "Session operation failed",
-                vec![crate::widgets::detail_list::DetailListRow::new(
-                    "Error", error,
-                )],
-            ));
+            app.show_overlay_in(
+                origin.mode,
+                crate::widgets::detail_list::DetailList::new(
+                    "Session operation failed",
+                    vec![crate::widgets::detail_list::DetailListRow::new(
+                        "Error", error,
+                    )],
+                ),
+            );
         }
         Completion::Sessions(SessionCompletion::ManagerCreated(Ok(ManagerSessionCompletion {
             conversation:
@@ -163,20 +194,36 @@ pub(super) fn apply_request_completion(
                 },
             turn,
         }))) => {
-            *conversation = next_conversation;
-            *thread_subscription = subscription;
+            let draft = app.sessions.pending_submission.take();
+            let rejected = matches!(&turn, TurnStartCompletion::Rejected(_));
+            *active = Some(Conversation {
+                conversation: next_conversation,
+                subscription,
+            });
+            let Conversation {
+                conversation,
+                subscription: thread_subscription,
+            } = active.as_mut().unwrap();
             finish_conversation_change(
                 conversation,
                 app,
                 change,
                 switch,
                 ConversationCompletionPresentation::Silent,
+                origin,
             );
             app.show_policy_tip(Instant::now());
             apply_turn_start_completion(turn, None, conversation, thread_subscription, app);
+            if rejected && let Some(draft) = draft {
+                app.thread_presentations
+                    .active_mut()
+                    .input
+                    .restore_queued(draft)
+                    .expect("a newly created conversation starts with an empty draft");
+            }
         }
         Completion::Sessions(SessionCompletion::ManagerCreated(Err(error))) => {
-            app.update(ThreadEvent::FailureReported(error));
+            app.fail_session_creation(error);
         }
         Completion::Sessions(SessionCompletion::ThreadChanged(Ok(ConversationCompletion {
             conversation: next_conversation,
@@ -184,18 +231,22 @@ pub(super) fn apply_request_completion(
             subscription,
             switch,
         }))) => {
-            *conversation = next_conversation;
-            *thread_subscription = subscription;
+            *active = Some(Conversation {
+                conversation: next_conversation,
+                subscription,
+            });
+            let conversation = &mut active.as_mut().unwrap().conversation;
             finish_conversation_change(
                 conversation,
                 app,
                 change,
                 switch,
                 ConversationCompletionPresentation::Notice,
+                origin,
             );
         }
         Completion::Sessions(SessionCompletion::ThreadChanged(Err(error))) => {
-            app.update(ThreadEvent::FailureReported(error));
+            app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error));
         }
         Completion::Sessions(SessionCompletion::Changed {
             command,
@@ -207,14 +258,18 @@ pub(super) fn apply_request_completion(
                     switch,
                 }),
         }) => {
-            *conversation = next_conversation;
-            *thread_subscription = subscription;
+            *active = Some(Conversation {
+                conversation: next_conversation,
+                subscription,
+            });
+            let conversation = &mut active.as_mut().unwrap().conversation;
             finish_conversation_change(
                 conversation,
                 app,
                 change,
                 switch,
                 ConversationCompletionPresentation::Command(command),
+                origin,
             );
         }
         Completion::Sessions(SessionCompletion::Changed {
@@ -225,9 +280,14 @@ pub(super) fn apply_request_completion(
             command,
             result: Err(error),
         } => {
-            app.update(ThreadEvent::CommandFailed { command, error });
+            app.update_for_panel(
+                panel_generation,
+                ThreadEvent::CommandFailed { command, error },
+            );
         }
-        Completion::Presentation(Err(error)) => app.update(ThreadEvent::FailureReported(error)),
+        Completion::Presentation(Err(error)) => {
+            app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error))
+        }
         Completion::ProductCommand {
             result:
                 Ok(ProductCommandCompletion {
@@ -237,17 +297,26 @@ pub(super) fn apply_request_completion(
             ..
         } => {
             for event in output.events.drain(..) {
-                app.update(event);
+                app.update_for_panel(panel_generation, event);
             }
             if let Some(change) = output.conversation_change.take() {
                 let Some((subscription, switch)) = switched else {
-                    app.update(ThreadEvent::FailureReported(
-                        "conversation command completed without a subscription result".into(),
-                    ));
+                    app.update_for_panel(
+                        panel_generation,
+                        ThreadEvent::FailureReported(
+                            "conversation command completed without a subscription result".into(),
+                        ),
+                    );
                     return;
                 };
-                *conversation = output.conversation;
-                *thread_subscription = subscription;
+                let Some(conversation) = output.conversation else {
+                    return;
+                };
+                *active = Some(Conversation {
+                    conversation,
+                    subscription,
+                });
+                let conversation = &mut active.as_mut().unwrap().conversation;
                 let command = output.command;
                 finish_conversation_change(
                     conversation,
@@ -255,34 +324,44 @@ pub(super) fn apply_request_completion(
                     change,
                     switch,
                     ConversationCompletionPresentation::Command(command),
+                    origin,
                 );
             }
         }
-        Completion::Presentation(Ok(event)) => app.update(event),
+        Completion::Presentation(Ok(event)) => app.update_from_origin(origin, event),
         Completion::PreferredModelUpdated {
             command,
             result: Ok(update),
         } => {
             let picker = update.picker;
             if picker.is_none() {
-                app.update(ModelEvent::SummaryReceived(update.summary));
+                app.update_for_panel(
+                    panel_generation,
+                    ModelEvent::SummaryReceived(update.summary),
+                );
             }
-            app.update(ThreadEvent::CommandCompleted {
-                command,
-                result: update.notice,
-            });
+            app.update_for_panel(
+                panel_generation,
+                ThreadEvent::CommandCompleted {
+                    command,
+                    result: update.notice,
+                },
+            );
             if let Some(picker) = picker {
-                app.update(ModelEvent::PickerUpdated(picker));
+                app.update_for_panel(panel_generation, ModelEvent::PickerUpdated(picker));
             } else {
-                app.update(AppEvent::CommandPanelClosed);
+                app.update_for_panel(panel_generation, AppEvent::CommandPanelClosed);
             }
         }
         Completion::PreferredModelUpdated {
             command,
             result: Err(error),
-        } => app.update(ThreadEvent::CommandFailed { command, error }),
+        } => app.update_for_panel(
+            panel_generation,
+            ThreadEvent::CommandFailed { command, error },
+        ),
         Completion::Theme(Ok(crate::theme::CommandCompletion::Presentation(event))) => {
-            app.update(event);
+            app.update_for_panel(panel_generation, event);
         }
         Completion::Theme(Ok(crate::theme::CommandCompletion::Updated {
             command,
@@ -290,56 +369,92 @@ pub(super) fn apply_request_completion(
             theme,
             result: Ok(()),
         })) => {
-            app.update(crate::theme::Event::RenderChanged(theme));
-            app.update(ThreadEvent::CommandCompleted {
-                command,
-                result: format!("Theme set to {label}"),
-            });
+            app.update_for_panel(panel_generation, crate::theme::Event::RenderChanged(theme));
+            app.update_for_panel(
+                panel_generation,
+                ThreadEvent::CommandCompleted {
+                    command,
+                    result: format!("Theme set to {label}"),
+                },
+            );
         }
         Completion::Theme(Ok(crate::theme::CommandCompletion::Updated {
             command,
             result: Err(error),
             ..
-        })) => app.update(ThreadEvent::CommandFailed { command, error }),
-        Completion::Theme(Err(error)) => app.update(ThreadEvent::FailureReported(error)),
+        })) => app.update_for_panel(
+            panel_generation,
+            ThreadEvent::CommandFailed { command, error },
+        ),
+        Completion::Theme(Err(error)) => {
+            app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error))
+        }
         Completion::Skills(Ok(refresh)) => {
             app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {
-                app.update(SkillEvent::SettingsUpdated(refresh.choices));
+                app.update_for_panel(
+                    panel_generation,
+                    SkillEvent::SettingsUpdated(refresh.choices),
+                );
             } else {
-                app.update(SkillEvent::DiagnosticsReceived(refresh.choices.diagnostics));
+                app.update_for_panel(
+                    panel_generation,
+                    SkillEvent::DiagnosticsReceived(refresh.choices.diagnostics),
+                );
             }
         }
         Completion::Skills(Err(error)) => {
             if app.skills_view_is_active() {
-                app.update(ThreadEvent::FailureReported(error));
+                app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error));
             }
         }
-        Completion::Thread(ThreadCompletion::RewindPickerLoaded {
+        Completion::Thread(completion) => {
+            if let Some(current) = active.as_mut() {
+                apply_thread_completion(
+                    completion,
+                    &mut current.conversation,
+                    &mut current.subscription,
+                    app,
+                    panel_generation,
+                );
+            }
+        }
+    }
+}
+
+fn apply_thread_completion(
+    completion: ThreadCompletion,
+    conversation: &mut ActiveConversation,
+    thread_subscription: &mut ThreadSubscription,
+    app: &mut App,
+    panel_generation: u64,
+) {
+    match completion {
+        ThreadCompletion::RewindPickerLoaded {
             result: Ok(choices),
             ..
-        }) => app.update(ThreadEvent::RewindPickerOpened(choices)),
-        Completion::Thread(ThreadCompletion::RewindPickerLoaded {
+        } => app.update_for_panel(panel_generation, ThreadEvent::RewindPickerOpened(choices)),
+        ThreadCompletion::RewindPickerLoaded {
             result: Err(error), ..
-        }) => app.update(ThreadEvent::FailureReported(error)),
-        Completion::Thread(ThreadCompletion::Started { result, .. }) => {
+        } => app.update(ThreadEvent::FailureReported(error)),
+        ThreadCompletion::Started { result, .. } => {
             apply_turn_start_completion(result, None, conversation, thread_subscription, app)
         }
-        Completion::Thread(ThreadCompletion::QueuedTurnStarted {
+        ThreadCompletion::QueuedTurnStarted {
             queue_id, result, ..
-        }) => apply_turn_start_completion(
+        } => apply_turn_start_completion(
             result,
             Some(queue_id),
             conversation,
             thread_subscription,
             app,
         ),
-        Completion::Thread(ThreadCompletion::Steered {
+        ThreadCompletion::Steered {
             source,
             steer_id,
             result: Ok((steer, snapshot)),
             ..
-        }) => {
+        } => {
             app.update(ThreadEvent::SteerCompleted { source, steer_id });
             if snapshot.thread.sequence < conversation.thread_sequence().max(steer.sequence) {
                 return;
@@ -356,23 +471,23 @@ pub(super) fn apply_request_completion(
                 install_transcript.then_some(snapshot.transcript),
             );
         }
-        Completion::Thread(ThreadCompletion::Steered {
+        ThreadCompletion::Steered {
             source,
             steer_id,
             result: Err(error),
             ..
-        }) => {
+        } => {
             app.update(ThreadEvent::SteerSubmissionFailed {
                 source,
                 steer_id,
                 error: error.to_string(),
             });
         }
-        Completion::Thread(ThreadCompletion::RequestResolved {
+        ThreadCompletion::RequestResolved {
             request,
             result: Ok(snapshot),
             ..
-        }) => {
+        } => {
             app.update(ThreadEvent::RequestResolved(request));
             if snapshot.thread.sequence < conversation.thread_sequence() {
                 return;
@@ -389,20 +504,20 @@ pub(super) fn apply_request_completion(
                 install_transcript.then_some(snapshot.transcript),
             );
         }
-        Completion::Thread(ThreadCompletion::RequestResolved {
+        ThreadCompletion::RequestResolved {
             request,
             result: Err(error),
             ..
-        }) => {
+        } => {
             app.update(ThreadEvent::RequestSubmissionFailed {
                 request,
                 error: error.to_string(),
             });
         }
-        Completion::Thread(ThreadCompletion::Refreshed {
+        ThreadCompletion::Refreshed {
             result: Ok(snapshot),
             ..
-        }) => {
+        } => {
             if snapshot.thread.sequence < conversation.thread_sequence() {
                 return;
             }
@@ -418,26 +533,26 @@ pub(super) fn apply_request_completion(
                 install_transcript.then_some(snapshot.transcript),
             );
         }
-        Completion::Thread(ThreadCompletion::HistoryPage {
+        ThreadCompletion::HistoryPage {
             result: Ok(page), ..
-        }) => {
+        } => {
             thread_subscription.apply_history_page(&page.thread, page.boundary);
             app.update(ThreadEvent::TranscriptHistoryPageReceived(page.transcript));
         }
-        Completion::Thread(ThreadCompletion::HistoryPage {
+        ThreadCompletion::HistoryPage {
             result: Err(error), ..
-        }) => {
+        } => {
             app.update(ThreadEvent::FailureReported(error.to_string()));
         }
-        Completion::Thread(ThreadCompletion::Refreshed {
+        ThreadCompletion::Refreshed {
             result: Err(error), ..
-        }) => {
+        } => {
             app.update(ThreadEvent::FailureReported(error.to_string()));
         }
-        Completion::Thread(ThreadCompletion::Interrupted {
+        ThreadCompletion::Interrupted {
             result: Ok(snapshot),
             ..
-        }) => {
+        } => {
             if snapshot.thread.sequence < conversation.thread_sequence() {
                 return;
             }
@@ -453,9 +568,9 @@ pub(super) fn apply_request_completion(
                 install_transcript.then_some(snapshot.transcript),
             );
         }
-        Completion::Thread(ThreadCompletion::Interrupted {
+        ThreadCompletion::Interrupted {
             result: Err(error), ..
-        }) => {
+        } => {
             app.update(ThreadEvent::InterruptFailed(error.to_string()));
         }
     }
@@ -652,9 +767,11 @@ fn finish_conversation_change(
     change: ConversationChange,
     switch: ThreadSwitch,
     presentation: ConversationCompletionPresentation,
+    origin: super::requests::RequestOrigin,
 ) {
+    let mode = app.presentation_mode(origin);
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
-        app.update(AppEvent::CommandPanelClosed);
+        app.update_for_panel(origin.panel_generation, AppEvent::CommandPanelClosed);
     }
     if matches!(change.transcript, ConversationTranscript::Clear) {
         app.update(ThreadEvent::TranscriptCleared);
@@ -680,6 +797,7 @@ fn finish_conversation_change(
             )));
         }
     }
+    app.show_conversation_in(mode);
     match presentation {
         ConversationCompletionPresentation::Command(command) => {
             app.update(ThreadEvent::CommandCompleted {

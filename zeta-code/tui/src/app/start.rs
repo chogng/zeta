@@ -80,16 +80,30 @@ pub(super) fn start(
     let initial_config = client.read_config()?;
     let terminal_settings = crate::config::TerminalSettings::from_tui(&initial_config.tui)
         .map_err(std::io::Error::other)?;
-    let mut conversation = match recovery {
-        Some(recovery) => ActiveConversation::recover(&mut client, recovery)?,
-        None => ActiveConversation::start(&mut client, thread_title)?,
-    };
-    let (thread_subscription, initial_thread, initial_transcript) = ThreadSubscription::start(
-        &mut client,
-        conversation.session_id(),
-        conversation.thread_id(),
-    )?;
-    conversation.set_thread_sequence(initial_thread.sequence);
+    let show_home = recovery.is_none()
+        && terminal_settings.screen_mode() == crate::terminal::ScreenMode::Fullscreen;
+    let initial = match recovery {
+        Some(recovery) => Some(ActiveConversation::recover(&mut client, recovery)?),
+        None if !show_home => Some(ActiveConversation::start(&mut client, thread_title)?),
+        None => None,
+    }
+    .map(|mut conversation| {
+        let (subscription, thread, transcript) = ThreadSubscription::start(
+            &mut client,
+            conversation.session_id(),
+            conversation.thread_id(),
+        )?;
+        conversation.set_thread_sequence(thread.sequence);
+        Ok::<_, TuiError>((
+            crate::sessions::Conversation {
+                conversation,
+                subscription,
+            },
+            thread,
+            transcript,
+        ))
+    })
+    .transpose()?;
     let terminal = TerminalSession::open(terminal_settings.screen_mode())?;
     let theme_resource = match theme_root {
         Some(theme_root) => ThemeResource::in_product_root(theme_root, terminal.background_color()),
@@ -136,7 +150,13 @@ pub(super) fn start(
             "could not load Sessions: {error}"
         ))),
     }
-    apply_thread_snapshot(&mut app, initial_thread, initial_transcript);
+    let conversation = initial.map(|(conversation, thread, transcript)| {
+        apply_thread_snapshot(&mut app, thread, transcript);
+        conversation
+    });
+    if show_home && terminal_settings.screen_mode() == crate::terminal::ScreenMode::Fullscreen {
+        app.open_home();
+    }
     app.update(SkillEvent::DiagnosticsReceived(initial_skill_diagnostics));
     if let Ok(status) = client.git_status() {
         app.update(StatusEvent::GitStatusReceived(status));
@@ -155,7 +175,6 @@ pub(super) fn start(
         app,
         client,
         conversation,
-        thread_subscription,
         AppDriverResources {
             file_search,
             host_dir_root,

@@ -340,6 +340,15 @@ impl ConfigEditor {
         (self.prompt.is_none() && self.provider_panel.is_none()).then(|| self.selection.state())
     }
 
+    pub(crate) fn selection_mut(
+        &mut self,
+    ) -> Option<&mut crate::widgets::list_selection::ListSelectionState> {
+        if let Some(subscription) = &mut self.subscription {
+            return Some(subscription.state_mut());
+        }
+        (self.prompt.is_none() && self.provider_panel.is_none()).then(|| self.selection.state_mut())
+    }
+
     pub(crate) fn open_subscription(&mut self, spec: ConfigChoices) {
         self.subscription = Some(ListSelection::new(spec.model, spec.actions));
     }

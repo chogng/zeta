@@ -300,10 +300,10 @@ pub enum TuiExit {
     UserRequested,
     /// The host process received an operating-system termination request.
     TerminationRequested,
-    /// The initialized App Server connection ended while the durable conversation remained.
+    /// The initialized App Server connection ended; a home page may have no durable conversation.
     ConnectionLost {
         kind: TuiConnectionLossKind,
-        recovery: TuiRecoveryState,
+        recovery: Option<TuiRecoveryState>,
         reason: String,
     },
 }

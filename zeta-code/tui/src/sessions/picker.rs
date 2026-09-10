@@ -21,13 +21,16 @@ pub(crate) enum SessionSelectionAction {
 
 pub(crate) type SessionChoices = ListSelectionSpec<SessionSelectionAction>;
 
-pub(crate) fn session_choices(sessions: &[Session], active_session_id: &str) -> SessionChoices {
+pub(crate) fn session_choices(
+    sessions: &[Session],
+    active_session_id: Option<&str>,
+) -> SessionChoices {
     session_choices_at(sessions, active_session_id, current_unix_millis())
 }
 
 fn session_choices_at(
     sessions: &[Session],
-    active_session_id: &str,
+    active_session_id: Option<&str>,
     now_unix_ms: u64,
 ) -> SessionChoices {
     let mut actions = BTreeMap::new();
@@ -37,7 +40,7 @@ fn session_choices_at(
         .filter(|session| session.status == SessionStatus::Active)
         .enumerate()
         .map(|(index, session)| {
-            if session.session_id.as_str() == active_session_id {
+            if Some(session.session_id.as_str()) == active_session_id {
                 selected = index;
             }
             session_item(session, now_unix_ms, &mut actions)

@@ -24,19 +24,31 @@ pub(super) fn draw(
     let input_view = app.chat_composer_view();
     if let Some(approval) = app.approval_view() {
         approval::draw(frame, areas.session.composer, approval, None, None, context);
-    } else if let Some(panel) = app.command_panel() {
-        super::panel::draw(panel, frame, areas.session.composer, context);
     } else {
         ChatComposerSurface {
             view: &input_view,
             cursor,
+            chrome: chat_input::ChatInputChrome::Box,
         }
         .render(frame, areas.input, context);
+        if areas.input.height >= 3 && areas.input.width >= 30 {
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(format!(" {} ", app.welcome().model()))
+                    .alignment(ratatui::layout::Alignment::Right)
+                    .style(ratatui::style::Style::default().fg(context.muted())),
+                ratatui::layout::Rect::new(
+                    areas.input.x + 4,
+                    areas.input.bottom() - 1,
+                    areas.input.width.saturating_sub(6),
+                    1,
+                ),
+            );
+        }
     }
     if let Some(query) = app.query_view() {
         query::draw(frame, areas.session.request, query, None, None, context);
     }
-    if app.session_manager_view().is_none() {
+    if !app.fullscreen.home_visible() && app.session_manager_view().is_none() {
         goal::draw(frame, areas.session.goal, app.goal_view(), context);
         plan::draw(frame, areas.session.plan, app.plan_view(), context);
         let queue_view = app.queue_view();
@@ -51,7 +63,9 @@ pub(super) fn draw(
         );
     }
     super::footer::draw(frame, areas.session.bottom, app, context);
-    if let Some(agent_thread_switcher) = app.agent_thread_switcher_view() {
+    if !app.fullscreen.home_visible()
+        && let Some(agent_thread_switcher) = app.agent_thread_switcher_view()
+    {
         crate::thread::draw_agent_thread_switcher(
             frame,
             chat_input::content_area(areas.session.agent_thread_switcher),
@@ -59,7 +73,9 @@ pub(super) fn draw(
             context,
         );
     }
-    if let Some(indicator) = app.status_indicator() {
+    if !app.fullscreen.home_visible()
+        && let Some(indicator) = app.status_indicator()
+    {
         indicator.draw(frame, areas.session.status_indicator, context);
     }
     super::footer::draw_tip(frame, areas.session.top_tip, app, context);

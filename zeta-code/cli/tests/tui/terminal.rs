@@ -94,7 +94,39 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
     process.wait_for_stable_screen("ask permissions on");
     assert_eq!(input_top_row(&process), fullscreen_input);
     process.submit("check the preserved conversation");
-    process.wait_for_screen("MODE-SWITCH-REPLY");
+    process.wait_for_stable_screen("MODE-SWITCH-REPLY");
+    process.type_text("CURRENT-DRAFT");
+    process.wait_for_stable_screen("CURRENT-DRAFT");
+    // Open Home without replacing the current conversation's draft.
+    process.send(b"\x1b[<0;3;1M\x1b[<0;3;1m");
+    process.wait_for_stable_screen("Resume session");
+    process.type_text("NEW-DRAFT");
+    process.tab();
+    process.down();
+    process.down();
+    process.enter();
+    process.wait_for_stable_screen("Screen mode");
+    for _ in 0..6 {
+        process.down();
+    }
+    process.enter();
+    process.wait_for_stable_screen("inline");
+    process.escape();
+    process.wait_for_stable_screen("CURRENT-DRAFT");
+    assert!(!process.screen().contains("NEW-DRAFT"));
+    // Explicitly clear the current draft to open settings; the new-task draft remains separate.
+    process.send(&[0x7f; "CURRENT-DRAFT".len()]);
+    process.submit("/config");
+    process.wait_for_stable_screen("Screen mode");
+    for _ in 0..6 {
+        process.down();
+    }
+    process.enter();
+    process.wait_for_stable_screen("fullscreen");
+    process.escape();
+    process.wait_for_stable_screen("NEW-DRAFT");
+    assert!(process.screen().contains("Resume session"));
+    process.escape();
     process.quit();
     assert_eq!(server.request_count(), 1);
 }
@@ -128,7 +160,7 @@ fn actual_tui_multiple_commands_preserve_internal_history_and_fixed_input() {
         process.scroll_up(2, 2);
         process.wait_for_screen("Jump to bottom (click) ↓");
         process.control_home();
-        process.wait_for_screen("Zeta Code v");
+        process.wait_for_screen("> /status");
         let visible_history = process.screen();
         assert!(
             visible_history.contains("> /status"),
@@ -205,18 +237,36 @@ fn actual_tui_input_keeps_hint_bar_without_blank_line_growth() {
 
 fn assert_input_surface_visible(process: &TuiProcess) {
     let screen = process.screen();
+    let top = input_top_row(process);
     assert!(
-        screen.lines().filter(|line| line.starts_with("──")).count() >= 2,
-        "chat input borders must remain visible:\n{screen}"
+        screen
+            .lines()
+            .skip(top + 1)
+            .any(|line| line.starts_with('>')),
+        "input prompt remains visible:\n{screen}"
+    );
+    assert!(
+        screen
+            .lines()
+            .skip(top + 2)
+            .any(|line| line.starts_with("──") || line.trim_start().starts_with('╰')),
+        "input bottom border remains visible:\n{screen}"
     );
 }
 
 fn input_top_row(process: &TuiProcess) -> usize {
-    process
-        .screen()
-        .lines()
-        .position(|line| line.starts_with("──"))
-        .expect("chat input top border remains visible")
+    let screen = process.screen();
+    let rows = screen.lines().collect::<Vec<_>>();
+    let prompt = rows
+        .iter()
+        .rposition(|line| line.starts_with('>'))
+        .expect("chat input prompt remains visible");
+    let top = prompt.checked_sub(1).expect("the input has a top border");
+    assert!(
+        rows[top].starts_with("──") || rows[top].trim_start().starts_with('╭'),
+        "{screen}"
+    );
+    top
 }
 
 #[test]
@@ -509,4 +559,43 @@ fn actual_tui_streaming_queue_drains_while_provider_waits_and_input_continues() 
     assert!(process.screen().contains("draft stays responsive"));
     assert_eq!(server.request_count(), 1);
     process.quit();
+}
+
+#[test]
+fn actual_tui_home_creates_only_the_submitted_session_and_resumes_it() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([HttpResponse::streaming(["HOME-SESSION-REPLY"], None)]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("Resume session");
+    assert!(fixture.sessions().is_empty());
+    assert_eq!(server.request_count(), 0);
+    process.submit("/config");
+    process.wait_for_stable_screen("Screen mode");
+    process.escape();
+    process.wait_for_stable_screen("Resume session");
+    process.submit("/status");
+    process.wait_for_stable_screen("Full context window");
+    process.escape();
+    process.wait_for_stable_screen("Resume session");
+    assert!(fixture.sessions().is_empty());
+    process.resize(SMALL_SIZE);
+    process.wait_for_stable_screen("Resume session");
+    process.submit("HOME-TASK 中文");
+    process.wait_for_stable_screen("HOME-SESSION-REPLY");
+    assert_eq!(server.request_count(), 1);
+    let (session, thread) = fixture.only_thread();
+    process.submit("/home");
+    process.wait_for_stable_screen("Resume session");
+    process.escape();
+    process.wait_for_stable_screen("HOME-SESSION-REPLY");
+    process.quit();
+    #[cfg(unix)]
+    assert!(process.raw_text().contains("\x1b[?1049l"));
+    let mut resumed =
+        TuiProcess::start_in_vscode(&fixture, &["resume", &session, &thread], LARGE_SIZE);
+    resumed.wait_for_stable_screen("HOME-SESSION-REPLY");
+    assert!(!resumed.screen().contains("Start a task below"));
+    assert_eq!(server.request_count(), 1);
+    resumed.quit();
 }

@@ -509,6 +509,9 @@ impl<'a> RenderContext<'a> {
     pub(crate) const fn background(self) -> Color {
         self.theme.background()
     }
+    pub(crate) const fn border(self) -> Color {
+        self.theme.border()
+    }
     pub(crate) const fn chat_input_chrome(self) -> Color {
         self.theme.chat_input_chrome()
     }

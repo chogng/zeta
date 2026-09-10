@@ -2,21 +2,19 @@
 source: zeta-code/tui/src/app/fullscreen/frame_tests.rs
 expression: "render(&app, 100, 18)"
 ---
+  Home  .                                                                                           
                                                                                                     
-    ▄  ▄     Zeta Code v0.1.0                                                                       
-  ▗█▛██▜█▖   Automatic model · Access unknown                                                       
-  ▝▜████▛▘   .                                                                                      
-    ▝  ▘                                                                                            
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-─ Model ────────────────────────────────────────────────────────────────────────────────────────────
-                                                                                                    
-   Favorites    My gateway                                                                          
-> gateway-model                                                                                     
-                                                                                                    
-  Enter to apply  ·  Tab/Shift+Tab to switch  ·  Esc to close  ·  P to pin/unpin
+            ┌── Model ────────────────────────────────────────────────────────────[×]─┐             
+            │                                                                         │             
+            │   Favorites    My gateway                                               │             
+            │                                                                         │             
+            │> gateway-model                                                          │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│                                                                         │────────────╮
+> │         │                                                                         │            │
+  ╰─────────│  Enter to apply · Tab/Shift+Tab to switch · Esc to close                │atic model ─╯
+            └─────────────────────────────────────────────────────────────────────────┘

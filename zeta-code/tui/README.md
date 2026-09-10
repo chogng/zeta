@@ -37,8 +37,10 @@ just zeta
 | 屏幕模式与页面组合 | [frame.rs](src/app/frame.rs)、[fullscreen.rs](src/app/fullscreen.rs)、[inline.rs](src/app/inline.rs) |
 | 全屏布局、鼠标和选区 | [layout.rs](src/app/fullscreen/layout.rs)、[pointer.rs](src/app/fullscreen/pointer.rs)、[selection.rs](src/app/fullscreen/selection.rs) |
 | 行内布局与历史追加 | [layout.rs](src/app/inline/layout.rs)、[output.rs](src/app/inline/output.rs) |
+| 首页与对话页 | [home.rs](src/app/fullscreen/home.rs)、[conversation.rs](src/app/fullscreen/conversation.rs) |
+| Modal 外框、标题、正文与底部区域 | [modal.rs](src/widgets/modal.rs) |
 | 全屏输入区组合 | [composer.rs](src/app/fullscreen/composer.rs) |
-| 模式内的按键路由与面板容器 | [全屏导航](src/app/fullscreen/navigation.rs)、[行内导航](src/app/inline/navigation.rs)、[全屏面板](src/app/fullscreen/panel.rs)、[行内面板](src/app/inline/panel.rs) |
+| 模式内的按键路由与面板容器 | [全屏导航](src/app/fullscreen/navigation.rs)、[行内导航](src/app/inline/navigation.rs)、[全屏弹窗](src/app/fullscreen/modal.rs)、[行内面板](src/app/inline/panel.rs) |
 | 欢迎信息、状态栏与提示位置 | 两种模式各自的 [全屏页眉](src/app/fullscreen/header.rs)、[行内页眉](src/app/inline/header.rs)、[全屏底栏](src/app/fullscreen/footer.rs)、[行内底栏](src/app/inline/footer.rs) |
 | 命令面板共用控件和文字绘制 | [widgets](src/widgets)、[render](src/render) |
 
@@ -48,38 +50,46 @@ Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 
 
 全屏界面的维护入口是 `app/fullscreen.rs` 与 `app/fullscreen/`：
 
-- 全屏入口组合正文、会话预览、输入区和浮层，持有鼠标、选区、面板和正文浏览状态；功能数据与请求仍由原功能模块维护。
+- 全屏入口分别组合首页和对话页，持有页面、鼠标、选区、弹窗和正文浏览状态；会话管理与 Issues 的内容和操作由对应功能模块维护。
 - 每种模式的 `layout.rs` 独立定义整页区域，绘制与命中共用本模式的区域计算；公共 App 不计算输入、正文或浮层坐标。`composer.rs` 组合全屏输入、批准、提问和队列。
 - `navigation.rs` 负责区域间的按键路由、焦点顺序、正文导航与面板打开关闭，功能组件继续处理自身的编辑和操作。全屏 `pointer.rs` 处理鼠标路由，`selection.rs` 处理选区手势、高亮和复制结果。
-- `panel.rs` 负责本模式的面板外框、尺寸及正文区域；`CommandPanel` 共用功能编辑器和操作结果，不决定页面摆放。
-- `header.rs`、`footer.rs` 分别维护欢迎信息、底栏与提示的呈现规则。目录和模型摘要、状态信息、通知内容与有效期继续共用；正文跳转文案由模式提供。
+- `fullscreen/modal.rs` 替代原 `fullscreen/panel.rs`，负责弹窗层的绘制和输入路由；`widgets/modal.rs` 计算外框、标题、关闭按钮、正文与提示区域。`CommandPanel` 共用功能编辑器和操作结果，inline 继续用自己的 `panel.rs` 承载。
+- `home.rs` 维护欢迎卡片与开始入口；欢迎卡片不进入对话历史。`header.rs` 显示固定的 Home 入口、分支和目录，`footer.rs` 显示状态与有效快捷键。输入框保留标识列，模型名称位于边框下沿。
 - `frame.rs` 只选择屏幕绘制入口和可见资源需求。两种模式彼此不调用，共用正文、输入编辑、通用控件和终端能力。
 - 终端模块负责捕获协议、输出与恢复，`terminal/text.rs` 负责缓冲区文字范围和提取，不保存界面手势状态。
-- 新首页、顶部栏等具体界面在有实现时加入这个目录，小组件在同一文件中维护状态、操作和绘制，不预建空文件。
+- Modal 打开时拦截背景键盘、鼠标和滚动；内容先处理内部返回，关闭后恢复原页面焦点。列表点击使用稳定条目身份，绘制与命中共用区域；Resize 取消未完成的点击。输入补全与批准、提问仍由各自的交互容器处理。
 
 `app/inline.rs` 与全屏入口平级，组合主屏上的正文、输入区和临时面板；`inline/layout.rs` 决定局部绘制高度与区域，`inline/output.rs` 管理已输出记录、定稿正文追加和退出前提交。会话、消息、草稿、队列、模型与设置继续共用现有功能模块的数据和操作。
 
-滚动、消息选中、展开项和绘制缓存由各模式分别持有，复用 [viewport.rs](src/thread/transcript/viewport.rs) 的有界存储与状态算法。预览数据与请求由原功能维护，预览滚动和缓存按模式隔离；关闭或更换预览时释放对应状态。移除消息时同步清理两种模式的无效选中项和锚点。
+共享模型保存会话目录、活动 Session/Thread、消息、配置和按输入目标保存的草稿。`SessionsState` 不保存页面、焦点或浏览选择；[SessionNavigation](src/sessions/navigation.rs) 由 fullscreen 和 inline 分别持有，负责各自的会话管理、分组、选择、预览与详情。
 
-切换模式保留共用草稿和队列，恢复目标模式自己的浏览位置，并将正在编辑的面板完整转交给目标模式。面板编辑状态只有一份，不会遗留一个可被异步结果重新打开的后台面板。
+两个模式分别持有 Issues 查询与浏览状态、子任务列表焦点，以及 [viewport.rs](src/thread/transcript/viewport.rs) 中按 Thread 保存的滚动、消息选中、展开项和队列焦点。`Queue` 只保存消息、排序、编辑和发送状态，`QueueNavigation` 保存各模式的选择。共享数据删除条目时，各视图清理自己失效的选择；另一种模式的导航动作不会修改本模式的页面或焦点。
 
-模式切换会结束共享控件的临时焦点，避免与目标模式恢复的正文焦点重叠；会话预览和详情保留管理器的返回焦点。即使共享草稿已有文字，Esc 仍可退出正文选中并返回输入框，不清空草稿。同一模式的设置重载不改变当前焦点。
+切换模式恢复目标模式自己的页面、焦点和浏览位置。新任务草稿由 `SessionsState.input` 保存，当前会话草稿由 `ThreadPresentationStore` 按 Thread 保存；只有输入目标相同才共用草稿，切换模式不会把新任务草稿送入当前会话。消息队列仍只有一份。
+
+异步剪贴板读取绑定发起时的草稿身份和代次，返回后写入同一份草稿；切换到其他输入目标不会改变它的去向，已经提交的草稿不会接收迟到的图片。
+
+正在编辑的功能面板采用明确交接：同一个编辑器及其身份移动到目标模式，源模式不保留第二份编辑器；页面焦点、会话预览和详情不随它迁移。鼠标按下、悬停和屏幕选区属于终端当前画面，切换时清除。即使草稿已有文字，Esc 仍可退出正文选中并返回输入框；同一模式的设置重载不改变当前焦点。
 
 两种模式的测试与文本快照分别放在 `fullscreen/` 和 `inline/`。定向运行 `just test zeta-tui --lib app::fullscreen` 或 `just test zeta-tui --lib app::inline`；模式隔离与面板转交运行 `just test zeta-tui --lib app::mode_tests`，共用应用流程运行 `just test zeta-tui --lib app::`。
 
 跨功能命令由 [dispatch.rs](src/app/dispatch.rs) 分发，通过各功能接口执行，不在 `app` 中为功能类型追加方法。功能模块解释后端返回值：例如 `dirs::add` 统一校验添加结果，并返回 `AddedDir`，供行内命令和目录面板共用。测试执行助手只放在测试模块中。
 
-会话管理器的导航、分组、归档、删除、恢复、预览和置顶按键由 [SessionsState](src/sessions/state.rs) 处理，返回会话命令或打开详情的请求。各模式负责页面焦点路由与浮层协调，不读取分组和归档状态来决定这些按键的含义。
+会话管理器的导航和按键由 [SessionNavigation](src/sessions/navigation.rs) 处理，借用共享 [SessionsState](src/sessions/state.rs) 查询目录与会话身份，并返回同一套功能命令。`App` 只分发到选中的模式，不能直接写 fullscreen 的私有首页状态。两种模式不调用对方的导航或绘制入口。
 
 ## 启动与事件循环
 
 CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 
 1. 校验初始化结果中的命令目录，拒绝非法名称、空描述和内置命令冲突；连接事件流只取一次。
-2. 读取配置、主题和启动信息，创建会话及根对话，或恢复指定 Session/Thread。
-3. 订阅当前 Thread，安装后端快照和历史分页，组装 App、请求调度器和事件源。
+2. 读取配置、主题和启动信息。普通 fullscreen 启动进入首页，只加载会话目录；inline 启动创建会话，指定恢复身份则直接打开该会话。
+3. 创建或恢复会话时沿用已有 Thread 事件监听，安装快照与历史分页；首页没有活动会话时不建立 Thread 监听。
 4. 终端输入、后端事件和后台完成事件分别唤醒主循环；主循环更新状态并按需绘制。
-5. 退出时结束任务并恢复终端；连接丢失时返回原因及可恢复的会话身份。
+5. 退出时清理客户端工作并恢复终端；连接丢失时返回原因，以及存在时的持久化会话身份。
+
+首页输入通过 Sessions 创建会话并发送首条消息，创建期间锁定完整草稿；创建失败或首条消息被拒绝时恢复文字、图片与长粘贴绑定。`/home` 或顶部 Home 返回首页，Esc 返回已有对话；返回首页不停止正在运行的任务。
+
+命令入队时记录来源模式和编辑器身份，后台请求沿用这个来源。预览、详情和 Issues 结果只回到发起它的模式，即使两个模式的请求代次相同也不会互相覆盖。编辑器身份由 App 统一分配，交接时保留；关闭或替换后迟到结果不能重开弹窗。配置、模型和主题的保存结果仍更新共享模型。
 
 输入、请求完成和后端控制事件不能相互长期阻塞。同一资源的写请求保序，不同资源可以并发；中断、批准和回答使用独立控制请求。具体功能解释自己的响应，事件循环只负责转交和调度。
 
@@ -93,7 +103,7 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 | `TuiOptions` | 指定标题、目录、profile、本地进程身份和恢复信息 |
 | `run` | 在已初始化连接上运行一次交互会话 |
 | `TuiRecoveryState` | 保存持久化 Session/Thread 身份，不携带连接或待执行请求 |
-| `TuiExit` | 区分用户退出、系统终止和连接丢失 |
+| `TuiExit` | 区分用户退出、系统终止和连接丢失；`ConnectionLost.recovery` 在尚无会话时为 `None` |
 | `TuiError` | 报告客户端、事件流、关闭和终端错误 |
 
 `with_remote_dir` 只设置远程展示目录，并关闭本地文件补全，避免把远程路径当成本机路径扫描。正文导出仍受先前配置的本机目录约束。`with_profile_root` 启用该 profile 的 TUI 主题目录，其他设置从后端配置读取。
@@ -201,7 +211,7 @@ Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码�
 
 `/export [relative-path]` 导出当前已加载正文，路径限制在本机工作目录内，不能覆盖已有文件。Ctrl+O 复制最后一条 Agent 回复。
 
-断线后，TUI 丢弃旧连接的待执行请求和操作，只返回持久化会话身份。本地和远程 CLI 在 30 秒窗口内重连；失败时分别给出 `zeta resume SESSION_ID THREAD_ID` 或 `zeta remote connect ... --resume SESSION_ID THREAD_ID`。正常服务端关闭和协议错误不进入传输重试。
+断线后，TUI 丢弃旧连接的待执行请求和操作；存在活动会话时返回其持久化身份，首页尚无会话时返回 `None`，重连后重新进入首页。本地和远程 CLI 在 30 秒窗口内重连；失败时分别给出 `zeta resume SESSION_ID THREAD_ID` 或 `zeta remote connect ... --resume SESSION_ID THREAD_ID`。正常服务端关闭和协议错误不进入传输重试。
 
 ## TUI 主题文件
 
@@ -317,10 +327,10 @@ just test-tui
 
 | 环境 | 当前证据 |
 | --- | --- |
-| VS Code / Windows ConPTY | 100×32 与 60×16 的真实 CLI 场景通过输入、回复、Status 开关、固定输入区、Ctrl+Home/End 历史浏览和退出恢复 |
+| VS Code / Windows ConPTY | 已有终端协议场景覆盖输入、回复、滚动和退出恢复；新首页与 Modal 布局仍需在该平台重新运行 |
 | 其他环境 | Windows Terminal、WezTerm、macOS、Linux 终端及 tmux/Zellij 组合尚未重新验证 |
 
-最小真实场景使用 `just test-tui actual_tui_input_keeps_hint_bar_without_blank_line_growth -- --nocapture`。多轮历史使用 `just test zeta-cli --test tui_real_scenarios actual_tui_multiple_commands_preserve_internal_history_and_fixed_input -- --nocapture`，它执行本地命令与 12 轮消息，核对 Welcome、本地命令和最后回复均可从同一 Transcript 到达。
+最小真实场景使用 `just test-tui actual_tui_input_keeps_hint_bar_without_blank_line_growth -- --nocapture`。多轮历史使用 `just test-tui actual_tui_multiple_commands_preserve_internal_history_and_fixed_input -- --nocapture`，它执行本地命令与 12 轮消息，核对本地命令和最后回复均可从同一 Transcript 到达，目录始终位于固定顶部栏。首页首次创建与跨进程恢复使用 `just test-tui actual_tui_home_creates_only_the_submitted_session_and_resumes_it -- --nocapture`。
 
 终端模式协议由 [session_tests.rs](src/terminal/session_tests.rs) 检查，正文分页、稳定锚点和长内容由 [正文绘制测试](src/thread/transcript/view/render_tests.rs) 检查。历史完整性不能再用终端回滚行数判断。
 

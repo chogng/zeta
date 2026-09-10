@@ -9,30 +9,55 @@ use crate::thread::plan;
 use crate::thread::queue;
 use ratatui::layout::Rect;
 
-const BOTTOM_ROWS: u16 = 2;
+const BOTTOM_ROWS: u16 = 3;
 
 pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
+    let header_rows = terminal_area.height.saturating_sub(8).min(2);
+    let header = Rect::new(
+        terminal_area.x + 2.min(terminal_area.width),
+        terminal_area.y,
+        terminal_area.width.saturating_sub(4),
+        header_rows.min(1),
+    );
+    let terminal_area = Rect::new(
+        terminal_area.x,
+        terminal_area.y + header_rows,
+        terminal_area.width,
+        terminal_area.height.saturating_sub(header_rows),
+    );
+    if app.issue_manager().is_some() {
+        let footer_rows = terminal_area.height.min(1);
+        return Layout {
+            header,
+            input: Rect::default(),
+            session: SessionAreas {
+                transcript: Rect {
+                    height: terminal_area.height.saturating_sub(footer_rows),
+                    ..terminal_area
+                },
+                bottom: Rect::new(
+                    terminal_area.x,
+                    terminal_area.bottom().saturating_sub(footer_rows),
+                    terminal_area.width,
+                    footer_rows,
+                ),
+                ..SessionAreas::default()
+            },
+        };
+    }
     if app.session_preview().is_some() {
         let session = session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0, 0, MIN_TRANSCRIPT_ROWS);
         return Layout {
+            header,
             input: Rect::default(),
             session,
-        };
-    }
-    if let Some(panel) = app.command_panel() {
-        return Layout {
-            session: command_panel_areas(
-                terminal_area,
-                super::panel::desired_height(panel, terminal_area.width),
-                BOTTOM_ROWS,
-            ),
-            input: Rect::default(),
         };
     }
     let input_view = app.chat_composer_view();
     let input_rows = ChatComposerSurface {
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
+        chrome: chat_input::ChatInputChrome::Box,
     }
     .desired_height(terminal_area.width, app.render_context());
     let approval_rows = app
@@ -48,7 +73,7 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
     } else {
         input_rows
     };
-    let queue_rows = if app.session_manager_view().is_some() {
+    let queue_rows = if app.fullscreen.home_visible() || app.session_manager_view().is_some() {
         0
     } else {
         let queue_view = app.queue_view();
@@ -56,12 +81,12 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
     };
     let session = session_areas(
         terminal_area,
-        if app.session_manager_view().is_some() {
+        if app.fullscreen.home_visible() || app.session_manager_view().is_some() {
             0
         } else {
             goal::desired_height(app.goal_view())
         },
-        if app.session_manager_view().is_some() {
+        if app.fullscreen.home_visible() || app.session_manager_view().is_some() {
             0
         } else {
             plan::desired_height(app.plan_view())
@@ -70,9 +95,17 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
         query_rows,
         composer_rows,
         BOTTOM_ROWS,
-        app.agent_thread_switcher_rows(),
-        u16::from(app.status_indicator().is_some()),
-        MIN_TRANSCRIPT_ROWS,
+        if app.fullscreen.home_visible() {
+            0
+        } else {
+            app.agent_thread_switcher_rows()
+        },
+        u16::from(!app.fullscreen.home_visible() && app.status_indicator().is_some()),
+        MIN_TRANSCRIPT_ROWS.min(
+            terminal_area
+                .height
+                .saturating_sub(composer_rows + BOTTOM_ROWS + TOP_TIP_ROWS),
+        ),
     );
     let input = if approval_rows > 0 {
         Rect {
@@ -88,10 +121,15 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
             ..session.composer
         }
     };
-    Layout { session, input }
+    Layout {
+        header,
+        session,
+        input,
+    }
 }
 
 pub(in crate::app) struct Layout {
+    pub(in crate::app) header: Rect,
     pub(in crate::app) session: SessionAreas,
     pub(in crate::app) input: Rect,
 }
@@ -105,52 +143,10 @@ impl Layout {
             height: self.input.y.saturating_sub(self.session.transcript.y),
         }
     }
-
-    pub(in crate::app) fn transient_area(&self) -> Rect {
-        Rect {
-            x: self.session.transcript.x,
-            y: self.session.transcript.y,
-            width: self.session.transcript.width,
-            height: self
-                .session
-                .bottom
-                .y
-                .saturating_sub(self.session.transcript.y),
-        }
-    }
 }
 
 pub(super) const MIN_TRANSCRIPT_ROWS: u16 = 4;
-const MIN_MANAGER_ROWS: u16 = 4;
 const TOP_TIP_ROWS: u16 = 1;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct ManagerAreas {
-    pub(in crate::app) welcome: Rect,
-    pub(in crate::app) sessions: Rect,
-}
-
-pub(in crate::app) fn manager_areas(area: Rect, welcome_desired_rows: u16) -> ManagerAreas {
-    let sessions_rows = MIN_MANAGER_ROWS.min(area.height);
-    let available_above_sessions = area.height.saturating_sub(sessions_rows);
-    let gap_rows = u16::from(available_above_sessions > 0);
-    let welcome_rows = welcome_desired_rows.min(available_above_sessions.saturating_sub(gap_rows));
-    let sessions_y = area.y.saturating_add(welcome_rows).saturating_add(gap_rows);
-    ManagerAreas {
-        welcome: Rect {
-            height: welcome_rows,
-            ..area
-        },
-        sessions: Rect {
-            y: sessions_y,
-            height: area
-                .y
-                .saturating_add(area.height)
-                .saturating_sub(sessions_y),
-            ..area
-        },
-    }
-}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) struct SessionAreas {
@@ -164,30 +160,6 @@ pub(in crate::app) struct SessionAreas {
     pub(in crate::app) composer: Rect,
     pub(in crate::app) bottom: Rect,
     pub(in crate::app) agent_thread_switcher: Rect,
-}
-
-pub(in crate::app) fn command_panel_areas(
-    area: Rect,
-    desired_rows: u16,
-    hint_rows: u16,
-) -> SessionAreas {
-    let hint_rows = hint_rows.min(area.height);
-    let panel_rows = desired_rows.min(area.height.saturating_sub(hint_rows));
-    let panel_y = area
-        .bottom()
-        .saturating_sub(hint_rows)
-        .saturating_sub(panel_rows);
-    SessionAreas {
-        transcript: Rect::new(area.x, area.y, area.width, panel_y.saturating_sub(area.y)),
-        composer: Rect::new(area.x, panel_y, area.width, panel_rows),
-        bottom: Rect::new(
-            area.x,
-            area.bottom().saturating_sub(hint_rows),
-            area.width,
-            hint_rows,
-        ),
-        ..SessionAreas::default()
-    }
 }
 
 pub(in crate::app) fn session_areas(

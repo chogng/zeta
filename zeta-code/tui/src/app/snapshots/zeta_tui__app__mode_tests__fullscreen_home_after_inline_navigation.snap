@@ -1,0 +1,20 @@
+---
+source: zeta-code/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  Home  .                                         
+                                                  
+  ╭────────────────────────────────────────────╮  
+  │                                            │  
+  │  Zeta Code v0.1.0                          │  
+  │  Resume session                            │  
+  │  Manage sessions                           │  
+  │  Settings                                  │  
+  ╰────────────────────────────────────────────╯  
+  Type a new task · Tab actions · Esc return      
+  ╭──────────────────────────────────────────────╮
+> │                                              │
+  ╰──────────────────────────── Automatic model ─╯
+                                                  
+  ⏸ ask permissions on                            
+  Enter send  ·  Tab actions  ·  / commands
