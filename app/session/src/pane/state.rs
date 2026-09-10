@@ -144,6 +144,30 @@ impl SessionPaneState {
         self.chat_input().has_shell_suggestion()
     }
 
+    pub fn connect_input_history(&mut self, client: message_history::MessageHistory) {
+        self.update_chat_input(|input| input.connect_history(client));
+    }
+
+    pub fn input_history_unavailable(&mut self, error: String) {
+        self.update_chat_input(|input| input.history_unavailable(error));
+    }
+
+    pub fn poll_input_history(&mut self) -> bool {
+        self.update_chat_input(ChatInput::poll_history)
+    }
+    pub fn searching_input_history(&self) -> bool {
+        self.chat_input().searching_history()
+    }
+    pub fn start_input_history_search(&mut self) {
+        self.update_chat_input(ChatInput::start_history_search);
+    }
+    pub fn accept_input_history(&mut self) {
+        self.update_chat_input(ChatInput::accept_history);
+    }
+    pub fn cancel_input_history(&mut self) {
+        self.update_chat_input(ChatInput::cancel_history);
+    }
+
     pub fn mark_agent_message_submitted(&mut self, text: &str) {
         self.update_chat_input(|chat_input| chat_input.mark_agent_message_submitted(text));
     }
@@ -219,6 +243,9 @@ impl SessionPaneState {
         scroll_limit: usize,
     ) {
         let previous_line_count = line_count(self.chat_widget.transcript());
+        if self.thread.as_ref().map(|current| &current.thread_id) != Some(&thread.thread_id) {
+            self.update_chat_input(|input| input.set_history_thread(thread.thread_id.to_string()));
+        }
         self.update_chat_input(|chat_input| synchronize_chat_input(chat_input, &thread));
         self.thread = Some(thread);
         self.chat_widget

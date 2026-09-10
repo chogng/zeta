@@ -52,6 +52,7 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
                 status: ThreadStatus::Active,
                 sequence: 7,
                 usage: Default::default(),
+                reference_cost: Default::default(),
                 goal: None,
                 turns: Vec::new(),
             },

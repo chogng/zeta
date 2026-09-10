@@ -15,10 +15,12 @@ use super::wrap::wrap_input;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use message_history::MessageHistory;
+use message_history::MessageHistoryKind as InputKind;
+use message_history::MessageHistoryRecall as HistoryRecall;
+use message_history::MessageHistoryRecallEffect as RecallEffect;
 use zeta_protocol::SkillRef;
 use zeta_slash_commands::SlashCommandOrigin;
-
-const MAX_COMPOSER_HISTORY: usize = 100;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputOutcome {
@@ -85,9 +87,8 @@ pub(crate) struct ChatInput {
     pub(super) skill_bindings: Vec<(TextElementId, SkillRef)>,
     pub(super) pending_pastes: PendingPastes,
     pub(super) attachments: Attachments,
-    history: Vec<String>,
-    history_index: Option<usize>,
-    history_draft: String,
+    history: HistoryRecall,
+    history_draft: Option<ChatInputDraft>,
 }
 
 impl ChatInput {
@@ -106,13 +107,26 @@ impl ChatInput {
             skill_bindings: Vec::new(),
             pending_pastes: PendingPastes::default(),
             attachments: Attachments::default(),
-            history: Vec::new(),
-            history_index: None,
-            history_draft: String::new(),
+            history: HistoryRecall::default(),
+            history_draft: None,
         }
     }
 
     pub(in crate::thread::composer) fn handle_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
+        if self.history.query().is_some() {
+            return self.handle_history_search_key(key);
+        }
+        if key.code == KeyCode::Char('r') && key.modifiers == KeyModifiers::CONTROL {
+            let effect = self.history.search(self.textarea.text().to_owned());
+            self.apply_history_effect(effect);
+            self.completion.clear();
+            return ChatInputOutcome::Consumed;
+        }
+        if key.code == KeyCode::Esc && self.history.active() {
+            self.history.reset();
+            self.apply_history_effect(RecallEffect::Restore);
+            return ChatInputOutcome::Consumed;
+        }
         if let Some(outcome) = self.handle_completion_key(key) {
             return outcome;
         }
@@ -133,8 +147,16 @@ impl ChatInput {
             return ChatInputOutcome::Consumed;
         }
         match key.code {
-            KeyCode::Up if !self.textarea.can_move_up() => return self.previous_history(),
-            KeyCode::Down if !self.textarea.can_move_down() => return self.next_history(),
+            KeyCode::Up if !self.textarea.can_move_up() => {
+                let effect = self.history.older();
+                self.apply_history_effect(effect);
+                return ChatInputOutcome::Consumed;
+            }
+            KeyCode::Down if !self.textarea.can_move_down() => {
+                let effect = self.history.newer();
+                self.apply_history_effect(effect);
+                return ChatInputOutcome::Consumed;
+            }
             _ => {}
         }
 
@@ -159,6 +181,11 @@ impl ChatInput {
         &mut self,
         pasted: String,
     ) -> Result<(), String> {
+        if let Some(query) = self.history.query() {
+            let effect = self.history.search(format!("{query}{pasted}"));
+            self.apply_history_effect(effect);
+            return Ok(());
+        }
         self.reset_history_navigation();
         match self
             .attachments
@@ -194,6 +221,7 @@ impl ChatInput {
             return;
         }
         self.input_mode = input_mode;
+        self.reset_history_navigation();
         self.vim.reset_draft();
     }
 
@@ -359,15 +387,19 @@ impl ChatInput {
         })
     }
 
-    fn take_draft(&mut self) -> ChatInputDraft {
-        let draft = ChatInputDraft {
+    fn take_editor_draft(&mut self) -> ChatInputDraft {
+        ChatInputDraft {
             textarea: std::mem::replace(&mut self.textarea, TextArea::new()),
             vim: std::mem::take(&mut self.vim),
             slash_command_element: self.slash_command_element.take(),
             skill_bindings: std::mem::take(&mut self.skill_bindings),
             pending_pastes: std::mem::take(&mut self.pending_pastes),
             attachments: std::mem::take(&mut self.attachments),
-        };
+        }
+    }
+
+    fn take_draft(&mut self) -> ChatInputDraft {
+        let draft = self.take_editor_draft();
         self.completion.clear();
         self.reset_history_navigation();
         draft
@@ -379,7 +411,12 @@ impl ChatInput {
             .iter()
             .all(|input| matches!(input, ChatInputItem::Text(_)))
         {
-            self.record_history(submission.display_text.clone());
+            let kind = if self.current_command().is_some() {
+                InputKind::Command
+            } else {
+                InputKind::Agent
+            };
+            self.history.record(submission.display_text.clone(), kind);
         }
     }
 
@@ -394,59 +431,127 @@ impl ChatInput {
         self.reset_history_navigation();
     }
 
-    fn previous_history(&mut self) -> ChatInputOutcome {
-        if self.history.is_empty() {
-            return ChatInputOutcome::Consumed;
-        }
-        let index = match self.history_index {
-            Some(index) => index.saturating_sub(1),
-            None => {
-                self.history_draft = self.textarea.text().to_owned();
-                self.history.len() - 1
-            }
-        };
-        self.history_index = Some(index);
-        self.replace_with_history_entry(index);
-        ChatInputOutcome::Consumed
+    pub(crate) fn connect_history(&mut self, client: MessageHistory, thread_id: String) {
+        self.history.connect(client);
+        self.history.set_thread_id(thread_id);
     }
 
-    fn next_history(&mut self) -> ChatInputOutcome {
-        let Some(index) = self.history_index else {
-            return ChatInputOutcome::Consumed;
-        };
-        if index + 1 < self.history.len() {
-            self.history_index = Some(index + 1);
-            self.replace_with_history_entry(index + 1);
+    pub(crate) fn history_unavailable(&mut self, error: String) {
+        self.history.unavailable(error);
+    }
+
+    pub(crate) fn poll_history(&mut self) -> bool {
+        let (changed, effect) = self.history.poll();
+        self.apply_history_effect(effect);
+        changed
+    }
+
+    pub(crate) fn history_status(&self) -> Option<String> {
+        let status = self.history.status();
+        if let Some(error) = status.error {
+            return Some(format!("History: {error}"));
+        }
+        if !status.active {
+            return None;
+        }
+        let state = if status.loading {
+            "Searching…"
+        } else if status.empty {
+            "No match"
         } else {
-            self.history_index = None;
-            self.textarea.replace_text(&self.history_draft);
-            self.history_draft.clear();
+            "↑/↓ browse"
+        };
+        Some(match status.query {
+            Some(query) => format!("History search: {query} · {state} · Enter edit · Esc cancel"),
+            None => format!("History · {state} · Esc restore draft"),
+        })
+    }
+
+    pub(crate) fn searching_history(&self) -> bool {
+        self.history.query().is_some()
+    }
+
+    pub(crate) fn history_intercepts(&self, key: KeyEvent) -> bool {
+        self.searching_history()
+            || (self.history.active() && key.code == KeyCode::Esc)
+            || (key.code == KeyCode::Char('r') && key.modifiers == KeyModifiers::CONTROL)
+    }
+
+    fn handle_history_search_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
+        let effect = match key.code {
+            KeyCode::Esc => {
+                self.history.reset();
+                RecallEffect::Restore
+            }
+            KeyCode::Enter => {
+                let effect = self.history.accept();
+                if matches!(effect, RecallEffect::Keep) {
+                    self.history_draft = None;
+                }
+                effect
+            }
+            KeyCode::Up => self.history.older(),
+            KeyCode::Down => self.history.newer(),
+            KeyCode::Char('r') if key.modifiers == KeyModifiers::CONTROL => self.history.older(),
+            KeyCode::Char('c' | 'g') if key.modifiers == KeyModifiers::CONTROL => {
+                self.history.reset();
+                RecallEffect::Restore
+            }
+            KeyCode::Char(ch)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                let mut query = self.history.query().unwrap().to_owned();
+                query.push(ch);
+                self.history.search(query)
+            }
+            KeyCode::Backspace => {
+                let mut query = self.history.query().unwrap().to_owned();
+                query.pop();
+                self.history.search(query)
+            }
+            _ => RecallEffect::Keep,
+        };
+        self.apply_history_effect(effect);
+        if !self.searching_history() {
+            self.sync_completion();
         }
         ChatInputOutcome::Consumed
     }
 
-    fn replace_with_history_entry(&mut self, index: usize) {
-        self.textarea.replace_text(&self.history[index]);
-        self.vim.reset_draft();
-        self.pending_pastes.clear();
-        self.attachments.clear();
-        self.slash_command_element = None;
-        self.skill_bindings.clear();
-        self.sync_completion();
-    }
-
-    fn record_history(&mut self, entry: String) {
-        if self.history.last() != Some(&entry) {
-            self.history.push(entry);
-            if self.history.len() > MAX_COMPOSER_HISTORY {
-                self.history.remove(0);
+    fn apply_history_effect(&mut self, effect: RecallEffect) {
+        match effect {
+            RecallEffect::Keep => {}
+            RecallEffect::Restore => {
+                if let Some(draft) = self.history_draft.take() {
+                    self.textarea = draft.textarea;
+                    self.vim = draft.vim;
+                    self.slash_command_element = draft.slash_command_element;
+                    self.skill_bindings = draft.skill_bindings;
+                    self.pending_pastes = draft.pending_pastes;
+                    self.attachments = draft.attachments;
+                    self.sync_completion();
+                }
+            }
+            RecallEffect::Recall(text) => {
+                if self.history_draft.is_none() {
+                    self.history_draft = Some(self.take_editor_draft());
+                }
+                self.textarea.replace_text(&text.text);
+                self.vim.reset_draft();
+                self.pending_pastes.clear();
+                self.attachments.clear();
+                self.slash_command_element = None;
+                self.skill_bindings.clear();
+                self.completion.clear();
             }
         }
     }
 
     pub(super) fn reset_history_navigation(&mut self) {
-        self.history_index = None;
-        self.history_draft.clear();
+        self.history.reset();
+        self.history_draft = None;
     }
 }
 
@@ -465,3 +570,7 @@ fn is_newline_key(key: KeyEvent) -> bool {
             .intersects(KeyModifiers::SHIFT | KeyModifiers::ALT))
         || matches!(key.code, KeyCode::Char('j')) && key.modifiers == KeyModifiers::CONTROL
 }
+
+#[cfg(test)]
+#[path = "history_tests.rs"]
+mod history_tests;

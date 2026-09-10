@@ -25,6 +25,10 @@ pub use layout::interaction_content_size;
 pub use layout::interaction_list_bounds;
 pub use layout::interaction_preferred_height;
 pub use layout::interaction_selection_scroll_command;
+use message_history::MessageHistory;
+use message_history::MessageHistoryKind as InputKind;
+use message_history::MessageHistoryRecall as HistoryRecall;
+use message_history::MessageHistoryRecallEffect as RecallEffect;
 use shell_completion::ShellGhostSuggestion;
 use shell_completion::shell_ghost_suggestion;
 pub(crate) use view::ChatInputView;
@@ -79,9 +83,10 @@ pub struct ChatInput {
     classifier: InputClassifier,
     conversation: InputConversation,
     agent_response: AgentResponseState,
-    shell_history: Vec<String>,
-    shell_history_index: Option<usize>,
-    shell_history_draft: Option<String>,
+    history: HistoryRecall,
+    history_draft: Option<(ChatInputEditor, ComposerRoute)>,
+    history_composition: Option<String>,
+    recalled_route: Option<ComposerRoute>,
     shell_suggestion: Option<ShellGhostSuggestion>,
     dismissed_shell_suggestion_input: Option<String>,
 }
@@ -103,9 +108,10 @@ impl ChatInput {
             classifier: InputClassifier::for_working_directory(working_directory),
             conversation: InputConversation::Standalone,
             agent_response: AgentResponseState::None,
-            shell_history: Vec::new(),
-            shell_history_index: None,
-            shell_history_draft: None,
+            history: HistoryRecall::default(),
+            history_draft: None,
+            history_composition: None,
+            recalled_route: None,
             shell_suggestion: None,
             dismissed_shell_suggestion_input: None,
         }
@@ -181,7 +187,7 @@ impl ChatInput {
     }
 
     pub fn set_text(&mut self, text: impl Into<String>) {
-        self.leave_shell_history();
+        self.leave_history();
         self.input.set_text(text);
         self.refresh_classification();
     }
@@ -204,7 +210,7 @@ impl ChatInput {
         let Some(suggestion) = self.shell_suggestion.take() else {
             return false;
         };
-        self.leave_shell_history();
+        self.leave_history();
         self.dismissed_shell_suggestion_input = None;
         let applied = self.input.apply_text_edit(suggestion.edit);
         self.refresh_classification();
@@ -286,51 +292,87 @@ impl ChatInput {
     }
 
     pub fn apply(&mut self, command: CodeEditorCommand) {
-        if self.route == ComposerRoute::Shell {
-            match command {
-                CodeEditorCommand::MoveUp(CodeEditorSelectionMode::Move)
-                    if self.input.is_collapsed_at_first_row() =>
-                {
-                    if self.older_shell_history() {
-                        return;
-                    }
+        if let Some(query) = self.history.query() {
+            let mut query = query.to_owned();
+            let effect = match command {
+                CodeEditorCommand::Insert(text) => {
+                    query.push_str(&text);
+                    self.history.search(query)
                 }
-                CodeEditorCommand::MoveDown(CodeEditorSelectionMode::Move)
-                    if self.input.is_collapsed_at_last_row() =>
-                {
-                    if self.newer_shell_history() {
-                        return;
-                    }
+                CodeEditorCommand::Backspace => {
+                    query.pop();
+                    self.history.search(query)
                 }
-                _ => self.leave_shell_history(),
-            }
+                CodeEditorCommand::MoveUp(_) => self.history.older(),
+                CodeEditorCommand::MoveDown(_) => self.history.newer(),
+                _ => RecallEffect::Keep,
+            };
+            self.apply_history_effect(effect);
+            return;
         }
+        let effect = match command {
+            CodeEditorCommand::MoveUp(CodeEditorSelectionMode::Move)
+                if self.input.is_collapsed_at_first_row() =>
+            {
+                Some(self.history.older())
+            }
+            CodeEditorCommand::MoveDown(CodeEditorSelectionMode::Move)
+                if self.input.is_collapsed_at_last_row() =>
+            {
+                Some(self.history.newer())
+            }
+            _ => None,
+        };
+        if let Some(effect) = effect {
+            self.apply_history_effect(effect);
+            return;
+        }
+        self.leave_history();
         self.input.apply(command);
         self.refresh_classification();
     }
 
     pub fn apply_composition(&mut self, event: TextInputCompositionEvent) {
-        self.leave_shell_history();
+        if let Some(query) = self.history.query() {
+            match event {
+                TextInputCompositionEvent::Preedit { text, .. } => {
+                    self.history_composition = Some(text)
+                }
+                TextInputCompositionEvent::Commit(text) => {
+                    let effect = self.history.search(format!("{query}{text}"));
+                    self.history_composition = None;
+                    self.apply_history_effect(effect);
+                }
+                TextInputCompositionEvent::Cancel => self.history_composition = None,
+            }
+            return;
+        }
+        self.leave_history();
         self.input.apply_composition(event);
         self.refresh_classification();
     }
 
     pub fn cancel_composition(&mut self) {
+        self.history_composition = None;
         self.input.cancel_composition();
         self.refresh_shell_suggestion();
     }
 
     pub fn clear_after_submit(&mut self) {
-        if self.route == ComposerRoute::Shell {
-            let command = self.input.text().to_owned();
-            if self.shell_history.last() != Some(&command) {
-                self.shell_history.push(command);
-            }
+        if !self.input.text().trim().is_empty() {
+            let kind = match self.route {
+                ComposerRoute::Agent if self.input.text().trim_start().starts_with('/') => {
+                    InputKind::Command
+                }
+                ComposerRoute::Agent => InputKind::Agent,
+                ComposerRoute::Shell => InputKind::Shell,
+            };
+            self.history.record(self.input.text().to_owned(), kind);
         }
         self.input.clear();
         self.route = ComposerRoute::Agent;
         self.refresh_editor_language();
-        self.leave_shell_history();
+        self.leave_history();
         self.dismissed_shell_suggestion_input = None;
         self.refresh_shell_suggestion();
         self.refresh_interaction();
@@ -342,7 +384,7 @@ impl ChatInput {
         point: Point,
         mode: CodeEditorSelectionMode,
     ) -> bool {
-        self.leave_shell_history();
+        self.leave_history();
         let moved = self.input.move_caret_to_point(bounds, point, mode);
         if moved {
             self.refresh_shell_suggestion();
@@ -350,47 +392,114 @@ impl ChatInput {
         moved
     }
 
-    fn older_shell_history(&mut self) -> bool {
-        if self.shell_history.is_empty() {
-            return false;
-        }
-        let index = match self.shell_history_index {
-            Some(index) => index.saturating_sub(1),
-            None => {
-                self.shell_history_draft = Some(self.input.text().to_owned());
-                self.shell_history.len() - 1
-            }
-        };
-        self.shell_history_index = Some(index);
-        self.input.set_text(self.shell_history[index].clone());
-        self.refresh_editor_language();
-        self.refresh_shell_suggestion();
-        true
+    pub fn connect_history(&mut self, client: MessageHistory) {
+        self.history.connect(client);
     }
 
-    fn newer_shell_history(&mut self) -> bool {
-        let Some(index) = self.shell_history_index else {
-            return false;
-        };
-        if index + 1 < self.shell_history.len() {
-            let next = index + 1;
-            self.shell_history_index = Some(next);
-            self.input.set_text(self.shell_history[next].clone());
-            self.refresh_editor_language();
-            self.refresh_shell_suggestion();
+    pub fn set_history_thread(&mut self, thread_id: String) {
+        self.cancel_history();
+        self.history.set_thread_id(thread_id);
+    }
+
+    pub fn history_unavailable(&mut self, error: String) {
+        self.history.unavailable(error);
+    }
+
+    pub fn poll_history(&mut self) -> bool {
+        let (changed, effect) = self.history.poll();
+        self.apply_history_effect(effect);
+        changed
+    }
+
+    pub fn searching_history(&self) -> bool {
+        self.history.query().is_some()
+    }
+
+    pub fn start_history_search(&mut self) {
+        let effect = if self.searching_history() {
+            self.history.older()
         } else {
-            let draft = self.shell_history_draft.take().unwrap_or_default();
-            self.shell_history_index = None;
-            self.input.set_text(draft);
-            self.refresh_editor_language();
-            self.refresh_shell_suggestion();
+            self.history.search(self.input.text().to_owned())
+        };
+        self.apply_history_effect(effect);
+        self.refresh_interaction();
+    }
+
+    pub fn accept_history(&mut self) {
+        if self.history_composition.is_some() {
+            return;
         }
-        true
+        let effect = self.history.accept();
+        self.apply_history_effect(effect);
+        self.history_draft = None;
+        self.refresh_interaction();
+    }
+
+    pub fn cancel_history(&mut self) {
+        self.history_composition = None;
+        self.history.reset();
+        self.apply_history_effect(RecallEffect::Restore);
+    }
+
+    pub fn history_status(&self) -> Option<String> {
+        let status = self.history.status();
+        if let Some(error) = status.error {
+            return Some(format!("History: {error}"));
+        }
+        if !status.active {
+            return None;
+        }
+        let state = if status.loading {
+            "Searching…"
+        } else if status.empty {
+            "No match"
+        } else {
+            "↑/↓ browse"
+        };
+        Some(match status.query {
+            Some(query) => {
+                let preedit = self.history_composition.as_deref().unwrap_or("");
+                format!("History search: {query}{preedit} · {state} · Enter edit · Esc cancel")
+            }
+            None => format!("History · {state} · Esc restore draft"),
+        })
+    }
+
+    fn apply_history_effect(&mut self, effect: RecallEffect) {
+        match effect {
+            RecallEffect::Keep => {}
+            RecallEffect::Restore => {
+                if let Some((input, route)) = self.history_draft.take() {
+                    self.input = input;
+                    self.route = route;
+                    self.recalled_route = Some(route);
+                    self.refresh_shell_suggestion();
+                    self.refresh_interaction();
+                }
+            }
+            RecallEffect::Recall(submission) => {
+                if self.history_draft.is_none() {
+                    self.history_draft = Some((self.input.take_draft(), self.route));
+                }
+                self.input.set_text(submission.text);
+                self.route = match submission.kind {
+                    InputKind::Shell => ComposerRoute::Shell,
+                    InputKind::Agent | InputKind::Command => ComposerRoute::Agent,
+                };
+                self.recalled_route = Some(self.route);
+                self.refresh_editor_language();
+                self.input.hide_ghost_text();
+                self.shell_suggestion = None;
+                self.refresh_interaction();
+            }
+        }
     }
 
     fn refresh_classification(&mut self) {
         let text = self.input.text();
-        self.route = if text.trim_start().starts_with('/') {
+        self.route = if let Some(route) = self.recalled_route {
+            route
+        } else if text.trim_start().starts_with('/') {
             ComposerRoute::Agent
         } else {
             let current_route = match self.route {
@@ -440,7 +549,11 @@ impl ChatInput {
     }
 
     fn refresh_interaction(&mut self) {
-        let text = self.input.text().to_owned();
+        let text = if self.history.active() {
+            String::new()
+        } else {
+            self.input.text().to_owned()
+        };
         let route = self.route;
         self.update_interaction(|interaction| interaction.sync_input(&text, route));
     }
@@ -457,9 +570,11 @@ impl ChatInput {
         result
     }
 
-    fn leave_shell_history(&mut self) {
-        self.shell_history_index = None;
-        self.shell_history_draft = None;
+    fn leave_history(&mut self) {
+        self.recalled_route = None;
+        self.history_composition = None;
+        self.history.reset();
+        self.history_draft = None;
     }
 }
 

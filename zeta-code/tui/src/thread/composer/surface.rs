@@ -29,9 +29,21 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             self.view.input_cursor_width(),
             self.view.input_cursor_line(),
             self.view.input_prompt(),
-            self.cursor,
+            if self.view.searching_history() {
+                ChatInputCursor::Hidden
+            } else {
+                self.cursor
+            },
             context,
         );
+        if let Some(status) = self.view.history_status() {
+            let content = chat_input::content_area(area);
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(status)
+                    .style(ratatui::style::Style::default().fg(context.foreground())),
+                Rect::new(content.x, area.y, content.width, 1),
+            );
+        }
     }
 }
 

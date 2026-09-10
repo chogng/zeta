@@ -146,7 +146,7 @@ impl AppDriver {
     pub(super) fn poll_request_completions(&mut self) -> bool {
         self.memory.observe_objects(self.app.memory_object_count());
         let completions = self.requests.poll();
-        let mut changed = !completions.is_empty();
+        let mut changed = self.app.poll_input_history() || !completions.is_empty();
         for completion in completions {
             match completion {
                 Ok(Completion::Memory(completion)) => {

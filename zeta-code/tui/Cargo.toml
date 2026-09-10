@@ -11,6 +11,8 @@ name = "zeta_tui"
 path = "src/lib.rs"
 
 [dependencies]
+message-history = { workspace = true }
+state = { package = "zeta-state", path = "../../zeta-rs/state" }
 base64 = { workspace = true }
 chrono = { workspace = true }
 crossterm = { workspace = true }

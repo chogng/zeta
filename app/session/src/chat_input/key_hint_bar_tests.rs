@@ -12,6 +12,26 @@ use zui::ui::UiFrame;
 use super::super::ComposerRoute;
 
 #[test]
+fn history_status_is_both_visible_and_exposed_to_accessibility() {
+    let style = SessionPaneStyle::from_theme(DEFAULT_UI_THEME);
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
+    let status = "History search: fix · No match · Esc cancel";
+    frame.draw_component(
+        &KeyHintBar::new(
+            Rect::from_xywh(10.0, 20.0, 500.0, 24.0),
+            ComposerRoute::Agent,
+            style,
+        )
+        .with_history_status(Some(status)),
+    );
+    assert_eq!(frame.scene().text_blocks()[0].text(), status);
+    let nodes = frame
+        .interaction()
+        .accessibility_nodes(&UiDispatch::default());
+    assert!(nodes.iter().any(|node| node.label == status));
+}
+
+#[test]
 fn key_hint_bar_paints_agent_and_shell_hints_with_dark_keycaps() {
     let style = SessionPaneStyle::from_theme(DEFAULT_UI_THEME);
     let bounds = Rect::from_xywh(10.0, 20.0, 400.0, 24.0);
@@ -20,14 +40,14 @@ fn key_hint_bar_paints_agent_and_shell_hints_with_dark_keycaps() {
         (
             ComposerRoute::Agent,
             &["/"][..],
-            "for commands",
-            "/ for commands",
+            "commands · Ctrl+R history",
+            "/ for commands, Up and Down to recall inputs, Control R to search history",
         ),
         (
             ComposerRoute::Shell,
             &["↑", "↓"][..],
-            "for command history",
-            "Up and Down for command history",
+            "history · Ctrl+R search",
+            "Up and Down for input history, Control R to search history",
         ),
     ] {
         let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);

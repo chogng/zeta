@@ -208,6 +208,26 @@ impl WorkbenchApplication {
     }
 
     fn composer_keyboard_input(&mut self, event: &KeyEvent) {
+        if self.modifiers.control_key()
+            && matches!(&event.logical_key, Key::Character(key) if key.eq_ignore_ascii_case("r"))
+        {
+            self.session_pane.start_input_history_search();
+            self.composer_changed();
+            return;
+        }
+        if self.session_pane.searching_input_history() {
+            match event.logical_key {
+                Key::Named(NamedKey::Enter) => self.session_pane.accept_input_history(),
+                Key::Named(NamedKey::Escape) => self.session_pane.cancel_input_history(),
+                _ => {
+                    if let Some(command) = code_editor_command(event, self.modifiers) {
+                        self.session_pane.apply_composer_command(command);
+                    }
+                }
+            }
+            self.composer_changed();
+            return;
+        }
         if self.session_pane.composer_interaction_visible() {
             match event.logical_key {
                 Key::Named(NamedKey::ArrowUp) => {
@@ -272,6 +292,7 @@ impl WorkbenchApplication {
             return;
         }
         if event.logical_key == Key::Named(NamedKey::Escape) {
+            self.session_pane.cancel_input_history();
             self.session_pane.dismiss_shell_suggestion();
             self.session_pane.cancel_composer_composition();
             self.composer_changed();

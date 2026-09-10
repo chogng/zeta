@@ -74,6 +74,67 @@ use zeta_slash_commands::SlashCommandArgumentMode;
 use zeta_slash_commands::SlashCommandDefinition;
 
 #[test]
+fn input_history_search_and_cancel_preserve_the_composer() {
+    use message_history::MessageHistory;
+    use message_history::MessageHistoryKind as InputKind;
+    use message_history::MessageHistoryRetention as Retention;
+    use message_history::MessageHistoryStore;
+    use message_history::MessageHistorySubmission as Submission;
+    use std::sync::Arc;
+    use std::sync::mpsc;
+
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        state::SqliteMessageHistory::open(&root.path().join("state.sqlite3"), Retention::default())
+            .unwrap(),
+    );
+    store
+        .append(Submission {
+            text: "find the input history owner".into(),
+            kind: InputKind::Agent,
+            thread_id: None,
+        })
+        .unwrap();
+    let (notify, wake) = mpsc::channel();
+    let client = MessageHistory::with_waker(store, move || {
+        let _ = notify.send(());
+    })
+    .unwrap();
+    let mut app = App::new();
+    app.connect_input_history(client);
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)),
+        None
+    );
+    for ch in "find".chars() {
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)),
+            None
+        );
+    }
+    while app.input() != "find the input history owner" {
+        wake.recv_timeout(Duration::from_secs(5)).unwrap();
+        app.poll_input_history();
+    }
+    let area = layout(&app, Rect::new(0, 0, 100, 20)).session.composer;
+    let content = crate::thread::composer::content_area(area);
+    let buffer = render_buffer(&app, 100, 20);
+    assert_eq!(buffer[(content.x, area.y)].symbol(), "H");
+    assert_eq!(
+        buffer[(content.x, area.y)].fg,
+        app.render_context().foreground()
+    );
+    assert_eq!(buffer[(area.x, area.y + 1)].symbol(), ">");
+    assert_snapshot!("input_history_search", render(&app, 100, 20));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.input(), "");
+    assert_snapshot!("input_history_search_cancelled", render(&app, 100, 20));
+}
+
+#[test]
 fn pull_request_command_submits_an_ordinary_agent_task() {
     let mut app = App::new();
     app.update(ThreadEvent::ContextChanged {

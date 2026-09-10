@@ -2,9 +2,11 @@
 
 mod dir_index;
 mod issue_cache;
+mod message_history;
 pub use issue_cache::CachedIssuePage;
 pub use issue_cache::IssueCacheKey;
 pub use issue_cache::SqliteIssueCache;
+pub use message_history::SqliteMessageHistory;
 mod sqlite;
 mod sqlite_runtime;
 

@@ -36,6 +36,14 @@ impl ChatComposerView<'_> {
         self.input.desired_height(available_width)
     }
 
+    pub(super) fn history_status(&self) -> Option<String> {
+        self.input.history_status()
+    }
+
+    pub(super) fn searching_history(&self) -> bool {
+        self.input.searching_history()
+    }
+
     pub(super) fn input_completion(&self) -> Option<CompletionView<'_>> {
         self.input.completion()
     }
@@ -77,7 +85,8 @@ impl ChatComposer {
         input: &mut ChatInput,
         key: KeyEvent,
     ) -> ChatComposerOutcome {
-        if key.code == KeyCode::Enter
+        if !input.searching_history()
+            && key.code == KeyCode::Enter
             && key.modifiers == KeyModifiers::CONTROL
             && input.completion().is_none()
             && input.accepts_submission_key()
@@ -101,7 +110,8 @@ impl ChatComposer {
         key: KeyEvent,
         submission_target: SubmissionTarget,
     ) -> ChatComposerOutcome {
-        if submission_target == SubmissionTarget::Queue
+        if !input.searching_history()
+            && submission_target == SubmissionTarget::Queue
             && key.code == KeyCode::Enter
             && key.modifiers.is_empty()
             && input.completion().is_none()

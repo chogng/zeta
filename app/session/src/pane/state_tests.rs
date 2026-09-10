@@ -43,6 +43,7 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
         status: ThreadStatus::Active,
         sequence: 1,
         usage: Default::default(),
+        reference_cost: Default::default(),
         goal: None,
         turns: vec![
             Turn {

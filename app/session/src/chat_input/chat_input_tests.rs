@@ -321,3 +321,72 @@ fn interaction_scroll_reveals_content_from_geometry() {
     chat_input.reset_interaction_scroll();
     assert_eq!(chat_input.interaction_scroll(), Default::default());
 }
+#[test]
+fn persisted_agent_input_keeps_its_route_and_restores_the_desktop_draft() {
+    use message_history::MessageHistory;
+    use message_history::MessageHistoryKind as InputKind;
+    use message_history::MessageHistoryRetention as Retention;
+    use message_history::MessageHistoryStore;
+    use message_history::MessageHistorySubmission as Submission;
+    use std::sync::Arc;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        state::SqliteMessageHistory::open(&root.path().join("state.sqlite3"), Retention::default())
+            .unwrap(),
+    );
+    store
+        .append(Submission {
+            text: "cargo test".into(),
+            kind: InputKind::Agent,
+            thread_id: Some("tui-thread".into()),
+        })
+        .unwrap();
+    let (notify, wake) = mpsc::channel();
+    let history = MessageHistory::with_waker(store, move || {
+        let _ = notify.send(());
+    })
+    .unwrap();
+    let mut input = ChatInput::for_working_directory(root.path());
+    input.connect_history(history);
+    input.set_history_thread("desktop-thread".into());
+    input.set_text("original draft");
+    input.apply(CodeEditorCommand::MoveLeft(CodeEditorSelectionMode::Move));
+    let cursor = input.input().cursor();
+    input.apply(CodeEditorCommand::MoveUp(CodeEditorSelectionMode::Move));
+    while input.input().text() != "cargo test" {
+        wake.recv_timeout(Duration::from_secs(5)).unwrap();
+        input.poll_history();
+    }
+    assert_eq!(input.route(), ComposerRoute::Agent);
+    input.synchronize_conversation(zeta_input_classifier::InputConversation::Standalone);
+    assert_eq!(input.route(), ComposerRoute::Agent);
+    input.cancel_history();
+    assert_eq!(input.input().text(), "original draft");
+    assert_eq!(input.input().cursor(), cursor);
+}
+
+#[test]
+fn history_search_accepts_an_input_for_editing_and_ime_commits_update_the_query() {
+    use zui::ui::TextInputCompositionCursor;
+    let mut input = ChatInput::default();
+    input.set_text("解释这个实现");
+    input.clear_after_submit();
+    input.start_history_search();
+    input.apply_composition(TextInputCompositionEvent::Preedit {
+        text: "解释".into(),
+        cursor: TextInputCompositionCursor::Visible(0..6),
+    });
+    assert!(input.searching_history());
+    assert!(input.history_status().unwrap().contains("解释"));
+    input.apply_composition(TextInputCompositionEvent::Commit("解释".into()));
+    assert_eq!(input.history.query(), Some("解释"));
+    assert_eq!(input.input().text(), "解释这个实现");
+    input.accept_history();
+    assert!(!input.searching_history());
+    assert_eq!(input.input().text(), "解释这个实现");
+    input.apply(CodeEditorCommand::Insert("，并给出例子".into()));
+    assert_eq!(input.input().text(), "解释这个实现，并给出例子");
+}

@@ -53,6 +53,14 @@ impl Default for ChatInputEditor {
 }
 
 impl ChatInputEditor {
+    pub(crate) fn take_draft(&mut self) -> Self {
+        let empty = Self {
+            style: self.style.clone(),
+            ..Self::default()
+        };
+        std::mem::replace(self, empty)
+    }
+
     pub fn text(&self) -> &str {
         self.document.text()
     }

@@ -19,6 +19,7 @@ just zeta
 | 要修改什么 | 从哪里开始 |
 | --- | --- |
 | 启动、事件循环和请求调度 | [start.rs](src/app/start.rs)、[event_loop.rs](src/app/event_loop.rs)、[driver.rs](src/app/driver.rs) |
+| 输入历史、搜索和草稿回查 | [input/state.rs](src/thread/composer/input/state.rs)、[共享输入历史](../../zeta-rs/message-history/README.md) |
 | 输入、附件、补全和排队发送 | [composer](src/thread/composer)、[submission.rs](src/thread/composer/submission.rs) |
 | 批准或回答问题 | [interaction](src/thread/interaction) |
 | 正文、执行输出、缓存与滚动 | [transcript](src/thread/transcript) |
@@ -298,3 +299,5 @@ just test-tui
 终端模式协议由 [session_tests.rs](src/terminal/session_tests.rs) 检查，正文分页、稳定锚点和长内容由 [正文绘制测试](src/thread/transcript/view/render_tests.rs) 检查。历史完整性不能再用终端回滚行数判断。
 
 主屏模式的真实边界检查使用 `just test-tui actual_tui_native_preserves_history_across_panels_resize_and_exit -- --nocapture`；两种模式的即时切换和设置保存使用 `just test-tui actual_tui_screen_mode_switches_live_and_persists -- --nocapture`。组件状态与文本基线位于 [native_tests.rs](src/app/frame/native_tests.rs)，历史顺序与样式位于 [scrollback_tests.rs](src/terminal/scrollback_tests.rs)。命令列出验证入口，不代表所有终端组合均已验证。
+
+输入历史验证：`just test zeta-tui history`；跨进程重启验证：`just test-tui actual_tui_recalls_input_history_after_process_restart`。

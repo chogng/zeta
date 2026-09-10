@@ -79,7 +79,25 @@ impl WorkbenchApplication {
             ScmDiff::new(diff.path(), diff.document().clone()).with_staging(diff.staging())
         }));
         let keybindings = keybindings::WorkbenchKeybindings::default();
-        let session_pane = SessionPaneState::for_working_directory(env.working_directory());
+        let mut session_pane = SessionPaneState::for_working_directory(env.working_directory());
+        let history_proxy = event_proxy.clone();
+        let history = (|| {
+            let runtime = ::state::StateRuntime::open(crate::app_server::local_profile_root())
+                .map_err(|error| error.to_string())?;
+            let store = ::state::SqliteMessageHistory::open(
+                runtime.database_path(),
+                message_history::MessageHistoryRetention::default(),
+            )?;
+            message_history::MessageHistory::with_waker(Arc::new(store), move || {
+                let _ = history_proxy.send_event(WorkbenchEvent::InputHistoryReady);
+            })
+            .map_err(|error| error.to_string())
+        })();
+        match history {
+            Ok(history) => session_pane.connect_input_history(history),
+            Err(error) => session_pane
+                .input_history_unavailable(format!("Could not open input history: {error}")),
+        }
         let language_events = Arc::new(language_service_adapter::WorkbenchLanguageEventSink::new(
             event_proxy.clone(),
         ));

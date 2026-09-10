@@ -139,6 +139,8 @@ pub(crate) struct ThreadPresentationStore {
     input_catalog: ChatInputCatalog,
     states: BTreeMap<ThreadId, ThreadPresentationState>,
     recent: VecDeque<ThreadId>,
+    history: Option<message_history::MessageHistory>,
+    history_error: Option<String>,
 }
 
 impl ThreadPresentationStore {
@@ -163,6 +165,8 @@ impl ThreadPresentationStore {
             input_catalog,
             states,
             recent: VecDeque::from([active]),
+            history: None,
+            history_error: None,
         }
     }
 
@@ -176,9 +180,47 @@ impl ThreadPresentationStore {
             .or_insert_with(|| ThreadPresentationState::with_input_catalog(input_catalog))
             .input
             .set_input_mode(self.input_mode);
+        if let Some(history) = &self.history {
+            self.states
+                .get_mut(&thread_id)
+                .unwrap()
+                .input
+                .connect_history(history.clone(), thread_id.to_string());
+        }
+        if let Some(error) = &self.history_error {
+            self.states
+                .get_mut(&thread_id)
+                .unwrap()
+                .input
+                .history_unavailable(error.clone());
+        }
         self.active = thread_id.clone();
         self.touch(thread_id);
         self.evict_inactive();
+    }
+
+    pub(crate) fn connect_history(&mut self, client: message_history::MessageHistory) {
+        for (thread_id, state) in &mut self.states {
+            state
+                .input
+                .connect_history(client.clone(), thread_id.to_string());
+        }
+        self.history = Some(client);
+    }
+
+    pub(crate) fn history_unavailable(&mut self, error: String) {
+        for state in self.states.values_mut() {
+            state.input.history_unavailable(error.clone());
+        }
+        self.history_error = Some(error);
+    }
+
+    pub(crate) fn poll_history(&mut self) -> bool {
+        let mut changed = false;
+        for state in self.states.values_mut() {
+            changed |= state.input.poll_history();
+        }
+        changed
     }
 
     pub(crate) fn replace_input_catalog(&mut self, input_catalog: ChatInputCatalog) {

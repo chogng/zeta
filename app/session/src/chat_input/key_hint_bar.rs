@@ -23,25 +23,37 @@ use super::ComposerRoute;
 const KEYCAP_SIZE: f32 = 16.0;
 const KEYCAP_LABEL_GAP: f32 = 6.0;
 
-pub(super) struct KeyHintBar {
+pub(super) struct KeyHintBar<'a> {
     bounds: Rect,
     route: ComposerRoute,
     style: SessionPaneStyle,
+    history_status: Option<&'a str>,
 }
 
-impl KeyHintBar {
+impl<'a> KeyHintBar<'a> {
     pub(super) const fn new(bounds: Rect, route: ComposerRoute, style: SessionPaneStyle) -> Self {
         Self {
             bounds,
             route,
             style,
+            history_status: None,
         }
     }
 
-    const fn accessibility_label(&self) -> &'static str {
+    pub(super) fn with_history_status(mut self, status: Option<&'a str>) -> Self {
+        self.history_status = status;
+        self
+    }
+
+    fn accessibility_label(&self) -> &str {
+        if let Some(status) = self.history_status {
+            return status;
+        }
         match self.route {
-            ComposerRoute::Agent => "/ for commands",
-            ComposerRoute::Shell => "Up and Down for command history",
+            ComposerRoute::Agent => {
+                "/ for commands, Up and Down to recall inputs, Control R to search history"
+            }
+            ComposerRoute::Shell => "Up and Down for input history, Control R to search history",
         }
     }
 
@@ -54,13 +66,13 @@ impl KeyHintBar {
 
     const fn label(&self) -> &'static str {
         match self.route {
-            ComposerRoute::Agent => "for commands",
-            ComposerRoute::Shell => "for command history",
+            ComposerRoute::Agent => "commands · Ctrl+R history",
+            ComposerRoute::Shell => "history · Ctrl+R search",
         }
     }
 }
 
-impl Component for KeyHintBar {
+impl Component for KeyHintBar<'_> {
     fn element(&self) -> ComponentElement {
         Element::leaf("KeyHintBar")
             .in_bounds(self.bounds)
@@ -78,6 +90,17 @@ impl Component for KeyHintBar {
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, element: &ComputedElement) {
         let bounds = element.bounds();
+        if let Some(status) = self.history_status {
+            context.scene_mut().draw_text(TextBlock::new(
+                status,
+                Point::new(bounds.origin.x, bounds.origin.y + 2.0),
+                bounds.size,
+                TextStyle::new(12.0, self.style.text_muted)
+                    .with_family(FontFamily::Monospace)
+                    .with_line_height(20.0),
+            ));
+            return;
+        }
         let keycaps = KeycapSequence::new(
             Point::new(
                 bounds.origin.x,

@@ -60,6 +60,7 @@ members = [
     "zeta-rs/file-watcher",
     "zeta-rs/git",
     "zeta-rs/history",
+    "zeta-rs/message-history",
     "zeta-rs/hooks",
     "zeta-rs/http-client",
     "zeta-rs/websocket-client",
@@ -355,6 +356,7 @@ zeta-files = { path = "app/files" }
 github = { package = "zeta-github", path = "zeta-rs/github" }
 zeta-git = { path = "zeta-rs/git" }
 zeta-history = { path = "zeta-rs/history" }
+message-history = { package = "zeta-message-history", path = "zeta-rs/message-history" }
 zeta-hooks = { path = "zeta-rs/hooks" }
 zeta-http-client = { path = "zeta-rs/http-client" }
 zeta-websocket-client = { path = "zeta-rs/websocket-client" }

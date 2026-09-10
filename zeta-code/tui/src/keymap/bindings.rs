@@ -764,6 +764,10 @@ pub(crate) fn fixed_bindings() -> impl Iterator<Item = (&'static str, &'static s
     static ENTRIES: LazyLock<Vec<(String, &'static str)>> = LazyLock::new(|| {
         vec![
             (
+                "ctrl+r".into(),
+                "search input history; Enter edits the match, Esc restores the draft",
+            ),
+            (
                 format!("{0} {0}", CLOSE.keys()),
                 "open rewind checkpoints when the input is empty",
             ),

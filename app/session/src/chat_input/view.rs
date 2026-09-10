@@ -76,11 +76,11 @@ pub(crate) fn draw_chat_input(
                 bounds: layout.content(),
             },
             |context, _| {
-                context.draw_component(&KeyHintBar::new(
-                    layout.key_hint_bar(),
-                    view.input.route(),
-                    style,
-                ));
+                let history_status = view.input.history_status();
+                context.draw_component(
+                    &KeyHintBar::new(layout.key_hint_bar(), view.input.route(), style)
+                        .with_history_status(history_status.as_deref()),
+                );
                 context.draw_component(
                     &InteractionRegion::new(
                         "ComposerInput",

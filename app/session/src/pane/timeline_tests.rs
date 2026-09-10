@@ -20,6 +20,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
         status: ThreadStatus::Active,
         sequence: 5,
         usage: Default::default(),
+        reference_cost: Default::default(),
         goal: None,
         turns: vec![Turn {
             turn_id: TurnId::new("turn").unwrap(),

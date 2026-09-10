@@ -11,6 +11,8 @@ name = "zeta_workbench"
 path = "lib.rs"
 
 [dependencies]
+message-history = { workspace = true }
+state = { package = "zeta-state", path = "../../zeta-rs/state" }
 zeta-memory-diagnostics = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }

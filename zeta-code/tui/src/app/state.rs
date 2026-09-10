@@ -389,6 +389,19 @@ impl App {
         if let Some(outcome) = self.chat_panel.handle_command_key(key, composer_area) {
             return self.handle_command_panel_outcome(outcome);
         }
+        if self.chat_input_focused()
+            && self
+                .thread_presentations
+                .active()
+                .input
+                .history_intercepts(key)
+        {
+            let outcome = self
+                .chat_panel
+                .handle_composer_key(&mut self.thread_presentations.active_mut().input, key);
+            self.screen_escape_sequence.reset();
+            return self.handle_chat_composer_outcome(outcome, now);
+        }
         if let Some(command) = self.handle_queue_key(key) {
             return command;
         }
@@ -850,6 +863,18 @@ impl App {
                     "could not paste clipboard image: {error}"
                 )));
         }
+    }
+
+    pub(crate) fn connect_input_history(&mut self, client: message_history::MessageHistory) {
+        self.thread_presentations.connect_history(client);
+    }
+
+    pub(crate) fn input_history_unavailable(&mut self, error: String) {
+        self.thread_presentations.history_unavailable(error);
+    }
+
+    pub(crate) fn poll_input_history(&mut self) -> bool {
+        self.thread_presentations.poll_history()
     }
 
     pub(crate) fn input(&self) -> &str {

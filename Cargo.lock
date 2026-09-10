@@ -12033,6 +12033,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-message-history"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-model-accounting"
 version = "0.1.0"
 dependencies = [
@@ -12341,13 +12345,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde_json",
+ "tempfile",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
  "zeta-editor",
  "zeta-icons",
  "zeta-input-classifier",
+ "zeta-message-history",
  "zeta-protocol",
  "zeta-slash-commands",
+ "zeta-state",
  "zeta-thread-transcript",
  "zeta-ui-components",
  "zeta-ui-theme",
@@ -12461,6 +12468,7 @@ dependencies = [
  "zeta-file-access",
  "zeta-github",
  "zeta-history",
+ "zeta-message-history",
  "zeta-projects",
  "zeta-protocol",
  "zeta-thread-store",
@@ -12609,10 +12617,12 @@ dependencies = [
  "zeta-file-search",
  "zeta-keybinding",
  "zeta-memory-diagnostics",
+ "zeta-message-history",
  "zeta-product-update",
  "zeta-protocol",
  "zeta-slash-commands",
  "zeta-sprite",
+ "zeta-state",
  "zeta-terminal-detection",
  "zeta-utils-elapsed",
  "zeta-utils-image",
@@ -12878,6 +12888,7 @@ dependencies = [
  "zeta-keybindings-host",
  "zeta-lsp-manager",
  "zeta-memory-diagnostics",
+ "zeta-message-history",
  "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
@@ -12887,6 +12898,7 @@ dependencies = [
  "zeta-session",
  "zeta-settings",
  "zeta-slash-commands",
+ "zeta-state",
  "zeta-terminal",
  "zeta-terminal-runtime",
  "zeta-text-file",

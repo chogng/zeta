@@ -11,6 +11,7 @@ name = "zeta_session"
 path = "src/lib.rs"
 
 [dependencies]
+message-history = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 zeta-app-server-client = { workspace = true }
@@ -24,6 +25,10 @@ zeta-thread-transcript = { workspace = true }
 zeta-ui-components = { workspace = true }
 zeta-ui-theme = { workspace = true }
 zui = { workspace = true, default-features = false }
+
+[dev-dependencies]
+state = { package = "zeta-state", path = "../../zeta-rs/state" }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

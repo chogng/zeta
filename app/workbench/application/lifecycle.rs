@@ -200,6 +200,12 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
 
     fn user_event(&mut self, _context: &mut AppContext<'_, WorkbenchEvent>, event: WorkbenchEvent) {
         match event {
+            WorkbenchEvent::InputHistoryReady => {
+                if self.session_pane.poll_input_history() {
+                    self.composer_changed();
+                }
+                return;
+            }
             WorkbenchEvent::Session(event) => {
                 self.handle_session_runtime_event(event);
                 return;
@@ -227,7 +233,11 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
                 self.handle_remote_tunnel_event(event);
                 return;
             }
-            WorkbenchEvent::Memory(completion) => { self.memory.finish(completion); self.rebuild_presentation_on_next_redraw(); return; }
+            WorkbenchEvent::Memory(completion) => {
+                self.memory.finish(completion);
+                self.rebuild_presentation_on_next_redraw();
+                return;
+            }
             WorkbenchEvent::ScmOperationFinished(result) => {
                 if let Err(error) = result {
                     eprintln!("SCM operation failed: {error}");

@@ -46,6 +46,7 @@ pub(super) fn start(
         host_dir_root,
         host_file_search_root,
         theme_root,
+        profile_root,
         app_server_process,
         recovery,
         notices,
@@ -100,7 +101,23 @@ pub(super) fn start(
         input_catalog,
         startup_context,
     );
-
+    let profile_root = profile_root.unwrap_or_else(zeta_app_server_client::local_profile_root);
+    let history = (|| {
+        let runtime =
+            state::StateRuntime::open(&profile_root).map_err(|error| error.to_string())?;
+        let store = state::SqliteMessageHistory::open(
+            runtime.database_path(),
+            message_history::MessageHistoryRetention::default(),
+        )?;
+        message_history::MessageHistory::new(std::sync::Arc::new(store))
+            .map_err(|error| error.to_string())
+    })();
+    match history {
+        Ok(history) => app.connect_input_history(history),
+        Err(error) => {
+            app.input_history_unavailable(format!("Could not open input history: {error}"))
+        }
+    }
     let initial_model_catalog = client.list_models().ok();
     let theme_preference = theme_feature::preference(&initial_config);
     match theme_resource.load(theme_preference) {

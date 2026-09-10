@@ -8,6 +8,34 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+fn actual_tui_recalls_input_history_after_process_restart() {
+    let fixture = Fixture::new();
+    let server =
+        ScenarioServer::start([HttpResponse::streaming(["Input saved and answered."], None)]);
+    fixture.write_config(&server.base_url());
+    let mut first = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    first.wait_for_stable_screen("Zeta Code v");
+    first.submit("Remember this input across restarts");
+    first.wait_for_stable_screen("Input saved and answered.");
+    first.quit();
+
+    let mut second = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    second.wait_for_stable_screen("Zeta Code v");
+    second.up();
+    second.wait_for_stable_screen("> Remember this input across restarts");
+    second.assert_snapshot("real/14-input-history/recalled-after-restart");
+    assert_eq!(server.request_count(), 1);
+    second.down();
+    second.send(&[0x12]);
+    second.type_text("across");
+    second.wait_for_stable_screen("History search: across · ↑/↓ browse");
+    second.enter();
+    second.wait_for_stable_screen("> Remember this input across restarts");
+    assert_eq!(server.request_count(), 1);
+    second.quit();
+}
+
+#[test]
 fn actual_tui_runs_three_complete_conversation_turns() {
     let fixture = Fixture::new();
     let first = Gate::new();
