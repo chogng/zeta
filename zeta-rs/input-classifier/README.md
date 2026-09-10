@@ -85,7 +85,8 @@ command-overlap 是为 Zeta 独立整理的集合。TextBlob 许可文本位于
 模型、tokenizer 和 CPU device 的唯一 owner。模型或 tokenizer 初始化失败会直接启用完整
 `HeuristicFallback`；初始化成功后的编码、推理或输出校验错误返回 `CurrentRouteFallback`，保留当前
 路由；Candle panic 会被隔离，并在当前进程永久改走 `HeuristicFallback`。官方
-`candle-onnx` 的构建脚本需要系统 `protoc`，产品运行时不需要。
+仓库补丁让 `candle-onnx` 的构建脚本通过 `protoc-bin-vendored` 获取 `protoc`，不依赖系统安装；
+产品运行时不需要也不会携带 `protoc`。
 
 更新模型时必须一起更新 ONNX、tokenizer、`metadata.json`、摘要常量、标签解释、温度和概率基线
 测试，不能只替换其中一个文件。

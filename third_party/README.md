@@ -22,6 +22,14 @@ licensed under Zeta's root license; any license files stored beside that wrapper
 must be clearly identified as applying to its upstream dependencies or bundled
 assets.
 
+## Patched Rust dependencies
+
+| Dependency | Purpose | Patch policy |
+| --- | --- | --- |
+| `candle-onnx` | Compile the embedded input-classifier ONNX model | Preserve the upstream 0.9.2 source and license; the local patch only supplies Cargo-vendored `protoc` to its build script |
+
+## Native runtimes
+
 | Runtime | Purpose | Distribution policy |
 | --- | --- | --- |
 | `node` | Shared runtime for package-provided JavaScript language servers | Required in every canonical Zeta package; language packages must not bundle it |

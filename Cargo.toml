@@ -484,3 +484,6 @@ debug = "limited"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+
+[patch.crates-io]
+candle-onnx = { path = "third_party/candle-onnx" }
