@@ -11,6 +11,14 @@ name = "zeta_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+extension-items = { workspace = true }
+queue = { workspace = true }
+zeta-otel = { workspace = true }
+build-info = { workspace = true }
+analytics = { workspace = true }
+diagnostics = { workspace = true }
+feedback = { workspace = true }
+features = { workspace = true }
 mxc-sandbox = { workspace = true }
 network-proxy = { workspace = true }
 zeta-memory-diagnostics = { workspace = true }

@@ -223,6 +223,15 @@ impl AppServer {
                 .cancel_descendants(thread_id)
                 .map_err(core_error)?;
         }
+        if let Some(queue) = &self.queue {
+            queue.delete_session(&session_id).map_err(|_| {
+                RpcError::new(
+                    -32603,
+                    zeta_app_server_protocol::protocol::error::AppServerErrorName::InternalError,
+                )
+            })?;
+            self.updates.publish_queue_changed();
+        }
         self.threads
             .delete_session_threads(&session_id)
             .map_err(core_error)?;

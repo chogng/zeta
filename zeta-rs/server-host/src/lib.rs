@@ -14,6 +14,14 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         return Err(usage().into());
     };
     match command.as_str() {
+        "--version" => {
+            println!(
+                "{}",
+                serde_json::to_string(&build_info::BuildInfo::current())
+                    .map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
         "app-server" => run_app_server(arguments),
         "fast-regex-worker" => zeta_fast_regex_search::serve_worker_from_environment()
             .map_err(|error| error.to_string()),

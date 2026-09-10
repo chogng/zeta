@@ -61,6 +61,7 @@ mod unix {
             .set_nonblocking(true)
             .map_err(RemoteServerError::from_io)?;
         let server = Arc::new(open_server(&options)?);
+        let _queue = server.start_queue().map_err(RemoteServerError::new)?;
         let active_connections = Arc::new(AtomicUsize::new(0));
         let idle_timeout = configured_idle_timeout()?;
         let mut idle_since = None;
@@ -99,6 +100,7 @@ mod unix {
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                     if active_connections.load(Ordering::Acquire) == 0
                         && server.active_terminal_count() == 0
+                        && !server.queue_needs_host().map_err(RemoteServerError::new)?
                     {
                         let idle_since = idle_since.get_or_insert_with(Instant::now);
                         if idle_since.elapsed() >= idle_timeout {

@@ -10,7 +10,11 @@ pub(super) struct ConfigWatcher {
 }
 
 impl ConfigWatcher {
-    pub(super) fn start(config: &ConfigStore, updates: Arc<UpdateBroker>) -> Self {
+    pub(super) fn start(
+        config: &ConfigStore,
+        updates: Arc<UpdateBroker>,
+        extensions: Arc<zeta_extension_api::ExtensionRegistry>,
+    ) -> Self {
         let changes = config.subscribe_changes();
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()
@@ -21,7 +25,10 @@ impl ConfigWatcher {
                         break;
                     }
                     match changes.recv_timeout(Duration::from_millis(100)) {
-                        Ok(change) => updates.publish_config_changed(change),
+                        Ok(change) => {
+                            extensions.config_changed(change.generation.get());
+                            updates.publish_config_changed(change);
+                        }
                         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                     }

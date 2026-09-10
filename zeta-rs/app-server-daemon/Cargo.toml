@@ -15,6 +15,9 @@ name = "zeta_app_server_daemon"
 path = "src/lib.rs"
 
 [dependencies]
+queue = { workspace = true }
+process-hardening = { workspace = true }
+build-info = { workspace = true }
 zeta-automation = { workspace = true }
 zeta-protocol = { workspace = true }
 dunce = { workspace = true }

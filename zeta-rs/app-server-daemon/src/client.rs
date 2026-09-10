@@ -239,7 +239,7 @@ fn lifecycle_output(
         instance_id: control.map(|control| control.instance_id.clone()),
         daemon_version: control
             .map(|control| control.daemon_version.clone())
-            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").into()),
+            .unwrap_or_else(|| build_info::VERSION.into()),
         endpoint_path: endpoint.socket.clone(),
         log_path: endpoint.log.clone(),
         app_server_name: probe.map(|probe| probe.server_name.clone()),
@@ -252,7 +252,7 @@ fn validate_managed_response(
     control: &ControlResponse,
 ) -> Result<ProcessRecord, String> {
     control.validate()?;
-    if control.daemon_version != env!("CARGO_PKG_VERSION") || control.schema_hash != schema_hash() {
+    if control.daemon_version != build_info::VERSION || control.schema_hash != schema_hash() {
         return Err("running Local App Server daemon is incompatible with this client".into());
     }
     let record = read_process_record(&endpoint.pid)?.ok_or_else(|| {
@@ -309,7 +309,7 @@ fn probe_app_server(
             "params": {
                 "clientInfo": {
                     "name": "zeta-app-server-daemon-probe",
-                    "version": env!("CARGO_PKG_VERSION"),
+                    "version": build_info::VERSION,
                 },
                 "capabilities": {},
             },

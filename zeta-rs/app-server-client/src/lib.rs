@@ -1,5 +1,6 @@
 //! Reusable typed app-server client boundary and contract-test entry point.
 
+mod infrastructure;
 mod memory;
 pub use memory::MemoryRecording;
 

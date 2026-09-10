@@ -1,6 +1,11 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    if let Err(error) = process_hardening::initialize() {
+        eprintln!("process hardening failed: {error}");
+        std::process::exit(1);
+    }
+
     let _package_lease = match std::env::current_exe()
         .and_then(zeta_package_store::acquire_package_lease_for_executable)
     {

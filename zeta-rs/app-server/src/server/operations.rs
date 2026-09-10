@@ -109,7 +109,7 @@ struct RewriteSessionMutation {
     input: Vec<InputItem>,
 }
 
-enum TurnToolModeSelection {
+pub(super) enum TurnToolModeSelection {
     ConfiguredDefault,
     Explicit(zeta_protocol::ToolMode),
 }
@@ -258,7 +258,7 @@ impl AppServer {
         result(&InitializeResult {
             server_info: ServerInfo {
                 name: "zeta-app-server".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
+                version: build_info::VERSION.into(),
             },
             protocol_version: ProtocolVersion::current(),
             schema_hash: SchemaHash(schema_hash()),
@@ -760,7 +760,7 @@ impl AppServer {
         Ok(Value::Null)
     }
 
-    fn read_session_thread(
+    pub(super) fn read_session_thread(
         &self,
         session_id: &zeta_protocol::SessionId,
         thread_id: &zeta_protocol::ThreadId,
@@ -848,7 +848,7 @@ impl AppServer {
         )
     }
 
-    fn start_agent_turn_request(
+    pub(super) fn start_agent_turn_request(
         &self,
         mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
@@ -892,6 +892,19 @@ impl AppServer {
         )? {
             return Ok(replayed);
         }
+        if tool_mode != zeta_protocol::ToolMode::Direct
+            && let Some(config) = &self.config
+            && !features::Feature::CodeMode.enabled(
+                &config
+                    .read_snapshot()
+                    .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                    .values
+                    .features,
+            )
+        {
+            return Err(RpcError::new(-32125, AppServerErrorName::FeatureDisabled));
+        }
+        self.refresh_analytics()?;
         let model = match thread_before
             .agent_configuration()
             .and_then(|agent| agent.model())
@@ -964,6 +977,7 @@ impl AppServer {
         self.turn_backend
             .start(&thread_id, &turn_id)
             .map_err(core_error)?;
+
         Ok(TurnStartResult {
             turn_id,
             sequence: start.sequence,
@@ -1774,7 +1788,7 @@ fn thread_mutation(mutation: SessionMutation, expected_sequence: u64) -> ThreadM
 }
 
 impl AppServer {
-    fn normalize_input(
+    pub(super) fn normalize_input(
         &self,
         _session_id: &zeta_protocol::SessionId,
         input: Vec<InputItem>,

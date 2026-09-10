@@ -150,6 +150,7 @@ impl Eq for InProcessClientOptions {}
 
 /// In-memory transport that still exercises the versioned JSON-RPC dispatcher.
 pub struct InProcessTransport {
+    _background: Arc<Option<queue::QueueRuntime>>,
     server: Arc<AppServer>,
     connection: ConnectionState,
     notifications: Vec<String>,
@@ -166,17 +167,34 @@ impl InProcessTransport {
 
     /// Creates one logical connection to a shared embedded App Server composition root.
     pub fn from_shared_server(server: Arc<AppServer>) -> Self {
+        let background = Arc::new(
+            server
+                .start_queue()
+                .expect("embedded queue scheduler must start"),
+        );
+        Self::with_background(server, background)
+    }
+
+    fn with_background(
+        server: Arc<AppServer>,
+        background: Arc<Option<queue::QueueRuntime>>,
+    ) -> Self {
         let connection = server.connection();
         Self {
+            _background: background,
             server,
             connection,
             notifications: Vec::new(),
         }
     }
 
-    fn from_shared_product_host(server: Arc<AppServer>) -> Self {
+    fn from_shared_product_host(
+        server: Arc<AppServer>,
+        background: Arc<Option<queue::QueueRuntime>>,
+    ) -> Self {
         let connection = server.product_host_connection();
         Self {
+            _background: background,
             server,
             connection,
             notifications: Vec::new(),
@@ -187,6 +205,7 @@ impl InProcessTransport {
 /// Shared embedded App Server composition that can open multiple isolated logical connections.
 #[derive(Clone)]
 pub struct InProcessAppServer {
+    background: Arc<Option<queue::QueueRuntime>>,
     pub(crate) server: Arc<AppServer>,
     pub(crate) client_info: ClientInfo,
     pub(crate) capabilities: ClientCapabilities,
@@ -196,7 +215,7 @@ impl InProcessAppServer {
     /// Opens and initializes one typed client connection to the shared App Server.
     pub fn connect(&self) -> Result<AppServerClient<InProcessTransport>, ClientError> {
         initialize_client(
-            InProcessTransport::from_shared_server(self.server.clone()),
+            InProcessTransport::with_background(self.server.clone(), self.background.clone()),
             self.client_info.clone(),
             self.capabilities.clone(),
         )
@@ -204,7 +223,10 @@ impl InProcessAppServer {
 
     fn connect_product_host(&self) -> Result<AppServerClient<InProcessTransport>, ClientError> {
         initialize_client(
-            InProcessTransport::from_shared_product_host(self.server.clone()),
+            InProcessTransport::from_shared_product_host(
+                self.server.clone(),
+                self.background.clone(),
+            ),
             self.client_info.clone(),
             self.capabilities.clone(),
         )
@@ -252,8 +274,11 @@ pub fn open_in_process_app_server(
     }
     let server = open_local_app_server(server_options)
         .map_err(|error| ClientError::Transport(error.to_string()))?;
+    let server = Arc::new(server);
+    let background = Arc::new(server.start_queue().map_err(ClientError::Transport)?);
     Ok(InProcessAppServer {
-        server: Arc::new(server),
+        background,
+        server,
         client_info: options.client_info,
         capabilities: options.capabilities,
     })
@@ -272,4 +297,11 @@ fn initialize_client(
     ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
         .map_err(|error| ClientError::Protocol(error.to_string()))?;
     Ok(client)
+}
+
+impl Drop for InProcessTransport {
+    fn drop(&mut self) {
+        self.server
+            .close_connection(std::mem::take(&mut self.connection));
+    }
 }

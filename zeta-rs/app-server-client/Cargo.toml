@@ -11,6 +11,9 @@ name = "zeta_app_server_client"
 path = "src/lib.rs"
 
 [dependencies]
+queue = { workspace = true }
+diagnostics = { workspace = true }
+feedback = { workspace = true }
 base64 = { workspace = true }
 zeta-memory-diagnostics = { workspace = true }
 serde = { workspace = true }

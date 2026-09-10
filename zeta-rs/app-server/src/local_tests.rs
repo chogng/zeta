@@ -1364,6 +1364,7 @@ fn configured_model_context_enables_core_managed_compaction() {
             command_id: CommandId::new("select-context-model").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 preferred_model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
                 ..Default::default()
             }),
@@ -1470,6 +1471,7 @@ fn select_model(
             command_id: CommandId::new(command_id).unwrap(),
             expected_revision: revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                features: Default::default(),
                 preferred_model: Patch::Value(model_ref(model)),
                 approval_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,

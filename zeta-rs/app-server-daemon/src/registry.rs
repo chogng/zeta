@@ -94,26 +94,80 @@ impl ProfileAppServerRegistry {
             .unwrap_or(1)
     }
 
-    pub(crate) fn start_automation(self: &Arc<Self>) -> Result<zeta_automation::AutomationRuntime, String> {
-        zeta_automation::AutomationRuntime::start(self.profile_runtime.automation_store(), self.clone())
-            .map_err(|error| error.to_string())
+    pub(crate) fn start_queue(self: &Arc<Self>) -> Result<queue::QueueRuntime, String> {
+        queue::QueueRuntime::start(
+            self.profile_runtime
+                .queue_store()
+                .map_err(|error| error.to_string())?,
+            self.clone(),
+        )
+        .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn queue_needs_host(&self) -> Result<bool, String> {
+        if self
+            .profile_runtime
+            .queue_store()
+            .map_err(|error| error.to_string())?
+            .needs_host()
+            .map_err(|error| error.to_string())?
+        {
+            return Ok(true);
+        }
+        for server in self
+            .servers
+            .lock()
+            .map_err(|_| "queue server registry lock poisoned")?
+            .values()
+        {
+            if server.queue_needs_host()? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub(crate) fn start_automation(
+        self: &Arc<Self>,
+    ) -> Result<zeta_automation::AutomationRuntime, String> {
+        zeta_automation::AutomationRuntime::start(
+            self.profile_runtime.automation_store(),
+            self.clone(),
+        )
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn automation_needs_host(&self) -> Result<bool, String> {
-        self.profile_runtime.automation_store().needs_host().map_err(|error| error.to_string())
+        self.profile_runtime
+            .automation_store()
+            .needs_host()
+            .map_err(|error| error.to_string())
     }
 }
 
 impl zeta_automation::AutomationExecutor for ProfileAppServerRegistry {
-    fn advance(&self, run: &zeta_protocol::AutomationRun, now: zeta_protocol::UnixMillis) -> Result<zeta_protocol::AutomationRun, String> {
-        let options = ConnectionOptions::new(self.host.profile_root(), Some(PathBuf::from(&run.definition.directory)),
-            crate::GrantSource::UserConfig, self.host.product_services().map(Path::to_path_buf));
-        self.server_for(ConnectionPrelude::from_options(&options))?.advance_automation_run(run, now)
+    fn advance(
+        &self,
+        run: &zeta_protocol::AutomationRun,
+        now: zeta_protocol::UnixMillis,
+    ) -> Result<zeta_protocol::AutomationRun, String> {
+        let options = ConnectionOptions::new(
+            self.host.profile_root(),
+            Some(PathBuf::from(&run.definition.directory)),
+            crate::GrantSource::UserConfig,
+            self.host.product_services().map(Path::to_path_buf),
+        );
+        self.server_for(ConnectionPrelude::from_options(&options))?
+            .advance_automation_run(run, now)
     }
 
-    fn changed(&self) { self.profile_runtime.automation_changed(); }
+    fn changed(&self) {
+        self.profile_runtime.automation_changed();
+    }
 
-    fn report_error(&self, message: &str) { eprintln!("automation: {message}"); }
+    fn report_error(&self, message: &str) {
+        eprintln!("automation: {message}");
+    }
 }
 
 fn open_server_with_profile_runtime(
@@ -162,4 +216,37 @@ fn product_services_identity(
 
 fn io_error(error: io::Error) -> String {
     error.to_string()
+}
+
+impl queue::QueueExecutor for ProfileAppServerRegistry {
+    fn ready(&self, message: &queue::QueuedMessage) -> Result<bool, String> {
+        let options = ConnectionOptions::new(
+            self.host.profile_root(),
+            Some(PathBuf::from(&message.request.directory)),
+            crate::GrantSource::UserConfig,
+            self.host.product_services().map(Path::to_path_buf),
+        );
+        self.server_for(ConnectionPrelude::from_options(&options))?
+            .queued_message_ready(message)
+    }
+
+    fn accepts(&self, _: &queue::QueuedMessage) -> bool {
+        true
+    }
+    fn deliver(&self, message: &queue::QueuedMessage) -> Result<queue::Delivery, String> {
+        let options = ConnectionOptions::new(
+            self.host.profile_root(),
+            Some(PathBuf::from(&message.request.directory)),
+            crate::GrantSource::UserConfig,
+            self.host.product_services().map(Path::to_path_buf),
+        );
+        self.server_for(ConnectionPrelude::from_options(&options))?
+            .deliver_queued_message(message)
+    }
+    fn changed(&self) {
+        self.profile_runtime.queue_changed();
+    }
+    fn report_error(&self, error: &str) {
+        eprintln!("message queue: {error}");
+    }
 }

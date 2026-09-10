@@ -2,6 +2,8 @@ use super::*;
 
 #[path = "automation_tests.rs"]
 mod automation_tests;
+#[path = "infrastructure_tests.rs"]
+mod infrastructure_tests;
 #[path = "memory_tests.rs"]
 mod memory_tests;
 use base64::Engine;

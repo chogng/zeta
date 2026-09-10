@@ -93,7 +93,7 @@ impl ProcessRecord {
             pid,
             instance_id: format!("{:x}", digest.finalize()),
             process_start_identity,
-            daemon_version: env!("CARGO_PKG_VERSION").into(),
+            daemon_version: build_info::VERSION.into(),
             executable_identity: Some(executable_identity(
                 &std::env::current_exe().map_err(io_error)?,
             )?),

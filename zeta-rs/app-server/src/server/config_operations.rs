@@ -176,6 +176,7 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    features: params.features,
                     preferred_model: model_ref_update_from_dto(params.preferred_model)?,
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
@@ -205,6 +206,7 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    features: Default::default(),
                     preferred_model: Patch::Missing,
                     approval_review_model: Patch::Missing,
                     commit_message_model: Patch::Missing,
@@ -613,6 +615,7 @@ fn config_read_result(
         embedding_status: tool_search_status_dto(tool_search_status),
     };
     ConfigReadResult {
+        features: features::resolve(&snapshot.values.features),
         issues: zeta_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: snapshot.values.issues.auto_refresh_minutes,
         },

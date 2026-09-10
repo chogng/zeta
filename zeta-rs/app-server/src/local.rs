@@ -695,6 +695,10 @@ impl std::error::Error for OpenAppServerError {}
 /// terminal, Git, language, and execution services remain in separately composed [`AppServer`]
 /// instances.
 pub struct LocalProfileRuntime {
+    diagnostics: diagnostics::Diagnostics,
+    telemetry: zeta_otel::Telemetry,
+    analytics: Arc<analytics::Analytics>,
+    queue: Arc<queue::QueueStore>,
     automation: Arc<zeta_automation::AutomationStore>,
     profile_root: PathBuf,
     state: Arc<zeta_state::StateRuntime>,
@@ -754,11 +758,17 @@ impl LocalProfileRuntime {
             FileSecretStore::open(profile_root.join("secrets"))
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
+        let diagnostics = diagnostics::Diagnostics::default();
+        let telemetry = zeta_otel::Telemetry::new(diagnostics.clone());
         Ok(Self {
+            diagnostics,
+            telemetry,
+            analytics: Arc::new(analytics::Analytics::default()),
             profile_root,
             automation: Arc::new(
                 zeta_automation::AutomationStore::open(&database_path).map_err(open_error)?,
             ),
+            queue: Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
             state,
             threads,
             config,
@@ -775,6 +785,14 @@ impl LocalProfileRuntime {
     }
 
     /// Shared plan and run store; the profile host owns its single scheduling loop.
+    pub fn queue_store(&self) -> Result<Arc<queue::QueueStore>, OpenAppServerError> {
+        Ok(self.queue.clone())
+    }
+
+    pub fn queue_changed(&self) {
+        self.updates.publish_queue_changed();
+    }
+
     pub fn automation_store(&self) -> Arc<zeta_automation::AutomationStore> {
         Arc::clone(&self.automation)
     }
@@ -1077,7 +1095,32 @@ pub fn open_local_app_server_with_codebase_providers(
         .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
     let provider_configs = ProviderConfigRegistry::builtin();
-    let model_operation_client = options.model_operation_client.take();
+    let (diagnostics, telemetry, analytics) = match &profile_runtime {
+        Some(runtime) => (
+            runtime.diagnostics.clone(),
+            runtime.telemetry.clone(),
+            runtime.analytics.clone(),
+        ),
+        None => {
+            let diagnostics = diagnostics::Diagnostics::default();
+            let telemetry = zeta_otel::Telemetry::new(diagnostics.clone());
+            (
+                diagnostics,
+                telemetry,
+                Arc::new(analytics::Analytics::default()),
+            )
+        }
+    };
+    let model_client = match options.model_operation_client.take() {
+        Some(client) => client,
+        None => {
+            let http = zeta_http_client::UreqHttpClient::new().map_err(open_error)?;
+            Arc::new(zeta_client::ZetaClient::new(
+                telemetry.instrument_http(Arc::new(http)),
+            ))
+        }
+    };
+    let model_operation_client = Some(model_client);
     let codex_home = match options.codex_home.take() {
         Some(home) => home,
         None => {
@@ -1102,7 +1145,7 @@ pub fn open_local_app_server_with_codebase_providers(
     let model_provider = match model_operation_client {
         Some(client) => ModelProviderRuntime::with_client_and_secrets(
             provider_configs.clone(),
-            client,
+            telemetry.instrument_model(client),
             Arc::clone(&profile_secrets),
         ),
         None => ModelProviderRuntime::with_secrets(
@@ -1185,6 +1228,7 @@ pub fn open_local_app_server_with_codebase_providers(
         ),
         None => AppServer::new(threads, agent_model),
     }
+    .with_telemetry(diagnostics, telemetry, analytics)
     .with_model_catalog(direct_catalog)
     .with_provider_credentials(Arc::new(
         zeta_model_provider::ProviderCredentialService::new(
@@ -1202,13 +1246,36 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_semantic_model_provider(model_provider)
     .with_cloud_codebase_storage_root(cloud_codebase_root)
     .with_cloud_codebase_providers(providers.cloud)
-    .with_extension_roots(extension_roots)
-    .with_skill_runtime(
-        built_in_skill_root,
-        skill_config,
-        options.web_search_backend.take(),
-    )
-    .map_err(OpenAppServerError)?;
+    .with_extension_roots(extension_roots);
+    if options.session_state_mode == SessionStateMode::Durable {
+        let directory = options
+            .dir_root
+            .as_ref()
+            .map(std::fs::canonicalize)
+            .transpose()
+            .map_err(open_error)?
+            .map(|directory| {
+                directory
+                    .into_os_string()
+                    .into_string()
+                    .map_err(|_| OpenAppServerError("queue directory must be UTF-8".into()))
+            })
+            .transpose()?;
+        let queue = match &profile_runtime {
+            Some(runtime) => runtime.queue_store()?,
+            None => Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
+        };
+        server = server
+            .with_queue_store(queue, directory)
+            .map_err(OpenAppServerError)?;
+    }
+    server = server
+        .with_skill_runtime(
+            built_in_skill_root,
+            skill_config,
+            options.web_search_backend.take(),
+        )
+        .map_err(OpenAppServerError)?;
     server = server
         .with_local_projects(&database_path)
         .map_err(OpenAppServerError)?;

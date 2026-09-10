@@ -812,6 +812,13 @@ impl UpdateBroker {
         self.broadcast_notification(ServerNotificationMethod::TurnChangesChanged, &changed);
     }
 
+    pub(crate) fn publish_queue_changed(&self) {
+        self.broadcast_notification(
+            ServerNotificationMethod::QueueChanged,
+            &serde_json::json!({}),
+        );
+    }
+
     pub(crate) fn publish_automation_changed(&self) {
         self.broadcast_notification(
             ServerNotificationMethod::AutomationChanged,

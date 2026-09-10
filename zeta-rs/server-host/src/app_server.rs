@@ -28,9 +28,11 @@ pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
     let options =
         AppServerHostOptions::from_environment(product_services.or_else(product_services_path))?;
     match command {
-        AppServerHostCommand::Stdio => open_server(&options)?
-            .serve_stdio()
-            .map_err(|error| error.to_string()),
+        AppServerHostCommand::Stdio => {
+            let server = Arc::new(open_server(&options)?);
+            let _queue = server.start_queue()?;
+            server.serve_stdio().map_err(|error| error.to_string())
+        }
         AppServerHostCommand::WebSocket(websocket) => {
             serve_websocket(open_server(&options)?, websocket)
         }
@@ -151,6 +153,7 @@ fn serve_websocket(server: AppServer, options: WebSocketHostOptions) -> Result<(
         .map_err(|error| error.to_string())?;
     runtime.block_on(async move {
         let server = Arc::new(server);
+        let _queue = server.start_queue()?;
         let connection_server = Arc::clone(&server);
         let listener = start_websocket_acceptor(
             options.bind_address,

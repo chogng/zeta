@@ -78,6 +78,7 @@ mod config_runtime;
 mod connector_operations;
 mod connector_runtime;
 mod debug_operations;
+mod diagnostics_operations;
 mod diff_operations;
 mod dir_contributions;
 mod environment_operations;
@@ -129,7 +130,9 @@ mod project_operations;
 mod project_operations_tests;
 mod project_projection;
 mod provider_operations;
+mod queue_operations;
 mod request_serialization;
+mod runtime_extensions;
 mod search_operations;
 mod semantic_index_job;
 mod session_operations;
@@ -164,6 +167,12 @@ use update_broker::UpdateBroker;
 pub use zeta_codebase::CodebaseModels;
 
 pub struct AppServer {
+    queue: Option<Arc<queue::QueueStore>>,
+    queue_directory: Option<String>,
+    diagnostics: diagnostics::Diagnostics,
+    telemetry: zeta_otel::Telemetry,
+    analytics: Arc<analytics::Analytics>,
+    feedback: feedback::Feedback,
     pub(super) threads: Arc<ThreadController>,
     thread_worktree_binder: Arc<dyn zeta_core::ThreadWorktreeBinder>,
     pub(super) multi_agent: Arc<MultiAgentCoordinator>,
@@ -473,7 +482,15 @@ impl AppServer {
             turn_executor.clone(),
         ));
         let env_runtime = Arc::new(RwLock::new(EnvRuntime::empty(turn_executor)));
+        let diagnostics = diagnostics::Diagnostics::default();
+        let telemetry = zeta_otel::Telemetry::new(diagnostics.clone());
         Self {
+            queue: None,
+            queue_directory: None,
+            diagnostics,
+            telemetry,
+            analytics: Arc::new(analytics::Analytics::default()),
+            feedback: feedback::Feedback::default(),
             threads,
             thread_worktree_binder: Arc::new(zeta_core::NoThreadWorktreeBinder),
             multi_agent,
@@ -748,6 +765,7 @@ impl AppServer {
             return;
         }
         self.memory.close_owner(connection.connection_id);
+        self.feedback.close(connection.connection_id);
         self.request_scheduler
             .cancel_connection(connection.connection_id);
         self.request_cancellations
@@ -860,10 +878,44 @@ impl AppServer {
         }
     }
 
+    pub(crate) fn with_telemetry(
+        mut self,
+        diagnostics: diagnostics::Diagnostics,
+        telemetry: zeta_otel::Telemetry,
+        analytics: Arc<analytics::Analytics>,
+    ) -> Self {
+        self.diagnostics = diagnostics;
+        self.telemetry = telemetry;
+        self.analytics = analytics;
+        self
+    }
+
+    fn restart_extension_config_watcher(&mut self) {
+        if let Some(config) = &self.config {
+            self._config_watcher = Some(config_runtime::ConfigWatcher::start(
+                config,
+                self.updates.clone(),
+                self.agent_extensions.clone(),
+            ));
+        }
+    }
+
     pub fn with_config_store(mut self, config: Arc<ConfigStore>) -> Self {
+        let mut builder =
+            zeta_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
+        builder.lifecycle_observer(Arc::new(runtime_extensions::UsageObserver {
+            analytics: self.analytics.clone(),
+            config: config.clone(),
+        }));
+        self.agent_extensions = Arc::new(builder.build());
+        self.threads
+            .install_extensions(self.agent_extensions.clone())
+            .expect("new extension registry");
+        self.agent_extensions.config_changed(0);
         self._config_watcher = Some(config_runtime::ConfigWatcher::start(
             &config,
             Arc::clone(&self.updates),
+            Arc::clone(&self.agent_extensions),
         ));
         self.config = Some(config);
         self
@@ -1086,7 +1138,8 @@ impl AppServer {
             Arc::clone(&self.env_runtime_mut().dir_grants)
                 as Arc<dyn zeta_skills_extension::SessionSkillSourceProvider>;
         runtime.bind_session_sources(session_sources)?;
-        let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
+        let mut builder =
+            zeta_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
         zeta_skills_extension::install(&mut builder, Arc::clone(&runtime));
         if let Some(backend) = web_search_backend {
             zeta_web_search_extension::install(&mut builder, backend);
@@ -1107,6 +1160,7 @@ impl AppServer {
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
         self.agent_extensions = agent_extensions;
+        self.restart_extension_config_watcher();
         self = self
             .with_extension_tool_port(extension_tool_port)
             .map_err(|error| error.to_string())?;
@@ -1562,6 +1616,7 @@ impl AppServer {
             },
             None => None,
         };
+        let request_started = std::time::Instant::now();
         let response = if cancellation.is_cancelled() {
             error_response(request.id, -32800, AppServerErrorName::RequestCancelled)
         } else {
@@ -1589,6 +1644,17 @@ impl AppServer {
         };
         self.request_cancellations
             .finish(connection.connection_id, request_id);
+        self.telemetry.record(
+            diagnostics::Activity::Rpc,
+            if cancellation.is_cancelled() {
+                diagnostics::Outcome::Cancelled
+            } else if response.get("error").is_some() {
+                diagnostics::Outcome::Failed
+            } else {
+                diagnostics::Outcome::Succeeded
+            },
+            request_started.elapsed(),
+        );
         serialize_response(response)
     }
 
@@ -1853,6 +1919,18 @@ impl AppServer {
                 self.turn_changes_discard_thread(&request.params)
             }
             Some(ClientMethod::ProjectList) => self.project_list(connection, &request.params),
+            Some(ClientMethod::ExtensionItems) => self.extension_items(&request.params),
+            Some(ClientMethod::QueueEdit) => self.queue_edit(&request.params),
+            Some(ClientMethod::QueueEnqueue) => self.queue_enqueue(&request.params),
+            Some(ClientMethod::QueueList) => self.queue_list(&request.params),
+            Some(ClientMethod::QueueCancel) => self.queue_cancel(&request.params),
+            Some(ClientMethod::DiagnosticsRead) => self.diagnostics_read(),
+            Some(ClientMethod::FeedbackPrepare) => {
+                self.feedback_prepare(connection, &request.params)
+            }
+            Some(ClientMethod::FeedbackUpload) => {
+                self.feedback_upload(connection, &request.params, cancellation)
+            }
             Some(ClientMethod::MemoryStart) => self.memory_start(connection, &request.params),
             Some(ClientMethod::MemoryRead) => self.memory_read(connection, &request.params),
             Some(ClientMethod::MemoryStop) => self.memory_stop(connection, &request.params),

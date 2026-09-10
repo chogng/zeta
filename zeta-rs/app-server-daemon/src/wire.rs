@@ -146,7 +146,7 @@ impl ControlResponse {
             state,
             pid,
             instance_id,
-            daemon_version: env!("CARGO_PKG_VERSION").into(),
+            daemon_version: build_info::VERSION.into(),
             schema_hash,
         }
     }

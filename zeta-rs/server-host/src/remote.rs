@@ -510,7 +510,7 @@ fn rollback_profile(
         .probe_compatibility(
             ClientInfo {
                 name: "zeta-remote-profile-rollback".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
+                version: build_info::VERSION.into(),
             },
             ClientCapabilities::default(),
         )
